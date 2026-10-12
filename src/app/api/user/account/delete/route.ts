@@ -27,7 +27,7 @@ import {
  *
  * What goes:
  *  - identity on the User row: name, email (→ deleted-<id>@deleted.invalid, freeing the real one),
- *    password, avatar, phone, Google Workspace link, WhatsApp link, DND/onboarding, system role;
+ *    password, avatar, phone, Google Workspace link, DND/onboarding, system role;
  *  - every way back in: OAuth accounts, passkeys (+ pending challenges), NextAuth/SAML sessions,
  *    MCP/API + OAuth tokens and auth codes, push devices, OTPs for the old address. The session JWT
  *    itself is stateless and cannot be deleted; lib/auth.ts and pages/api/socket.ts refuse any
@@ -35,7 +35,7 @@ import {
  *  - rosters: workspace, team and project memberships (removing them cascades NOTHING — no model
  *    references those rows), and approver-chart edges that pointed at this person (so their staff
  *    fall back to BoD instead of waiting on someone who can never answer);
- *  - personal-only data: notification preferences (hold a WA phone and Slack webhook), GIDEON chat
+ *  - personal-only data: notification preferences (hold a Slack webhook), GIDEON chat
  *    history and its uploaded files, the avatar file.
  *
  * What stays: attendance records/requests/corrections, tasks + assignments + comments, XP, streaks,
@@ -178,9 +178,6 @@ export async function POST(request: NextRequest) {
             avatar: null,
             googleWorkspaceEmail: null,
             phoneNumber: null,
-            whatsappId: null,
-            waLinkCode: null,
-            waLinkExpiresAt: null,
             dndUntil: null,
             onboardedAt: null,
             role: "MEMBER",

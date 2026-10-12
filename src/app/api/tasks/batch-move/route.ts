@@ -26,7 +26,7 @@ const batchMoveSchema = z.object({
  * Body: { taskIds (1–200), taskListId?, status?, priority?, projectContextId? }. Every task gets exactly the
  * edit PATCH /api/tasks/[taskId] would make with { taskListId, status, priority, projectContextId } —
  * the same function (lib/task-update.ts): access check per task, section ↔ status, done stamps, recurring
- * follow-up, activity log, audit, notifications, webhooks, automations, and a `task-updated` socket event
+ * follow-up, activity log, audit, notifications, automations, and a `task-updated` socket event
  * per task (what the apps listen to). Tasks are applied one after another, in the order given.
  *
  * Answer: { moved: string[], failed: { id, error }[] } — 200 even when some failed (each refusal is

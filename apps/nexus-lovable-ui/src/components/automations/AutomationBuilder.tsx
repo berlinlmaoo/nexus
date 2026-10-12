@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  AlertTriangle, ArrowDown, ArrowUp, Check, ChevronDown, Copy, Filter, Loader2, Play, Plus, RefreshCw, Search, Trash2, X, Zap,
+  AlertTriangle, ArrowDown, ArrowUp, Check, ChevronDown, Filter, Loader2, Play, Plus, Search, Trash2, X, Zap,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SelectPicker } from "@/components/SelectPicker";
@@ -10,7 +10,7 @@ import { nexusApi, type NexusAutomation, type NexusAutomationRun } from "@/lib/n
 import { useLang, type LangApi } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import {
-  ACTIONS, BUILTIN_FIELDS, OPS, PRIORITIES, SETTABLE_BUILTIN, STATUSES, TEMPLATE_HINT, TRIGGERS, WEEKDAYS,
+  ACTIONS, BUILTIN_FIELDS, LEGACY_TRIGGER_LABEL, OPS, PRIORITIES, SETTABLE_BUILTIN, STATUSES, TEMPLATE_HINT, TRIGGERS, WEEKDAYS,
   cfChoices, cfKind, type ConditionRule, type Conditions, type FieldKind, type Rule,
 } from "./automation-meta";
 
@@ -206,14 +206,8 @@ function Connector() {
 
 function TriggerConfig({ trigger, set, ctx, automation, disabled }: { trigger: Rule; set: (r: Rule) => void; ctx: BuilderContext; automation?: NexusAutomation | null; disabled?: boolean }) {
   const { t, locale } = useLang();
-  const qc = useQueryClient();
   const cfg = trigger.config ?? {};
   const setCfg = (patch: Record<string, unknown>) => set({ ...trigger, config: { ...cfg, ...patch } });
-  const regen = useMutation({
-    mutationFn: () => nexusApi.updateAutomation({ id: automation!.id, regenerateWebhookToken: true }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["nexus", "automations", ctx.projectId] }); toast.success(t("New URL made. The old one stops working.")); },
-    onError: (e) => toast.error(errorText(e, t("Couldn't make a new URL."))),
-  });
   switch (trigger.type) {
     case "STATUS_CHANGED":
       if (usesStatusOptions(ctx)) {
@@ -311,21 +305,10 @@ function TriggerConfig({ trigger, set, ctx, automation, disabled }: { trigger: R
             </div>
           )}
           {automation?.nextRunAt && <p className="text-xs text-muted-foreground">{t("Next run: {when}", { when: new Date(automation.nextRunAt).toLocaleString(locale, { timeZone: "Asia/Jakarta", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }) + " WIB" })}</p>}
-          <p className="text-xs text-muted-foreground">{t("Without conditions it runs once (create a task, notify, webhook). With conditions it runs on every task that matches them.")}</p>
+          <p className="text-xs text-muted-foreground">{t("Without conditions it runs once (create a task, notify). With conditions it runs on every task that matches them.")}</p>
         </div>
       );
     }
-    case "WEBHOOK_RECEIVED":
-      return automation?.webhookUrl ? (
-        <div className="space-y-1.5">
-          <div className="flex items-stretch gap-2">
-            <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-lg border border-border bg-background px-2.5 py-2 text-xs">{automation.webhookUrl}</code>
-            <button type="button" onClick={() => navigator.clipboard?.writeText(automation.webhookUrl!).then(() => toast.success(t("Copied"))).catch(() => {})} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 text-xs font-semibold hover:bg-accent"><Copy className="h-3.5 w-3.5" /> {t("Copy")}</button>
-            {!disabled && <button type="button" onClick={() => regen.mutate()} disabled={regen.isPending} title={t("Make a new URL")} aria-label={t("Make a new URL")} className="inline-flex items-center rounded-lg border border-border px-2 hover:bg-accent"><RefreshCw className={cn("h-3.5 w-3.5", regen.isPending && "animate-spin")} /></button>}
-          </div>
-          <p className="text-xs text-muted-foreground">{t("POST JSON here. Use {payload.key} in texts; \"title\" names a new task, \"taskId\" picks a task of this project.")}</p>
-        </div>
-      ) : <p className="text-xs text-muted-foreground">{t("Save the automation to get its private URL.")}</p>;
     default:
       return null;
   }
@@ -436,13 +419,6 @@ function ActionConfig({ action, set, ctx, disabled }: { action: Rule; set: (r: R
       return <Sel label={t("Section")} disabled={disabled} value={String(cfg.sectionId ?? "")} onChange={(v) => setCfg({ sectionId: v || undefined })} options={sectionOpts(t("Same section"))} />;
     case "ARCHIVE_TASK":
       return <p className="text-xs text-muted-foreground">{t("The task is deleted and can be restored from Control Room → Audit for 90 days.")}</p>;
-    case "CALL_WEBHOOK":
-      return (
-        <div className="space-y-1">
-          <input disabled={disabled} value={action.value ?? ""} onChange={(e) => set({ ...action, value: e.target.value })} placeholder="https://example.com/hook" className={cn(input, "w-full font-mono text-xs")} />
-          <p className="text-[11px] text-muted-foreground">{t("NEXUS POSTs the task and what changed as JSON. https only; private addresses are refused.")}</p>
-        </div>
-      );
     default:
       return null;
   }
@@ -564,19 +540,21 @@ export function AutomationBuilder({ automation, ctx, canEdit, onClose, initialTa
   }, [onClose]);
 
   const triggerDef = TRIGGERS.find((d) => d.type === trigger?.type);
-  const noTask = trigger?.type === "WEBHOOK_RECEIVED" || (trigger?.type === "SCHEDULED" && conditions.rules.length === 0);
+  const noTask = trigger?.type === "SCHEDULED" && conditions.rules.length === 0;
   const invalidate = () => qc.invalidateQueries({ queryKey: ["nexus", "automations", ctx.projectId] });
 
   const problem = useMemo(() => {
     if (!name.trim()) return t("Give it a name");
     if (!trigger) return t("Pick a trigger");
+    // "Webhook received" was removed (12 Oct 2026): the rule can only be saved with another trigger.
+    if (trigger.type === "WEBHOOK_RECEIVED") return t("Pick a trigger");
     if (trigger.type === "FIELD_CHANGED" && !trigger.field) return t("Pick the field to watch");
     if (trigger.type === "SCHEDULED" && trigger.config?.frequency === "weekly" && arr(trigger.config?.days).length === 0) return t("Pick at least one day");
     if (actions.length === 0) return t("Add at least one action");
     for (const a of actions) {
       if ((a.type === "SET_STATUS" || a.type === "SET_PRIORITY" || a.type === "MOVE_TO_SECTION") && !a.value) return t("Finish the “{action}” step", { action: t(ACTIONS.find((d) => d.type === a.type)?.label ?? a.type) });
       if ((a.type === "ASSIGN_TO" || a.type === "UNASSIGN") && !a.value) return t("Pick who in “{action}”", { action: t(ACTIONS.find((d) => d.type === a.type)?.label ?? a.type) });
-      if ((a.type === "ADD_TAG" || a.type === "REMOVE_TAG" || a.type === "ADD_COMMENT" || a.type === "CALL_WEBHOOK") && !a.value?.trim()) return t("Finish the “{action}” step", { action: t(ACTIONS.find((d) => d.type === a.type)?.label ?? a.type) });
+      if ((a.type === "ADD_TAG" || a.type === "REMOVE_TAG" || a.type === "ADD_COMMENT") && !a.value?.trim()) return t("Finish the “{action}” step", { action: t(ACTIONS.find((d) => d.type === a.type)?.label ?? a.type) });
       if (a.type === "SET_FIELD" && !a.field) return t("Pick the field to set");
     }
     return null;
@@ -644,7 +622,7 @@ export function AutomationBuilder({ automation, ctx, canEdit, onClose, initialTa
                   <div className="rounded-2xl border border-border bg-background p-3">
                     <div className="flex items-center gap-2">
                       {triggerDef && <triggerDef.icon className="h-4 w-4 text-primary" />}
-                      <span className="flex-1 text-sm font-semibold">{triggerDef ? t(triggerDef.label) : trigger.type === "TASK_COMPLETED" ? t("Task completed") : trigger.type}</span>
+                      <span className="flex-1 text-sm font-semibold">{triggerDef ? t(triggerDef.label) : LEGACY_TRIGGER_LABEL[trigger.type] ? t(LEGACY_TRIGGER_LABEL[trigger.type]) : trigger.type}</span>
                       {!readOnly && (
                         <PickMenu placeholder={t("Search triggers…")} options={triggerOptions} onPick={(v) => setTrigger(v === "SCHEDULED" ? { type: v, config: { frequency: "daily", time: "09:00" } } : v === "DUE_DATE_APPROACHING" ? { type: v, value: "24" } : { type: v })}
                           trigger={<button type="button" className="rounded-lg px-2 py-1 text-xs font-semibold text-muted-foreground hover:bg-accent">{t("Change")}</button>} />
@@ -703,7 +681,7 @@ export function AutomationBuilder({ automation, ctx, canEdit, onClose, initialTa
                           )}
                         </div>
                         <div className="mt-2 empty:hidden"><ActionConfig action={a} ctx={ctx} disabled={readOnly} set={(na) => setActions(actions.map((x, j) => (j === i ? na : x)))} /></div>
-                        {def?.needsTask && noTask && <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400"><AlertTriangle className="h-3.5 w-3.5" /> {t("This trigger has no task, so this step is skipped. Add a condition (schedule) or send a taskId (webhook).")}</p>}
+                        {def?.needsTask && noTask && <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400"><AlertTriangle className="h-3.5 w-3.5" /> {t("This trigger has no task, so this step is skipped. Add a condition to run it on every matching task.")}</p>}
                       </div>
                     );
                   })}

@@ -56,7 +56,7 @@ export async function PATCH(request: NextRequest) {
         data.phoneNumber = normalizeIndonesianPhoneNumber(phoneNumber)
       } else {
         return NextResponse.json(
-          { error: "Enter a valid Indonesian WhatsApp number, for example +6281234567890." },
+          { error: "Enter a valid Indonesian phone number, for example +6281234567890." },
           { status: 400 }
         )
       }

@@ -18,7 +18,7 @@ function createPrismaClient() {
   // places that must read the hash (credentials-auth, user/password) ask with an explicit `select`.
   // Typed as the plain client on purpose: helpers across the codebase take `PrismaClient`, and the
   // omit-specialised type is not assignable to it. The omission still happens at runtime.
-  const base = new PrismaClient({ adapter, omit: { user: { password: true, waLinkCode: true } } })
+  const base = new PrismaClient({ adapter, omit: { user: { password: true } } })
   // The retired "Customize project" switches (owner, 11 Oct 2026; see lib/project-retired-flags.ts) read
   // as their fixed values wherever a project is returned, whatever the row still holds, so released apps
   // that decode them behave the same before and after the backfill SQL runs.

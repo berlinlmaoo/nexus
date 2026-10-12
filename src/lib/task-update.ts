@@ -5,7 +5,6 @@ import { logAudit } from "@/lib/audit"
 import { auditDiff } from "@/lib/audit-describe"
 import { checkProjectAccess } from "@/lib/rbac"
 import { runAutomations } from "@/lib/automation-engine"
-import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitTaskUpdated } from "@/lib/socket-emitter"
 import { notifyTaskAssigned, notifyTaskCompleted, notifySubmissionStatus } from "@/lib/notification-service"
 import { bumpStreak } from "@/lib/gamification"
@@ -19,7 +18,7 @@ export type TaskUpdateSession = { user: { id?: string | null; name?: string | nu
 /**
  * One task edit (the body of PATCH /api/tasks/[taskId], validated by updateTaskSchema): access check,
  * section ↔ status rules, completion stamps, recurring follow-up, activity log, audit, notifications,
- * webhooks, automations and the per-task `task-updated` realtime event. Moved here verbatim from the
+ * automations and the per-task `task-updated` realtime event. Moved here verbatim from the
  * PATCH route so POST /api/tasks/batch-move applies exactly the same rules to every task it moves.
  * The caller authenticates and rate-limits; errors thrown here are the caller's to turn into a 500.
  */
@@ -424,16 +423,6 @@ export async function applyTaskUpdate({
     }).catch(() => {})
   }
 
-  // Webhook: task.updated (or task.completed if status → DONE)
-  const webhookEvent = (status === "DONE" && existing.status !== "DONE") ? "task.completed" : "task.updated"
-  dispatchWebhookEvent(webhookEvent, {
-    taskId: taskId,
-    title: task.title,
-    status: task.status,
-    priority: task.priority,
-    changes: body,
-    previousStatus: existing.status,
-  }, effectiveProjectId).catch(() => {})
 
   // The description written as text (released apps): a live block-editor room on this task reloads,
   // and the body is rebuilt from this text the next time it is opened (lib/blockdoc.ts resolveTaskBody).

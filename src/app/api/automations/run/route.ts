@@ -10,7 +10,7 @@ import { runAutomationNow } from "@/lib/automation-engine"
  * POST /api/automations/run { id, taskId? } → { run }
  * "Run now" from the builder (12 Oct 2026): fires the rule once, by hand, as the caller. With a task the
  * conditions are checked against it and task actions act on it; without one only task-free actions run
- * (create task, notify, webhook). LEAD only, like editing. The run lands in the log as "manual".
+ * (create task, notify). LEAD only, like editing. The run lands in the log as "manual".
  */
 export async function POST(req: NextRequest) {
   try {

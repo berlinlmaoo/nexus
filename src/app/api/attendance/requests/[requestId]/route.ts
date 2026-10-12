@@ -6,7 +6,7 @@ import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { getAttendanceWorkspaceContext, serializeAttendanceRequest } from "@/lib/attendance"
 import { applyAttendanceReviewSideEffects } from "@/lib/attendance-absence"
-import { notifyAttendanceRequestReviewed } from "@/lib/wa-bot"
+import { notifyAttendanceRequestReviewed } from "@/lib/attendance-review-notify"
 import { canUserReviewRequest } from "@/lib/attendance-approvers"
 import { attendanceRequestPatchSchema } from "@/lib/validations"
 
@@ -202,7 +202,7 @@ export async function PATCH(
     })
 
     // Tell the requester (outcome + who decided) AND the other approvers (handled → no double-action).
-    // In-app bell + WhatsApp via Gideon. Fire-and-forget so it never blocks/fails the review response.
+    // In-app bell + push. Fire-and-forget so it never blocks/fails the review response.
     notifyAttendanceRequestReviewed({
       requestId: updated.id,
       reviewerId: session.user.id,
@@ -211,7 +211,7 @@ export async function PATCH(
       note: updated.reviewNote,
       // They were told, to the minute, what the lateness cost them. Tell them it came back.
       xpRefunded,
-    }).catch((e) => console.error("[wa] notifyAttendanceRequestReviewed failed", e))
+    }).catch((e) => console.error("notifyAttendanceRequestReviewed failed", e))
 
     return NextResponse.json({ request: serializeAttendanceRequest(updated) })
   } catch (error) {

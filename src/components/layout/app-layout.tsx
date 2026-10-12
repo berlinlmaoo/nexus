@@ -6,7 +6,6 @@ import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import { LoadingBar } from "@/components/layout/loading-bar"
 import { DesktopNotificationPrompt } from "@/components/layout/desktop-notification-prompt"
-import { PhoneNumberPrompt } from "@/components/layout/phone-number-prompt"
 import { PageTransition } from "@/components/ui/page-transition"
 import { ShortcutsHelpProvider } from "@/components/layout/shortcuts-help"
 import { useAppStore } from "@/stores/app-store"
@@ -71,7 +70,6 @@ export function AppLayout({ children, title, breadcrumbs, user }: AppLayoutProps
           <LoadingBar />
         </Suspense>
         <DesktopNotificationPrompt />
-        <PhoneNumberPrompt userId={user.id} initialPhoneNumber={user.phoneNumber ?? null} />
 
         {/* Mobile overlay */}
         {sidebarOpen && (

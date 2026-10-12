@@ -42,7 +42,6 @@ export const RESTORABLE: Record<string, Spec> = {
   custom_field: { table: "CustomField", label: "custom field" },
   form: { table: "Form", label: "form" },
   automation: { table: "Automation", label: "automation" },
-  webhook: { table: "Webhook", label: "webhook" },
   workflow_bundle: { table: "WorkflowBundle", label: "workflow bundle" },
   goal: { table: "Goal", label: "goal" },
   portfolio: { table: "Portfolio", label: "portfolio" },

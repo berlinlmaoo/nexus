@@ -3,7 +3,7 @@ import { SelectPicker } from "@/components/SelectPicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
 import { nexusApi, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusWorkspaceMember } from "@/lib/nexus-api";
-import { Settings as SettingsIcon, User, Bell, Lock, Palette, Webhook, Zap, Loader2, Trash2, ImagePlus, Users, UserPlus, ShieldCheck, KeyRound, Copy, Check, X, Plug, Sparkles, AlertTriangle, Globe, Terminal, Monitor, MessageCircle, AtSign, Sun, Moon, Languages } from "lucide-react";
+import { Settings as SettingsIcon, User, Bell, Lock, Palette, Zap, Loader2, Trash2, ImagePlus, Users, UserPlus, ShieldCheck, KeyRound, Copy, Check, X, Plug, Sparkles, AlertTriangle, Globe, Terminal, Monitor, AtSign, Sun, Moon, Languages } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useEdgeFade } from "@/hooks/use-edge-fade";
@@ -28,9 +28,7 @@ const sections = [
   { id: "security", label: "Security", icon: Lock },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "automation", label: "Automation", icon: Zap },
-  { id: "webhooks", label: "Webhooks", icon: Webhook },
   { id: "mcp", label: "Claude (MCP)", icon: Plug },
-  { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
 ];
 
 function Settings() {
@@ -58,10 +56,8 @@ function Settings() {
           {active === "security" && <SecuritySection />}
           {active === "appearance" && <AppearanceSection />}
           {active === "automation" && <AutomationSection />}
-          {active === "webhooks" && <WebhooksSection />}
           {active === "mcp" && <McpTokensSection />}
-          {active === "whatsapp" && <WhatsAppLinkCard />}
-          {!["profile","members","notifications","security","appearance","automation","webhooks","mcp","whatsapp"].includes(active) && (
+          {!["profile","members","notifications","security","appearance","automation","mcp"].includes(active) && (
             <div className="rounded-xl border border-border bg-card p-8 shadow-soft text-center text-muted-foreground text-sm">
               {t("Coming soon.")}
             </div>
@@ -180,7 +176,7 @@ function WorkspaceMembersSection() {
   );
 }
 
-// BoD+ inline editor for a member's WhatsApp/phone number (notif target + WA-bot fallback).
+// BoD+ inline editor for a member's phone number (contact detail on the account).
 function MemberPhoneEditor({ member, workspaceId, canEdit }: { member: NexusWorkspaceMember; workspaceId?: string; canEdit: boolean }) {
   const { t } = useLang();
   const qc = useQueryClient();
@@ -193,7 +189,7 @@ function MemberPhoneEditor({ member, workspaceId, canEdit }: { member: NexusWork
   if (!canEdit) return member.phoneNumber ? <span className="hidden text-xs text-muted-foreground sm:inline">{member.phoneNumber}</span> : null;
   return (
     <div className="flex items-center gap-1">
-      <input value={val} onChange={(e) => setVal(e.target.value)} placeholder={t("08xx / +65…")} inputMode="tel" title={t("Phone / WhatsApp number. For numbers outside Indonesia, use + and the country code.")} className="w-28 rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-primary" />
+      <input value={val} onChange={(e) => setVal(e.target.value)} placeholder={t("08xx / +65…")} inputMode="tel" title={t("Phone number. For numbers outside Indonesia, use + and the country code.")} className="w-28 rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-primary" />
       {dirty && <button onClick={() => save.mutate()} disabled={save.isPending} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" aria-label={t("Save number")} title={t("Save")}>{save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}</button>}
     </div>
   );
@@ -398,9 +394,9 @@ function ProfileSection() {
             </div>
           </label>
           <label className="block sm:col-span-2">
-            <span className="text-xs font-medium text-muted-foreground">{t("Phone number (WhatsApp)")}</span>
+            <span className="text-xs font-medium text-muted-foreground">{t("Phone number")}</span>
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t("08xxxxxxxxxx · outside Indonesia, start with + (e.g. +65…)")} inputMode="tel" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
-            <span className="mt-1 block text-[11px] text-muted-foreground">{t("Used for WhatsApp notifications (assignments and mentions) and as a fallback if you haven't linked WhatsApp yet. For numbers outside Indonesia, type + and the country code.")}</span>
+            <span className="mt-1 block text-[11px] text-muted-foreground">{t("For numbers outside Indonesia, type + and the country code.")}</span>
           </label>
         </div>
         <div className="pt-4 border-t border-border flex justify-end gap-2">
@@ -592,48 +588,6 @@ function NotificationsSection() {
   );
 }
 
-function WhatsAppLinkCard() {
-  const { t } = useLang();
-  const qc = useQueryClient();
-  // Poll while unlinked so the card auto-flips to "Terhubung" the moment the user sends /link in WhatsApp.
-  const status = useQuery({ queryKey: ["wa-link"], queryFn: nexusApi.waLinkStatus, retry: false, refetchInterval: 5000 });
-  const linked = status.data?.linked;
-  const [gen, setGen] = useState<{ code: string; deepLink: string | null } | null>(null);
-  const [copied, setCopied] = useState(false);
-  const generate = useMutation({ mutationFn: nexusApi.waLinkGenerate, onSuccess: (d) => setGen({ code: d.code, deepLink: d.deepLink }) });
-  const unlink = useMutation({ mutationFn: nexusApi.waUnlink, onSuccess: () => { setGen(null); qc.invalidateQueries({ queryKey: ["wa-link"] }); } });
-
-  return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-3">
-      <div className="flex items-center gap-2">
-        <MessageCircle className="h-4 w-4 text-primary" />
-        <h2 className="font-semibold">WhatsApp (GIDEON)</h2>
-        {linked && <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success">{t("Connected")}</span>}
-      </div>
-      <p className="text-xs text-muted-foreground">{t("Link your WhatsApp to use quick commands ({examples}) from the chat, and to get assignment and mention notifications there.", { examples: "/today, /done, …" })}</p>
-
-      {linked ? (
-        <div className="flex items-center justify-between rounded-lg border border-success/30 bg-success/5 p-3">
-          <span className="text-sm font-medium text-success">{t("WhatsApp connected")}</span>
-          <button onClick={() => unlink.mutate()} disabled={unlink.isPending} className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50">{unlink.isPending ? "…" : t("Disconnect")}</button>
-        </div>
-      ) : gen ? (
-        <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
-          <div className="text-xs text-muted-foreground">{t("Send this message to the NEXUS WhatsApp bot (the number that usually sends your notifications):")}</div>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 rounded-md bg-background px-3 py-2 text-sm font-bold tracking-wider">/link {gen.code}</code>
-            <button onClick={() => { navigator.clipboard?.writeText(`/link ${gen.code}`); setCopied(true); setTimeout(() => setCopied(false), 1500); }} className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent" aria-label={t("Copy")}>{copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}</button>
-          </div>
-          {gen.deepLink && <a href={gen.deepLink} target="_blank" rel="noreferrer" className="block rounded-lg bg-primary py-2 text-center text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90">{t("Open WhatsApp →")}</a>}
-          <p className="text-[11px] text-muted-foreground">{t("The code is valid for 10 minutes. This page updates by itself once you send it.")}</p>
-        </div>
-      ) : (
-        <button onClick={() => generate.mutate()} disabled={generate.isPending} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60">{generate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />} {t("Link WhatsApp")}</button>
-      )}
-    </div>
-  );
-}
-
 // Was a static mock with two made-up rules and a dead "+ New rule" button (fixed 12 Oct 2026). Automations
 // belong to a project; this points there.
 function AutomationSection() {
@@ -642,50 +596,6 @@ function AutomationSection() {
     <div className="rounded-xl border border-border bg-card p-6 shadow-soft">
       <h2 className="flex items-center gap-2 font-semibold"><Zap className="h-4 w-4 text-primary" /> {t("Automations")}</h2>
       <p className="mt-2 text-sm text-muted-foreground">{t("Automations live in each project. Open a project, then its Automations tab, to set up “When … do …” rules and see their run log. Project leads edit them.")}</p>
-    </div>
-  );
-}
-
-const WEBHOOK_EVENTS = ["task.created", "task.updated", "task.completed", "comment.created", "project.updated"];
-
-function WebhooksSection() {
-  const { t } = useLang();
-  const qc = useQueryClient();
-  const [url, setUrl] = useState("");
-  const [events, setEvents] = useState<string[]>(["task.created"]);
-  const list = useQuery({ queryKey: ["nexus", "webhooks"], queryFn: nexusApi.webhooks, retry: false });
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["nexus", "webhooks"] });
-  const create = useMutation({ mutationFn: () => nexusApi.createWebhook({ url: url.trim(), events }), onSuccess: () => { setUrl(""); invalidate(); } });
-  const del = useMutation({ mutationFn: (id: string) => nexusApi.deleteWebhook(id), onSuccess: invalidate });
-  const toggle = (e: string) => setEvents((cur) => cur.includes(e) ? cur.filter((x) => x !== e) : [...cur, e]);
-  const rows = list.data ?? [];
-
-  return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
-      <h2 className="font-semibold">{t("Webhooks")}</h2>
-      <div className="space-y-2">
-        {list.isLoading && <p className="text-sm text-muted-foreground">{t("Loading…")}</p>}
-        {!list.isLoading && rows.length === 0 && <p className="text-sm text-muted-foreground">{t("No webhooks yet.")}</p>}
-        {rows.map((w) => (
-          <div key={w.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-            <div className="min-w-0">
-              <div className="truncate font-mono text-sm">{w.url}</div>
-              <div className="mt-0.5 text-xs text-muted-foreground">{(w.events ?? []).join(", ")}{w.project?.name ? ` · ${w.project.name}` : ""}</div>
-            </div>
-            <button onClick={() => { if (confirm(t("Delete this webhook?"))) del.mutate(w.id); }} aria-label={t("Delete")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
-          </div>
-        ))}
-      </div>
-      <div className="space-y-2 border-t border-border pt-4">
-        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={t("https://your-endpoint.com/hook")} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
-        <div className="flex flex-wrap gap-1.5">
-          {WEBHOOK_EVENTS.map((e) => (
-            <button key={e} onClick={() => toggle(e)} className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${events.includes(e) ? "border-primary/40 bg-primary/10 text-primary" : "border-border hover:bg-accent"}`}>{e}</button>
-          ))}
-        </div>
-        <button disabled={!url.includes("http") || events.length === 0 || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Add webhook")}</button>
-        {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">{t("Couldn't add it. Check the URL and access.")}</span>}
-      </div>
     </div>
   );
 }

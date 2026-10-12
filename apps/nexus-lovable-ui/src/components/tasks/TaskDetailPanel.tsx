@@ -1274,7 +1274,7 @@ function FileFieldEditor({ projectId, value, onSet }: { projectId?: string; valu
 }
 
 /** Comment input with @-mention autocomplete (project members). Tracks the EXACT userIds picked and sends
- *  them as `mentionedUserIds` so the backend notifies the right person on WhatsApp regardless of name. */
+ *  them as `mentionedUserIds` so the backend notifies the right person regardless of name. */
 function CommentComposer({ members, pending, onSubmit }: { members: NexusUser[]; pending: boolean; onSubmit: (content: string, mentionedUserIds: string[]) => void }) {
   const { t: tr } = useLang();
   const [text, setText] = useState("");

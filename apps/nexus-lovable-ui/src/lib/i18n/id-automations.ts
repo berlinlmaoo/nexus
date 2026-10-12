@@ -60,7 +60,6 @@ export const ID_AUTOMATIONS: Record<string, string> = {
   "No conditions: every matching event runs it.": "Tanpa syarat: setiap kejadian yang cocok menjalankannya.",
   "Remove condition": "Hapus syarat",
   "Remove action": "Hapus aksi",
-  "This trigger has no task, so this step is skipped. Add a condition (schedule) or send a taskId (webhook).": "Pemicu ini tidak punya task, jadi langkah ini dilewati. Tambahkan syarat (jadwal) atau kirim taskId (webhook).",
   "Task to run on": "Task yang dipakai",
   "No task": "Tanpa task",
   "Save your changes first": "Simpan perubahanmu dulu",
@@ -90,8 +89,6 @@ export const ID_AUTOMATIONS: Record<string, string> = {
 
   // Trigger settings
   "Section": "Bagian",
-  "New URL made. The old one stops working.": "URL baru dibuat. URL lama tidak berlaku lagi.",
-  "Couldn't make a new URL.": "Gagal membuat URL baru.",
   "from": "dari",
   "From status": "Dari status",
   "Any status": "Status apa saja",
@@ -118,10 +115,6 @@ export const ID_AUTOMATIONS: Record<string, string> = {
   "Day of month": "Tanggal",
   "Days": "Hari",
   "Next run: {when}": "Jalan berikutnya: {when}",
-  "Without conditions it runs once (create a task, notify, webhook). With conditions it runs on every task that matches them.": "Tanpa syarat, jalan sekali (buat task, kabari, webhook). Dengan syarat, jalan untuk setiap task yang cocok.",
-  "Make a new URL": "Buat URL baru",
-  "POST JSON here. Use {payload.key} in texts; \"title\" names a new task, \"taskId\" picks a task of this project.": "Kirim JSON (POST) ke sini. Pakai {payload.key} di teks; \"title\" jadi nama task baru, \"taskId\" memilih task di project ini.",
-  "Save the automation to get its private URL.": "Simpan otomasinya untuk mendapat URL pribadinya.",
   "Operator": "Operator",
 
   // Action settings
@@ -145,7 +138,6 @@ export const ID_AUTOMATIONS: Record<string, string> = {
   "Subtask title": "Judul subtask",
   "Same section": "Bagian yang sama",
   "The task is deleted and can be restored from Control Room → Audit for 90 days.": "Task dihapus dan bisa dipulihkan dari Control Room → Audit selama 90 hari.",
-  "NEXUS POSTs the task and what changed as JSON. https only; private addresses are refused.": "NEXUS mengirim (POST) task dan perubahannya sebagai JSON. Hanya https; alamat privat ditolak.",
 
   // Run log
   "Couldn't load more runs.": "Gagal memuat log berikutnya.",
@@ -188,7 +180,9 @@ export const ID_AUTOMATIONS: Record<string, string> = {
   "Every…": "Setiap…",
   "On a schedule: daily, weekdays, weekly or monthly": "Terjadwal: harian, hari kerja, mingguan, atau bulanan",
   "Webhook received": "Webhook diterima",
-  "Another app calls a private URL": "Aplikasi lain memanggil URL pribadi",
+  "Webhook received (removed)": "Webhook diterima (sudah dihapus)",
+  "This trigger has no task, so this step is skipped. Add a condition to run it on every matching task.": "Pemicu ini tidak punya task, jadi langkah ini dilewati. Tambahkan syarat supaya jalan di setiap task yang cocok.",
+  "Without conditions it runs once (create a task, notify). With conditions it runs on every task that matches them.": "Tanpa syarat, jalan sekali (buat task, kabari). Dengan syarat, jalan untuk setiap task yang cocok.",
 
   // Actions
   "Set status": "Atur status",
@@ -206,7 +200,6 @@ export const ID_AUTOMATIONS: Record<string, string> = {
   "Duplicate task": "Duplikat task",
   "Add comment": "Tambah komentar",
   "Send notification": "Kirim notifikasi",
-  "Send webhook": "Kirim webhook",
 
   // Fields and operators
   "Start date": "Tanggal mulai",

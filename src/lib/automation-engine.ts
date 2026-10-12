@@ -4,7 +4,6 @@ import { createLogger } from "@/lib/logger"
 import { notifyAutomation, notifyTaskAssigned } from "@/lib/notification-service"
 import { getAutomationUserId } from "@/lib/automation-identity"
 import { emitAutomationsChanged, emitCommentAdded, emitTaskCreated, emitTaskDeleted, emitTaskUpdated } from "@/lib/socket-emitter"
-import { webhookUrlError } from "@/lib/webhook-dispatcher"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
 import { autofillOnEvent } from "@/lib/gideon-autofill"
@@ -46,7 +45,7 @@ const log = createLogger("automation")
 export interface AutomationEvent {
   kind: AutomationEventKind
   projectId: string
-  /** The person whose action raised the event; null for the clock and inbound webhooks. */
+  /** The person whose action raised the event; null for the clock. */
   actorId: string | null
   taskId?: string
   changes?: Record<string, FieldChange>
@@ -172,7 +171,7 @@ export async function runOne(
 
   if (event.taskId && !facts) return null // the task was deleted between the event and now
   if (conditions && facts && !conditionsHold(conditions, facts)) return null
-  // Conditions on a run with no task (schedule, webhook) cannot hold: they filter tasks.
+  // Conditions on a run with no task (schedule) cannot hold: they filter tasks.
   if (conditions && !facts && event.kind !== "scheduled") return null
 
   let runId: string | null = null
@@ -181,7 +180,7 @@ export async function runOne(
       data: {
         automationId: row.id, projectId: row.projectId, taskId: event.taskId ?? null,
         event: opts.manual ? "manual" : event.kind, trigger: trigger?.type ?? "UNKNOWN",
-        // Who set it off: the person, or for the clock and inbound webhooks the rule's author.
+        // Who set it off: the person, or for the clock the rule's author.
         status: "RUNNING", actorId: event.actorId ?? row.createdById, dedupKey: opts.dedupKey ?? null,
       },
       select: { id: true },
@@ -266,7 +265,7 @@ type ActionCtx = {
   event: AutomationEvent
   /** The Automation identity: author of every comment, task, activity and audit row an action writes. */
   actor: string
-  /** The person who set the run off (or the rule's author for clock/webhook runs); metadata only. */
+  /** The person who set the run off (or the rule's author for clock runs); metadata only. */
   triggeredBy: string | null
   actorName: string
   projectName: string
@@ -551,9 +550,6 @@ async function executeAction(action: Rule, ctx: ActionCtx): Promise<ActionOutcom
       return { message: "Archived (restorable from Audit)", deletedTask: true }
     }
 
-    case "CALL_WEBHOOK":
-      return callWebhook(action, ctx)
-
     default:
       return { message: `Unknown action ${action.type}`, skipped: true }
   }
@@ -597,39 +593,6 @@ async function setField(action: Rule, ctx: ActionCtx): Promise<ActionOutcome> {
     return { message: `${cf.name} set`, touchedTask: true }
   }
   return { message: `Skipped: unknown field ${field}`, skipped: true }
-}
-
-async function callWebhook(action: Rule, ctx: ActionCtx): Promise<ActionOutcome> {
-  const url = action.value ?? ""
-  const blocked = await webhookUrlError(url)
-  if (blocked) throw new Error(blocked)
-  const task = ctx.event.taskId
-    ? await prisma.task.findUnique({
-        where: { id: ctx.event.taskId },
-        select: {
-          id: true, title: true, status: true, priority: true, dueDate: true, startDate: true, tags: true, taskListId: true,
-          assignees: { select: { user: { select: { id: true, name: true, email: true } } } },
-        },
-      })
-    : null
-  const body = JSON.stringify({
-    event: "automation.fired",
-    timestamp: new Date().toISOString(),
-    automation: { id: ctx.row.id, name: ctx.row.name },
-    project: { id: ctx.row.projectId, name: ctx.projectName },
-    trigger: ctx.event.kind,
-    task: task ? { ...task, assignees: task.assignees.map((a) => a.user) } : null,
-    changes: ctx.event.changes ?? null,
-  })
-  const res = await fetch(url, {
-    method: "POST",
-    redirect: "manual",
-    body,
-    headers: { "Content-Type": "application/json", "User-Agent": "NEXUS-Automation/1", "X-Nexus-Automation": ctx.row.id },
-    signal: AbortSignal.timeout(10_000),
-  })
-  if (!res.ok) throw new Error(`Webhook answered HTTP ${res.status}`)
-  return { message: `Webhook answered HTTP ${res.status}` }
 }
 
 // ── Clock: due dates and schedules (called every minute by lib/automation-ticker.ts and /api/cron/automations) ──
@@ -708,7 +671,7 @@ export async function pruneAutomationRuns(now = new Date()): Promise<number> {
   return count
 }
 
-/** Fire one rule now, by hand ("Run now" in the builder) or from its inbound webhook. */
+/** Fire one rule now, by hand ("Run now" in the builder). */
 export async function runAutomationNow(automationId: string, event: Omit<AutomationEvent, "projectId">, opts: { manual?: boolean } = {}): Promise<RunResult | null> {
   const row = (await prisma.automation.findUnique({ where: { id: automationId }, select: ROW_SELECT })) as AutomationRow | null
   if (!row) return null

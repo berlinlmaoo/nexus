@@ -509,7 +509,7 @@ export async function PATCH(req: NextRequest) {
     // sebagai daftar kosong supaya bentuk balasan (dan klien yang membacanya) tidak berubah.
     const orphaned: Array<{ id: string; name: string | null }> = []
 
-    // BoD+ can set this member's WhatsApp/phone number (notif target + WA-bot fallback identity).
+    // BoD+ can set this member's phone number (contact detail on the account).
     if (phoneNumber !== undefined) {
       let normalized: string | null = null
       if (phoneNumber !== null && phoneNumber !== "") {
@@ -518,7 +518,7 @@ export async function PATCH(req: NextRequest) {
         }
         normalized = normalizeIndonesianPhoneNumber(phoneNumber)
       }
-      // The number belongs to the whole account (WA identity, notifications), not to this workspace.
+      // The number belongs to the whole account, not to this workspace.
       // Only checked when it actually changes: the member editor re-sends the unchanged number with
       // every save (shift, rest days…), and those saves must keep working.
       const currentPhone = await prisma.user.findUnique({ where: { id: targetMember.userId }, select: { phoneNumber: true } })

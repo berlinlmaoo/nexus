@@ -268,14 +268,6 @@ export const updateProjectSchema = z.object({
   autoAssignAssigneeIds: z.array(idString).max(50).optional(),
 })
 
-// ── Webhooks ────────────────────────────────────────────────────
-
-export const createWebhookSchema = z.object({
-  url: z.string().url("Invalid webhook URL"),
-  events: z.array(z.string().max(50)).min(1, "At least one event is required").max(20),
-  projectId: idString.nullable().optional(),
-})
-
 // ── Goals ───────────────────────────────────────────────────────
 
 export const createGoalSchema = z.object({

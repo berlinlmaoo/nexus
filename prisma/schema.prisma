@@ -39,9 +39,8 @@ model User {
   /// unik penuh dan menolak setiap baris kedua yang NULL.
   googleWorkspaceEmail String?
   phoneNumber    String?
-  whatsappId       String?         @unique // verified WhatsApp identity (LID/JID) for the Gideon WA bot
-  waLinkCode       String?         // short-lived code to link WhatsApp (self-service)
-  waLinkExpiresAt  DateTime?
+  // whatsappId / waLinkCode / waLinkExpiresAt: retired 12 Oct 2026 with the NEXUS WhatsApp feature. The
+  // columns stay in the database (unused) until prisma/sql/2026-10-12-retire-wa-webhooks-DROP.sql runs.
   role           SystemRole        @default(MEMBER)
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
@@ -70,7 +69,6 @@ model User {
   notificationPref NotificationPreference?
   auditLogs        AuditLog[]
   accounts         Account[]
-  webhooks         Webhook[]
   inviteTokens     InviteToken[]
   portfolios       Portfolio[]
   commentReactions CommentReaction[]
@@ -535,7 +533,6 @@ model Project {
   financeValues  FinanceValue[]
   statusUpdates  StatusUpdate[]
   pages          ProjectPage[]
-  webhooks           Webhook[]
   goalProjects       GoalProject[]
   portfolioProjects  PortfolioProject[]
   teamProjects       TeamProject[]
@@ -984,14 +981,14 @@ model Automation {
   enabled    Boolean   @default(true)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @default(now()) @updatedAt
-  /// Who made it; clock- and webhook-driven runs act as this person (else a project lead).
+  /// Who made it; clock-driven runs act as this person (else a project lead).
   createdById String?
   lastRunAt     DateTime?
   /// SUCCESS | PARTIAL | FAILED | SKIPPED of the last run.
   lastRunStatus String?
   runCount      Int       @default(0)
-  /// Secret path part of the inbound webhook (/api/automations/hook/<token>) for WEBHOOK_RECEIVED rules.
-  webhookToken  String?   @unique
+  // webhookToken: retired 12 Oct 2026 with the "Webhook received" trigger; column dropped by
+  // prisma/sql/2026-10-12-retire-wa-webhooks-DROP.sql.
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1009,7 +1006,7 @@ model AutomationRun {
   projectId    String
   /// No FK: the task may be archived/deleted by the run itself and the log must survive it.
   taskId       String?
-  /// task_created | task_updated | comment_added | form_submitted | due_approaching | due_reached | scheduled | webhook | manual
+  /// task_created | task_updated | comment_added | form_submitted | due_approaching | due_reached | scheduled | manual (old rows: webhook)
   event        String
   trigger      String
   /// RUNNING | SUCCESS | PARTIAL | FAILED | SKIPPED
@@ -1932,11 +1929,10 @@ model SyncedBlock {
 model NotificationPreference {
   id                String   @id @default(cuid())
   emailEnabled      Boolean  @default(true)
-  waEnabled         Boolean  @default(false)
+  // waEnabled / waPhone: retired 12 Oct 2026 (WhatsApp channel); dropped by 2026-10-12-retire-wa-webhooks-DROP.sql.
   slackEnabled      Boolean  @default(false)
   desktopEnabled    Boolean  @default(false)
   desktopSoundEnabled Boolean @default(true)
-  waPhone           String?
   slackWebhook      String?
   taskAssigned      Boolean  @default(true)
   taskDueSoon       Boolean  @default(true)
@@ -2016,37 +2012,8 @@ model Account {
 
 // ─── BATCH B MODELS ──────────────────────────────────────────
 
-model Webhook {
-  id        String   @id @default(cuid())
-  url       String
-  events    String[] // ["task.created", "task.updated", "task.completed", "comment.created", "project.updated"]
-  secret    String   @default(cuid()) // for HMAC signing
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  projectId String?
-  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  deliveries WebhookDelivery[]
-}
-
-model WebhookDelivery {
-  id         String   @id @default(cuid())
-  event      String
-  payload    Json
-  statusCode Int?
-  response   String?
-  success    Boolean  @default(false)
-  attempts   Int      @default(0)
-  createdAt  DateTime @default(now())
-
-  webhookId  String
-  webhook    Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
-}
+// Webhook / WebhookDelivery: retired 12 Oct 2026 (owner: "fitur whatsapp, webhooks hapus aja"). The
+// tables stay in the database, unused, until prisma/sql/2026-10-12-retire-wa-webhooks-DROP.sql runs.
 
 model InviteToken {
   id        String      @id @default(cuid())

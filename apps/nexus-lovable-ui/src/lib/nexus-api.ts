@@ -1340,8 +1340,6 @@ export type NexusAutomation = {
   lastRunStatus?: string | null;
   runCount?: number;
   nextRunAt?: string | null;
-  /** Inbound URL of a "Webhook received" rule; only sent to people who can edit. */
-  webhookUrl?: string;
 };
 
 export type NexusAutomationRun = {
@@ -1573,15 +1571,6 @@ export type NexusFavorite = {
   id: string;
   type?: string;
   targetId?: string;
-};
-
-export type NexusWebhook = {
-  id: string;
-  url: string;
-  events?: string[];
-  active?: boolean;
-  createdAt?: string | null;
-  project?: { id: string; name: string } | null;
 };
 
 export type NexusSession = {
@@ -2938,15 +2927,8 @@ export const nexusApi = {
   changePassword: (currentPassword: string, newPassword: string) => apiFetch<{ success?: boolean }>("/api/user/password", { method: "PATCH", body: JSON.stringify({ currentPassword, newPassword }) }),
   notificationPreferences: () => apiFetch<{ preferences?: NexusNotificationPrefs }>("/api/notifications/preferences"),
   updateNotificationPreferences: (payload: Partial<NexusNotificationPrefs>) => apiFetch<{ preferences?: NexusNotificationPrefs }>("/api/notifications/preferences", { method: "PATCH", body: JSON.stringify(payload) }),
-  // WhatsApp bot linking (Gideon)
-  waLinkStatus: () => apiFetch<{ linked: boolean }>("/api/notifications/wa/link"),
-  waLinkGenerate: () => apiFetch<{ code: string; expiresAt: string; deepLink: string | null; botNumber: string | null }>("/api/notifications/wa/link", { method: "POST" }),
-  waUnlink: () => apiFetch<{ ok?: boolean }>("/api/notifications/wa/link", { method: "DELETE" }),
 
-  // --- Webhooks + sessions ---
-  webhooks: () => apiFetch<NexusWebhook[]>("/api/webhooks"),
-  createWebhook: (payload: { url: string; events: string[]; projectId?: string | null }) => apiFetch<NexusWebhook>("/api/webhooks", { method: "POST", body: JSON.stringify(payload) }),
-  deleteWebhook: (id: string) => apiFetch<{ success?: boolean }>(`/api/webhooks/${id}`, { method: "DELETE" }),
+  // --- Sessions ---
   userSessions: () => apiFetch<{ sessions: NexusSession[] }>("/api/user/sessions"),
   revokeSession: (id: string) => apiFetch<{ success?: boolean }>(`/api/user/sessions/${id}`, { method: "DELETE" }),
 
@@ -2986,7 +2968,7 @@ export const nexusApi = {
   // --- Automations ---
   automations: (projectId: string) => apiFetch<{ automations: NexusAutomation[]; canEdit?: boolean }>(`/api/automations?projectId=${encodeURIComponent(projectId)}`),
   createAutomation: (payload: { name: string; projectId: string; trigger: NexusAutomationRule; action?: NexusAutomationRule; actions?: NexusAutomationRule[]; conditions?: NexusAutomationConditions | null; enabled?: boolean }) => apiFetch<{ automation: NexusAutomation }>("/api/automations", { method: "POST", body: JSON.stringify(payload) }),
-  updateAutomation: (payload: { id: string; enabled?: boolean; name?: string; trigger?: NexusAutomationRule; action?: NexusAutomationRule; actions?: NexusAutomationRule[]; conditions?: NexusAutomationConditions | null; regenerateWebhookToken?: boolean }) => apiFetch<{ automation: NexusAutomation }>("/api/automations", { method: "PATCH", body: JSON.stringify(payload) }),
+  updateAutomation: (payload: { id: string; enabled?: boolean; name?: string; trigger?: NexusAutomationRule; action?: NexusAutomationRule; actions?: NexusAutomationRule[]; conditions?: NexusAutomationConditions | null }) => apiFetch<{ automation: NexusAutomation }>("/api/automations", { method: "PATCH", body: JSON.stringify(payload) }),
   automationRuns: (automationId: string, before?: string) => apiFetch<{ runs: NexusAutomationRun[]; hasMore: boolean }>(`/api/automations/runs?automationId=${encodeURIComponent(automationId)}&limit=50${before ? `&before=${encodeURIComponent(before)}` : ""}`),
   runAutomation: (id: string, taskId?: string) => apiFetch<{ run: { runId: string | null; status: string; steps: NexusAutomationRun["steps"] } | null; skipped?: boolean; reason?: string }>("/api/automations/run", { method: "POST", body: JSON.stringify({ id, taskId }) }),
   deleteAutomation: (id: string) => apiFetch<{ success?: boolean }>(`/api/automations?id=${encodeURIComponent(id)}`, { method: "DELETE" }),

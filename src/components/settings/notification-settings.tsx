@@ -6,17 +6,15 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { Bell, Mail, MessageSquare, Hash, Loader2, MonitorSpeaker, Volume2 } from "lucide-react"
+import { Bell, Mail, Hash, Loader2, MonitorSpeaker, Volume2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
 interface NotifPrefs {
   emailEnabled: boolean
-  waEnabled: boolean
   slackEnabled: boolean
   desktopEnabled: boolean
   desktopSoundEnabled: boolean
-  waPhone: string | null
   slackWebhook: string | null
   taskAssigned: boolean
   taskDueSoon: boolean
@@ -71,11 +69,9 @@ function ToggleRow({
 export function NotificationSettings() {
   const [prefs, setPrefs] = useState<NotifPrefs>({
     emailEnabled: true,
-    waEnabled: false,
     slackEnabled: false,
     desktopEnabled: false,
     desktopSoundEnabled: true,
-    waPhone: null,
     slackWebhook: null,
     taskAssigned: true,
     taskDueSoon: true,
@@ -181,26 +177,6 @@ export function NotificationSettings() {
             checked={prefs.emailEnabled}
             onChange={() => toggle("emailEnabled")}
           />
-          <Separator />
-          <ToggleRow
-            icon={<MessageSquare className="h-4 w-4" />}
-            label="WhatsApp Notifications"
-            description="Receive notifications via WhatsApp"
-            checked={prefs.waEnabled}
-            onChange={() => toggle("waEnabled")}
-          />
-          {prefs.waEnabled && (
-            <div className="pl-8 space-y-1">
-              <Label htmlFor="wa-phone" className="text-xs">Phone Number</Label>
-              <Input
-                id="wa-phone"
-                placeholder="+62812345678"
-                value={prefs.waPhone || ""}
-                onChange={(e) => setPrefs((p) => ({ ...p, waPhone: e.target.value || null }))}
-                className="max-w-xs"
-              />
-            </div>
-          )}
           <Separator />
           <ToggleRow
             icon={<Hash className="h-4 w-4" />}

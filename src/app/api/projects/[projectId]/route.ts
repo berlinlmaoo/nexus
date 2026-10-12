@@ -7,7 +7,6 @@ import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { deleteKeepingSnapshot } from "@/lib/deletion-snapshot"
 import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
-import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import {
   normalizeAutoAssignConfig,
   ProjectAutoAssignConfigError,
@@ -290,12 +289,6 @@ export async function PATCH(
       existing.members.map((m) => m.userId),
     )
 
-    // Webhook: project.updated
-    dispatchWebhookEvent("project.updated", {
-      projectId: (await params).projectId,
-      name: project.name,
-      changes: body,
-    }, (await params).projectId).catch(() => {})
 
     return NextResponse.json(project)
   } catch (error) {

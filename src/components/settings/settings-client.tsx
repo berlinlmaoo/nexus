@@ -2,11 +2,10 @@
 
 import { useState } from "react"
 import type { LucideIcon } from "lucide-react"
-import { User, Building2, Camera, Loader2, Bell, Webhook, Upload, Users, Lock, ChevronRight, Activity } from "lucide-react"
+import { User, Building2, Camera, Loader2, Bell, Upload, Users, Lock, ChevronRight, Activity } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 import { AuditLogViewer } from "./audit-log-viewer"
-import { WebhooksManager } from "./webhooks-manager"
 import { ImportWizard } from "./import-wizard"
 import { NotificationSettings } from "./notification-settings"
 import { PasswordChangeSection } from "./password-change"
@@ -25,7 +24,7 @@ interface SettingsClientProps {
   workspaceRole?: string | null
 }
 
-type SettingsTab = "profile" | "security" | "members" | "attendance" | "notifications" | "webhooks" | "import" | "audit"
+type SettingsTab = "profile" | "security" | "members" | "attendance" | "notifications" | "import" | "audit"
 
 export function SettingsClient({ user, workspace, isAdmin, canAccessAttendanceSettings }: SettingsClientProps) {
   const router = useRouter()
@@ -40,14 +39,13 @@ export function SettingsClient({ user, workspace, isAdmin, canAccessAttendanceSe
     { id: "members", label: "Operatives", icon: Users },
     ...(canAccessAttendanceSettings && workspace ? [{ id: "attendance" as SettingsTab, label: "Attendance", icon: Building2 }] : []),
     { id: "notifications", label: "Intelligence", icon: Bell },
-    { id: "webhooks", label: "Webhooks", icon: Webhook },
     { id: "import", label: "Migration", icon: Upload },
     { id: "audit", label: "Protocols", icon: Activity },
   ]
 
   const handleSaveProfile = async () => {
     if (phoneNumber.trim() && !isLikelyPhoneNumber(phoneNumber)) {
-      toast.error("Nomor WhatsApp belum valid", {
+      toast.error("Nomor HP belum valid", {
         description: "Pakai format 0812..., 62812..., atau +62812...",
       })
       return
@@ -154,7 +152,7 @@ export function SettingsClient({ user, workspace, isAdmin, canAccessAttendanceSe
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 ml-1">WhatsApp Number</label>
+                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 ml-1">Phone Number</label>
                       <input
                         value={phoneNumber}
                         onChange={(e) => setPhoneNumber(e.target.value)}
@@ -166,7 +164,7 @@ export function SettingsClient({ user, workspace, isAdmin, canAccessAttendanceSe
                       <p className="ml-1 text-xs font-medium text-on-surface-variant/50">
                         {phoneNumber.trim() && isLikelyPhoneNumber(phoneNumber)
                           ? `Akan disimpan sebagai ${normalizeIndonesianPhoneNumber(phoneNumber)}`
-                          : "Dipakai nanti untuk WhatsApp AI agent dan notifikasi operasional."}
+                          : "Nomor kontak di profil kamu."}
                       </p>
                     </div>
                     <Button 
@@ -214,7 +212,6 @@ export function SettingsClient({ user, workspace, isAdmin, canAccessAttendanceSe
               )}
               {activeTab === "attendance" && <AttendanceSettingsSection workspace={workspace} />}
               {activeTab === "notifications" && <NotificationSettings />}
-              {activeTab === "webhooks" && <WebhooksManager />}
               {activeTab === "import" && <ImportWizard />}
               {activeTab === "audit" && <AuditLogViewer />}
             </div>

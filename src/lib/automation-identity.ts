@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma'
 /**
  * The identity project automations sign their own writes with (owner via coordinator, 12 Oct 2026):
  * comments, tasks, activity and audit rows an automation makes say "Automation" (⚡ avatar), not the
- * person who happened to trigger it. Who triggered it (or, for the clock and webhooks, who made the
+ * person who happened to trigger it. Who triggered it (or, for the clock, who made the
  * rule) is kept in the run log (AutomationRun.actorId) and as `triggeredBy` metadata.
  *
  * Same pattern as GIDEON (lib/gideon-identity.ts):

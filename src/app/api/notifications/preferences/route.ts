@@ -4,12 +4,6 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
-import { isLikelyPhoneNumber, normalizeIndonesianPhoneNumber } from "@/lib/phone-number"
-
-function isMissingSchemaError(error: unknown) {
-  return typeof error === "object" && error !== null && "code" in error
-    && (error.code === "P2021" || error.code === "P2022")
-}
 
 export async function GET() {
   try {
@@ -20,34 +14,21 @@ export async function GET() {
     const pref = await prisma.notificationPreference.findUnique({
       where: { userId: session.user.id },
     })
-    const userPhoneNumber = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { phoneNumber: true },
-    })
-      .then((user) => user?.phoneNumber ?? null)
-      .catch((error) => {
-        if (isMissingSchemaError(error)) return null
-        throw error
-      })
 
-    // Return defaults if no preferences set
-    const preferences = {
-      ...(pref || {
-        emailEnabled: true,
-        waEnabled: false,
-        slackEnabled: false,
-        desktopEnabled: false,
-        desktopSoundEnabled: true,
-        waPhone: null,
-        slackWebhook: null,
-        taskAssigned: true,
-        taskDueSoon: true,
-        commentMention: true,
-        projectInvite: true,
-        statusUpdate: true,
-        automation: true,
-      }),
-      waPhone: pref?.waPhone ?? userPhoneNumber,
+    // Return defaults if no preferences set. (The WhatsApp channel — waEnabled / waPhone — was removed
+    // on 12 Oct 2026; no released app reads those keys.)
+    const preferences = pref || {
+      emailEnabled: true,
+      slackEnabled: false,
+      desktopEnabled: false,
+      desktopSoundEnabled: true,
+      slackWebhook: null,
+      taskAssigned: true,
+      taskDueSoon: true,
+      commentMention: true,
+      projectInvite: true,
+      statusUpdate: true,
+      automation: true,
     }
     // Flat fields for the older callers, plus the same object under `preferences`, which is what
     // the SPA (apps/nexus-lovable-ui settings -> NotificationsSection) reads (method-fix 2026-09-24).
@@ -64,29 +45,17 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   try {
+    // waEnabled / waPhone from an old client are ignored: the WhatsApp channel was removed (12 Oct 2026).
     const body = await req.json()
-    const waPhone =
-      typeof body.waPhone === "string" && body.waPhone.trim()
-        ? normalizeIndonesianPhoneNumber(body.waPhone)
-        : null
-
-    if (body.waPhone && !isLikelyPhoneNumber(body.waPhone)) {
-      return NextResponse.json(
-        { error: "Enter a valid Indonesian WhatsApp number, for example +6281234567890." },
-        { status: 400 }
-      )
-    }
 
     const pref = await prisma.notificationPreference.upsert({
       where: { userId: session.user.id },
       create: {
         userId: session.user.id,
         emailEnabled: body.emailEnabled ?? true,
-        waEnabled: body.waEnabled ?? false,
         slackEnabled: body.slackEnabled ?? false,
         desktopEnabled: body.desktopEnabled ?? false,
         desktopSoundEnabled: body.desktopSoundEnabled ?? true,
-        waPhone,
         slackWebhook: body.slackWebhook || null,
         taskAssigned: body.taskAssigned ?? true,
         taskDueSoon: body.taskDueSoon ?? true,
@@ -97,11 +66,9 @@ export async function PUT(req: NextRequest) {
       },
       update: {
         emailEnabled: body.emailEnabled,
-        waEnabled: body.waEnabled,
         slackEnabled: body.slackEnabled,
         desktopEnabled: body.desktopEnabled,
         desktopSoundEnabled: body.desktopSoundEnabled,
-        waPhone,
         slackWebhook: body.slackWebhook,
         taskAssigned: body.taskAssigned,
         taskDueSoon: body.taskDueSoon,
@@ -112,16 +79,6 @@ export async function PUT(req: NextRequest) {
         automation: typeof body.automation === "boolean" ? body.automation : undefined,
       },
     })
-
-    if (waPhone) {
-      await prisma.user.update({
-        where: { id: session.user.id },
-        data: { phoneNumber: waPhone },
-      })
-        .catch((error) => {
-          if (!isMissingSchemaError(error)) throw error
-        })
-    }
 
     logAudit({ action: "update", entityType: "notificationPreference", entityId: pref.id, userId: session.user.id, request: req })
 
@@ -134,13 +91,11 @@ export async function PUT(req: NextRequest) {
 
 // PATCH = partial update (method-fix 2026-09-24).
 // The web settings screen sends only the toggle that changed, e.g. { desktopEnabled: true }.
-// PUT cannot serve that: it rewrites every column, and a body without waPhone would null the
-// user's WhatsApp number. PATCH writes ONLY the keys present in the body; everything else keeps
+// PUT cannot serve that: it rewrites every column. PATCH writes ONLY the keys present in the body; everything else keeps
 // its stored value (or the schema default, which equals DEFAULT_PREFS in notification-service,
 // when the row is created here for the first time).
 const PATCHABLE_BOOLEANS = [
   "emailEnabled",
-  "waEnabled",
   "slackEnabled",
   "desktopEnabled",
   "desktopSoundEnabled",
@@ -153,7 +108,6 @@ const PATCHABLE_BOOLEANS = [
 ] as const
 
 type PreferencePatch = Partial<Record<(typeof PATCHABLE_BOOLEANS)[number], boolean>> & {
-  waPhone?: string | null
   slackWebhook?: string | null
 }
 
@@ -181,25 +135,6 @@ export async function PATCH(req: NextRequest) {
     data[key] = value
   }
 
-  if (input.waPhone !== undefined) {
-    const raw = input.waPhone
-    if (raw !== null && typeof raw !== "string")
-      return NextResponse.json({ error: "waPhone must be a string or null" }, { status: 400 })
-    if (typeof raw === "string" && raw.trim()) {
-      // Same rule and message as PUT.
-      if (!isLikelyPhoneNumber(raw)) {
-        return NextResponse.json(
-          { error: "Enter a valid Indonesian WhatsApp number, for example +6281234567890." },
-          { status: 400 }
-        )
-      }
-      data.waPhone = normalizeIndonesianPhoneNumber(raw)
-    } else {
-      // Explicit null / "" clears it - only when the caller actually sent the key.
-      data.waPhone = null
-    }
-  }
-
   if (input.slackWebhook !== undefined) {
     const raw = input.slackWebhook
     if (raw !== null && typeof raw !== "string")
@@ -216,17 +151,6 @@ export async function PATCH(req: NextRequest) {
       create: { userId: session.user.id, ...data },
       update: data,
     })
-
-    // Same side effect as PUT: a newly set WhatsApp number is also stored on the user.
-    if (data.waPhone) {
-      await prisma.user.update({
-        where: { id: session.user.id },
-        data: { phoneNumber: data.waPhone },
-      })
-        .catch((error) => {
-          if (!isMissingSchemaError(error)) throw error
-        })
-    }
 
     logAudit({
       action: "update",

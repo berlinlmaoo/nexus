@@ -6,7 +6,6 @@ import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { notifyMention, notifyCommentAdded } from "@/lib/notification-service"
 import { executeAutomations } from "@/lib/automation-engine"
-import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitCommentAdded } from "@/lib/socket-emitter"
 import { checkProjectAccess } from "@/lib/rbac"
 import { answerGideonMention, mentionsGideon } from "@/lib/gideon-triggers"
@@ -130,14 +129,6 @@ export async function POST(
       commentId: comment.id,
     }).catch(() => {})
 
-    // Webhook: comment.created
-    dispatchWebhookEvent("comment.created", {
-      commentId: comment.id,
-      taskId: (await params).taskId,
-      taskTitle: task.title,
-      content: content.slice(0, 500),
-      authorId: session.user.id!,
-    }, task.taskList.projectId).catch(() => {})
 
     // Notify all assignees + followers about the new comment
     notifyCommentAdded({
@@ -190,7 +181,7 @@ export async function POST(
       }
     }
     // Note: we do NOT skip self here — parity with task-assignment (which also notifies you when you
-    // assign yourself), and it lets a single account verify the mention → WhatsApp pipeline end-to-end.
+    // assign yourself), and it lets a single account verify the mention → notification pipeline end-to-end.
     for (const uid of mentionIds) {
       notifyMention({
         mentionedUserId: uid,

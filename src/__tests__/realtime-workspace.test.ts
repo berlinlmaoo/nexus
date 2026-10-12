@@ -128,7 +128,6 @@ vi.mock("@/lib/project-sheets", () => ({ resolveSheetAccess: async () => ({ allo
 vi.mock("@/lib/chat-access", () => ({ conversationMemberAccess: async () => ({ ok: false }) }))
 vi.mock("@/lib/chat-membership", () => ({ syncProjectRoomSafe: async () => {}, syncUserRoomsSafe: async () => {} }))
 vi.mock("@/lib/team-sync", () => ({ syncProjectLinkedTeamAccess: async () => {} }))
-vi.mock("@/lib/webhook-dispatcher", () => ({ dispatchWebhookEvent: async () => {} }))
 vi.mock("@/lib/deletion-snapshot", () => ({
   deleteKeepingSnapshot: async () => {},
   restorableDelete: async () => {},

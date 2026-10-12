@@ -335,7 +335,7 @@ function DetailLink({ link, children }: { link: NexusAuditLink; children: ReactN
  */
 const RESTORABLE_TYPES = new Set([
   "project", "task", "comment", "attachment", "proof_annotation", "doc", "project_page", "project_sheet", "sheet_comment",
-  "custom_field", "form", "automation", "webhook", "workflow_bundle", "goal", "portfolio", "calendar", "room_booking",
+  "custom_field", "form", "automation", "workflow_bundle", "goal", "portfolio", "calendar", "room_booking",
   "announcement", "saved_search", "project_view", "pnl_expense", "pnl_income", "pnl_payment", "pnl_category", "pnl_stage", "pnl_recurring",
   "pnl_expense_attachment", "pnl_budget", "holiday", "attendance_request", "attendance_office", "org_unit_member",
   "vault_file", "vault_folder", "vault_file_version", "vault_trash", "task_list", "project_folder", "org_unit", "sheet_rows", "form_submission",
@@ -348,7 +348,7 @@ const RESTORE_BUTTON: Record<string, string> = {
   project: "Restore project", task: "Restore task", comment: "Restore comment", attachment: "Restore file",
   proof_annotation: "Restore annotation", doc: "Restore doc", project_page: "Restore page", project_sheet: "Restore sheet",
   sheet_comment: "Restore comment", custom_field: "Restore custom field", form: "Restore form", automation: "Restore automation",
-  webhook: "Restore webhook", workflow_bundle: "Restore workflow bundle", goal: "Restore goal", portfolio: "Restore portfolio",
+  workflow_bundle: "Restore workflow bundle", goal: "Restore goal", portfolio: "Restore portfolio",
   calendar: "Restore calendar", room_booking: "Restore booking", announcement: "Restore announcement",
   saved_search: "Restore saved search", project_view: "Restore view", pnl_expense: "Restore expense", pnl_income: "Restore income", pnl_payment: "Restore payment",
   pnl_category: "Restore category", pnl_stage: "Restore stage", pnl_recurring: "Restore recurring expense",

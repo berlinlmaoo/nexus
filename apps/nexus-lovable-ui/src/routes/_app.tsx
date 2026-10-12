@@ -11,7 +11,6 @@ import { AttendanceReminderModal } from "@/components/attendance/AttendanceRemin
 import { AnnouncementModal } from "@/components/AnnouncementModal";
 import { AppStoreModal } from "@/components/AppStoreModal";
 import { XpPenaltyModal } from "@/components/XpPenaltyModal";
-import { PhoneNumberPrompt } from "@/components/PhoneNumberPrompt";
 import { RealtimeProvider } from "@/lib/realtime";
 import { ChatUnreadTitle } from "@/lib/chat-unread";
 import { VaultUploadPanel } from "@/components/vault/VaultUploadPanel";
@@ -144,7 +143,6 @@ function AppLayout() {
         <AnnouncementModal />
         <AppStoreModal />
         <XpPenaltyModal />
-        <PhoneNumberPrompt />
         {/* Z Vault uploads: here, above every route, so they keep going wherever the person goes. */}
         <VaultUploadPanel />
         {/* "(3) NEXUS Phaëthon" in the browser tab while chats are unread. */}

@@ -14,7 +14,6 @@ import {
 import { getFormAccessStatus } from "@/lib/form-access-schedule"
 import { executeAutomations, runAutomations } from "@/lib/automation-engine"
 import { resolveAutoAssignAssigneeIds } from "@/lib/project-auto-assign"
-import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitTaskCreated } from "@/lib/socket-emitter"
 import { formResponseLimit, normalizeFormSettings, RESPONSE_LIMIT_MESSAGE } from "@/lib/form-settings"
 import { createInAppNotification } from "@/lib/notification-service"
@@ -585,17 +584,6 @@ export async function POST(
     // "Form submitted" automations (12 Oct 2026): the same task, as a submission of THIS form.
     runAutomations({ kind: "form_submitted", projectId: form.projectId, actorId: fallbackCreatorId, taskId: result.task.id, formId: form.id }).catch(() => {})
 
-    dispatchWebhookEvent("task.created", {
-      taskId: result.task.id,
-      title: result.task.title,
-      status: result.task.status,
-      priority: result.task.priority,
-      taskListId: result.task.taskListId,
-      creatorId: fallbackCreatorId,
-      source: "form",
-      formId: form.id,
-      attachmentCount: attachments.length,
-    }, form.projectId).catch(() => {})
 
     emitTaskCreated(form.projectId, JSON.parse(JSON.stringify(result.task)))
 

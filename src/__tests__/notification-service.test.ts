@@ -46,16 +46,13 @@ describe('notifyTaskAssigned', () => {
     mockSendEmail.mockResolvedValue(undefined as never)
   })
 
-  it('sends WhatsApp assignment notification by default using user.phoneNumber fallback', async () => {
+  it('creates the in-app notification and never calls a WhatsApp bridge (feature removed 12 Oct 2026)', async () => {
     mockUserFindUnique.mockResolvedValue({
       name: 'Naren',
       email: 'naren@example.com',
-      phoneNumber: '081234567890',
     } as never)
     mockPreferenceFindUnique.mockResolvedValue({
       emailEnabled: false,
-      waEnabled: false,
-      waPhone: null,
       taskAssigned: true,
     } as never)
 
@@ -68,41 +65,7 @@ describe('notifyTaskAssigned', () => {
       assignedByName: 'GIDEON',
     })
 
-    expect(fetch).toHaveBeenCalledWith(
-      'http://host.docker.internal:3001/send',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
-          chatId: '6281234567890@s.whatsapp.net',
-          message: '[NEXUS] GIDEON assigned you "Do the thing" in Ops',
-        }),
-      })
-    )
-  })
-
-  it('respects the default WhatsApp assignment kill-switch', async () => {
-    vi.stubEnv('NEXUS_WA_TASK_ASSIGNMENTS_DEFAULT_ENABLED', 'false')
-    mockUserFindUnique.mockResolvedValue({
-      name: 'Naren',
-      email: 'naren@example.com',
-      phoneNumber: '081234567890',
-    } as never)
-    mockPreferenceFindUnique.mockResolvedValue({
-      emailEnabled: false,
-      waEnabled: false,
-      waPhone: null,
-      taskAssigned: true,
-    } as never)
-
-    await notifyTaskAssigned({
-      assigneeId: 'user-1',
-      taskId: 'task-1',
-      taskTitle: 'Do the thing',
-      projectName: 'Ops',
-      projectId: 'project-1',
-      assignedByName: 'GIDEON',
-    })
-
+    expect(mockNotificationCreate).toHaveBeenCalled()
     expect(fetch).not.toHaveBeenCalled()
   })
 })

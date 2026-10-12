@@ -29,7 +29,6 @@ export const TRIGGER_TYPES = [
   "COMMENT_ADDED",
   "FORM_SUBMITTED",
   "SCHEDULED",
-  "WEBHOOK_RECEIVED",
 ] as const
 export type TriggerType = (typeof TRIGGER_TYPES)[number]
 
@@ -49,11 +48,10 @@ export const ACTION_TYPES = [
   "CREATE_SUBTASK",
   "DUPLICATE_TASK",
   "ARCHIVE_TASK",
-  "CALL_WEBHOOK",
 ] as const
 export type ActionType = (typeof ACTION_TYPES)[number]
 
-/** Actions that need a task to act on. Under a scheduled or webhook trigger with no task they are skipped. */
+/** Actions that need a task to act on. Under a scheduled trigger with no task they are skipped. */
 export const TASK_ACTIONS = new Set<ActionType>([
   "SET_STATUS", "MARK_COMPLETE", "SET_PRIORITY", "ASSIGN_TO", "UNASSIGN", "SET_FIELD", "MOVE_TO_SECTION",
   "ADD_TAG", "REMOVE_TAG", "ADD_COMMENT", "CREATE_SUBTASK", "DUPLICATE_TASK", "ARCHIVE_TASK",
@@ -120,10 +118,14 @@ const TRIGGER_ALIASES: Record<string, TriggerType> = {
   SCHEDULED: "SCHEDULED",
   SCHEDULE: "SCHEDULED",
   EVERY: "SCHEDULED",
-  WEBHOOK_RECEIVED: "WEBHOOK_RECEIVED",
-  WEBHOOK: "WEBHOOK_RECEIVED",
-  WEBHOOK_IN: "WEBHOOK_RECEIVED",
 }
+
+/**
+ * Types that were removed on 12 Oct 2026 together with NEXUS webhooks (owner: "fitur whatsapp, webhooks
+ * hapus aja"): the inbound "Webhook received" trigger and the "Send webhook" action. They normalise to
+ * null, so a stored rule with that trigger never fires again and a stored "Send webhook" step is
+ * skipped by actionsOf; the rows themselves are kept, readable and editable.
+ */
 
 const ACTION_ALIASES: Record<string, ActionType> = {
   SET_STATUS: "SET_STATUS",
@@ -152,9 +154,6 @@ const ACTION_ALIASES: Record<string, ActionType> = {
   DUPLICATE: "DUPLICATE_TASK",
   ARCHIVE_TASK: "ARCHIVE_TASK",
   ARCHIVE: "ARCHIVE_TASK",
-  CALL_WEBHOOK: "CALL_WEBHOOK",
-  SEND_WEBHOOK: "CALL_WEBHOOK",
-  WEBHOOK: "CALL_WEBHOOK",
 }
 
 const LEGACY_CONDITION: Record<string, { field: string; op: ConditionOp }> = {
@@ -316,16 +315,6 @@ export function actionError(a: Rule): string | null {
       return a.value?.trim() ? null : "Write the comment"
     case "SET_FIELD":
       return a.field ? null : "Pick the field to set"
-    case "CALL_WEBHOOK": {
-      if (!a.value) return "Paste the webhook URL"
-      try {
-        const u = new URL(a.value)
-        if (u.protocol !== "https:") return "Webhook URL must use https"
-      } catch {
-        return "Invalid URL"
-      }
-      return null
-    }
     default:
       return null
   }
@@ -349,7 +338,6 @@ export type AutomationEventKind =
   | "due_approaching"
   | "due_reached"
   | "scheduled"
-  | "webhook"
   | "manual"
 
 export interface AutomationEventLike {
@@ -445,8 +433,6 @@ export function triggerMatches(trigger: Rule, event: AutomationEventLike): boole
       return event.kind === "due_reached"
     case "SCHEDULED":
       return event.kind === "scheduled"
-    case "WEBHOOK_RECEIVED":
-      return event.kind === "webhook"
     default:
       return false
   }
@@ -646,7 +632,7 @@ export function nextSlot(schedule: Schedule, from: Date): Date | null {
 
 /**
  * Fills {task}, {project}, {actor}, {status}, {priority}, {due}, {url} and {payload.some.key} in comment,
- * notification, task-title and webhook text. Unknown placeholders stay as typed.
+ * notification and task-title text. Unknown placeholders stay as typed.
  */
 export function fillTemplate(text: string, vars: Record<string, string | undefined>, payload?: unknown): string {
   return text.replace(/\{([\w.]+)\}/g, (m, k: string) => {

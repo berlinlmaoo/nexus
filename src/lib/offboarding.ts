@@ -14,7 +14,7 @@ import { WORKSPACE_HIERARCHY } from "@/lib/rbac"
  *    working day, 00:00 UTC of that Jakarta date, like AttendanceRecord.attendanceDate), so recaps of
  *    periods they were still part of can include them (lib/former-members.ts);
  *  - User.deactivatedAt: the account can no longer sign in anywhere (lib/auth.ts, credentials-auth,
- *    passkeys, socket, MCP, GIDEON, WhatsApp) and gets no notifications;
+ *    passkeys, socket, MCP, GIDEON) and gets no notifications;
  *  - every way back in is removed (the same list as POST /api/user/account/delete).
  *
  * NOTHING of theirs is deleted: attendance records, requests, corrections, XP, tasks they created or are
@@ -141,16 +141,13 @@ export async function offboardUser(input: OffboardInput, tx: Prisma.TransactionC
 
   // The account first, and conditionally: the row lock makes a second offboarding of the same person
   // running at the same moment wait for this one, then find deactivatedAt set and stop here. Every
-  // live session ends (lib/session-version.ts); WhatsApp is unlinked.
+  // live session ends (lib/session-version.ts).
   const deactivated = await tx.user.updateMany({
     where: { id: userId, deactivatedAt: null },
     data: {
       deactivatedAt: offboardedAt,
       deactivatedById: actorId,
       sessionVersion: { increment: 1 },
-      whatsappId: null,
-      waLinkCode: null,
-      waLinkExpiresAt: null,
     },
   })
   if (deactivated.count !== 1) throw new OffboardRefused(409, "ALREADY_OFFBOARDED", `${user.name} sudah di-offboard.`)
@@ -264,7 +261,7 @@ export type ReinstateResult = {
 /**
  * Undo an offboarding: the member rows come back from FormerMember.member (same role, settings and
  * joinedAt — and the same row id when it is still free), the FormerMember rows go, the account is
- * active again. NOT restored: projects, teams, passkeys, devices, sessions, the WhatsApp link, and the
+ * active again. NOT restored: projects, teams, passkeys, devices, sessions, and the
  * approver edges of people who reported to them (those were cleared; set them again in the chart).
  */
 export async function reinstateUser(input: ReinstateInput, tx: Prisma.TransactionClient): Promise<ReinstateResult> {

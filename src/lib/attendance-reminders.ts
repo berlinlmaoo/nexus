@@ -2,10 +2,10 @@ import prisma from "@/lib/prisma"
 import { getAttendanceDate, formatAttendanceDateKey, isWorkdayForAttendanceDate, resolveEffectiveAttendanceShift, resolveShiftWindowAt, safeAttendanceTimezone, isRestDayForMember, FLEXI_WORK_HOURS } from "@/lib/attendance"
 import { isHoliday } from "@/lib/holidays"
 import { isOutageDay, usualOfficeByUser } from "@/lib/attendance-absence"
-import { notifyAttendanceReminder, sendWA } from "@/lib/notification-service"
-import { publicBaseUrl } from "./public-url"
+import { notifyAttendanceReminder } from "@/lib/notification-service"
 
-// WhatsApp reminders: nudge staff 15 minutes before their shift to check IN, and 15 minutes before
+// Attendance reminders (push + in-app; the WhatsApp copy was removed 12 Oct 2026): nudge staff
+// 15 minutes before their shift to check IN, and 15 minutes before
 // shift end to check OUT. Driven by a per-minute cron (same cadence as accrue-late).
 //
 // Time handling is OVERNIGHT-AWARE: we work in ABSOLUTE datetimes (resolveShiftWindowAt rolls a shift
@@ -20,8 +20,8 @@ import { publicBaseUrl } from "./public-url"
 // dryRun (the GET preview) skips the minute gate and lists everyone in scope today with their resolved
 // shift + the exact clock times they'd be pinged — so the roster can be verified before any real send.
 // Pengingat MASUK tiga kali — 30 dan 15 menit sebelum, lalu tepat pada jam masuk — dan PULANG sekali,
-// tepat pada jam pulang. Semuanya push ke HP lewat notifyAttendanceReminder; WhatsApp tetap dicoba
-// kalau ada nomor, tapi bridge-nya sudah lama mati dan bukan lagi jalur yang diandalkan.
+// tepat pada jam pulang. Semuanya push ke HP lewat notifyAttendanceReminder (salinan WhatsApp dihapus
+// 12 Okt 2026 bersama fitur WhatsApp NEXUS).
 const CHECKIN_OFFSETS = [30, 15, 0] as const
 const CHECKOUT_OFFSETS = [0] as const
 const REMINDER_LEAD_MINUTES = 15 // hanya untuk label pratinjau lama
@@ -65,17 +65,6 @@ function zoneParts(date: Date, tz: string): { ymd: string; hm: string; key: stri
   return { ymd, hm, key: `${ymd} ${hm}` }
 }
 
-function attendanceUrl(): string {
-  // Was `NEXUS_PUBLIC_URL || NEXTAUTH_URL` with no filter, so behind nginx it happily emitted a
-  // 127.0.0.1 link into a WhatsApp reminder.
-  const base = publicBaseUrl()
-  return base && !/(localhost|127\.0\.0\.1)/.test(base) ? `${base}/attendance` : ""
-}
-
-function firstName(name?: string | null): string {
-  return (name ?? "").trim().split(/\s+/)[0] || "kamu"
-}
-
 /** Keep only the leading + trailing digits so a roster preview never exposes full numbers. */
 function maskPhone(phone: string): string {
   const d = phone.replace(/[^\d+]/g, "")
@@ -99,9 +88,9 @@ function dayRecord(userId: string, workspaceId: string, attendanceDate: Date) {
 }
 
 /**
- * Send any check-in / check-out WhatsApp reminders due at `now` (or, with `dryRun`, just compute who is
+ * Send any check-in / check-out reminders due at `now` (or, with `dryRun`, just compute who is
  * in scope today and return the roster without sending). Recipients = every workspace member required to
- * absen (role not BOD / One-Above-All) who has a phone number on their profile. Skips non-workdays,
+ * absen (role not BOD / One-Above-All). Skips non-workdays,
  * holidays, outage days, and anyone on approved/pending leave or day-off.
  */
 export async function sendAttendanceReminders(now: Date = new Date(), opts?: { dryRun?: boolean }): Promise<AttendanceReminderResult> {
@@ -122,8 +111,6 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
     result.note = "Hari ini ditandai outage — tidak ada reminder."
     return result
   }
-
-  const url = attendanceUrl()
 
   // One active office per workspace (used for workdays / timezone / default shift) — same convention as
   // the late-accrual & absence-deduction crons.
@@ -213,9 +200,6 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
             offsetMinutes: off,
           })
           if (shouldSend) {
-            if (phone) await sendWA(phone, off > 0
-              ? `🔔 *Reminder Absen Masuk*\nHai ${firstName(member.user?.name)}, ${off} menit lagi jam masuk (${shiftToday.shiftStartTime}). Jangan lupa check-in di NEXUS ya 🙌${url ? `\n${url}` : ""}`
-              : `⏰ *Waktunya Absen Masuk*\nHai ${firstName(member.user?.name)}, sudah jam ${shiftToday.shiftStartTime}. Check-in sekarang ya 🙌${url ? `\n${url}` : ""}`)
             result.checkinSent++
           }
         }
@@ -261,9 +245,6 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
             offsetMinutes: off,
           })
           if (shouldSend) {
-            if (phone) await sendWA(phone, off > 0
-              ? `🔔 *Reminder Absen Pulang*\nHai ${firstName(member.user?.name)}, ${off} menit lagi jam pulang (${endLabel}). Jangan lupa check-out di NEXUS ya ✅${url ? `\n${url}` : ""}`
-              : `⏰ *Waktunya Absen Pulang*\nHai ${firstName(member.user?.name)}, sudah jam ${endLabel}. Jangan lupa check-out ya ✅${url ? `\n${url}` : ""}`)
             result.checkoutSent++
           }
         }

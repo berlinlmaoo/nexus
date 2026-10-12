@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST → the LIVE send (driven by the per-minute cron). Sends real WhatsApp messages.
+// POST → the LIVE send (driven by the per-minute cron). Sends real push / in-app reminders.
 export async function POST(req: NextRequest) {
   try {
     if (!(await authorize(req))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

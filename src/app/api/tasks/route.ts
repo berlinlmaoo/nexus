@@ -7,7 +7,6 @@ import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
 import { executeAutomations } from "@/lib/automation-engine"
-import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitTaskCreated } from "@/lib/socket-emitter"
 import type { Prisma } from "@/generated/prisma/client"
 import { TaskPriority, TaskStatus } from "@/generated/prisma"
@@ -328,7 +327,7 @@ export async function POST(request: NextRequest) {
 
     logAudit({ action: "create", entityType: "task", entityId: task.id, entityName: title, userId, request })
 
-    // Fire automations and webhook (non-blocking)
+    // Fire automations (non-blocking)
     executeAutomations(taskList.projectId, "task_created", {
       taskId: task.id,
       userId,
@@ -336,14 +335,6 @@ export async function POST(request: NextRequest) {
       assigneeIds: finalAssigneeIds,
     }).catch(() => {})
 
-    dispatchWebhookEvent("task.created", {
-      taskId: task.id,
-      title: task.title,
-      status: task.status,
-      priority: task.priority,
-      taskListId: task.taskListId,
-      creatorId: userId,
-    }, taskList.projectId).catch(() => {})
 
     // Real-time: broadcast to project room
     emitTaskCreated(taskList.projectId, JSON.parse(JSON.stringify(task)))

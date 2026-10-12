@@ -5,7 +5,6 @@ import { sendPushToUser, sendPushToUsers, type PushPayload } from "@/lib/apns"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
 import { pushImageUrl } from "@/lib/feed-push-image"
 import { emitNotification } from "@/lib/socket-emitter"
-import { postWaBridge } from "@/lib/wa-bridge"
 import {
   sendEmail,
   taskAssignedEmail,
@@ -15,7 +14,6 @@ import {
   statusUpdateEmail,
 } from "@/lib/email"
 import { createLogger } from "@/lib/logger"
-import { normalizeIndonesianPhoneNumber } from "@/lib/phone-number"
 import { publicBaseUrl, publicUrl } from "./public-url"
 
 const log = createLogger("notifications")
@@ -24,11 +22,9 @@ const log = createLogger("notifications")
 
 const DEFAULT_PREFS = {
   emailEnabled: true,
-  waEnabled: false,
   slackEnabled: false,
   desktopEnabled: false,
   desktopSoundEnabled: true,
-  waPhone: null as string | null,
   slackWebhook: null as string | null,
   taskAssigned: true,
   taskDueSoon: true,
@@ -55,11 +51,9 @@ async function getUserPrefs(userId: string): Promise<NotifPrefs> {
   })
   return {
     emailEnabled: pref?.emailEnabled ?? DEFAULT_PREFS.emailEnabled,
-    waEnabled: pref?.waEnabled ?? DEFAULT_PREFS.waEnabled,
     slackEnabled: pref?.slackEnabled ?? DEFAULT_PREFS.slackEnabled,
     desktopEnabled: pref?.desktopEnabled ?? DEFAULT_PREFS.desktopEnabled,
     desktopSoundEnabled: pref?.desktopSoundEnabled ?? DEFAULT_PREFS.desktopSoundEnabled,
-    waPhone: pref?.waPhone ?? DEFAULT_PREFS.waPhone,
     slackWebhook: pref?.slackWebhook ?? DEFAULT_PREFS.slackWebhook,
     taskAssigned: pref?.taskAssigned ?? DEFAULT_PREFS.taskAssigned,
     taskDueSoon: pref?.taskDueSoon ?? DEFAULT_PREFS.taskDueSoon,
@@ -92,12 +86,10 @@ async function getBatchPrefs(userIds: string[]): Promise<Map<string, NotifPrefs>
     const pref = prefs.find((p) => p.userId === userId)
     map.set(userId, {
       emailEnabled: pref?.emailEnabled ?? DEFAULT_PREFS.emailEnabled,
-      waEnabled: pref?.waEnabled ?? DEFAULT_PREFS.waEnabled,
-      slackEnabled: pref?.slackEnabled ?? DEFAULT_PREFS.slackEnabled,
+        slackEnabled: pref?.slackEnabled ?? DEFAULT_PREFS.slackEnabled,
       desktopEnabled: pref?.desktopEnabled ?? DEFAULT_PREFS.desktopEnabled,
       desktopSoundEnabled: pref?.desktopSoundEnabled ?? DEFAULT_PREFS.desktopSoundEnabled,
-      waPhone: pref?.waPhone ?? DEFAULT_PREFS.waPhone,
-      slackWebhook: pref?.slackWebhook ?? DEFAULT_PREFS.slackWebhook,
+        slackWebhook: pref?.slackWebhook ?? DEFAULT_PREFS.slackWebhook,
       taskAssigned: pref?.taskAssigned ?? DEFAULT_PREFS.taskAssigned,
       taskDueSoon: pref?.taskDueSoon ?? DEFAULT_PREFS.taskDueSoon,
       commentMention: pref?.commentMention ?? DEFAULT_PREFS.commentMention,
@@ -107,89 +99,6 @@ async function getBatchPrefs(userIds: string[]): Promise<Map<string, NotifPrefs>
     })
   }
   return map
-}
-
-function whatsappChatIdFromPhone(phone: string): string | null {
-  const normalized = normalizeIndonesianPhoneNumber(phone)
-  if (!normalized) return null
-  const digits = normalized.replace(/\D/g, "")
-  if (!digits) return null
-  return `${digits}@s.whatsapp.net`
-}
-
-function shouldUseHermesBridge(webhookUrl: string): boolean {
-  try {
-    const url = new URL(webhookUrl)
-    return url.pathname.replace(/\/+$/, "").endsWith("/send")
-  } catch {
-    return false
-  }
-}
-
-function envFlagEnabled(name: string, defaultValue = true): boolean {
-  const raw = process.env[name]
-  if (raw === undefined || raw === "") return defaultValue
-  return !["0", "false", "no", "off"].includes(raw.toLowerCase())
-}
-
-// Public deep link to a task's detail (same route the email "View Task" button uses) so WA notifications
-// are one-tap → straight into the task. NEXUS_PUBLIC_URL is required on backends that sit behind an nginx
-// proxy with a localhost NEXTAUTH_URL (e.g. the beta backend serving nexus.patsgroup.id); we fall back to
-// NEXTAUTH_URL only when it's already a public https URL.
-function taskUrl(taskId: string): string {
-  return publicUrl(`tasks/${taskId}`)
-}
-
-export async function sendWA(phone: string, message: string) {
-  // Kill switch. Tanpa ini WA tidak bisa dimatikan lewat env: rantai webhookUrl di bawah
-  // berakhir di URL hardcoded, jadi mengosongkan WA_WEBHOOK_URL tetap menyisakan percobaan
-  // koneksi yang gagal (ECONNREFUSED) plus timeout 10 detik per penerima.
-  if (process.env.WA_DELIVERY_DISABLED === "1") return
-
-  const webhookUrl =
-    process.env.WA_WEBHOOK_URL ||
-    process.env.HERMES_WA_BRIDGE_URL ||
-    "http://host.docker.internal:3001/send"
-
-  const chatId = whatsappChatIdFromPhone(phone)
-  if (!chatId) {
-    log.warn("WA phone invalid, skipping notification", { phone })
-    return
-  }
-
-  const useHermesBridge = shouldUseHermesBridge(webhookUrl)
-  const body = useHermesBridge ? { chatId, message } : { phone, message }
-
-  try {
-    // The Hermes bridge rejects non-loopback Host headers; postWaBridge (raw node:http) overrides it.
-    // A non-bridge webhook is a normal external URL → plain fetch.
-    if (useHermesBridge) {
-      const r = await postWaBridge(webhookUrl, body)
-      if (r.status < 200 || r.status >= 300) {
-        log.error("WA delivery failed", { phone, status: r.status, response: r.body.slice(0, 300) })
-        return
-      }
-      log.info("WA message sent", { phone, via: "hermes_bridge" })
-      return
-    }
-
-    const res = await fetch(webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(10000),
-    })
-
-    if (!res.ok) {
-      const response = await res.text().catch(() => "")
-      log.error("WA delivery failed", { phone, status: res.status, response: response.slice(0, 300) })
-      return
-    }
-
-    log.info("WA message sent", { phone, via: "webhook" })
-  } catch (error) {
-    log.error("WA delivery failed", { error: String(error) })
-  }
 }
 
 async function sendSlack(webhookUrl: string, message: string) {
@@ -435,8 +344,8 @@ const ATTENDANCE_TYPE_LABEL: Record<string, string> = {
 }
 
 /**
- * Someone filed a leave/permit/sick/day-off request. Until now the only alert was a WhatsApp
- * message via wa-bot, so with the bridge down approvers were told nothing at all and requests
+ * Someone filed a leave/permit/sick/day-off request. The only alert used to be a WhatsApp
+ * message (removed 12 Oct 2026), so with the bridge down approvers were told nothing at all and requests
  * sat in the queue unseen.
  *
  * Who gets told mirrors who may actually approve — and both come from the SAME resolver
@@ -545,7 +454,7 @@ export async function notifyTaskAssigned(data: {
 
   const user = await prisma.user.findUnique({
     where: { id: data.assigneeId },
-    select: { name: true, email: true, phoneNumber: true },
+    select: { name: true, email: true },
   })
   if (!user) return
 
@@ -579,21 +488,6 @@ export async function notifyTaskAssigned(data: {
     await sendEmail(email)
   }
 
-  // WA
-  // Phase 1 default: NEXUS assignment notifications should reach assignees on WA
-  // when a usable phone number exists. Users can still override the number via
-  // NotificationPreference.waPhone; ops can kill-switch this default with
-  // NEXUS_WA_TASK_ASSIGNMENTS_DEFAULT_ENABLED=false.
-  const assignmentWaDefaultEnabled = envFlagEnabled("NEXUS_WA_TASK_ASSIGNMENTS_DEFAULT_ENABLED", true)
-  const waRecipient = prefs.waPhone || user.phoneNumber
-  if (prefs.taskAssigned && waRecipient && (prefs.waEnabled || assignmentWaDefaultEnabled)) {
-    const link = taskUrl(data.taskId)
-    await sendWA(
-      waRecipient,
-      `[NEXUS] ${data.assignedByName} assigned you "${data.taskTitle}" in ${data.projectName}${link ? `\n${link}` : ""}`
-    )
-  }
-
   // Slack
   if (prefs.slackEnabled && prefs.slackWebhook) {
     await sendSlack(
@@ -616,7 +510,7 @@ export async function notifyMention(data: {
 
   const user = await prisma.user.findUnique({
     where: { id: data.mentionedUserId },
-    select: { name: true, email: true, phoneNumber: true },
+    select: { name: true, email: true },
   })
   if (!user) return
 
@@ -645,19 +539,6 @@ export async function notifyMention(data: {
     })
     email.to = user.email
     await sendEmail(email)
-  }
-
-  // WA — mirror task-assignment behavior so mentions actually reach people: fall back to the profile
-  // phone number, and default-on (ops can kill-switch with NEXUS_WA_MENTIONS_DEFAULT_ENABLED=false).
-  // The mention pref itself is already gated above (`if (!prefs.commentMention) return`).
-  const mentionWaDefaultEnabled = envFlagEnabled("NEXUS_WA_MENTIONS_DEFAULT_ENABLED", true)
-  const waRecipient = prefs.waPhone || user.phoneNumber
-  if (waRecipient && (prefs.waEnabled || mentionWaDefaultEnabled)) {
-    const link = taskUrl(data.taskId)
-    await sendWA(
-      waRecipient,
-      `[NEXUS] ${data.mentionedByName} mentioned you on "${data.taskTitle}": ${data.commentSnippet.slice(0, 100)}${link ? `\n${link}` : ""}`
-    )
   }
 
   if (prefs.slackEnabled && prefs.slackWebhook) {
@@ -739,7 +620,7 @@ export async function notifyFeedMention(data: {
   imageId?: string | null
 }) {
   if (await isUserDnd(data.mentionedUserId)) return
-  const user = await prisma.user.findUnique({ where: { id: data.mentionedUserId }, select: { name: true, phoneNumber: true } })
+  const user = await prisma.user.findUnique({ where: { id: data.mentionedUserId }, select: { name: true } })
   if (!user) return
   const prefs = await getUserPrefs(data.mentionedUserId)
   const base = publicBaseUrl()
@@ -757,11 +638,6 @@ export async function notifyFeedMention(data: {
   })
 
   if (!prefs.commentMention) return
-  const waDefaultEnabled = envFlagEnabled("NEXUS_WA_MENTIONS_DEFAULT_ENABLED", true)
-  const waRecipient = prefs.waPhone || user.phoneNumber
-  if (waRecipient && (prefs.waEnabled || waDefaultEnabled)) {
-    await sendWA(waRecipient, `[NEXUS] ${data.mentionedByName} mentioned you on Threads: ${data.snippet.slice(0, 100)}${base ? `\n${base}${link}` : ""}`)
-  }
   if (prefs.slackEnabled && prefs.slackWebhook) {
     await sendSlack(prefs.slackWebhook, `*Threads*: ${data.mentionedByName} mentioned ${user.name} in a post`)
   }
@@ -884,7 +760,7 @@ export async function notifyFeedComment(data: {
   reason: "author" | "mention"
 }) {
   if (await isUserDnd(data.recipientUserId)) return
-  const user = await prisma.user.findUnique({ where: { id: data.recipientUserId }, select: { name: true, phoneNumber: true } })
+  const user = await prisma.user.findUnique({ where: { id: data.recipientUserId }, select: { name: true } })
   if (!user) return
   const prefs = await getUserPrefs(data.recipientUserId)
   const base = publicBaseUrl()
@@ -901,11 +777,6 @@ export async function notifyFeedComment(data: {
   })
 
   if (!prefs.commentMention) return
-  const waDefaultEnabled = envFlagEnabled("NEXUS_WA_MENTIONS_DEFAULT_ENABLED", true)
-  const waRecipient = prefs.waPhone || user.phoneNumber
-  if (waRecipient && (prefs.waEnabled || waDefaultEnabled)) {
-    await sendWA(waRecipient, `[NEXUS] ${data.commenterName} on Threads: ${data.snippet.slice(0, 100)}${base ? `\n${base}${link}` : ""}`)
-  }
   if (prefs.slackEnabled && prefs.slackWebhook) {
     await sendSlack(prefs.slackWebhook, `*Threads*: ${data.commenterName} commented`)
   }
@@ -1010,12 +881,6 @@ export async function notifyDueSoon(data: {
     await sendEmail(email)
   }
 
-  if (prefs.waEnabled && prefs.waPhone) {
-    await sendWA(
-      prefs.waPhone,
-      `[NEXUS] Task "${data.taskTitle}" is due on ${data.dueDate}`
-    )
-  }
 }
 
 export async function notifyProjectInvite(data: {
@@ -1060,12 +925,6 @@ export async function notifyProjectInvite(data: {
     await sendEmail(email)
   }
 
-  if (prefs.waEnabled && prefs.waPhone) {
-    await sendWA(
-      prefs.waPhone,
-      `[NEXUS] ${data.invitedByName} invited you to project "${data.projectName}" as ${data.role}`
-    )
-  }
 
   if (prefs.slackEnabled && prefs.slackWebhook) {
     await sendSlack(
@@ -1123,12 +982,6 @@ export async function notifyStatusUpdate(data: {
       await sendEmail(email)
     }
 
-    if (prefs.waEnabled && prefs.waPhone) {
-      await sendWA(
-        prefs.waPhone,
-        `[NEXUS] ${data.updatedByName} updated "${data.projectName}" → ${data.status}`
-      )
-    }
   }
 }
 

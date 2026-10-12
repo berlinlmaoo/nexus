@@ -13,9 +13,7 @@ interface NotificationPrefsResponse {
   desktopEnabled?: boolean
   desktopSoundEnabled?: boolean
   emailEnabled?: boolean
-  waEnabled?: boolean
   slackEnabled?: boolean
-  waPhone?: string | null
   slackWebhook?: string | null
   taskAssigned?: boolean
   taskDueSoon?: boolean
@@ -97,11 +95,9 @@ export function DesktopNotificationPrompt() {
 
       const nextPrefs = {
         emailEnabled: prefs?.emailEnabled ?? true,
-        waEnabled: prefs?.waEnabled ?? false,
         slackEnabled: prefs?.slackEnabled ?? false,
         desktopEnabled: true,
         desktopSoundEnabled: prefs?.desktopSoundEnabled ?? true,
-        waPhone: prefs?.waPhone ?? null,
         slackWebhook: prefs?.slackWebhook ?? null,
         taskAssigned: prefs?.taskAssigned ?? true,
         taskDueSoon: prefs?.taskDueSoon ?? true,

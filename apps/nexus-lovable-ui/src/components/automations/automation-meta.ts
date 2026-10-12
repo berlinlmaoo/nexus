@@ -1,7 +1,7 @@
 import {
   AlarmClock, Archive, ArrowRightLeft, Bell, CalendarClock, CalendarX2, CheckCircle2, CircleDot, Copy, FilePlus2,
-  FileText, Flag, FolderInput, MessageSquarePlus, MessageSquareText, Pencil, PencilLine, Plus, Repeat, Send, Tag,
-  TagsIcon, UserMinus, UserPlus, Users, Webhook, type LucideIcon,
+  FileText, Flag, FolderInput, MessageSquarePlus, MessageSquareText, Pencil, PencilLine, Plus, Repeat, Tag,
+  TagsIcon, UserMinus, UserPlus, Users, type LucideIcon,
 } from "lucide-react";
 
 /**
@@ -26,10 +26,12 @@ export const TRIGGERS: TriggerDef[] = [
   { type: "DUE_DATE_APPROACHING", label: "Due date approaching", hint: "Some hours before a task is due", icon: AlarmClock, group: "Time" },
   { type: "DUE_DATE_REACHED", label: "Due date reached", hint: "A task's due date passes and it isn't done", icon: CalendarX2, group: "Time" },
   { type: "SCHEDULED", label: "Every…", hint: "On a schedule: daily, weekdays, weekly or monthly", icon: Repeat, group: "Time" },
-  { type: "WEBHOOK_RECEIVED", label: "Webhook received", hint: "Another app calls a private URL", icon: Webhook, group: "Other" },
 ];
-/** Old rows: TASK_COMPLETED is shown as "Status changed to Done". */
-export const LEGACY_TRIGGER_LABEL: Record<string, string> = { TASK_COMPLETED: "Task completed" };
+/**
+ * Old rows: TASK_COMPLETED is shown as "Status changed to Done". WEBHOOK_RECEIVED was removed with NEXUS
+ * webhooks (12 Oct 2026): such a rule never fires again; it stays visible so its owner can change or delete it.
+ */
+export const LEGACY_TRIGGER_LABEL: Record<string, string> = { TASK_COMPLETED: "Task completed", WEBHOOK_RECEIVED: "Webhook received (removed)" };
 
 export type ActionDef = { type: string; label: string; icon: LucideIcon; needsTask: boolean; group: "Edit" | "Create" | "Notify" };
 export const ACTIONS: ActionDef[] = [
@@ -48,7 +50,6 @@ export const ACTIONS: ActionDef[] = [
   { type: "DUPLICATE_TASK", label: "Duplicate task", icon: Copy, needsTask: true, group: "Create" },
   { type: "ADD_COMMENT", label: "Add comment", icon: MessageSquarePlus, needsTask: true, group: "Notify" },
   { type: "SEND_NOTIFICATION", label: "Send notification", icon: Bell, needsTask: false, group: "Notify" },
-  { type: "CALL_WEBHOOK", label: "Send webhook", icon: Send, needsTask: false, group: "Notify" },
 ];
 
 export const TIME_ICON = CalendarClock;

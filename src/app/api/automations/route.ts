@@ -1,6 +1,5 @@
 export const dynamic = "force-dynamic"
 
-import { randomBytes } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
@@ -8,7 +7,6 @@ import { checkProjectAccess } from '@/lib/rbac'
 import { logAudit } from '@/lib/audit'
 import { restorableDelete } from '@/lib/deletion-snapshot'
 import { emitAutomationsChanged } from '@/lib/socket-emitter'
-import { webhookUrlError } from '@/lib/webhook-dispatcher'
 import {
   MAX_ACTIONS,
   actionError,
@@ -39,19 +37,11 @@ type Row = {
   id: string; name: string; enabled: boolean; projectId: string
   trigger: unknown; action: unknown; actions: unknown; condition: unknown; conditions: unknown
   createdAt: Date; updatedAt: Date; createdById: string | null
-  lastRunAt: Date | null; lastRunStatus: string | null; runCount: number; webhookToken: string | null
+  lastRunAt: Date | null; lastRunStatus: string | null; runCount: number
 }
 
-function publicBase(req: NextRequest): string {
-  const env = process.env.NEXUS_PUBLIC_URL || process.env.NEXT_PUBLIC_APP_URL
-  if (env) return env.replace(/\/+$/, '')
-  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? ''
-  const proto = req.headers.get('x-forwarded-proto') ?? 'https'
-  return host ? `${proto}://${host}` : ''
-}
-
-/** A row as clients see it: normalised types, `action` = the first action (released apps), webhook URL for editors only. */
-function present(row: Row, canEdit: boolean, req: NextRequest) {
+/** A row as clients see it: normalised types, `action` = the first action (released apps). */
+function present(row: Row) {
   const trigger = normalizeTrigger(row.trigger) ?? { type: String((row.trigger as { type?: unknown } | null)?.type ?? 'UNKNOWN') }
   const actions = actionsOf(row)
   const conditions = normalizeConditions(row.conditions, row.condition)
@@ -72,9 +62,6 @@ function present(row: Row, canEdit: boolean, req: NextRequest) {
     lastRunStatus: row.lastRunStatus,
     runCount: row.runCount,
     nextRunAt: schedule && row.enabled ? nextSlot(schedule, new Date()) : null,
-    ...(canEdit && trigger.type === 'WEBHOOK_RECEIVED' && row.webhookToken
-      ? { webhookUrl: `${publicBase(req)}/api/automations/hook/${row.webhookToken}` }
-      : {}),
   }
 }
 
@@ -103,12 +90,6 @@ async function parseRule(
       if (!n) return { ok: false, error: `Unknown action ${(a as { type?: unknown })?.type ?? ''}` }
       const err = actionError(n)
       if (err) return { ok: false, error: err }
-      if (n.type === 'CALL_WEBHOOK') {
-        // Private and internal addresses are refused now; a host that does not resolve yet is allowed
-        // (checked again before every call, as for project webhooks).
-        const blocked = await webhookUrlError(n.value)
-        if (blocked && blocked !== 'Webhook host does not resolve') return { ok: false, error: blocked }
-      }
       actions.push(n)
     }
     out.actions = actions
@@ -117,10 +98,6 @@ async function parseRule(
     out.conditions = normalizeConditions(body.conditions, body.condition)
   } else if (!partial) out.conditions = null
   return { ok: true, value: out }
-}
-
-function newToken() {
-  return randomBytes(24).toString('base64url')
 }
 
 function json(v: unknown): InputJsonValue {
@@ -138,7 +115,7 @@ export async function GET(req: NextRequest) {
     if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     const { allowed: canEdit } = await checkProjectAccess(session.user.id, projectId, ['LEAD'])
     const rows = (await prisma.automation.findMany({ where: { projectId }, orderBy: [{ createdAt: 'asc' }, { name: 'asc' }] })) as Row[]
-    return NextResponse.json({ automations: rows.map((r) => present(r, canEdit, req)), canEdit })
+    return NextResponse.json({ automations: rows.map((r) => present(r)), canEdit })
   } catch (error) {
     console.error('Error fetching automations:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -172,14 +149,13 @@ export async function POST(req: NextRequest) {
         ...(conditions ? { conditions: json(conditions) } : {}),
         enabled: body.enabled === false ? false : true,
         createdById: session.user.id,
-        webhookToken: trigger.type === 'WEBHOOK_RECEIVED' ? newToken() : null,
       },
     })) as Row
 
     logAudit({ action: "create", entityType: "automation", entityId: automation.id, entityName: name, userId: session.user.id, request: req, metadata: { projectId, trigger: trigger.type, actions: actions.map((a) => a.type) } })
     emitAutomationsChanged(projectId, automation.id, session.user.id)
 
-    return NextResponse.json({ automation: present(automation, true, req) }, { status: 201 })
+    return NextResponse.json({ automation: present(automation) }, { status: 201 })
   } catch (error) {
     console.error('Error creating automation:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -194,7 +170,7 @@ export async function PATCH(req: NextRequest) {
     const { id, enabled } = body ?? {}
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
-    const existing = await prisma.automation.findUnique({ where: { id }, select: { projectId: true, webhookToken: true, trigger: true } })
+    const existing = await prisma.automation.findUnique({ where: { id }, select: { projectId: true } })
     if (!existing) return NextResponse.json({ error: 'Automation not found' }, { status: 404 })
 
     const { allowed } = await checkProjectAccess(session.user.id, existing.projectId, ['LEAD'])
@@ -213,15 +189,7 @@ export async function PATCH(req: NextRequest) {
       if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 })
       data.name = name
     }
-    if (trigger) {
-      data.trigger = json(trigger)
-      if (trigger.type === 'WEBHOOK_RECEIVED') { if (!existing.webhookToken) data.webhookToken = newToken() }
-      else data.webhookToken = null
-    }
-    if (body.regenerateWebhookToken === true) {
-      const t = trigger ?? normalizeTrigger(existing.trigger)
-      if (t?.type === 'WEBHOOK_RECEIVED') data.webhookToken = newToken()
-    }
+    if (trigger) data.trigger = json(trigger)
     if (actions) { data.actions = json(actions); data.action = json(actions[0]) }
     if (conditions !== undefined) data.conditions = conditions ? json(conditions) : null
 
@@ -230,7 +198,7 @@ export async function PATCH(req: NextRequest) {
     logAudit({ action: "update", entityType: "automation", entityId: id, entityName: automation.name, userId: session.user.id, request: req, metadata: { projectId: existing.projectId, changes: { enabled, name: body.name, trigger: trigger?.type, actions: actions?.map((a) => a.type), conditions: conditions === undefined ? undefined : conditions?.rules.length ?? 0 } } })
     emitAutomationsChanged(existing.projectId, id, session.user.id)
 
-    return NextResponse.json({ automation: present(automation, true, req) })
+    return NextResponse.json({ automation: present(automation) })
   } catch (error) {
     console.error('Error updating automation:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

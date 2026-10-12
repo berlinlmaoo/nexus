@@ -181,7 +181,10 @@ test("validation, templates and date values", () => {
   assert.equal(R.triggerError({ type: "SCHEDULED", config: { frequency: "daily", time: "09:00" } }), null)
   assert.equal(R.actionError({ type: "SET_STATUS", value: "DONE" }), null)
   assert.equal(R.actionError({ type: "SET_STATUS", value: "LATER" }), "Pick a status")
-  assert.equal(R.actionError({ type: "CALL_WEBHOOK", value: "http://x.test" }), "Webhook URL must use https")
+  // Webhooks were removed (12 Oct 2026): stored "Send webhook" steps and "Webhook received" triggers normalise to null.
+  assert.equal(R.normalizeAction({ type: "CALL_WEBHOOK", value: "https://x.test" }), null)
+  assert.equal(R.normalizeTrigger({ type: "WEBHOOK_RECEIVED" }), null)
+  assert.deepEqual(R.actionsOf({ actions: [{ type: "CALL_WEBHOOK", value: "https://x.test" }, { type: "MARK_COMPLETE" }] }).map((a) => a.type), ["MARK_COMPLETE"])
   assert.equal(R.fillTemplate("{task} in {project} by {payload.user.name} {unknown}", { task: "T", project: "P" }, { user: { name: "Ana" } }), "T in P by Ana {unknown}")
   assert.equal(R.resolveDateValue("+3", now).toISOString(), "2026-10-15T00:00:00.000Z")
   assert.equal(R.resolveDateValue("", now), null)

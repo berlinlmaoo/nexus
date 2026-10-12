@@ -15,7 +15,6 @@ import {
   updateTaskSchema,
   createProjectSchema,
   createCommentSchema,
-  createWebhookSchema,
   validateBody,
 } from '@/lib/validations'
 
@@ -367,32 +366,6 @@ describe('createCommentSchema', () => {
 
   it('rejects oversized comment', () => {
     const result = createCommentSchema.safeParse({ content: 'x'.repeat(10001) })
-    expect(result.success).toBe(false)
-  })
-})
-
-describe('createWebhookSchema', () => {
-  it('accepts valid webhook', () => {
-    const result = createWebhookSchema.safeParse({
-      url: 'https://hooks.example.com/webhook',
-      events: ['task.created', 'task.updated'],
-    })
-    expect(result.success).toBe(true)
-  })
-
-  it('rejects invalid URL', () => {
-    const result = createWebhookSchema.safeParse({
-      url: 'not-a-url',
-      events: ['task.created'],
-    })
-    expect(result.success).toBe(false)
-  })
-
-  it('rejects empty events array', () => {
-    const result = createWebhookSchema.safeParse({
-      url: 'https://hooks.example.com/webhook',
-      events: [],
-    })
     expect(result.success).toBe(false)
   })
 })

@@ -8,7 +8,6 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { compareVersions, parseClientTag } from "@/lib/client-version"
 import { logAudit } from "@/lib/audit"
-import { notifyApproversOfRequest } from "@/lib/wa-bot"
 import { notifyAttendanceRequestPending , createInAppNotification } from "@/lib/notification-service"
 import {
   attendanceMonthRange,
@@ -791,11 +790,8 @@ export async function POST(request: NextRequest) {
       await cancelAttendancePenaltiesForRange(effectiveUserId, context.workspace.id, attendanceRequest.startDate, attendanceRequest.endDate)
     } catch (err) { console.error("cancelAttendancePenaltiesForRange (file) failed:", err) }
 
-    // Ping approvers (fire-and-forget). WhatsApp lets a BoD /approve straight from chat, but the
-    // bridge is not always up, so the in-app notification and push are what actually guarantee the
-    // request is seen.
+    // Ping approvers (fire-and-forget): in-app notification + push.
     if (!isGrant && attendanceRequest.status === "PENDING") {
-      notifyApproversOfRequest(attendanceRequest.id).catch((e) => console.error("[wa] notifyApproversOfRequest failed", e))
       notifyAttendanceRequestPending(attendanceRequest.id).catch((e) => console.error("notifyAttendanceRequestPending failed", e))
     }
     // A grant is a decision about somebody else's day, made without them. Until 20 Sep 2026 the

@@ -7,7 +7,6 @@ import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { checkProjectAccess } from "@/lib/rbac"
 import { executeAutomations } from "@/lib/automation-engine"
-import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitTaskCreated } from "@/lib/socket-emitter"
 import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
 
@@ -306,15 +305,6 @@ export async function POST(
       assigneeIds: keptAssigneeIds,
     }).catch(() => {})
 
-    dispatchWebhookEvent("task.created", {
-      taskId: duplicatedTask.id,
-      title: duplicatedTask.title,
-      status: duplicatedTask.status,
-      priority: duplicatedTask.priority,
-      taskListId: duplicatedTask.taskListId,
-      creatorId: session.user.id,
-      duplicatedFrom: existing.id,
-    }, destList.projectId).catch(() => {})
 
     emitTaskCreated(destList.projectId, JSON.parse(JSON.stringify(duplicatedTask)))
 

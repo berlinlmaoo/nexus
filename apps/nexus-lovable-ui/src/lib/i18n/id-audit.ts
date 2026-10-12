@@ -106,7 +106,6 @@ export const ID_AUDIT: Record<string, string> = {
   "Restore custom field": "Pulihkan custom field",
   "Restore form": "Pulihkan form",
   "Restore automation": "Pulihkan otomasi",
-  "Restore webhook": "Pulihkan webhook",
   "Restore workflow bundle": "Pulihkan workflow bundle",
   "Restore goal": "Pulihkan goal",
   "Restore portfolio": "Pulihkan portofolio",
