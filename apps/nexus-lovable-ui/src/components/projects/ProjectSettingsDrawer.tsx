@@ -153,8 +153,8 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   });
   const invite = useMutation({
     mutationFn: () => nexusApi.inviteToProject(project.id, inviteEmail.trim()),
-    onSuccess: () => { setInviteMsg(`Invite sent to ${inviteEmail.trim()}`); setInviteEmail(""); },
-    onError: () => setInviteMsg("Invite failed — check the email / access."),
+    onSuccess: () => { setInviteMsg(t("Invite sent to {email}", { email: inviteEmail.trim() })); setInviteEmail(""); },
+    onError: () => setInviteMsg(t("Invite failed. Check the email and your access.")),
   });
   const duplicate = useMutation({
     mutationFn: () => nexusApi.duplicateProject(project.id),
@@ -218,8 +218,8 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
           >
             <motion.div initial={morph ? { opacity: 0 } : false} animate={{ opacity: 1 }} transition={{ delay: morph ? 0.05 : 0, duration: 0.16 }} className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card/95 px-5 py-4 backdrop-blur">
-          <h2 className="font-display text-lg font-bold tracking-tight">Project settings</h2>
-          <button onClick={requestClose} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+          <h2 className="font-display text-lg font-bold tracking-tight">{t("Project settings")}</h2>
+          <button onClick={requestClose} aria-label={t("Close")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
 
         <div className="flex flex-1 flex-col gap-6 p-5">
@@ -232,26 +232,26 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
                 </span>
                 {uploadIcon.isPending && <div className="absolute inset-0 grid place-items-center rounded-2xl bg-background/60"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>}
               </div>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Project name" className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Project name")} className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button onClick={() => iconFileRef.current?.click()} disabled={uploadIcon.isPending} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition hover:bg-accent disabled:opacity-50"><ImagePlus className="h-3.5 w-3.5" />{iconIsImage ? t("Change photo") : t("Add photo")}</button>
               {iconIsImage && <button onClick={() => { setIcon("folder"); settings.mutate({ icon: "folder" }); }} disabled={uploadIcon.isPending} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" />{t("Remove photo")}</button>}
-              <span className="text-[11px] text-muted-foreground">PNG/JPG/SVG/WEBP, max 5MB</span>
+              <span className="text-[11px] text-muted-foreground">{t("PNG/JPG/SVG/WEBP, max 5MB")}</span>
               <input ref={iconFileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden onChange={onPickIcon} />
             </div>
-            {uploadIcon.isError && <p className="text-xs font-semibold text-destructive">{(uploadIcon.error as Error)?.message ?? "Icon upload failed."}</p>}
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Description…" className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            {uploadIcon.isError && <p className="text-xs font-semibold text-destructive">{(uploadIcon.error as Error)?.message ?? t("Icon upload failed.")}</p>}
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder={t("Description…")} className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
             <label className="block space-y-1">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Status</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Status")}</span>
               <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary">
                 {STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
               </select>
             </label>
             <button onClick={() => save.mutate()} disabled={save.isPending || !name.trim()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">
-              {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Save changes
+              {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Save changes")}
             </button>
-            {save.isError && <p className="text-xs font-semibold text-destructive">Couldn't save.</p>}
+            {save.isError && <p className="text-xs font-semibold text-destructive">{t("Couldn't save.")}</p>}
           </div>
 
           {/* customize project — only auto assign since 11 Oct 2026 */}
@@ -296,17 +296,17 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
 
           {/* workflow bundle */}
           <div className="space-y-2 border-t border-border pt-5">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Apply workflow bundle</span>
-            <p className="text-xs text-muted-foreground">Spin saved lists & automations into this project.</p>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Apply workflow bundle")}</span>
+            <p className="text-xs text-muted-foreground">{t("Add saved lists and automations to this project.")}</p>
             <div className="flex gap-2">
               <select value={bundleId} onChange={(e) => setBundleId(e.target.value)} className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary">
-                <option value="">{(bundles.data?.bundles?.length ?? 0) === 0 ? "No bundles available" : "Pick a bundle…"}</option>
+                <option value="">{(bundles.data?.bundles?.length ?? 0) === 0 ? t("No bundles available") : t("Pick a bundle…")}</option>
                 {(bundles.data?.bundles ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
-              <button disabled={!bundleId || applyBundle.isPending} onClick={() => applyBundle.mutate()} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50">{applyBundle.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Apply</button>
+              <button disabled={!bundleId || applyBundle.isPending} onClick={() => applyBundle.mutate()} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50">{applyBundle.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Apply")}</button>
             </div>
-            {applyBundle.isSuccess && <p className="text-xs font-semibold text-success">Bundle applied ✓</p>}
-            {applyBundle.isError && <p className="text-xs font-semibold text-destructive">Apply failed — check your access / bundle.</p>}
+            {applyBundle.isSuccess && <p className="text-xs font-semibold text-success">{t("Bundle applied")}</p>}
+            {applyBundle.isError && <p className="text-xs font-semibold text-destructive">{t("Couldn't apply. Check your access and the bundle.")}</p>}
           </div>
 
           {/* custom fields */}
@@ -320,7 +320,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
                 <div key={m.userId || m.user?.id} className="flex items-center gap-2 rounded-xl bg-muted/50 px-2 py-1.5">
                   <MiniAvatar user={m.user} />
                   <span className="flex-1 truncate text-sm font-semibold">{m.user?.name ?? m.user?.email ?? m.userId}</span>
-                  <button onClick={() => { const id = m.userId || m.user?.id; if (id) removeMember.mutate(id); }} className="rounded p-1 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => { const id = m.userId || m.user?.id; if (id) removeMember.mutate(id); }} aria-label={t("Remove member")} className="rounded p-1 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
                 </div>
               ))}
             </div>
@@ -330,11 +330,11 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
 
           {/* invite by email */}
           <div className="space-y-2 border-t border-border pt-5">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Invite by email</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Invite by email")}</span>
             <div className="flex items-center gap-2">
               <input value={inviteEmail} onChange={(e) => { setInviteEmail(e.target.value); setInviteMsg(null); }} type="email" placeholder="teammate@company.com" className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
               <button disabled={!inviteEmail.includes("@") || invite.isPending} onClick={() => invite.mutate()} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-secondary px-3 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-accent active:scale-[0.98] disabled:opacity-50">
-                {invite.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />} Invite
+                {invite.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />} {t("Invite")}
               </button>
             </div>
             {inviteMsg && <p className="text-xs font-semibold text-muted-foreground">{inviteMsg}</p>}
@@ -342,17 +342,17 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
 
           {/* danger zone */}
           <div className="mt-auto space-y-2 border-t border-border pt-5">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Danger zone</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Danger zone")}</span>
             <div className="flex gap-2">
               {/* BoD+ only — duplicating clones every task, assignee and member at once. The server
                   enforces the same gate; this just keeps the button out of everyone else's way. */}
               {isBod && (
                 <button onClick={() => duplicate.mutate()} disabled={duplicate.isPending} className="flex-1 rounded-xl border border-border px-3 py-2 text-sm font-semibold transition-colors hover:bg-accent active:scale-[0.98] disabled:opacity-50">
-                  {duplicate.isPending ? "Duplicating…" : "Duplicate"}
+                  {duplicate.isPending ? t("Duplicating…") : t("Duplicate")}
                 </button>
               )}
-              <button onClick={() => { if (confirm(`Delete project "${project.name}"? This cannot be undone.`)) del.mutate(); }} disabled={del.isPending} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.98] disabled:opacity-50">
-                <Trash2 className="h-4 w-4" /> Delete
+              <button onClick={() => { if (confirm(t("Delete the project “{name}”? This can't be undone.", { name: project.name ?? "" }))) del.mutate(); }} disabled={del.isPending} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.98] disabled:opacity-50">
+                <Trash2 className="h-4 w-4" /> {t("Delete")}
               </button>
             </div>
           </div>

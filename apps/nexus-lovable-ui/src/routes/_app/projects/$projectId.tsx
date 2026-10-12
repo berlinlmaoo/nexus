@@ -1002,12 +1002,13 @@ function AddListColumn({ projectId, statusOptions }: { projectId: string; status
 
 /** "+X XP" — when the task is part of one or more task-bundle quests. XP = sum across quests. */
 function QuestChip({ task, className }: { task: NexusTask; className?: string }) {
+  const { t } = useLang();
   const quests = task.quests ?? [];
   if (quests.length === 0) return null;
   const xp = quests.reduce((s, q) => s + (q.xpReward ?? 0), 0);
   return (
     <span
-      title={`Quest: ${quests.map((q) => q.title).join(", ")} — +${xp} XP`}
+      title={t("Quest: {titles} (+{xp} XP)", { titles: quests.map((q) => q.title).join(", "), xp })}
       className={cn("inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-[color:var(--accent-foreground)] bg-accent", className)}
     >
       +{xp} XP
@@ -1704,6 +1705,7 @@ function PagesView({ project, onOpen }: { project: NexusProject; onOpen: (doc: N
 }
 
 function ProjectChat({ projectId }: { projectId: string }) {
+  const { t } = useLang();
   const me = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1 });
   const convos = useQuery({ queryKey: ["conversations"], queryFn: () => nexusApi.conversations(), retry: false });
   const room = (convos.data?.conversations ?? []).find((c) => c.type === "PROJECT" && c.projectId === projectId);
@@ -1711,7 +1713,7 @@ function ProjectChat({ projectId }: { projectId: string }) {
     <div className="p-4 md:p-8">
       <div className="mx-auto h-[70vh] max-w-2xl overflow-hidden rounded-3xl border border-border bg-card shadow-soft">
         {convos.isLoading && <div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
-        {!convos.isLoading && !room && <div className="grid h-full place-items-center p-8 text-center text-sm text-muted-foreground"><div><MessageSquare className="mx-auto mb-3 h-8 w-8 opacity-40" />Project chat room isn't active yet (needs the Messages backend).</div></div>}
+        {!convos.isLoading && !room && <div className="grid h-full place-items-center p-8 text-center text-sm text-muted-foreground"><div><MessageSquare className="mx-auto mb-3 h-8 w-8 opacity-40" />{t("This project's chat room isn't active yet.")}</div></div>}
         {room && <ChatThread conversationId={room.id} meId={me.data?.user?.id} />}
       </div>
     </div>

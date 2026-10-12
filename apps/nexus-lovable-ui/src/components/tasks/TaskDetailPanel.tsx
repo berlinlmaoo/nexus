@@ -285,7 +285,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   const [copyOpen, setCopyOpen] = useState(false);
   const projDetail = useQuery({ queryKey: ["nexus", "project", projectId], queryFn: () => nexusApi.project(projectId!), enabled: !!projectId, staleTime: 60_000 });
   const sections = (projDetail.data?.taskLists ?? []).slice().sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-  const { t: tr } = useLang();
+  const { t: tr, tn } = useLang();
   const deps = useQuery({ queryKey: ["task-deps", taskId], queryFn: () => nexusApi.taskDependencies(taskId) });
   const times = useQuery({ queryKey: ["task-times", taskId], queryFn: () => nexusApi.timeEntries(taskId) });
   // Only fetch the whole-workspace member list as a FALLBACK for tasks with no project. For a project
@@ -312,7 +312,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
     mutationFn: (payload: Parameters<typeof nexusApi.updateTask>[1]) => nexusApi.updateTask(taskId, payload),
     onSuccess: invalidateAll,
     // Surfaces the "wajib lampiran sebelum Done" gate (and any other reject) instead of failing silently.
-    onError: (e: unknown) => { invalidateAll(); toast.error(e instanceof Error ? e.message : "Gagal update task"); },
+    onError: (e: unknown) => { invalidateAll(); toast.error(e instanceof Error ? e.message : tr("Couldn't update the task.")); },
   });
   // --- subtasks (Asana-style: full tasks linked via parentId; hidden from board, live here) ---
   const [openSub, setOpenSub] = useState<string | null>(null);
@@ -407,7 +407,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
       qc.invalidateQueries({ queryKey: ["task-cf", taskId] });
       qc.invalidateQueries({ queryKey: ["project-custom-fields", projectId] });
     },
-    onError: (e: unknown) => toast.error("Couldn't create field", { description: e instanceof Error ? e.message : "You need LEAD access." }),
+    onError: (e: unknown) => toast.error(tr("Couldn't create field"), { description: e instanceof Error ? e.message : tr("You need LEAD access.") }),
   });
   const linkProjectMut = useMutation({
     mutationFn: async (projectId: string) => {
@@ -494,14 +494,14 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
             <button
               onClick={() => followMut.mutate()}
               className={cn("inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition-colors active:scale-[0.97]", followers.data?.isFollowing ? "text-primary" : "text-muted-foreground hover:bg-accent")}
-              title={followers.data?.isFollowing ? "Following" : "Follow"}
+              title={followers.data?.isFollowing ? tr("Following") : tr("Follow")}
             >
               <Eye className="h-4 w-4" /> {followers.data?.followers?.length ?? 0}
             </button>
             <button
               onClick={() => favMut.mutate()}
               className={cn("rounded-lg p-1.5 transition-colors active:scale-[0.95]", isFavorited ? "text-amber-500" : "text-muted-foreground hover:bg-accent")}
-              title="Favorite"
+              title={tr("Favorite")}
             >
               <Star className={cn("h-4 w-4", isFavorited && "fill-amber-500")} />
             </button>
@@ -511,24 +511,24 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               // the like straight back off. One request at a time.
               disabled={likeMut.isPending}
               className={cn("inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition-colors active:scale-[0.97] disabled:opacity-60", t?.liked ? "text-destructive" : "text-muted-foreground hover:bg-accent")}
-              title="Like"
+              title={tr("Like")}
             >
               <Heart className={cn("h-4 w-4", t?.liked && "fill-destructive")} /> {t?.likeCount ?? 0}
             </button>
             {canMakeQuest && t && (
-              <button onClick={() => setQuestOpen(true)} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary" title="Make a quest">
+              <button onClick={() => setQuestOpen(true)} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary" title={tr("Make a quest")}>
                 <Trophy className="h-4 w-4" />
               </button>
             )}
             {/* Copy this one task into another project (the bulk bar covers many at once, but it's
                 gated behind the project's duplicate-mode toggle — this is always available). */}
-            <button onClick={() => setCopyOpen(true)} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary" title="Copy ke project lain">
+            <button onClick={() => setCopyOpen(true)} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary" title={tr("Copy to another project")}>
               <FolderInput className="h-4 w-4" />
             </button>
-            <button onClick={() => { if (confirm("Delete this task?")) delTask.mutate(); }} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Delete task">
+            <button onClick={() => { if (confirm(tr("Delete this task?"))) delTask.mutate(); }} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title={tr("Delete task")}>
               <Trash2 className="h-4 w-4" />
             </button>
-            <button onClick={requestClose} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent" title="Close">
+            <button onClick={requestClose} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent" title={tr("Close")}>
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -538,7 +538,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
           <div className="flex flex-1 items-center justify-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
         )}
         {task.isError && (
-          <div className="p-6 text-sm font-semibold text-destructive">Couldn't load this task. Check your session / connection.</div>
+          <div className="p-6 text-sm font-semibold text-destructive">{tr("Couldn't load this task. Check your connection.")}</div>
         )}
 
         {t && (
@@ -549,16 +549,16 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 <Trophy className="h-5 w-5 shrink-0 text-primary" />
                 <div className="min-w-0 flex-1 text-sm">
                   <div className="font-bold text-primary">
-                    {(q.total ?? 1) <= 1 ? <>Finish this task → <span className="tabular-nums">+{q.xpReward} XP</span> 🎯</> : <>Part of the quest “{q.title}” → <span className="tabular-nums">+{q.xpReward} XP</span> 🎯</>}
+                    {(q.total ?? 1) <= 1 ? <>{tr("Finish this task →")} <span className="tabular-nums">+{q.xpReward} XP</span></> : <>{tr("Part of the quest “{title}” →", { title: q.title })} <span className="tabular-nums">+{q.xpReward} XP</span></>}
                   </div>
-                  {(q.total ?? 1) > 1 && <div className="text-xs text-muted-foreground">Wrap up all {q.total} tasks ({q.done ?? 0}/{q.total} done) to grab the XP.</div>}
+                  {(q.total ?? 1) > 1 && <div className="text-xs text-muted-foreground">{tr("Finish all {total} tasks ({done}/{total} done) to get the XP.", { total: q.total ?? 0, done: q.done ?? 0 })}</div>}
                 </div>
               </div>
             ))}
             {/* toolbar: mark done + status + priority (old-NEXUS pills) */}
             <div className="flex flex-wrap items-center gap-2">
-              <button onClick={() => update.mutate({ status: (isDoneStatus(t.status) ? "TODO" : "DONE") as never })} className={cn("inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-bold uppercase tracking-wider transition-colors", isDoneStatus(t.status) ? "border-success/30 bg-success/10 text-success" : "border-border bg-card text-foreground hover:bg-accent")}>
-                {isDoneStatus(t.status) ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4 text-muted-foreground" />} {isDoneStatus(t.status) ? "Done" : "Mark done"}
+              <button onClick={() => update.mutate({ status: (isDoneStatus(t.status) ? "TODO" : "DONE") as never })} className={cn("inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-bold transition-colors", isDoneStatus(t.status) ? "border-success/30 bg-success/10 text-success" : "border-border bg-card text-foreground hover:bg-accent")}>
+                {isDoneStatus(t.status) ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4 text-muted-foreground" />} {isDoneStatus(t.status) ? tr("Done") : tr("Mark done")}
               </button>
               {/* Section = the project's board column (TaskList). Falls back to global status if the
                   task isn't in a project (no sections). */}
@@ -593,7 +593,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 </div>
               )}
               <div className="relative">
-                <select value={t.priority ?? "NONE"} onChange={(e) => update.mutate({ priority: e.target.value as never })} className="appearance-none rounded-full border border-border bg-card px-3.5 py-2 pr-8 text-xs font-bold uppercase tracking-wider outline-none transition focus:border-primary">
+                <select value={t.priority ?? "NONE"} onChange={(e) => update.mutate({ priority: e.target.value as never })} className="appearance-none rounded-full border border-border bg-card px-3.5 py-2 pr-8 text-xs font-bold outline-none transition focus:border-primary">
                   {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{statusLabel(p)}</option>)}
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -607,7 +607,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-accent px-2.5 py-1 text-xs font-semibold text-accent-foreground transition hover:opacity-80"
               >
                 <ListChecks className="h-3 w-3 shrink-0" />
-                <span className="shrink-0 text-accent-foreground/70">Subtask of</span>
+                <span className="shrink-0 text-accent-foreground/70">{tr("Subtask of")}</span>
                 <span className="truncate">{t.parent.title}</span>
               </button>
             )}
@@ -623,7 +623,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
 
             {/* assigned personnel + due date (2-col) */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <SecCard icon={User} label="Assigned personnel">
+              <SecCard icon={User} label={tr("Assignees")}>
                 <div className="flex flex-wrap items-center gap-2">
                   {(t.assignees ?? []).map((a) => (
                     <span key={a.user?.id} className="group inline-flex items-center gap-1.5 rounded-full bg-muted py-1 pl-1 pr-2 text-xs font-semibold">
@@ -638,11 +638,11 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                       <div className="absolute z-20 mt-1 w-60 rounded-xl border border-border bg-popover p-1 shadow-pop">
                         <div className="relative p-1">
                           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                          <input autoFocus value={assignSearch} onChange={(e) => setAssignSearch(e.target.value)} placeholder="Search team members…" className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none transition focus:border-primary" />
+                          <input autoFocus value={assignSearch} onChange={(e) => setAssignSearch(e.target.value)} placeholder={tr("Search team members…")} className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none transition focus:border-primary" />
                         </div>
                         <div className="max-h-56 overflow-y-auto">
-                          {assignPickerLoading && <div className="px-3 py-2 text-xs text-muted-foreground">Loading…</div>}
-                          {!assignPickerLoading && assignableMembers.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">{assignSearch.trim() ? "No matching members." : "Everyone on the project team is already assigned."}</div>}
+                          {assignPickerLoading && <div className="px-3 py-2 text-xs text-muted-foreground">{tr("Loading…")}</div>}
+                          {!assignPickerLoading && assignableMembers.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">{assignSearch.trim() ? tr("No matching members.") : tr("Everyone on the project team is already assigned.")}</div>}
                           {assignableMembers.map((m) => (
                             <button key={m.id} onClick={() => assignMut.mutate({ userId: m.id, add: true })} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent">
                               <MiniAvatar user={m} size={22} /> <span className="truncate">{m.name}</span>
@@ -654,7 +654,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                   </div>
                 </div>
               </SecCard>
-              <SecCard icon={Calendar} label="Due date">
+              <SecCard icon={Calendar} label={tr("Due date")}>
                 {/* datetime-local so a TIME can be set (not just a date). Value is formatted in LOCAL time;
                     onChange turns the local value back into a UTC ISO string for the API. */}
                 <input type="datetime-local" value={(() => { if (!t.dueDate) return ""; const d = new Date(t.dueDate); if (Number.isNaN(d.getTime())) return ""; const p = (n: number) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; })()} onChange={(e) => update.mutate({ dueDate: e.target.value ? new Date(e.target.value).toISOString() : null })} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-semibold outline-none transition focus:border-primary" />
@@ -668,10 +668,10 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
             {projectId && (
               <SecCard
                 icon={SlidersHorizontal}
-                label="Fields"
+                label={tr("Fields")}
                 action={
-                  <button onClick={() => setCfAdding((v) => !v)} title="New field" className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary">
-                    <Plus className="h-3.5 w-3.5" /> New field
+                  <button onClick={() => setCfAdding((v) => !v)} title={tr("New field")} className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary">
+                    <Plus className="h-3.5 w-3.5" /> {tr("New field")}
                   </button>
                 }
               >
@@ -694,23 +694,22 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     ))}
                   </div>
                 ) : !cfAdding ? (
-                  <p className="text-xs text-muted-foreground">No fields yet. Click <span className="font-semibold">New field</span> to add one.</p>
+                  <p className="text-xs text-muted-foreground">{tr("No fields yet. Click New field to add one.")}</p>
                 ) : null}
               </SecCard>
             )}
 
             {/* Legal: issue the number + generate the invoice/PKS from the Google Docs master. */}
             {docTypeField && (
-              <SecCard icon={FileSignature} label="Dokumen resmi">
+              <SecCard icon={FileSignature} label={tr("Official document")}>
                 {issuedNumber ? (
                   <p className="text-xs">
-                    Nomor terbit: <span className="font-mono font-bold">{issuedNumber}</span>
-                    <span className="text-muted-foreground"> — file PDF + DOCX ada di Attachments.</span>
+                    {tr("Issued number:")} <span className="font-mono font-bold">{issuedNumber}</span>
+                    <span className="text-muted-foreground"> — {tr("the PDF and DOCX files are in Attachments.")}</span>
                   </p>
                 ) : (
                   <p className="mb-2 text-xs text-muted-foreground">
-                    Nomor dan isi dokumennya digenerate dari field di atas. Cek dulu datanya bener, karena nomor
-                    yang udah terbit nggak bisa dipakai ulang.
+                    {tr("The document number and content are generated from the fields above. Check the data first: an issued number can't be reused.")}
                   </p>
                 )}
                 <button
@@ -719,7 +718,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                   className="mt-1 inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition active:scale-[0.97] disabled:opacity-40"
                 >
                   {genDoc.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSignature className="h-3.5 w-3.5" />}
-                  {issuedNumber ? "Generate ulang (nomor baru)" : "Generate dokumen"}
+                  {issuedNumber ? tr("Generate again (new number)") : tr("Generate document")}
                 </button>
                 {genDoc.isError && (
                   <p className="mt-2 text-xs font-semibold text-rose-600">{(genDoc.error as Error)?.message}</p>
@@ -727,7 +726,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 {genDoc.isSuccess && genDoc.data?.webViewLink && (
                   <a href={genDoc.data.webViewLink} target="_blank" rel="noreferrer"
                      className="mt-2 block text-xs font-semibold text-primary underline">
-                    Buka di Google Docs
+                    {tr("Open in Google Docs")}
                   </a>
                 )}
               </SecCard>
@@ -736,13 +735,13 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
             {/* also in projects (multi-project links) */}
             <SecCard
               icon={FolderPlus}
-              label="Also in projects"
+              label={tr("Also in projects")}
               action={
                 <div className="relative">
                   <button onClick={() => setShowProjPicker((v) => !v)} className="grid h-7 w-7 place-items-center rounded-full border border-dashed border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"><Plus className="h-3.5 w-3.5" /></button>
                   {showProjPicker && (
                     <div className="absolute right-0 z-20 mt-1 max-h-64 w-64 overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-pop">
-                      {candidateProjects.isLoading && <div className="px-3 py-2 text-xs text-muted-foreground">Loading…</div>}
+                      {candidateProjects.isLoading && <div className="px-3 py-2 text-xs text-muted-foreground">{tr("Loading…")}</div>}
                       {(candidateProjects.data ?? []).filter((p) => p.id !== projectId && !(t.taskProjects ?? []).some((tp) => tp.project?.id === p.id)).map((p) => (
                         <button key={p.id} onClick={() => linkProjectMut.mutate(p.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"><span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color ?? "#7b68ee" }} /><span className="truncate">{p.name}</span></button>
                       ))}
@@ -751,7 +750,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 </div>
               }
             >
-              <p className="mb-3 -mt-1 text-xs text-muted-foreground">Mention another division by linking this task to another project in the same workspace.</p>
+              <p className="mb-3 -mt-1 text-xs text-muted-foreground">{tr("Mention another division by linking this task to another project in the same workspace.")}</p>
               <div className="flex flex-wrap gap-2">
                 {(t.taskProjects ?? []).map((tp) => (
                   <span key={tp.id} className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold">
@@ -759,7 +758,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     <button onClick={() => tp.project?.id && unlinkProjectMut.mutate(tp.project.id)} className="rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
                   </span>
                 ))}
-                {(t.taskProjects?.length ?? 0) === 0 && <p className="text-xs text-muted-foreground">Only in its home project.</p>}
+                {(t.taskProjects?.length ?? 0) === 0 && <p className="text-xs text-muted-foreground">{tr("Only in its home project.")}</p>}
               </div>
             </SecCard>
 
@@ -774,7 +773,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               const subs = t.subtasks ?? [];
               const doneCount = subs.filter((s) => s.status === "DONE").length;
               return (
-                <SecCard icon={ListChecks} label={subs.length > 0 ? `Subtasks · ${doneCount}/${subs.length}` : "Subtasks"}>
+                <SecCard icon={ListChecks} label={subs.length > 0 ? `${tr("Subtasks")} · ${doneCount}/${subs.length}` : tr("Subtasks")}>
                   {subs.length > 0 && (
                     <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-muted">
                       <div className="h-full rounded-full bg-success transition-all" style={{ width: `${subs.length ? Math.round((doneCount / subs.length) * 100) : 0}%` }} />
@@ -787,7 +786,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                           <button
                             onClick={() => toggleSubtask.mutate({ id: st.id, done: st.status !== "DONE" })}
                             disabled={toggleSubtask.isPending}
-                            title={st.status === "DONE" ? "Move back to To-do" : "Mark done"}
+                            title={st.status === "DONE" ? tr("Move back to To-do") : tr("Mark done")}
                             className="shrink-0 transition active:scale-90 disabled:opacity-50"
                           >
                             {st.status === "DONE"
@@ -813,7 +812,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                       value={newSubTitle}
                       onChange={(e) => setNewSubTitle(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter" && newSubTitle.trim() && !addSubtask.isPending) addSubtask.mutate(newSubTitle.trim()); }}
-                      placeholder="+ Add subtask… (Enter)"
+                      placeholder={tr("+ Add subtask… (Enter)")}
                       className="min-w-0 flex-1 rounded-xl border border-dashed border-border bg-transparent px-3 py-2 text-sm outline-none transition focus:border-primary"
                     />
                     <button
@@ -825,7 +824,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     </button>
                   </div>
                   )}
-                  {addSubtask.isError && <p className="mt-1 text-[11px] font-semibold text-destructive">{(addSubtask.error as Error)?.message ?? "Couldn't add subtask."}</p>}
+                  {addSubtask.isError && <p className="mt-1 text-[11px] font-semibold text-destructive">{(addSubtask.error as Error)?.message ?? tr("Couldn't add subtask.")}</p>}
                 </SecCard>
               );
             })()}
@@ -833,16 +832,16 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
             {/* attachments */}
             <SecCard
               icon={Paperclip}
-              label="Attachments"
+              label={tr("Attachments")}
               action={
                 <div className="flex items-center gap-2">
-                  <span className="hidden text-[11px] text-muted-foreground sm:inline">Max {MAX_ATTACH_LABEL}</span>
+                  <span className="hidden text-[11px] text-muted-foreground sm:inline">{tr("Max {size}", { size: MAX_ATTACH_LABEL })}</span>
                   <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary">
-                    {uploadMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Upload
+                    {uploadMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {tr("Upload")}
                     <input type="file" className="hidden" disabled={uploadMut.isPending} onChange={(e) => {
                       const f = e.target.files?.[0]; e.target.value = "";
                       if (!f) return;
-                      if (f.size > MAX_ATTACH_BYTES) { setSizeWarn(`File is ${(f.size / 1024 / 1024).toFixed(1)} MB — over the ${MAX_ATTACH_LABEL} max. Upload rejected.`); return; }
+                      if (f.size > MAX_ATTACH_BYTES) { setSizeWarn(tr("The file is {mb} MB, over the {max} limit. Upload rejected.", { mb: (f.size / 1024 / 1024).toFixed(1), max: MAX_ATTACH_LABEL })); return; }
                       setSizeWarn(null); uploadMut.mutate(f);
                     }} />
                   </label>
@@ -853,7 +852,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 {uploadPct != null && (
                   <div className="rounded-xl border border-border bg-background px-3 py-2">
                     <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="font-semibold text-muted-foreground">Uploading…</span>
+                      <span className="font-semibold text-muted-foreground">{tr("Uploading…")}</span>
                       <span className="font-bold tabular-nums text-primary">{uploadPct}%</span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-muted">
@@ -868,34 +867,34 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     ) : (
                       <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
                     )}
-                    <button onClick={() => setPreviewAtt(att)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-primary hover:underline">{att.name || "(unnamed)"}</button>
+                    <button onClick={() => setPreviewAtt(att)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-primary hover:underline">{att.name || tr("(unnamed)")}</button>
                     {att.size != null && <span className="shrink-0 text-xs text-muted-foreground">{Math.round(att.size / 1024)} KB</span>}
-                    <button onClick={() => setPreviewAtt(att)} title="Preview" className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
-                    {att.url && <a href={`${att.url}?download=${encodeURIComponent(att.name || "file")}`} download={att.name || ""} title="Download" className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-3.5 w-3.5" /></a>}
+                    <button onClick={() => setPreviewAtt(att)} title={tr("Preview")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
+                    {att.url && <a href={`${att.url}?download=${encodeURIComponent(att.name || "file")}`} download={att.name || ""} title={tr("Download")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-3.5 w-3.5" /></a>}
                     <button onClick={() => delAttachment.mutate(att.id)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
-                {(attachments.data ?? []).filter((a) => a.kind !== "PROOF").length === 0 && <p className="text-xs text-muted-foreground">No attachments.</p>}
+                {(attachments.data ?? []).filter((a) => a.kind !== "PROOF").length === 0 && <p className="text-xs text-muted-foreground">{tr("No attachments.")}</p>}
                 {sizeWarn && (
                   <div className="flex items-start gap-2 rounded-xl border border-rose-300/60 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
                     <X className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {sizeWarn}
                   </div>
                 )}
-                {uploadMut.isError && <p className="text-xs font-semibold text-destructive">{(uploadMut.error as Error)?.message || `Upload failed — max ${MAX_ATTACH_LABEL}.`}</p>}
+                {uploadMut.isError && <p className="text-xs font-semibold text-destructive">{(uploadMut.error as Error)?.message || tr("Upload failed. Max {size}.", { size: MAX_ATTACH_LABEL })}</p>}
               </div>
             </SecCard>
 
             {/* Bukti Pencairan — the SEPARATE payout-proof channel (shown to the submitter on /submissions) */}
             <SecCard
               icon={Paperclip}
-              label={tr("Bukti Pencairan")}
+              label={tr("Payout proof")}
               action={
                 <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-dashed border-emerald-400/60 px-2.5 py-1 text-xs font-semibold text-emerald-600 transition-colors hover:border-emerald-500 hover:text-emerald-700">
                   {uploadProofMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {tr("Upload proof")}
                   <input type="file" className="hidden" disabled={uploadProofMut.isPending} onChange={(e) => {
                     const f = e.target.files?.[0]; e.target.value = "";
                     if (!f) return;
-                    if (f.size > MAX_ATTACH_BYTES) { setSizeWarn(`File is ${(f.size / 1024 / 1024).toFixed(1)} MB — over the ${MAX_ATTACH_LABEL} max. Upload rejected.`); return; }
+                    if (f.size > MAX_ATTACH_BYTES) { setSizeWarn(tr("The file is {mb} MB, over the {max} limit. Upload rejected.", { mb: (f.size / 1024 / 1024).toFixed(1), max: MAX_ATTACH_LABEL })); return; }
                     setSizeWarn(null); uploadProofMut.mutate(f);
                   }} />
                 </label>
@@ -918,15 +917,15 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     ) : (
                       <Paperclip className="h-4 w-4 shrink-0 text-emerald-600" />
                     )}
-                    <button onClick={() => setPreviewAtt(att)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-primary hover:underline">{att.name || "(unnamed)"}</button>
+                    <button onClick={() => setPreviewAtt(att)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-primary hover:underline">{att.name || tr("(unnamed)")}</button>
                     {att.size != null && <span className="shrink-0 text-xs text-muted-foreground">{Math.round(att.size / 1024)} KB</span>}
-                    <button onClick={() => setPreviewAtt(att)} title="Preview" className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
-                    {att.url && <a href={`${att.url}?download=${encodeURIComponent(att.name || "file")}`} download={att.name || ""} title="Download" className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-3.5 w-3.5" /></a>}
+                    <button onClick={() => setPreviewAtt(att)} title={tr("Preview")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
+                    {att.url && <a href={`${att.url}?download=${encodeURIComponent(att.name || "file")}`} download={att.name || ""} title={tr("Download")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-3.5 w-3.5" /></a>}
                     <button onClick={() => delAttachment.mutate(att.id)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
                 {(attachments.data ?? []).filter((a) => a.kind === "PROOF").length === 0 && (
-                  <p className="text-xs text-muted-foreground">{tr("No Bukti Pencairan yet.")}</p>
+                  <p className="text-xs text-muted-foreground">{tr("No payout proof yet.")}</p>
                 )}
                 {uploadProofMut.isError && <p className="text-xs font-semibold text-destructive">{(uploadProofMut.error as Error)?.message || tr("Proof upload failed.")}</p>}
               </div>
@@ -938,12 +937,12 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 <div className="relative z-10 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-bold">{previewAtt.name || "Preview"}</div>
-                      <div className="truncate text-xs text-muted-foreground">{previewAtt.mimeType ?? "file"}{previewAtt.size != null ? ` · ${Math.round(previewAtt.size / 1024)} KB` : ""}</div>
+                      <div className="truncate text-sm font-bold">{previewAtt.name || tr("Preview")}</div>
+                      <div className="truncate text-xs text-muted-foreground">{previewAtt.mimeType ?? tr("file")}{previewAtt.size != null ? ` · ${Math.round(previewAtt.size / 1024)} KB` : ""}</div>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
-                      {previewAtt.url && <a href={`${previewAtt.url}?download=${encodeURIComponent(previewAtt.name || "file")}`} download={previewAtt.name || ""} title="Download" className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-4 w-4" /></a>}
-                      <button onClick={() => setPreviewAtt(null)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"><X className="h-4 w-4" /></button>
+                      {previewAtt.url && <a href={`${previewAtt.url}?download=${encodeURIComponent(previewAtt.name || "file")}`} download={previewAtt.name || ""} title={tr("Download")} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-4 w-4" /></a>}
+                      <button onClick={() => setPreviewAtt(null)} aria-label={tr("Close")} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"><X className="h-4 w-4" /></button>
                     </div>
                   </div>
                   <div className="flex-1 overflow-auto bg-muted/30 p-2">
@@ -956,7 +955,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                       if (kind === "pdf") return (
                         // Safari PDFKit needs range-able responses; the cache-bust + server no-store keeps CF
                         // from serving a stale full-200 for a Range request (which renders blank white).
-                        <iframe src={rangeSrc} title="preview" className="h-[75vh] w-full rounded-lg bg-white" />
+                        <iframe src={rangeSrc} title={tr("Preview")} className="h-[75vh] w-full rounded-lg bg-white" />
                       );
                       if (kind === "video") return (
                         <div>
@@ -964,7 +963,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                           <video src={rangeSrc} controls playsInline preload="metadata" className="mx-auto max-h-[72vh] rounded-lg" />
                           {maybeUnplayableVideo(previewAtt) && (
                             <p className="mx-auto mt-2 max-w-md text-center text-[11px] text-muted-foreground">
-                              The <span className="font-semibold">.mov</span> (HEVC) format often won't play on Android/webview — if you just get a black screen, hit Download to watch it.
+                              {tr("The .mov (HEVC) format often won't play on Android or in a webview. If the screen stays black, download it to watch.")}
                             </p>
                           )}
                         </div>
@@ -973,8 +972,8 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                       return (
                         <div className="grid place-items-center gap-2 py-16 text-center text-sm text-muted-foreground">
                           <Paperclip className="h-8 w-8" />
-                          Preview isn't available for this file type.
-                          <a href={`${previewAtt.url}?download=${encodeURIComponent(previewAtt.name || "file")}`} download={previewAtt.name || ""} className="mt-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground">Download</a>
+                          {tr("Preview isn't available for this file type.")}
+                          <a href={`${previewAtt.url}?download=${encodeURIComponent(previewAtt.name || "file")}`} download={previewAtt.name || ""} className="mt-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground">{tr("Download")}</a>
                         </div>
                       );
                     })()}
@@ -987,13 +986,13 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
             {/* dependencies */}
             <SecCard
               icon={Link2}
-              label="Blocked by"
+              label={tr("Blocked by")}
               action={
                 <div className="relative">
-                  <button onClick={() => setShowDepPicker((v) => !v)} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary"><Plus className="h-3.5 w-3.5" /> Add</button>
+                  <button onClick={() => setShowDepPicker((v) => !v)} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary"><Plus className="h-3.5 w-3.5" /> {tr("Add")}</button>
                   {showDepPicker && (
                     <div className="absolute right-0 z-20 mt-1 max-h-64 w-72 overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-pop">
-                      {candidateTasks.isLoading && <div className="px-3 py-2 text-xs text-muted-foreground">Loading…</div>}
+                      {candidateTasks.isLoading && <div className="px-3 py-2 text-xs text-muted-foreground">{tr("Loading…")}</div>}
                       {(candidateTasks.data ?? []).filter((ct) => ct.id !== taskId).slice(0, 40).map((ct) => (
                         <button key={ct.id} onClick={() => { addDep.mutate(ct.id); setShowDepPicker(false); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"><span className="truncate">{ct.title}</span></button>
                       ))}
@@ -1010,18 +1009,18 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     <button onClick={() => removeDep.mutate(dep.id)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
-                {(deps.data?.dependencies?.length ?? 0) === 0 && <p className="text-xs text-muted-foreground">No blockers.</p>}
+                {(deps.data?.dependencies?.length ?? 0) === 0 && <p className="text-xs text-muted-foreground">{tr("No blockers.")}</p>}
                 {(deps.data?.dependedOnBy?.length ?? 0) > 0 && (
-                  <p className="text-xs text-muted-foreground">Blocks {deps.data!.dependedOnBy.length} task{deps.data!.dependedOnBy.length === 1 ? "" : "s"}.</p>
+                  <p className="text-xs text-muted-foreground">{tn(deps.data!.dependedOnBy.length, "Blocks {n} task.", "Blocks {n} tasks.")}</p>
                 )}
               </div>
             </SecCard>
 
             {/* time tracking */}
-            <SecCard icon={Clock} label={`Time tracked${(() => { const total = (times.data?.entries ?? []).reduce((n, e) => n + (e.duration ?? 0), 0); return total ? ` · ${total}m` : ""; })()}`}>
+            <SecCard icon={Clock} label={`${tr("Time tracked")}${(() => { const total = (times.data?.entries ?? []).reduce((n, e) => n + (e.duration ?? 0), 0); return total ? ` · ${total}m` : ""; })()}`}>
               <div className="flex items-center gap-2">
-                <input value={timeMins} onChange={(e) => setTimeMins(e.target.value.replace(/[^0-9]/g, ""))} placeholder="Minutes" className="w-28 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary" />
-                <button disabled={!timeMins || logTimeMut.isPending} onClick={() => { logTimeMut.mutate({ duration: Number(timeMins) }); setTimeMins(""); }} className="inline-flex items-center gap-1 rounded-lg bg-secondary px-3 py-1.5 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-accent active:scale-[0.98] disabled:opacity-50">{logTimeMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Log time"}</button>
+                <input value={timeMins} onChange={(e) => setTimeMins(e.target.value.replace(/[^0-9]/g, ""))} placeholder={tr("Minutes")} className="w-28 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary" />
+                <button disabled={!timeMins || logTimeMut.isPending} onClick={() => { logTimeMut.mutate({ duration: Number(timeMins) }); setTimeMins(""); }} className="inline-flex items-center gap-1 rounded-lg bg-secondary px-3 py-1.5 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-accent active:scale-[0.98] disabled:opacity-50">{logTimeMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : tr("Log time")}</button>
               </div>
               {(times.data?.entries ?? []).slice(0, 5).map((e) => (
                 <div key={e.id} className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -1033,23 +1032,23 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
             </SecCard>
 
             {/* comments */}
-            <SecCard icon={MessageCircle} label="Comments">
+            <SecCard icon={MessageCircle} label={tr("Comments")}>
               <CommentComposer members={projectMembers} pending={addComment.isPending} onSubmit={(content, mentionedUserIds) => addComment.mutate({ content, mentionedUserIds })} />
               <div className="space-y-3">
                 {(comments.data?.comments ?? []).map((c) => (
                   <CommentItem key={c.id} comment={c} currentUserId={currentUserId} onReact={(emoji, has) => reactMut.mutate({ commentId: c.id, emoji, has })} onDelete={() => delComment.mutate(c.id)} />
                 ))}
-                {comments.data && (comments.data.comments?.length ?? 0) === 0 && <p className="text-xs text-muted-foreground">No comments yet.</p>}
+                {comments.data && (comments.data.comments?.length ?? 0) === 0 && <p className="text-xs text-muted-foreground">{tr("No comments yet.")}</p>}
               </div>
             </SecCard>
 
             {/* activity */}
             {(t.activityLogs?.length ?? 0) > 0 && (
-              <SecCard icon={Activity} label="Activity">
+              <SecCard icon={Activity} label={tr("Activity")}>
                 <div className="space-y-1.5 text-xs text-muted-foreground">
                   {t.activityLogs!.slice(0, 12).map((a) => (
                     <div key={a.id} className="flex gap-2">
-                      <span className="font-semibold text-foreground/80">{displayName(a.user, "Someone")}</span>
+                      <span className="font-semibold text-foreground/80">{displayName(a.user, tr("Someone"))}</span>
                       <span className="flex-1">{statusLabel(a.action)}{a.details ? ` — ${a.details}` : ""}</span>
                       <span className="shrink-0 text-muted-foreground/70">{fmtDate(a.createdAt)}</span>
                     </div>
@@ -1075,6 +1074,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
 // goes to whoever did them; visible to those tasks' project members.
 function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; title: string }; onClose: () => void }) {
   const qc = useQueryClient();
+  const { t: tr } = useLang();
   const [title, setTitle] = useState(initialTask.title);
   const [xp, setXp] = useState(50);
   const [tasks, setTasks] = useState<{ id: string; title: string }[]>([initialTask]);
@@ -1087,19 +1087,19 @@ function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; ti
   });
   const results = (taskSearch.data ?? []).filter((r) => !tasks.some((t) => t.id === r.id)).slice(0, 8);
   const create = useMutation({
-    mutationFn: () => nexusApi.createAdminQuest({ title: title.trim() || "Quest", xpReward: xp, requirementType: "specific_tasks", taskIds: tasks.map((t) => t.id) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["gamification", "me"] }); toast.success("Quest created 🎯"); onClose(); },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Couldn't create quest"),
+    mutationFn: () => nexusApi.createAdminQuest({ title: title.trim() || tr("Quest"), xpReward: xp, requirementType: "specific_tasks", taskIds: tasks.map((t) => t.id) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["gamification", "me"] }); toast.success(tr("Quest created")); onClose(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : tr("Couldn't create quest")),
   });
   return createPortal(
     <div className="fixed inset-0 z-[90] grid place-items-center bg-black/50 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">Make a quest</h3></div>
-        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Quest title</label>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} className="mb-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Quest name" />
-        <label className="mb-1 block text-xs font-semibold text-muted-foreground">XP reward (max 50)</label>
+        <div className="mb-3 flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">{tr("Make a quest")}</h3></div>
+        <label className="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Quest title")}</label>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} className="mb-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder={tr("Quest name")} />
+        <label className="mb-1 block text-xs font-semibold text-muted-foreground">{tr("XP reward (max 50)")}</label>
         <input type="number" min={0} max={50} value={xp} onChange={(e) => setXp(Math.max(0, Math.min(50, Number(e.target.value) || 0)))} className="mb-3 block w-28 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
-        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Tasks ({tasks.length})</label>
+        <label className="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Tasks")} ({tasks.length})</label>
         <div className="mb-2 space-y-1">
           {tasks.map((t) => (
             <div key={t.id} className="flex items-center gap-2 rounded-lg bg-muted px-2 py-1.5 text-sm">
@@ -1108,7 +1108,7 @@ function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; ti
             </div>
           ))}
         </div>
-        <input value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-xl border border-dashed border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder="+ Search tasks to add (min 2 letters)…" />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-xl border border-dashed border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder={tr("+ Search tasks to add (min 2 letters)…")} />
         {results.length > 0 && (
           <div className="mt-1 max-h-44 space-y-1 overflow-y-auto rounded-xl border border-border bg-popover p-1">
             {results.map((r) => (
@@ -1119,12 +1119,12 @@ function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; ti
           </div>
         )}
         <div className="mt-4 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-xl border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent">Cancel</button>
+          <button onClick={onClose} className="rounded-xl border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent">{tr("Cancel")}</button>
           <button onClick={() => create.mutate()} disabled={create.isPending || tasks.length === 0 || !title.trim()} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
-            {create.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Create quest
+            {create.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {tr("Create quest")}
           </button>
         </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">The quest completes once every task is done. XP goes to whoever did them; visible to the tasks' project members.</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">{tr("The quest completes once every task is done. XP goes to whoever did them; visible to the tasks' project members.")}</p>
       </div>
     </div>,
     document.body,
@@ -1142,15 +1142,16 @@ function customFieldChoices(options: NexusCustomField["options"]): string[] {
 }
 
 // "DD Mon YYYY • HH:mm" in Asia/Jakarta (matches the OLD NEXUS CREATED-field format).
-function fmtCreatedDateTime(ts: string): string {
+function fmtCreatedDateTime(ts: string, locale: string): string {
   const d = new Date(ts);
   if (Number.isNaN(d.getTime())) return ts;
-  const p = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jakarta", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(d);
+  const p = new Intl.DateTimeFormat(locale, { timeZone: "Asia/Jakarta", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(d);
   const m = Object.fromEntries(p.map((x) => [x.type, x.value]));
   return `${m.day} ${m.month} ${m.year} • ${m.hour}:${m.minute}`;
 }
 
 export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLeft }: { field: NexusCustomField; projectId?: string; onSet: (value: unknown) => void; hideLabel?: boolean; /** The task's creator was offboarded: the CREATED field marks them "Left". */ creatorLeft?: boolean }) {
+  const { t: tr, locale } = useLang();
   const type = (field.type ?? "").toUpperCase();
   const choices = customFieldChoices(field.options);
   const cls = "w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary";
@@ -1181,14 +1182,14 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
             </button>
           );
         })}
-        {choices.length === 0 && <span className="text-xs text-muted-foreground">No options.</span>}
+        {choices.length === 0 && <span className="text-xs text-muted-foreground">{tr("No options.")}</span>}
       </div>
     );
   } else if (type === "PLACE") {
     body = (
       <div className="space-y-1.5">
-        <input value={place.label} onChange={(e) => setPlace((p) => ({ ...p, label: e.target.value }))} onBlur={() => onSet(place)} placeholder="Location / place name" className={cls} />
-        <input value={place.mapUrl} onChange={(e) => setPlace((p) => ({ ...p, mapUrl: e.target.value }))} onBlur={() => onSet(place)} placeholder="Google Maps link" className={cls} />
+        <input value={place.label} onChange={(e) => setPlace((p) => ({ ...p, label: e.target.value }))} onBlur={() => onSet(place)} placeholder={tr("Location / place name")} className={cls} />
+        <input value={place.mapUrl} onChange={(e) => setPlace((p) => ({ ...p, mapUrl: e.target.value }))} onBlur={() => onSet(place)} placeholder={tr("Google Maps link")} className={cls} />
       </div>
     );
   } else if (type === "CREATED") {
@@ -1196,7 +1197,7 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
     const meta = field.createdMeta;
     const ts = (meta?.timestamp || strVal || "").trim();
     const name = meta?.userName?.trim();
-    const when = ts ? fmtCreatedDateTime(ts) : "";
+    const when = ts ? fmtCreatedDateTime(ts, locale) : "";
     body = (
       <div className="w-full rounded-lg border border-border bg-muted/40 px-2.5 py-1.5">
         {name ? <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">{name}{creatorLeft && <PersonLeftTag />}</div> : null}
@@ -1209,7 +1210,7 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
         <input type="url" value={local} onChange={(e) => setLocal(e.target.value)} onBlur={() => { if (local !== strVal) onSet(local); }} placeholder="https://…" className={cls} />
         {strVal.trim() && (
           <a href={strVal} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
-            <Link2 className="h-3 w-3" /> Open link
+            <Link2 className="h-3 w-3" /> {tr("Open link")}
           </a>
         )}
       </div>
@@ -1241,6 +1242,7 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
 }
 
 function FileFieldEditor({ projectId, value, onSet }: { projectId?: string; value: CustomFieldFile[]; onSet: (value: unknown) => void }) {
+  const { t: tr } = useLang();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const files = value.filter((f) => f && f.url);
@@ -1257,7 +1259,7 @@ function FileFieldEditor({ projectId, value, onSet }: { projectId?: string; valu
       }
       onSet(next);
     } catch {
-      toast.error("Upload failed", { description: "Check the file size (max 250MB) and your project access." });
+      toast.error(tr("Upload failed"), { description: tr("Check the file size (max 250MB) and your project access.") });
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -1281,7 +1283,7 @@ function FileFieldEditor({ projectId, value, onSet }: { projectId?: string; valu
                   <span className="truncate">{f.name}</span>
                 </a>
               )}
-              <button type="button" onClick={() => remove(f.url)} className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-foreground/80 text-background opacity-0 transition-opacity group-hover:opacity-100" aria-label="Remove">
+              <button type="button" onClick={() => remove(f.url)} className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-foreground/80 text-background opacity-0 transition-opacity group-hover:opacity-100" aria-label={tr("Remove")}>
                 <X className="h-2.5 w-2.5" />
               </button>
             </div>
@@ -1290,7 +1292,7 @@ function FileFieldEditor({ projectId, value, onSet }: { projectId?: string; valu
       )}
       <input ref={fileRef} type="file" multiple hidden onChange={(e) => onPick(e.target.files)} />
       <button type="button" disabled={busy || !projectId} onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:opacity-50">
-        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {busy ? "Uploading…" : "Add files"}
+        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {busy ? tr("Uploading…") : tr("Add files")}
       </button>
     </div>
   );
@@ -1299,6 +1301,7 @@ function FileFieldEditor({ projectId, value, onSet }: { projectId?: string; valu
 /** Comment input with @-mention autocomplete (project members). Tracks the EXACT userIds picked and sends
  *  them as `mentionedUserIds` so the backend notifies the right person on WhatsApp regardless of name. */
 function CommentComposer({ members, pending, onSubmit }: { members: NexusUser[]; pending: boolean; onSubmit: (content: string, mentionedUserIds: string[]) => void }) {
+  const { t: tr } = useLang();
   const [text, setText] = useState("");
   const [mentions, setMentions] = useState<{ id: string; name: string }[]>([]);
   const [query, setQuery] = useState<string | null>(null); // active "@…" token being typed (null = closed)
@@ -1357,7 +1360,7 @@ function CommentComposer({ members, pending, onSubmit }: { members: NexusUser[];
   return (
     <div className="flex items-start gap-2">
       <div className="relative flex-1">
-        <textarea ref={ref} value={text} onChange={onChange} onKeyDown={onKeyDown} rows={2} placeholder="Write a comment… (@ to mention)" className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary" />
+        <textarea ref={ref} value={text} onChange={onChange} onKeyDown={onKeyDown} rows={2} placeholder={tr("Write a comment… (@ to mention)")} className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary" />
         {query !== null && matches.length > 0 && (
           <div className="absolute bottom-full left-0 z-20 mb-1 max-h-56 w-64 overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-pop">
             {matches.map((u, i) => (
@@ -1376,6 +1379,7 @@ function CommentComposer({ members, pending, onSubmit }: { members: NexusUser[];
 }
 
 function CommentItem({ comment, currentUserId, onReact, onDelete }: { comment: NexusComment; currentUserId?: string; onReact: (emoji: string, has: boolean) => void; onDelete: () => void }) {
+  const { t: tr } = useLang();
   const [showEmoji, setShowEmoji] = useState(false);
   const grouped = useMemo(() => {
     const map = new Map<string, { count: number; mine: boolean }>();
@@ -1395,7 +1399,7 @@ function CommentItem({ comment, currentUserId, onReact, onDelete }: { comment: N
         <MiniAvatar user={comment.user} size={24} />
         <span className="text-sm font-semibold">{displayName(comment.user)}</span>
         <span className="text-[11px] text-muted-foreground">{fmtDate(comment.createdAt)} {fmtTime(comment.createdAt)}</span>
-        {isMine && <button onClick={onDelete} className="ml-auto rounded p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>}
+        {isMine && <button onClick={onDelete} aria-label={tr("Delete comment")} className="ml-auto rounded p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>}
       </div>
       <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">{comment.content}</p>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -1405,7 +1409,7 @@ function CommentItem({ comment, currentUserId, onReact, onDelete }: { comment: N
           </button>
         ))}
         <div className="relative">
-          <button onClick={() => setShowEmoji((v) => !v)} className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-accent"><Plus className="h-3 w-3" /></button>
+          <button onClick={() => setShowEmoji((v) => !v)} aria-label={tr("Add reaction")} className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-accent"><Plus className="h-3 w-3" /></button>
           {showEmoji && (
             <div className="absolute z-20 mt-1 flex gap-1 rounded-xl border border-border bg-popover p-1.5 shadow-pop">
               {REACTION_EMOJIS.map((e) => (

@@ -208,6 +208,7 @@ function questXp(task: NexusTask): number {
 }
 
 function NameCell({ task, onRename, onOpen }: { task: NexusTask; onRename: (title: string) => void; onOpen: () => void }) {
+  const { t } = useLang();
   const [title, setTitle] = useState(task.title);
   const done = task.status === "DONE";
   const xp = questXp(task);
@@ -220,8 +221,8 @@ function NameCell({ task, onRename, onOpen }: { task: NexusTask; onRename: (titl
         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
         className={cn("min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium outline-none hover:border-border focus:border-primary focus:bg-background", done && "text-muted-foreground line-through")}
       />
-      {xp > 0 && <span title="Quest XP" className="shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">+{xp} XP</span>}
-      <button onClick={onOpen} title="Open" className="shrink-0 text-muted-foreground/0 transition-colors hover:text-primary group-hover:text-muted-foreground"><ChevronRight className="h-3.5 w-3.5" /></button>
+      {xp > 0 && <span title={t("Quest XP")} className="shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">+{xp} XP</span>}
+      <button onClick={onOpen} title={t("Open")} className="shrink-0 text-muted-foreground/0 transition-colors hover:text-primary group-hover:text-muted-foreground"><ChevronRight className="h-3.5 w-3.5" /></button>
     </div>
   );
 }
@@ -237,6 +238,7 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
   toggleAssignee: (taskId: string, userId: string, has: boolean) => void;
   setCf: (fieldId: string, taskId: string, value: unknown) => void;
 }) {
+  const { locale } = useLang();
   const cls = "w-full rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm outline-none hover:border-border focus:border-primary focus:bg-background";
 
   if (colKey.startsWith("cf:")) {
@@ -291,7 +293,7 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
   }
   if (colKey === "created" || colKey === "updated") {
     const v = colKey === "created" ? task.createdAt : task.updatedAt;
-    return <span className="block truncate px-1.5 py-1 text-sm text-muted-foreground">{v ? new Date(v).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>;
+    return <span className="block truncate px-1.5 py-1 text-sm text-muted-foreground">{v ? new Date(v).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>;
   }
   if (colKey === "subtasks") {
     const subs = task.subtasks ?? [];
@@ -324,6 +326,7 @@ function cfChoices(options: NexusCustomField["options"]): string[] {
 // Compact MULTI_SELECT cell for the Table view: a summary trigger (first pick + "+N") that opens a
 // checklist popover — so a field with many options (e.g. TALENT) doesn't stretch the table sideways.
 function MultiSelectCell({ field, value, onSet }: { field: NexusCustomField; value: string[]; onSet: (v: string[]) => void }) {
+  const { t } = useLang();
   const choices = cfChoices(field.options);
   const selected = value.filter(Boolean);
   const toggle = (c: string) => onSet(selected.includes(c) ? selected.filter((x) => x !== c) : [...selected, c]);
@@ -346,7 +349,7 @@ function MultiSelectCell({ field, value, onSet }: { field: NexusCustomField; val
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="max-h-64 w-56 overflow-y-auto p-1">
-        {list.length === 0 && <p className="px-2 py-3 text-center text-xs text-muted-foreground">No options.</p>}
+        {list.length === 0 && <p className="px-2 py-3 text-center text-xs text-muted-foreground">{t("No options.")}</p>}
         {list.map((c) => {
           const on = selected.includes(c);
           return (
@@ -362,6 +365,7 @@ function MultiSelectCell({ field, value, onSet }: { field: NexusCustomField; val
 }
 
 function AssigneeCell({ task, members, onToggle }: { task: NexusTask; members: NexusUser[]; onToggle: (userId: string, has: boolean) => void }) {
+  const { t } = useLang();
   const current = (task.assignees ?? []).map((a) => a.user).filter(Boolean) as NexusUser[];
   const currentIds = new Set(current.map((u) => u.id));
   return (
@@ -379,14 +383,14 @@ function AssigneeCell({ task, members, onToggle }: { task: NexusTask; members: N
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="max-h-56 w-52 overflow-y-auto p-1">
-        {members.length === 0 && <p className="px-2 py-3 text-center text-xs text-muted-foreground">No members.</p>}
+        {members.length === 0 && <p className="px-2 py-3 text-center text-xs text-muted-foreground">{t("No members.")}</p>}
         {members.map((u) => {
           const has = currentIds.has(u.id);
           return (
             <button key={u.id} onClick={() => onToggle(u.id, has)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs hover:bg-accent">
               <span className={cn("grid h-4 w-4 shrink-0 place-items-center rounded border", has ? "border-primary bg-primary text-primary-foreground" : "border-border")}>{has && <Check className="h-3 w-3" />}</span>
               <Avatar userId={u.id} name={u.name} avatar={u.avatar} size={24} className="shrink-0 ring-0" />
-              <span className="truncate">{u.name ?? u.email ?? "Member"}</span>
+              <span className="truncate">{u.name ?? u.email ?? t("Member")}</span>
             </button>
           );
         })}
@@ -396,6 +400,7 @@ function AssigneeCell({ task, members, onToggle }: { task: NexusTask; members: N
 }
 
 function TagsCell({ task, onSave }: { task: NexusTask; onSave: (tags: string[]) => void }) {
+  const { t } = useLang();
   // Local accumulator so rapid add/remove (before the refetch lands) can't clobber an in-flight save
   // by reading a stale task.tags. Seeded once; this user's edits accumulate locally + persist each.
   const [tags, setTags] = useState<string[]>(() => (task.tags ?? []).filter(Boolean));
@@ -419,7 +424,7 @@ function TagsCell({ task, onSave }: { task: NexusTask; onSave: (tags: string[]) 
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
         onBlur={add}
-        placeholder={tags.length === 0 ? "Add…" : ""}
+        placeholder={tags.length === 0 ? t("Add…") : ""}
         className="min-w-[3rem] flex-1 border-none bg-transparent px-1 py-0.5 text-xs outline-none"
       />
     </div>
