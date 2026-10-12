@@ -45,12 +45,54 @@ struct ProjectDetailView: View {
     @State private var extrasLoaded = false
     /// "My meetings" & co.: only tasks assigned to me, on every task tab.
     @State private var mineOnly = false
+    // Board like web/Notion (owner, 12 Oct 2026): saved views, the project's fields, undo, option edits.
+    @State private var views: [ProjectViewFull] = []
+    @State private var canEditShared = false
+    @State private var allFields: [CustomField] = []
+    /// The view picked on Board and on List (by id), remembered per project on this device.
+    @State private var boardViewId: String?
+    @State private var listViewId: String?
+    @State private var undo: MoveUndo?
+    @State private var boardAlert: BoardAlert?
+    @State private var alertText = ""
+    @State private var filterView: ProjectViewFull?
+    /// iPad / Mac: the task opens as a centred sheet over the board (web popup; owner rejected a side
+    /// peek). The phone pushes it, as before.
+    @State private var sheetTask: TaskSheetRef?
+    @Environment(\.horizontalSizeClass) private var hSize
 
     private var meId: String? { auth.session?.userId }
 
     static func isMine(_ t: BoardTask, me: String?) -> Bool {
         guard let me else { return false }
         return (t.assignees ?? []).contains { $0.user?.id == me }
+    }
+
+    private func open(_ id: String) {
+        if hSize == .regular { sheetTask = TaskSheetRef(id: id) } else { openTaskId = id }
+    }
+
+    private var viewContext: ViewContext { ViewContext(fields: allFields, meId: meId, today: Date()) }
+
+    /// The saved views shown as chips on a layout: the layout's built-in first, then the others of the same
+    /// layout (e.g. "Per kategori" on Board). Calendar/Timeline/Table views are their own tabs here.
+    private func viewsFor(_ layout: String) -> [ProjectViewFull] {
+        let mine = views.filter { $0.layout == layout }
+        return mine.filter { $0.builtin == layout } + mine.filter { $0.builtin != layout }.sorted { ($0.position ?? 0) < ($1.position ?? 0) }
+    }
+    private func activeView(_ layout: String) -> ProjectViewFull? {
+        let list = viewsFor(layout)
+        let id = layout == "list" ? listViewId : boardViewId
+        return list.first { $0.id == id } ?? list.first
+    }
+    /// What the Board / List draws: the sections (search, drill, "My …" applied) through the view's
+    /// filter, sort and grouping.
+    private func displayLanes(_ layout: String) -> [ProjectDetail.Lane] {
+        ViewEngine.lanes(filteredLanes, config: activeView(layout)?.config, ctx: viewContext)
+    }
+    private func pickView(_ layout: String, _ id: String?) {
+        if layout == "list" { listViewId = id } else { boardViewId = id }
+        UserDefaults.standard.set(id, forKey: "nexus.view.\(projectId).\(layout)")
     }
 
     /// The "My …" preset's name: the saved view the server made for it, else the template's.
@@ -165,7 +207,11 @@ struct ProjectDetailView: View {
             tab = t
         }
         savedViews = (try? await APIClient.shared.projectViews(projectId)) ?? []
-        dateFields = ((try? await APIClient.shared.projectCustomFields(projectId)) ?? []).filter { $0.type.uppercased() == "DATE" }
+        allFields = (try? await APIClient.shared.projectCustomFields(projectId)) ?? []
+        dateFields = allFields.filter { $0.type.uppercased() == "DATE" }
+        await reloadViews()
+        boardViewId = UserDefaults.standard.string(forKey: "nexus.view.\(projectId).board")
+        listViewId = UserDefaults.standard.string(forKey: "nexus.view.\(projectId).list")
         if let saved = UserDefaults.standard.string(forKey: plotKey) {
             plotBy = saved == "due" ? nil : (dateFields.contains { $0.id == saved } ? saved : nil)
         } else if let prop = savedViews.first(where: { $0.builtin == "calendar" })?.config?.dateProp, prop.hasPrefix("cf:") {
@@ -275,7 +321,9 @@ struct ProjectDetailView: View {
             content
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if selection.active && selectionApplies {
-                        TaskSelectionBar(selection: selection, visibleIds: filteredLanes.flatMap { ($0.tasks ?? []).map(\.id) })
+                        TaskSelectionBar(selection: selection, visibleIds: visibleTaskIds)
+                    } else if let undo {
+                        MoveUndoBar(undo: undo, onUndo: { Task { await performUndo(undo) } }, onDismiss: { if self.undo == undo { self.undo = nil } })
                     }
                 }
                 // On `content` rather than the root, which already carries two sheets.
@@ -316,6 +364,12 @@ struct ProjectDetailView: View {
         .realtimeRoom("project:\(projectId)")
         .liveRefresh(every: 60, on: [.nexusProjectTasksChanged, .nexusWorkspaceChanged],
                      kinds: [RealtimeKind.projects], projectId: projectId) { await reloadQuietly() }
+        .background {
+            // Keyboard: ⌘N = new task (iPad keyboard, Mac).
+            Button("") { if !isPipeline && !isOutlet && canCreate && tab != .forms { prefillDue = nil; showCreate = true } }
+                .keyboardShortcut("n", modifiers: .command)
+                .opacity(0).accessibilityHidden(true)
+        }
         .alert(T("Couldn't update the board"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK") { actionError = nil }
         } message: { Text(actionError ?? "") }
@@ -337,6 +391,25 @@ struct ProjectDetailView: View {
             if !displayName.isEmpty { ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: displayName, icon: detail?.icon, color: detail?.color)) }
         }
         .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
+        // iPad / Mac: a centred sheet (a form sheet on a wide screen), closed with its own button.
+        .sheet(item: $sheetTask, onDismiss: { Task { await reloadQuietly() } }) { ref in
+            NavigationStack {
+                TaskDetailView(taskId: ref.id)
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { sheetTask = nil } } }
+            }
+        }
+        .sheet(item: $filterView) { v in
+            ViewFilterSheet(view: v, lanes: lanes, fields: allFields, members: detail?.members ?? []) { patch in
+                do {
+                    try await APIClient.shared.updateProjectView(projectId, viewId: v.id, patch: patch)
+                    await reloadViews()
+                    return nil
+                } catch { return (error as? LocalizedError)?.errorDescription ?? T("Couldn't save the view.") }
+            }
+        }
+        .alert(boardAlert?.title ?? "", isPresented: Binding(get: { boardAlert != nil }, set: { if !$0 { boardAlert = nil } }), presenting: boardAlert) { a in
+            boardAlertActions(a)
+        } message: { a in Text(a.message) }
         .navigationDestination(isPresented: $newFormOpen) {
             FormBuilderView(projectId: projectId, projectName: displayName, formId: nil)
         }
@@ -492,17 +565,17 @@ struct ProjectDetailView: View {
                     OverviewTab(
                         detail: detail,
                         onDrill: drillTab.map { target -> (OverviewDrill) -> Void in { (d: OverviewDrill) in drill = d; tab = target } },
-                        onOpenTask: { openTaskId = $0 },
+                        onOpenTask: { open($0) },
                         onEditBrief: { showSettings = true },
                         onAddTask: canCreate ? { () -> Void in prefillDue = nil; showCreate = true } : nil,
                         onOpenMember: { openProfile = $0 }
                     )
                 case .board:    boardTab(detail)
-                case .list:     ListTab(lanes: filteredLanes, onOpen: { openTaskId = $0 }, selection: selection)
-                case .sheet:    SpreadsheetTab(projectId: projectId, lanes: filteredLanes, onOpen: { openTaskId = $0 })
-                case .calendar: CalendarTab(tasks: filteredLanes.flatMap { $0.tasks ?? [] }, onOpen: { openTaskId = $0 }, onCreate: { date in prefillDue = date; showCreate = true },
+                case .list:     listTab()
+                case .sheet:    SpreadsheetTab(projectId: projectId, lanes: filteredLanes, onOpen: { open($0) })
+                case .calendar: CalendarTab(tasks: filteredLanes.flatMap { $0.tasks ?? [] }, onOpen: { open($0) }, onCreate: { date in prefillDue = date; showCreate = true },
                                             dateFieldId: plotBy, plotChoices: plotChoices, onPlotBy: { choosePlot($0) })
-                case .timeline: TimelineTab(lanes: filteredLanes, onOpen: { openTaskId = $0 })
+                case .timeline: TimelineTab(lanes: filteredLanes, onOpen: { open($0) })
                 default:        EmptyView()
                 }
             }
@@ -547,32 +620,107 @@ struct ProjectDetailView: View {
         }
     }
 
-    @ViewBuilder private func boardTab(_ detail: ProjectDetail) -> some View {
-        let lanes = filteredLanes
-        if !lanes.isEmpty {
-            // Horizontal-only: each lane is a full-height column that scrolls its own cards
-            // vertically (see LaneColumn). The lanes fill the board height, so the HStack never
-            // overflows it and the custom header/tab-bar stay put.
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 14) {
-                    ForEach(lanes) { lane in
-                        LaneColumn(lane: lane, allLanes: lanes, selection: selection, onOpen: { openTaskId = $0 },
-                                   onAddTask: { title in await addTask(laneId: lane.id, title: title) },
-                                   onMove: { tid, lid in await moveTask(tid, to: lid) },
-                                   onSetStatus: { status in await setSectionStatus(lane.id, status) })
-                    }
-                }
-                .padding(16)
-                .frame(maxHeight: .infinity, alignment: .top)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            VStack(spacing: 8) {
-                Image(systemName: "square.stack.3d.up.slash").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
-                Text(T("No sections yet")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                Text(T("This project has no sections yet. Add one from Project settings.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+    @ViewBuilder private func viewChips(_ layout: String) -> some View {
+        let list = viewsFor(layout)
+        if !list.isEmpty {
+            ViewChipsBar(
+                views: list, activeId: activeView(layout)?.id,
+                fieldName: { id in allFields.first { $0.id == id }?.name },
+                onPick: { pickView(layout, $0) },
+                onNew: { alertText = ""; boardAlert = .newView(layout: layout) },
+                onFilter: { filterView = $0 },
+                onRename: { v in alertText = v.name ?? ""; boardAlert = .renameView(v) },
+                onDelete: { boardAlert = .deleteView($0) }
+            )
+            Divider().overlay(NX.border)
         }
+    }
+
+    private var visibleTaskIds: [String] {
+        displayLanes(tab == .list ? "list" : "board").flatMap { ($0.tasks ?? []).map(\.id) }
+    }
+
+    @ViewBuilder private func boardTab(_ detail: ProjectDetail) -> some View {
+        let shown = displayLanes("board")
+        let statusStyle = StatusOptions.inUse(lanes) && shown.allSatisfy { !$0.id.hasPrefix("grp:") }
+        let grouped = shown.contains { $0.id.hasPrefix("grp:") }
+        VStack(spacing: 0) {
+            viewChips("board")
+            if !shown.isEmpty {
+                // Horizontal-only: each column is a full-height lane that scrolls its own cards
+                // vertically (see LaneColumn), so the board never pans in two directions at once.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ForEach(Array(shown.enumerated()), id: \.element.id) { i, lane in
+                            laneColumn(lane, at: i, in: shown, statusStyle: statusStyle, grouped: grouped)
+                        }
+                        if statusStyle { addStatusColumn }
+                    }
+                    .padding(14)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                EmptyState(icon: "square.stack.3d.up.slash", title: T("No sections yet"),
+                           subtitle: T("This project has no sections yet. Add one from Project settings."),
+                           actionTitle: T("Project settings"), actionIcon: "gearshape") { showSettings = true }
+            }
+        }
+    }
+
+    /// One column, built outside the ForEach so the type checker sees one plain call.
+    private func laneColumn(_ lane: ProjectDetail.Lane, at i: Int, in shown: [ProjectDetail.Lane], statusStyle: Bool, grouped: Bool) -> LaneColumn {
+        let firstOfGroup = i == 0 || shown[i - 1].group != lane.group
+        let label: String? = statusStyle && firstOfGroup ? lane.group.label : nil
+        var sectionStatus: ((String?) async -> Void)? = nil
+        if !statusStyle && !grouped {
+            sectionStatus = { status in await setSectionStatus(lane.id, status) }
+        }
+        let addable = ViewEngine.groupTarget(lane.id)?.prop != "assignee"
+        return LaneColumn(
+            lane: lane, allLanes: shown, selection: selection,
+            statusStyle: statusStyle || grouped,
+            groupLabel: label,
+            onOpen: { id in open(id) },
+            onAddTask: { title in await addTask(laneId: lane.id, title: title) },
+            onDrop: { ids in dropped(ids, on: lane.id, visible: shown) },
+            onMoveTo: { tid, lid in moveLater([tid], to: lid) },
+            options: statusStyle ? optionActions(lane) : nil,
+            onSetStatus: sectionStatus,
+            canAdd: addable
+        )
+    }
+
+    private func moveLater(_ ids: [String], to laneId: String) {
+        Task { await moveTasks(ids, to: laneId) }
+    }
+
+    @ViewBuilder private func listTab() -> some View {
+        let shown = displayLanes("list")
+        VStack(spacing: 0) {
+            viewChips("list")
+            ListTab(lanes: shown, onOpen: { open($0) }, selection: selection,
+                    statusStyle: StatusOptions.inUse(lanes) || shown.contains { $0.id.hasPrefix("grp:") },
+                    onDrop: { ids, laneId in dropped(ids, on: laneId, visible: shown) })
+        }
+    }
+
+    /// "+ Status" after the last column: a new option in one of the three groups (web StatusPicker).
+    private var addStatusColumn: some View {
+        Menu {
+            Section(T("Add a status to")) {
+                ForEach(StatusGroup.allCases) { g in
+                    Button(g.label) { alertText = ""; boardAlert = .addStatus(g) }
+                }
+            }
+        } label: {
+            Label(T("Status"), systemImage: "plus")
+                .font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                .frame(width: 140, height: 44)
+                .contentShape(Rectangle())
+        }
+        .padding(.top, 18)
+        .accessibilityLabel(T("Add a status"))
     }
 
     private func load() async {
@@ -667,12 +815,41 @@ struct ProjectDetailView: View {
         }
     }
 
-    private func addTask(laneId: String, title: String) async {
-        let t = title.trimmingCharacters(in: .whitespaces)
-        guard !t.isEmpty else { return }
-        do { _ = try await APIClient.shared.createTask(projectId: projectId, taskListId: laneId, title: t) }
-        catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("The task wasn't created.") }
-        await load()
+    /// A new task from a column's inline card. A virtual column (a view grouped by priority or a field)
+    /// makes the task in the default status and gives it that column's value; a filtered view fills in
+    /// the filter's single values so the new task does not vanish at once (bughunt C-BUG-9).
+    private func addTask(laneId: String, title: String) async -> String? {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return nil }
+        let layout = tab == .list ? "list" : "board"
+        let config = activeView(layout)?.config
+        var section = laneId
+        var priority: String?
+        var assignMe = false
+        var fieldValues: [String: String] = [:]
+        func take(_ prop: String, _ value: String) {
+            if prop == "priority" { priority = value }
+            else if prop == "section" { section = value }
+            else if prop == "assignee" { assignMe = assignMe || value == ViewEngine.me || value == meId }
+            else if prop.hasPrefix("cf:") { fieldValues[String(prop.dropFirst(3))] = value }
+        }
+        for r in config?.simple ?? [] where r.op == "any_of" && r.value.strings.count == 1 { take(r.prop, r.value.strings[0]) }
+        if let g = ViewEngine.groupTarget(laneId) {
+            section = StatusOptions.defaultOption(lanes)?.id ?? lanes.first?.id ?? ""
+            if g.value != ViewEngine.none { take(g.prop, g.value) }
+        }
+        guard !section.isEmpty else { return nil }
+        do {
+            let id = try await APIClient.shared.createTask(projectId: projectId, taskListId: section, title: t,
+                                                           priority: priority, placement: "top")
+            if assignMe, let meId { try? await APIClient.shared.updateTask(id, ["assigneeIds": [meId]]) }
+            for (fid, v) in fieldValues { try? await APIClient.shared.setCustomFieldValue(fieldId: fid, taskId: id, value: v) }
+            await reloadQuietly()
+            return id
+        } catch {
+            actionError = (error as? LocalizedError)?.errorDescription ?? T("The task wasn't created.")
+            return nil
+        }
     }
 
     /// Lane menu → Section status (12 Oct 2026): what tasks moved into this section become.
@@ -682,49 +859,285 @@ struct ProjectDetailView: View {
         await reloadQuietly()
     }
 
-    private func moveTask(_ taskId: String, to laneId: String) async {
-        do { _ = try await APIClient.shared.updateTask(taskId, ["taskListId": laneId]) }
-        catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("The task wasn't moved.") }
-        await load()
+    /// Cards dropped on a column: a card that is part of the selection carries the whole selection (in
+    /// screen order, only what is visible — bughunt C-BUG-4); an unselected card moves alone and clears
+    /// the selection (web group-move).
+    private func dropped(_ ids: [String], on laneId: String, visible: [ProjectDetail.Lane]) {
+        guard let first = ids.first else { return }
+        let onScreen = visible.flatMap { ($0.tasks ?? []).map(\.id) }
+        var moving: [String]
+        if selection.active && selection.contains(first) {
+            moving = onScreen.filter { selection.contains($0) }
+        } else {
+            moving = ids
+            selection.clear()
+        }
+        let target = visible.first { $0.id == laneId }
+        moving = moving.filter { id in !(target?.tasks ?? []).contains { $0.id == id } }
+        guard !moving.isEmpty else { return }
+        Task { await moveTasks(moving, to: laneId) }
     }
+
+    /// Moves tasks to a column: on screen at once, then one POST /api/tasks/batch-move (the server runs
+    /// each task's normal rules — column status, Done wins, automations — and announces each live).
+    /// A virtual column sets its priority / field instead. Undo for 10 s puts every task back.
+    private func moveTasks(_ ids: [String], to laneId: String) async {
+        let all = lanes.flatMap { $0.tasks ?? [] }
+        let before = ids.compactMap { id in all.first { $0.id == id } }
+        guard !before.isEmpty else { return }
+        if let g = ViewEngine.groupTarget(laneId) {
+            await moveToGroup(before, prop: g.prop, value: g.value)
+            return
+        }
+        // Optimistic: take the cards out of their columns and put them at the top of the target.
+        let moved = Set(ids)
+        let movedTasks = ids.compactMap { id in all.first { $0.id == id } }
+        lanes = lanes.map { lane -> ProjectDetail.Lane in
+            var rest = (lane.tasks ?? []).filter { !moved.contains($0.id) }
+            if lane.id == laneId { rest = movedTasks + rest }
+            return lane.with(tasks: rest)
+        }
+        do {
+            let r = try await APIClient.shared.batchMoveTasks(ids, taskListId: laneId)
+            if let f = r.failed, !f.isEmpty {
+                actionError = String(format: T("%d of the tasks couldn't be moved."), f.count)
+            }
+            let okIds = Set(r.moved ?? ids)
+            let groups = Dictionary(grouping: before.filter { okIds.contains($0.id) }) { "\($0.taskListId ?? "")|\($0.status ?? "")" }
+            undo = MoveUndo(count: okIds.count, groups: groups.values.map { ts in
+                MoveUndo.Group(taskIds: ts.map(\.id), laneId: ts.first?.taskListId, status: ts.first?.status, priority: nil)
+            })
+            selection.clear()
+        } catch {
+            actionError = (error as? LocalizedError)?.errorDescription ?? T("The task wasn't moved.")
+        }
+        await reloadQuietly()
+    }
+
+    /// A view grouped by priority or a select field: dropping sets that value.
+    private func moveToGroup(_ tasks: [BoardTask], prop: String, value: String) async {
+        let v = value == ViewEngine.none ? "" : value
+        do {
+            if prop == "priority" {
+                _ = try await APIClient.shared.batchMoveTasks(tasks.map(\.id), priority: v.isEmpty ? "NONE" : v)
+                let groups = Dictionary(grouping: tasks) { $0.priority ?? "NONE" }
+                undo = MoveUndo(count: tasks.count, groups: groups.map { MoveUndo.Group(taskIds: $0.value.map(\.id), laneId: nil, status: nil, priority: $0.key) })
+            } else if prop == "status" {
+                _ = try await APIClient.shared.batchMoveTasks(tasks.map(\.id), status: v)
+            } else if prop.hasPrefix("cf:") {
+                let fid = String(prop.dropFirst(3))
+                for t in tasks { try await APIClient.shared.setCustomFieldValue(fieldId: fid, taskId: t.id, value: v) }
+            } else {
+                actionError = T("Tasks can't be moved into this group. Change the person in the task instead.")
+            }
+            selection.clear()
+        } catch {
+            actionError = (error as? LocalizedError)?.errorDescription ?? T("The task wasn't moved.")
+        }
+        await reloadQuietly()
+    }
+
+    private func performUndo(_ u: MoveUndo) async {
+        undo = nil
+        for g in u.groups {
+            if let p = g.priority { _ = try? await APIClient.shared.batchMoveTasks(g.taskIds, priority: p) }
+            else { _ = try? await APIClient.shared.batchMoveTasks(g.taskIds, taskListId: g.laneId, status: g.status) }
+        }
+        await reloadQuietly()
+    }
+
+    // MARK: status options + views (alerts)
+
+    private func optionActions(_ lane: ProjectDetail.Lane) -> LaneOptionActions {
+        LaneOptionActions(
+            rename: { alertText = lane.name; boardAlert = .renameStatus(lane) },
+            color: { key in Task { await optionChange { try await APIClient.shared.updateStatusOption(projectId: projectId, id: lane.id, color: key) } } },
+            move: { dir in Task { await moveOption(lane, dir) } },
+            delete: { moveTo in boardAlert = .deleteStatus(lane, moveTo: moveTo) }
+        )
+    }
+
+    /// Left/right inside its group: takes the neighbour's position (web StatusPicker).
+    private func moveOption(_ lane: ProjectDetail.Lane, _ dir: Int) async {
+        let same = StatusOptions.ordered(lanes).filter { $0.group == lane.group }
+        guard let i = same.firstIndex(where: { $0.id == lane.id }), same.indices.contains(i + dir) else { return }
+        let other = same[i + dir]
+        await optionChange { try await APIClient.shared.updateStatusOption(projectId: projectId, id: lane.id, position: other.position ?? (i + dir)) }
+    }
+
+    private func optionChange(_ work: () async throws -> Void) async {
+        do { try await work() }
+        catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't change the status options.") }
+        await reloadQuietly()
+    }
+
+    private func reloadViews() async {
+        if let r = try? await APIClient.shared.projectViewsFull(projectId) {
+            views = r.views ?? []
+            canEditShared = r.canEditShared ?? false
+        }
+    }
+
+    @ViewBuilder private func boardAlertActions(_ a: BoardAlert) -> some View {
+        switch a {
+        case .renameStatus(let lane):
+            TextField(T("Name"), text: $alertText)
+            Button(T("Save")) {
+                let name = alertText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty { Task { await optionChange { try await APIClient.shared.updateStatusOption(projectId: projectId, id: lane.id, name: name) } } }
+            }
+            Button(T("Cancel"), role: .cancel) {}
+        case .addStatus(let group):
+            TextField(T("Name"), text: $alertText)
+            Button(T("Add")) {
+                let name = alertText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty {
+                    Task { await optionChange { _ = try await APIClient.shared.createStatusOption(projectId: projectId, name: name, taskStatus: group.statusForNewOption(named: name)) } }
+                }
+            }
+            Button(T("Cancel"), role: .cancel) {}
+        case .deleteStatus(let lane, let moveTo):
+            Button(T("Delete"), role: .destructive) {
+                Task { await optionChange { try await APIClient.shared.deleteStatusOption(projectId: projectId, id: lane.id, moveTo: moveTo) } }
+            }
+            Button(T("Cancel"), role: .cancel) {}
+        case .newView(let layout):
+            TextField(T("Name"), text: $alertText)
+            Button(T("Create")) {
+                let name = alertText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty {
+                    Task {
+                        do {
+                            let v = try await APIClient.shared.createProjectView(projectId, name: name, layout: layout, shared: false, config: ["groupBy": "section"])
+                            await reloadViews()
+                            pickView(layout, v.id)
+                            filterView = v
+                        } catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save the view.") }
+                    }
+                }
+            }
+            Button(T("Cancel"), role: .cancel) {}
+        case .renameView(let v):
+            TextField(T("Name"), text: $alertText)
+            Button(T("Save")) {
+                let name = alertText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty {
+                    Task {
+                        do { try await APIClient.shared.updateProjectView(projectId, viewId: v.id, name: name); await reloadViews() }
+                        catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save the view.") }
+                    }
+                }
+            }
+            Button(T("Cancel"), role: .cancel) {}
+        case .deleteView(let v):
+            Button(T("Delete"), role: .destructive) {
+                Task {
+                    do { try await APIClient.shared.deleteProjectView(projectId, viewId: v.id); await reloadViews() }
+                    catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't delete the view.") }
+                }
+            }
+            Button(T("Cancel"), role: .cancel) {}
+        }
+    }
+
 }
 
 struct LaneColumn: View {
     let lane: ProjectDetail.Lane
     let allLanes: [ProjectDetail.Lane]
     let selection: TaskSelection
+    /// The project works with status options: the column is tinted in its option's colour and its
+    /// header is the option's pill (web board, owner 12 Oct 2026). Plain sections keep the old look.
+    var statusStyle = false
+    /// "To-do" / "In progress" / "Complete" above the first column of each group; nil elsewhere.
+    var groupLabel: String? = nil
     let onOpen: (String) -> Void
-    let onAddTask: (String) async -> Void
-    let onMove: (String, String) async -> Void
-    /// Section status (12 Oct 2026): nil = the lane offers no menu.
+    /// Creates a task in this column from the inline card; answers its id (nil = failed).
+    let onAddTask: (String) async -> String?
+    /// Task ids dropped on this column. The board decides what moves (a selected card drags the whole
+    /// selection) and does it with one batch call.
+    let onDrop: ([String]) -> Void
+    /// The card menu's "Move to": one task to another column.
+    let onMoveTo: (String, String) -> Void
+    /// Status option actions (status options only); nil hides them.
+    var options: LaneOptionActions? = nil
+    /// Section status (plain sections only): nil = no menu.
     var onSetStatus: ((String?) async -> Void)? = nil
+    /// False for a column that cannot take a new card (a group by assignee).
+    var canAdd = true
     @State private var composing = false
-    @State private var newTitle = ""
-    @State private var adding = false
     /// True while a card is hovering over this column, so the target is obvious before you let go.
     @State private var dropTargeted = false
 
-    /// Unfinished work first, finished work after it.
-    ///
-    /// The server orders a lane by `position` — the manual order cards were put in — which is the
-    /// right answer for a pure kanban board, where the column IS the status and nothing inside it
-    /// is ever "done". NEXUS lets a task be ticked off without leaving its column, so that
-    /// assumption leaks: a finished card sits wherever it happened to be, between two live ones.
-    ///
-    /// The split is stable, so `position` still decides the order inside each half — dragging a
-    /// card to a lane still lands it where the server put it, relative to its peers.
+    /// Unfinished work first, finished work after it (a stable split; `position` decides inside each).
+    /// A status column holds one status, so this only matters for plain sections.
     private var orderedTasks: [BoardTask] {
         let tasks = lane.tasks ?? []
         return tasks.filter { !$0.isDone } + tasks.filter { $0.isDone }
     }
-    @FocusState private var focused: Bool
 
     var body: some View {
-        // ClickUp-style column: a FIXED lane header above a per-lane vertical scroll, so only this
-        // column's visible cards render (reliable culling) and the header stays put — faithful to
-        // the web board, and far smoother than the old whole-board 2-axis pan on a task-heavy lane.
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
+        // A FIXED column header above a per-column vertical scroll (one axis each; the board's
+        // horizontal scroll is the parent's). Proven on device; no lazy stack in a two-way scroll.
+        VStack(alignment: .leading, spacing: 4) {
+            if statusStyle {
+                Text(groupLabel ?? " ").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg).padding(.leading, 6)
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                header
+                // "New task" sits under the header, above the cards, so a long column never has to be
+                // scrolled to its end to add one; the new card lands at the top (placement "top").
+                if canAdd {
+                    if composing {
+                        InlineDraftCard(onSave: onAddTask, onOpen: onOpen, onClose: { composing = false })
+                    } else {
+                        Button { composing = true } label: {
+                            HStack(spacing: 6) { Image(systemName: "plus"); Text(T("New task")) }
+                                .font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 8).frame(minHeight: 40)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .hoverEffect(.highlight)
+                    }
+                }
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(alignment: .leading, spacing: 8) {
+                        ForEach(orderedTasks) { task in card(task) }
+                        if (lane.tasks ?? []).isEmpty && !composing {
+                            Text(T("No tasks")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg.opacity(0.7))
+                                .frame(maxWidth: .infinity).padding(.vertical, 18)
+                        }
+                    }
+                    .padding(.bottom, 8)
+                }
+            }
+            .padding(10)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .background(statusStyle ? lane.swatch.lane : NX.card.opacity(0.6), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(dropTargeted ? NX.violet : (statusStyle ? Color.clear : NX.border), lineWidth: dropTargeted ? 2 : 1)
+            )
+            // The whole column is the target, not just the gap under the last card.
+            .dropDestination(for: String.self) { ids, _ in
+                guard !ids.isEmpty else { return false }
+                onDrop(ids)
+                return true
+            } isTargeted: { targeted in
+                withAnimation(.easeOut(duration: 0.12)) { dropTargeted = targeted }
+            }
+        }
+        .frame(width: 280)
+        .frame(maxHeight: .infinity, alignment: .top)   // the column fills the board height so its scroll is bounded
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            if statusStyle {
+                StatusPill(name: lane.name, colorKey: lane.colorKey, size: 13)
+            } else {
                 Text(lane.name).font(NXFont.display(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
                 if let status = lane.taskStatus {
                     Text(TaskStatusName.label(status)).font(NXFont.text(10, .semibold)).foregroundStyle(NX.violetText)
@@ -732,119 +1145,91 @@ struct LaneColumn: View {
                         .background(NX.violet.opacity(0.10), in: Capsule())
                         .lineLimit(1)
                 }
-                Spacer()
-                if let onSetStatus { sectionStatusMenu(onSetStatus) }
-                Text("\(lane.tasks?.count ?? 0)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
-                    .padding(.horizontal, 8).padding(.vertical, 2).background(NX.muted, in: Capsule())
             }
-            .padding(.horizontal, 4)
-
-            // Add task sits under the lane header, above the cards (like the web board's "Spawn card"),
-            // so a long lane never has to be scrolled to its end to add one.
-            if composing {
-                VStack(spacing: 8) {
-                    TextField(T("Task title…"), text: $newTitle, axis: .vertical)
-                        .font(NXFont.text(14)).focused($focused).lineLimit(3)
-                        .padding(10).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.violet.opacity(0.5)))
-                        .onSubmit(submit)
-                    HStack(spacing: 8) {
-                        Button(T("Cancel")) { composing = false; newTitle = "" }
-                            .font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
-                        Spacer()
-                        Button(action: submit) {
-                            HStack(spacing: 4) { if adding { ProgressView().scaleEffect(0.7) }; Text(T("Add")) }
-                                .font(NXFont.text(13, .bold)).foregroundStyle(.white)
-                                .padding(.horizontal, 14).padding(.vertical, 7)
-                                .background(NX.violet, in: Capsule())
-                        }
-                        .disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty || adding)
-                    }
-                }
-            } else {
-                Button { composing = true; focused = true } label: {
-                    HStack(spacing: 6) { Image(systemName: "plus"); Text(T("Add task")) }
-                        .font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
-                        .frame(maxWidth: .infinity).padding(.vertical, 10)
-                        .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [5])))
-                        .contentShape(Rectangle())
-                }.buttonStyle(.plain)
-            }
-
-            ScrollView(.vertical, showsIndicators: false) {
-              LazyVStack(alignment: .leading, spacing: 10) {
-            ForEach(orderedTasks) { task in
-                // In selection mode a tap ticks the card instead of opening it.
-                Button {
-                    if selection.active { selection.toggle(task.id) } else { onOpen(task.id) }
-                } label: {
-                    // The tick is drawn inside the card (leading, before the status circle), so the
-                    // lane's scroll view never clips it.
-                    BoardCard(task: task, selectMark: selection.active ? selection.contains(task.id) : nil)
-                        .overlay {
-                            if selection.active && selection.contains(task.id) {
-                                RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(NX.violet, lineWidth: 2)
-                            }
-                        }
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(selection.active && selection.contains(task.id) ? .isSelected : [])
-                // ⌘-click ticks, ⇧-click ticks the range in this lane's on-screen order (iPad keyboard, Mac).
-                .taskModifierClicks(task.id, selection: selection) { orderedTasks.map(\.id) }
-                .hoverEffect(.lift)
-                    // The task id is the whole payload. Dragging the card itself would mean making
-                    // Task Transferable and shipping a copy of the model between columns, when all
-                    // the drop needs to know is which task moved — the board already holds the rest.
-                    .draggable(task.id) {
-                        BoardCard(task: task).frame(width: 260).opacity(0.9)
-                    }
-                    .contextMenu {
-                        TaskSelectionMenuItems(taskId: task.id, selection: selection)
-                        let others = allLanes.filter { $0.id != lane.id }
-                        if !others.isEmpty {
-                            Menu("Pindah ke") {
-                                ForEach(others) { l in
-                                    Button(l.name) { Task { await onMove(task.id, l.id) } }
-                                }
-                            }
-                        }
-                    }
-            }
-            if (lane.tasks ?? []).isEmpty && !composing {
-                Text(T("Empty")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg.opacity(0.6))
-                    .frame(maxWidth: .infinity).padding(.vertical, 18)
-                    .background(NX.card.opacity(0.5), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [5])))
-            }
-
-              }   // LazyVStack
-            }     // per-lane ScrollView
+            Text("\(lane.tasks?.count ?? 0)").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg).monospacedDigit()
+            Spacer(minLength: 0)
+            if let options { optionMenu(options) }
+            else if let onSetStatus { sectionStatusMenu(onSetStatus) }
         }
-        .frame(width: 290)
-        .frame(maxHeight: .infinity, alignment: .top)   // lane fills the board height so its scroll is bounded
-        .padding(12)
-        .background(NX.card.opacity(dropTargeted ? 0.9 : 0.6), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .strokeBorder(dropTargeted ? NX.violet : NX.border, lineWidth: dropTargeted ? 2 : 1)
-        )
-        // The whole column is the target, not just the gap under the last card: aiming at a
-        // list's empty tail is a game, and the answer to "which column" is the column.
-        .dropDestination(for: String.self) { ids, _ in
-            guard let taskId = ids.first else { return false }
-            // A card dropped back where it started would still cost a round trip to the server and
-            // a board reload, for a move that did not happen.
-            guard !(lane.tasks ?? []).contains(where: { $0.id == taskId }) else { return false }
-            Task { await onMove(taskId, lane.id) }
-            return true
-        } isTargeted: { targeted in
-            withAnimation(.easeOut(duration: 0.12)) { dropTargeted = targeted }
+        .padding(.horizontal, 2)
+    }
+
+    private func card(_ task: BoardTask) -> some View {
+        // In selection mode a tap ticks the card instead of opening it.
+        Button {
+            if selection.active { selection.toggle(task.id) } else { onOpen(task.id) }
+        } label: {
+            // The tick is drawn inside the card, so the column's scroll view never clips it.
+            BoardCard(task: task, selectMark: selection.active ? selection.contains(task.id) : nil)
+                .overlay {
+                    if selection.active && selection.contains(task.id) {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.violet, lineWidth: 2)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selection.active && selection.contains(task.id) ? .isSelected : [])
+        // ⌘-click ticks, ⇧-click ticks the range in this column's on-screen order (iPad keyboard, Mac).
+        .taskModifierClicks(task.id, selection: selection) { orderedTasks.map(\.id) }
+        .hoverEffect(.lift)
+        // The id is the payload; a selected card carries the whole selection (the board reads it on drop).
+        .draggable(task.id) {
+            let count = selection.active && selection.contains(task.id) ? selection.ids.count : 1
+            BoardCard(task: task).frame(width: 250).opacity(0.9)
+                .overlay(alignment: .topTrailing) {
+                    if count > 1 {
+                        Text("\(count)").font(NXFont.text(12, .bold)).foregroundStyle(.white)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(NX.violetFill, in: Capsule())
+                            .offset(x: 6, y: -6)
+                    }
+                }
+        }
+        .contextMenu {
+            TaskSelectionMenuItems(taskId: task.id, selection: selection)
+            let others = allLanes.filter { $0.id != lane.id }
+            if !others.isEmpty {
+                Menu(T("Move to")) {
+                    ForEach(others) { l in
+                        Button(l.name) { onMoveTo(task.id, l.id) }
+                    }
+                }
+            }
         }
     }
 
-    /// The web's lane menu "Section status": tasks moved into this section get the status picked here;
-    /// "None" makes it a plain section. Tasks already in it keep theirs.
+    /// The column's ••• menu for a status option: rename, colour, order inside its group, delete (its
+    /// tasks move to the option picked first). Web StatusPicker's option menu.
+    private func optionMenu(_ o: LaneOptionActions) -> some View {
+        Menu {
+            Button { o.rename() } label: { Label(T("Rename…"), systemImage: "pencil") }
+            Menu {
+                ForEach(StatusColor.keys, id: \.self) { k in
+                    Button { o.color(k) } label: {
+                        if lane.colorKey == k { Label(StatusColor.label(k), systemImage: "checkmark") } else { Text(StatusColor.label(k)) }
+                    }
+                }
+            } label: { Label(T("Colour"), systemImage: "paintpalette") }
+            Button { o.move(-1) } label: { Label(T("Move left"), systemImage: "arrow.left") }
+            Button { o.move(1) } label: { Label(T("Move right"), systemImage: "arrow.right") }
+            let others = allLanes.filter { $0.id != lane.id && !$0.id.hasPrefix("grp:") }
+            if !others.isEmpty {
+                Menu {
+                    Section(T("Its tasks move to")) {
+                        ForEach(others) { l in
+                            Button(role: .destructive) { o.delete(l.id) } label: { Text(l.name) }
+                        }
+                    }
+                } label: { Label(T("Delete status…"), systemImage: "trash") }
+            }
+        } label: {
+            Image(systemName: "ellipsis").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                .frame(width: 32, height: 32).contentShape(Rectangle())
+        }
+        .accessibilityLabel(String(format: T("Options for %@"), lane.name))
+    }
+
+    /// The web's lane menu "Section status" for a plain section: tasks moved into it get this status.
     private func sectionStatusMenu(_ set: @escaping (String?) async -> Void) -> some View {
         Menu {
             Section(T("Tasks moved into this section get this status.")) {
@@ -863,21 +1248,20 @@ struct LaneColumn: View {
             Image(systemName: lane.taskStatus == nil ? "checkmark.circle" : "checkmark.circle.fill")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(lane.taskStatus == nil ? NX.mutedFg : NX.violetText)
-                .frame(width: 28, height: 28)
+                .frame(width: 32, height: 32)
                 .contentShape(Rectangle())
         }
         .accessibilityLabel(T("Section status"))
     }
+}
 
-    private func submit() {
-        let t = newTitle.trimmingCharacters(in: .whitespaces)
-        guard !t.isEmpty, !adding else { return }
-        adding = true
-        Task {
-            await onAddTask(t)
-            newTitle = ""; composing = false; adding = false
-        }
-    }
+/// What a status option's column menu can do; the board performs it.
+struct LaneOptionActions {
+    let rename: () -> Void
+    let color: (String) -> Void
+    let move: (Int) -> Void
+    /// Delete, moving its tasks to the option with this id first.
+    let delete: (String) -> Void
 }
 
 /// "+N XP" pill — shown on any task that's part of one or more task-bundle quests (board + list).
@@ -927,7 +1311,10 @@ struct BoardCard: View {
             }
             CFChipRow(values: task.customFieldValues)
             HStack(spacing: 8) {
-                Label(dueText, systemImage: "clock").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                // No "No due" placeholder on every card (Notion shows nothing when there is no date).
+                if let due = dueText {
+                    Label(due, systemImage: "clock").font(NXFont.text(11)).foregroundStyle(isOverdue ? NX.danger : NX.mutedFg)
+                }
                 if task.totalSubs > 0 {
                     NexusChip(text: "\(task.doneSubs)/\(task.totalSubs)", tone: task.doneSubs == task.totalSubs ? .success : .neutral, systemImage: "checklist")
                 }
@@ -944,19 +1331,23 @@ struct BoardCard: View {
                 }
             }
         }
-        .padding(14)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             // Shadow on the flat shape, not the card's content — cheap to rasterize per scroll.
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(NX.card)
                 .nexusShadowSoft()
-                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(NX.border))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
         }
     }
 
-    private var dueText: String {
-        guard let d = ProjDate.parse(task.dueDate) else { return "No due" }
+    private var dueText: String? {
+        guard let d = ProjDate.parse(task.dueDate) else { return nil }
         return ProjDate.fmt("d MMM").string(from: d)   // cached parser + formatter
+    }
+    private var isOverdue: Bool {
+        guard !task.isDone, let d = ProjDate.parse(task.dueDate) else { return false }
+        return ProjDate.cal.startOfDay(for: d) < ProjDate.cal.startOfDay(for: Date())
     }
 }

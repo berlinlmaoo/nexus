@@ -178,35 +178,59 @@ struct ListTab: View {
     let lanes: [ProjectDetail.Lane]   // subtasks already merged in (nested under their parent)
     let onOpen: (String) -> Void
     var selection: TaskSelection? = nil
+    /// Status options (or a grouped view): each group's header is its coloured pill.
+    var statusStyle = false
+    /// Rows dropped on a group (ids, group id). nil = rows are not draggable.
+    var onDrop: (([String], String) -> Void)? = nil
+
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
                 ForEach(lanes) { lane in
                     VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 6) {
-                            Text(lane.name).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
-                            Text("\(lane.tasks?.count ?? 0)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
-                                .padding(.horizontal, 8).padding(.vertical, 2).background(NX.muted, in: Capsule())
+                        HStack(spacing: 8) {
+                            if statusStyle {
+                                StatusPill(name: lane.name, colorKey: lane.colorKey, size: 13)
+                            } else {
+                                Text(lane.name).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
+                            }
+                            Text("\(lane.tasks?.count ?? 0)").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg).monospacedDigit()
                             Spacer()
                         }
                         if (lane.tasks ?? []).isEmpty {
-                            Text(T("Empty")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg.opacity(0.7)).padding(.vertical, 4)
+                            Text(T("No tasks")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg.opacity(0.7)).padding(.vertical, 4)
                         } else {
                             let order = { (lane.tasks ?? []).map(\.id) }
                             ForEach(lane.tasks ?? []) { t in
-                                if t.isSubtask {
-                                    ProjectTaskRow(task: t, onOpen: onOpen, selection: selection, order: order)
-                                        .padding(.leading, 16)                       // nest under parent
-                                        .overlay(alignment: .leading) { Rectangle().fill(Color(hex: "#7c3aed").opacity(0.35)).frame(width: 2).padding(.vertical, 6) }
-                                } else {
-                                    ProjectTaskRow(task: t, onOpen: onOpen, selection: selection, order: order)
-                                }
+                                row(t, order: order)
                             }
                         }
+                    }
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                    // A whole group takes a drop (web: drag a row's grip onto another group).
+                    .dropDestination(for: String.self) { ids, _ in
+                        guard let onDrop, !ids.isEmpty else { return false }
+                        onDrop(ids, lane.id)
+                        return true
                     }
                 }
             }.padding(16)
         }
+    }
+
+    @ViewBuilder private func row(_ t: BoardTask, order: @escaping () -> [String]) -> some View {
+        let base = ProjectTaskRow(task: t, onOpen: onOpen, selection: selection, order: order)
+        Group {
+            if t.isSubtask {
+                base
+                    .padding(.leading, 16)                       // nest under parent
+                    .overlay(alignment: .leading) { Rectangle().fill(Color(hex: "#7c3aed").opacity(0.35)).frame(width: 2).padding(.vertical, 6) }
+            } else {
+                base
+            }
+        }
+        .draggable(t.id)
     }
 }
 
@@ -244,7 +268,9 @@ struct TimelineTab: View {
 
     private var groups: [Group] {
         lanes.map { lane in
-            let rows = (lane.tasks ?? []).map { Row(id: $0.id, task: $0, win: window($0)) }
+            // A task with neither a start nor a due date is not on the timeline (bughunt C-BUG-17: it was
+            // drawn as a 4-day bar from today and looked scheduled).
+            let rows = (lane.tasks ?? []).filter { $0.startDate != nil || $0.dueDate != nil }.map { Row(id: $0.id, task: $0, win: window($0)) }
                 .sorted { $0.win.start < $1.win.start }
             return Group(id: lane.id, name: lane.name, rows: rows)
         }.filter { !$0.rows.isEmpty }
