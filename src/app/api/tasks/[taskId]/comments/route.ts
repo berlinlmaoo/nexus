@@ -180,8 +180,7 @@ export async function POST(
         if (mentionedUser) mentionIds.add(mentionedUser.id)
       }
     }
-    // Note: we do NOT skip self here — parity with task-assignment (which also notifies you when you
-    // assign yourself), and it lets a single account verify the mention → notification pipeline end-to-end.
+    // Mentioning yourself notifies nobody: notifyMention skips actor = recipient (QA S-16, 13 Oct 2026).
     for (const uid of mentionIds) {
       notifyMention({
         mentionedUserId: uid,
