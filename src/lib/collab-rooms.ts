@@ -62,7 +62,15 @@ type Room = {
   dead: boolean
 }
 
-type CollabGlobal = { rooms: Map<string, Room>; loading: Map<string, Promise<Room | null>>; io: IOServer | null; busBound: boolean }
+type CollabGlobal = {
+  rooms: Map<string, Room>; loading: Map<string, Promise<Room | null>>; io: IOServer | null; busBound: boolean
+  /**
+   * applyBlockEdit as the SOCKET server's module instance has it. The API routes are a separate bundle with
+   * their own copy of yjs; touching a room's Y.Doc with another copy breaks (instanceof checks fail, inserted
+   * items are refused). So a route hands the edit to the instance that owns the rooms.
+   */
+  applyEdit?: (opts: BlockEditOptions) => Promise<BlockEditResult>
+}
 const g = globalThis as unknown as { __nexusCollab?: CollabGlobal }
 const state: CollabGlobal = g.__nexusCollab ?? (g.__nexusCollab = { rooms: new Map(), loading: new Map(), io: null, busBound: false })
 
@@ -226,6 +234,7 @@ function removeMember(socket: Socket, key: string) {
 /** Wire the collab events on one connected socket (pages/api/socket.ts). */
 export function attachCollabSocket(io: IOServer, socket: Socket) {
   state.io = io
+  state.applyEdit = applyBlockEdit
   bindBus()
   socket.data.collabRooms = new Set<string>()
 
@@ -331,7 +340,14 @@ const blockCanon = (b: unknown) => canonicalDoc({ type: "doc", content: [b] })
  * persistence. A block the app changed that someone else also changed is a conflict (409 with the live
  * document) unless `keepBoth`, which keeps their version and adds the app's beside it.
  */
-export async function applyBlockEdit(opts: { kind: BodyKind; id: string; userId: string; base: BlockDoc; mine: BlockDoc; keepBoth: boolean }): Promise<BlockEditResult> {
+export type BlockEditOptions = { kind: BodyKind; id: string; userId: string; base: BlockDoc; mine: BlockDoc; keepBoth: boolean }
+
+/** What API routes call: the socket server's instance when it is running in this process (see applyEdit). */
+export function requestBlockEdit(opts: BlockEditOptions): Promise<BlockEditResult> {
+  return state.applyEdit ? state.applyEdit(opts) : applyBlockEdit(opts)
+}
+
+export async function applyBlockEdit(opts: BlockEditOptions): Promise<BlockEditResult> {
   const key = `${opts.kind}:${opts.id}`
   const room = await getRoom(key)
   if (!room || room.dead) return { status: 404 }

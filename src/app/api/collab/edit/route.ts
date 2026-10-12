@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { bodyAccess } from "@/lib/block-bodies"
 import { sanitizeDoc } from "@/lib/blockdoc"
-import { applyBlockEdit } from "@/lib/collab-rooms"
+import { requestBlockEdit } from "@/lib/collab-rooms"
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit"
 
 /**
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   if (!access.exists) return NextResponse.json({ error: "Not found" }, { status: 404 })
   if (!access.write) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-  const result = await applyBlockEdit({ kind, id, userId: session.user.id, base, mine, keepBoth: payload.keepBoth === true })
+  const result = await requestBlockEdit({ kind, id, userId: session.user.id, base, mine, keepBoth: payload.keepBoth === true })
   if (result.status === 404) return NextResponse.json({ error: "Not found" }, { status: 404 })
   if (result.status === 409) {
     return NextResponse.json({ error: "Someone else changed the same part.", conflict: true, doc: result.doc, conflicts: result.conflicts, epoch: result.epoch }, { status: 409 })
