@@ -22,12 +22,14 @@ import { useProjectViews } from "@/components/projects/views/use-project-views";
 import { FilterButton, FilterChips, GroupButton, SortButton, ToolbarButton, sortSummary, usePropLabel } from "@/components/projects/views/view-controls";
 import { AddViewButton, LAYOUT_ICON, ViewSettingsPanel } from "@/components/projects/views/view-settings";
 import { Incremental } from "@/components/projects/views/incremental";
-import { holdProject, insertDraftTask, patchTaskInCaches, settleTaskWrite } from "@/lib/task-cache";
+import { beginTaskWrite, holdProject, insertDraftTask, patchTaskInCaches, settleTaskWrite } from "@/lib/task-cache";
+import { friendlyError, pushUndo } from "@/lib/task-undo";
+import { FilterHint, FilterHintProvider, useFilteredOut } from "@/components/projects/views/filter-hint";
 import { plainPreview } from "@/lib/plain-preview";
 import { AddTaskSplit, ToolbarSearch, ViewTabsBar, type ToolbarTab } from "@/components/projects/views/view-toolbar";
 import { cardTint, GalleryView, GroupHeader, PropLine } from "@/components/projects/views/view-layouts";
 import { InlineTaskDraft } from "@/components/projects/views/inline-draft";
-import { canDragTask, DragHandle, droppable, moveToGroup, useGroupMove } from "@/components/projects/views/group-move";
+import { canDragTask, DragHandle, droppable, moveToGroup, setStackDragImage, useGroupMove } from "@/components/projects/views/group-move";
 import { optionColorKey, StatusOptionMenu, StatusPicker } from "@/components/tasks/StatusPicker";
 import { defaultOption, orderedOptions, statusForNewOption, statusGroupOf, STATUS_GROUPS, usesStatusOptions, type StatusGroupKey } from "@/lib/status-options";
 import {
@@ -45,6 +47,7 @@ import {
   optionColor,
   groupTasks,
   isBuiltinTab,
+  ME,
   newId,
   propDef,
   propDefs,
@@ -65,7 +68,7 @@ import {
   type ViewFilter,
   type ViewLayout,
 } from "@/lib/project-views";
-import { useLang } from "@/lib/lang";
+import { t as tt, useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { priorityTone } from "@/lib/calendar/tone";
@@ -162,7 +165,9 @@ export const Route = createFileRoute("/_app/projects/$projectId")({
   // or one of the project's other tabs ("overview", "sheet", "automations", "pages", "forms", "chat");
   // `&q=` the search box; `&f=` / `&s=` the filter / sort on screen while it differs from the saved view
   // (lib/project-views.ts encodes them). A reload or a shared link keeps all of it.
-  validateSearch: (s: Record<string, unknown>): { settings?: 1; view?: OutletView; date?: string; event?: string; v?: string; q?: string; f?: Record<string, unknown>; s?: string } => ({
+  // `&task=<id>`: the task popup that is open (bug hunt C-BUG-11, 12 Oct 2026) — Back closes it, a reload or a
+  // shared link opens it again.
+  validateSearch: (s: Record<string, unknown>): { settings?: 1; view?: OutletView; date?: string; event?: string; v?: string; q?: string; f?: Record<string, unknown>; s?: string; task?: string } => ({
     settings: s.settings === 1 || s.settings === "1" ? 1 : undefined,
     view: s.view === "overview" || s.view === "calendar" || s.view === "board" || s.view === "form" ? s.view : undefined,
     date: typeof s.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s.date) ? s.date : undefined,
@@ -173,6 +178,7 @@ export const Route = createFileRoute("/_app/projects/$projectId")({
     // (f="{\"simple\"…}") as soon as another param changed. Old double-encoded links still open.
     f: searchObject(s.f, 8000),
     s: searchString(s.s, 400),
+    task: searchString(s.task, 64),
   }),
 });
 
@@ -287,7 +293,6 @@ function ProjectDetail() {
   const [autofillOpen, setAutofillOpen] = useState(false);
   const [viewSettingsOpen, setViewSettingsOpen] = useState(false);
   const [specialView, setSpecialView] = useState<ViewId>("pipeline");
-  const [openTask, setOpenTask] = useState<NexusTask | null>(null);
   const [composerListId, setComposerListId] = useState<string | null>(null);
   const [composerDueDate, setComposerDueDate] = useState<string>("");
   const [chipsHidden, setChipsHidden] = useState(false);
@@ -301,9 +306,26 @@ function ProjectDetail() {
   // GIDEON opened here carries this project as context (Notion AI's page chip).
   useEffect(() => (data ? pushGideonPage({ kind: "project", id: data.id, title: data.name, projectId: data.id, projectName: data.name }) : undefined), [data?.id, data?.name]); // eslint-disable-line react-hooks/exhaustive-deps
   const search = Route.useSearch();
-  const { t: tr } = useLang();
+  const { t: tr, tn } = useLang();
   const setSearch = (patch: Partial<typeof search>, replace = true) =>
     navigate({ to: "/projects/$projectId", params: { projectId }, search: ((prev: Record<string, unknown>) => ({ ...prev, ...patch })) as never, replace });
+  // The open task lives in the address (?task=…): opening pushes a history entry, so browser Back closes
+  // the popup instead of leaving the project (C-BUG-11). Closing it goes back over that entry; a popup
+  // opened from a link (no entry of ours) just drops the param.
+  const openTaskId = search.task ?? null;
+  const pushedTask = useRef<string | null>(null);
+  const setOpenTask = useCallback((task: NexusTask | null) => {
+    if (task) {
+      pushedTask.current = task.id;
+      navigate({ to: "/projects/$projectId", params: { projectId }, search: ((prev: Record<string, unknown>) => ({ ...prev, task: task.id })) as never });
+    } else if (pushedTask.current) {
+      pushedTask.current = null;
+      window.history.back();
+    } else {
+      navigate({ to: "/projects/$projectId", params: { projectId }, search: ((prev: Record<string, unknown>) => ({ ...prev, task: undefined })) as never, replace: true });
+    }
+  }, [navigate, projectId]);
+  useEffect(() => { if (!openTaskId) pushedTask.current = null; }, [openTaskId]);
   useEffect(() => {
     if (search.settings !== 1 || !data) return;
     setSettingsOpen(true);
@@ -460,11 +482,33 @@ function ProjectDetail() {
   const defs = useMemo(() => propDefs(ctx), [ctx]);
   const layout = activeView?.layout ?? "board";
   const base = cfg && (cfg.showSubtasks || layout === "calendar") ? withSubtasks : allTasks;
-  const shown = useMemo(
-    () => (cfg ? sortTasks(base.filter((task) => taskMatches(task, cfg.filter, query, defs, ctx)), cfg.sort, defs, ctx) : []),
+  // Tasks made right here that the view's filter or search would hide stay on screen, marked, until the
+  // view, its filter or the search changes (Notion; bug hunt C-BUG-9). Unsaved drafts always show.
+  const stickyKey = `${activeView?.id ?? ""}|${fKey}|${search.s ?? ""}|${query}`;
+  const [sticky, setSticky] = useState<{ key: string; ids: Set<string> }>({ key: stickyKey, ids: new Set() });
+  const stickyIds = sticky.key === stickyKey ? sticky.ids : null;
+  const keepVisible = useCallback((task: NexusTask | null) => {
+    if (!task?.id) return;
+    setSticky((cur) => ({ key: stickyKey, ids: new Set([...(cur.key === stickyKey ? cur.ids : []), task.id]) }));
+  }, [stickyKey]);
+  const { shown, filteredOut } = useMemo(() => {
+    if (!cfg) return { shown: [] as NexusTask[], filteredOut: new Set<string>() };
+    const out = new Set<string>();
+    const pass = base.filter((task) => {
+      if (taskMatches(task, cfg.filter, query, defs, ctx)) return true;
+      if (task.id.startsWith("draft-")) return true;
+      if (stickyIds?.has(task.id)) { out.add(task.id); return true; }
+      return false;
+    });
+    return { shown: sortTasks(pass, cfg.sort, defs, ctx), filteredOut: out };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [base, fKey, search.s, saved, query, defs, ctx],
-  );
+  }, [base, fKey, search.s, saved, query, defs, ctx, stickyIds]);
+  // What the bulk selection may hold: the view's tasks and the tasks linked in from other projects.
+  const visibleIds = useMemo(() => {
+    const ids = new Set(shown.map((x) => x.id));
+    for (const l of taskLists) for (const tp of l.taskProjects ?? []) if (tp.task?.id) ids.add(tp.task.id);
+    return ids;
+  }, [shown, taskLists]);
   const buildGroups = (tasks: NexusTask[], by: string | null, opts: { keepHidden?: boolean; keepEmpty?: boolean } = {}): TaskGroup[] => {
     if (!by || !cfg) return [{ key: "__all__", label: "", tasks, empty: tasks.length === 0 }];
     let gs = groupTasks(tasks, by, defs, ctx);
@@ -483,19 +527,50 @@ function ProjectDetail() {
   const showChips = !!cfg && ((hasRules && !chipsHidden) || dirty);
   const label = usePropLabel();
 
-  const setTaskDate = useMutation({
-    mutationFn: async ({ task, iso, prop }: { task: NexusTask; iso: string; prop: string }) => {
-      if (prop === "due") return nexusApi.updateTask(task.id, { dueDate: iso });
-      if (prop === "start") return nexusApi.updateTask(task.id, { startDate: iso } as Parameters<typeof nexusApi.updateTask>[1]);
-      if (prop.startsWith("cf:")) return nexusApi.setCustomFieldValue(prop.slice(3), task.id, iso.slice(0, 10));
-      throw new Error(tr("This date can't be changed by dragging."));
-    },
-    onSuccess: () => {
-      rootQc.invalidateQueries({ queryKey: ["nexus", "project", projectId] });
-      rootQc.invalidateQueries({ queryKey: ["nexus", "project-calendar-tasks", projectId] });
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : tr("Couldn't move the task")),
-  });
+  /**
+   * Date writes from the Calendar and the Timeline (one drag can move several tasks, C-BUG-5/17): due and
+   * start show at once; a date field is written and then refetched. One Undo (toast + Ctrl/⌘+Z) for all.
+   */
+  const writeDates = async (moves: Array<{ task: NexusTask; changes: Record<string, string | null> }>) => {
+    if (!moves.length) return;
+    await holdProject(rootQc, projectId);
+    const end = beginTaskWrite();
+    const rollbacks: Array<() => void> = [];
+    const done: typeof moves = [];
+    let failed = 0;
+    let why: string | undefined;
+    const write = async (task: NexusTask, changes: Record<string, string | null>) => {
+      const patch: Record<string, unknown> = {};
+      if ("due" in changes) patch.dueDate = changes.due;
+      if ("start" in changes) patch.startDate = changes.start;
+      if (Object.keys(patch).length) await nexusApi.updateTask(task.id, patch as Parameters<typeof nexusApi.updateTask>[1]);
+      for (const [prop, v] of Object.entries(changes)) {
+        if (prop.startsWith("cf:")) await nexusApi.setCustomFieldValue(prop.slice(3), task.id, v ? v.slice(0, 10) : "");
+        else if (prop !== "due" && prop !== "start") throw new Error(tr("This date can't be changed by dragging."));
+      }
+    };
+    for (const m of moves) {
+      const optimistic: Partial<NexusTask> = {};
+      if ("due" in m.changes) optimistic.dueDate = m.changes.due;
+      if ("start" in m.changes) (optimistic as { startDate?: string | null }).startDate = m.changes.start;
+      if (Object.keys(optimistic).length) rollbacks.push(patchTaskInCaches(rootQc, m.task.id, optimistic));
+    }
+    for (const m of moves) {
+      try { await write(m.task, m.changes); done.push(m); } catch (e) { failed++; why ??= friendlyError(e); }
+    }
+    end();
+    if (failed === moves.length) rollbacks.reverse().forEach((r) => r());
+    settleTaskWrite(rootQc, projectId);
+    if (failed) toast.error(tn(failed, "Couldn't move the task", "Couldn't move {n} tasks"), { description: why });
+    if (done.length) {
+      const before = done.map((m) => ({ task: m.task, changes: Object.fromEntries(Object.keys(m.changes).map((k) => [k, taskValues(m.task, k)[0] ?? null])) as Record<string, string | null> }));
+      pushUndo(tn(done.length, "Task moved", "Moved {n} tasks"), async () => {
+        await holdProject(rootQc, projectId);
+        const e2 = beginTaskWrite();
+        try { for (const b of before) await write(b.task, b.changes); } finally { e2(); settleTaskWrite(rootQc, projectId); }
+      });
+    }
+  };
 
   const createView = (p: { layout: ViewLayout; name: string; shared: boolean; config?: Record<string, unknown> }) =>
     pv.create.mutate({ layout: p.layout, name: p.name || null, shared: p.shared, config: p.config }, { onSuccess: ({ view }) => select(view.id) });
@@ -663,7 +738,8 @@ function ProjectDetail() {
       )}
       {!project.isLoading && !project.isError && data && !isSpecial && (
         // Multi-select + duplicate is on in every project (owner, 11 Oct 2026 — it used to be a per-project switch).
-        <TaskBulkProvider projectId={data.id}>
+        <TaskBulkProvider projectId={data.id} visibleIds={activeModule ? undefined : visibleIds}>
+          <FilterHintProvider ids={filteredOut}>
           {/* A view or tab switch fades in over 150 ms (none with reduced motion); the key restarts it. */}
           <div key={activeKey ?? "none"} className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150">
           <Pending>
@@ -710,21 +786,23 @@ function ProjectDetail() {
             if (layout !== "calendar" && shown.length > 0 && groups.length === 0) return emptyState;
             switch (layout) {
               case "board":
-                return <BoardView project={data} tasks={shown} groupBy={groupBy ?? "section"} cfg={cfg} defs={defs} ctx={ctx} keys={keys} buildGroups={buildGroups} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} onCreate={addTask} />;
+                return <BoardView project={data} tasks={shown} groupBy={groupBy ?? "section"} cfg={cfg} defs={defs} ctx={ctx} keys={keys} buildGroups={buildGroups} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} onCreate={addTask} onCreated={keepVisible} />;
               case "list":
-                return <ListView project={data} groups={groups} groupBy={groupBy} subGroupBy={cfg.subGroupBy} buildGroups={buildGroups} cfg={cfg} defs={defs} ctx={ctx} keys={keys} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} />;
+                return <ListView project={data} groups={groups} groupBy={groupBy} subGroupBy={cfg.subGroupBy} buildGroups={buildGroups} cfg={cfg} defs={defs} ctx={ctx} keys={keys} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} onCreated={keepVisible} />;
               case "table":
-                return <ProjectTableView project={data} groups={groups} groupBy={groupBy} subGroupBy={cfg.subGroupBy} buildGroups={buildGroups} cfg={cfg} defs={defs} columns={keys} canEditColumns={canEdit} onColumnsChange={(cols) => patchConfig({ visibleProps: cols })} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} />;
+                return <ProjectTableView project={data} groups={groups} groupBy={groupBy} subGroupBy={cfg.subGroupBy} buildGroups={buildGroups} cfg={cfg} defs={defs} columns={keys} canEditColumns={canEdit} onColumnsChange={(cols) => patchConfig({ visibleProps: cols })} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask}
+                  onCreateInGroup={(gKey, subKey, p) => createInline({ project: data, defs, ctx, cfg, qc: rootQc, groupBy, sub: cfg.subGroupBy && cfg.subGroupBy !== groupBy ? cfg.subGroupBy : null, groupKey: gKey, subKey, placement: "bottom", ...p }).then((task) => { keepVisible(task); return task; })} />;
               case "gallery":
                 return <GalleryView projectId={data.id} groups={groups} groupBy={groupBy} cfg={cfg} keys={keys} defs={defs} ctx={ctx} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} onCreate={() => addTask()} />;
               case "calendar":
-                return <CalendarView tasks={shown} cfg={cfg} defs={defs} ctx={ctx} onOpen={setOpenTask} onCreate={(due) => { setComposerDueDate(due); addTask(); }} onSetDate={(task, iso) => setTaskDate.mutate({ task, iso, prop: cfg.dateProp })} canDrag={["due", "start"].includes(cfg.dateProp) || cfg.dateProp.startsWith("cf:")} />;
+                return <CalendarView tasks={shown} cfg={cfg} defs={defs} ctx={ctx} onOpen={setOpenTask} onCreate={(due) => { setComposerDueDate(due); addTask(); }} onSetDates={(moves) => void writeDates(moves.map((m) => ({ task: m.task, changes: { [cfg.dateProp]: m.iso } })))} canDrag={["due", "start"].includes(cfg.dateProp) || cfg.dateProp.startsWith("cf:")} />;
               case "timeline":
-                return <TimelineView groups={groups} groupBy={groupBy} cfg={cfg} defs={defs} ctx={ctx} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} />;
+                return <TimelineView groups={groups} groupBy={groupBy} cfg={cfg} defs={defs} ctx={ctx} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} onSetDates={(task, changes) => void writeDates([{ task, changes }])} />;
             }
           })()}
           </Pending>
           </div>
+          </FilterHintProvider>
         </TaskBulkProvider>
       )}
 
@@ -750,7 +828,7 @@ function ProjectDetail() {
         />
       )}
       <Suspense fallback={null}>
-      {openTask && <TaskDetailPanel taskId={openTask.id} onClose={() => setOpenTask(null)} morphId={["board", "list", "calendar", "timeline", "gallery"].includes(layout) && !activeModule ? `${layout}-taskcard-${openTask.id}` : undefined} />}
+      {openTaskId && <TaskDetailPanel key={openTaskId} taskId={openTaskId} onClose={() => setOpenTask(null)} morphId={["board", "list", "calendar", "timeline", "gallery"].includes(layout) && !activeModule ? `${layout}-taskcard-${openTaskId}` : undefined} />}
       {data && autofillEver && <AutofillPanel projectId={data.id} open={autofillOpen} onOpenChange={setAutofillOpen} />}
       {settingsOpen && data && <ProjectSettingsDrawer project={data} onClose={() => setSettingsOpen(false)} onDeleted={() => { setSettingsOpen(false); navigate({ to: "/projects" }); }} />}
       {composerListId && data && <TaskComposer project={data} selectedListId={composerListId} initialDueDate={composerDueDate} onClose={() => { setComposerListId(null); setComposerDueDate(""); }} />}
@@ -761,22 +839,72 @@ function ProjectDetail() {
 
 const LANE_W: Record<ViewConfig["cardSize"], string> = { small: "w-64", medium: "w-72", large: "w-96" };
 
+/** Values a view's filter asks for, written into a task made inside it (Notion pre-fills them; C-BUG-9). */
+type Prefill = { priority?: string; status?: string; sectionId?: string; assigneeIds?: string[]; tags?: string[]; fields: Array<{ key: string; value: string }> };
+function filterPrefill(filter: ViewFilter, defs: PropDef[], meId: string | null): Prefill {
+  const out: Prefill = { fields: [] };
+  for (const r of filter.simple) {
+    if (r.op !== "any_of") continue;
+    const vals = (Array.isArray(r.value) ? r.value : r.value != null && r.value !== "" ? [String(r.value)] : [])
+      .map((v) => (v === ME ? meId ?? "" : String(v))).filter(Boolean);
+    const v = vals[0];
+    if (!v) continue;
+    if (r.prop === "priority") out.priority = v;
+    else if (r.prop === "status") out.status = v;
+    else if (r.prop === "section") out.sectionId = v;
+    else if (r.prop === "assignee") out.assigneeIds = [v];
+    else if (r.prop === "tags") out.tags = [v];
+    else if (r.prop.startsWith("cf:") && droppable(r.prop, defs)) out.fields.push({ key: r.prop, value: v });
+  }
+  return out;
+}
+
 /**
- * A task made inline in a group (board column, list group): in the group's section when the view groups
- * by status/section, else in the default status; then the group's (and sub-group's) value is written as
- * a drop would. The server gives it its section's status.
+ * A task made inline in a group (board column, list group, table group): in the group's section when the view
+ * groups by status/section, else in the default status; the view's filter values are pre-filled; then the
+ * group's (and sub-group's) value is written as a drop would. The server gives it its section's status.
+ * `placement` "top" for the drafts at the top of a column / group, "bottom" for the Table's row under it.
  */
-async function createTaskInGroup({ project, defs, groupBy, groupKey, sub, subKey, title, dueDate }: {
-  project: NexusProject; defs: PropDef[]; groupBy: string | null; groupKey: string | null; sub: string | null; subKey: string | null; title: string; dueDate: string | null;
+async function createInline({ project, defs, ctx, cfg, qc, groupBy, groupKey, sub, subKey, title, dueDate, placement, withDraft }: {
+  project: NexusProject; defs: PropDef[]; ctx: ViewCtx; cfg: ViewConfig; qc: ReturnType<typeof useQueryClient>;
+  groupBy: string | null; groupKey: string | null; sub: string | null; subKey: string | null; title: string; dueDate: string | null;
+  placement: "top" | "bottom"; withDraft?: boolean;
 }): Promise<NexusTask | null> {
   const sections = project.taskLists ?? [];
+  const pre = filterPrefill(cfg.filter, defs, ctx.meId ?? null);
+  const statusOpts = usesStatusOptions(sections);
+  const grouped = (k: string) => groupBy === k || sub === k;
   const bySection = groupBy === "section" && groupKey && groupKey !== EMPTY_GROUP;
-  const sectionId = bySection ? groupKey! : sub === "section" && subKey && subKey !== EMPTY_GROUP ? subKey : defaultOption(sections)?.id ?? sections[0]?.id;
+  const fromStatus = pre.status && statusOpts && !grouped("status") ? orderedOptions(sections).find((l) => l.taskStatus === pre.status)?.id : undefined;
+  const sectionId = bySection ? groupKey!
+    : sub === "section" && subKey && subKey !== EMPTY_GROUP ? subKey
+      : (pre.sectionId && sections.some((l) => l.id === pre.sectionId) ? pre.sectionId : fromStatus) ?? defaultOption(sections)?.id ?? sections[0]?.id;
   if (!sectionId) return null;
-  const task = await nexusApi.createTask({ title, projectId: project.id, taskListId: sectionId, dueDate });
-  if (groupBy && groupBy !== "section" && groupKey && groupKey !== EMPTY_GROUP && droppable(groupBy, defs)) await moveToGroup(task, groupBy, EMPTY_GROUP, groupKey, defs, project.id);
-  if (sub && sub !== "section" && subKey && subKey !== EMPTY_GROUP && droppable(sub, defs)) await moveToGroup(task, sub, EMPTY_GROUP, subKey, defs, project.id);
-  return task;
+  const section = sections.find((l) => l.id === sectionId);
+  const payload: CreateTaskPayload = {
+    title, projectId: project.id, taskListId: sectionId, dueDate, placement,
+    ...(pre.priority && !grouped("priority") ? { priority: pre.priority as CreateTaskPayload["priority"] } : {}),
+    ...(pre.status && !statusOpts && !grouped("status") ? { status: pre.status as CreateTaskPayload["status"] } : {}),
+    ...(pre.assigneeIds && !grouped("assignee") ? { assigneeIds: pre.assigneeIds } : {}),
+    ...(pre.tags && !grouped("tags") ? { tags: pre.tags } : {}),
+  };
+  // The card shows the moment Enter is pressed (a placeholder in its column while the server saves it).
+  const undo = withDraft && section
+    ? insertDraftTask(qc, project.id, section.id, { id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, title, dueDate, status: section.taskStatus ?? "TODO", priority: payload.priority ?? "NONE", taskListId: section.id, taskList: { id: section.id, name: section.name, projectId: project.id }, assignees: [], tags: payload.tags ?? [] }, placement)
+    : null;
+  try {
+    const task = await nexusApi.createTask(payload);
+    for (const f of pre.fields) if (!grouped(f.key)) await moveToGroup(task, f.key, EMPTY_GROUP, f.value, defs, project.id);
+    if (groupBy && groupBy !== "section" && groupKey && groupKey !== EMPTY_GROUP && droppable(groupBy, defs)) await moveToGroup(task, groupBy, EMPTY_GROUP, groupKey, defs, project.id);
+    if (sub && sub !== "section" && subKey && subKey !== EMPTY_GROUP && droppable(sub, defs)) await moveToGroup(task, sub, EMPTY_GROUP, subKey, defs, project.id);
+    return task;
+  } catch (e) {
+    undo?.();
+    toast.error(tt("Couldn't add the task"), { description: friendlyError(e) });
+    return null;
+  } finally {
+    settleTaskWrite(qc, project.id);
+  }
 }
 
 const noop = () => {};
@@ -784,12 +912,13 @@ const noDrag: CardDrag = () => {};
 
 type GroupBuilder = (tasks: NexusTask[], by: string | null, opts?: { keepHidden?: boolean; keepEmpty?: boolean }) => TaskGroup[];
 
-function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups, collapsed, onToggleGroup, onOpen, onCreate }: {
+function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups, collapsed, onToggleGroup, onOpen, onCreate, onCreated }: {
   project: NexusProject; tasks: NexusTask[]; groupBy: string; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; keys: string[];
   buildGroups: GroupBuilder; collapsed: Set<string>; onToggleGroup: (k: string) => void; onOpen: (task: NexusTask) => void; onCreate: (listId?: string) => void;
+  onCreated: (task: NexusTask | null) => void;
 }) {
   const qc = useQueryClient();
-  const { t } = useLang();
+  const { t, tn } = useLang();
   const [dragLaneId, setDragLaneId] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const isSection = groupBy === "section";
@@ -803,7 +932,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   const drag = mover.drag;
   const { startDrag, endDrag } = mover;
   const onCardDrag = useCallback<CardDrag>((task, from, fromRow, e) => startDrag(e ?? null, task, from, fromRow), [startDrag]);
-  const onCardDragEnd = useCallback(() => { endDrag(); setOver(null); }, [endDrag]);
+  const onCardDragEnd = useCallback(() => { endDrag(); setOver(null); setSlot(null); }, [endDrag]);
 
   // Reorder sections (lanes) left/right — the ←/→ buttons or dragging the lane's handle. Optimistic.
   const reorderLane = useMutation({
@@ -863,14 +992,65 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   // column's (and row's) value is written like a drop.
   // The new card shows the moment Enter is pressed (a placeholder in its column while the server saves it),
   // when the column is a section/status column and so certainly where the task will land.
-  const createInline = async (g: TaskGroup, rowKey: string | null, p: { title: string; dueDate: string | null }) => {
-    const section = isSection && !sub && g.key !== EMPTY_GROUP ? (project.taskLists ?? []).find((l) => l.id === g.key) : undefined;
-    const undo = section
-      ? insertDraftTask(qc, project.id, section.id, { id: `draft-${Date.now()}`, title: p.title, dueDate: p.dueDate, status: section.taskStatus ?? "TODO", taskListId: section.id, taskList: { id: section.id, name: section.name, projectId: project.id }, assignees: [], tags: [] })
-      : null;
-    const task = await createTaskInGroup({ project, defs, groupBy, groupKey: g.key, sub, subKey: rowKey, ...p }).catch((e) => { undo?.(); toast.error(t("Couldn't add the task"), { description: e instanceof Error ? e.message : undefined }); return null; });
-    refresh();
+  // New cards go on top of the column, right under the draft (C-BUG-13), newest first.
+  const createHere = async (g: TaskGroup, rowKey: string | null, p: { title: string; dueDate: string | null }) => {
+    const task = await createInline({ project, defs, ctx, cfg, qc, groupBy, groupKey: g.key, sub, subKey: rowKey, placement: "top", withDraft: isSection && !sub && g.key !== EMPTY_GROUP, ...p });
+    onCreated(task);
     return task;
+  };
+
+  // Manual order inside a column (C-BUG-6): a card dropped between two others of its own column lands there.
+  // Only for status/section columns without a sort (the order is the section's), like Notion.
+  const canReorder = isSection && !sub && cfg.sort.length === 0;
+  const [slot, setSlot] = useState<{ lane: string; index: number; y: number } | null>(null);
+  const slotFor = (laneEl: HTMLElement, clientY: number) => {
+    const box = laneEl.querySelector<HTMLElement>("[data-lane-cards]");
+    if (!box) return null;
+    const cards = [...box.querySelectorAll<HTMLElement>(":scope > [data-bulk-task]")];
+    const top = box.getBoundingClientRect().top;
+    let index = cards.length;
+    for (let i = 0; i < cards.length; i++) { const r = cards[i].getBoundingClientRect(); if (clientY < r.top + r.height / 2) { index = i; break; } }
+    const ref = cards[index] ?? cards[cards.length - 1];
+    const r = ref?.getBoundingClientRect();
+    const y = !r ? 0 : index < cards.length ? r.top - top - 3 : r.bottom - top + 3;
+    return { index, y, ids: cards.map((c) => c.dataset.bulkTask ?? "") };
+  };
+  const reorderIn = async (listId: string, moved: string[], beforeId: string | null) => {
+    const key = ["nexus", "project", project.id];
+    const data = qc.getQueryData<NexusProject>(key);
+    const list = data?.taskLists?.find((l) => l.id === listId);
+    if (!data || !list) return;
+    const order = (list.tasks ?? []).map((x) => x.id).filter((id) => !id.startsWith("draft-"));
+    const set = new Set(moved.filter((id) => order.includes(id)));
+    if (!set.size) return;
+    const rest = order.filter((id) => !set.has(id));
+    const at = beforeId && rest.includes(beforeId) ? rest.indexOf(beforeId) : rest.length;
+    const ids = order.filter((id) => set.has(id));
+    const next = [...rest.slice(0, at), ...ids, ...rest.slice(at)];
+    if (next.join() === order.join()) return;
+    await holdProject(qc, project.id);
+    const byId = new Map((list.tasks ?? []).map((x) => [x.id, x]));
+    const apply = (ids2: string[]) => {
+      const cur = qc.getQueryData<NexusProject>(key);
+      if (!cur?.taskLists) return;
+      qc.setQueryData<NexusProject>(key, { ...cur, taskLists: cur.taskLists.map((l) => (l.id === listId ? { ...l, tasks: [...ids2.map((id) => byId.get(id)!).filter(Boolean), ...(l.tasks ?? []).filter((x) => !ids2.includes(x.id))] } : l)) });
+    };
+    apply(next);
+    const end = beginTaskWrite();
+    try {
+      await nexusApi.reorderTasks({ taskListId: listId, orderedIds: next, movedId: ids[0] });
+      pushUndo(tn(ids.length, "Task moved", "Moved {n} tasks"), async () => {
+        apply(order);
+        await nexusApi.reorderTasks({ taskListId: listId, orderedIds: order, movedId: ids[0] });
+        settleTaskWrite(qc, project.id);
+      });
+    } catch (e) {
+      apply(order);
+      toast.error(t("Couldn't move the task"), { description: friendlyError(e) });
+    } finally {
+      end();
+      settleTaskWrite(qc, project.id);
+    }
   };
 
   const renderLane = (g: TaskGroup, rowKey: string | null, laneTasks: NexusTask[], showHeader: boolean) => {
@@ -897,11 +1077,29 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
         aria-label={laneLabel(g)}
         style={{ backgroundColor: tone.lane, ...(over === id && dropOk ? { boxShadow: `inset 0 0 0 1.5px ${tone.dot}` } : {}) }}
         className={cn("group/lane flex shrink-0 flex-col rounded-lg p-1.5 transition-shadow", laneW, dragLaneId === g.key && "opacity-40")}
-        onDragOver={(e) => { if (dropOk) { e.preventDefault(); if (over !== id) setOver(id); } }}
-        onDragLeave={() => setOver((o) => (o === id ? null : o))}
-        onDrop={() => {
+        onDragOver={(e) => {
+          if (!dropOk) return;
+          e.preventDefault();
+          if (over !== id) setOver(id);
+          if (canReorder && drag && !dragLaneId && drag.from === g.key) {
+            const sl = slotFor(e.currentTarget, e.clientY);
+            if (sl && (slot?.lane !== id || slot.index !== sl.index)) setSlot({ lane: id, index: sl.index, y: sl.y });
+          } else if (slot) setSlot(null);
+        }}
+        onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget as Node | null)) return; setOver((o) => (o === id ? null : o)); setSlot((x) => (x?.lane === id ? null : x)); }}
+        onDrop={(e) => {
           setOver(null);
-          if (dragLaneId && isSection && dragLaneId !== g.key && section) {
+          setSlot(null);
+          if (canReorder && drag && !dragLaneId && drag.from === g.key && section) {
+            // Same column: a reorder, not a move.
+            const sl = slotFor(e.currentTarget, e.clientY);
+            mover.endDrag();
+            if (sl) {
+              const moving = new Set(drag.ids);
+              const beforeId = sl.ids.slice(sl.index).find((x) => x && !moving.has(x)) ?? null;
+              void reorderIn(section.id, drag.ids, beforeId);
+            }
+          } else if (dragLaneId && isSection && dragLaneId !== g.key && section) {
             const from = sections.find((s) => s.id === dragLaneId);
             // Columns are ordered by status group; a column moves within its group.
             if (from && statusOptions && statusGroupOf(from.taskStatus) !== statusGroupOf(section.taskStatus)) toast(t("A column moves within its group. Change its group from its ••• menu."));
@@ -937,10 +1135,11 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
             </div>
           </div>
         )}
-        <div className="flex min-h-16 flex-col gap-1.5">
+        <div data-lane-cards className="relative flex min-h-16 flex-col gap-1.5">
+          {slot?.lane === id && <div aria-hidden className="pointer-events-none absolute inset-x-1 z-10 h-0.5 rounded-full" style={{ top: slot.y, backgroundColor: tone.dot }} />}
           {/* "+ New task" sits at the TOP of the column (owner, 10 Oct 2026: "Add task di atas lane"). */}
           {draft === id ? (
-            <InlineTaskDraft variant="card" accent={tone.dot} onCreate={(p) => createInline(g, rowKey, p)} onExpand={onOpen} onClose={() => setDraft(null)} />
+            <InlineTaskDraft variant="card" accent={tone.dot} onCreate={(p) => createHere(g, rowKey, p)} onExpand={onOpen} onClose={() => setDraft(null)} />
           ) : (
             <button type="button" onClick={() => setDraft(id)} style={{ color: tone.text }} className="flex h-8 items-center gap-1.5 rounded-md px-2 text-left text-sm opacity-80 transition-[opacity,background-color] hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10">
               <Plus className="h-3.5 w-3.5" />{t("New task")}
@@ -1120,17 +1319,8 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
   const linkedFrom = task.taskList?.projectId && currentProjectId && task.taskList.projectId !== currentProjectId ? (task.taskList.project?.name ?? t("another project")) : null;
   const projectId = task.taskList?.projectId ?? currentProjectId;
   // Optimistic: the circle fills at once; the server's answer (and the move to the Done column) follows.
-  const toggleDone = useMutation({
-    mutationFn: (next: string) => nexusApi.updateTask(task.id, { status: next }),
-    onMutate: async (next) => {
-      await holdProject(qc, projectId);
-      const rollback = patchTaskInCaches(qc, task.id, { status: next });
-      if (next === "DONE") celebrate(t("Done: {title}", { title: task.title.length > 28 ? task.title.slice(0, 26) + "…" : task.title }));
-      return { rollback };
-    },
-    onError: (e, _v, c) => { c?.rollback(); toast.error(e instanceof Error ? e.message : t("Couldn't update the task.")); },
-    onSettled: () => settleTaskWrite(qc, projectId, task.id),
-  });
+  const toggleDone = useDoneToggle(task, projectId);
+  const filteredOut = useFilteredOut(task.id);
   const tint = cardTint(task, cfg, defs, ctx);
   return (
     <div data-morph-id={morph && !draft ? `board-taskcard-${task.id}` : undefined} data-bulk-task={draft ? undefined : cardProps["data-bulk-task"]} style={{ borderRadius: 8 }} onContextMenu={draft ? undefined : cardProps.onContextMenu} onTouchStart={cardProps.onTouchStart} onTouchEnd={cardProps.onTouchEnd} onTouchMove={cardProps.onTouchMove} className={cn("w-full", done && "opacity-60", draft && "pointer-events-none opacity-70", selected && "ring-2 ring-[color:var(--accent-foreground)] ring-offset-1 ring-offset-background")}>
@@ -1170,10 +1360,42 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
           <QuestChip task={task} />
         </div>
         <PropLine task={task} keys={keys} defs={defs} ctx={ctx} className="pl-[22px]" />
+        {filteredOut && <FilterHint className="ml-[18px]" />}
       </div>
     </div>
   );
 });
+
+/**
+ * The done circle on a card / list row: optimistic, and Undo puts the old status (and column) back
+ * (C-BUG-16). One request at a time per task, so a double click can't race.
+ */
+function useDoneToggle(task: NexusTask, projectId: string | undefined) {
+  const qc = useQueryClient();
+  const { t } = useLang();
+  return useMutation({
+    mutationFn: (next: string) => nexusApi.updateTask(task.id, { status: next }),
+    onMutate: async (next) => {
+      await holdProject(qc, projectId);
+      const rollback = patchTaskInCaches(qc, task.id, { status: next });
+      return { rollback, prev: { status: task.status || "TODO", listId: task.taskListId ?? task.taskList?.id ?? null } };
+    },
+    onSuccess: (_r, next, c) => {
+      const prev = c?.prev;
+      const label = next === "DONE" ? t("Done: {title}", { title: task.title.length > 28 ? task.title.slice(0, 26) + "…" : task.title }) : t("Marked as not done");
+      pushUndo(label, async () => {
+        if (!prev) return;
+        await holdProject(qc, projectId);
+        patchTaskInCaches(qc, task.id, { status: prev.status }, { moveToListId: prev.listId });
+        if (prev.listId && projectId) await nexusApi.batchMoveTasks({ taskIds: [task.id], taskListId: prev.listId, projectContextId: projectId, status: prev.status });
+        else await nexusApi.updateTask(task.id, { status: prev.status });
+        settleTaskWrite(qc, projectId, task.id);
+      }, { duration: 6000 });
+    },
+    onError: (e, _v, c) => { c?.rollback(); toast.error(t("Couldn't update the task."), { description: friendlyError(e) }); },
+    onSettled: () => settleTaskWrite(qc, projectId, task.id),
+  });
+}
 
 /**
  * Resting the pointer on a card for a moment fetches its popup's data, so a click opens a filled popup
@@ -1271,6 +1493,9 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
   const selected = bulk.isSelected(task.id);
   const done = isDone(task.status);
   const tint = cardTint(task, cfg, defs, ctx);
+  const filteredOut = useFilteredOut(task.id);
+  const toggleDone = useDoneToggle(task, task.taskList?.projectId ?? undefined);
+  const draft = task.id.startsWith("draft-");
   const handle = dragGroup !== null && onDragTask ? (
     <DragHandle
       onDragStart={(e) => onDragTask(e, task, dragGroup, dragRow)}
@@ -1286,12 +1511,24 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
       {...cardProps}
       className={cn("group flex min-h-9 w-full items-center gap-2.5 border-b border-border/70 px-2 py-1.5 text-left transition-colors [contain-intrinsic-size:auto_37px] [content-visibility:auto] hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--accent-foreground)]/40", selected && "bg-accent", task.parentId && "pl-7")}
     >
-      {done ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground/60" />}
+      {/* The circle is a checkbox (Notion; C-BUG-26): a click marks done / not done, it doesn't open the task. */}
+      <span
+        role="checkbox"
+        aria-checked={done}
+        aria-label={done ? t("Mark as not done") : t("Mark as done")}
+        title={done ? t("Mark as not done") : t("Mark as done")}
+        tabIndex={-1}
+        onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || draft) return; e.preventDefault(); e.stopPropagation(); if (!toggleDone.isPending) toggleDone.mutate(done ? "TODO" : "DONE"); }}
+        className="-m-1 grid shrink-0 place-items-center rounded-full p-1 transition-transform hover:bg-muted active:scale-90"
+      >
+        {toggleDone.isPending || draft ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : done ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : <Circle className="h-4 w-4 text-muted-foreground/60" />}
+      </span>
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
         {task.parentId && <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label={t("Subtask")} />}
         <span className={cn("truncate text-sm", done && "text-muted-foreground line-through")}>{task.title}</span>
         {task.parentId && task.parent?.title && <span className="hidden truncate text-xs text-muted-foreground md:inline">· {task.parent.title}</span>}
         <QuestChip task={task} />
+        {filteredOut && <FilterHint />}
       </span>
       <PropLine task={task} keys={keys} defs={defs} ctx={ctx} className="hidden shrink-0 flex-nowrap justify-end sm:flex [&>*]:shrink-0" />
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground" />
@@ -1300,9 +1537,9 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
   return handle ? <div className="group/row relative">{handle}{row}</div> : row;
 });
 
-function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs, ctx, keys, collapsed, onToggleGroup, onOpen }: {
+function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs, ctx, keys, collapsed, onToggleGroup, onOpen, onCreated }: {
   project: NexusProject; groups: TaskGroup[]; groupBy: string | null; subGroupBy: string | null; buildGroups: GroupBuilder; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; keys: string[];
-  collapsed: Set<string>; onToggleGroup: (k: string) => void; onOpen: (task: NexusTask) => void;
+  collapsed: Set<string>; onToggleGroup: (k: string) => void; onOpen: (task: NexusTask) => void; onCreated: (task: NexusTask | null) => void;
 }) {
   const { t } = useLang();
   const qc = useQueryClient();
@@ -1321,8 +1558,8 @@ function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs
   );
   const dropRing = "rounded-md bg-[color:var(--accent-foreground)]/[0.04] ring-2 ring-[color:var(--accent-foreground)]/40";
   const create = async (gKey: string | null, subKey: string | null, p: { title: string; dueDate: string | null }) => {
-    const task = await createTaskInGroup({ project, defs, groupBy, groupKey: gKey, sub: subGroupBy, subKey, ...p }).catch((e) => { toast.error(t("Couldn't add the task"), { description: e instanceof Error ? e.message : undefined }); return null; });
-    settleTaskWrite(qc, project.id);
+    const task = await createInline({ project, defs, ctx, cfg, qc, groupBy, groupKey: gKey, sub, subKey, placement: "top", withDraft: groupBy === "section" && !sub && !!gKey && gKey !== EMPTY_GROUP, ...p });
+    onCreated(task);
     return task;
   };
   // "+ New task" at the TOP of each group (owner, 10 Oct 2026), opening an inline row (12 Oct 2026).
@@ -1384,9 +1621,9 @@ const CAL_STRIPE: Record<string, string> = {
   NONE: "bg-muted-foreground/40",
 };
 
-function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDate, canDrag }: {
+function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, canDrag }: {
   tasks: NexusTask[]; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx;
-  onOpen: (task: NexusTask) => void; onCreate: (dueDate: string) => void; onSetDate: (task: NexusTask, iso: string) => void; canDrag: boolean;
+  onOpen: (task: NexusTask) => void; onCreate: (dueDate: string) => void; onSetDates: (moves: Array<{ task: NexusTask; iso: string }>) => void; canDrag: boolean;
 }) {
   const { t, locale } = useLang();
   const bulk = useTaskBulk();
@@ -1427,9 +1664,28 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDate, canD
     if (!src) return;
     const prev = dateOf(src);
     if (prev && dayKey(prev) === dayKey(day)) return; // same day = no write
+    // A dragged chip that is part of the selection takes the whole selection along (C-BUG-5), each task
+    // shifted by the same number of days (an undated one lands on the drop day).
+    const group = bulk.isSelected(src.id) && bulk.selectedIds.length > 1
+      ? [src, ...tasks.filter((x) => x.id !== src.id && bulk.isSelected(x.id))]
+      : [src];
+    const shift = prev ? Math.round((startOfDay(day).getTime() - startOfDay(prev).getTime()) / DAY_MS) : 0;
     // Moving a task keeps its CLOCK TIME — these calendars hold timed events ("10:00 PM"), and sending a
     // bare date would silently reset them to midnight. Undated tasks land on the plain date.
-    onSetDate(src, prev ? new Date(day.getFullYear(), day.getMonth(), day.getDate(), prev.getHours(), prev.getMinutes(), 0, 0).toISOString() : ymd(day));
+    const target = (task: NexusTask) => {
+      const d = dateOf(task);
+      if (!d || !prev) return d ? new Date(day.getFullYear(), day.getMonth(), day.getDate(), d.getHours(), d.getMinutes()).toISOString() : ymd(day);
+      const n = new Date(d); n.setDate(n.getDate() + shift);
+      return n.toISOString();
+    };
+    onSetDates(group.map((task) => ({ task, iso: target(task) })));
+  };
+  const startChipDrag = (e: React.DragEvent, task: NexusTask) => {
+    setDragTaskId(task.id);
+    e.dataTransfer.effectAllowed = "move";
+    try { e.dataTransfer.setData("text/plain", task.title); } catch { /* Firefox needs data to start a drag */ }
+    const n = bulk.isSelected(task.id) ? bulk.selectedIds.length : 1;
+    if (n > 1) setStackDragImage(e, n, task.title);
   };
 
   return (
@@ -1506,7 +1762,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDate, canD
                           style={{ borderRadius: 4, ...(cs && !done ? cs : {}) }}
                           {...bulk.bindCard(task, () => onOpen(task))}
                           draggable={canDrag}
-                          onDragStart={() => setDragTaskId(task.id)}
+                          onDragStart={(e) => startChipDrag(e, task)}
                           onDragEnd={() => { setDragTaskId(null); setDropKey(null); }}
                           title={task.title}
                           className={cn("block w-full truncate px-1.5 py-0.5 text-left text-[11px] font-medium leading-tight", canDrag && "cursor-grab active:cursor-grabbing", done ? "bg-muted text-muted-foreground line-through" : !cs && (CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? CAL_CHIP.NONE), dragTaskId === task.id && "opacity-40", bulk.isSelected(task.id) && "ring-1 ring-inset ring-[color:var(--accent-foreground)]")}
@@ -1552,10 +1808,10 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDate, canD
                 key={task.id}
                 type="button"
                 draggable={canDrag}
-                onDragStart={() => setDragTaskId(task.id)}
+                onDragStart={(e) => startChipDrag(e, task)}
                 onDragEnd={() => { setDragTaskId(null); setDropKey(null); }}
-                onClick={() => onOpen(task)}
-                className={cn("max-w-[220px] truncate rounded-md border border-border bg-card px-2 py-1 text-xs transition hover:border-foreground/20", canDrag && "cursor-grab active:cursor-grabbing")}
+                {...bulk.bindCard(task, () => onOpen(task))}
+                className={cn("max-w-[220px] truncate rounded-md border border-border bg-card px-2 py-1 text-xs transition hover:border-foreground/20", canDrag && "cursor-grab active:cursor-grabbing", bulk.isSelected(task.id) && "ring-2 ring-[color:var(--accent-foreground)]")}
               >
                 {task.title}
               </button>
@@ -1602,16 +1858,23 @@ function tlInitials(name?: string | null) {
   if (!name) return "?";
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 }
-function taskWindow(task: NexusTask, startProp = "start", endProp = "due"): { start: Date; end: Date } {
+/**
+ * A task's bar: start → end. One date gives a one-day bar on that day; no date gives no bar at all — the row
+ * says "No date" and a click on its track schedules it (Notion; bug hunt C-BUG-17, 12 Oct 2026). It used to
+ * draw an undated task as a 4-day bar from today, which looked scheduled.
+ */
+function taskWindow(task: NexusTask, startProp = "start", endProp = "due"): { start: Date; end: Date } | null {
   let start = parseDate(taskValues(task, startProp)[0]);
   let end = parseDate(taskValues(task, endProp)[0]);
-  if (start && !end) end = new Date(start.getTime() + DAY_MS * 3);
-  if (!start && end) start = new Date(end.getTime() - DAY_MS * 3);
-  if (!start || !end) { const t = startOfDay(new Date()); start = t; end = new Date(t.getTime() + DAY_MS * 3); }
-  start = startOfDay(start); end = startOfDay(end);
+  if (!start && !end) return null;
+  if (start && !end) end = start;
+  if (!start && end) start = end;
+  start = startOfDay(start!); end = startOfDay(end!);
   if (end < start) end = start;
   return { start, end };
 }
+/** Date properties a Timeline drag can write. */
+const tlWritable = (prop: string) => prop === "due" || prop === "start" || prop.startsWith("cf:");
 
 function TlMenuItem({ icon: Icon, label, onClick, danger, shortcut }: { icon: typeof Pencil; label: string; onClick: () => void; danger?: boolean; shortcut?: string }) {
   return (
@@ -1623,8 +1886,9 @@ function TlMenuItem({ icon: Icon, label, onClick, danger, shortcut }: { icon: ty
   );
 }
 
-function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, onToggleGroup, onOpen }: {
+function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, onToggleGroup, onOpen, onSetDates }: {
   groups: TaskGroup[]; groupBy: string | null; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; collapsed: Set<string>; onToggleGroup: (k: string) => void; onOpen: (task: NexusTask) => void;
+  onSetDates: (task: NexusTask, changes: Record<string, string | null>) => void;
 }) {
   const bulk = useTaskBulk();
   const { t, tn, locale } = useLang();
@@ -1635,23 +1899,81 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   const groups = taskGroups.map((g) => {
     const tasks = g.tasks.map((task) => ({ task, win: taskWindow(task, cfg.startProp, cfg.endProp) }));
     // The view's own sort wins; without one, bars run by start date.
-    if (!cfg.sort.length) tasks.sort((a, b) => a.win.start.getTime() - b.win.start.getTime());
+    if (!cfg.sort.length) tasks.sort((a, b) => (a.win ? a.win.start.getTime() : 8.64e15) - (b.win ? b.win.start.getTime() : 8.64e15));
     return { list: { id: g.key, name: groupLabelIsBuiltin(groupBy, g.key, defs) ? t(g.label) : g.label }, tasks };
   });
-  const allWins = groups.flatMap((g) => g.tasks.map((t) => t.win));
+  const allWins = groups.flatMap((g) => g.tasks.map((t) => t.win)).filter((w): w is { start: Date; end: Date } => !!w);
+  const taskCount = groups.reduce((n, g) => n + g.tasks.length, 0);
+  // Drag a bar to move it, its ends to resize it (pointer events, so it follows the cursor day by day).
+  const startW = tlWritable(cfg.startProp);
+  const endW = tlWritable(cfg.endProp);
+  const [drag, setDrag] = useState<{ id: string; mode: "move" | "start" | "end"; x0: number; days: number; moved: boolean } | null>(null);
+  const dragRef = useRef(drag);
+  dragRef.current = drag;
+  const [ghost, setGhost] = useState<{ id: string; day: number } | null>(null);
 
-  if (allWins.length === 0) {
+  if (taskCount === 0) {
     return <div className="px-4 py-10 md:px-8"><EmptyState icon={GanttChart} tone="muted" title={t("Nothing on the timeline")} message={t("Tasks show here as bars from their start date to their due date.")} /></div>;
   }
 
-  let min = allWins.reduce((a, w) => (w.start < a ? w.start : a), allWins[0].start);
-  let max = allWins.reduce((a, w) => (w.end > a ? w.end : a), allWins[0].end);
+  const todayStart = startOfDay(new Date());
+  let min = allWins.length ? allWins.reduce((a, w) => (w.start < a ? w.start : a), allWins[0].start) : todayStart;
+  let max = allWins.length ? allWins.reduce((a, w) => (w.end > a ? w.end : a), allWins[0].end) : new Date(todayStart.getTime() + DAY_MS * 14);
+  if (todayStart < min) min = todayStart;
+  if (todayStart > max) max = todayStart;
   min = startOfDay(new Date(min.getTime() - DAY_MS * 2));
   max = startOfDay(new Date(max.getTime() + DAY_MS * 3));
   const dayCount = daysBetween(min, max) + 1;
   const timelineW = dayCount * GANTT_DAY_W;
   const today = startOfDay(new Date());
   const xOf = (d: Date) => daysBetween(min, d) * GANTT_DAY_W;
+  const shiftIso = (task: NexusTask, prop: string, d: Date, days: number) => {
+    // Keep the time of day the value had (a due date with a time stays at that time).
+    const raw = parseDate(taskValues(task, prop)[0]);
+    const n = new Date(d.getFullYear(), d.getMonth(), d.getDate() + days, raw ? raw.getHours() : 12, raw ? raw.getMinutes() : 0);
+    return prop.startsWith("cf:") ? localDateKey(n) : n.toISOString();
+  };
+  const beginBarDrag = (e: React.PointerEvent, task: NexusTask, mode: "move" | "start" | "end") => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    if ((mode === "move" && !(startW || endW)) || (mode === "start" && !startW) || (mode === "end" && !endW)) return;
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    setDrag({ id: task.id, mode, x0: e.clientX, days: 0, moved: false });
+  };
+  const moveBarDrag = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const days = Math.round((e.clientX - d.x0) / GANTT_DAY_W);
+    const moved = d.moved || Math.abs(e.clientX - d.x0) > 4;
+    if (days !== d.days || moved !== d.moved) setDrag({ ...d, days, moved });
+  };
+  const endBarDrag = (task: NexusTask, win: { start: Date; end: Date }) => {
+    const d = dragRef.current;
+    setDrag(null);
+    if (!d || d.id !== task.id || !d.moved || d.days === 0) return;
+    const changes: Record<string, string | null> = {};
+    const hasStart = !!taskValues(task, cfg.startProp)[0];
+    const hasEnd = !!taskValues(task, cfg.endProp)[0];
+    if (d.mode === "move") {
+      if (startW && hasStart) changes[cfg.startProp] = shiftIso(task, cfg.startProp, win.start, d.days);
+      if (endW && (hasEnd || !hasStart)) changes[cfg.endProp] = shiftIso(task, cfg.endProp, win.end, d.days);
+    } else if (d.mode === "start") {
+      const ns = Math.min(d.days, daysBetween(win.start, win.end));
+      changes[cfg.startProp] = shiftIso(task, cfg.startProp, win.start, ns);
+    } else {
+      const ne = Math.max(d.days, -daysBetween(win.start, win.end));
+      changes[cfg.endProp] = shiftIso(task, cfg.endProp, win.end, ne);
+    }
+    if (Object.keys(changes).length) onSetDates(task, changes);
+  };
+  /** The window a bar shows while it is being dragged. */
+  const liveWin = (id: string, win: { start: Date; end: Date }) => {
+    if (!drag || drag.id !== id || !drag.moved) return win;
+    const add = (x: Date, n: number) => new Date(x.getFullYear(), x.getMonth(), x.getDate() + n);
+    if (drag.mode === "move") return { start: add(win.start, drag.days), end: add(win.end, drag.days) };
+    if (drag.mode === "start") { const s2 = add(win.start, drag.days); return { start: s2 > win.end ? win.end : s2, end: win.end }; }
+    const e2 = add(win.end, drag.days); return { start: win.start, end: e2 < win.start ? win.start : e2 };
+  };
 
   const days = Array.from({ length: dayCount }, (_, i) => new Date(min.getTime() + i * DAY_MS));
   const months: { label: string; days: number }[] = [];
@@ -1706,7 +2028,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
             )}
             {groups.map((g) => {
               const isCollapsed = collapsed.has(g.list.id);
-              const wins = g.tasks.map((t) => t.win);
+              const wins = g.tasks.map((t) => t.win).filter((w): w is { start: Date; end: Date } => !!w);
               const gStart = wins.length ? wins.reduce((a, w) => (w.start < a ? w.start : a), wins[0].start) : null;
               const gEnd = wins.length ? wins.reduce((a, w) => (w.end > a ? w.end : a), wins[0].end) : null;
               const gDur = gStart && gEnd ? daysBetween(gStart, gEnd) + 1 : 0;
@@ -1731,17 +2053,20 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                     </div>
                   </div>}
                   {/* TASK ROWS */}
-                  {!isCollapsed && <Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.task.id} render={({ task, win }) => {
+                  {!isCollapsed && <Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.task.id} render={({ task, win: saved }) => {
                     const pct = tlProgress(task.status);
-                    const dur = daysBetween(win.start, win.end) + 1;
-                    const left = xOf(win.start);
-                    const width = Math.max(GANTT_DAY_W * 0.8, daysBetween(win.start, win.end) * GANTT_DAY_W + GANTT_DAY_W);
+                    const win = saved ? liveWin(task.id, saved) : null;
+                    const dur = win ? daysBetween(win.start, win.end) + 1 : 0;
+                    const left = win ? xOf(win.start) : 0;
+                    const width = win ? Math.max(GANTT_DAY_W * 0.8, daysBetween(win.start, win.end) * GANTT_DAY_W + GANTT_DAY_W) : 0;
                     const isDone = (task.status ?? "").toUpperCase() === "DONE";
                     const tint = taskColor(task, cfg, defs, ctx);
                     const barColor = tint ? "" : GANTT_BAR[(task.priority ?? "NONE").toUpperCase()] ?? GANTT_BAR.NONE;
                     const people = (task.assignees ?? []).map((a) => a.user).filter(Boolean).slice(0, 3);
                     const cp = bulk.bindCard(task, () => onOpen(task));
                     const selected = bulk.isSelected(task.id);
+                    const dragging = drag?.id === task.id && drag.moved;
+                    const canMove = (startW || endW) && !task.id.startsWith("draft-");
                     return (
                       <div key={task.id} className={cn("flex border-b border-border/50 hover:bg-accent/20", selected && "bg-primary/10 ring-1 ring-inset ring-primary")}>
                         <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-card" style={{ width: leftW }}>
@@ -1749,20 +2074,50 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                             {isDone ? <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />}
                             <span className={cn("truncate text-sm font-medium", isDone && "text-muted-foreground line-through")}>{task.title}</span>
                           </button>
-                          {!compact && <div className="w-[90px] px-2 text-xs text-muted-foreground">{tn(dur, "{n} day", "{n} days")}</div>}
+                          {!compact && <div className="w-[90px] px-2 text-xs text-muted-foreground">{win ? tn(dur, "{n} day", "{n} days") : t("No date")}</div>}
                           {!compact && <div className="flex w-[150px] items-center gap-2 border-l border-border px-3">
                             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"><div className={cn("h-full rounded-full", pctTone(pct))} style={{ width: `${pct}%` }} /></div>
                             <span className="w-8 shrink-0 text-right text-xs font-bold tabular-nums">{pct}%</span>
                           </div>}
                         </div>
-                        <div className="relative py-2" style={{ width: timelineW }}>
+                        <div
+                          className="relative py-2"
+                          style={{ width: timelineW }}
+                          onPointerMove={(e) => {
+                            if (win || !endW) return;
+                            const r = e.currentTarget.getBoundingClientRect();
+                            const day = Math.max(0, Math.floor((e.clientX - r.left) / GANTT_DAY_W));
+                            if (ghost?.id !== task.id || ghost.day !== day) setGhost({ id: task.id, day });
+                          }}
+                          onPointerLeave={() => setGhost((g2) => (g2?.id === task.id ? null : g2))}
+                          onClick={(e) => {
+                            // An undated row: a click on its track schedules it on that day.
+                            if (win || !endW || e.target !== e.currentTarget && !(e.target as HTMLElement).dataset.ghost) return;
+                            const r = e.currentTarget.getBoundingClientRect();
+                            const day = new Date(min.getFullYear(), min.getMonth(), min.getDate() + Math.max(0, Math.floor((e.clientX - r.left) / GANTT_DAY_W)));
+                            onSetDates(task, { [cfg.endProp]: shiftIso(task, cfg.endProp, day, 0) });
+                          }}
+                        >
+                          {!win && endW && ghost?.id === task.id && (
+                            <div data-ghost="1" title={t("Click to schedule")} className="absolute top-1.5 flex h-8 cursor-pointer items-center justify-center rounded-lg border border-dashed border-muted-foreground/40 text-muted-foreground" style={{ left: ghost.day * GANTT_DAY_W, width: GANTT_DAY_W }}>
+                              <Plus className="pointer-events-none h-3.5 w-3.5" />
+                            </div>
+                          )}
+                          {win && (
                           <button
                             data-morph-id={`timeline-taskcard-${task.id}`}
                             {...cp}
+                            onClickCapture={(e) => { if (drag?.moved) { e.preventDefault(); e.stopPropagation(); } }}
+                            onPointerDown={canMove ? (e) => beginBarDrag(e, task, "move") : undefined}
+                            onPointerMove={canMove ? moveBarDrag : undefined}
+                            onPointerUp={canMove ? () => endBarDrag(task, saved!) : undefined}
+                            onPointerCancel={() => setDrag(null)}
+                            data-tl-bar={task.id}
                             title={`${task.title} · ${fmtDate(win.start.toISOString())} → ${fmtDate(win.end.toISOString())}`}
-                            className={cn("group absolute top-1.5 flex h-8 items-center gap-1.5 overflow-hidden px-1.5 text-left shadow-soft transition-transform duration-150 hover:scale-[1.015] motion-reduce:hover:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40", barColor)}
+                            className={cn("group absolute top-1.5 flex h-8 touch-none select-none items-center gap-1.5 overflow-hidden px-1.5 text-left shadow-soft transition-[transform,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40", !dragging && "hover:scale-[1.015] motion-reduce:hover:scale-100", canMove && (dragging ? "cursor-grabbing shadow-pop" : "cursor-grab"), barColor)}
                             style={{ left, width, borderRadius: 8, ...(tint ? { backgroundColor: COLOR_PRESETS[tint].dot } : {}) }}
                           >
+                            {startW && canMove && <span aria-hidden onPointerDown={(e) => beginBarDrag(e, task, "start")} className="absolute inset-y-0 left-0 w-2 cursor-ew-resize rounded-l-lg hover:bg-white/30" />}
                             {people.length > 0 && (
                               <div className="flex shrink-0 -space-x-1.5">
                                 {people.map((u, i) => (
@@ -1771,7 +2126,9 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                               </div>
                             )}
                             <span className="truncate text-xs font-bold text-white drop-shadow-sm">{task.title}</span>
+                            {endW && canMove && <span aria-hidden onPointerDown={(e) => beginBarDrag(e, task, "end")} className="absolute inset-y-0 right-0 w-2 cursor-ew-resize rounded-r-lg hover:bg-white/30" />}
                           </button>
+                          )}
                         </div>
                       </div>
                     );

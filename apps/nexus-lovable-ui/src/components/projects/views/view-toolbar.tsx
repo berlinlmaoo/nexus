@@ -95,7 +95,8 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
               onClick={() => !active && onSelect(tab.key)}
               title={tab.compact ? tab.label : undefined}
               onDoubleClick={() => v && editable && setRenaming(v.id)}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(tab.key); } }}
+              // Keys typed in the rename field inside the tab are the field's (a space in a name, C-BUG-10).
+              onKeyDown={(e) => { if (e.target !== e.currentTarget) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(tab.key); } }}
               className={cn(
                 "group inline-flex h-8 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/30",
                 active ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",

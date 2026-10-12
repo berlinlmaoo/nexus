@@ -27,6 +27,8 @@ import { Avatar } from "@/components/Avatar";
 import { useTaskBulk } from "@/components/tasks/task-bulk";
 import { toast } from "sonner";
 import { Incremental } from "@/components/projects/views/incremental";
+import { InlineTaskDraft } from "@/components/projects/views/inline-draft";
+import { FilterHint, useFilteredOut } from "@/components/projects/views/filter-hint";
 import { holdProject, patchTaskInCaches } from "@/lib/task-cache";
 import { canDragTask, DragHandle, useGroupMove } from "@/components/projects/views/group-move";
 
@@ -50,7 +52,7 @@ type GroupBuilder = (tasks: NexusTask[], by: string | null, opts?: { keepHidden?
  * old per-project column list (Project.tableColumns) seeded the built-in Table view and is no longer
  * written.
  */
-export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs, columns, canEditColumns, onColumnsChange, collapsed, onToggleGroup, onOpen }: {
+export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs, columns, canEditColumns, onColumnsChange, collapsed, onToggleGroup, onOpen, onCreateInGroup }: {
   project: NexusProject;
   groups: TaskGroup[];
   groupBy: string | null;
@@ -64,8 +66,18 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   collapsed: Set<string>;
   onToggleGroup: (key: string) => void;
   onOpen: (task: NexusTask) => void;
+  /** "+ New task" under a group (Notion's table; bug hunt C-BUG-19). Absent = no row. */
+  onCreateInGroup?: (groupKey: string | null, subKey: string | null, p: { title: string; dueDate: string | null }) => Promise<NexusTask | null>;
 }) {
   const projectId = project.id;
+  const [draft, setDraft] = useState<string | null>(null);
+  const newRow = (id: string, gKey: string | null, subKey: string | null) => !onCreateInGroup ? null : draft === id
+    ? <div className="sticky left-0 max-w-[min(100%,640px)]"><InlineTaskDraft variant="row" onCreate={(p) => onCreateInGroup(gKey, subKey, p)} onExpand={onOpen} onClose={() => setDraft(null)} /></div>
+    : (
+      <button type="button" onClick={() => setDraft(id)} className="sticky left-0 flex h-9 w-full max-w-[min(100%,640px)] items-center gap-2 border-b border-border/70 px-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground">
+        <Plus className="h-4 w-4" />{t("New task")}
+      </button>
+    );
   const qc = useQueryClient();
   const { t } = useLang();
   const propLabel = usePropLabel();
@@ -196,7 +208,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
           </div>
 
           {groups.map((g) => {
-            if (!groupBy) return <div key={g.key}><Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.id} render={(task) => row(task)} /></div>;
+            if (!groupBy) return <div key={g.key}><Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.id} render={(task) => row(task)} />{newRow("all", null, null)}</div>;
             const subs = subGroupBy && subGroupBy !== groupBy ? buildGroups(g.tasks, subGroupBy, { keepHidden: true }).filter((x) => x.tasks.length > 0) : null;
             const zone = mover.dropZone(g.key, null);
             return (
@@ -206,9 +218,9 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
                   ? subs.map((s) => {
                     const k = `${g.key}/${s.key}`;
                     const subZone = mover.dropZone(g.key, s.key);
-                    return <div key={k} {...subZone.props} className={cn(subZone.isOver && dropRing)}>{groupRow(s, subGroupBy, k, 1)}{!collapsed.has(k) && <Incremental items={s.tasks} first={40} step={25} keyOf={(x) => x.id} render={rowIn(g.key, s.key)} />}</div>;
+                    return <div key={k} {...subZone.props} className={cn(subZone.isOver && dropRing)}>{groupRow(s, subGroupBy, k, 1)}{!collapsed.has(k) && <><Incremental items={s.tasks} first={40} step={25} keyOf={(x) => x.id} render={rowIn(g.key, s.key)} />{newRow(k, g.key, s.key)}</>}</div>;
                   })
-                  : g.tasks.length ? <Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.id} render={rowIn(g.key, null)} /> : <div className="border-b border-border px-3 py-2 text-xs text-muted-foreground">{t("No tasks in this group.")}</div>)}
+                  : <>{g.tasks.length ? <Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.id} render={rowIn(g.key, null)} /> : null}{newRow(g.key, g.key, null)}</>)}
               </div>
             );
           })}
@@ -235,6 +247,7 @@ function NameCell({ task, handle, onRename, onOpen }: { task: NexusTask; handle?
   const [title, setTitle] = useState(task.title);
   const done = task.status === "DONE";
   const xp = questXp(task);
+  const filteredOut = useFilteredOut(task.id);
   return (
     <div className={cn("flex min-w-0 items-center gap-1.5 px-2 py-1.5", handle && "gap-1 pl-0.5")}>
       {handle}
@@ -245,6 +258,7 @@ function NameCell({ task, handle, onRename, onOpen }: { task: NexusTask; handle?
         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
         className={cn("min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium outline-none hover:border-border focus:border-primary focus:bg-background", done && "text-muted-foreground line-through")}
       />
+      {filteredOut && <FilterHint />}
       {xp > 0 && <span title={t("Quest XP")} className="shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">+{xp} XP</span>}
       <button onClick={onOpen} aria-label={t("Open")} title={t("Open")} className="shrink-0 text-muted-foreground/0 transition-colors hover:text-primary group-hover:text-muted-foreground"><ChevronRight className="h-3.5 w-3.5" /></button>
     </div>

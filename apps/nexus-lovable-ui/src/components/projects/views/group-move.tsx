@@ -7,6 +7,7 @@ import { nexusApi, type NexusProject, type NexusTask } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
 import { EMPTY_GROUP, propDef, sectionIdOf, taskValues, type PropDef } from "@/lib/project-views";
 import { beginTaskWrite, holdProject, patchTaskInCaches, settleTaskWrite } from "@/lib/task-cache";
+import { friendlyError, pushUndo } from "@/lib/task-undo";
 import { cn } from "@/lib/utils";
 
 /**
@@ -200,11 +201,11 @@ export function useGroupMove({ project, defs, groupBy, sub, viewTasks }: {
         const res = await nexusApi.batchMoveTasks({ taskIds: ids, ...payload });
         for (const f of res.failed ?? []) failed.set(f.id, f.error);
       } catch (e) {
-        for (const id of ids) failed.set(id, e instanceof Error ? e.message : "");
+        for (const id of ids) failed.set(id, friendlyError(e) ?? "");
       }
     }
     for (let i = 0; i < perTask.length; i++) {
-      try { await perTask[i](); } catch (e) { failed.set(perTaskIds[i], e instanceof Error ? e.message : ""); }
+      try { await perTask[i](); } catch (e) { failed.set(perTaskIds[i], friendlyError(e) ?? ""); }
     }
     return failed;
   };
@@ -299,7 +300,8 @@ export function useGroupMove({ project, defs, groupBy, sub, viewTasks }: {
         const why = [...failed.values()].find(Boolean);
         toast.error(tn(failed.size, "Couldn't move the task", "Couldn't move {n} tasks"), { description: why || undefined });
       }
-      if (ok.length) toast(tn(ok.length, "Task moved", "Moved {n} tasks"), { duration: 10000, action: { label: t("Undo"), onClick: () => void undoMove(ok, to, toRow) } });
+      // Undo from the toast or with Ctrl/⌘+Z (lib/task-undo.ts).
+      if (ok.length) pushUndo(tn(ok.length, "Task moved", "Moved {n} tasks"), () => undoMove(ok, to, toRow));
     })();
   }, [qc, t, tn]);
 
