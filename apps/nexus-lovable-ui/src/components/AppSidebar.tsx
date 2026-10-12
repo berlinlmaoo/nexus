@@ -2,7 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Inbox, MessageCircle, CheckSquare, Calendar, CalendarClock, FolderKanban,
   Users, Trophy, ClipboardCheck, Settings, Shield, FileText, Megaphone,
-  Search, PanelLeftClose, LogOut, Loader2, AtSign, ShieldAlert, Ticket, Sun, Moon,
+  Search, PanelLeftClose, LogOut, Loader2, AtSign, Ticket, Sun, Moon,
  HardDrive, Languages,
 } from "lucide-react";
 import { useState } from "react";
@@ -22,32 +22,30 @@ import { cn } from "@/lib/utils";
 
 const groups = [
   {
-    label: "Home Base",
+    label: "Home",
     items: [
       { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
       { title: "Messages", url: "/messages", icon: MessageCircle },
       // GIDEON full page (12 Oct 2026, Notion AI's chat page): conversations with search.
       { title: "GIDEON", url: "/gideon", icon: GideonMark },
-      { title: "Notification", url: "/inbox", icon: Inbox },
+      { title: "Notifications", url: "/inbox", icon: Inbox },
       { title: "Threads", url: "/threads", icon: AtSign },
       { title: "Z Vault", url: "/vault", icon: HardDrive },
-      { title: "My Mission", url: "/my-tasks", icon: CheckSquare },
+      { title: "My Tasks", url: "/my-tasks", icon: CheckSquare },
       { title: "My Submissions", url: "/submissions", icon: FileText },
       { title: "Calendar", url: "/calendar", icon: Calendar },
       { title: "Room Booking", url: "/room-booking", icon: CalendarClock },
     ],
   },
   {
-    label: "Missions",
+    label: "Work",
     items: [
-      { title: "Mission Control", url: "/projects", icon: FolderKanban },
-      { title: "Social Approvals", url: "/social", icon: Megaphone },
+      { title: "Projects", url: "/projects", icon: FolderKanban },
       { title: "Leaderboard", url: "/leaderboard", icon: Trophy },
-      { title: "Integrity", url: "/peer-reports", icon: ShieldAlert },
     ],
   },
   {
-    label: "Pulse Check",
+    label: "Team",
     items: [
       { title: "Attendance", url: "/attendance", icon: ClipboardCheck },
     ],
@@ -56,7 +54,7 @@ const groups = [
     label: "System",
     items: [
       { title: "Ticket", url: "/complaints", icon: Ticket },
-      { title: "Setting", url: "/settings", icon: Settings },
+      { title: "Settings", url: "/settings", icon: Settings },
       { title: "Control Room", url: "/admin", icon: Shield },
     ],
   },

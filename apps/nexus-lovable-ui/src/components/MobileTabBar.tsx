@@ -5,7 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   LayoutDashboard, Inbox, CheckSquare, FolderKanban, Menu, X,
   MessageCircle, Calendar, CalendarClock, Users, Trophy,
-  ClipboardCheck, Settings, Shield, LogOut, Loader2, FileText, AtSign, ShieldAlert, Ticket, Sun, Moon,
+  ClipboardCheck, Settings, Shield, LogOut, Loader2, FileText, AtSign, Ticket, Sun, Moon,
  HardDrive, Languages,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -30,29 +30,28 @@ const primary = [
 
 const moreGroups = [
   {
-    label: "Home Base",
+    label: "Home",
     items: [
       { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
       { title: "Messages", url: "/messages", icon: MessageCircle },
-      { title: "Notification", url: "/inbox", icon: Inbox },
+      { title: "Notifications", url: "/inbox", icon: Inbox },
       { title: "Threads", url: "/threads", icon: AtSign },
       { title: "Z Vault", url: "/vault", icon: HardDrive },
-      { title: "My Mission", url: "/my-tasks", icon: CheckSquare },
+      { title: "My Tasks", url: "/my-tasks", icon: CheckSquare },
       { title: "My Submissions", url: "/submissions", icon: FileText },
       { title: "Calendar", url: "/calendar", icon: Calendar },
       { title: "Room Booking", url: "/room-booking", icon: CalendarClock },
     ],
   },
   {
-    label: "Missions",
+    label: "Work",
     items: [
-      { title: "Mission Control", url: "/projects", icon: FolderKanban },
+      { title: "Projects", url: "/projects", icon: FolderKanban },
       { title: "Leaderboard", url: "/leaderboard", icon: Trophy },
-      { title: "Integrity", url: "/peer-reports", icon: ShieldAlert },
     ],
   },
   {
-    label: "Pulse Check",
+    label: "Team",
     items: [
       { title: "Attendance", url: "/attendance", icon: ClipboardCheck },
     ],
@@ -61,7 +60,7 @@ const moreGroups = [
     label: "System",
     items: [
       { title: "Ticket", url: "/complaints", icon: Ticket },
-      { title: "Setting", url: "/settings", icon: Settings },
+      { title: "Settings", url: "/settings", icon: Settings },
       { title: "Control Room", url: "/admin", icon: Shield },
     ],
   },

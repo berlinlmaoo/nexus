@@ -64,7 +64,7 @@ function LoginPage() {
       if (err instanceof ApiError && err.status === 401) {
         setError("This device's passkey isn't registered. Sign in with your password, then add it in Settings.");
       } else {
-        setError("Passkey uplink failed. Use your email/password instead.");
+        setError(lang.t("Passkey sign-in failed. Use your email and password instead."));
       }
     } finally {
       setPasskeyLoading(false);
@@ -96,7 +96,7 @@ function LoginPage() {
       } else if (err instanceof ApiError && err.status === 403) {
         setError("The NEXUS core doesn't trust this login origin yet. Check the proxy/config.");
       } else {
-        setError("Login uplink failed. Make sure the NEXUS core on port 3000 is up.");
+        setError(lang.t("Couldn't sign in. Check your connection and try again."));
       }
     } finally {
       setLoading(false);
@@ -201,11 +201,11 @@ function LoginPage() {
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Opening uplink...</span>
+                <span>{lang.t("Signing in…")}</span>
               </>
             ) : (
               <>
-                <span>Enter Mission Control</span>
+                <span>{lang.t("Sign in")}</span>
                 <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
               </>
             )}
@@ -245,7 +245,7 @@ function LoginPage() {
           <p className="text-sm text-muted-foreground">New operative? <a href="/register" className="text-primary font-bold hover:underline underline-offset-4 decoration-2 decoration-primary/30 transition-all ml-1">Request access</a></p>
         </div>
 
-        <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-[#FF7F50] text-white text-[10px] font-bold uppercase tracking-[0.2em] rounded-full shadow-lg border-2 border-white">Secure Uplink Ready</div>
+        <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-[#FF7F50] text-white text-[10px] font-bold uppercase tracking-[0.2em] rounded-full shadow-lg border-2 border-white">{lang.t("Secure sign-in")}</div>
       </div>
 
       <style>{`

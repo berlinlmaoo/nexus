@@ -391,7 +391,7 @@ function ProjectsPage() {
   return (
     <div>
       <PageHeader
-        title="Mission Control"
+        title="Projects"
         subtitle={
           projectsQuery.data
             ? "Live projects from NEXUS Phaëthon — pick a workstream and make it move."
