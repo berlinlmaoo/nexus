@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { docTitle } from "@/lib/doc-title";
 import type React from "react";
 import { useNavigate } from "@tanstack/react-router";
@@ -22,7 +22,15 @@ export function SearchModal({ onClose, takeInitial }: { onClose: () => void; tak
   const { t } = useLang();
   // The full list of what it searches is cut off on a phone; there it says it more briefly.
   const phone = useIsMobile();
-  const [q, setQ] = useState(() => takeInitial?.() ?? "");
+  const [q, setQ] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Once the box is on screen and focused, take what was typed before it existed (the shell buffered it
+  // until now, so no key falls between the two).
+  useLayoutEffect(() => {
+    inputRef.current?.focus();
+    const early = takeInitial?.() ?? "";
+    if (early) setQ((cur) => early + cur);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [debounced, setDebounced] = useState("");
   const [active, setActive] = useState(0);
   const listId = useId();
@@ -96,6 +104,7 @@ export function SearchModal({ onClose, takeInitial }: { onClose: () => void; tak
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
           {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
           <input
+            ref={inputRef}
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
