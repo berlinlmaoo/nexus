@@ -205,7 +205,7 @@ export function AppSidebar() {
           </button>
         </div>
       </SidebarFooter>
-      <SidebarRail />
+      <SidebarRail aria-label={t("Show or hide the sidebar")} />
     </Sidebar>
   );
 }
