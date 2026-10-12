@@ -257,7 +257,7 @@ export function LocationTrail({ recordId, compact = false, trackingState }: { re
             <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><LogOut className="h-3.5 w-3.5" /> {t("Check-out")}</span>
             <span className="font-semibold tabular-nums">
               {record.checkOutAt ? fmtTime(record.checkOutAt) : t("Still in")}
-              {record.checkOutOffsite && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">{t("Offsite")}</span>}
+              {record.checkOutOffsite && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">{t("Offsite")}</span>}
             </span>
           </div>
         </div>
@@ -271,7 +271,7 @@ export function LocationTrail({ recordId, compact = false, trackingState }: { re
                 {spans.map((s) => (
                   <li key={s.from} className="flex items-baseline justify-between gap-2 text-xs">
                     <span className="tabular-nums">{fmtTime(s.from)} – {s.to ? fmtTime(s.to) : record.checkOutAt ? `${fmtTime(record.checkOutAt)} (${t("out")})` : t("now")}</span>
-                    <span className={s.to ? "text-muted-foreground" : "font-semibold text-amber-700"}>{fmtSpanDuration(spanEnd(s) - new Date(s.from).getTime())}</span>
+                    <span className={s.to ? "text-muted-foreground" : "font-semibold text-amber-700 dark:text-amber-300"}>{fmtSpanDuration(spanEnd(s) - new Date(s.from).getTime())}</span>
                   </li>
                 ))}
               </ul>
@@ -293,7 +293,7 @@ export function LocationTrailDialog({ recordId, title, subtitle, onClose }: { re
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-3 backdrop-blur-sm sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-3 backdrop-blur-sm sm:p-4" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={title} className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-border bg-card p-4 shadow-pop sm:p-5" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">

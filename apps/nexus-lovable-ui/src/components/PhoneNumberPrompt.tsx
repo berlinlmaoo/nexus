@@ -63,7 +63,7 @@ export function PhoneNumberPrompt() {
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-[80] grid place-items-center p-4">
-          <motion.div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={dismiss} />
+          <motion.div className="absolute inset-0 bg-foreground/40 dark:bg-scrim backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={dismiss} />
           <motion.div
             role="dialog" aria-modal="true"
             initial={{ opacity: 0, scale: 0.96, y: 14 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 14 }}

@@ -820,14 +820,14 @@ export function OrgChart() {
             </div>
           </section>
 
-          <section {...dropProps(null, "__tray__")} className={cn("rounded-b-2xl px-5 py-4 transition", overId === "__tray__" ? "bg-rose-50" : "bg-muted/20")}>
+          <section {...dropProps(null, "__tray__")} className={cn("rounded-b-2xl px-5 py-4 transition", overId === "__tray__" ? "bg-rose-50 dark:bg-rose-500/10" : "bg-muted/20")}>
             <div className="flex items-baseline justify-between gap-3">
               <Eyebrow>{t("Not placed yet")} <span className="normal-case tracking-normal text-muted-foreground/70">· {tn(unplaced.length, "{n} person", "{n} people")} · {t("drag onto an IP/Team card")}</span></Eyebrow>
-              {drag?.kind === "person" && drag.fromUnitId && <span className="text-[11px] font-semibold text-rose-700">{t("Drop here to remove from {name}", { name: unitsById.get(drag.fromUnitId)?.name ?? t("that card") })}</span>}
+              {drag?.kind === "person" && drag.fromUnitId && <span className="text-[11px] font-semibold text-rose-700 dark:text-rose-300">{t("Drop here to remove from {name}", { name: unitsById.get(drag.fromUnitId)?.name ?? t("that card") })}</span>}
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               {unplaced.map((p) => <PersonChip key={p.userId} {...personProps(p)} />)}
-              {unplaced.length === 0 && <span className="text-xs text-emerald-700">{t("Empty — everyone is already in an IP/Team.")}</span>}
+              {unplaced.length === 0 && <span className="text-xs text-emerald-700 dark:text-emerald-300">{t("Empty — everyone is already in an IP/Team.")}</span>}
             </div>
           </section>
         </div>
@@ -922,7 +922,7 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 }
 function Stat({ n, of, label, tone }: { n: number; of?: number; label: string; tone?: "warn" | "ok" }) {
   return (
-    <span className={cn("inline-flex items-baseline gap-1", tone === "warn" && "text-amber-700", tone === "ok" && "text-emerald-700")}>
+    <span className={cn("inline-flex items-baseline gap-1", tone === "warn" && "text-amber-700 dark:text-amber-300", tone === "ok" && "text-emerald-700 dark:text-emerald-300")}>
       <b className="text-sm tabular-nums">{n}</b>{of !== undefined && <span className="text-muted-foreground">/ {of}</span>}<span className={cn(!tone && "text-muted-foreground")}>{label}</span>
     </span>
   );
@@ -1261,7 +1261,7 @@ function PersonChip({ p, busy, dragging, onDragStart, onDragEnd, onClick, onRemo
     </button>
     {onRemove && (
       <button type="button" onClick={onRemove} disabled={busy} aria-label={t("Remove {name} from this card", { name: label(p) })} title={t("Remove from this card")}
-        className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full border border-border bg-card text-muted-foreground opacity-0 shadow-sm transition hover:text-rose-700 focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40">
+        className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full border border-border bg-card text-muted-foreground opacity-0 shadow-sm transition hover:text-rose-700 focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40 dark:hover:text-rose-300">
         <X className="h-3 w-3" />
       </button>
     )}
@@ -1519,7 +1519,7 @@ function UnitDialog({ unit, units, excluded, initial, people = [], members = 0, 
 
   return (
     <>
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-labelledby="oc-unit-title" onClick={(e) => e.stopPropagation()}
         className="flex max-h-[min(92vh,780px)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
         <div className="flex items-start gap-3 border-b border-border px-5 py-4">
@@ -1705,7 +1705,7 @@ function UnitPicker({ person, units, people, busy, onToggle, onPlaceUnder, onRel
     .map(([unitId, leaderId]) => ({ unitId, unit: byId.get(unitId), leader: people.find((p) => p.userId === leaderId) }))
     .filter((c) => c.unit && c.leader);
   return (
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
           <div className="text-sm font-bold">{label(person)}</div>
@@ -1723,7 +1723,7 @@ function UnitPicker({ person, units, people, busy, onToggle, onPlaceUnder, onRel
               {current.map((c) => (
                 <div key={c.unitId} className="mb-1 flex items-center gap-2 rounded-lg bg-primary/10 px-2 py-1.5 text-xs">
                   <span className="min-w-0 flex-1 truncate">{t("Now under:")} <b>{c.leader!.name}</b> · {c.unit!.name}</span>
-                  <button type="button" disabled={busy} onClick={() => onRelease(c.unitId)} className="shrink-0 rounded-md px-2 py-0.5 font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">{t("Release")}</button>
+                  <button type="button" disabled={busy} onClick={() => onRelease(c.unitId)} className="shrink-0 rounded-md px-2 py-0.5 font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50 dark:text-rose-300 dark:hover:bg-rose-500/10">{t("Release")}</button>
                 </div>
               ))}
               <div className="space-y-0.5">

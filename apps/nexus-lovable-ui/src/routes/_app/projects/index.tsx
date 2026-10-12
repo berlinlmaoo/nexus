@@ -62,11 +62,11 @@ const EXPANDED_KEY = "nexus:projects:expanded-folders";
 const statusBadge: Record<string, { label: string; cls: string }> = {
   ACTIVE: { label: "Active", cls: "bg-success/15 text-success" },
   PLANNING: { label: "Planning", cls: "bg-info/15 text-info" },
-  ON_HOLD: { label: "On hold", cls: "bg-warning/20 text-warning-foreground" },
+  ON_HOLD: { label: "On hold", cls: "bg-warning/20 text-warning-foreground dark:text-warning" },
   COMPLETED: { label: "Completed", cls: "bg-muted text-muted-foreground" },
   ARCHIVED: { label: "Archived", cls: "bg-muted text-muted-foreground" },
   on_track: { label: "On track", cls: "bg-success/15 text-success" },
-  at_risk: { label: "At risk", cls: "bg-warning/20 text-warning-foreground" },
+  at_risk: { label: "At risk", cls: "bg-warning/20 text-warning-foreground dark:text-warning" },
   off_track: { label: "Off track", cls: "bg-destructive/15 text-destructive" },
   completed: { label: "Completed", cls: "bg-muted text-muted-foreground" },
 };
@@ -431,7 +431,7 @@ function ProjectsPage() {
 
       {isCreateOpen && (
         <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/35 px-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 grid place-items-center bg-black/35 dark:bg-scrim px-4 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
         >
@@ -543,7 +543,7 @@ function ProjectsPage() {
               )}
 
               {!workspaceOptions.length && (
-                <p className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+                <p className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground dark:text-warning">
                   {tr("You're not in a workspace yet, so you can't create a project. Ask a BoD or Manager to add you.")}
                 </p>
               )}
@@ -571,7 +571,7 @@ function ProjectsPage() {
 
       <div className="p-4 md:p-8 space-y-5">
         <section className="rounded-[28px] border border-border bg-card p-4 md:p-5 shadow-soft overflow-hidden relative">
-          <div className="absolute -right-10 -top-12 h-32 w-32 rounded-full bg-primary/10" />
+          <div className="absolute -right-10 -top-12 h-32 w-32 rounded-full bg-primary/10 dark:hidden" />
           <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">

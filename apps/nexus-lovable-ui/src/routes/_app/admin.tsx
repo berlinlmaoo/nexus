@@ -261,7 +261,7 @@ function Admin() {
                 </button>
               )}
               {canManageShift && (
-                <button onClick={() => setRedDateOpen(true)} className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-100">
+                <button onClick={() => setRedDateOpen(true)} className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/15">
                   <CalendarX2 className="h-3.5 w-3.5" /> {t("Public holiday quota")}
                 </button>
               )}
@@ -296,7 +296,7 @@ function Admin() {
       {reinstateTarget && <ReinstateUserModal user={reinstateTarget} onClose={() => setReinstateTarget(null)} />}
       {redDateOpen && <RedDateQuotaModal onClose={() => setRedDateOpen(false)} />}
       {teamSettingsId && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-4" onClick={() => { setTeamSettingsId(null); setDivisionsOpen(false); }}>
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 dark:bg-scrim p-4" onClick={() => { setTeamSettingsId(null); setDivisionsOpen(false); }}>
           <div className="mx-auto my-8 w-full max-w-lg space-y-3" onClick={(e) => e.stopPropagation()}>
             {openTeam ? (
               <>
@@ -328,17 +328,17 @@ function Admin() {
         </div>
       )}
       {teamExit && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setTeamExit(null)}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={() => setTeamExit(null)}>
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-soft" onClick={(e) => e.stopPropagation()}>
             <div className="text-lg font-bold">{t("Remove from {team}?", { team: teamExit.teamName })}</div>
             <p className="mt-2 text-sm text-muted-foreground"><b className="text-foreground">{teamExit.userName}</b> {t("leaves this team.")}</p>
             {teamExit.losing.length > 0 ? (
-              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                <div className="text-xs font-bold text-amber-800">{tn(teamExit.losing.length, "They also lose access to {n} project", "They also lose access to {n} projects")}</div>
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
+                <div className="text-xs font-bold text-amber-800 dark:text-amber-300">{tn(teamExit.losing.length, "They also lose access to {n} project", "They also lose access to {n} projects")}</div>
                 <div className="mt-1.5 flex flex-wrap gap-1">
-                  {teamExit.losing.map((n) => <span key={n} className="rounded bg-white/70 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900">{n}</span>)}
+                  {teamExit.losing.map((n) => <span key={n} className="rounded bg-white/70 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900 dark:bg-background/40 dark:text-amber-200">{n}</span>)}
                 </div>
-                <div className="mt-2 text-[11px] text-amber-700">{t("Access added directly to a project stays.")}</div>
+                <div className="mt-2 text-[11px] text-amber-700 dark:text-amber-300">{t("Access added directly to a project stays.")}</div>
               </div>
             ) : (
               <p className="mt-3 text-xs text-muted-foreground">{t("This team isn't linked to any project, so no access is lost.")}</p>
@@ -377,7 +377,7 @@ function RedDateQuotaModal({ onClose }: { onClose: () => void }) {
   const dirty = valid && q.data && n !== q.data.quota;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
           <h2 className="font-display text-base font-bold tracking-tight">{t("Public holiday quota — {month}", { month: monthLabel })}</h2>
@@ -396,7 +396,7 @@ function RedDateQuotaModal({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         )}
-        {q.data && q.data.quota === 0 && <p className="mt-2 text-[11px] text-amber-600">{t("The quota is still 0, so staff can't request public holidays this month until you set it.")}</p>}
+        {q.data && q.data.quota === 0 && <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">{t("The quota is still 0, so staff can't request public holidays this month until you set it.")}</p>}
       </div>
     </div>
   );
@@ -468,13 +468,13 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
   // tidak tertutup interaksi berikutnya, dan hanya hilang saat ditutup dengan sengaja.
   if (madePassword) {
     return (
-      <span className="inline-flex max-w-[280px] flex-col gap-1 rounded-md border border-emerald-300 bg-emerald-50 p-2 text-[11px] text-emerald-900">
+      <span className="inline-flex max-w-[280px] flex-col gap-1 rounded-md border border-emerald-300 bg-emerald-50 p-2 text-[11px] text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
         <span className="font-semibold">{t("{email} created", { email: madePassword.email })}</span>
         <span>{t("Temporary password. Copy it now, it can't be shown again:")}</span>
-        <code className="select-all rounded bg-white px-1.5 py-1 font-mono text-[11px] tracking-tight">{madePassword.password}</code>
-        <span className="text-emerald-700">{t("They must change it the first time they sign in.")}</span>
+        <code className="select-all rounded bg-white px-1.5 dark:bg-background py-1 font-mono text-[11px] tracking-tight">{madePassword.password}</code>
+        <span className="text-emerald-700 dark:text-emerald-300">{t("They must change it the first time they sign in.")}</span>
         {madePassword.notified?.email ? (
-          <span className="text-emerald-700">
+          <span className="text-emerald-700 dark:text-emerald-300">
             {t("The password was sent to {email}. You don't need to pass it on.", { email: madePassword.notified.emailTo ?? "" })}
           </span>
         ) : (
@@ -485,7 +485,7 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
           </span>
         )}
         {problem && <span className="text-destructive">{problem}</span>}
-        <button type="button" onClick={() => { setMadePassword(null); setOpen(false); }} className="self-start rounded border border-emerald-300 px-1.5 py-0.5 font-semibold hover:bg-emerald-100">
+        <button type="button" onClick={() => { setMadePassword(null); setOpen(false); }} className="self-start rounded border border-emerald-300 px-1.5 py-0.5 font-semibold hover:bg-emerald-100 dark:border-emerald-500/40 dark:hover:bg-emerald-500/15">
           {t("I've copied it")}
         </button>
       </span>
@@ -502,7 +502,7 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
           — sebagian besar orang memang belum punya email kantor. */}
       <div className="flex flex-wrap items-center gap-2">
         {current ? (
-          <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-800"><AtSign className="h-3.5 w-3.5" /> {current}</span>
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300"><AtSign className="h-3.5 w-3.5" /> {current}</span>
         ) : (
           <span className="text-sm text-muted-foreground">{t("Not linked.")}</span>
         )}
@@ -517,7 +517,7 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
               </button>
             )}
             {current && (
-              <button type="button" disabled={link.isPending} onClick={() => link.mutate(null)} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition hover:border-rose-300 hover:text-rose-700 disabled:opacity-50">
+              <button type="button" disabled={link.isPending} onClick={() => link.mutate(null)} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition hover:border-rose-300 hover:text-rose-700 disabled:opacity-50 dark:hover:border-rose-500/40 dark:hover:text-rose-300">
                 {link.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2Off className="h-3.5 w-3.5" />} {t("Unlink")}
               </button>
             )}
@@ -529,7 +529,7 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
       {/* Pemilih: daftar yang bisa dicari, bukan <select> dengan 22 opsi sepanjang satu kalimat. Yang
           sudah dipakai orang lain tetap terlihat tapi tidak bisa dipilih, lengkap dengan nama pemakainya. */}
       {open && (
-        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 p-4" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={() => setOpen(false)}>
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
             <div className="mb-1 flex items-center justify-between">
               <div className="text-sm font-bold">{user.name ? t("Google Workspace account for {name}", { name: user.name }) : t("Google Workspace account for this person")}</div>
@@ -555,7 +555,7 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
                     <span className="min-w-0 flex-1">
                       <span className={cn("block truncate text-sm font-semibold", isCurrent && "text-primary")}>{a.email}</span>
                       <span className="block truncate text-[11px] text-muted-foreground">
-                        {a.fullName || "—"}{a.suspended && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-bold text-amber-700">{t("suspended")}</span>}{taken && <span className="ml-1">{t("· used by {name}", { name: taken })}</span>}
+                        {a.fullName || "—"}{a.suspended && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-bold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">{t("suspended")}</span>}{taken && <span className="ml-1">{t("· used by {name}", { name: taken })}</span>}
                       </span>
                     </span>
                     {isCurrent && <span className="text-xs font-bold text-primary">✓</span>}
@@ -573,7 +573,7 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
       {/* Formulir buat mailbox baru. Modal sendiri: ini mengisi seat lisensi berbayar, dan formulir
           yang ditempel di dalam baris tabel terbaca seperti sesuatu yang boleh diisi asal-asalan. */}
       {making && (
-        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 p-4" onClick={() => setMaking(false)}>
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={() => setMaking(false)}>
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
             <div className="mb-1 flex items-center justify-between">
               <div className="text-sm font-bold">{user.name ? t("Create a work email for {name}", { name: user.name }) : t("Create a work email for this person")}</div>
@@ -671,7 +671,7 @@ function UserRow(props: UserRowProps) {
                 orgInfo.approverName
                   ? <div className="truncate text-[11px] text-muted-foreground">{t("Approver:")} <b className="text-foreground">{orgInfo.approverName}</b></div>
                   : (orgInfo.role === "STAFF" || orgInfo.role === "MANAGER")
-                    ? <div className="text-[11px] font-semibold text-amber-700">{t("Not placed in the Approval chart yet")}</div>
+                    ? <div className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">{t("Not placed in the Approval chart yet")}</div>
                     : <div className="text-[11px] text-muted-foreground">{t("Approver: another BoD")}</div>
               )}
               {isMember && (
@@ -691,12 +691,12 @@ function UserRow(props: UserRowProps) {
             // lencana "mati" di tiap baris membuat yang menyala berhenti terlihat.
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
               {orgInfo.flexi ? (
-                <span className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 font-semibold text-amber-700"><Zap className="h-3 w-3 fill-amber-400" /> Flexi 12:00–15:00</span>
+                <span className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 font-semibold text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300"><Zap className="h-3 w-3 fill-amber-400" /> Flexi 12:00–15:00</span>
               ) : (
                 <span className="font-semibold tabular-nums text-foreground">{shiftLabel ?? <span className="font-normal text-muted-foreground">{t("Office hours")}</span>}</span>
               )}
               {!orgInfo.flexi && overrideCount > 0 && <span className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground">{t("per day ×{n}", { n: overrideCount })}</span>}
-              {orgInfo.noGeofence && <span className="inline-flex items-center gap-1 rounded-md border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-700"><Smartphone className="h-3 w-3" /> Mobile</span>}
+              {orgInfo.noGeofence && <span className="inline-flex items-center gap-1 rounded-md border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-300"><Smartphone className="h-3 w-3" /> Mobile</span>}
               {gwConfigured && user.googleWorkspaceEmail && <span className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground" title={user.googleWorkspaceEmail}><AtSign className="h-3 w-3" /> Google</span>}
             </div>
           )}
@@ -721,12 +721,12 @@ function UserRow(props: UserRowProps) {
               </button>
             )}
             {!isMember && !deactivated && canJoin && (
-              <button type="button" onClick={onJoin} disabled={joinPending} className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-50">
+              <button type="button" onClick={onJoin} disabled={joinPending} className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/15">
                 {joinPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {t("Add to {workspace}", { workspace: workspaceName })}
               </button>
             )}
             {canDelete && !isMember && (
-              <button type="button" onClick={onDelete} title={t("Delete account permanently")} className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700 transition hover:bg-rose-100">
+              <button type="button" onClick={onDelete} title={t("Delete account permanently")} className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700 transition hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/15">
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             )}
@@ -783,20 +783,20 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
   );
 
   const ToggleRow = ({ on, pending: p, onToggle, icon, title, desc, tone }: { on: boolean; pending: boolean; onToggle: () => void; icon: React.ReactNode; title: string; desc: string; tone: "amber" | "sky" }) => (
-    <button type="button" disabled={!canManageShift || p} onClick={onToggle} className={cn("flex w-full items-start gap-3 rounded-lg border p-3 text-left transition disabled:cursor-default", on ? (tone === "amber" ? "border-amber-300 bg-amber-50" : "border-sky-300 bg-sky-50") : "border-border bg-card hover:bg-accent/40")}>
-      <span className={cn("mt-0.5 shrink-0", on ? (tone === "amber" ? "text-amber-600" : "text-sky-600") : "text-muted-foreground")}>{icon}</span>
+    <button type="button" disabled={!canManageShift || p} onClick={onToggle} className={cn("flex w-full items-start gap-3 rounded-lg border p-3 text-left transition disabled:cursor-default", on ? (tone === "amber" ? "border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10" : "border-sky-300 bg-sky-50 dark:border-sky-500/40 dark:bg-sky-500/10") : "border-border bg-card hover:bg-accent/40")}>
+      <span className={cn("mt-0.5 shrink-0", on ? (tone === "amber" ? "text-amber-600 dark:text-amber-400" : "text-sky-600 dark:text-sky-400") : "text-muted-foreground")}>{icon}</span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold">{title}</span>
         <span className="block text-[11px] text-muted-foreground">{desc}</span>
       </span>
-      <span className={cn("mt-1 h-5 w-9 shrink-0 rounded-full p-0.5 transition", on ? (tone === "amber" ? "bg-amber-500" : "bg-sky-500") : "bg-muted")}>
+      <span className={cn("mt-1 h-5 w-9 shrink-0 rounded-full p-0.5 transition", on ? (tone === "amber" ? "bg-amber-500" : "bg-sky-500") : "bg-muted dark:bg-control-border")}>
         <span className={cn("block h-4 w-4 rounded-full bg-white shadow transition", on && "translate-x-4")} />
       </span>
     </button>
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 md:p-8" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-scrim p-4 md:p-8" onClick={onClose}>
       <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {/* Kepala: siapa dia, dalam satu pandangan — peran, gabung, approver. Bukan pengaturan. */}
         <header className="flex items-start gap-4 border-b border-border px-6 py-5">
@@ -841,7 +841,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                     {orgInfo.approverName
                       ? <span className="text-sm font-semibold">{orgInfo.approverName}</span>
                       : (orgInfo.role === "STAFF" || orgInfo.role === "MANAGER")
-                        ? <span className="text-sm font-semibold text-amber-700">{t("Not placed yet, so requests still go to every BoD")}</span>
+                        ? <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">{t("Not placed yet, so requests still go to every BoD")}</span>
                         : <span className="text-sm text-muted-foreground">{t("Not placed, so requests go to the other BoD")}</span>}
                     <button type="button" onClick={() => { onClose(); onOpenApproval(); }} className="shrink-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-primary transition hover:bg-accent">{t("Open Approval chart →")}</button>
                   </div>
@@ -911,7 +911,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                           ) : tm.name}
                           {tm.division && <span className="font-normal text-muted-foreground">· {tm.division}</span>}
                           {canManageTeams && (
-                            <button type="button" disabled={teamPending} onClick={() => onTeamExit({ id: tm.id, name: tm.name }, losing)} title={t("Remove from this team")} className="rounded p-0.5 text-muted-foreground/50 transition hover:bg-rose-100 hover:text-rose-600 disabled:opacity-40">
+                            <button type="button" disabled={teamPending} onClick={() => onTeamExit({ id: tm.id, name: tm.name }, losing)} title={t("Remove from this team")} className="rounded p-0.5 text-muted-foreground/50 transition hover:bg-rose-100 hover:text-rose-600 disabled:opacity-40 dark:hover:bg-rose-500/15 dark:hover:text-rose-400">
                               <X className="h-3 w-3" />
                             </button>
                           )}
@@ -935,7 +935,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                         {pr.viaTeam && <span className="font-normal text-muted-foreground">{t("· via {team}", { team: pr.viaTeam })}</span>}
                         {pr.role !== "MEMBER" && <span className="rounded bg-primary/10 px-1 text-[10px] font-bold text-primary">{pr.role}</span>}
                         {canManageTeams && !pr.viaTeam ? (
-                          <button type="button" disabled={projectPending} onClick={() => onProjectRemove(pr.id)} title={t("Remove from this project")} className="rounded p-0.5 text-muted-foreground/50 transition hover:bg-rose-100 hover:text-rose-600 disabled:opacity-40"><X className="h-3 w-3" /></button>
+                          <button type="button" disabled={projectPending} onClick={() => onProjectRemove(pr.id)} title={t("Remove from this project")} className="rounded p-0.5 text-muted-foreground/50 transition hover:bg-rose-100 hover:text-rose-600 disabled:opacity-40 dark:hover:bg-rose-500/15 dark:hover:text-rose-400"><X className="h-3 w-3" /></button>
                         ) : <span className="w-1" />}
                       </span>
                     ))}
@@ -1028,7 +1028,7 @@ function AccountCard({ user, memberId, Card }: { user: NexusAdminUser; memberId:
           <div className="mb-1 text-[11px] font-semibold text-muted-foreground">{t("New password")} <span className="font-normal text-muted-foreground/70">{t("— at least 8 characters, visible as you type")}</span></div>
           <div className="flex gap-2">
             <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t("Type a new password…")} autoComplete="off" spellCheck={false} className={cn(inputCls, "font-mono")} />
-            <button type="button" disabled={password.length < 8 || save.isPending} onClick={() => save.mutate({ password })} className="shrink-0 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100 disabled:opacity-40">
+            <button type="button" disabled={password.length < 8 || save.isPending} onClick={() => save.mutate({ password })} className="shrink-0 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100 disabled:opacity-40 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/15">
               {t("Change password")}
             </button>
           </div>
@@ -1188,7 +1188,7 @@ function ShiftCell({ start, end, canEdit, pending, onSave }: { start: string | n
   const hasShift = !!start && !!end;
   // On blur, snap a valid entry to canonical "h:mm AM/PM".
   const snap = (raw: string, set: (v: string) => void) => { const p = parse12h(raw); if (p && p !== "invalid") set(to12h(p)); };
-  const inputCls = (bad: boolean) => cn("w-[6.75rem] rounded-md border bg-background px-2 py-1 text-xs outline-none focus:border-primary disabled:opacity-50", bad ? "border-rose-400 text-rose-600" : "border-border");
+  const inputCls = (bad: boolean) => cn("w-[6.75rem] rounded-md border bg-background px-2 py-1 text-xs outline-none focus:border-primary disabled:opacity-50", bad ? "border-rose-400 text-rose-600 dark:text-rose-400" : "border-border");
 
   return (
     <div className="flex items-center gap-1">
@@ -1207,7 +1207,7 @@ function ShiftCell({ start, end, canEdit, pending, onSave }: { start: string | n
           {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("Save")}
         </button>
       ) : hasShift ? (
-        <button type="button" disabled={pending} onClick={() => onSave(null, null)} title={t("Clear shift (back to default)")} className="ml-0.5 rounded-md border border-border px-1.5 py-1 text-[11px] font-semibold text-muted-foreground transition hover:bg-accent hover:text-rose-600">×</button>
+        <button type="button" disabled={pending} onClick={() => onSave(null, null)} title={t("Clear shift (back to default)")} className="ml-0.5 rounded-md border border-border px-1.5 py-1 text-[11px] font-semibold text-muted-foreground transition hover:bg-accent hover:text-rose-600 dark:hover:text-rose-400">×</button>
       ) : null}
     </div>
   );
@@ -1301,7 +1301,7 @@ function DayoffModal({ user, canEdit, onClose }: { user: { id: string; name: str
   const data = q.data;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-display text-base font-bold tracking-tight">{t("Day off — {name}", { name: user.name })}</h2>
@@ -1318,7 +1318,7 @@ function DayoffModal({ user, canEdit, onClose }: { user: { id: string; name: str
           <p className="text-xs text-muted-foreground">
             {t("Used this period:")} <b className="text-foreground">{data.used} / {data.quota}</b>
             {(data.bonusDays ?? 0) > 0 && <span className="ml-1">({t("{base} + {n} extra", { base: data.baseQuota ?? "", n: data.bonusDays ?? 0 })}{data.bonusGrants?.length ? `: ${data.bonusGrants.map((g) => g.reason).join(", ")}` : ""})</span>}
-            {data.used > data.quota && <span className="ml-1 font-semibold text-amber-600">{t("(over quota)")}</span>}
+            {data.used > data.quota && <span className="ml-1 font-semibold text-amber-600 dark:text-amber-400">{t("(over quota)")}</span>}
           </p>
         )}
       </div>
@@ -1416,7 +1416,7 @@ function ExtraDayOffAdmin({ members }: { members: Array<{ userId: string; name: 
               ))}
             </div>
           )}
-          {list.isError && <p className="mt-1 text-xs text-rose-600">{list.error instanceof ApiError ? list.error.message : t("Couldn't load the extra day off list.")}</p>}
+          {list.isError && <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{list.error instanceof ApiError ? list.error.message : t("Couldn't load the extra day off list.")}</p>}
         </div>
 
         <div>
@@ -1464,7 +1464,7 @@ function ExtraDayOffAdmin({ members }: { members: Array<{ userId: string; name: 
             <input value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} placeholder={t("e.g. Worked the 3-day Jakarta event")} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
           </label>
         </div>
-        {!daysValid && days !== "" && <p className="text-[11px] text-rose-600">{t("Days must be a whole number from 1 to 31.")}</p>}
+        {!daysValid && days !== "" && <p className="text-[11px] text-rose-600 dark:text-rose-400">{t("Days must be a whole number from 1 to 31.")}</p>}
 
         <div className="flex flex-wrap items-center gap-3 rounded-xl bg-muted/40 px-3 py-2">
           <span className="text-sm">
@@ -1497,7 +1497,7 @@ function ExtraDayOffAdmin({ members }: { members: Array<{ userId: string; name: 
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-x-2">
                   <span className="truncate text-sm font-semibold">{g.user?.name ?? g.user?.email ?? t("Unknown")}</span>
-                  <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">+{g.days} DO</span>
+                  <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">+{g.days} DO</span>
                 </div>
                 <div className="truncate text-xs text-muted-foreground" title={g.reason}>{g.reason}</div>
                 <div className="text-[10px] text-muted-foreground">
@@ -1509,7 +1509,7 @@ function ExtraDayOffAdmin({ members }: { members: Array<{ userId: string; name: 
               {g.active && (
                 <button type="button" disabled={revoke.isPending}
                   onClick={() => { if (window.confirm(t("Revoke {name}’s {days} ({reason})?\n\nDays already taken are not undone.", { name: g.user?.name ?? t("this person"), days: extraDays(g.days), reason: g.reason }))) revoke.mutate(g.id); }}
-                  className="shrink-0 rounded-lg border border-border px-2 py-1 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-40">
+                  className="shrink-0 rounded-lg border border-border px-2 py-1 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-40 dark:text-rose-400 dark:hover:bg-rose-500/10">
                   {t("Revoke")}
                 </button>
               )}
@@ -1589,7 +1589,7 @@ function OffboardUserModal({ user, onClose, onOpenApproval }: { user: NexusAdmin
   ];
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-black/40 p-4" onClick={() => { if (!m.isPending) onClose(); }}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-black/40 dark:bg-scrim p-4" onClick={() => { if (!m.isPending) onClose(); }}>
       <div className="my-auto w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-start justify-between gap-3">
           <h2 className="min-w-0 font-display text-base font-bold tracking-tight">{result ? t("{name} is offboarded.", { name: result.user.name }) : t("Offboard {name}", { name })}</h2>
@@ -1651,7 +1651,7 @@ function OffboardUserModal({ user, onClose, onOpenApproval }: { user: NexusAdmin
                 {happens.map((line) => <li key={line}>{line}</li>)}
               </ul>
             </div>
-            {m.isError && <p className="text-xs font-semibold text-rose-600">{offboardErrorText(m.error, t)}</p>}
+            {m.isError && <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">{offboardErrorText(m.error, t)}</p>}
             <div className="flex items-center justify-end gap-2">
               <button type="button" onClick={onClose} disabled={m.isPending} className="rounded-xl border border-border px-3 py-2 text-sm font-semibold hover:bg-accent disabled:opacity-40">{t("Cancel")}</button>
               <button type="submit" disabled={!dayValid || m.isPending} className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-rose-700 disabled:opacity-40">
@@ -1680,7 +1680,7 @@ function ReinstateUserModal({ user, onClose }: { user: NexusAdminUser; onClose: 
     },
   });
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => { if (!m.isPending) onClose(); }}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 dark:bg-scrim p-4" onClick={() => { if (!m.isPending) onClose(); }}>
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-start justify-between gap-3">
           <h2 className="min-w-0 font-display text-base font-bold tracking-tight">{t("Reinstate {name}?", { name })}</h2>
@@ -1692,7 +1692,7 @@ function ReinstateUserModal({ user, onClose }: { user: NexusAdminUser; onClose: 
             : t("They can sign in again.")}</p>
           <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">{t("Not restored: projects, teams, passkeys, devices, and anyone who had them as approver. Set those again by hand.")}</p>
         </div>
-        {m.isError && <p className="mt-2 text-xs font-semibold text-rose-600">{offboardErrorText(m.error, t)}</p>}
+        {m.isError && <p className="mt-2 text-xs font-semibold text-rose-600 dark:text-rose-400">{offboardErrorText(m.error, t)}</p>}
         <div className="mt-4 flex items-center justify-end gap-2">
           <button onClick={onClose} disabled={m.isPending} className="rounded-xl border border-border px-3 py-2 text-sm font-semibold hover:bg-accent disabled:opacity-40">{t("Cancel")}</button>
           <button onClick={() => m.mutate()} disabled={m.isPending} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40">
@@ -1720,10 +1720,10 @@ function DeleteUserModal({ user, onClose }: { user: { id: string; name: string; 
   const reassignedTotal = result ? Object.values(result.reassigned).reduce((a, b) => a + b, 0) : 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-base font-bold tracking-tight text-rose-700">{t("Delete account permanently")}</h2>
+          <h2 className="font-display text-base font-bold tracking-tight text-rose-700 dark:text-rose-300">{t("Delete account permanently")}</h2>
           <button onClick={onClose} aria-label={t("Close")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
 
@@ -1735,7 +1735,7 @@ function DeleteUserModal({ user, onClose }: { user: { id: string; name: string; 
           </div>
         ) : (
           <>
-            <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
               <p>{t("You're about to permanently delete this account:")}</p>
               <p className="mt-1 font-bold">{user.name} <span className="font-normal">· {user.email}</span></p>
               <ul className="mt-2 list-disc space-y-0.5 pl-4">
@@ -1756,7 +1756,7 @@ function DeleteUserModal({ user, onClose }: { user: { id: string; name: string; 
                     : t("This account has attendance records or requests. Use Offboard instead, so they stay.")}
                 </p>
               ) : (
-                <p className="mt-2 text-xs font-semibold text-rose-600">{(err.payload as { message?: string } | undefined)?.message ?? err.message}</p>
+                <p className="mt-2 text-xs font-semibold text-rose-600 dark:text-rose-400">{(err.payload as { message?: string } | undefined)?.message ?? err.message}</p>
               )
             )}
             <div className="mt-4 flex items-center justify-end gap-2">
@@ -1902,7 +1902,7 @@ function AdminQuests() {
             <div className="divide-y divide-border">
               {rows.map((q) => (
                 <div key={q.id} className="flex items-center gap-3 px-4 py-3 text-sm">
-                  <Trophy className="h-4 w-4 shrink-0 text-warning-foreground" />
+                  <Trophy className="h-4 w-4 shrink-0 text-warning-foreground dark:text-warning" />
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold">{q.title}</div>
                     <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
@@ -1935,7 +1935,7 @@ function Stat({ label, value, active, onClick }: { label: string; value: number;
       className={cn(
         "rounded-2xl border bg-card p-4 text-left shadow-soft transition-colors",
         onClick && "hover:border-primary/60 cursor-pointer",
-        active ? "border-primary ring-1 ring-primary" : "border-border",
+        active ? "border-primary ring-1 ring-primary dark:border-ring dark:ring-ring" : "border-border",
         !onClick && "cursor-default",
       )}
     >
@@ -2044,7 +2044,7 @@ function AnnouncementsAdmin() {
                   {attachment ? (
                     <>
                       <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-black text-white">SP</span>
-                      <a href={attachment.url} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 truncate text-sm font-semibold text-foreground hover:underline"><FileText className="h-4 w-4 shrink-0 text-rose-600" />{attachment.name}</a>
+                      <a href={attachment.url} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 truncate text-sm font-semibold text-foreground hover:underline"><FileText className="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />{attachment.name}</a>
                       <span className="text-xs text-muted-foreground">{(attachment.size / 1024 / 1024).toFixed(2)} MB</span>
                       <button onClick={() => setAttachment(null)} aria-label={t("Remove PDF")} className="ml-auto rounded p-1 text-muted-foreground hover:bg-accent"><X className="h-3.5 w-3.5" /></button>
                     </>
@@ -2114,7 +2114,7 @@ function AnnouncementsAdmin() {
                     {a.kind === "sp" && <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-black text-white">SP</span>}
                     {a.kind === "warning" && <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-black uppercase text-white">{t("Warning")}</span>}
                     <span className="text-sm font-bold">{a.title}</span>
-                    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", a.active ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground")}>{a.active ? t("Active") : t("Inactive")}</span>
+                    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", a.active ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300" : "bg-muted text-muted-foreground")}>{a.active ? t("Active") : t("Inactive")}</span>
                     {a.repeatUntil && new Date(a.repeatUntil) >= new Date(new Date().toDateString()) && (
                       <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">{t("Repeats daily {time} until {date}", { time: a.repeatAtTime ?? "", date: new Date(a.repeatUntil).toLocaleDateString(locale) })}</span>
                     )}
@@ -2132,7 +2132,7 @@ function AnnouncementsAdmin() {
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   <button onClick={() => toggle.mutate({ id: a.id, active: !a.active })} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold hover:bg-accent">{a.active ? t("Deactivate") : t("Activate")}</button>
-                  <button onClick={() => del.mutate(a.id)} aria-label={t("Delete")} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
+                  <button onClick={() => del.mutate(a.id)} aria-label={t("Delete")} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-rose-600 dark:hover:text-rose-400"><Trash2 className="h-4 w-4" /></button>
                 </div>
               </div>
             ))}

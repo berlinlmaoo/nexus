@@ -64,7 +64,7 @@ function Card({ s, onOpen }: { s: NexusMySubmission; onOpen: () => void }) {
         {s.category && <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5"><Tag className="h-3 w-3" />{s.category}</span>}
         {s.date && <span className="inline-flex items-center gap-1"><CalendarDays className="h-3 w-3" />{date(s.date)}</span>}
         {(s.commentCount ?? 0) > 0 && <span className="inline-flex items-center gap-1"><MessageSquare className="h-3 w-3" />{s.commentCount}</span>}
-        {(s.proofs?.length ?? 0) > 0 && <span className="inline-flex items-center gap-1 text-emerald-700"><Paperclip className="h-3 w-3" />{t("Proof")}</span>}
+        {(s.proofs?.length ?? 0) > 0 && <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300"><Paperclip className="h-3 w-3" />{t("Proof")}</span>}
       </div>
       <div className="mt-1.5 flex items-center justify-between gap-2">
         <span className="truncate text-[11px] text-muted-foreground">{s.projectName}</span>
@@ -127,7 +127,7 @@ function SubmissionDetail({ id, onClose }: { id: string; onClose: () => void }) 
   const label = "text-xs font-semibold text-muted-foreground";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={sub?.taskTitle || t("Submission")} className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
           <div className="min-w-0">
@@ -177,12 +177,12 @@ function SubmissionDetail({ id, onClose }: { id: string; onClose: () => void }) 
                   <h3 className={cn(label, "mb-2")}>{t("Proof of payment (Bukti Pencairan)")}</h3>
                   <div className="space-y-2">
                     {sub.proofs!.map((p) => (
-                      <div key={p.id} className="flex items-center gap-2 rounded-xl border border-emerald-300/50 bg-emerald-50/50 p-2.5 dark:bg-emerald-500/10">
+                      <div key={p.id} className="flex items-center gap-2 rounded-xl border border-emerald-300/50 bg-emerald-50/50 p-2.5 dark:bg-emerald-500/10 dark:border-emerald-500/30">
                         {p.mimeType?.startsWith("image/") && p.url
                           ? <a href={p.url} target="_blank" rel="noreferrer" className="shrink-0"><img src={p.url} alt="" className="h-10 w-10 rounded-md object-cover" /></a>
-                          : <Paperclip className="h-4 w-4 shrink-0 text-emerald-600" />}
+                          : <Paperclip className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />}
                         <span className="min-w-0 flex-1 truncate text-sm font-medium">{p.name || t("proof")}</span>
-                        {p.url && <a href={`${p.url}?download=${encodeURIComponent(p.name || "bukti")}`} download={p.name || ""} title={t("Download")} aria-label={t("Download")} className="rounded-lg p-1 text-emerald-700 transition hover:bg-emerald-100"><Download className="h-4 w-4" /></a>}
+                        {p.url && <a href={`${p.url}?download=${encodeURIComponent(p.name || "bukti")}`} download={p.name || ""} title={t("Download")} aria-label={t("Download")} className="rounded-lg p-1 text-emerald-700 transition hover:bg-emerald-100 dark:text-emerald-300 dark:hover:bg-emerald-500/15"><Download className="h-4 w-4" /></a>}
                       </div>
                     ))}
                   </div>
@@ -235,7 +235,7 @@ function SubmissionDetail({ id, onClose }: { id: string; onClose: () => void }) 
           <button
             onClick={() => { if (window.confirm(t("Delete this submission? Its task in the project is deleted too."))) del.mutate(); }}
             disabled={del.isPending}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50 dark:hover:bg-rose-500/10"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50 dark:hover:bg-rose-500/10 dark:text-rose-400"
           >
             {del.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} {t("Delete")}
           </button>

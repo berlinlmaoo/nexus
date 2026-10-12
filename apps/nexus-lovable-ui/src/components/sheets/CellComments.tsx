@@ -109,7 +109,7 @@ export function CellCommentThread({
                     <div className="flex items-center gap-1.5">
                       <span className="truncate text-[11px] font-bold">{c.author.name ?? "—"}</span>
                       <span className="shrink-0 text-[10px] text-muted-foreground">{when(c.createdAt)}</span>
-                      {c.resolvedAt && <span className="rounded-full bg-emerald-100 px-1.5 text-[9px] font-bold text-emerald-700">{t("resolved")}</span>}
+                      {c.resolvedAt && <span className="rounded-full bg-emerald-100 px-1.5 text-[9px] font-bold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">{t("resolved")}</span>}
                     </div>
                     <p className="whitespace-pre-wrap break-words text-xs">{c.body}</p>
                   </div>
@@ -118,12 +118,12 @@ export function CellCommentThread({
                       <button
                         onClick={() => onResolve(c.id, !c.resolvedAt)}
                         title={c.resolvedAt ? t("Reopen") : t("Mark resolved")}
-                        className="rounded p-0.5 text-muted-foreground hover:text-emerald-600"
+                        className="rounded p-0.5 text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400"
                       ><Check className="h-3 w-3" /></button>
                       {/* Delete is the author's (the server also lets a lead clean up). */}
                       {c.authorId === meId && (
                         <button onClick={() => onDelete(c.id)} title={t("Delete")}
-                          className="rounded p-0.5 text-muted-foreground hover:text-rose-600"><Trash2 className="h-3 w-3" /></button>
+                          className="rounded p-0.5 text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"><Trash2 className="h-3 w-3" /></button>
                       )}
                     </div>
                   )}

@@ -86,7 +86,7 @@ export function OnboardingWizard() {
   const back = () => setStep((s) => Math.max(0, s - 1));
 
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] grid place-items-center bg-black/60 dark:bg-scrim p-4 backdrop-blur-sm">
       <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-pop">
         {/* progress */}
         <div className="flex items-center gap-1.5 border-b border-border px-6 py-3">
@@ -121,7 +121,7 @@ export function OnboardingWizard() {
                 <p className="mt-1 text-sm text-muted-foreground">{t("Use your full name, not a nickname, so your team can find you.")}</p>
               </div>
               <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={me.name || t("Full name…")} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-base font-semibold outline-none focus:border-primary" />
-              {!nameValid && name.length > 0 && <p className="text-xs font-semibold text-amber-600">{t("Enter your full name (at least 2 words).")}</p>}
+              {!nameValid && name.length > 0 && <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">{t("Enter your full name (at least 2 words).")}</p>}
               {saveName.isError && <p className="text-xs font-semibold text-destructive">{t("Couldn't save your name.")}</p>}
             </div>
           )}

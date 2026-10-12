@@ -106,7 +106,7 @@ export function Composer({ me, members, onPost, autoFocus }: { me?: MentionUser;
                     className={cn(over ? "stroke-rose-500" : remaining <= 20 ? "stroke-amber-500" : "stroke-primary")}
                     strokeDasharray={C} strokeDashoffset={C * (1 - pct)} />
                 </svg>
-                {remaining <= 20 && <span className={cn("absolute text-[10px] font-bold tabular-nums", over ? "text-rose-500" : "text-amber-600")}>{remaining}</span>}
+                {remaining <= 20 && <span className={cn("absolute text-[10px] font-bold tabular-nums", over ? "text-rose-500" : "text-amber-600 dark:text-amber-400")}>{remaining}</span>}
               </motion.div>
             )}
           </AnimatePresence>

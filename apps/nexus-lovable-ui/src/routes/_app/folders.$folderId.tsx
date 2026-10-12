@@ -466,7 +466,7 @@ function ProjectPicker({ folderId, allProjects, selected, usingAll, onClose }: {
   const toggle = (id: string) => setPicked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 dark:bg-scrim p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-[28px] border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
           <h3 className="text-lg font-bold">{t("Pick projects")}</h3>

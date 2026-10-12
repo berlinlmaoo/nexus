@@ -254,7 +254,7 @@ function ShareBody({ item }: { item: VaultItem }) {
                       aria-label={t("Copy")}
                       onClick={() => { void copy(s); }}
                     >
-                      {copiedId === s.id ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                      {copiedId === s.id ? <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
                     </button>
                   )}
                   {s.status === "active" && s.canRevoke !== false && (

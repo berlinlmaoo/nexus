@@ -522,7 +522,7 @@ function RunLog({ automationId }: { automationId: string }) {
                   const def = ACTIONS.find((a) => a.type === s.type);
                   return (
                     <div key={i} className="flex items-start gap-2 text-xs">
-                      {s.ok ? (s.skipped ? <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border border-muted-foreground/50" /> : <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />) : <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />}
+                      {s.ok ? (s.skipped ? <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border border-muted-foreground/50" /> : <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />) : <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />}
                       <span><span className="font-semibold">{def ? t(def.label) : s.type}</span> · <span className={cn(!s.ok && "text-destructive")}>{s.message}</span></span>
                     </div>
                   );
@@ -615,7 +615,7 @@ export function AutomationBuilder({ automation, ctx, canEdit, onClose, initialTa
   const dirty = !automation || JSON.stringify(payload()) !== JSON.stringify({ name: automation.name, trigger: automation.trigger, actions: initialActions(automation), conditions: automation.conditions ?? null });
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-labelledby="automation-builder-title" className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         <header className="border-b border-border px-6 pb-3 pt-5">
           <div className="flex items-start gap-3">

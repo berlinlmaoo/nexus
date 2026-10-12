@@ -141,7 +141,7 @@ export const projectById = (id: string) =>
 export const statusMeta: Record<Status, { label: string; color: string; dot: string }> = {
   todo: { label: "To do", color: "bg-muted text-muted-foreground", dot: "bg-muted-foreground/60" },
   in_progress: { label: "In progress", color: "bg-info/15 text-info", dot: "bg-info" },
-  review: { label: "In review", color: "bg-warning/20 text-warning-foreground", dot: "bg-warning" },
+  review: { label: "In review", color: "bg-warning/20 text-warning-foreground dark:text-warning", dot: "bg-warning" },
   done: { label: "Done", color: "bg-success/15 text-success", dot: "bg-success" },
   blocked: { label: "Blocked", color: "bg-destructive/15 text-destructive", dot: "bg-destructive" },
 };
@@ -149,6 +149,6 @@ export const statusMeta: Record<Status, { label: string; color: string; dot: str
 export const priorityMeta: Record<Priority, { label: string; color: string }> = {
   low: { label: "Low", color: "text-muted-foreground" },
   medium: { label: "Medium", color: "text-info" },
-  high: { label: "High", color: "text-warning-foreground" },
+  high: { label: "High", color: "text-warning-foreground dark:text-warning" },
   urgent: { label: "Urgent", color: "text-destructive" },
 };

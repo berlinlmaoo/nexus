@@ -43,16 +43,16 @@ const catOf = (k: string) => CATEGORIES.find((c) => c.key === k);
 // there would quietly empty the inbox into a tab implying somebody was already handling it. So it
 // gets its own colour, and the Inbox tab below asks for it alongside OPEN.
 const STATUS: Record<string, { label: string; cls: string }> = {
-  OPEN: { label: "Open", cls: "bg-amber-100 text-amber-700 ring-amber-200" },
-  AWAITING_DECISION: { label: "Awaiting decision", cls: "bg-violet-100 text-violet-700 ring-violet-200" },
-  IN_REVIEW: { label: "In review", cls: "bg-sky-100 text-sky-700 ring-sky-200" },
-  RESOLVED: { label: "Resolved", cls: "bg-emerald-100 text-emerald-700 ring-emerald-200" },
-  CLOSED: { label: "Closed", cls: "bg-slate-100 text-slate-500 ring-slate-200" },
+  OPEN: { label: "Open", cls: "bg-amber-100 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30" },
+  AWAITING_DECISION: { label: "Awaiting decision", cls: "bg-violet-100 text-violet-700 ring-violet-200 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-500/30" },
+  IN_REVIEW: { label: "In review", cls: "bg-sky-100 text-sky-700 ring-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:ring-sky-500/30" },
+  RESOLVED: { label: "Resolved", cls: "bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30" },
+  CLOSED: { label: "Closed", cls: "bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-500/15 dark:text-slate-400 dark:ring-slate-500/30" },
 };
 // A status this build has never heard of gets a neutral chip and its own name Title-Cased, rather
 // than an undefined lookup that takes the whole list down with it. The server enum grows; a deployed
 // bundle does not.
-const statusOf = (key: string) => STATUS[key] ?? { label: statusLabel(key), cls: "bg-slate-100 text-slate-500 ring-slate-200" };
+const statusOf = (key: string) => STATUS[key] ?? { label: statusLabel(key), cls: "bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-500/15 dark:text-slate-400 dark:ring-slate-500/30" };
 // The BoD inbox = every ticket nobody has claimed. Mirror of COMPLAINT_INBOX_STATUSES in
 // src/lib/complaints.ts. Asked for by name rather than leaning on the server widening a bare "OPEN"
 // (that widening exists for older clients): a ticket GIDEON answered is still unclaimed work.
@@ -65,9 +65,9 @@ const fmtWhen = (iso: string) => new Date(iso).toLocaleDateString(localeOf(), { 
 // Day of a correction ("YYYY-MM-DD"), in the interface language.
 const fmtDay = (d: string) => { const x = new Date(d); return Number.isNaN(x.getTime()) ? d : x.toLocaleDateString(localeOf(), { day: "numeric", month: "short" }); };
 const CORRECTION_STATUS: Record<string, { label: string; cls: string }> = {
-  PENDING: { label: "Awaiting decision", cls: "bg-amber-100 text-amber-700 ring-amber-200" },
-  APPROVED: { label: "Approved", cls: "bg-emerald-100 text-emerald-700 ring-emerald-200" },
-  REJECTED: { label: "Rejected", cls: "bg-rose-100 text-rose-700 ring-rose-200" },
+  PENDING: { label: "Awaiting decision", cls: "bg-amber-100 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30" },
+  APPROVED: { label: "Approved", cls: "bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30" },
+  REJECTED: { label: "Rejected", cls: "bg-rose-100 text-rose-700 ring-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-500/30" },
 };
 // Keep in sync with EVIDENCE_MAX_COUNT in src/app/api/complaints/route.ts — the server rejects past this.
 const MAX_PHOTOS = 5;
@@ -128,8 +128,8 @@ function ComplaintsPage() {
               {tab === tk && <motion.span layoutId="complaint-tab" className="absolute inset-0 rounded-lg bg-primary" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
               <span className={cn("relative flex items-center gap-1.5", tab === tk ? "text-primary-foreground" : "text-muted-foreground")}>
                 {t(label)}
-                {tk === "open" && (counts.OPEN ?? 0) > 0 && <span className={cn("rounded-full px-1.5 text-[10px] font-black tabular-nums", tab === tk ? "bg-primary-foreground/20" : "bg-amber-100 text-amber-700")}>{counts.OPEN}</span>}
-                {tk === "review" && ((counts.IN_REVIEW ?? 0) + (counts.AWAITING_DECISION ?? 0)) > 0 && <span className={cn("rounded-full px-1.5 text-[10px] font-black tabular-nums", tab === tk ? "bg-primary-foreground/20" : "bg-violet-100 text-violet-700")}>{(counts.IN_REVIEW ?? 0) + (counts.AWAITING_DECISION ?? 0)}</span>}
+                {tk === "open" && (counts.OPEN ?? 0) > 0 && <span className={cn("rounded-full px-1.5 text-[10px] font-black tabular-nums", tab === tk ? "bg-primary-foreground/20" : "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300")}>{counts.OPEN}</span>}
+                {tk === "review" && ((counts.IN_REVIEW ?? 0) + (counts.AWAITING_DECISION ?? 0)) > 0 && <span className={cn("rounded-full px-1.5 text-[10px] font-black tabular-nums", tab === tk ? "bg-primary-foreground/20" : "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300")}>{(counts.IN_REVIEW ?? 0) + (counts.AWAITING_DECISION ?? 0)}</span>}
               </span>
             </button>
           ))}
@@ -181,7 +181,7 @@ function ComplaintCard({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: 
       {(c.pendingCorrection || c.gideonReplied) && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           {c.pendingCorrection && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-700 ring-1 ring-violet-200">
+            <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-700 ring-1 ring-violet-200 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-500/30">
               <CalendarClock className="h-3 w-3" /> {t("Decision waiting")}
             </span>
           )}
@@ -201,7 +201,7 @@ function ComplaintCard({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: 
 
 function Backdrop({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
-    <motion.div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+    <motion.div className="fixed inset-0 z-50 grid place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.div initial={{ opacity: 0, scale: 0.96, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }} transition={{ duration: 0.18, ease: "easeOut" }}
         className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         {children}
@@ -303,13 +303,13 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
               OS shows its normal chooser (Photo Library / Take Photo / Files), so both still work.
               The attendance selfie inputs keep `capture="user"` — there a live shot is the point. */}
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => addFiles(e.target.files)} />
-          {fileNote && <p className="text-[11px] font-semibold text-amber-600">{fileNote}</p>}
+          {fileNote && <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">{fileNote}</p>}
         </div>
 
-        <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-800">
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
           {t("Only the BoD can read this ticket. It won't show up in the feed or to other staff. The BoD replies right here.")}
         </div>
-        {create.isError && <p className="text-sm font-semibold text-rose-600">{(create.error as Error)?.message || t("Couldn't send. Check your connection.")}</p>}
+        {create.isError && <p className="text-sm font-semibold text-rose-600 dark:text-rose-400">{(create.error as Error)?.message || t("Couldn't send. Check your connection.")}</p>}
       </div>
       <div className="flex justify-end gap-2 border-t border-border px-5 py-4">
         <button onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-accent">{t("Cancel")}</button>
@@ -445,8 +445,8 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
       {/* BoD status controls */}
       {c?.canManage && (
         <div className="flex flex-wrap gap-1.5 border-t border-border px-4 py-2">
-          {c.status !== "IN_REVIEW" && c.status !== "CLOSED" && c.status !== "RESOLVED" && <button onClick={() => setStatus.mutate("IN_REVIEW")} disabled={busy} className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700 transition hover:bg-sky-100 disabled:opacity-50">{t("Take it on")}</button>}
-          {c.status !== "RESOLVED" && c.status !== "CLOSED" && <button onClick={() => setStatus.mutate("RESOLVED")} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"><CheckCircle2 className="h-3.5 w-3.5" /> {t("Mark resolved")}</button>}
+          {c.status !== "IN_REVIEW" && c.status !== "CLOSED" && c.status !== "RESOLVED" && <button onClick={() => setStatus.mutate("IN_REVIEW")} disabled={busy} className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700 transition hover:bg-sky-100 disabled:opacity-50 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300 dark:hover:bg-sky-500/15">{t("Take it on")}</button>}
+          {c.status !== "RESOLVED" && c.status !== "CLOSED" && <button onClick={() => setStatus.mutate("RESOLVED")} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/15"><CheckCircle2 className="h-3.5 w-3.5" /> {t("Mark resolved")}</button>}
           {c.status !== "CLOSED" && <button onClick={() => setStatus.mutate("CLOSED")} disabled={busy} className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold text-muted-foreground transition hover:bg-accent disabled:opacity-50">{t("Close")}</button>}
           {c.status === "CLOSED" && <button onClick={() => setStatus.mutate("IN_REVIEW")} disabled={busy} className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold text-muted-foreground transition hover:bg-accent disabled:opacity-50">{t("Reopen")}</button>}
         </div>
@@ -596,7 +596,7 @@ function ProposeRemedyForm({ complaintId, defaultDate, onProposed }: { complaint
       </label>
 
       {error && (
-        <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-rose-50 px-2 py-1.5 text-[11px] font-semibold leading-snug text-rose-700">
+        <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-rose-50 px-2 py-1.5 text-[11px] font-semibold leading-snug text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" /> {error}
         </div>
       )}
@@ -676,7 +676,7 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
       {/* Koreksi jam juga membalikkan potongan hari itu saat di-approve. Disebut di sini, karena
           kartu yang cuma bilang "ubah jam" membuat BoD mengira jatah day off-nya tidak ikut. */}
       {!isCancellation && pending && (penaltyXp < 0 || dayOffs > 0) && (
-        <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+        <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
           {t("If approved, that day's deduction comes back too:")} {penaltyXp < 0 ? <b>{penaltyXp} XP</b> : null}{penaltyXp < 0 && dayOffs > 0 ? ` ${t("and")} ` : ""}{dayOffs > 0 ? <b>{tn(dayOffs, "{n} day off", "{n} days off")}</b> : null}.
         </div>
       )}
@@ -684,12 +684,12 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
         <div className="mt-2.5 rounded-xl border border-border bg-muted/30 p-2.5">
           <div className="flex items-baseline gap-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("XP deducted that day")}</span>
-            <span className="ml-auto text-lg font-black tabular-nums text-rose-600">{penaltyXp === 0 ? "—" : penaltyXp}</span>
+            <span className="ml-auto text-lg font-black tabular-nums text-rose-600 dark:text-rose-400">{penaltyXp === 0 ? "—" : penaltyXp}</span>
           </div>
           {dayOffs > 0 && (
             <div className="mt-1 flex items-baseline gap-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("Days off deducted")}</span>
-              <span className="ml-auto text-lg font-black tabular-nums text-rose-600">-{dayOffs}</span>
+              <span className="ml-auto text-lg font-black tabular-nums text-rose-600 dark:text-rose-400">-{dayOffs}</span>
             </div>
           )}
           <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
@@ -720,7 +720,7 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
                 <span className="text-[11px] font-semibold text-muted-foreground">{r.label}</span>
                 <span className={cn("text-sm tabular-nums", changed ? "text-muted-foreground line-through" : "font-semibold")}>{r.before ? fmtTime(r.before) : "—"}</span>
                 <ArrowRight className={cn("h-3.5 w-3.5", changed ? "text-primary" : "text-transparent")} />
-                <span className={cn("text-sm", changed ? "font-black tabular-nums text-emerald-600" : "italic text-muted-foreground/70")}>{changed ? fmtTime(r.after) : t("unchanged")}</span>
+                <span className={cn("text-sm", changed ? "font-black tabular-nums text-emerald-600 dark:text-emerald-400" : "italic text-muted-foreground/70")}>{changed ? fmtTime(r.after) : t("unchanged")}</span>
               </Fragment>
             );
           })}
@@ -740,7 +740,7 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
       </div>
 
       {!pending && (
-        <div className={cn("mt-2.5 rounded-xl border px-3 py-2 text-xs leading-snug", approved ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-border bg-muted/40 text-muted-foreground")}>
+        <div className={cn("mt-2.5 rounded-xl border px-3 py-2 text-xs leading-snug", approved ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300" : "border-border bg-muted/40 text-muted-foreground")}>
           <p className="font-bold">
             {correction.decidedBy
               ? t(approved ? "Approved by {name}" : "Rejected by {name}", { name: correction.decidedBy.name })
@@ -802,7 +802,7 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
       {/* Rendered outside the pending branch: a 409 refetches this card, and if it turns out somebody
           else already decided it, the approver still needs to read why their tap did nothing. */}
       {err && (
-        <div className={cn("mt-2 rounded-xl border px-3 py-2 text-xs leading-snug", stale ? "border-amber-300 bg-amber-50 text-amber-900" : "border-rose-200 bg-rose-50 text-rose-700")}>
+        <div className={cn("mt-2 rounded-xl border px-3 py-2 text-xs leading-snug", stale ? "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200" : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300")}>
           {stale ? (
             <>
               <p className="flex items-center gap-1.5 font-bold"><AlertTriangle className="h-3.5 w-3.5 shrink-0" /> {t("Out of date. Nothing was changed.")}</p>

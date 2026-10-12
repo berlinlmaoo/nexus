@@ -111,7 +111,7 @@ export function AddProjectMembersDialog({
 
   return createPortal(
     <div className="fixed inset-0 z-[60] grid place-items-end p-0 sm:place-items-center sm:p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-foreground/30 backdrop-blur-sm" aria-hidden="true" />
+      <div className="absolute inset-0 bg-foreground/30 dark:bg-scrim backdrop-blur-sm" aria-hidden="true" />
       <div
         role="dialog"
         aria-modal="true"

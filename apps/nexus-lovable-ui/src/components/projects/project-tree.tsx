@@ -47,7 +47,21 @@ export function FolderGlyph({ folder, open, size = 16, className }: { folder: Pi
     );
   }
   const Icon = open ? FolderOpen : Folder;
-  return <Icon aria-hidden className={cn("shrink-0", className)} style={{ width: size, height: size, color: folder.color || undefined }} strokeWidth={2} />;
+  // A near-black folder colour (the picker offers #111827) would vanish on the dark theme's surfaces:
+  // there it draws in the text colour instead. The stored colour is left as it is.
+  return <Icon aria-hidden className={cn("shrink-0", isNearBlack(folder.color) && "dark:text-foreground!", className)} style={{ width: size, height: size, color: folder.color || undefined }} strokeWidth={2} />;
+}
+
+/** True for a #rgb / #rrggbb colour too dark to read on the dark theme's surfaces (luminance under 4%). */
+function isNearBlack(color?: string | null): boolean {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color?.trim() ?? "");
+  if (!m) return false;
+  const hex = m[1].length === 3 ? m[1].replace(/./g, (c) => c + c) : m[1];
+  const lin = (i: number) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * lin(0) + 0.7152 * lin(2) + 0.0722 * lin(4) < 0.04;
 }
 
 /**
@@ -418,7 +432,7 @@ export function FolderFormModal({ form, saving, canSave, onChange, onCancel, onS
   const photoPreview = pickedPreview ?? uploadedUrl;
   const title = form.mode === "create" ? (form.parentName ? t("New subfolder") : t("New folder")) : t("Edit folder");
   return (
-    <div className="fixed inset-0 z-[60] grid place-items-center bg-black/35 px-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
+    <div className="fixed inset-0 z-[60] grid place-items-center bg-black/35 dark:bg-scrim px-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
       <div className="w-full max-w-sm rounded-[28px] border border-border bg-card p-5 shadow-pop">
         <h2 className="text-lg font-black tracking-tight">{title}</h2>
         <p className="mt-1 text-xs text-muted-foreground">

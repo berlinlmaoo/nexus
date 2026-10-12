@@ -1069,7 +1069,7 @@ function TaskCard({ task, currentProjectId, keys, cfg, defs, ctx, onOpen, onDrag
             aria-label={done ? t("Mark as not done") : t("Mark as done")}
             title={done ? t("Mark as not done") : t("Mark as done")}
           >
-            {toggleDone.isPending || moving ? <Loader2 className="h-4 w-4 animate-spin" /> : done ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <Circle className="h-4 w-4 opacity-60" />}
+            {toggleDone.isPending || moving ? <Loader2 className="h-4 w-4 animate-spin" /> : done ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : <Circle className="h-4 w-4 opacity-60" />}
           </button>
           <span className={cn("min-w-0 flex-1 text-sm font-medium leading-snug", cfg.cardSize === "small" && "text-[13px]", done && "text-muted-foreground line-through")}>{task.title}</span>
           <QuestChip task={task} />
@@ -1163,7 +1163,7 @@ function ListRow({ task, keys, cfg, defs, ctx, onOpen, morph }: { task: NexusTas
       {...cardProps}
       className={cn("group flex min-h-9 w-full items-center gap-2.5 border-b border-border/70 px-2 py-1.5 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--accent-foreground)]/40", selected && "bg-accent", task.parentId && "pl-7")}
     >
-      {done ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground/60" />}
+      {done ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground/60" />}
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
         {task.parentId && <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label={t("Subtask")} />}
         <span className={cn("truncate text-sm", done && "text-muted-foreground line-through")}>{task.title}</span>

@@ -297,14 +297,14 @@ export function ApprovalChart() {
         </section>
 
         {/* 3 · Sendirian — zona jatuh untuk MELEPAS */}
-        <section {...dropProps(null)} className={cn("rounded-b-2xl px-5 py-4 transition", overId === "__none__" ? "bg-rose-50" : "bg-muted/20")}>
+        <section {...dropProps(null)} className={cn("rounded-b-2xl px-5 py-4 transition", overId === "__none__" ? "bg-rose-50 dark:bg-rose-500/10" : "bg-muted/20")}>
           <div className="flex items-baseline justify-between gap-3">
             <Eyebrow>{t("Not placed yet")} <span className="normal-case tracking-normal text-muted-foreground/70">· {tn(alone.length, "{n} person", "{n} people")} · {t("their requests go to every BoD")}</span></Eyebrow>
-            {dragged && <span className="text-[11px] font-semibold text-rose-700">{t("Drop here to remove from the chart")}</span>}
+            {dragged && <span className="text-[11px] font-semibold text-rose-700 dark:text-rose-300">{t("Drop here to remove from the chart")}</span>}
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
             {alone.map((p) => <PersonCard key={p.userId} {...cardProps(p)} compact />)}
-            {alone.length === 0 && <span className="text-xs text-emerald-700">{t("Empty. Everyone is in a tree.")}</span>}
+            {alone.length === 0 && <span className="text-xs text-emerald-700 dark:text-emerald-300">{t("Empty. Everyone is in a tree.")}</span>}
           </div>
         </section>
       </div>
@@ -383,7 +383,7 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 }
 function Stat({ n, of, label, tone }: { n: number; of?: number; label: string; tone?: "warn" | "ok" }) {
   return (
-    <span className={cn("inline-flex items-baseline gap-1", tone === "warn" && "text-amber-700", tone === "ok" && "text-emerald-700")}>
+    <span className={cn("inline-flex items-baseline gap-1", tone === "warn" && "text-amber-700 dark:text-amber-300", tone === "ok" && "text-emerald-700 dark:text-emerald-300")}>
       <b className="text-sm tabular-nums">{n}</b>{of !== undefined && <span className="text-muted-foreground">/ {of}</span>}<span className={cn(!tone && "text-muted-foreground")}>{label}</span>
     </span>
   );
@@ -436,15 +436,15 @@ function PersonCard({ p, busy, dragging, over, droppable, reports, rootless, com
               menggantikan jamnya (jam tetap diabaikan saat Flexi menyala); Mobile cuma lencana. */}
           <span className={cn("mt-0.5 flex items-center gap-1 text-[9.5px] leading-tight tabular-nums", filled ? "opacity-80" : "text-muted-foreground")}>
             {p.flexi
-              ? <span className={cn("inline-flex items-center gap-0.5 rounded px-1 font-semibold", filled ? "bg-amber-300/25 text-amber-100" : "bg-amber-50 text-amber-700")}><Zap className="h-2.5 w-2.5" /> Flexi</span>
+              ? <span className={cn("inline-flex items-center gap-0.5 rounded px-1 font-semibold", filled ? "bg-amber-300/25 text-amber-100" : "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300")}><Zap className="h-2.5 w-2.5" /> Flexi</span>
               : <span>{p.shiftStart && p.shiftEnd ? `${to12(p.shiftStart, locale)}–${to12(p.shiftEnd, locale)}` : t("Office hours")}</span>}
-            {p.mobile && <span className={cn("inline-flex items-center gap-0.5 rounded px-1 font-semibold", filled ? "bg-sky-300/25 text-sky-100" : "bg-sky-50 text-sky-700")}><Smartphone className="h-2.5 w-2.5" /> Mobile</span>}
+            {p.mobile && <span className={cn("inline-flex items-center gap-0.5 rounded px-1 font-semibold", filled ? "bg-sky-300/25 text-sky-100" : "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300")}><Smartphone className="h-2.5 w-2.5" /> Mobile</span>}
           </span>
         </span>
       </button>
       {/* Akar yang bukan BoD: pohonnya sah, tapi puncaknya sendiri masih jatuh ke kelompok BoD. */}
       {rootless && !compact && (
-        <span className="absolute -top-2 right-2 whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-1.5 text-[9.5px] font-bold text-amber-800">{t("no approver")}</span>
+        <span className="absolute -top-2 right-2 whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-1.5 text-[9.5px] font-bold text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">{t("no approver")}</span>
       )}
     </div>
   );
@@ -460,7 +460,7 @@ function ApproverPicker({ person, candidates, reportsOf, currentApproverId, onPi
     .map((r) => [r, rows.filter((m) => m.role === r)] as [string, ApprovalChartPerson[]])
     .filter(([, list]) => list.length > 0);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
       <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
           <div className="text-sm font-bold">{t("Approver for {name}", { name: label(person) })}</div>
@@ -487,7 +487,7 @@ function ApproverPicker({ person, candidates, reportsOf, currentApproverId, onPi
           {rows.length === 0 && <div className="px-2 py-3 text-center text-xs text-muted-foreground">{t("Nothing matches.")}</div>}
         </div>
         {currentApproverId && (
-          <button type="button" onClick={() => onPick(null)} className="mt-2 w-full rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100">
+          <button type="button" onClick={() => onPick(null)} className="mt-2 w-full rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/15">
             {t("Remove from the chart. Their requests go to every BoD.")}
           </button>
         )}

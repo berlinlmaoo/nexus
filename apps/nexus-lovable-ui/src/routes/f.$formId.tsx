@@ -137,7 +137,7 @@ function PublicForm() {
           <div className="rounded-3xl border border-border bg-card p-8 text-center shadow-soft">
             {scheduleMsg ? (
               <>
-                <Clock className="mx-auto mb-4 h-10 w-10 text-warning-foreground" />
+                <Clock className="mx-auto mb-4 h-10 w-10 text-warning-foreground dark:text-warning" />
                 <div className="text-lg font-bold">{t("Form not open yet")}</div>
                 <p className="mt-2 text-sm text-muted-foreground">{scheduleMsg}</p>
               </>

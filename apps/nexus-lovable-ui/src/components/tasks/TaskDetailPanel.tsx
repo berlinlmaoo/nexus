@@ -459,7 +459,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   return createPortal(
     <div className="fixed inset-0 z-50 grid place-items-center p-0 sm:p-4">
       <motion.div
-        className="absolute inset-0 bg-foreground/30 backdrop-blur-sm"
+        className="absolute inset-0 bg-foreground/30 dark:bg-scrim backdrop-blur-sm"
         style={{ opacity: backdropO }}
         onClick={requestClose}
       />
@@ -723,7 +723,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                   {issuedNumber ? tr("Generate again (new number)") : tr("Generate document")}
                 </button>
                 {genDoc.isError && (
-                  <p className="mt-2 text-xs font-semibold text-rose-600">{(genDoc.error as Error)?.message}</p>
+                  <p className="mt-2 text-xs font-semibold text-rose-600 dark:text-rose-400">{(genDoc.error as Error)?.message}</p>
                 )}
                 {genDoc.isSuccess && genDoc.data?.webViewLink && (
                   <a href={genDoc.data.webViewLink} target="_blank" rel="noreferrer"
@@ -878,7 +878,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 ))}
                 {(attachments.data ?? []).filter((a) => a.kind !== "PROOF").length === 0 && <p className="text-xs text-muted-foreground">{tr("No attachments.")}</p>}
                 {sizeWarn && (
-                  <div className="flex items-start gap-2 rounded-xl border border-rose-300/60 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+                  <div className="flex items-start gap-2 rounded-xl border border-rose-300/60 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
                     <X className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {sizeWarn}
                   </div>
                 )}
@@ -891,7 +891,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               icon={Paperclip}
               label={tr("Payout proof")}
               action={
-                <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-dashed border-emerald-400/60 px-2.5 py-1 text-xs font-semibold text-emerald-600 transition-colors hover:border-emerald-500 hover:text-emerald-700">
+                <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-dashed border-emerald-400/60 px-2.5 py-1 text-xs font-semibold text-emerald-600 transition-colors hover:border-emerald-500 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300">
                   {uploadProofMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {tr("Upload proof")}
                   <input type="file" className="hidden" disabled={uploadProofMut.isPending} onChange={(e) => {
                     const f = e.target.files?.[0]; e.target.value = "";
@@ -907,17 +907,17 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                   <div className="rounded-xl border border-border bg-background px-3 py-2">
                     <div className="mb-1 flex items-center justify-between text-xs">
                       <span className="font-semibold text-muted-foreground">{tr("Uploading proof…")}</span>
-                      <span className="font-bold tabular-nums text-emerald-600">{proofPct}%</span>
+                      <span className="font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{proofPct}%</span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-emerald-500 transition-all duration-150" style={{ width: `${proofPct}%` }} /></div>
                   </div>
                 )}
                 {(attachments.data ?? []).filter((a) => a.kind === "PROOF").map((att) => (
-                  <div key={att.id} className="flex items-center gap-2 rounded-xl border border-emerald-300/40 bg-emerald-50/40 px-3 py-2">
+                  <div key={att.id} className="flex items-center gap-2 rounded-xl border border-emerald-300/40 bg-emerald-50/40 px-3 py-2 dark:border-emerald-500/30 dark:bg-emerald-500/10">
                     {mediaKind(att) === "image" && att.url ? (
                       <button onClick={() => setPreviewAtt(att)} className="shrink-0"><img src={att.url} alt="" className="h-9 w-9 rounded-md object-cover" /></button>
                     ) : (
-                      <Paperclip className="h-4 w-4 shrink-0 text-emerald-600" />
+                      <Paperclip className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                     )}
                     <button onClick={() => setPreviewAtt(att)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-primary hover:underline">{att.name || tr("(unnamed)")}</button>
                     {att.size != null && <span className="shrink-0 text-xs text-muted-foreground">{Math.round(att.size / 1024)} KB</span>}
@@ -935,7 +935,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
 
             {previewAtt && createPortal(
               <div className="fixed inset-0 z-[90] grid place-items-center p-4" onClick={() => setPreviewAtt(null)}>
-                <div className="absolute inset-0 bg-foreground/60 backdrop-blur-sm" />
+                <div className="absolute inset-0 bg-foreground/60 dark:bg-scrim backdrop-blur-sm" />
                 <div className="relative z-10 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
                     <div className="min-w-0">
@@ -1094,7 +1094,7 @@ function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; ti
     onError: (e) => toast.error(e instanceof Error ? e.message : tr("Couldn't create the goal")),
   });
   return createPortal(
-    <div className="fixed inset-0 z-[90] grid place-items-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[90] grid place-items-center bg-black/50 dark:bg-scrim p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">{tr("Make it a goal")}</h3></div>
         <label className="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Goal title")}</label>

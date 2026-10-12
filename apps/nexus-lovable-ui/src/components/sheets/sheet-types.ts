@@ -71,10 +71,10 @@ export const RULE_OP_LABEL: Record<NexusSheetRule["op"], string> = {
 
 /** Tailwind classes per style. Kept here so the rule editor and the cell agree on the swatches. */
 export const RULE_STYLE_CLASS: Record<NexusSheetRule["style"], string> = {
-  red: "bg-rose-100 text-rose-800",
-  amber: "bg-amber-100 text-amber-800",
-  green: "bg-emerald-100 text-emerald-800",
-  blue: "bg-sky-100 text-sky-800",
+  red: "bg-rose-100 text-rose-800 dark:bg-rose-500/15 dark:text-rose-300",
+  amber: "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
+  green: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
+  blue: "bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300",
   grey: "bg-muted text-muted-foreground",
   bold: "font-black",
 };

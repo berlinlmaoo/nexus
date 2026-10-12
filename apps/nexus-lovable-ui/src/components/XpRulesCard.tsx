@@ -24,7 +24,7 @@ function Row({ xp, rule, note, auto, tone }: { xp: string; rule: string; note: s
   const { t: tr } = useLang();
   return (
     <div className="flex items-start gap-3 py-1.5">
-      <span className={cn("w-24 shrink-0 text-sm font-black tabular-nums", tone === "red" ? "text-rose-600" : "text-emerald-600")}>{xp}</span>
+      <span className={cn("w-24 shrink-0 text-sm font-black tabular-nums", tone === "red" ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400")}>{xp}</span>
       <div className="min-w-0 flex-1">
         <div className="text-sm font-semibold text-foreground">{tr(rule)}</div>
         <div className="text-[11px] text-muted-foreground">{tr(note)}</div>
@@ -62,11 +62,11 @@ export function XpRulesCard() {
           >
         <div className="space-y-5 border-t border-border px-5 py-4">
           <div>
-            <div className="mb-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-600"><TrendingDown className="h-3.5 w-3.5" /> {tr("XP penalties")}</div>
+            <div className="mb-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400"><TrendingDown className="h-3.5 w-3.5" /> {tr("XP penalties")}</div>
             <div className="divide-y divide-border/60">{PENALTIES.map((p) => <Row key={p.rule} {...p} tone="red" />)}</div>
           </div>
           <div>
-            <div className="mb-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-600"><TrendingUp className="h-3.5 w-3.5" /> {tr("XP bonuses")}</div>
+            <div className="mb-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400"><TrendingUp className="h-3.5 w-3.5" /> {tr("XP bonuses")}</div>
             <div className="divide-y divide-border/60">{BONUSES.map((b) => <Row key={b.rule} {...b} tone="green" />)}</div>
           </div>
           <div>

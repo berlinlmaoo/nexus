@@ -75,7 +75,7 @@ function DivisionRow({ division, count, onChange }: { division: NexusDivision; c
       )}
       <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-bold text-muted-foreground">{tn(count, "{n} team", "{n} teams")}</span>
       {editing ? (
-        <button onClick={() => name.trim() && update.mutate({ name: name.trim() })} disabled={update.isPending} className="rounded-md p-1.5 text-emerald-600 transition hover:bg-emerald-50 disabled:opacity-50" aria-label={tr("Save")}>{update.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}</button>
+        <button onClick={() => name.trim() && update.mutate({ name: name.trim() })} disabled={update.isPending} className="rounded-md p-1.5 text-emerald-600 transition hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10" aria-label={tr("Save")}>{update.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}</button>
       ) : (
         <button onClick={() => setEditing(true)} className="rounded-md p-1.5 text-muted-foreground transition hover:bg-accent" aria-label={tr("Rename")}><Pencil className="h-3.5 w-3.5" /></button>
       )}

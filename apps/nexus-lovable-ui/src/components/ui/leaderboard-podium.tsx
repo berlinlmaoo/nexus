@@ -19,9 +19,9 @@ function initialsOf(name?: string | null) {
 }
 
 const PODIUM_STYLE: Record<number, { bar: string; barText: string; ring: string; crown: string; height: string; avatar: number }> = {
-  1: { bar: "bg-amber-300", barText: "text-amber-900", ring: "ring-amber-300", crown: "text-amber-500", height: "h-32", avatar: 72 },
-  2: { bar: "bg-slate-200", barText: "text-slate-600", ring: "ring-slate-300", crown: "text-slate-400", height: "h-24", avatar: 56 },
-  3: { bar: "bg-orange-300", barText: "text-orange-900", ring: "ring-orange-300", crown: "text-orange-500", height: "h-20", avatar: 56 },
+  1: { bar: "bg-amber-300 dark:bg-amber-400/25", barText: "text-amber-900 dark:text-amber-200", ring: "ring-amber-300", crown: "text-amber-500", height: "h-32", avatar: 72 },
+  2: { bar: "bg-slate-200 dark:bg-slate-400/20", barText: "text-slate-600 dark:text-slate-200", ring: "ring-slate-300", crown: "text-slate-400", height: "h-24", avatar: 56 },
+  3: { bar: "bg-orange-300 dark:bg-orange-400/25", barText: "text-orange-900 dark:text-orange-200", ring: "ring-orange-300", crown: "text-orange-500", height: "h-20", avatar: 56 },
 }
 
 function PodiumAvatar({ item, size, ring }: { item: LeaderboardRanking; size: number; ring: string }) {

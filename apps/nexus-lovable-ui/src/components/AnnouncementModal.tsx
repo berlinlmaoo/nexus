@@ -10,11 +10,11 @@ import { useLang } from "@/lib/lang";
 
 const TONE: Record<string, { icon: typeof Info; head: string; accent: string }> = {
   info: { icon: Info, head: "from-accent via-card to-secondary", accent: "text-primary" },
-  success: { icon: CheckCircle2, head: "from-emerald-100 via-card to-emerald-50", accent: "text-emerald-600" },
-  warning: { icon: AlertTriangle, head: "from-amber-100 via-card to-amber-50", accent: "text-amber-600" },
+  success: { icon: CheckCircle2, head: "from-emerald-100 via-card to-emerald-50", accent: "text-emerald-600 dark:text-emerald-400" },
+  warning: { icon: AlertTriangle, head: "from-amber-100 via-card to-amber-50", accent: "text-amber-600 dark:text-amber-400" },
 };
 
-const SP_TONE = { icon: FileText, head: "from-rose-100 via-card to-rose-50", accent: "text-rose-600" };
+const SP_TONE = { icon: FileText, head: "from-rose-100 via-card to-rose-50", accent: "text-rose-600 dark:text-rose-400" };
 
 /**
  * Global pop-up for BoD-posted announcements; shown once per user (dismiss = marked seen).
@@ -61,7 +61,7 @@ export function AnnouncementModal() {
     <AnimatePresence>
       {current && (
         <div className="fixed inset-0 z-[85] grid place-items-center p-4">
-          <motion.div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => dismiss.mutate(current.id)} />
+          <motion.div className="absolute inset-0 bg-foreground/40 dark:bg-scrim backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => dismiss.mutate(current.id)} />
           <motion.div
             role="dialog" aria-modal="true"
             initial={{ opacity: 0, scale: 0.96, y: 14 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 14 }}

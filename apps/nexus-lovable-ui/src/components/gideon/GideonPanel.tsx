@@ -952,7 +952,7 @@ function AssistantTurn({ turn, onDecided, question, projectId, editorTarget }: {
             <ol className="mt-1 space-y-0.5 border-l border-border pl-3">
               {steps.map((s) => (
                 <li key={s.id} className="flex items-start gap-1.5">
-                  {s.status === "running" ? <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin" /> : s.status === "error" ? <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-destructive" /> : <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600" />}
+                  {s.status === "running" ? <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin" /> : s.status === "error" ? <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-destructive" /> : <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />}
                   <span className="min-w-0">{stepText(s, t)}{s.status === "error" && s.error ? <span className="block text-destructive/80">{s.error}</span> : null}</span>
                 </li>
               ))}
@@ -1088,7 +1088,7 @@ function ProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDec
   return (
     <div className={cn("overflow-hidden rounded-xl border bg-background", open ? "border-amber-500/40" : "border-border opacity-90")}>
       <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
-        <ShieldCheck className={cn("h-4 w-4 shrink-0", open ? "text-amber-600" : "text-muted-foreground")} />
+        <ShieldCheck className={cn("h-4 w-4 shrink-0", open ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")} />
         <span className="min-w-0 flex-1">
           <span className="block text-[11px] font-semibold text-muted-foreground">{open ? t("Waiting for your approval") : title}</span>
           <span className="block truncate text-sm font-semibold" title={proposal.summary}>{open ? title : proposal.summary}</span>

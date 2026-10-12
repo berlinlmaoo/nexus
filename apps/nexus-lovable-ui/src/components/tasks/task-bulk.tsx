@@ -332,7 +332,7 @@ function DatePopup({ ids, reduce, busy, onClose, onConfirm }: { ids: string[]; r
   const [date, setDate] = useState("");
   return (
     <div className="fixed inset-0 z-[96] grid place-items-center p-4">
-      <motion.div className="absolute inset-0 bg-black/55" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+      <motion.div className="absolute inset-0 bg-black/55 dark:bg-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
       <motion.div
         initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.95, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}

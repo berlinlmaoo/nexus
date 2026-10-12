@@ -88,7 +88,7 @@ export function AttendanceReminderModal() {
     <AnimatePresence>
       {shouldShow && (
         <div className="fixed inset-0 z-[80] grid place-items-center p-4">
-          <motion.div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setDismissed(true)} />
+          <motion.div className="absolute inset-0 bg-foreground/40 dark:bg-scrim backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setDismissed(true)} />
           <motion.div
             role="dialog" aria-modal="true"
             initial={{ opacity: 0, scale: 0.96, y: 14 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 14 }}
@@ -106,7 +106,7 @@ export function AttendanceReminderModal() {
 
             <div className="space-y-3 p-5">
               {isCheckout && (
-                <div className="flex items-start gap-2 rounded-2xl border border-amber-300/60 bg-amber-100 p-3 text-sm font-semibold text-amber-800">
+                <div className="flex items-start gap-2 rounded-2xl border border-amber-300/60 bg-amber-100 p-3 text-sm font-semibold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{t("Check out first before you check in today.")}</span>
                 </div>

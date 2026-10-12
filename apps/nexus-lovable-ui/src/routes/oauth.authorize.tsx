@@ -114,7 +114,7 @@ function OAuthAuthorizePage() {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-6 relative overflow-hidden bg-[#fdfcfb]" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>
+    <div className="min-h-screen w-full flex items-center justify-center p-6 relative overflow-hidden bg-[#fdfcfb] force-light" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-primary/20 blur-[120px]" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-orange-200/40 blur-[120px]" />
 

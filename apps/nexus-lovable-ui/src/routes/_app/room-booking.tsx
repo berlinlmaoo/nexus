@@ -20,9 +20,9 @@ export const Route = createFileRoute("/_app/room-booking")({
 });
 
 const ROOM_STYLE: Record<string, { dot: string; chip: string }> = {
-  "Ruang Meeting VIP": { dot: "bg-amber-500", chip: "bg-amber-100 text-amber-700" },
-  "Ruang Meeting": { dot: "bg-sky-500", chip: "bg-sky-100 text-sky-700" },
-  "Studio": { dot: "bg-violet-500", chip: "bg-violet-100 text-violet-700" },
+  "Ruang Meeting VIP": { dot: "bg-amber-500", chip: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300" },
+  "Ruang Meeting": { dot: "bg-sky-500", chip: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300" },
+  "Studio": { dot: "bg-violet-500", chip: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300" },
 };
 const roomStyle = (room: string) => ROOM_STYLE[room] ?? { dot: "bg-muted-foreground/40", chip: "bg-muted text-muted-foreground" };
 
@@ -253,7 +253,7 @@ function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoo
 
   return createPortal(
     <div className="fixed inset-0 z-[70] grid place-items-center p-0 sm:p-4">
-      <motion.div className="absolute inset-0 bg-foreground/30 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+      <motion.div className="absolute inset-0 bg-foreground/30 dark:bg-scrim backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
       <motion.div
         role="dialog" aria-modal="true" aria-label={editing ? t("Edit booking") : t("New booking")}
         initial={{ opacity: 0, scale: 0.96, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 12 }}

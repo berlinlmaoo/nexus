@@ -34,10 +34,10 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
       onClick={() => onChange(!checked)}
       className={cn(
         "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50",
-        checked ? "bg-primary" : "bg-muted-foreground/30",
+        checked ? "bg-primary" : "bg-muted-foreground/30 dark:bg-control-border",
       )}
     >
-      <span className={cn("inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform", checked ? "translate-x-[22px]" : "translate-x-0.5")} />
+      <span className={cn("inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform dark:bg-background", checked ? "translate-x-[22px]" : "translate-x-0.5")} />
     </button>
   );
 }
@@ -204,7 +204,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
     <AnimatePresence onExitComplete={onClose}>
       {open && (
         <div className="fixed inset-0 z-50 grid place-items-center p-0 sm:p-4">
-          <motion.div className="absolute inset-0 bg-foreground/30 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={requestClose} />
+          <motion.div className="absolute inset-0 bg-foreground/30 dark:bg-scrim backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={requestClose} />
           <motion.aside
             role="dialog"
             aria-modal="true"
