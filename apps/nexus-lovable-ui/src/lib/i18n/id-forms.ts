@@ -147,4 +147,17 @@ export const ID_FORMS: Record<string, string> = {
   "in a question's title picks its type": "di judul pertanyaan untuk memilih tipenya",
   "then the form closes by itself": "lalu form tertutup sendiri",
   "this project": "project ini",
+  // Forms / automations bug-hunt fixes (12 Oct 2026)
+  "Enter an email address, like name@company.com.": "Isi alamat email, misalnya nama@perusahaan.com.",
+  "Enter a web address, like company.com.": "Isi alamat web, misalnya perusahaan.com.",
+  "Logic not set yet: pick a value. Until then it always shows.": "Logika belum lengkap: pilih nilainya. Sampai itu, pertanyaan ini selalu tampil.",
+  "“{value}” is no longer an option of “{q}”, so this question never shows": "“{value}” sudah bukan pilihan di “{q}”, jadi pertanyaan ini tidak pernah tampil",
+  "A routing rule reads an option that no longer exists": "Ada aturan routing yang membaca pilihan yang sudah tidak ada",
+  "Pick a value. Until then the question always shows.": "Pilih nilainya. Sampai itu, pertanyaan ini selalu tampil.",
+  "“{value}” is no longer an option, so this question never shows. Pick a value again.": "“{value}” sudah bukan pilihan, jadi pertanyaan ini tidak pernah tampil. Pilih nilainya lagi.",
+  "“{q}” is itself shown only after this question, so neither can ever show. Pick another question.": "“{q}” sendiri baru tampil setelah pertanyaan ini, jadi keduanya tidak akan pernah tampil. Pilih pertanyaan lain.",
+  "“{value}” is no longer an option, so this rule never runs. Pick a value again.": "“{value}” sudah bukan pilihan, jadi aturan ini tidak pernah jalan. Pilih nilainya lagi.",
+  "{n} new response came in while you were here.": "{n} jawaban baru masuk selama kamu di sini.",
+  "{n} new responses came in while you were here.": "{n} jawaban baru masuk selama kamu di sini.",
+  "Their tasks stay on the board, but the responses leave their senders' My Submissions. The link stops working. Control Room → Audit can restore the form with its responses.": "Task-nya tetap ada di board, tapi jawabannya hilang dari Pengajuan Saya para pengirim. Link-nya berhenti berfungsi. Control Room → Audit bisa memulihkan form beserta jawabannya.",
 };

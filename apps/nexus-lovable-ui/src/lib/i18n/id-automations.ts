@@ -226,4 +226,14 @@ export const ID_AUTOMATIONS: Record<string, string> = {
   "Fr": "Jum",
   "Sa": "Sab",
   "Su": "Min",
+  // Forms / automations bug-hunt fixes (12 Oct 2026)
+  "Pick a day of the month from 1 to 28": "Pilih tanggal 1 sampai 28",
+  "Hours before due must be between 1 and 720": "Jam sebelum tenggat harus antara 1 dan 720",
+  "Finish the condition: it has no value": "Lengkapi kondisinya: nilainya masih kosong",
+  "Give the new task a title": "Beri judul untuk task barunya",
+  "Discard your changes?": "Buang perubahanmu?",
+  "Discard this automation?": "Buang otomasi ini?",
+  "The automation keeps working as it was saved.": "Otomasi tetap jalan seperti yang terakhir disimpan.",
+  "Nothing has been turned on yet.": "Belum ada yang dinyalakan.",
+  "Keep editing": "Lanjut edit",
 };

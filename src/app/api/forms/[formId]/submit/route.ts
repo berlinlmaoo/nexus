@@ -18,6 +18,7 @@ import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitTaskCreated } from "@/lib/socket-emitter"
 import { formResponseLimit, normalizeFormSettings, RESPONSE_LIMIT_MESSAGE } from "@/lib/form-settings"
 import { createInAppNotification } from "@/lib/notification-service"
+import { pickStatusSection } from "@/lib/status-sections"
 import { mkdir, writeFile } from "fs/promises"
 import path from "path"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
@@ -66,6 +67,20 @@ interface IntakeFormField {
 const TASK_STATUSES = new Set(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"])
 const TASK_PRIORITIES = new Set(["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"])
 const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024
+const MAX_TITLE_LENGTH = 250
+
+// Same checks as the web form (components/forms/form-model.ts answerProblem): an email needs "@" and a
+// domain, a link a host with a dot. Empty answers are the required check's business.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+function looksLikeUrl(v: string) {
+  if (/\s/.test(v)) return false
+  try {
+    const u = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(v) ? v : `https://${v}`)
+    return (u.protocol === "http:" || u.protocol === "https:") && /\.[a-z]{2,}$/i.test(u.hostname)
+  } catch {
+    return false
+  }
+}
 
 /** A form file over MAX_ATTACHMENT_SIZE. Thrown from the parser, answered 413 by POST (it used to be a 500). */
 class FormFileTooLargeError extends Error {
@@ -74,6 +89,8 @@ class FormFileTooLargeError extends Error {
     this.name = "FormFileTooLargeError"
   }
 }
+
+class ResponseLimitReachedError extends Error {}
 
 interface SubmittedFile {
   fieldId: string
@@ -303,6 +320,9 @@ export async function POST(
 
     const { formId } = await params
     const { data, files } = await parseSubmissionRequest(request)
+    // One attempt = one response (web form, 12 Oct 2026): a repeat of the same key returns the first one.
+    const rawKey = request.headers.get("idempotency-key")?.trim() ?? ""
+    const idempotencyKey = /^[\w-]{8,100}$/.test(rawKey) ? rawKey : null
 
     if (!data) {
       return NextResponse.json({ error: "data is required" }, { status: 400 })
@@ -334,6 +354,18 @@ export async function POST(
 
     if (!form) return NextResponse.json({ error: "Form not found" }, { status: 404 })
 
+    const replay = async () => {
+      if (!idempotencyKey || !userId) return null
+      const first = await prisma.formSubmission.findUnique({
+        where: { formId_idempotencyKey: { formId: form.id, idempotencyKey } },
+        include: { task: true },
+      })
+      // Only the same sender's attempt counts as a repeat.
+      if (!first || first.submitterId !== userId) return null
+      const { task, ...submission } = first
+      return NextResponse.json({ submission, task, duplicate: true }, { status: 200 })
+    }
+
     // Hardcoded policy: EVERY form submission requires a logged-in NEXUS account — no anonymous
     // submissions. Guarantees the requester is always known (so "Request by" = the real submitter,
     // never a LEAD fallback).
@@ -358,6 +390,9 @@ export async function POST(
     if (form.requireAuth && !userId) {
       return NextResponse.json({ error: "Login NEXUS diperlukan untuk mengajukan form ini.", code: "LOGIN_REQUIRED" }, { status: 401 })
     }
+
+    const repeated = await replay()
+    if (repeated) return repeated
 
     const accessStatus = getFormAccessStatus(form.accessSchedule)
     if (!accessStatus.allowed) {
@@ -409,7 +444,22 @@ export async function POST(
     })
 
     if (requiredMissing) {
-      return NextResponse.json({ error: `${requiredMissing.name} is required` }, { status: 400 })
+      // Legacy fields may only have `label`; never "undefined is required".
+      const label = requiredMissing.name || (requiredMissing as { label?: string }).label || "A question"
+      return NextResponse.json({ error: `${label} is required`, code: "REQUIRED", fieldId: requiredMissing.id }, { status: 400 })
+    }
+
+    for (const field of visibleFields) {
+      if (field.autofill || (field.type !== "email" && field.type !== "url")) continue
+      const value = normalizeText(getFieldValue(data, field))
+      if (!value) continue
+      const label = field.name || (field as { label?: string }).label || "A question"
+      if (field.type === "email" && !EMAIL_RE.test(value)) {
+        return NextResponse.json({ error: `${label}: enter an email address, like name@company.com.`, code: "INVALID_EMAIL", fieldId: field.id }, { status: 400 })
+      }
+      if (field.type === "url" && !looksLikeUrl(value)) {
+        return NextResponse.json({ error: `${label}: enter a web address, like company.com.`, code: "INVALID_URL", fieldId: field.id }, { status: 400 })
+      }
     }
 
     const mappedTitleField = visibleFields.find((field) => field.mapping?.target === "task_title")
@@ -419,10 +469,13 @@ export async function POST(
     const mappedTaskListField = visibleFields.find((field) => field.mapping?.target === "task_list")
 
     const mappedTaskListValue = mappedTaskListField ? normalizeText(getFieldValue(data, mappedTaskListField)) : ""
-    const taskList =
-      form.project.taskLists.find((list) => list.id === mappedTaskListValue) ??
-      form.project.taskLists.find((list) => list.name.toLowerCase() === mappedTaskListValue.toLowerCase()) ??
-      form.project.taskLists[0]
+    const answeredTaskList = mappedTaskListValue
+      ? form.project.taskLists.find((list) => list.id === mappedTaskListValue) ??
+        form.project.taskLists.find((list) => list.name.toLowerCase() === mappedTaskListValue.toLowerCase())
+      : undefined
+    const taskList = answeredTaskList ?? form.project.taskLists[0]
+    // An answer or a routing rule picked the section: that choice wins over a mapped status (below).
+    let sectionChosen = !!answeredTaskList
 
     const validTaskListIds = new Set(form.project.taskLists.map((list) => list.id))
     const validProjectMemberIds = new Set(form.project.members.map((member) => member.userId))
@@ -436,6 +489,7 @@ export async function POST(
 
         if (rule.action === "set_task_list" && rule.targetTaskListId && validTaskListIds.has(rule.targetTaskListId)) {
           routedTaskList = form.project.taskLists.find((list) => list.id === rule.targetTaskListId) ?? routedTaskList
+          sectionChosen = true
         }
 
         if (rule.action === "set_field" && rule.targetCustomFieldId && typeof rule.targetValue === "string" && rule.targetValue.trim()) {
@@ -459,7 +513,7 @@ export async function POST(
     // No question fills the task title (a form built from scratch), or an optional one was left empty:
     // name the task after the form and the sender instead of refusing the response (it used to 400).
     const submitterName = submitter?.name || submitter?.email || "Someone"
-    const title = normalizeText(mappedTitleField ? getFieldValue(data, mappedTitleField) : "") || `${form.name} · ${submitterName}`.slice(0, 250)
+    const title = (normalizeText(mappedTitleField ? getFieldValue(data, mappedTitleField) : "") || `${form.name} · ${submitterName}`).slice(0, MAX_TITLE_LENGTH)
 
     const descriptionFromField = buildTaskDescriptionFromFields(visibleFields, data)
     const summary = buildSubmissionSummary(visibleFields, data)
@@ -479,6 +533,19 @@ export async function POST(
       ? normalizeEnumValue(getFieldValue(data, mappedPriorityField), TASK_PRIORITIES)
       : undefined
 
+    // Sections are statuses (12 Oct 2026): the column and the status must agree. A mapped status moves the
+    // task to that status's section, unless an answer or a rule chose the section, then the section's
+    // status wins (a task never sits DONE in the To Do column).
+    if (status && !sectionChosen) {
+      const target = pickStatusSection(
+        form.project.taskLists.map((list) => ({ id: list.id, taskStatus: list.taskStatus ? String(list.taskStatus) : null, position: list.position })),
+        routedTaskList.id,
+        status
+      )
+      if (target) routedTaskList = form.project.taskLists.find((list) => list.id === target) ?? routedTaskList
+    }
+    const finalStatus = sectionChosen && routedTaskList.taskStatus ? String(routedTaskList.taskStatus) : status
+
     // Apply the project's auto-assign (e.g. always-to-Gerald) when the form's routing rules didn't
     // already pick assignees — same as a normal task create (forms previously skipped this).
     const finalAssigneeIds = resolveAutoAssignAssigneeIds({
@@ -488,13 +555,21 @@ export async function POST(
       validProjectMemberIds: Array.from(validProjectMemberIds),
     })
 
-    const result = await prisma.$transaction(async (tx) => {
+    let result
+    try {
+    result = await prisma.$transaction(async (tx) => {
+      // A response limit is checked again inside the transaction, one response of this form at a time,
+      // so two people sending at once can't both take the last place.
+      if (responseLimit !== null) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"form-submit:" + form.id}))`
+        if ((await tx.formSubmission.count({ where: { formId: form.id } })) >= responseLimit) throw new ResponseLimitReachedError()
+      }
       const task = await tx.task.create({
         data: {
           title,
           description: taskDescription || null,
           // No mapped status: the section's own (TaskList.taskStatus, project templates), if it has one.
-          ...(status ? { status: status as "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE" | "CANCELLED" } : routedTaskList.taskStatus ? { status: routedTaskList.taskStatus } : {}),
+          ...(finalStatus ? { status: finalStatus as "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE" | "CANCELLED" } : routedTaskList.taskStatus ? { status: routedTaskList.taskStatus } : {}),
           ...(priority ? { priority: priority as "URGENT" | "HIGH" | "MEDIUM" | "LOW" | "NONE" } : {}),
           ...(dueDate ? { dueDate } : {}),
           taskListId: routedTaskList.id,
@@ -544,11 +619,24 @@ export async function POST(
           formId: form.id, // param may be a slug; store the canonical form id (FK)
           taskId: task.id,
           submitterId: userId,
+          ...(idempotencyKey ? { idempotencyKey } : {}),
         },
       })
 
       return { submission, task }
     })
+    } catch (error) {
+      if (error instanceof ResponseLimitReachedError) {
+        return NextResponse.json({ error: RESPONSE_LIMIT_MESSAGE, code: "RESPONSE_LIMIT" }, { status: 403 })
+      }
+      // The same attempt arrived twice at once: the other request made the response (and its task); this
+      // one's task was rolled back with it. Answer with the first.
+      if (idempotencyKey && (error as { code?: string })?.code === "P2002") {
+        const repeat = await replay()
+        if (repeat) return repeat
+      }
+      throw error
+    }
 
     const attachments = await createTaskAttachments(files, result.task.id, fallbackCreatorId)
 

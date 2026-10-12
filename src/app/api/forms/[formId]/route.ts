@@ -105,7 +105,12 @@ export async function DELETE(
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const { formId } = await params
-    const force = new URL(request.url).searchParams.get("force") === "1"
+    const search = new URL(request.url).searchParams
+    const force = search.get("force") === "1"
+    // expect = the response count the person confirmed (web, 12 Oct 2026). More than that arrived since:
+    // ask again instead of deleting responses nobody saw. Without it (released apps): force=1 as before.
+    const expectRaw = search.get("expect")
+    const expected = expectRaw !== null && /^\d+$/.test(expectRaw) ? Number(expectRaw) : null
 
     const existing = await prisma.form.findUnique({
       where: { id: formId },
@@ -120,7 +125,7 @@ export async function DELETE(
     // Guard: deleting a form CASCADE-deletes every submission (and its "Pengajuan Saya" history) — that
     // bit a user before. Refuse unless the caller explicitly confirms with ?force=1 after seeing the count.
     const submissionCount = existing._count.submissions
-    if (!force && submissionCount > 0) {
+    if ((!force && submissionCount > 0) || (force && expected !== null && submissionCount > expected)) {
       return NextResponse.json(
         { error: `Form ini punya ${submissionCount} pengajuan — kalau dihapus, semua pengajuan + history-nya ikut kehapus permanen.`, submissionCount },
         { status: 409 }

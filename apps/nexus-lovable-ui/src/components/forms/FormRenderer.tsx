@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { CheckCircle2, Eye, Loader2, Lock, Paperclip, RotateCcw } from "lucide-react";
@@ -8,7 +8,7 @@ import { RupiahInput } from "@/components/RupiahInput";
 import { thumbUrl } from "@/lib/thumb";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
-import { coverCss, evalCond, fieldTitle, isFilled, optionsOf, type RichField } from "./form-model";
+import { answerProblem, coverCss, evalCond, fieldTitle, isFilled, optionsOf, type RichField } from "./form-model";
 
 /**
  * The form as a respondent sees it: the public page /f/:id and the builder's Preview render this same
@@ -48,8 +48,8 @@ export function QuestionControl({ field, value, onChange, disabled, attachment, 
   } else if ((field.type === "dropdown" || field.type === "select") && field.display === "list") {
     control = (
       <div role="radiogroup" aria-label={label} className="space-y-0.5">
-        {(opts.length ? opts : [t("Option")]).map((o) => (
-          <label key={o} className={cn("flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[15px]", !disabled && "cursor-pointer hover:bg-muted/60")}>
+        {(opts.length ? opts : [t("Option")]).map((o, i) => (
+          <label key={`${i}:${o}`} className={cn("flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[15px]", !disabled && "cursor-pointer hover:bg-muted/60")}>
             <input type="radio" disabled={disabled} name={field.id} checked={value === o} onChange={() => onChange(o)} className="h-4 w-4 shrink-0 accent-primary" />
             <span className="min-w-0 break-words">{o}</span>
           </label>
@@ -60,15 +60,15 @@ export function QuestionControl({ field, value, onChange, disabled, attachment, 
     control = (
       <select disabled={disabled} required={field.required} aria-label={label} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} className={cn(inputCls, "appearance-auto")}>
         <option value="">{t("Choose…")}</option>
-        {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+        {opts.map((o, i) => <option key={`${i}:${o}`} value={o}>{o}</option>)}
       </select>
     );
   } else if (field.type === "multi_select") {
     const arr = Array.isArray(value) ? (value as string[]) : [];
     control = (
       <div role="group" aria-label={label} className="space-y-0.5">
-        {(opts.length ? opts : [t("Option")]).map((o) => (
-          <label key={o} className={cn("flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[15px]", !disabled && "cursor-pointer hover:bg-muted/60")}>
+        {(opts.length ? opts : [t("Option")]).map((o, i) => (
+          <label key={`${i}:${o}`} className={cn("flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[15px]", !disabled && "cursor-pointer hover:bg-muted/60")}>
             <input type="checkbox" disabled={disabled} checked={arr.includes(o)} onChange={(e) => onChange(e.target.checked ? [...arr, o] : arr.filter((x) => x !== o))} className="h-4 w-4 shrink-0 rounded accent-primary" />
             <span className="min-w-0 break-words">{o}</span>
           </label>
@@ -175,7 +175,8 @@ export function FormRenderer({ form, formKey, me, mode = "live" }: {
   const set = (id: string, v: unknown) => setValues((cur) => ({ ...cur, [id]: v }));
 
   // Autofill fields prefill from the signed-in account (the server re-applies them on send, anti-spoof).
-  useEffect(() => {
+  // Also called by "Send another response", which starts from empty answers.
+  const fillFromAccount = useCallback(() => {
     if (!me) return;
     setValues((cur) => {
       let changed = false;
@@ -188,9 +189,19 @@ export function FormRenderer({ form, formKey, me, mode = "live" }: {
       return changed ? next : cur;
     });
   }, [me, fields]);
+  useEffect(() => { fillFromAccount(); }, [fillFromAccount]);
 
   const visible = useMemo(() => fields.filter((field) => evalCond(field.showIf, values)), [fields, values]);
   const missing = visible.filter((x) => x.required && !isFilled(values[x.id]));
+  // Answers that are there but can't be right (an email without "@", a link without a domain).
+  const invalid = visible.filter((x) => answerProblem(x, values[x.id]));
+
+  // One response per press of Send: a ref (not the mutation's isPending, which lags a render) blocks a
+  // double click, and the attempt's key lets the server drop a repeat that still got through (a retry
+  // after a lost reply). "Send another response" starts a new attempt.
+  const sending = useRef(false);
+  const attemptKey = useRef<string>("");
+  const newAttemptKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -213,7 +224,8 @@ export function FormRenderer({ form, formKey, me, mode = "live" }: {
         }
       }
       fd.append("data", JSON.stringify(data));
-      const res = await fetch(`/api/forms/${formKey}/submit`, { method: "POST", body: fd });
+      if (!attemptKey.current) attemptKey.current = newAttemptKey();
+      const res = await fetch(`/api/forms/${formKey}/submit`, { method: "POST", body: fd, headers: { "Idempotency-Key": attemptKey.current } });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         throw new Error(body?.error || t("Couldn't send the form. Try again."));
@@ -221,14 +233,22 @@ export function FormRenderer({ form, formKey, me, mode = "live" }: {
       return res.json().catch(() => ({}));
     },
     onSuccess: () => setDone(true),
+    onSettled: () => { sending.current = false; },
   });
 
   const send = () => {
-    if (missing.length) { setShowMissing(true); return; }
+    if (sending.current) return;
+    if (missing.length || invalid.length) { setShowMissing(true); return; }
     if (mode === "preview") { setDone(true); return; }
-    if (!submit.isPending) submit.mutate();
+    sending.current = true;
+    submit.mutate();
   };
-  const again = () => { setValues({}); setDone(false); setShowMissing(false); submit.reset(); };
+  const again = () => {
+    setValues({});
+    fillFromAccount();
+    attemptKey.current = "";
+    setDone(false); setShowMissing(false); submit.reset();
+  };
   const s = form.settings ?? null;
 
   if (done) {
@@ -265,8 +285,9 @@ export function FormRenderer({ form, formKey, me, mode = "live" }: {
 
         <form className="mt-8 space-y-8 pb-6" noValidate onSubmit={(e) => { e.preventDefault(); send(); }}>
           {visible.map((field) => (
-            <div key={field.id} className={cn(showMissing && missing.includes(field) && "rounded-lg ring-2 ring-destructive/40 ring-offset-8 ring-offset-background")}>
+            <div key={field.id} className={cn(showMissing && (missing.includes(field) || invalid.includes(field)) && "rounded-lg ring-2 ring-destructive/40 ring-offset-8 ring-offset-background")}>
               <QuestionBlock field={field} value={values[field.id]} onChange={(v) => set(field.id, v)} attachment={values[`attachment:${field.id}`]} onAttachment={(f) => set(`attachment:${field.id}`, f)} />
+              {showMissing && invalid.includes(field) && <p className="mt-1.5 text-xs font-medium text-destructive">{answerProblem(field, values[field.id]) === "email" ? t("Enter an email address, like name@company.com.") : t("Enter a web address, like company.com.")}</p>}
             </div>
           ))}
           {visible.length === 0 && <p className="text-sm text-muted-foreground">{t("This form has no questions yet.")}</p>}
