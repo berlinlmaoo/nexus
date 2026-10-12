@@ -34,6 +34,8 @@ struct ProjectDetailView: View {
     /// Multi-select for Duplicate on Board and List (always on since 11 Oct 2026, TaskBatchDuplicate.swift).
     @State private var selection = TaskSelection()
     @Environment(\.dismiss) private var dismiss
+    /// True when pushed (a back button makes sense); false as the sidebar's root.
+    @Environment(\.isPresented) private var isPresented
     // Project templates (12 Oct 2026; DEV server): the template this project was built from, the
     // project's saved views (only the Calendar's date field and the "My …" preset are read here), the
     // project's DATE fields for Calendar → Plot by, and the "My …" chip.
@@ -467,97 +469,125 @@ struct ProjectDetailView: View {
     /// Single-expression background (a `.background { multi-statement closure }` mishandles the top
     /// safe area and reserved a tall gap above the content).
     private var projectBackground: some View {
-        ZStack {
-            NX.background
-            RadialGradient(colors: [Color(hex: "#4eb301").opacity(0.05), .clear], center: .topLeading, startRadius: 0, endRadius: 320)
-            RadialGradient(colors: [Color(hex: "#7b4dff").opacity(0.07), .clear], center: .topTrailing, startRadius: 0, endRadius: 320)
-        }
-        .ignoresSafeArea()
+        // Plain, as on the dev web: the page is the content, not a backdrop.
+        NX.background.ignoresSafeArea()
     }
 
-    // MARK: compact header (native bar hidden — it reserved a tall white gap above the tab bar)
+    // MARK: page header (dev web: the project's icon and a large title, actions on the right)
+
+    private var wide: Bool { hSize == .regular }
 
     private var projectHeader: some View {
         HStack(spacing: 10) {
-            Button { dismiss() } label: {
-                Image(systemName: "chevron.left").font(.system(size: 16, weight: .bold)).foregroundStyle(NX.foreground)
-                    .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
-                    .frame(width: 44, height: 44).contentShape(Rectangle())
+            // Only when there is somewhere to go back to: opened from the sidebar the board is the root.
+            if isPresented {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left").font(.system(size: 16, weight: .semibold)).foregroundStyle(NX.foreground)
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityLabel(T("Back"))
             }
-            .hoverEffect(.lift)
-            .accessibilityLabel(T("Back"))
             if let d = detail {
-                ProjectMark(icon: d.icon, color: d.color, size: 30)
+                ProjectMark(icon: d.icon, color: d.color, size: wide ? 34 : 28)
             }
-            Text(displayName).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+            Text(displayName).font(NXFont.display(wide ? 26 : 20, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
             Spacer(minLength: 6)
             if detail != nil {
                 // Ask GIDEON about this project: a new chat scoped to it (web header, 12 Oct 2026).
-                AskGideonButton(context: GideonContext(projectId: projectId, projectName: displayName))
-                Button { showSettings = true } label: {
-                    Image(systemName: "gearshape").font(.system(size: 15, weight: .semibold)).foregroundStyle(NX.violetText)
-                        .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
-                        .frame(width: 44, height: 44).contentShape(Rectangle())
-                }
-                .hoverEffect(.lift)
-                .keyboardShortcut(",", modifiers: .command)
-                .accessibilityLabel(T("Project settings"))
+                AskGideonButton(context: GideonContext(projectId: projectId, projectName: displayName), labelled: wide)
+                ProjectHeaderButton(title: T("Project settings"), icon: "slider.horizontal.3", labelled: wide) { showSettings = true }
+                    .keyboardShortcut(",", modifiers: .command)
             }
-            // On the Forms tab "+" means New form, as on the web's Forms tab; on every other tab it is
-            // New task. It used to open New task on the Forms tab too (owner, 9 Oct 2026).
-            // A Pipeline Dashboard has no task header (web): "+" is New deal on Pipeline and absent on
-            // its other tabs, where a new task would land in sections nobody can see.
-            if tab == .pipeline {
-                Button { newDealRequest += 1 } label: {
-                    Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(NX.violetText)
-                        .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
-                        .frame(width: 44, height: 44).contentShape(Rectangle())
-                }
-                .hoverEffect(.lift)
-                .accessibilityLabel(T("New deal"))
-            } else if !isPipeline && !isOutlet {
-                // An outlet's "Add event" sits in its own header row, next to the month.
-                Button {
-                    if tab == .forms { newFormOpen = true } else { prefillDue = nil; showCreate = true }
-                } label: {
-                    Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(tab == .forms || canCreate ? NX.violetText : NX.mutedFg)
-                        .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
-                        .frame(width: 44, height: 44).contentShape(Rectangle())
-                }
-                .hoverEffect(.lift)
-                .disabled(tab != .forms && !canCreate)
-                .accessibilityLabel(tab == .forms ? T("New form") : T("New task"))
-            }
+            addButton
         }
-        .padding(.horizontal, 14).padding(.top, 4).padding(.bottom, 8)
+        .padding(.leading, isPresented ? 6 : (wide ? 24 : 14))
+        .padding(.trailing, wide ? 24 : 14)
+        .padding(.top, wide ? 12 : 4).padding(.bottom, 4)
     }
 
-    // MARK: tab bar (underline style, horizontally scrollable)
+    /// On the Forms tab "+" means New form, as on the web's Forms tab; on every other tab it is New task.
+    /// A Pipeline Dashboard has no task header (web): "+" is New deal on Pipeline and absent on its other
+    /// tabs. An outlet's "Add event" sits in its own header row, next to the month.
+    @ViewBuilder private var addButton: some View {
+        if tab == .pipeline {
+            ProjectHeaderButton(title: T("New deal"), icon: "plus", labelled: wide, prominent: true) { newDealRequest += 1 }
+        } else if !isPipeline && !isOutlet {
+            ProjectHeaderButton(title: tab == .forms ? T("New form") : T("Add task"), icon: "plus", labelled: wide,
+                                prominent: true, enabled: tab == .forms || canCreate) {
+                if tab == .forms { newFormOpen = true } else { prefillDue = nil; showCreate = true }
+            }
+        }
+    }
+
+    // MARK: tab row (dev web: icon + label chips, the saved views beside their layout, "+" new view)
+
+    private func layoutOf(_ t: ProjectTab) -> String? {
+        switch t {
+        case .board: return "board"
+        case .list: return "list"
+        default: return nil
+        }
+    }
+
+    /// The saved views of a layout other than its built-in one ("Per kategori" on Board).
+    private func extraViews(_ t: ProjectTab) -> [ProjectViewFull] {
+        guard let layout = layoutOf(t) else { return [] }
+        return viewsFor(layout).filter { $0.builtin != layout }
+    }
+
+    private func viewTitle(_ v: ProjectViewFull) -> String {
+        v.title(fieldName: { id in allFields.first { $0.id == id }?.name })
+    }
+
+    private func tabIsOn(_ t: ProjectTab) -> Bool {
+        guard tab == t else { return false }
+        guard let layout = layoutOf(t), let v = activeView(layout) else { return true }
+        return v.builtin == layout
+    }
+
+    private func pickTab(_ t: ProjectTab) {
+        tab = t
+        if let layout = layoutOf(t), let builtin = viewsFor(layout).first(where: { $0.builtin == layout }) {
+            pickView(layout, builtin.id)
+        }
+    }
 
     private var tabBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 2) {
-                ForEach(visibleTabs) { t in
-                    Button { tab = t } label: {
-                        VStack(spacing: 5) {
-                            HStack(spacing: 5) {
-                                Image(systemName: t.icon).font(.system(size: 12, weight: .semibold))
-                                Text(t.label).font(NXFont.text(13, tab == t ? .semibold : .medium))
-                            }
-                            .foregroundStyle(tab == t ? NX.foreground : NX.mutedFg)
-                            .padding(.horizontal, 12).padding(.vertical, 9)
-                            .frame(minHeight: 42)
-                            Rectangle().fill(tab == t ? NX.violet : .clear).frame(height: 2)
-                        }
-                        .contentShape(Rectangle())
+        HStack(spacing: 4) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 2) {
+                    ForEach(visibleTabs) { t in
+                        tabChip(t)
+                        ForEach(extraViews(t)) { v in viewChip(v, tab: t) }
                     }
-                    .buttonStyle(.plain)
-                    .hoverEffect(.highlight)
-                    .accessibilityAddTraits(tab == t ? .isSelected : [])
+                    if let layout = layoutOf(tab) {
+                        Button { alertText = ""; boardAlert = .newView(layout: layout) } label: {
+                            Image(systemName: "plus").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                                .frame(width: 34, height: 34).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .hoverEffect(.highlight)
+                        .accessibilityLabel(T("New view"))
+                    }
                 }
+                .padding(.horizontal, wide ? 18 : 8)
             }
-            .padding(.horizontal, 8)
+            if let layout = layoutOf(tab), let v = activeView(layout) {
+                Button { filterView = v } label: {
+                    Image(systemName: v.config.isFiltered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(v.config.isFiltered ? NX.violetText : NX.mutedFg)
+                        .frame(width: 40, height: 40).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .padding(.trailing, wide ? 18 : 8)
+                .accessibilityLabel(T("Filter and sort…"))
+            }
         }
+        .padding(.vertical, 4)
         // Keyboard (iPad keyboard, Mac): ⌘[ / ⌘] previous / next tab, ⌘F search the project.
         .background {
             Group {
@@ -566,6 +596,33 @@ struct ProjectDetailView: View {
                 Button("") { if searchApplies { searchFocused = true } }.keyboardShortcut("f", modifiers: .command)
             }
             .opacity(0).accessibilityHidden(true)
+        }
+    }
+
+    private func tabChip(_ t: ProjectTab) -> some View {
+        let builtin = layoutOf(t).flatMap { l in viewsFor(l).first { $0.builtin == l } }
+        return ProjectTabChip(title: t.label, icon: t.icon, on: tabIsOn(t),
+                              filtered: builtin?.config.isFiltered ?? false) { pickTab(t) }
+            .contextMenu {
+                if let builtin { viewMenuItems(builtin) }
+            }
+    }
+
+    private func viewChip(_ v: ProjectViewFull, tab t: ProjectTab) -> some View {
+        let layout = layoutOf(t) ?? "board"
+        return ProjectTabChip(title: viewTitle(v), icon: t.icon, on: tab == t && activeView(layout)?.id == v.id,
+                              filtered: v.config.isFiltered) {
+            tab = t
+            pickView(layout, v.id)
+        }
+        .contextMenu { viewMenuItems(v) }
+    }
+
+    @ViewBuilder private func viewMenuItems(_ v: ProjectViewFull) -> some View {
+        Button { filterView = v } label: { Label(T("Filter and sort…"), systemImage: "line.3.horizontal.decrease.circle") }
+        Button { alertText = v.name ?? ""; boardAlert = .renameView(v) } label: { Label(T("Rename…"), systemImage: "pencil") }
+        if v.canDelete {
+            Button(role: .destructive) { boardAlert = .deleteView(v) } label: { Label(T("Delete view"), systemImage: "trash") }
         }
     }
 
@@ -718,7 +775,6 @@ struct ProjectDetailView: View {
         let statusStyle = StatusOptions.inUse(lanes) && shown.allSatisfy { !$0.id.hasPrefix("grp:") }
         let grouped = shown.contains { $0.id.hasPrefix("grp:") }
         VStack(spacing: 0) {
-            viewChips("board")
             if !shown.isEmpty {
                 // Horizontal-only: each column is a full-height lane that scrolls its own cards
                 // vertically (see LaneColumn), so the board never pans in two directions at once.
@@ -821,11 +877,23 @@ struct ProjectDetailView: View {
     @ViewBuilder private func listTab() -> some View {
         let shown = displayLanes("list")
         VStack(spacing: 0) {
-            viewChips("list")
             ListTab(lanes: shown, onOpen: { open($0) }, selection: selection,
                     statusStyle: StatusOptions.inUse(lanes) || shown.contains { $0.id.hasPrefix("grp:") },
-                    onDrop: { ids, laneId, before in dropped(ids, on: laneId, before: before, visible: shown) })
+                    onDrop: { ids, laneId, before in dropped(ids, on: laneId, before: before, visible: shown) },
+                    statusOf: rowStatusLookup())
         }
+    }
+
+    /// Each task's status option (the real section it sits in), for the List's status pill. Built once
+    /// per render; nil for every task when the project has no status options.
+    private func rowStatusLookup() -> (BoardTask) -> RowStatus? {
+        guard StatusOptions.inUse(lanes) else { return { _ in nil } }
+        var byTask: [String: RowStatus] = [:]
+        for lane in lanes {
+            let st = RowStatus(name: lane.name, colorKey: lane.colorKey)
+            for t in lane.tasks ?? [] { byTask[t.id] = st }
+        }
+        return { byTask[$0.id] }
     }
 
     /// "+ Status" after the last column: a new option in one of the three groups (web StatusPicker).

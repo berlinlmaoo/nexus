@@ -183,61 +183,64 @@ struct ListTab: View {
     /// Rows dropped on a group (ids, group id, the row they were dropped on — nil = the group's end).
     /// nil = rows are not draggable.
     var onDrop: (([String], String, String?) -> Void)? = nil
+    /// The status option a task sits in (its section), when the project has options; nil = plain status.
+    var statusOf: (BoardTask) -> RowStatus? = { _ in nil }
+
+    @Environment(\.horizontalSizeClass) private var hSize
+    @State private var collapsed: Set<String> = []
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 18) {
+            LazyVStack(alignment: .leading, spacing: 14) {
                 ForEach(lanes) { lane in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 8) {
-                            if statusStyle {
-                                StatusPill(name: lane.name, colorKey: lane.colorKey, size: 13)
-                            } else {
-                                Text(lane.name).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
-                            }
-                            Text("\(lane.tasks?.count ?? 0)").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg).monospacedDigit()
-                            Spacer()
-                        }
-                        if (lane.tasks ?? []).isEmpty {
-                            Text(T("No tasks")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg.opacity(0.7)).padding(.vertical, 4)
-                        } else {
-                            let order = { (lane.tasks ?? []).map(\.id) }
-                            ForEach(lane.tasks ?? []) { t in
-                                row(t, laneId: lane.id, order: order)
-                            }
-                        }
-                    }
-                    .padding(.vertical, 4)
-                    .contentShape(Rectangle())
-                    // A whole group takes a drop (web: drag a row's grip onto another group).
-                    .dropDestination(for: String.self) { ids, _ in
-                        guard let onDrop, !ids.isEmpty else { return false }
-                        onDrop(ids, lane.id, nil)
-                        return true
-                    }
+                    group(lane)
                 }
-            }.padding(16)
+            }
+            .padding(.horizontal, hSize == .regular ? 24 : 14)
+            .padding(.vertical, 12)
         }
     }
 
-    @ViewBuilder private func row(_ t: BoardTask, laneId: String, order: @escaping () -> [String]) -> some View {
-        let base = ProjectTaskRow(task: t, onOpen: onOpen, selection: selection, order: order)
-        Group {
-            if t.isSubtask {
-                base
-                    .padding(.leading, 16)                       // nest under parent
-                    .overlay(alignment: .leading) { Rectangle().fill(Color(hex: "#7c3aed").opacity(0.35)).frame(width: 2).padding(.vertical, 6) }
-            } else {
-                base
+    private func group(_ lane: ProjectDetail.Lane) -> some View {
+        let isCollapsed = collapsed.contains(lane.id)
+        return VStack(alignment: .leading, spacing: 0) {
+            ListGroupHeader(lane: lane, statusStyle: statusStyle, collapsed: isCollapsed) {
+                withAnimation(.snappy(duration: 0.2)) {
+                    if isCollapsed { collapsed.remove(lane.id) } else { collapsed.insert(lane.id) }
+                }
+            }
+            .overlay(alignment: .bottom) { Rectangle().fill(NX.border.opacity(0.7)).frame(height: 0.5) }
+            if !isCollapsed {
+                if (lane.tasks ?? []).isEmpty {
+                    Text(T("No tasks")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg.opacity(0.7))
+                        .padding(.horizontal, 8).padding(.vertical, 8)
+                } else {
+                    let order = { (lane.tasks ?? []).map(\.id) }
+                    ForEach(lane.tasks ?? []) { t in
+                        row(t, laneId: lane.id, order: order)
+                    }
+                }
             }
         }
-        .draggable(t.id)
-        // Dropped on a row: just before it (manual order inside the group, or a move to that place).
+        .contentShape(Rectangle())
+        // A whole group takes a drop (web: drag a row's grip onto another group).
         .dropDestination(for: String.self) { ids, _ in
-            guard let onDrop, !ids.isEmpty, !ids.contains(t.id) else { return false }
-            onDrop(ids, laneId, t.id)
+            guard let onDrop, !ids.isEmpty else { return false }
+            onDrop(ids, lane.id, nil)
             return true
         }
+    }
+
+    private func row(_ t: BoardTask, laneId: String, order: @escaping () -> [String]) -> some View {
+        ListTaskRow(task: t, status: statusOf(t) ?? RowStatus.plain(t), wide: hSize == .regular,
+                    onOpen: onOpen, selection: selection, order: order)
+            .draggable(t.id)
+            // Dropped on a row: just before it (manual order inside the group, or a move to that place).
+            .dropDestination(for: String.self) { ids, _ in
+                guard let onDrop, !ids.isEmpty, !ids.contains(t.id) else { return false }
+                onDrop(ids, laneId, t.id)
+                return true
+            }
     }
 }
 

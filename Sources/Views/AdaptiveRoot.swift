@@ -85,6 +85,33 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
+    /// The sidebar's outline glyph (dev web: calm, one colour, lucide-like). `icon` stays for the phone's
+    /// launcher tiles, which are filled and tinted.
+    var sidebarIcon: String {
+        switch self {
+        case .dashboard:    return "square.grid.2x2"
+        case .tasks:        return "checkmark.square"
+        case .inbox:        return "tray"
+        case .projects:     return "folder"
+        case .messages:     return "bubble.left"
+        case .gideon:       return "sparkles"
+        case .threads:      return "at"
+        case .submissions:  return "doc.text"
+        case .teamCalendar: return "calendar"
+        case .roomBooking:  return "door.left.hand.open"
+        case .leaderboard:  return "trophy"
+        case .reports:      return "chart.bar"
+        case .docs:         return "book"
+        case .forms:        return "list.bullet.rectangle"
+        case .vault:        return "externaldrive"
+        case .attendance:   return "clock.badge.checkmark"
+        case .tickets:      return "ticket"
+        case .teams:        return "person.3"
+        case .settings:     return "gearshape"
+        case .admin:        return "shield"
+        }
+    }
+
     var tint: Color {
         switch self {
         case .dashboard, .projects, .threads, .teamCalendar, .docs, .vault, .settings, .gideon: return NX.violetText
@@ -392,11 +419,12 @@ struct SidebarRoot: View {
                         // just stops offering a door that opens onto a wall of 403s.
                         ForEach(group.screens.filter { $0 != .admin || viewer.canAdminister }) { screen in
                             Label {
-                                Text(screen.title).font(NXFont.text(15, .semibold))
+                                Text(screen.title).font(NXFont.text(15))
                             } icon: {
-                                // White on the violet selection: Home's own violet vanished into it.
-                                Image(systemName: screen.icon)
-                                    .foregroundStyle(selection == .screen(screen) ? Color.white : screen.tint)
+                                // Calm, one colour (dev web); white on the selection fill.
+                                Image(systemName: screen.sidebarIcon)
+                                    .font(.system(size: 15, weight: .regular))
+                                    .foregroundStyle(selection == .screen(screen) ? Color.white : NX.mutedFg)
                             }
                             .tag(NXSelection.screen(screen))
                         }
@@ -618,7 +646,7 @@ struct SidebarRoot: View {
         ForEach(refs) { ref in
             HStack(spacing: 10) {
                 projectIcon(ref)
-                Text(ref.name).font(NXFont.text(15, .medium)).lineLimit(1)
+                Text(ref.name).font(NXFont.text(15)).lineLimit(1)
                 Spacer(minLength: 6)
                 // A visible button, not only a long press: a gesture nobody is told about is a
                 // feature nobody finds. .borderless keeps the tap on the button instead of letting
@@ -653,7 +681,7 @@ struct SidebarRoot: View {
     }
 
     @ViewBuilder private func projectIcon(_ ref: ProjectRef) -> some View {
-        ProjectRefIcon(ref: ref)
+        ProjectRefIcon(ref: ref, size: 20)
     }
 }
 

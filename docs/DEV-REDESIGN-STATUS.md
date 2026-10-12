@@ -83,7 +83,10 @@ full-width pages on iPad/Mac.
 | Room Booking | shared empty state |
 | Projects list / folders | plain copy, no dashed boxes |
 | Project: Overview | unchanged (already redesigned 11 Oct to the web) |
-| Project: Board / List | rebuilt (Phase 2) |
+| Project page header (13 Oct, after the owner's Mac build) | web page header: project icon + large title; iPad/Mac labelled "Ask GIDEON", "Project settings", dark "Add task"; phone keeps icons; back only when pushed; plain background |
+| Project tab row (13 Oct) | web chips (icon + label, soft fill when on); saved views sit beside their layout tab ("Per kategori" next to Board); "+" new view; filter button with a dot when filtered; view menu on long-press / right-click; the old chip bar under the tabs is gone |
+| Project: Board / List | rebuilt (Phase 2); List redone 13 Oct as flat hairline rows: done circle, title, properties on the right on iPad/Mac (first 3 custom fields e.g. amount, due with overdue red, priority, status pill, avatars), wrapped under the title on iPhone; collapsible group headers with coloured pill and done/total |
+| Sidebar (iPad/Mac, 13 Oct) | calm outline icons in one muted colour, regular-weight labels, smaller project marks |
 | Project: Sheet / Timeline | statuses ordered; Timeline skips undated tasks |
 | Project: Calendar / Pages / Forms / Chat / Automations / Pipeline / Outlet | shared pieces; Pages editable |
 | Task detail | rebuilt (Phase 1 + editor) |

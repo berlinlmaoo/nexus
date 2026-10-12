@@ -1093,21 +1093,38 @@ struct GideonChatsSheet: View {
 /// with that context. The panel reads only what this account can open.
 struct AskGideonButton: View {
     let context: GideonContext
+    /// iPad / Mac project header: logo + "Ask GIDEON" in the web's outlined button.
+    var labelled = false
     @Environment(AuthStore.self) private var auth
     @Environment(AppRouter.self) private var router
     @State private var open = false
 
     var body: some View {
         Button { open = true } label: {
-            Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
-                .frame(width: 17, height: 17)
-                .foregroundStyle(NX.violetText)
-                .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
-                .frame(width: 44, height: 44).contentShape(Rectangle())
+            if labelled {
+                HStack(spacing: 6) {
+                    logo(15)
+                    Text(T("Ask GIDEON")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                }
+                .padding(.horizontal, 12).frame(height: 36)
+                .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
+                .frame(minHeight: 44).contentShape(Rectangle())
+            } else {
+                logo(17)
+                    .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
+            }
         }
         .buttonStyle(.plain)
         .hoverEffect(.lift)
         .accessibilityLabel(T("Ask GIDEON"))
         .sheet(isPresented: $open) { GideonPanel(openContext: context).environment(auth).environment(router) }
+    }
+
+    private func logo(_ size: CGFloat) -> some View {
+        Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
+            .frame(width: size, height: size)
+            .foregroundStyle(NX.violetText)
     }
 }
