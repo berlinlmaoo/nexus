@@ -712,7 +712,7 @@ final class GideonChat {
 
     /// Which drain is the current one. reset() starts a new generation, so a drain that was cancelled
     /// mid-answer can never clear `sending` for (or race) the drain a new question started after it.
-    private var generation = 0
+    @ObservationIgnored private var generation = 0
 
     private func drain() async {
         let mine = generation
@@ -723,6 +723,7 @@ final class GideonChat {
     }
 
     private func send(_ item: Outgoing) async {
+        let gen = generation
         // History is cut at this question. Anything queued behind it is already in `turns`, and
         // sending that as context would have the server answer the wrong message.
         let messages = history(upTo: item)
@@ -775,6 +776,8 @@ final class GideonChat {
                 error = T("GIDEON didn't answer. Try again.")
             }
         } catch APIError.unauthorized {
+            // An answer from before reset() belongs to a session that is gone: nothing to touch.
+            guard generation == gen else { return }
             // Drop the queue as well: the session is gone, so replaying it would only produce the
             // same 401 once per queued message.
             turns.removeAll { $0.id == answer.id }
@@ -783,7 +786,7 @@ final class GideonChat {
         } catch {
             // A cancelled drain is `reset()` taking the session away, not something that went
             // wrong. The transcript this would write into belongs to somebody who has signed out.
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, generation == gen else { return }
             turns.removeAll { $0.id == answer.id }
             // The server writes its own sentence for a refused attachment — which file, and what to
             // do about it. Replacing that with "GIDEON failed." would throw the useful half away.

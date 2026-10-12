@@ -202,6 +202,21 @@ enum BlockConvert {
         }
     }
 
+    private static func scalarString(_ a: ArraySlice<Unicode.Scalar>) -> String {
+        var v = String.UnicodeScalarView()
+        v.append(contentsOf: a)
+        return String(v)
+    }
+
+    /// The marks text typed at the END of a run takes: not a link or code.
+    private static func extendable(_ marks: [Any]?) -> [Any]? {
+        let kept = (marks ?? []).filter { m in
+            let t = (m as? RawJSON)?["type"] as? String ?? ""
+            return t != "link" && t != "code"
+        }
+        return kept.isEmpty ? nil : kept
+    }
+
     private static func sameMarks(_ a: [Any]?, _ b: [Any]?) -> Bool {
         let ea = a ?? [], eb = b ?? []
         guard let da = try? JSONSerialization.data(withJSONObject: ea, options: [.sortedKeys]),
@@ -215,13 +230,15 @@ enum BlockConvert {
     /// after), as an editor does. A mention or date the edit cuts into becomes plain text.
     static func editInline(_ original: [Any], old: String, new: String) -> [Any] {
         if old == new { return original }
-        let o = Array(old), n = Array(new)
+        // Unicode scalars, counted the same way for the whole line and for every piece: characters would
+        // merge across a piece boundary ("\r" + "\n", a split emoji) and shift every mark after it.
+        let o = Array(old.unicodeScalars), n = Array(new.unicodeScalars)
         var pre = 0
         while pre < o.count && pre < n.count && o[pre] == n[pre] { pre += 1 }
         var suf = 0
         while suf < o.count - pre && suf < n.count - pre && o[o.count - 1 - suf] == n[n.count - 1 - suf] { suf += 1 }
         let cutStart = pre, cutEnd = o.count - suf          // [cutStart, cutEnd) of the old text goes
-        let inserted = String(n[pre..<(n.count - suf)])
+        let inserted = scalarString(n[pre..<(n.count - suf)])
 
         var out: [Piece] = []
         var at = 0
@@ -234,7 +251,7 @@ enum BlockConvert {
             if !inserted.isEmpty { out.append(.text(inserted, marks: marksForInsert)) }
         }
         for p in pieces(original) {
-            let len = p.shown.count
+            let len = p.shown.unicodeScalars.count
             let start = at, end = at + len
             at = end
             switch p {
@@ -246,25 +263,26 @@ enum BlockConvert {
                     out.append(p)
                 } else {
                     // Cut into: its text survives outside the cut as plain text.
-                    let chars = Array(p.shown)
-                    let keepBefore = String(chars[0..<max(0, cutStart - start)])
-                    let keepAfter = String(chars[min(len, max(0, cutEnd - start))..<len])
+                    let chars = Array(p.shown.unicodeScalars)
+                    let keepBefore = scalarString(chars[0..<max(0, cutStart - start)])
+                    let keepAfter = scalarString(chars[min(len, max(0, cutEnd - start))..<len])
                     if !keepBefore.isEmpty { out.append(.text(keepBefore, marks: nil)) }
                     insertNow()
                     if !keepAfter.isEmpty { out.append(.text(keepAfter, marks: nil)) }
                 }
             case .text(let t, let marks):
-                let chars = Array(t)
+                let chars = Array(t.unicodeScalars)
                 if end <= cutStart {
                     out.append(p)
-                    if end == cutStart { marksForInsert = marks; marksChosen = true }
+                    // Typing right after a link or code does not extend it (TipTap: inclusive false).
+                    if end == cutStart { marksForInsert = extendable(marks); marksChosen = true }
                 } else if start >= cutEnd {
                     if !marksChosen { marksForInsert = marks; marksChosen = true }
                     insertNow()
                     out.append(p)
                 } else {
-                    let before = String(chars[0..<max(0, cutStart - start)])
-                    let after = String(chars[min(len, max(0, cutEnd - start))..<len])
+                    let before = scalarString(chars[0..<max(0, cutStart - start)])
+                    let after = scalarString(chars[min(len, max(0, cutEnd - start))..<len])
                     if !marksChosen { marksForInsert = marks; marksChosen = true }
                     if !before.isEmpty { out.append(.text(before, marks: marks)) }
                     insertNow()
