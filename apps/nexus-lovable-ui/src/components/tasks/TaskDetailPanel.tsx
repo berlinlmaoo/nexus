@@ -679,11 +679,11 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     <span key={a.user?.id} className="group inline-flex items-center gap-1.5 rounded-full bg-muted py-1 pl-1 pr-2 text-xs font-semibold">
                       <MiniAvatar user={a.user} size={22} /> {a.user?.name}
                       {a.user?.deactivatedAt && <PersonLeftTag />}
-                      <button onClick={() => a.user?.id && assignMut.mutate({ userId: a.user.id, add: false })} className="rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
+                      <button aria-label={tr("Remove {name}", { name: a.user?.name ?? tr("assignee") })} onClick={() => a.user?.id && assignMut.mutate({ userId: a.user.id, add: false })} className="rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
                     </span>
                   ))}
                   <div className="relative">
-                    <button onClick={() => { setAssignSearch(""); setShowAssignPicker((v) => !v); }} className="grid h-8 w-8 place-items-center rounded-full border border-dashed border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary active:scale-[0.98]"><Plus className="h-4 w-4" /></button>
+                    <button aria-label={tr("Add assignee")} onClick={() => { setAssignSearch(""); setShowAssignPicker((v) => !v); }} className="grid h-8 w-8 place-items-center rounded-full border border-dashed border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary active:scale-[0.98]"><Plus className="h-4 w-4" /></button>
                     {showAssignPicker && (
                       <div className="absolute z-20 mt-1 w-60 rounded-xl border border-border bg-popover p-1 shadow-pop">
                         <div className="relative p-1">
@@ -787,7 +787,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               label={tr("Also in projects")}
               action={
                 <div className="relative">
-                  <button onClick={() => setShowProjPicker((v) => !v)} className="grid h-7 w-7 place-items-center rounded-full border border-dashed border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"><Plus className="h-3.5 w-3.5" /></button>
+                  <button aria-label={tr("Link to another project")} onClick={() => setShowProjPicker((v) => !v)} className="grid h-7 w-7 place-items-center rounded-full border border-dashed border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"><Plus className="h-3.5 w-3.5" /></button>
                   {showProjPicker && (
                     <div className="absolute right-0 z-20 mt-1 max-h-64 w-64 overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-pop">
                       {candidateProjects.isLoading && <div className="px-3 py-2 text-xs text-muted-foreground">{tr("Loading…")}</div>}
@@ -804,7 +804,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 {(t.taskProjects ?? []).map((tp) => (
                   <span key={tp.id} className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold">
                     <span className="h-2 w-2 rounded-full" style={{ background: tp.project?.color ?? "#7b68ee" }} /> {tp.project?.name}
-                    <button onClick={() => tp.project?.id && unlinkProjectMut.mutate(tp.project.id)} className="rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
+                    <button aria-label={tr("Unlink {name}", { name: tp.project?.name ?? tr("project") })} onClick={() => tp.project?.id && unlinkProjectMut.mutate(tp.project.id)} className="rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
                   </span>
                 ))}
                 {(t.taskProjects?.length ?? 0) === 0 && <p className="text-xs text-muted-foreground">{tr("Only in its home project.")}</p>}
@@ -864,7 +864,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                       placeholder={tr("+ Add subtask… (Enter)")}
                       className="min-w-0 flex-1 rounded-xl border border-dashed border-border bg-transparent px-3 py-2 text-sm outline-none transition focus:border-primary"
                     />
-                    <button
+                    <button aria-label={tr("Add subtask")}
                       onClick={() => { if (newSubTitle.trim()) addSubtask.mutate(newSubTitle.trim()); }}
                       disabled={addSubtask.isPending || !newSubTitle.trim()}
                       className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition hover:bg-primary/90 active:scale-[0.97] disabled:opacity-40"
@@ -912,7 +912,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 {(attachments.data ?? []).filter((a) => a.kind !== "PROOF").map((att) => (
                   <div key={att.id} className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2">
                     {mediaKind(att) === "image" && att.url ? (
-                      <button onClick={() => setPreviewAtt(att)} className="shrink-0"><img src={att.url} alt="" className="h-9 w-9 rounded-md object-cover" /></button>
+                      <button aria-label={tr("Preview")} onClick={() => setPreviewAtt(att)} className="shrink-0"><img src={att.url} alt="" className="h-9 w-9 rounded-md object-cover" /></button>
                     ) : (
                       <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
                     )}
@@ -920,7 +920,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     {att.size != null && <span className="shrink-0 text-xs text-muted-foreground">{Math.round(att.size / 1024)} KB</span>}
                     <button onClick={() => setPreviewAtt(att)} aria-label={tr("Preview")} title={tr("Preview")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
                     {att.url && <a href={`${att.url}?download=${encodeURIComponent(att.name || "file")}`} download={att.name || ""} aria-label={tr("Download")} title={tr("Download")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-3.5 w-3.5" /></a>}
-                    <button onClick={() => delAttachment.mutate(att.id)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                    <button aria-label={tr("Delete attachment")} onClick={() => delAttachment.mutate(att.id)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
                 {(attachments.data ?? []).filter((a) => a.kind !== "PROOF").length === 0 && <p className="text-xs text-muted-foreground">{tr("No attachments.")}</p>}
@@ -962,7 +962,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 {(attachments.data ?? []).filter((a) => a.kind === "PROOF").map((att) => (
                   <div key={att.id} className="flex items-center gap-2 rounded-xl border border-emerald-300/40 bg-emerald-50/40 px-3 py-2 dark:border-emerald-500/30 dark:bg-emerald-500/10">
                     {mediaKind(att) === "image" && att.url ? (
-                      <button onClick={() => setPreviewAtt(att)} className="shrink-0"><img src={att.url} alt="" className="h-9 w-9 rounded-md object-cover" /></button>
+                      <button aria-label={tr("Preview")} onClick={() => setPreviewAtt(att)} className="shrink-0"><img src={att.url} alt="" className="h-9 w-9 rounded-md object-cover" /></button>
                     ) : (
                       <Paperclip className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                     )}
@@ -970,7 +970,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     {att.size != null && <span className="shrink-0 text-xs text-muted-foreground">{Math.round(att.size / 1024)} KB</span>}
                     <button onClick={() => setPreviewAtt(att)} aria-label={tr("Preview")} title={tr("Preview")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
                     {att.url && <a href={`${att.url}?download=${encodeURIComponent(att.name || "file")}`} download={att.name || ""} aria-label={tr("Download")} title={tr("Download")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-3.5 w-3.5" /></a>}
-                    <button onClick={() => delAttachment.mutate(att.id)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                    <button aria-label={tr("Delete attachment")} onClick={() => delAttachment.mutate(att.id)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
                 {(attachments.data ?? []).filter((a) => a.kind === "PROOF").length === 0 && (
@@ -1055,7 +1055,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                   <div key={dep.id} className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm">
                     <CheckCircle2 className={cn("h-4 w-4 shrink-0", dep.dependsOnTask?.status === "DONE" ? "text-success" : "text-muted-foreground/40")} />
                     <span className="flex-1 truncate">{dep.dependsOnTask?.title}</span>
-                    <button onClick={() => removeDep.mutate(dep.id)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
+                    <button aria-label={tr("Remove dependency")} onClick={() => removeDep.mutate(dep.id)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
                 {(deps.data?.dependencies?.length ?? 0) === 0 && <p className="text-xs text-muted-foreground">{tr("No blockers.")}</p>}
@@ -1153,7 +1153,7 @@ function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; ti
           {tasks.map((t) => (
             <div key={t.id} className="flex items-center gap-2 rounded-lg bg-muted px-2 py-1.5 text-sm">
               <span className="min-w-0 flex-1 truncate">{t.title}</span>
-              <button onClick={() => setTasks((prev) => (prev.length > 1 ? prev.filter((x) => x.id !== t.id) : prev))} disabled={tasks.length <= 1} className="rounded p-0.5 text-muted-foreground hover:text-destructive disabled:opacity-30"><X className="h-3.5 w-3.5" /></button>
+              <button aria-label={tr("Remove {name}", { name: t.title })} onClick={() => setTasks((prev) => (prev.length > 1 ? prev.filter((x) => x.id !== t.id) : prev))} disabled={tasks.length <= 1} className="rounded p-0.5 text-muted-foreground hover:text-destructive disabled:opacity-30"><X className="h-3.5 w-3.5" /></button>
             </div>
           ))}
         </div>
@@ -1426,7 +1426,7 @@ function CommentComposer({ members, pending, onSubmit }: { members: NexusUser[];
           </div>
         )}
       </div>
-      <button disabled={!text.trim() || pending} onClick={submit} className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.95] disabled:opacity-50">
+      <button aria-label={tr("Send comment")} disabled={!text.trim() || pending} onClick={submit} className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.95] disabled:opacity-50">
         {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
       </button>
     </div>

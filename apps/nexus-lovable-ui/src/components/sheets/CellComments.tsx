@@ -146,7 +146,7 @@ export function CellCommentThread({
                   placeholder={t("Write a comment… (@name to tag)")}
                   className="max-h-24 min-h-[2rem] flex-1 resize-none rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary"
                 />
-                <button
+                <button aria-label={t("Send comment")}
                   onClick={send}
                   disabled={!draft.trim() || busy}
                   className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40"
@@ -185,6 +185,7 @@ export function CellCommentThread({
                     <button
                       onClick={() => onRestore(r.oldValue)}
                       title={t("Restore to {value}", { value: show(r.oldValue) })}
+                      aria-label={t("Restore to {value}", { value: show(r.oldValue) })}
                       className="shrink-0 self-start rounded p-0.5 text-muted-foreground opacity-0 transition hover:text-primary group-hover:opacity-100"
                     ><RotateCcw className="h-3 w-3" /></button>
                   )}

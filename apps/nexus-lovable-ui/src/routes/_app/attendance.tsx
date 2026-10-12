@@ -11,6 +11,7 @@ import { Avatar } from "@/components/Avatar";
 import { ApiError, downloadFile, fmtDate, fmtTime, nexusApi, statusLabel, type AttendanceActionPayload, type NexusAttendanceHistory, type NexusOffice, type NexusOffsiteCheckout } from "@/lib/nexus-api";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { getAttendanceFix, GeoError } from "@/lib/geo";
+import { attendanceReasonText, deductionLabel } from "@/lib/server-text";
 import { AlertTriangle, Calendar, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Clock, Coffee, Download, FileText, Flag, Globe, Hand, HeartPulse, Image as ImageIcon, Info, Loader2, MapPin, MapPinOff, Moon, Pencil, PenLine, Route as RouteIcon, Search, Sparkles, Sun, Trash2, X } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
 import { SelfieCapture, type SelfieCaptureHandle } from "@/components/attendance/SelfieCapture";
@@ -764,16 +765,16 @@ function DeductionLogModal({ userId, name, monthKey, onClose }: { userId: string
     <div key={e.id} className={cn("flex items-center gap-3 rounded-xl border border-border px-3 py-2", e.cleared && "opacity-55")}>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="text-sm font-semibold">{e.label}</span>
+          <span className="text-sm font-semibold">{deductionLabel(e)}</span>
           {e.cleared && <span className="rounded-full bg-emerald-100 px-1.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">{tr("removed")}</span>}
         </div>
-        <div className="text-[11px] text-muted-foreground">{fmtDate(e.dateKey)}{e.detail ? ` · ${e.detail}` : ""}</div>
+        <div className="text-[11px] text-muted-foreground">{fmtDate(e.dateKey)}{e.detail ? ` · ${attendanceReasonText(e.detail)}` : ""}</div>
       </div>
       <span className={cn("shrink-0 text-sm font-black tabular-nums", e.cleared ? "text-muted-foreground" : "text-rose-600 dark:text-rose-400")}>
         {e.unit === "XP" ? `${e.amount} XP` : tr("{n} day off", { n: e.amount })}
       </span>
       {!e.cleared && (
-        <button
+        <button aria-label={tr("Remove this day's deduction")}
           disabled={clear.isPending}
           onClick={() => {
             const same = active.filter((x) => x.dateKey === e.dateKey);
@@ -1442,7 +1443,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
         <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusTone(r.status)}`}>{statusLabel(r.status)}</span>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold">{REQ_LABEL[typeKey] ? tr(REQ_LABEL[typeKey]) : statusLabel(r.type)} {r.user?.name ? <span className="font-normal text-muted-foreground">· {r.user.name}</span> : null}</div>
-          <div className="text-xs text-muted-foreground">{fmtDateShort(r.startDate)}{sameDay ? "" : ` → ${fmtDateShort(r.endDate)}`}{r.reason ? ` · ${r.reason}` : ""}</div>
+          <div className="text-xs text-muted-foreground">{fmtDateShort(r.startDate)}{sameDay ? "" : ` → ${fmtDateShort(r.endDate)}`}{r.reason ? ` · ${attendanceReasonText(r.reason)}` : ""}</div>
           {/* Permit evidence, right under the reason — this is what separates a real errand from a
               forgotten check-in, and it's useless if the approver has to click to find it. */}
           {(r.submittedAddress || r.submittedLat != null || r.reportDelayMinutes != null) && (
@@ -2283,7 +2284,7 @@ function DayOffLogModal({ kind, origin, onClose }: { kind: "DAY_OFF" | "RED_DATE
                     <span className="text-sm font-semibold">{range}</span>
                     {kind === "DAY_OFF" && <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", auto ? "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300")}>{auto ? tr("Auto · late >120m") : tr("Manual")}</span>}
                   </div>
-                  {r.reason && <p className="mt-1 text-xs text-muted-foreground">{r.reason}</p>}
+                  {r.reason && <p className="mt-1 text-xs text-muted-foreground">{attendanceReasonText(r.reason)}</p>}
                   <p className="mt-0.5 text-[11px] text-muted-foreground">{tr("Status")}: {statusLabel(r.status || "")}</p>
                 </div>
               );

@@ -255,7 +255,7 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
                 <span className="max-w-[120px] truncate font-semibold" title={m.user?.name ?? ""}>{m.user?.name ?? "—"}</span>
                 {/* Lead tim dihapus: approval absensi sekarang diatur di Control Room > Bagan Approval. */}
                 {canManageAtt ? (
-                  <button onClick={() => setPrimary.mutate({ userId: uid, value: !isPrimary })} disabled={setPrimary.isPending} title={isPrimary ? tr("Their primary attendance team (click to unset)") : tr("Make this their primary attendance team")} className={cn("shrink-0 rounded-full p-0.5 transition", isPrimary ? "text-amber-500" : "text-muted-foreground/40 hover:text-amber-500")}><Star className={cn("h-3.5 w-3.5", isPrimary && "fill-current")} /></button>
+                  <button aria-label={isPrimary ? tr("Their primary attendance team (click to unset)") : tr("Make this their primary attendance team")} onClick={() => setPrimary.mutate({ userId: uid, value: !isPrimary })} disabled={setPrimary.isPending} title={isPrimary ? tr("Their primary attendance team (click to unset)") : tr("Make this their primary attendance team")} className={cn("shrink-0 rounded-full p-0.5 transition", isPrimary ? "text-amber-500" : "text-muted-foreground/40 hover:text-amber-500")}><Star className={cn("h-3.5 w-3.5", isPrimary && "fill-current")} /></button>
                 ) : isPrimary ? <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" /> : null}
                 {canManage && <button onClick={() => removeMember.mutate(uid)} className="shrink-0 text-muted-foreground/50 transition hover:text-destructive" aria-label={tr("Remove")}><X className="h-3 w-3" /></button>}
               </span>

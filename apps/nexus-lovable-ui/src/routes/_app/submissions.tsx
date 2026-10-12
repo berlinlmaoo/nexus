@@ -179,7 +179,7 @@ function SubmissionDetail({ id, onClose }: { id: string; onClose: () => void }) 
                     {sub.proofs!.map((p) => (
                       <div key={p.id} className="flex items-center gap-2 rounded-xl border border-emerald-300/50 bg-emerald-50/50 p-2.5 dark:bg-emerald-500/10 dark:border-emerald-500/30">
                         {p.mimeType?.startsWith("image/") && p.url
-                          ? <a href={p.url} target="_blank" rel="noreferrer" className="shrink-0"><img src={p.url} alt="" className="h-10 w-10 rounded-md object-cover" /></a>
+                          ? <a aria-label={t("Open photo")} href={p.url} target="_blank" rel="noreferrer" className="shrink-0"><img src={p.url} alt="" className="h-10 w-10 rounded-md object-cover" /></a>
                           : <Paperclip className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />}
                         <span className="min-w-0 flex-1 truncate text-sm font-medium">{p.name || t("proof")}</span>
                         {p.url && <a href={`${p.url}?download=${encodeURIComponent(p.name || "bukti")}`} download={p.name || ""} title={t("Download")} aria-label={t("Download")} className="rounded-lg p-1 text-emerald-700 transition hover:bg-emerald-100 dark:text-emerald-300 dark:hover:bg-emerald-500/15"><Download className="h-4 w-4" /></a>}

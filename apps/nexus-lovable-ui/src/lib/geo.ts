@@ -5,6 +5,9 @@
 // high-accuracy call with no fallback and showed a generic "ditolak/timeout" message, which looks like
 // a permission problem when it usually isn't. This helper tries high-accuracy first, then falls back to
 // a coarser / recently-cached fix, and surfaces a clear, actionable message for the real failure mode.
+// The messages are thrown at the moment of failure, so t() gives them in the current UI language.
+
+import { t } from "@/lib/lang";
 
 export type GeoFix = { lat: number; lng: number; accuracy: number };
 
@@ -16,7 +19,7 @@ function getPos(opts: PositionOptions): Promise<GeolocationPosition> {
 
 export async function getAttendanceFix(): Promise<GeoFix> {
   if (typeof navigator === "undefined" || !navigator.geolocation) {
-    throw new GeoError("This browser doesn't support GPS.");
+    throw new GeoError(t("This browser doesn't support GPS."));
   }
   try {
     // 1) Precise GPS — best for the geofence radius.
@@ -25,7 +28,7 @@ export async function getAttendanceFix(): Promise<GeoFix> {
   } catch (e) {
     const err = e as GeolocationPositionError;
     if (err && err.code === 1) {
-      throw new GeoError("Location access denied. Allow location for this site in Settings, then try again.");
+      throw new GeoError(t("Location access denied. Allow location for this site in Settings, then try again."));
     }
     // Timeout (3) / position-unavailable (2): retry with coarse accuracy + accept a recent cached fix
     // (wifi/cell positioning is usually fast and accurate enough for geofencing).
@@ -35,12 +38,12 @@ export async function getAttendanceFix(): Promise<GeoFix> {
     } catch (e2) {
       const err2 = e2 as GeolocationPositionError;
       if (err2 && err2.code === 1) {
-        throw new GeoError("Location access denied. Allow location for this site in Settings, then try again.");
+        throw new GeoError(t("Location access denied. Allow location for this site in Settings, then try again."));
       }
       if (err2 && err2.code === 3) {
-        throw new GeoError("GPS timed out. Turn on Location Services + Precise Location for your browser, move near a window / open area, then try again.");
+        throw new GeoError(t("GPS timed out. Turn on Location Services + Precise Location for your browser, move near a window / open area, then try again."));
       }
-      throw new GeoError("Couldn't get your location (weak signal). Make sure Location Services & Precise Location are on for your browser, then try again.");
+      throw new GeoError(t("Couldn't get your location (weak signal). Make sure Location Services & Precise Location are on for your browser, then try again."));
     }
   }
 }

@@ -110,7 +110,7 @@ export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = [
   {
     id: "content-plan",
     category: "marketing",
-    name: l("Content Plan", "Content Plan"),
+    name: l("Content Plan", "Rencana Konten"),
     blurb: l("Plan, make and publish content across your channels.", "Rencanakan, produksi, dan terbitkan konten di semua channel."),
     icon: "CalendarRange",
     tint: "purple",
@@ -124,17 +124,17 @@ export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = [
     fields: [
       {
         key: "type", name: l("Type", "Tipe"), type: "MULTI_SELECT",
-        options: [o("Live stream", "gray"), o("Long form video", "purple", "Video panjang"), o("Story / short form video", "gray", "Story / video pendek"), o("Social post", "red", "Post sosmed"), o("Podcast (video)", "pink"), o("Podcast (audio)", "orange"), o("Blog article", "blue", "Artikel blog")],
+        options: [o("Live stream", "gray", "Siaran langsung"), o("Long form video", "purple", "Video panjang"), o("Story / short form video", "gray", "Story / video pendek"), o("Social post", "red", "Post sosmed"), o("Podcast (video)", "pink"), o("Podcast (audio)", "orange"), o("Blog article", "blue", "Artikel blog")],
       },
       {
         key: "platform", name: l("Platform", "Platform"), type: "MULTI_SELECT",
-        options: [o("Instagram", "purple"), o("TikTok", "yellow"), o("YouTube", "gray"), o("X", "blue"), o("LinkedIn", "gray"), o("Spotify", "pink"), o("Email", "red"), o("Blog / website", "orange")],
+        options: [o("Instagram", "purple"), o("TikTok", "yellow"), o("YouTube", "gray"), o("X", "blue"), o("LinkedIn", "gray"), o("Spotify", "pink"), o("Email", "red"), o("Blog / website", "orange", "Blog / situs web")],
       },
       { key: "publicationDate", name: l("Publication date", "Tanggal tayang"), type: "DATE" },
       { key: "link", name: l("Link", "Link"), type: "URL" },
       { key: "media", name: l("Media", "Media"), type: "FILE" },
     ],
-    builtins: [ASSIGNEE("Assign", "Assign"), DUE("Deadline", "Deadline")],
+    builtins: [ASSIGNEE("Assign", "PIC"), DUE("Deadline", "Tenggat")],
     tabs: ["overview", "board", "table", "calendar", "pages", "chat"],
     defaultTab: "board",
     tableColumns: ["status", "assignee", "dueDate", "cf:publicationDate", "cf:type", "cf:platform", "cf:link", "cf:media"],
@@ -158,14 +158,14 @@ export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = [
   {
     id: "social-media",
     category: "marketing",
-    name: l("Social Media Planner", "Social Media Planner"),
+    name: l("Social Media Planner", "Perencana Media Sosial"),
     blurb: l("Organize and schedule social posts.", "Atur dan jadwalkan post media sosial."),
     icon: "Megaphone",
     tint: "pink",
     color: "#DB2777",
     sections: [
       { name: l("Post idea", "Ide post"), status: "TODO", color: "gray" },
-      { name: l("Draft", "Draft"), status: "IN_PROGRESS", color: "yellow" },
+      { name: l("Draft", "Draf"), status: "IN_PROGRESS", color: "yellow" },
       { name: l("Ready for review", "Siap direview"), status: "IN_REVIEW", color: "purple" },
       { name: l("Scheduled", "Terjadwal"), status: "IN_PROGRESS", color: "blue" },
       { name: l("Published", "Terbit"), status: "DONE", color: "green" },
@@ -179,11 +179,11 @@ export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = [
       },
       {
         key: "contentType", name: l("Content type", "Jenis konten"), type: "MULTI_SELECT",
-        options: [o("Text", "yellow", "Teks"), o("Image / photo", "orange", "Gambar / foto"), o("Video", "blue"), o("Link", "purple"), o("Carousel", "red"), o("Poll", "brown", "Polling"), o("Story", "gray"), o("Live stream", "pink")],
+        options: [o("Text", "yellow", "Teks"), o("Image / photo", "orange", "Gambar / foto"), o("Video", "blue"), o("Link", "purple"), o("Carousel", "red"), o("Poll", "brown", "Polling"), o("Story", "gray"), o("Live stream", "pink", "Siaran langsung")],
       },
       { key: "postUrl", name: l("Post URL", "URL post"), type: "URL" },
     ],
-    builtins: [ASSIGNEE("Owner", "Owner")],
+    builtins: [ASSIGNEE("Owner", "Pemilik")],
     tabs: ["overview", "board", "table", "calendar", "chat"],
     defaultTab: "calendar",
     tableColumns: ["assignee", "status", "cf:postDate", "cf:platform", "cf:contentType", "cf:postUrl"],
@@ -193,7 +193,7 @@ export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = [
   {
     id: "event",
     category: "operations",
-    name: l("Event Management", "Event Management"),
+    name: l("Event Management", "Manajemen Event"),
     blurb: l("Plan and manage your events.", "Rencanakan dan kelola event kamu."),
     icon: "PartyPopper",
     tint: "yellow",
@@ -211,13 +211,13 @@ export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = [
       { key: "format", name: l("Format", "Format"), type: "SELECT", options: [o("In person", "purple", "Tatap muka"), o("Virtual", "green", "Online")] },
       {
         key: "category", name: l("Category", "Kategori"), type: "SELECT",
-        options: [o("Webinar", "green"), o("Conference", "gray", "Konferensi"), o("Tradeshow", "red", "Pameran"), o("Workshop", "gray"), o("Internal event", "blue", "Event internal"), o("Partner event", "yellow", "Event partner"), o("Community meetup", "orange", "Meetup komunitas"), o("Team building", "pink"), o("Retreat", "purple")],
+        options: [o("Webinar", "green"), o("Conference", "gray", "Konferensi"), o("Tradeshow", "red", "Pameran"), o("Workshop", "gray", "Lokakarya"), o("Internal event", "blue", "Event internal"), o("Partner event", "yellow", "Event partner"), o("Community meetup", "orange", "Meetup komunitas"), o("Team building", "pink", "Kekompakan tim"), o("Retreat", "purple", "Retret")],
       },
       // Notion: a Select with "Venue 1/2/3" placeholders. NEXUS has a place field (name + map link), which
       // is what a venue is; no placeholder options to delete.
-      { key: "venue", name: l("Venue", "Venue"), type: "PLACE" },
+      { key: "venue", name: l("Venue", "Tempat"), type: "PLACE" },
       { key: "capacity", name: l("Capacity", "Kapasitas"), type: "NUMBER" },
-      { key: "budget", name: l("Budget", "Budget"), type: "NUMBER", format: "currency-idr" },
+      { key: "budget", name: l("Budget", "Anggaran"), type: "NUMBER", format: "currency-idr" },
       { key: "eventUrl", name: l("Event URL", "URL event"), type: "URL" },
     ],
     builtins: [ASSIGNEE("Event owner", "PIC event")],
@@ -231,7 +231,7 @@ export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = [
         title: l("Run of show", "Rundown"), icon: "🎤",
         blocks: [
           { p: l("One page per event day: who does what, and when.", "Satu halaman per hari event: siapa mengerjakan apa, dan kapan.") },
-          { h: l("Timeline", "Timeline") },
+          { h: l("Timeline", "Linimasa") },
           { bullets: [l("", "")] },
           { h: l("Crew and contacts", "Crew dan kontak") },
           { bullets: [l("", "")] },
@@ -246,8 +246,8 @@ export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = [
   {
     id: "meetings",
     category: "docs",
-    name: l("Meetings", "Meetings"),
-    blurb: l("Turn meetings into action.", "Ubah meeting jadi aksi."),
+    name: l("Meetings", "Rapat"),
+    blurb: l("Turn meetings into action.", "Ubah rapat jadi aksi."),
     icon: "Users",
     tint: "yellow",
     color: "#B45309",
@@ -260,7 +260,7 @@ export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = [
       { key: "date", name: l("Date", "Tanggal"), type: "DATE" },
       {
         key: "category", name: l("Category", "Kategori"), type: "MULTI_SELECT",
-        options: [o("Planning", "blue", "Perencanaan"), o("Standup", "red"), o("Presentation", "yellow", "Presentasi"), o("Retro", "green"), o("Customer call", "blue", "Call klien")],
+        options: [o("Planning", "blue", "Perencanaan"), o("Standup", "red", "Rapat harian"), o("Presentation", "yellow", "Presentasi"), o("Retro", "green", "Retrospeksi"), o("Customer call", "blue", "Call klien")],
       },
       { key: "created", name: l("Created by", "Dibuat oleh"), type: "CREATED" },
     ],
@@ -269,13 +269,13 @@ export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = [
     defaultTab: "list",
     tableColumns: ["cf:date", "assignee", "cf:category", "cf:created"],
     calendarBy: "cf:date",
-    myView: { name: l("My meetings", "Meeting saya"), tab: "list" },
+    myView: { name: l("My meetings", "Rapat saya"), tab: "list" },
     preview: { layout: "table", columns: ["cf:date", "cf:category"] },
     starterDocs: [
       {
         title: l("Meeting notes template", "Template notulen"), icon: "🗒️",
         blocks: [
-          { p: l("Copy this into a meeting's notes.", "Salin ini ke catatan meeting.") },
+          { p: l("Copy this into a meeting's notes.", "Salin ini ke catatan rapat.") },
           { h: l("Agenda", "Agenda") },
           { bullets: [l("", "")] },
           { h: l("Decisions", "Keputusan") },
@@ -306,28 +306,28 @@ export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = [
   {
     id: "brainstorm",
     category: "planning",
-    name: l("Brainstorm", "Brainstorm"),
+    name: l("Brainstorm", "Curah Ide"),
     blurb: l("Spark new ideas together.", "Kumpulkan ide baru bareng tim."),
     icon: "Lightbulb",
     tint: "orange",
     color: "#F59E0B",
     // Notion's "By category" board: the categories are the columns. Ideas are not work, so no status.
     sections: [
-      { name: l("Top of funnel", "Top of funnel"), color: "yellow" },
+      { name: l("Top of funnel", "Awal funnel"), color: "yellow" },
       { name: l("Activation", "Aktivasi"), color: "orange" },
       { name: l("Conversion", "Konversi"), color: "blue" },
     ],
     fields: [{ key: "created", name: l("Created by", "Dibuat oleh"), type: "CREATED" }],
-    builtins: [PRIORITY, { key: "likes", name: l("Upvote", "Upvote") }],
+    builtins: [PRIORITY, { key: "likes", name: l("Upvote", "Dukungan") }],
     tabs: ["board", "table", "chat"],
     defaultTab: "board",
     tableColumns: ["cf:created", "priority", "tags"],
     preview: { layout: "table", columns: ["cf:created", "priority"] },
     starterDocs: [
       {
-        title: l("How we brainstorm", "Cara kita brainstorm"), icon: "💡",
+        title: l("How we brainstorm", "Cara kita curah ide"), icon: "💡",
         blocks: [
-          { bullets: [l("One idea per card. Put the detail in the card's description.", "Satu ide satu kartu. Detailnya taruh di deskripsi kartu."), l("Like a card to upvote it.", "Like kartu untuk upvote."), l("No judging until the session ends.", "Jangan menilai sebelum sesi selesai.")] },
+          { bullets: [l("One idea per card. Put the detail in the card's description.", "Satu ide satu kartu. Detailnya taruh di deskripsi kartu."), l("Like a card to upvote it.", "Sukai kartu untuk mendukungnya."), l("No judging until the session ends.", "Jangan menilai sebelum sesi selesai.")] },
         ],
       },
     ],
@@ -335,7 +335,7 @@ export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = [
   {
     id: "tasks",
     category: "projects",
-    name: l("Tasks Tracker", "Tasks Tracker"),
+    name: l("Tasks Tracker", "Pelacak Task"),
     blurb: l("Stay organized with tasks, your way.", "Atur task dengan caramu sendiri."),
     icon: "ListChecks",
     tint: "green",
@@ -344,12 +344,12 @@ export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = [
     fields: [
       {
         key: "taskType", name: l("Task type", "Jenis task"), type: "MULTI_SELECT",
-        options: [o("🐞 Bug", "orange"), o("💬 Feature request", "green"), o("💅 Polish", "pink")],
+        options: [o("🐞 Bug", "orange"), o("💬 Feature request", "green", "💬 Permintaan fitur"), o("💅 Polish", "pink", "💅 Penyempurnaan")],
       },
       { key: "effort", name: l("Effort level", "Tingkat usaha"), type: "SELECT", options: [o("Small", "green", "Kecil"), o("Medium", "yellow", "Sedang"), o("Large", "red", "Besar")] },
       { key: "files", name: l("Attach file", "Lampiran"), type: "FILE" },
     ],
-    builtins: [ASSIGNEE("Assignee", "Assignee"), DUE("Due date", "Tenggat"), PRIORITY, { key: "description", name: l("Description", "Deskripsi") }],
+    builtins: [ASSIGNEE("Assignee", "PIC"), DUE("Due date", "Tenggat"), PRIORITY, { key: "description", name: l("Description", "Deskripsi") }],
     tabs: ["overview", "board", "table", "list", "calendar", "chat"],
     defaultTab: "table",
     tableColumns: ["status", "assignee", "dueDate", "priority", "cf:taskType", "cf:files", "cf:effort"],
