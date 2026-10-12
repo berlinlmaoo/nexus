@@ -88,7 +88,8 @@ export function fmtDayShort(iso: string | null | undefined, locale: string): str
 export function useVocabLabels() {
   const { t } = useLang();
   return {
-    stage: (k: string) => sentenceCase(t(k)),
+    // Stage names are the GM's own wording: shown exactly as he wrote them (owner decision, 12 Oct 2026).
+    stage: (k: string) => t(k),
     risk: (k: string) => sentenceCase(k === "Aman" ? t("On track") : t(k)),
     /** A status value of the GM's lists (contract, payment, closing …), as shown: sentence case. */
     status: (k: string | null | undefined) => (k ? sentenceCase(t(k)) : ""),
