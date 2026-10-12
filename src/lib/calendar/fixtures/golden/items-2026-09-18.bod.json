@@ -52,68 +52,6 @@
   "editProjectId": "cmpquamw0019t08k95pgb2xnl"
  },
  {
-  "key": "cmu1gl5ku0bb701keng4gtea0",
-  "id": "cmu1gl5ku0bb701keng4gtea0",
-  "masked": false,
-  "title": "Task 02a0bfe6",
-  "day": "2026-09-18",
-  "time": null,
-  "due": "2026-09-18T00:00:00.000Z",
-  "status": "TODO",
-  "done": false,
-  "noStatus": false,
-  "priority": "MEDIUM",
-  "project": {
-   "id": "cmq5e3vaj00jp01p6yx6ne3w6",
-   "name": "PATS Entertainment: Master Calendar",
-   "color": "#ec4899"
-  },
-  "linkedProjectIds": [],
-  "parent": null,
-  "assigneeIds": [],
-  "placements": [
-   {
-    "unitId": "ouda117084994807e15c72c9a",
-    "userIds": []
-   }
-  ],
-  "placedBy": "project",
-  "unplacedIds": [],
-  "canEdit": true,
-  "editProjectId": "cmq5e3vaj00jp01p6yx6ne3w6"
- },
- {
-  "key": "cmu1gkltm0bat01ke34pjchj1",
-  "id": "cmu1gkltm0bat01ke34pjchj1",
-  "masked": false,
-  "title": "Task 47a521fe",
-  "day": "2026-09-18",
-  "time": null,
-  "due": "2026-09-18T00:00:00.000Z",
-  "status": "TODO",
-  "done": false,
-  "noStatus": false,
-  "priority": "MEDIUM",
-  "project": {
-   "id": "cmq5e3vaj00jp01p6yx6ne3w6",
-   "name": "PATS Entertainment: Master Calendar",
-   "color": "#ec4899"
-  },
-  "linkedProjectIds": [],
-  "parent": null,
-  "assigneeIds": [],
-  "placements": [
-   {
-    "unitId": "ouda117084994807e15c72c9a",
-    "userIds": []
-   }
-  ],
-  "placedBy": "project",
-  "unplacedIds": [],
-  "canEdit": true,
-  "editProjectId": "cmq5e3vaj00jp01p6yx6ne3w6"
- },
- {
   "key": "cmtlk52pz01cy01vulzspofmi",
   "id": "cmtlk52pz01cy01vulzspofmi",
   "masked": false,
@@ -147,37 +85,6 @@
   "unplacedIds": [],
   "canEdit": true,
   "editProjectId": "cmq5cs1o1009i01p6luesai1e"
- },
- {
-  "key": "cmu1gk8420bak01ke2wmxsbxl",
-  "id": "cmu1gk8420bak01ke2wmxsbxl",
-  "masked": false,
-  "title": "Task b544dd27",
-  "day": "2026-09-18",
-  "time": null,
-  "due": "2026-09-18T00:00:00.000Z",
-  "status": "TODO",
-  "done": false,
-  "noStatus": false,
-  "priority": "MEDIUM",
-  "project": {
-   "id": "cmq5e3vaj00jp01p6yx6ne3w6",
-   "name": "PATS Entertainment: Master Calendar",
-   "color": "#ec4899"
-  },
-  "linkedProjectIds": [],
-  "parent": null,
-  "assigneeIds": [],
-  "placements": [
-   {
-    "unitId": "ouda117084994807e15c72c9a",
-    "userIds": []
-   }
-  ],
-  "placedBy": "project",
-  "unplacedIds": [],
-  "canEdit": true,
-  "editProjectId": "cmq5e3vaj00jp01p6yx6ne3w6"
  },
  {
   "key": "cmtliz7jv015701vump6zhitz",
