@@ -18,6 +18,7 @@ import { emitTaskCreated } from "@/lib/socket-emitter"
 import { formResponseLimit, normalizeFormSettings, RESPONSE_LIMIT_MESSAGE } from "@/lib/form-settings"
 import { createInAppNotification } from "@/lib/notification-service"
 import { pickStatusSection } from "@/lib/status-sections"
+import { parseClientTag } from "@/lib/client-version"
 import { mkdir, writeFile } from "fs/promises"
 import path from "path"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
@@ -448,7 +449,12 @@ export async function POST(
       return NextResponse.json({ error: `${label} is required`, code: "REQUIRED", fieldId: requiredMissing.id }, { status: 400 })
     }
 
-    for (const field of visibleFields) {
+    // Format checks only for clients that show their messages (12 Oct 2026): the web form (web/*). The
+    // released iOS / Android apps (and anything without X-Nexus-Client) keep the old, lenient behaviour:
+    // the answer is accepted and stored as typed. A native version that handles INVALID_EMAIL /
+    // INVALID_URL gets added here when it ships, never before.
+    const strictAnswers = parseClientTag(request.headers.get("x-nexus-client"))?.platform === "web"
+    for (const field of strictAnswers ? visibleFields : []) {
       if (field.autofill || (field.type !== "email" && field.type !== "url")) continue
       const value = normalizeText(getFieldValue(data, field))
       if (!value) continue

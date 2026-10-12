@@ -1176,6 +1176,37 @@ export function buildFixtures(profile, world, media) {
     })
   }
 
+  // ---- form answers (12 Oct 2026): email / link format checks are web-only ----
+  // Released apps (and clients without X-Nexus-Client) keep the old behaviour: a malformed answer is
+  // accepted and stored. The web form shows the new messages, so it gets 400 INVALID_EMAIL / INVALID_URL.
+  if (!p.legacy) {
+    const formPath = () => `/api/forms/${world.formId}/submit`
+    const noForm = () => (world.formId ? null : "candidate seeds no form")
+    add({
+      id: "form-submit-ok", title: "POST /api/forms/:id/submit (good email + link) → 201", as: "a", kind: "compat", needs: noForm,
+      request: () => ({ method: "POST", path: formPath(), json: { data: { q_title: `compat ${p.id} ok`, q_mail: "a@b.co", q_url: "nexus.id/x" } } }),
+      expect: { status: "2xx", check: (j) => need(isStr(j?.task?.id), "task.id missing") },
+    })
+    if (ios) {
+      add({
+        id: "form-submit-lenient", title: "POST …/submit with 'not an email' / 'lol' → still 2xx (released apps)", as: "a", kind: "compat", needs: noForm,
+        request: () => ({ method: "POST", path: formPath(), json: { data: { q_title: `compat ${p.id} lenient`, q_mail: "not an email", q_url: "lol" } } }),
+        expect: { status: "2xx", check: (j) => need(isStr(j?.task?.id), "task.id missing") },
+      })
+    } else {
+      add({
+        id: "form-submit-web-email", title: "POST …/submit (web) with 'not an email' → 400 INVALID_EMAIL", as: "a", kind: "policy", needs: noForm,
+        request: () => ({ method: "POST", path: formPath(), json: { data: { q_title: `compat ${p.id} bad mail`, q_mail: "not an email" } } }),
+        expect: { status: 400, code: "INVALID_EMAIL" },
+      })
+      add({
+        id: "form-submit-web-url", title: "POST …/submit (web) with link 'lol' → 400 INVALID_URL", as: "a", kind: "policy", needs: noForm,
+        request: () => ({ method: "POST", path: formPath(), json: { data: { q_title: `compat ${p.id} bad url`, q_url: "lol" } } }),
+        expect: { status: 400, code: "INVALID_URL" },
+      })
+    }
+  }
+
   // ---- chat (CHAT-CONTRACT 8 Oct 2026): what every released client does, plus the new routes ----
   if (!p.legacy) chatFixtures(p, world, add)
 
