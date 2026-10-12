@@ -92,7 +92,7 @@ full-width pages on iPad/Mac.
 | Forms (list, builder, fill) | plain copy, delete flow, validation |
 | Attendance (+ requests, offices, admin, liveness) | plain copy, status labels in the app language, light filter chips |
 | Tickets | BoD queues Inbox / In review / All with counts, lands on first non-empty; staff by status |
-| Settings | web tabs: Profile, Members, Notifications, Security, Appearance, Claude (MCP) |
+| Settings | web tabs: Profile, Members, Notifications, Security, Appearance, Claude (MCP); Security › Active sessions (device label as web lib/device-label.ts, "This device" badge, per-row Sign out and "Sign out other sessions" behind centred alerts; own session revoked → clean sign-out) |
 | Control Room (users, audit, quests, org chart, day-off, fake GPS, announcements) | light chips / tabs, shared empty states |
 | What's New | copy swept |
 | Watch / widgets | "Team", "No division" |
@@ -115,6 +115,7 @@ production they answer 404 or behave the old way, so they go out in the same rel
 | Form submit `Idempotency-Key` + INVALID_EMAIL / INVALID_URL; form DELETE `expect` | forms |
 | `/api/forms/my-submissions` `columns` + replies / delete | My Submissions |
 | Calendar: no-PIC tasks excluded, "No division" placement | calendar |
+| `GET /api/user/sessions` with `client` + `current`; `DELETE /api/user/sessions/:id` answering `{ current }` (prod has the routes but neither field: no "This device" badge there) | Settings › Security › Active sessions |
 
 ## Residual risks
 

@@ -104,6 +104,7 @@ struct SettingsView: View {
         case .security:
             SecurityCard()
             PasskeyCard()
+            ActiveSessionsCard()
         case .appearance:
             AppearanceCard()
             LanguageCard()

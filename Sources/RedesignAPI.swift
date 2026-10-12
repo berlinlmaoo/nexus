@@ -144,6 +144,25 @@ extension APIClient {
         return data
     }
 
+    // MARK: Active sessions (Settings › Security)
+
+    /// Every live session of this account, this device's first and flagged `current`.
+    func userSessions() async throws -> [UserSessionRow] {
+        let data = try await redesignRaw(makeRequest("/api/user/sessions"))
+        do { return try JSONDecoder().decode(UserSessionList.self, from: data).sessions } catch { throw APIError.decoding }
+    }
+
+    /// Signs one session out. Returns true when it was THIS device's own session.
+    func revokeSession(_ id: String) async throws -> Bool {
+        let data = try await redesignRaw(makeRequest("/api/user/sessions/\(Self.redesignEnc(id))", method: "DELETE"))
+        return ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["current"] as? Bool ?? false
+    }
+
+    /// Signs every OTHER session out; this one stays signed in.
+    func revokeOtherSessions() async throws {
+        _ = try await redesignRaw(makeRequest("/api/user/sessions", method: "DELETE"))
+    }
+
     // MARK: My Submissions
 
     /// A reply to the team that handles a submission (a comment on the task it created).
