@@ -574,7 +574,7 @@ struct DashboardView: View {
     @ViewBuilder private func statDetail(_ a: Int) -> some View {
         switch a {
         case 0: detailList(projectsList.map { ($0.name, $0.statusLabel) }, empty: T("No projects yet."))
-        case 1: detailList(cardTasks.map { ($0.title ?? T("Untitled"), $0.isDone ? T("Done") : T("Open")) }, empty: T("No open tasks."))
+        case 1: detailList(cardTasks.map { (UntitledText.task($0.title), $0.isDone ? T("Done") : T("Open")) }, empty: T("No open tasks."))
         default: questDetailList
         }
     }
@@ -821,7 +821,11 @@ struct DashboardView: View {
                             ForEach(bellShown.prefix(8)) { n in
                                 Button { openNotification(n) } label: {
                                     HStack(alignment: .top, spacing: 10) {
-                                        Circle().fill(n.isRead ? NX.mutedFg.opacity(0.3) : NX.violet).frame(width: 7, height: 7).padding(.top, 5)
+                                        if let a = n.actor {
+                                            AvatarView(url: a.avatar, initial: a.initial, size: 28)
+                                        } else {
+                                            Circle().fill(n.isRead ? NX.mutedFg.opacity(0.3) : NX.violet).frame(width: 7, height: 7).padding(.top, 5)
+                                        }
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(n.title ?? n.typeLabel).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                                             if let m = n.message { Text(m).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2) }
@@ -1194,7 +1198,7 @@ if !XpRules.tiers.isEmpty {
                 Image(systemName: t.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 15)).foregroundStyle(t.isDone ? NX.success : NX.mutedFg.opacity(0.5))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(t.title ?? T("Untitled")).font(NXFont.text(13, .semibold))
+                    Text(UntitledText.task(t.title)).font(NXFont.text(13, .semibold))
                         .foregroundStyle(t.isDone ? NX.mutedFg : NX.foreground)
                         .strikethrough(t.isDone).lineLimit(1)
                     Text(t.laneName).font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)

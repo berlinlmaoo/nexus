@@ -305,7 +305,7 @@ struct AutomationContext: Sendable {
         case "@actor": return T("Person who triggered it")
         case "@creator": return T("Task creator")
         case "@assignees": return T("Assignees")
-        case "@leads": return T("Project leads")
+        case "@leads": return T("Project Owners")
         case "@all": return T("Everyone")
         default: return members.first { $0.id == id }?.name ?? T("Someone")
         }

@@ -379,10 +379,12 @@ final class InboxBadge {
 /// iPad / Mac shape — every destination visible at once, detail on the right.
 struct SidebarRoot: View {
     @Environment(AppRouter.self) private var router
+    @Environment(AuthStore.self) private var auth
     @State private var viewer = Viewer.shared
     @State private var selection: NXSelection? = .screen(.dashboard)
     @State private var columns: NavigationSplitViewVisibility = .all
     @State private var shortcuts = ProjectShortcuts.shared
+    @State private var showSearch = false
 
     /// Company-only screens (Z Vault, Threads) left out for anyone outside the company workspace,
     /// and the Calendar while the server's `flags.calendar` holds it back.
@@ -548,12 +550,18 @@ struct SidebarRoot: View {
                     Button(screen.title) { selection = .screen(screen) }
                         .keyboardShortcut(KeyEquivalent(Character(String(i + 1))), modifiers: .command)
                 }
+                // ⌘K: search everything (web). Not while an editor has the keyboard: there ⌘K adds a link.
+                Button(T("Search")) { showSearch = true }
+                    .keyboardShortcut("k", modifiers: .command)
+                    .disabled(EditorKeys.shared.editorHasKeyboard)
             }
             .opacity(0).accessibilityHidden(true)
         }
         // An outside instruction arrives as a request, not as state, and is cleared the moment it
         // is answered. Held as state it would keep dragging the sidebar back to attendance every
         // time this view redrew, and no amount of tapping elsewhere would stick.
+        // Environment passed explicitly: a sheet on Mac Catalyst does not always inherit it (GideonPanel).
+        .sheet(isPresented: $showSearch) { NavigationStack { SearchView() }.environment(auth).environment(router) }
         .task { await viewer.loadIfNeeded() }
         // A request made before this shape existed: the screen the tab bar was showing when the window
         // grew past compact (AppRouter.carryAcrossShapes), or a link that arrived on a cold start.

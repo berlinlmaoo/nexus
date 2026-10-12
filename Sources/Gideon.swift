@@ -223,6 +223,9 @@ private struct GideonProposalEnvelope: Decodable { let proposal: GideonProposal?
 /// with a 4xx before any SSE exists. `error` is written in Indonesian for the user to read.
 private struct GideonRefusal: Decodable {
     let error: String?
+    /// "file_too_large", "unsupported_file_type", "not_configured", "rate_limited"… (QA 13 Oct 2026: the
+    /// sentence is Indonesian only, so the app words it from the code instead).
+    let code: String?
 }
 
 /// A document attached to one question.
@@ -294,7 +297,7 @@ enum GideonClient {
     static func history(chatId: String? = nil) async throws -> (turns: [GideonTurn], chatId: String?, title: String?) {
         var request = authed("/api/gideon/history", query: chatId.map { "chatId=\(enc($0))" })
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await fetch(request)
         try check(response)
         let decoded = try JSONDecoder().decode(GideonHistoryResponse.self, from: data)
         let turns: [GideonTurn] = (decoded.messages ?? []).compactMap { row in
@@ -325,7 +328,7 @@ enum GideonClient {
         let q = query.trimmingCharacters(in: .whitespaces)
         var request = authed("/api/gideon/chats", query: q.isEmpty ? "limit=50" : "limit=50&q=\(enc(q))")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await fetch(request)
         try check(response)
         return (try JSONDecoder().decode(GideonChatsResponse.self, from: data)).chats ?? []
     }
@@ -408,7 +411,9 @@ enum GideonClient {
                     }
                     request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
+                    let bytes: URLSession.AsyncBytes
+                    let response: URLResponse
+                    do { (bytes, response) = try await URLSession.shared.bytes(for: request) } catch { throw GideonProblem.from(error) }
                     try await check(response, refusalIn: bytes)
 
                     // SSE frames are separated by a blank line, and `lines` already splits on
@@ -427,7 +432,10 @@ enum GideonClient {
                         case "reset":
                             continuation.yield(.reset)
                         case "final":
-                            continuation.yield(.final(event.content ?? ""))
+                            // "(Gideon balas kosong — coba ulang.)" is the route saying the model gave
+                            // nothing back: an empty answer the store reports, not text to show.
+                            let text = event.content ?? ""
+                            continuation.yield(.final(GideonProblem.isEmptyPlaceholder(text) ? "" : text))
                         case "step":
                             if let step = event.step { continuation.yield(.step(step)) }
                         case "sources", "cited":
@@ -439,7 +447,7 @@ enum GideonClient {
                         case "chat":
                             if let id = event.id { continuation.yield(.chat(id: id, title: event.title)) }
                         case "error":
-                            throw APIError.transport(event.content ?? "GIDEON failed.")
+                            throw GideonProblem.stream(event.content ?? "")
                         case "done":
                             continuation.finish()
                             return
@@ -449,8 +457,13 @@ enum GideonClient {
                         }
                     }
                     continuation.finish()
-                } catch {
+                } catch let error as GideonProblem {
                     continuation.finish(throwing: error)
+                } catch APIError.unauthorized {
+                    continuation.finish(throwing: APIError.unauthorized)
+                } catch {
+                    // A connection dropped mid-answer: "can't be reached", not URLSession's sentence.
+                    continuation.finish(throwing: (error is URLError) ? GideonProblem.unreachable : error)
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
@@ -482,6 +495,12 @@ enum GideonClient {
         guard (200..<300).contains(http.statusCode) else { throw APIError.http(http.statusCode, nil) }
     }
 
+    /// Reads (history, chats) that go through URLSession directly: a dropped connection is said in the
+    /// app's words, not URLSession's.
+    private static func fetch(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        do { return try await URLSession.shared.data(for: request) } catch { throw APIError.nothingAnswered(error) }
+    }
+
     /// The streaming variant: on a refusal the body is JSON, not SSE, so it is read here before the
     /// caller starts parsing frames.
     ///
@@ -498,17 +517,11 @@ enum GideonClient {
             body += line
             if body.count > 8192 { break }
         }
-        if let message = try? JSONDecoder().decode(GideonRefusal.self, from: Data(body.utf8)).error,
-           !message.isEmpty {
-            throw APIError.transport(message)
-        }
-        // No JSON to read: the refusal came from something in front of the route, so say what the
-        // status means rather than repeating the number back.
-        switch http.statusCode {
-        case 413: throw APIError.transport(T("File is over the 10MB limit."))
-        case 415: throw APIError.transport(T("GIDEON can't read that kind of file yet."))
-        default: throw APIError.http(http.statusCode, nil)
-        }
+        // The route's own refusals (413/415 with a code, 429, 503 when GIDEON is not connected) and a
+        // proxy's (no JSON) are worded from the status and the code (QA 13 Oct 2026): the route's
+        // sentence is Indonesian only, and "Server error (503)." says nothing useful.
+        let refusal = try? JSONDecoder().decode(GideonRefusal.self, from: Data(body.utf8))
+        throw GideonProblem.http(status: http.statusCode, code: refusal?.code, message: refusal?.error)
     }
 }
 
@@ -561,6 +574,16 @@ final class GideonChat {
 
     /// Questions the composer has accepted but the network has not taken yet. See `submit()`.
     private var outbox: [Outgoing] = []
+    /// What "Try again" under the error line does (QA 13 Oct 2026): ask the failed question again (its
+    /// bubble is still in the transcript), or open the conversation that failed to load. nil = no retry
+    /// makes sense (a file type, GIDEON not connected on this server).
+    private var retryAction: RetryAction?
+    private enum RetryAction {
+        case resend(Outgoing)
+        case open(String)
+    }
+    /// Draws "Try again" under the error.
+    var canRetry: Bool { retryAction != nil && !sending }
     private var drainTask: Task<Void, Never>?
 
     private init() {}
@@ -615,17 +638,48 @@ final class GideonChat {
         chatTitle = nil
         startNew = true
         error = nil
+        retryAction = nil
         self.context = context
     }
 
-    /// Opens one conversation from the chats list.
+    /// Opens one conversation from the chats list. A conversation that cannot be loaded says so with
+    /// Try again (web QA 13 Oct 2026: it used to open as an empty new chat, hiding the failure).
     func openChat(_ id: String) async {
         guard !sending else { return }
-        chatId = id
-        startNew = false
-        if let fresh = try? await GideonClient.history(chatId: id) {
+        error = nil
+        retryAction = nil
+        do {
+            let fresh = try await GideonClient.history(chatId: id)
+            chatId = id
+            startNew = false
             turns = fresh.turns
             chatTitle = fresh.title
+        } catch APIError.unauthorized {
+            sessionExpired = true
+        } catch APIError.http(404, _) {
+            error = T("This conversation doesn't exist any more. Start a new chat below.")
+        } catch APIError.http(403, _) {
+            error = T("This conversation doesn't exist any more. Start a new chat below.")
+        } catch {
+            self.error = String(format: T("Couldn't open this conversation. %@"), GideonProblem.from(error).text)
+            retryAction = .open(id)
+        }
+    }
+
+    /// "Try again" under the error line.
+    func retry() {
+        guard !sending, let action = retryAction else { return }
+        retryAction = nil
+        error = nil
+        switch action {
+        case .open(let id):
+            Task { await openChat(id) }
+        case .resend(let item):
+            // The question's bubble is still in the transcript; only the answer is asked for again.
+            guard turns.contains(where: { $0.id == item.turnId }) else { return }
+            outbox.append(item)
+            sending = true
+            drainTask = Task { await drain() }
         }
     }
 
@@ -654,6 +708,7 @@ final class GideonChat {
             try await GideonClient.clearHistory(chatId: chatId)
             turns = []
             error = nil
+            retryAction = nil
         } catch {
             self.error = (error as? LocalizedError)?.errorDescription ?? T("Failed.")
         }
@@ -675,6 +730,7 @@ final class GideonChat {
         guard !text.isEmpty else { return nil }
         draft = ""
         error = nil
+        retryAction = nil
 
         // The attachment is recorded ON the turn as well as posted with it. A question about a file
         // that draws as bare text leaves nothing in the thread saying which file was meant, so the
@@ -774,6 +830,7 @@ final class GideonChat {
                turns[index].proposals.isEmpty, turns[index].cards.isEmpty {
                 turns.remove(at: index)
                 error = T("GIDEON didn't answer. Try again.")
+                retryAction = .resend(item)
             }
         } catch APIError.unauthorized {
             // An answer from before reset() belongs to a session that is gone: nothing to touch.
@@ -788,9 +845,13 @@ final class GideonChat {
             // wrong. The transcript this would write into belongs to somebody who has signed out.
             guard !Task.isCancelled, generation == gen else { return }
             turns.removeAll { $0.id == answer.id }
-            // The server writes its own sentence for a refused attachment — which file, and what to
-            // do about it. Replacing that with "GIDEON failed." would throw the useful half away.
-            self.error = (error as? LocalizedError)?.errorDescription ?? T("GIDEON failed.")
+            // Worded by GideonProblem (status / code / the route's fixed sentences, EN + ID). A failure a
+            // retry can fix keeps the question for "Try again"; nothing was stored server-side for a
+            // failed turn, so asking again cannot duplicate it.
+            let problem = GideonProblem.from(error)
+            self.error = problem.text
+            // Only the newest failure is retried; the queue behind it carries on by itself.
+            retryAction = problem.retryable && outbox.isEmpty ? .resend(item) : nil
         }
     }
 
@@ -827,6 +888,7 @@ final class GideonChat {
         attachment = nil
         document = nil
         error = nil
+        retryAction = nil
         sessionExpired = false
         sending = false
         chatId = nil

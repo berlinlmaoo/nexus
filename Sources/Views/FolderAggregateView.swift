@@ -334,7 +334,7 @@ private struct FolderTaskRow: View {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 16)).foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.45))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(task.title).font(NXFont.text(14, .semibold)).foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
+                    Text(UntitledText.task(task.title)).font(NXFont.text(14, .semibold)).foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
                         .strikethrough(task.isDone).lineLimit(2).multilineTextAlignment(.leading)
                     HStack(spacing: 5) {
                         if let p = project {

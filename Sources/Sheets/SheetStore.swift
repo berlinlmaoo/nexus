@@ -35,9 +35,35 @@ final class SheetStore {
 
     // derived (rebuilt with `version`)
     private(set) var snapshot: SheetBridge.Snapshot?
-    /// Model indices of the rows / columns shown (hidden ones left out).
+    /// Model indices of the rows / columns shown (hidden ones left out). Frozen rows come first, then the
+    /// rest (filtered, and ordered by the filter's sort when it has one).
     private(set) var visRows: [Int] = []
     private(set) var visCols: [Int] = []
+    /// How many of the visible rows / columns are frozen (settings.frozenRows / frozenCols, in the
+    /// underlying order: hidden ones among the first N don't count).
+    private(set) var frozenRowCount = 0
+    private(set) var frozenColCount = 0
+    /// Merged blocks in VISIBLE positions (settings.merges); empty while the filter's sort reorders rows.
+    private(set) var merges: [SheetRange] = []
+    /// The filter in force for this viewer (an open filter view, else the sheet's filter) and its block
+    /// in model indices (first row = the header).
+    private(set) var activeFilter: SheetFilter.Spec?
+    private(set) var filterRect: SheetValidation.Rect?
+    /// A filter view opened by this viewer (filter views are personal; the list is shared).
+    private(set) var activeFilterView: String?
+
+    /// Opens a filter view for this viewer (nil = back to the sheet's own filter).
+    func openFilterView(_ id: String?) {
+        guard id != activeFilterView else { return }
+        activeFilterView = id
+        rebuild()
+    }
+    /// Hidden rows / columns (settings.hiddenRows / hiddenCols) just before a visible index (unhide arrows).
+    private(set) var rowGaps: [Int: [Int]] = [:]
+    private(set) var colGaps: [Int: [Int]] = [:]
+    @ObservationIgnored var settingsInFlight = 0
+    /// Merging needs the rows in sheet order (the filter's sort reorders them on screen only).
+    private(set) var mergesAllowed = true
 
     // selection + editor
     var selection = SheetSelection()
@@ -83,12 +109,12 @@ final class SheetStore {
 
     func columnWidth(_ c: Int) -> CGFloat {
         guard let m = modelCol(c), let w = (columns[m]["width"] as? NSNumber)?.doubleValue, w > 0 else { return 110 }
-        return CGFloat(min(max(w, 48), 600))
+        return CGFloat(min(max(w, 30), 600))
     }
 
     func rowHeight(_ r: Int) -> CGFloat {
         guard let m = modelRow(r), let h = rows[m].height, h > 0 else { return 32 }
-        return CGFloat(min(max(h, 24), 400))
+        return CGFloat(min(max(h, 20), 400))
     }
 
     var canUndo: Bool { !(past[sheetId ?? ""] ?? []).isEmpty }
@@ -101,19 +127,87 @@ final class SheetStore {
         return SheetA1.range(top: t, left: l, bottom: b, right: rt)
     }
 
-    private func rebuild() {
+    func rebuild() {
         let hiddenRows = Set((settings["hiddenRows"] as? [String]) ?? [])
         let hiddenCols = Set((settings["hiddenCols"] as? [String]) ?? [])
-        visRows = rows.indices.filter { !hiddenRows.contains(rows[$0].id) }
-        visCols = columns.indices.filter { !hiddenCols.contains(columns[$0]["id"] as? String ?? "") }
-        snapshot = SheetBridge.snapshot(columns: columns, rows: rows, settings: settings, previous: snapshot)
+        let rowIds = rows.map(\.id)
+        let colIds = columns.map { $0["id"] as? String ?? "" }
+        let groupRows = Self.collapsedGroups(settings["rowGroups"], ids: rowIds)
+        let groupCols = Self.collapsedGroups(settings["colGroups"], ids: colIds)
+        let snap = SheetBridge.snapshot(columns: columns, rows: rows, settings: settings, previous: snapshot)
+        snapshot = snap
+
+        // The filter (and slicers) hide body rows; the header row of the range always stays.
+        var filtered = Set<String>()
+        let spec = activeFilterView.flatMap { id in ((settings["filterViews"] as? [Any]) ?? []).compactMap { SheetFilter.Spec(json: $0) }.first { $0.id == id } }
+            ?? SheetFilter.Spec(json: settings["filter"])
+        activeFilter = spec
+        filterRect = nil
+        let slicers: [(range: String, colId: String, crit: SheetFilter.Crit?)] = ((settings["slicers"] as? [SheetJSON]) ?? []).compactMap { o in
+            guard let r = o["range"] as? String, let c = o["colId"] as? String else { return nil }
+            return (r, c, SheetFilter.Crit(json: o["crit"]))
+        }
+        if let spec {
+            let own = slicers.filter { $0.range == spec.range }.map { (colId: $0.colId, crit: $0.crit) }
+            let res = SheetFilter.applyFilter(spec, snap.filterOpts(slicers: own))
+            filtered.formUnion(res.hidden)
+            filterRect = res.rect
+        }
+        for sl in slicers where sl.range != spec?.range && sl.crit != nil {
+            filtered.formUnion(SheetFilter.applyFilter(SheetFilter.Spec(range: sl.range), snap.filterOpts(slicers: [(colId: sl.colId, crit: sl.crit)])).hidden)
+        }
+
+        let frozenSetting = min((settings["frozenRows"] as? NSNumber)?.intValue ?? 0, rows.count)
+        let shown = rows.indices.filter { !hiddenRows.contains(rows[$0].id) && !groupRows.contains(rows[$0].id) && !filtered.contains(rows[$0].id) }
+        let fixed = shown.filter { $0 < frozenSetting }
+        var rest = shown.filter { $0 >= frozenSetting }
+        // The filter's sort (a filter view grouped by a column) orders the rows of its range, in view only.
+        if let sort = spec?.sort, let rc = filterRect {
+            let inside = rest.filter { $0 > rc.top && $0 <= rc.bottom }
+            let order = SheetFilter.sortedRowIds(inside.map { rows[$0].id }, [sort]) { snap.value($0, $1) }
+            var at: [String: Int] = [:]
+            for i in inside { at[rows[i].id] = i }
+            var k = 0
+            rest = rest.map { i in
+                guard i > rc.top && i <= rc.bottom, k < order.count, let j = at[order[k]] else { return i }
+                k += 1
+                return j
+            }
+        }
+        visRows = fixed + rest
+        frozenRowCount = fixed.count
+        visCols = columns.indices.filter { !hiddenCols.contains(colIds[$0]) && !groupCols.contains(colIds[$0]) }
+        let frozenColSetting = min((settings["frozenCols"] as? NSNumber)?.intValue ?? 0, columns.count)
+        frozenColCount = visCols.filter { $0 < frozenColSetting }.count
+
+        let natural = zip(visRows, visRows.dropFirst()).allSatisfy { $0 < $1 }
+        mergesAllowed = natural
+        let specs = ((settings["merges"] as? [Any]) ?? []).compactMap { SheetMerges.Spec(json: $0) }
+        merges = natural ? SheetMerges.resolve(specs, rowIds: rowIds, colIds: colIds, visRows: visRows, visCols: visCols) : []
+        rowGaps = SheetHiddenGaps.gaps(visible: visRows, count: rows.count) { hiddenRows.contains(rowIds[$0]) }
+        colGaps = SheetHiddenGaps.gaps(visible: visCols, count: columns.count) { hiddenCols.contains(colIds[$0]) }
         selection.clamp(rows: visRows.count, cols: visCols.count)
         version += 1
     }
 
+    /// Ids inside collapsed groups (View › Group: { from, to, collapsed }).
+    private static func collapsedGroups(_ raw: Any?, ids: [String]) -> Set<String> {
+        var out = Set<String>()
+        for g in (raw as? [SheetJSON]) ?? [] where SheetFormula.jsTruthy(g["collapsed"]) {
+            guard let f = g["from"] as? String, let t = g["to"] as? String,
+                  let a = ids.firstIndex(of: f), let b = ids.firstIndex(of: t) else { continue }
+            for i in min(a, b)...max(a, b) { out.insert(ids[i]) }
+        }
+        return out
+    }
+
     func display(_ p: SheetPos) -> SheetCellDisplay {
         guard let snapshot, let r = modelRow(p.r), let c = modelCol(p.c) else { return SheetCellDisplay() }
-        return snapshot.display(row: r, col: c)
+        var d = snapshot.display(row: r, col: c)
+        if let rc = filterRect, r == rc.top, c >= rc.left, c <= rc.right, let cid = columnId(p.c) {
+            d.filterHead = SheetFilter.critActive(activeFilter?.criteria[cid])
+        }
+        return d
     }
 
     // MARK: loading
@@ -144,6 +238,7 @@ final class SheetStore {
         rows = []
         columns = []
         settings = [:]
+        activeFilterView = nil
         rebuild()
         loading = true
         outbox.activeStore = self
@@ -248,20 +343,42 @@ final class SheetStore {
         }
         let q = SheetPos(r: min(max(0, p.r), rowCount - 1), c: min(max(0, p.c), colCount - 1))
         if extend { selection.extend(to: q) } else if add { selection.add(q) } else { selection.select(q) }
+        snapToMerges()
         cursor.tabStartColumn = nil
         selVersion += 1
+    }
+
+    /// Sheets never selects half a merged block: the active cell goes to its top-left, ranges grow over it.
+    private func snapToMerges() {
+        guard !merges.isEmpty else { return }
+        if let m = SheetMerges.at(selection.active, in: merges) { selection.active = SheetPos(r: m.top, c: m.left) }
+        if let i = selection.ranges.indices.last {
+            let cur = selection.ranges[i]
+            if cur.isSingle, let m = SheetMerges.at(cur.a, in: merges) {
+                selection.ranges[i] = SheetRange(SheetPos(r: m.top, c: m.left), SheetPos(r: m.bottom, c: m.right))
+            } else {
+                selection.ranges[i] = SheetMerges.expand(cur, with: merges)
+            }
+        }
+    }
+
+    /// Where an arrow step starts from: the far edge of the merged block the cell is in.
+    private func stepOrigin(_ p: SheetPos, dr: Int, dc: Int) -> SheetPos {
+        guard let m = SheetMerges.at(p, in: merges) else { return p }
+        return SheetPos(r: dr > 0 ? m.bottom : (dr < 0 ? m.top : p.r), c: dc > 0 ? m.right : (dc < 0 ? m.left : p.c))
     }
 
     /// Arrow keys: one step, or (with extend) grow the current range from its far corner.
     func move(dr: Int, dc: Int, extend: Bool = false) {
         guard rowCount > 0, colCount > 0 else { return }
         if extend {
-            let b = selection.current.b
+            let b = stepOrigin(selection.current.b, dr: dr, dc: dc)
             selection.extend(to: SheetPos(r: min(max(0, b.r + dr), rowCount - 1), c: min(max(0, b.c + dc), colCount - 1)))
         } else {
-            let a = selection.active
+            let a = stepOrigin(selection.active, dr: dr, dc: dc)
             selection.select(SheetPos(r: min(max(0, a.r + dr), rowCount - 1), c: min(max(0, a.c + dc), colCount - 1)))
         }
+        snapToMerges()
         selVersion += 1
     }
 
@@ -274,8 +391,10 @@ final class SheetStore {
         } else {
             let col = cursor.tabStartColumn ?? a.c
             cursor.tabStartColumn = nil
-            let r = min(max(0, a.r + (back ? -1 : 1)), max(0, rowCount - 1))
+            let from = stepOrigin(a, dr: back ? -1 : 1, dc: 0)
+            let r = min(max(0, from.r + (back ? -1 : 1)), max(0, rowCount - 1))
             selection.select(SheetPos(r: r, c: col))
+            snapToMerges()
             selVersion += 1
         }
     }
@@ -286,6 +405,7 @@ final class SheetStore {
         let from = extend ? selection.current.b : selection.active
         let target = SheetPos(r: dr < 0 ? 0 : (dr > 0 ? rowCount - 1 : from.r), c: dc < 0 ? 0 : (dc > 0 ? colCount - 1 : from.c))
         if extend { selection.extend(to: target) } else { selection.select(target) }
+        snapToMerges()
         selVersion += 1
     }
 
@@ -441,7 +561,7 @@ final class SheetStore {
         applyStyles(changes, label: label, record: record)
     }
 
-    private func applyStyles(_ changes: [(String, String, [String: Any]?)], label: String, record: Bool) {
+    func applyStyles(_ changes: [(String, String, [String: Any]?)], label: String, record: Bool) {
         guard let sid = sheetId, !changes.isEmpty else { return }
         var before: [(String, String, [String: Any]?)] = []
         for (rid, cid, st) in changes {
@@ -795,7 +915,7 @@ final class SheetStore {
 
     // MARK: undo
 
-    private func push(_ entry: SheetUndoEntry) {
+    func push(_ entry: SheetUndoEntry) {
         if undoBusy { return }
         if collecting != nil { collecting?.append(entry); return }
         let key = sheetId ?? ""
@@ -879,7 +999,7 @@ final class SheetStore {
         Task { await reload() }
     }
 
-    private func fail(_ error: Error, _ fallback: String) {
+    func fail(_ error: Error, _ fallback: String) {
         if (error as? APIError)?.nobodyAnswered == true {
             notice = T("You're offline. Rows, columns and sheets can be changed once you're back online.")
             offline = true

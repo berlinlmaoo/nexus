@@ -34,11 +34,30 @@ struct GideonLauncher: View {
         // half: is Home the screen, or only the tab.
         let onHomeTab = hSize == .regular ? router.sidebarScreen == .dashboard : router.tab == .dashboard
         let onHome = onHomeTab && router.homeIsRoot
-        if gideonLauncherHomeOnly && !onHome {
-            EmptyView()
-        } else {
-            launcher
+        // GIDEON's own page (iPad / Mac sidebar) binds ⌘O itself: one binding at a time.
+        let onGideonPage = hSize == .regular && router.sidebarScreen == .gideon
+        Group {
+            if gideonLauncherHomeOnly && !onHome {
+                Color.clear.frame(width: 0, height: 0).allowsHitTesting(false)
+            } else {
+                launcher
+            }
         }
+        // ⌘O anywhere = a new GIDEON chat (web launcher, QA 13 Oct 2026). A text field keeps the key only
+        // where it has a meaning of its own; none here does.
+        .background {
+            if !onGideonPage {
+                Button("") {
+                    GideonChat.shared.startChat()
+                    open = true
+                }
+                .keyboardShortcut("o", modifiers: .command)
+                .opacity(0).accessibilityHidden(true)
+            }
+        }
+        // Handed over explicitly: on Mac Catalyst the sheet did not inherit them and opening the
+        // panel trapped on "No Observable object of type AuthStore found".
+        .sheet(isPresented: $open) { GideonPanel().environment(auth).environment(router) }
     }
 
     private var launcher: some View {
@@ -67,9 +86,6 @@ struct GideonLauncher: View {
         .padding(.bottom, hSize == .regular ? 28 : 76)
         .frame(maxWidth: .infinity, maxHeight: .infinity,
                alignment: hSize == .regular ? .bottomTrailing : .bottomLeading)
-        // Handed over explicitly: on Mac Catalyst the sheet did not inherit them and opening the
-        // panel trapped on "No Observable object of type AuthStore found".
-        .sheet(isPresented: $open) { GideonPanel().environment(auth).environment(router) }
     }
 }
 
@@ -118,7 +134,7 @@ struct GideonPanel: View {
     @ViewBuilder private func refDestination(_ ref: GideonRef) -> some View {
         switch ref.kind {
         case "project": ProjectDetailView(projectId: ref.id, projectName: ref.title ?? "")
-        case "doc": DocReaderView(docId: ref.id, title: ref.title ?? "")
+        case "doc": DocReaderView(docId: ref.id, title: DocTitle.display(ref.title))
         default: TaskDetailView(taskId: ref.id)
         }
     }
@@ -157,7 +173,8 @@ struct GideonPanel: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    if !embedded { Button(T("Close")) { dismiss() } }
+                    // Esc closes the panel (hardware keyboard, Mac — web QA 13 Oct 2026).
+                    if !embedded { Button(T("Close")) { dismiss() }.keyboardShortcut(.cancelAction) }
                 }
                 ToolbarItem(placement: .principal) { title }
                 ToolbarItem(placement: .primaryAction) {
@@ -178,6 +195,13 @@ struct GideonPanel: View {
                 }
             }
             .navigationDestination(item: $openRef) { ref in refDestination(ref) }
+            // ⌘O = a new chat (web GideonPanel). A hidden button: a key on a menu item only works while
+            // that menu is open.
+            .background {
+                Button("") { if !chat.sending { chat.startChat(context: chat.context); composerFocused = true } }
+                    .keyboardShortcut("o", modifiers: .command)
+                    .opacity(0).accessibilityHidden(true)
+            }
             .sheet(isPresented: $showPersonalize) {
                 GideonPersonalizeSheet { p in assistantName = p.assistantName ?? "" }
             }
@@ -300,11 +324,7 @@ struct GideonPanel: View {
                         bubble(turn).id(turn.id).transition(appear)
                     }
                     if let error = chat.error {
-                        Text(error)
-                            .font(NXFont.text(12))
-                            .foregroundStyle(NX.danger)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .id("error")
+                        errorLine(error).id("error")
                     }
                     // A fixed anchor rather than the last turn's id: the newest thing on screen is
                     // sometimes the error line or an answer that has not been given an id yet.
@@ -338,6 +358,29 @@ struct GideonPanel: View {
                 proxy.scrollTo("bottom", anchor: .bottom)
             }
         }
+    }
+
+    /// The last failure, in words, with Try again when asking again can help (GIDEON busy or unreachable,
+    /// an answer that never came, a conversation that failed to load).
+    private func errorLine(_ error: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(error)
+                .font(NXFont.text(12))
+                .foregroundStyle(NX.danger)
+                .fixedSize(horizontal: false, vertical: true)
+            if chat.canRetry {
+                Button { chat.retry() } label: {
+                    Label(T("Try again"), systemImage: "arrow.clockwise")
+                        .font(NXFont.text(12, .semibold))
+                        .foregroundStyle(NX.violetText)
+                        .frame(minHeight: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// One place that decides what "show me the newest message" means, so opening the panel, a new
@@ -743,6 +786,12 @@ struct GideonPanel: View {
                 .font(NXFont.text(14))
                 .lineLimit(1...5)
                 .focused($composerFocused)
+                // Hardware keyboard (iPad, Mac): Enter asks, Shift+Enter is a new line (web panel).
+                .onKeyPress(keys: [.return], phases: .down) { press in
+                    if press.modifiers.contains(.shift) || press.modifiers.contains(.option) { return .ignored }
+                    submit()
+                    return .handled
+                }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(NX.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -1035,12 +1084,17 @@ struct GideonChatsSheet: View {
     @State private var query = ""
     @State private var loading = true
     @State private var toDelete: GideonChatSummary?
+    /// The list failed to load (QA 13 Oct 2026: a failure is not "No chats yet").
+    @State private var failure: String?
+    @State private var deleteFailure: String?
 
     var body: some View {
         NavigationStack {
             Group {
                 if loading && chats.isEmpty {
                     ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let failure, chats.isEmpty {
+                    ErrorState(message: failure, icon: "bubble.left.and.text.bubble.right") { Task { await load() } }
                 } else if chats.isEmpty {
                     EmptyState(icon: "bubble.left.and.text.bubble.right", title: query.isEmpty ? T("No chats yet") : T("No chats match"),
                                subtitle: query.isEmpty ? T("Every conversation with GIDEON is kept here, on the web and in the app.") : T("Try other words."))
@@ -1049,7 +1103,7 @@ struct GideonChatsSheet: View {
                         ForEach(chats) { c in
                             Button { onOpen(c.id); dismiss() } label: {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(c.title ?? T("Untitled chat")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(2)
+                                    Text(GideonChatTitle.text(c.title) ?? T("Untitled chat")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(2)
                                     if let d = ProjDate.parse(c.updatedAt) {
                                         Text(ProjDate.dayLabel(d)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                                     }
@@ -1068,24 +1122,39 @@ struct GideonChatsSheet: View {
             .searchable(text: $query, prompt: T("Search chats"))
             .navigationTitle(T("Chats"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() }.keyboardShortcut(.cancelAction) } }
             .task(id: query) {
                 try? await Task.sleep(for: .milliseconds(250))
                 await load()
             }
             .alert(T("Delete this chat?"), isPresented: Binding(get: { toDelete != nil }, set: { if !$0 { toDelete = nil } }), presenting: toDelete) { c in
                 Button(T("Delete"), role: .destructive) {
-                    Task { try? await GideonClient.deleteChat(c.id); await load() }
+                    Task {
+                        do { try await GideonClient.deleteChat(c.id) }
+                        catch { deleteFailure = GideonProblem.from(error).text }
+                        await load()
+                    }
                 }
                 Button(T("Cancel"), role: .cancel) {}
             } message: { _ in Text(T("Its messages are deleted for you on every device.")) }
+            .alert(T("Couldn't delete the chat"), isPresented: Binding(get: { deleteFailure != nil }, set: { if !$0 { deleteFailure = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: { Text(deleteFailure ?? "") }
         }
     }
 
     private func load() async {
         loading = true
         defer { loading = false }
-        if let list = try? await GideonClient.chats(query: query) { chats = list }
+        do {
+            chats = try await GideonClient.chats(query: query)
+            failure = nil
+        } catch {
+            // The search changed under it (a cancelled request): the next load answers.
+            if Task.isCancelled { return }
+            // Keeps the last rows it had; with none, the failure is said with Try again.
+            failure = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load your chats.")
+        }
     }
 }
 

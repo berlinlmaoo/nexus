@@ -16,6 +16,9 @@ struct Conversation: Decodable, Identifiable, Sendable {
     /// (owner, 8 Oct 2026). Anyone may still leave. nil = a server from before the rule, which
     /// keeps today's behaviour (the add button stays).
     let canManageMembers: Bool?
+    /// false = a project room this person can read but not post in (Can view, access levels round 2,
+    /// 13 Oct 2026). nil = a server from before it: posting stays open.
+    let canPost: Bool?
 
     struct Member: Decodable, Sendable {
         let userId: String?
@@ -24,7 +27,7 @@ struct Conversation: Decodable, Identifiable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, name, projectId, members, lastMessage, unreadCount, mutedUntil, canManageMembers
+        case id, type, name, projectId, members, lastMessage, unreadCount, mutedUntil, canManageMembers, canPost
     }
 
     /// Written out only so `mutedUntil` and `canManageMembers` can be read leniently. Every other
@@ -42,6 +45,7 @@ struct Conversation: Decodable, Identifiable, Sendable {
         unreadCount = try c.decodeIfPresent(Int.self, forKey: .unreadCount)
         mutedUntil = try? c.decodeIfPresent(String.self, forKey: .mutedUntil)
         canManageMembers = try? c.decodeIfPresent(Bool.self, forKey: .canManageMembers)
+        canPost = (try? c.decodeIfPresent(Bool.self, forKey: .canPost)) ?? nil
     }
 
     var isGroupish: Bool { type == "PROJECT" || type == "GROUP" }

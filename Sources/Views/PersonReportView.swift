@@ -229,7 +229,8 @@ struct PersonReportPane: View {
             drop(refusal.errorDescription ?? T("You can't see this person's report."))
         }
         catch {
-            drop((error as? LocalizedError)?.errorDescription ?? T("Couldn't load this"))
+            // Never the server's raw text ("Internal server error"): the shared wording (web QA B19).
+            drop(FailureText.text(error))
         }
     }
 
@@ -391,15 +392,22 @@ struct PersonReportSections: View {
                 Spacer()
                 if !list.isEmpty { NexusChip(text: ReportFormat.number(report.work?.overdueNow ?? Double(list.count)), tone: .danger) }
             }
+            asOfNote
             if list.isEmpty {
                 EmptyState(icon: "checkmark.seal", title: T("Nothing overdue"),
-                           subtitle: T("Every open task with a due date is still on schedule."),
+                           subtitle: report.work?.pastAsOf != nil ? T("Nothing was overdue at the end of this period.")
+                                                                  : T("Every open task with a due date is still on schedule."),
                            tint: NX.success, compact: true)
             } else {
-                ForEach(list) { task in
-                    NavigationLink { TaskDetailView(taskId: task.id) } label: { overdueRow(task) }
-                        .buttonStyle(.plain)
-                    if task.id != list.last?.id { Divider().overlay(NX.border) }
+                // By position: rows from projects the viewer isn't in share an empty id.
+                ForEach(Array(list.enumerated()), id: \.offset) { idx, task in
+                    if task.isHiddenProject {
+                        overdueRow(task)
+                    } else {
+                        NavigationLink { TaskDetailView(taskId: task.id) } label: { overdueRow(task) }
+                            .buttonStyle(.plain)
+                    }
+                    if idx < list.count - 1 { Divider().overlay(NX.border) }
                 }
             }
         }
@@ -407,14 +415,24 @@ struct PersonReportSections: View {
         .nexusCard()
     }
 
+    /// "At the end of the period (27 Sep)" over the open / overdue cards of a past period (web AsOfNote).
+    @ViewBuilder private var asOfNote: some View {
+        if let day = report.work?.pastAsOf {
+            Text(String(format: T("At the end of the period (%@)"), AgendaRange.dayLabel(day)))
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+        }
+    }
+
     private func overdueRow(_ task: ReportOverdueTask) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Circle().fill(Self.priorityColor(task.priority)).frame(width: 8, height: 8).padding(.top, 5)
+        let hidden = task.isHiddenProject
+        return HStack(alignment: .top, spacing: 10) {
+            Circle().fill(hidden ? NX.border : Self.priorityColor(task.priority)).frame(width: 8, height: 8).padding(.top, 5)
             VStack(alignment: .leading, spacing: 3) {
-                Text(task.title ?? T("Untitled task")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                Text(hidden ? T("Task in a project you're not in") : UntitledText.task(task.title))
+                    .font(NXFont.text(14, .semibold)).foregroundStyle(hidden ? NX.mutedFg : NX.foreground)
                     .lineLimit(2).multilineTextAlignment(.leading)
                 HStack(spacing: 6) {
-                    if let project = task.projectName {
+                    if !hidden, let project = task.projectName {
                         Text(project).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     }
                     if let count = task.assigneeCount, count > 1 {
@@ -426,8 +444,10 @@ struct PersonReportSections: View {
             }
             Spacer(minLength: 6)
             NexusChip(text: String(format: T("%@d late"), ReportFormat.number(task.daysOverdue ?? 0)), tone: .danger)
-            Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(NX.mutedFg)
-                .padding(.top, 4)
+            if !hidden {
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                    .padding(.top, 4)
+            }
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
@@ -449,6 +469,7 @@ struct PersonReportSections: View {
         let lines = report.work?.perProject ?? []
         return VStack(alignment: .leading, spacing: 10) {
             SectionLabel(T("By project"))
+            asOfNote
             if lines.isEmpty {
                 EmptyState(icon: "folder", title: T("No project activity"),
                            subtitle: T("Tasks assigned in this period show up here, grouped by project."),
@@ -457,8 +478,10 @@ struct PersonReportSections: View {
                 ForEach(lines) { line in
                     HStack(spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(line.projectName ?? T("Untitled project")).font(NXFont.text(14, .semibold))
-                                .foregroundStyle(NX.foreground).lineLimit(1)
+                            Text(line.isOtherProjects ? T("Other projects") : UntitledText.project(line.projectName))
+                                .font(NXFont.text(14, .semibold))
+                                .foregroundStyle(line.isOtherProjects ? NX.mutedFg : NX.foreground).lineLimit(1)
+                                .accessibilityHint(line.isOtherProjects ? T("Projects you're not a member of") : "")
                             Text(String(format: T("%@ done · %@ open"), ReportFormat.number(line.completed), ReportFormat.number(line.open)))
                                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                         }

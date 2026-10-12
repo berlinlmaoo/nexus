@@ -64,7 +64,7 @@ struct DocCard: View {
             Text(doc.emoji).font(.system(size: 22))
                 .frame(width: 44, height: 44).background(NX.muted, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
-                Text(doc.title).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                Text(UntitledText.any(doc.title)).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
                 if let preview = doc.contentText, !preview.isEmpty {
                     Text(preview).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2)
                 } else if let pname = doc.project?.name {
@@ -85,6 +85,12 @@ struct DocReaderView: View {
     @State private var doc: Doc?
     @State private var loading = true
     @State private var failed = false
+    /// Why the page did not load: 403 (not a member of its project, page read follows project access since
+    /// 13 Oct 2026) and 404 get their own state.
+    @State private var loadFailure: Error?
+    /// Whether this person may edit the page: Can edit and up in its project (access levels round 2).
+    /// nil until known (and for a page without a project); Edit shows until then, as before.
+    @State private var pageEditable: Bool?
     /// Editing (owner, 12 Oct 2026): the page's blocks, merged into the live document on the server.
     @State private var editing = false
     @State private var model: BlockEditorModel
@@ -101,6 +107,12 @@ struct DocReaderView: View {
             NX.background.ignoresSafeArea()
             if loading { ProgressView().tint(NX.violetText) }
             else if let doc { page(doc) }
+            else if failed, let loadFailure, FailureText.loadKind(loadFailure) == .forbidden || FailureText.loadKind(loadFailure) == .notFound {
+                LoadErrorView(error: loadFailure, what: T("this page"),
+                              notFoundTitle: T("This page doesn't exist any more"),
+                              forbiddenTitle: T("You can't open this page"),
+                              forbiddenMessage: T("It's in a project you're not a member of. Ask its Project Owner to add you."))
+            }
             else if failed {
                 EmptyState(icon: "doc.questionmark", title: T("Couldn't load the doc."),
                            subtitle: T("Check your connection and try again."),
@@ -132,7 +144,7 @@ struct DocReaderView: View {
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
-            if doc != nil && model.canEdit {
+            if doc != nil && model.canEdit && pageEditable != false {
                 if editing {
                     Button { Task { await finishEditing() } } label: {
                         if model.saving { ProgressView() } else { Text(T("Done")).bold() }
@@ -151,7 +163,7 @@ struct DocReaderView: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 10) {
                     Text(doc.emoji).font(.system(size: 30))
-                    Text(doc.title).font(NXFont.display(26, .bold)).foregroundStyle(NX.foreground)
+                    Text(UntitledText.any(doc.title)).font(NXFont.display(26, .bold)).foregroundStyle(NX.foreground)
                 }
                 if let note = model.note {
                     Label(note, systemImage: "icloud.slash").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
@@ -193,10 +205,16 @@ struct DocReaderView: View {
     }
 
     private func load() async {
-        do { doc = try await APIClient.shared.doc(docId); failed = false }
+        do { doc = try await APIClient.shared.doc(docId); failed = false; loadFailure = nil }
         catch APIError.unauthorized { auth.logout() }
-        catch { failed = doc == nil }
+        catch { failed = doc == nil; loadFailure = error }
         loading = false
+        // Can view / Can comment: no Edit button (the server refuses the save with NEEDS_EDIT_ACCESS).
+        // The page's own GET has no `canEdit`, so the project's level decides (nil = an older server: shown).
+        if let pid = doc?.projectId, pageEditable == nil, !editing,
+           let project = try? await APIClient.shared.project(pid) {
+            pageEditable = project.canEditProject
+        }
         // An edit made offline earlier: open straight into the editor so it is sent and seen.
         if BlockEditOutbox.shared.hasPending(model.ref) && !editing { startEditing() }
     }

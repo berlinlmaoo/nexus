@@ -9,7 +9,19 @@ struct RoomBooking: Decodable, Identifiable, Sendable {
     let endsAt: String
     let status: String?
     let createdBy: UserRef?
-    struct UserRef: Decodable, Sendable { let name: String? }
+    var description: String? = nil
+    struct UserRef: Decodable, Sendable { let name: String?; var id: String? = nil }
+
+    /// The room as the interface names it (web roomLabel): the stored names stay Indonesian.
+    var roomLabel: String { RoomBooking.label(room) }
+    static let rooms = ["Ruang Meeting VIP", "Ruang Meeting", "Studio"]
+    static func label(_ room: String) -> String {
+        switch room {
+        case "Ruang Meeting VIP": return T("VIP Meeting Room")
+        case "Ruang Meeting": return T("Meeting Room")
+        default: return room
+        }
+    }
 }
 struct RoomBookingsResponse: Decodable, Sendable { let bookings: [RoomBooking]? }
 
@@ -66,6 +78,10 @@ struct WorkspaceRoster: Decodable, Sendable {
         let approver: ApproverRef?
         struct ApproverRef: Decodable, Sendable { let id: String; let name: String?; let avatar: String? }
         let joinedAt: String?
+        /// The personal attendance fields above (shift, per-day shift, rest days, Flexi, Mobile, approver)
+        /// were withheld from this viewer and arrive neutral (owner, 13 Oct 2026): only the person, the
+        /// people above them in the Approval chart and the BoD see them. Draw "—", never the neutral values.
+        var personalHidden: Bool? = nil
         // Some other endpoints nest under `user` — kept as a fallback.
         let user: UserRef?
         struct UserRef: Decodable, Sendable { let name: String?; let email: String?; let avatar: String? }
@@ -76,6 +92,7 @@ struct WorkspaceRoster: Decodable, Sendable {
         var emailText: String? { email ?? user?.email }
         var avatarURL: String? { avatar ?? user?.avatar }
         var initial: String { String((name ?? user?.name ?? email ?? user?.email ?? "?").first ?? "?").uppercased() }
+        var isPersonalHidden: Bool { personalHidden == true }
         /// "09:00–18:00" when a personal default shift override is set, else nil (= inherit team/office).
         var shiftLabel: String? {
             guard let s = attendanceShiftStartTime, let e = attendanceShiftEndTime, !s.isEmpty, !e.isEmpty else { return nil }

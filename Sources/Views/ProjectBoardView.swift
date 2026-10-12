@@ -63,6 +63,8 @@ struct ProjectDetailView: View {
     @State private var boardAlert: BoardAlert?
     @State private var alertText = ""
     @State private var filterView: ProjectViewFull?
+    /// Can view / Can comment: a filter / sort kept on this screen only, per view id (not saved).
+    @State private var screenConfigs: [String: ProjectViewConfig] = [:]
     /// iPad / Mac: the task opens as a centred sheet over the board (web popup; owner rejected a side
     /// peek). The phone pushes it, as before.
     @State private var sheetTask: TaskSheetRef?
@@ -96,8 +98,18 @@ struct ProjectDetailView: View {
     /// What the Board / List draws: the sections (search, drill, "My …" applied) through the view's
     /// filter, sort and grouping.
     private func displayLanes(_ layout: String) -> [ProjectDetail.Lane] {
-        ViewEngine.lanes(filteredLanes, config: activeView(layout)?.config, ctx: viewContext)
+        ViewEngine.lanes(filteredLanes, config: activeView(layout).map { configOf($0) }, ctx: viewContext)
     }
+    /// The Table's row drop (a move); nil below Can edit, so nothing drops there.
+    private var tableDrop: (([String], String, String?) -> Void)? {
+        guard canEdit else { return nil }
+        let visible = filteredLanes
+        return { (ids: [String], laneId: String, before: String?) -> Void in
+            dropped(ids, on: laneId, before: before, visible: visible)
+        }
+    }
+    /// The view's config as drawn: an on-screen filter (read-only levels) over the saved one.
+    private func configOf(_ v: ProjectViewFull) -> ProjectViewConfig { screenConfigs[v.id] ?? v.config }
     private func pickView(_ layout: String, _ id: String?) {
         if layout == "list" { listViewId = id } else { boardViewId = id }
         UserDefaults.standard.set(id, forKey: "nexus.view.\(projectId).\(layout)")
@@ -109,7 +121,11 @@ struct ProjectDetailView: View {
         return template?.myView?.name.text
     }
 
-    private var canCreate: Bool { !(detail?.taskLists?.isEmpty ?? true) }
+    /// Adding tasks needs Can edit or Full access (project access levels, owner 13 Oct 2026).
+    private var canCreate: Bool { !(detail?.taskLists?.isEmpty ?? true) && canEdit }
+    /// Can edit or more (access levels round 2): creating, moving, bulk edits, saved views, forms. Can view /
+    /// Can comment see the project read-only. Unknown level (older server) = allowed.
+    private var canEdit: Bool { detail?.canEditProject ?? true }
 
     // MARK: pencarian task di dalam project
     //
@@ -255,7 +271,7 @@ struct ProjectDetailView: View {
     }
 
     /// The task tabs with multi-select + Duplicate. Not an outlet's Board, which shows its events.
-    private var selectionApplies: Bool { !isOutlet && !isPipeline && (tab == .board || tab == .list) }
+    private var selectionApplies: Bool { !isOutlet && !isPipeline && canEdit && (tab == .board || tab == .list) }
 
     /// The selected tasks in board order (lanes, then position), skipping any that vanished meanwhile.
     private func tasksFor(_ ids: [String]) -> [BoardTask] {
@@ -315,6 +331,10 @@ struct ProjectDetailView: View {
     }
 
     @State private var actionError: String?
+    /// A new task that could not be created while offline / on a blip, and that the inline card could not
+    /// take back (it had closed): kept here with Try again (web createInline toast, QA 13 Oct 2026).
+    @State private var keptNewTask: KeptNewTask?
+    struct KeptNewTask: Identifiable { let id = UUID(); let laneId: String; let title: String; let reason: String }
 
     var body: some View {
         redesignChrome(baseBody)
@@ -328,7 +348,7 @@ struct ProjectDetailView: View {
             .sheet(item: $sheetTask, onDismiss: { Task { await reloadQuietly() } }) { ref in
                 NavigationStack {
                     TaskDetailView(taskId: ref.id)
-                        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { sheetTask = nil } } }
+                        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { sheetTask = nil }.keyboardShortcut(.cancelAction) } }
                 }
             }
             .sheet(item: $filterView) { v in filterSheet(v) }
@@ -354,13 +374,15 @@ struct ProjectDetailView: View {
     }
 
     private func filterSheet(_ v: ProjectViewFull) -> ViewFilterSheet {
-        ViewFilterSheet(view: v, lanes: lanes, fields: allFields, members: detail?.members ?? []) { patch in
+        // Below Can edit the filter and sort stay on this screen (the server refuses saving a view).
+        let local: ((ProjectViewConfig) -> Void)? = canEdit ? nil : { (c: ProjectViewConfig) -> Void in screenConfigs[v.id] = c }
+        return ViewFilterSheet(view: v, lanes: lanes, fields: allFields, members: detail?.members ?? [], onSave: { patch in
             do {
                 try await APIClient.shared.updateProjectView(projectId, viewId: v.id, patch: patch)
                 await reloadViews()
                 return nil
             } catch { return (error as? LocalizedError)?.errorDescription ?? T("Couldn't save the view.") }
-        }
+        }, onApplyLocal: local, startConfig: screenConfigs[v.id])
     }
 
     private var baseBody: some View {
@@ -433,6 +455,11 @@ struct ProjectDetailView: View {
         .alert(T("Couldn't update the board"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK") { actionError = nil }
         } message: { Text(actionError ?? "") }
+        .alert(T("Couldn't add the task"), isPresented: Binding(get: { keptNewTask != nil }, set: { if !$0 { keptNewTask = nil } }), presenting: keptNewTask) { k in
+            // Re-sends it as typed. The card is gone, so this is the only copy: no duplicate.
+            Button(T("Try again")) { Task { _ = await addTask(laneId: k.laneId, title: k.title, kept: { false }) } }
+            Button(T("Discard"), role: .destructive) {}
+        } message: { k in Text("“\(k.title)” · \(k.reason)") }
         // Recorded here rather than at each tap site, so a project counts as visited whichever
         // route led in: the projects list, a sidebar shortcut, or a link out of a task.
         .task { if !displayName.isEmpty { ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: displayName, icon: nil)) } }
@@ -493,6 +520,7 @@ struct ProjectDetailView: View {
                 ProjectMark(icon: d.icon, color: d.color, size: wide ? 34 : 28)
             }
             Text(displayName).font(NXFont.display(wide ? 26 : 20, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+            if let chip = detail?.readOnlyLevelChip { ProjectLevelChip(text: chip) }
             Spacer(minLength: 6)
             if detail != nil {
                 // Ask GIDEON about this project: a new chat scoped to it (web header, 12 Oct 2026).
@@ -513,7 +541,8 @@ struct ProjectDetailView: View {
     @ViewBuilder private var addButton: some View {
         if tab == .pipeline {
             ProjectHeaderButton(title: T("New deal"), icon: "plus", labelled: wide, prominent: true) { newDealRequest += 1 }
-        } else if !isPipeline && !isOutlet {
+        } else if !isPipeline && !isOutlet && canEdit {
+            // Can view / Can comment: no Add task / New form (access levels round 2).
             ProjectHeaderButton(title: tab == .forms ? T("New form") : T("Add task"), icon: "plus", labelled: wide,
                                 prominent: true, enabled: tab == .forms || canCreate) {
                 if tab == .forms { newFormOpen = true } else { prefillDue = nil; showCreate = true }
@@ -562,7 +591,7 @@ struct ProjectDetailView: View {
                         tabChip(t)
                         ForEach(extraViews(t)) { v in viewChip(v, tab: t) }
                     }
-                    if let layout = layoutOf(tab) {
+                    if let layout = layoutOf(tab), canEdit {
                         Button { alertText = ""; boardAlert = .newView(layout: layout) } label: {
                             Image(systemName: "plus").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
                                 .frame(width: 34, height: 34).contentShape(Rectangle())
@@ -575,10 +604,11 @@ struct ProjectDetailView: View {
                 .padding(.horizontal, wide ? 18 : 8)
             }
             if let layout = layoutOf(tab), let v = activeView(layout) {
+                let filtered = configOf(v).isFiltered
                 Button { filterView = v } label: {
-                    Image(systemName: v.config.isFiltered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease")
+                    Image(systemName: filtered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(v.config.isFiltered ? NX.violetText : NX.mutedFg)
+                        .foregroundStyle(filtered ? NX.violetText : NX.mutedFg)
                         .frame(width: 40, height: 40).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -602,7 +632,7 @@ struct ProjectDetailView: View {
     private func tabChip(_ t: ProjectTab) -> some View {
         let builtin = layoutOf(t).flatMap { l in viewsFor(l).first { $0.builtin == l } }
         return ProjectTabChip(title: t.label, icon: t.icon, on: tabIsOn(t),
-                              filtered: builtin?.config.isFiltered ?? false) { pickTab(t) }
+                              filtered: builtin.map { configOf($0).isFiltered } ?? false) { pickTab(t) }
             .contextMenu {
                 if let builtin { viewMenuItems(builtin) }
             }
@@ -611,7 +641,7 @@ struct ProjectDetailView: View {
     private func viewChip(_ v: ProjectViewFull, tab t: ProjectTab) -> some View {
         let layout = layoutOf(t) ?? "board"
         return ProjectTabChip(title: viewTitle(v), icon: t.icon, on: tab == t && activeView(layout)?.id == v.id,
-                              filtered: v.config.isFiltered) {
+                              filtered: configOf(v).isFiltered) {
             tab = t
             pickView(layout, v.id)
         }
@@ -620,9 +650,12 @@ struct ProjectDetailView: View {
 
     @ViewBuilder private func viewMenuItems(_ v: ProjectViewFull) -> some View {
         Button { filterView = v } label: { Label(T("Filter and sort…"), systemImage: "line.3.horizontal.decrease.circle") }
-        Button { alertText = v.name ?? ""; boardAlert = .renameView(v) } label: { Label(T("Rename…"), systemImage: "pencil") }
-        if v.canDelete {
-            Button(role: .destructive) { boardAlert = .deleteView(v) } label: { Label(T("Delete view"), systemImage: "trash") }
+        // Saved views are made, renamed and deleted from Can edit (access levels round 2).
+        if canEdit {
+            Button { alertText = v.name ?? ""; boardAlert = .renameView(v) } label: { Label(T("Rename…"), systemImage: "pencil") }
+            if v.canDelete {
+                Button(role: .destructive) { boardAlert = .deleteView(v) } label: { Label(T("Delete view"), systemImage: "trash") }
+            }
         }
     }
 
@@ -683,14 +716,14 @@ struct ProjectDetailView: View {
         case .pages: ProjectPagesTab(projectId: projectId)
         // The project's spreadsheet: its own data, not the tasks — no search box, no task filters.
         case .sheet: ProjectSheetsTab(projectId: projectId)
-        case .forms: ProjectFormsBuilderTab(projectId: projectId, projectName: displayName, onNewForm: { newFormOpen = true })
-        case .chat:  ProjectChatTab(projectId: projectId, projectName: projectName)
+        case .forms: ProjectFormsBuilderTab(projectId: projectId, projectName: displayName, onNewForm: { newFormOpen = true }, canEdit: canEdit)
+        case .chat:  ProjectChatTab(projectId: projectId, projectName: projectName, canPost: detail?.canCommentProject ?? true)
         case .automations: AutomationsTab(projectId: projectId)
         default:
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error {
-                ErrorState(message: error, icon: "lock") { Task { await load() } }
+                ProjectUnavailableView(message: error, retry: { Task { await load() } }, goToProjects: { dismiss() })
             } else if let detail {
                 switch tab {
                 case .overview:
@@ -704,8 +737,11 @@ struct ProjectDetailView: View {
                     )
                 case .board:    boardTab(detail)
                 case .list:     listTab()
-                case .table:    SpreadsheetTab(projectId: projectId, lanes: filteredLanes, onOpen: { open($0) })
-                case .calendar: CalendarTab(tasks: filteredLanes.flatMap { $0.tasks ?? [] }, onOpen: { open($0) }, onCreate: { date in prefillDue = date; showCreate = true },
+                case .table:    SpreadsheetTab(projectId: projectId, lanes: filteredLanes, onOpen: { open($0) },
+                                               onDrop: tableDrop)
+                case .calendar: CalendarTab(tasks: filteredLanes.flatMap { $0.tasks ?? [] }, onOpen: { open($0) },
+                                            onCreate: { date in if canCreate { prefillDue = date; showCreate = true } },
+                                            canCreate: canCreate,
                                             dateFieldId: plotBy, plotChoices: plotChoices, onPlotBy: { choosePlot($0) })
                 case .timeline: TimelineTab(lanes: filteredLanes, onOpen: { open($0) })
                 default:        EmptyView()
@@ -762,7 +798,8 @@ struct ProjectDetailView: View {
                 onNew: { alertText = ""; boardAlert = .newView(layout: layout) },
                 onFilter: { filterView = $0 },
                 onRename: { v in alertText = v.name ?? ""; boardAlert = .renameView(v) },
-                onDelete: { boardAlert = .deleteView($0) }
+                onDelete: { boardAlert = .deleteView($0) },
+                canEdit: canEdit
             )
             Divider().overlay(NX.border)
         }
@@ -785,7 +822,7 @@ struct ProjectDetailView: View {
                         ForEach(Array(shown.enumerated()), id: \.element.id) { i, lane in
                             laneColumn(lane, at: i, in: shown, statusStyle: statusStyle, grouped: grouped)
                         }
-                        if statusStyle { addStatusColumn }
+                        if statusStyle && (detail?.canManageProject ?? true) { addStatusColumn }
                     }
                     .padding(14)
                     .frame(maxHeight: .infinity, alignment: .top)
@@ -804,7 +841,9 @@ struct ProjectDetailView: View {
         let firstOfGroup = i == 0 || shown[i - 1].group != lane.group
         let label: String? = statusStyle && firstOfGroup ? lane.group.label : nil
         var sectionStatus: ((String?) async -> Void)? = nil
-        if !statusStyle && !grouped {
+        // Status columns are edited with Full access only (project access levels).
+        let manages = detail?.canManageProject ?? true
+        if !statusStyle && !grouped && manages {
             sectionStatus = { status in await setSectionStatus(lane.id, status) }
         }
         let addable = ViewEngine.groupTarget(lane.id)?.prop != "assignee"
@@ -813,12 +852,13 @@ struct ProjectDetailView: View {
             statusStyle: statusStyle || grouped,
             groupLabel: label,
             onOpen: { id in open(id) },
-            onAddTask: { title in await addTask(laneId: lane.id, title: title) },
+            onAddTask: { title, kept in await addTask(laneId: lane.id, title: title, kept: kept) },
             onDrop: { ids, before in dropped(ids, on: lane.id, before: before, visible: shown) },
             onMoveTo: { tid, lid in moveLater([tid], to: lid) },
-            options: statusStyle ? optionActions(lane) : nil,
+            options: statusStyle && manages ? optionActions(lane) : nil,
             onSetStatus: sectionStatus,
-            canAdd: addable
+            canAdd: addable && canEdit,
+            canEdit: canEdit
         )
     }
 
@@ -879,9 +919,13 @@ struct ProjectDetailView: View {
     @ViewBuilder private func listTab() -> some View {
         let shown = displayLanes("list")
         VStack(spacing: 0) {
-            ListTab(lanes: shown, onOpen: { open($0) }, selection: selection,
+            // Can view / Can comment: rows open, nothing selects or drags (access levels round 2).
+            let drop: (([String], String, String?) -> Void)? = canEdit
+                ? { (ids: [String], laneId: String, before: String?) -> Void in dropped(ids, on: laneId, before: before, visible: shown) }
+                : nil
+            ListTab(lanes: shown, onOpen: { open($0) }, selection: canEdit ? selection : nil,
                     statusStyle: StatusOptions.inUse(lanes) || shown.contains { $0.id.hasPrefix("grp:") },
-                    onDrop: { ids, laneId, before in dropped(ids, on: laneId, before: before, visible: shown) },
+                    onDrop: drop,
                     statusOf: rowStatusLookup())
         }
     }
@@ -936,7 +980,8 @@ struct ProjectDetailView: View {
         // Not restored from cache on purpose: 403 is the server saying this person is no longer on
         // the project, and answering that with the copy they had before is the one case where a
         // cache would be showing something it has been told not to.
-        catch APIError.http(403, _) { error = T("Project locked — you're not a member of this project.") }
+        catch APIError.http(403, _) { error = ProjectOpenFailure.forbiddenText }
+        catch APIError.http(404, _) { error = ProjectOpenFailure.notFoundText }
         catch {
             if restoreFromCache() {
                 self.error = nil
@@ -1011,11 +1056,13 @@ struct ProjectDetailView: View {
     /// A new task from a column's inline card. A virtual column (a view grouped by priority or a field)
     /// makes the task in the default status and gives it that column's value; a filtered view fills in
     /// the filter's single values so the new task does not vanish at once (bughunt C-BUG-9).
-    private func addTask(laneId: String, title: String) async -> String? {
+    /// `kept` answers, after a failure, whether the inline card takes the title back; when it does not, a
+    /// connection failure keeps the title here with Try again (one keeper, never two: QA 13 Oct 2026).
+    private func addTask(laneId: String, title: String, kept: @escaping @MainActor () -> Bool = { false }) async -> String? {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return nil }
         let layout = tab == .list ? "list" : "board"
-        let config = activeView(layout)?.config
+        let config = activeView(layout).map { configOf($0) }
         var section = laneId
         var priority: String?
         var assignMe = false
@@ -1040,7 +1087,16 @@ struct ProjectDetailView: View {
             await reloadQuietly()
             return id
         } catch {
-            actionError = (error as? LocalizedError)?.errorDescription ?? T("The task wasn't created.")
+            let reason = (error as? LocalizedError)?.errorDescription ?? T("The task wasn't created.")
+            let transient = isTransientFailure(error)
+            if transient && kept() {
+                // The card shows "It's back in the box" with the title in its field: nothing more here.
+            } else if transient {
+                keptNewTask = KeptNewTask(laneId: laneId, title: t, reason: reason)
+            } else {
+                // A refusal (no right to add, a 4xx): said, not retried.
+                actionError = reason
+            }
             return nil
         }
     }
@@ -1083,7 +1139,7 @@ struct ProjectDetailView: View {
     private func canReorder(_ laneId: String) -> Bool {
         guard !laneId.hasPrefix("grp:") else { return false }
         let layout = tab == .list ? "list" : "board"
-        let config = activeView(layout)?.config
+        let config = activeView(layout).map { configOf($0) }
         return (config?.sort.isEmpty ?? true) && ((config?.groupBy ?? "section") == "section")
     }
 
@@ -1297,7 +1353,7 @@ struct LaneColumn: View {
     var groupLabel: String? = nil
     let onOpen: (String) -> Void
     /// Creates a task in this column from the inline card; answers its id (nil = failed).
-    let onAddTask: (String) async -> String?
+    let onAddTask: (String, @escaping @MainActor () -> Bool) async -> String?
     /// Task ids dropped on this column, and the card they were dropped on (nil = the column's empty end).
     /// The board decides: cards from this column are reordered (manual order), others move here; a
     /// selected card drags the whole selection.
@@ -1310,6 +1366,9 @@ struct LaneColumn: View {
     var onSetStatus: ((String?) async -> Void)? = nil
     /// False for a column that cannot take a new card (a group by assignee).
     var canAdd = true
+    /// Can edit or more (access levels round 2): false = cards open, but nothing drags, drops, moves or
+    /// gets selected.
+    var canEdit = true
     @State private var composing = false
     /// True while a card is hovering over this column, so the target is obvious before you let go.
     @State private var dropTargeted = false
@@ -1367,7 +1426,7 @@ struct LaneColumn: View {
             )
             // The whole column is the target, not just the gap under the last card.
             .dropDestination(for: String.self) { ids, _ in
-                guard !ids.isEmpty else { return false }
+                guard canEdit, !ids.isEmpty else { return false }
                 onDrop(ids, nil)
                 return true
             } isTargeted: { targeted in
@@ -1399,7 +1458,18 @@ struct LaneColumn: View {
         .padding(.horizontal, 2)
     }
 
-    private func card(_ task: BoardTask) -> some View {
+    @ViewBuilder private func card(_ task: BoardTask) -> some View {
+        if canEdit {
+            editableCard(task)
+        } else {
+            // Read-only: the card opens the task, nothing else.
+            Button { onOpen(task.id) } label: { BoardCard(task: task) }
+                .buttonStyle(.plain)
+                .hoverEffect(.lift)
+        }
+    }
+
+    private func editableCard(_ task: BoardTask) -> some View {
         // In selection mode a tap ticks the card instead of opening it.
         Button {
             if selection.active { selection.toggle(task.id) } else { onOpen(task.id) }

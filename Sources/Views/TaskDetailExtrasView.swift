@@ -211,6 +211,9 @@ struct TaskCustomFieldsCard: View {
 
 struct TaskAttachmentsCard: View {
     let taskId: String
+    /// Can edit or more in the task's project (access levels round 2): false = files open and share, but
+    /// no add and no delete.
+    var canEdit = true
     @State private var items: [TaskAttachment] = []
     @State private var loading = true
     @State private var busy = false
@@ -243,12 +246,14 @@ struct TaskAttachmentsCard: View {
                 taskCardHeader(items.isEmpty ? T("Attachments") : "\(T("Attachments")) · \(items.count)", "paperclip")
                 Spacer()
                 if busy { ProgressView().scaleEffect(0.8) }
-                Button { showImporter = true } label: {
-                    Image(systemName: "plus.circle.fill").font(.system(size: 20)).foregroundStyle(NX.violetText)
-                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                if canEdit {
+                    Button { showImporter = true } label: {
+                        Image(systemName: "plus.circle.fill").font(.system(size: 20)).foregroundStyle(NX.violetText)
+                            .frame(width: 44, height: 44).contentShape(Rectangle())
+                    }
+                    .accessibilityLabel(T("Add files"))
+                    .disabled(busy)
                 }
-                .accessibilityLabel(T("Add files"))
-                .disabled(busy)
             }
             if uploadProgress.isActive { meter(T("Uploading"), uploadProgress) }
             if fetchProgress.isActive { meter(T("Downloading"), fetchProgress) }
@@ -256,7 +261,7 @@ struct TaskAttachmentsCard: View {
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
             } else if items.isEmpty {
-                Text(T("No files yet. Tap + to add receipts, proofs or documents.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                Text(canEdit ? T("No files yet. Tap + to add receipts, proofs or documents.") : T("No files yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
                 ForEach(items) { a in row(a) }
             }
@@ -335,7 +340,9 @@ struct TaskAttachmentsCard: View {
             .contextMenu {
                 Button { Task { await show(a) } } label: { Label(T("Open file"), systemImage: "eye") }
                 Button { Task { await save(a) } } label: { Label(T("Save or share"), systemImage: "square.and.arrow.up") }
-                Button(role: .destructive) { deleteTarget = a } label: { Label(T("Delete"), systemImage: "trash") }
+                if canEdit {
+                    Button(role: .destructive) { deleteTarget = a } label: { Label(T("Delete"), systemImage: "trash") }
+                }
             }
     }
 
@@ -384,7 +391,7 @@ struct TaskAttachmentsCard: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { tapped(a) }
         .accessibilityAction(named: Text(T("Save or share"))) { Task { await save(a) } }
-        .accessibilityAction(named: Text(T("Delete"))) { deleteTarget = a }
+        .accessibilityAction(named: Text(T("Delete"))) { if canEdit { deleteTarget = a } }
     }
 
     /// Swipe left to uncover delete, right to put it back.
@@ -397,7 +404,7 @@ struct TaskAttachmentsCard: View {
         DragGesture(minimumDistance: 24)
             .onEnded { value in
                 // A drag that is mostly vertical belongs to the scroll view behind this card.
-                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                guard canEdit, abs(value.translation.width) > abs(value.translation.height) else { return }
                 withAnimation(Self.slide) { swiped = value.translation.width < 0 ? a.id : nil }
             }
     }

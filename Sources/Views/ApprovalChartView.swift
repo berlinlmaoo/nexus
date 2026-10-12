@@ -23,8 +23,19 @@ struct ApprovalChartView: View {
     @State private var problem: String?
     @State private var fitTrigger = 0
     @State private var shareItem: ShareItem?
+    /// The chart's own edges (GET /api/admin/approval-chart). Since 13 Oct 2026 the members list withholds
+    /// approverId for people outside a Manager's own chain (personal attendance data), which drew the rest
+    /// of the company as "not placed"; the chart endpoint keeps every edge. nil = not loaded / older server:
+    /// the members' own approverId is used, as before.
+    @State private var chartEdges: [String: String]?
 
     // MARK: data
+
+    /// Who approves `p`: the chart's edge when the chart answered, else the member row's.
+    private func approverOf(_ p: WorkspaceRoster.Member) -> String? {
+        if let edges = chartEdges, let uid = p.userId { return edges[uid] }
+        return p.approverId
+    }
 
     private var people: [WorkspaceRoster.Member] { members.filter { $0.userId != nil } }
     private var byId: [String: WorkspaceRoster.Member] {
@@ -39,12 +50,12 @@ struct ApprovalChartView: View {
     private var children: [String: [WorkspaceRoster.Member]] {
         var m: [String: [WorkspaceRoster.Member]] = [:]
         for p in people {
-            if let a = p.approverId, byId[a] != nil { m[a, default: []].append(p) }
+            if let a = approverOf(p), byId[a] != nil { m[a, default: []].append(p) }
         }
         return m.mapValues(sorted)
     }
     private var roots: [WorkspaceRoster.Member] {
-        sorted(people.filter { $0.approverId == nil || byId[$0.approverId!] == nil })
+        sorted(people.filter { p in approverOf(p).map { byId[$0] == nil } ?? true })
     }
     private func hasKids(_ p: WorkspaceRoster.Member) -> Bool { !(children[p.userId!] ?? []).isEmpty }
     /// Pohon: siapa pun tanpa atasan yang punya bawahan, plus BoD tanpa bawahan (mereka tetap
@@ -52,7 +63,7 @@ struct ApprovalChartView: View {
     /// pernah diajukan). Yang bukan BoD, tanpa atasan DAN tanpa bawahan → chip "belum ditaruh".
     private var trees: [WorkspaceRoster.Member] { roots.filter { hasKids($0) || Self.isSenior($0) } }
     private var alone: [WorkspaceRoster.Member] { roots.filter { !Self.isSenior($0) && !hasKids($0) } }
-    private var placed: Int { people.filter { $0.approverId != nil && byId[$0.approverId!] != nil }.count }
+    private var placed: Int { people.filter { p in approverOf(p).map { byId[$0] != nil } ?? false }.count }
     private var unplaced: Int { roots.filter { !Self.isSenior($0) }.count }
 
     // MARK: body
@@ -96,7 +107,17 @@ struct ApprovalChartView: View {
                 }
             }
             .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
+            .task(id: members.count) { await loadEdges() }
         }
+    }
+
+    private func loadEdges() async {
+        guard let chart = try? await APIClient.shared.approvalChartEdges() else { return }
+        var edges: [String: String] = [:]
+        for person in chart.people ?? [] {
+            if let uid = person.userId, let a = person.approverId { edges[uid] = a }
+        }
+        chartEdges = edges
     }
 
     private var statsStrip: some View {
@@ -139,7 +160,7 @@ struct ApprovalChartView: View {
 
     private func tap(_ p: WorkspaceRoster.Member) {
         guard !busy, let mid = p.id else { return }
-        pick = ApproverPickTarget(id: mid, memberId: mid, workspaceId: workspaceId, name: p.displayName, current: p.approverId, selfUserId: p.userId)
+        pick = ApproverPickTarget(id: mid, memberId: mid, workspaceId: workspaceId, name: p.displayName, current: approverOf(p), selfUserId: p.userId)
     }
 
     // MARK: chart content (dipakai kanvas DAN ekspor)

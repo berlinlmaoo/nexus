@@ -63,14 +63,18 @@ extension GideonClient {
                     if let docId { body["docId"] = docId }
                     if let taskId { body["taskId"] = taskId }
                     request.httpBody = try JSONSerialization.data(withJSONObject: body)
-                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
-                    guard let http = response as? HTTPURLResponse else { throw APIError.offline }
+                    let bytes: URLSession.AsyncBytes
+                    let response: URLResponse
+                    do { (bytes, response) = try await URLSession.shared.bytes(for: request) } catch { throw GideonProblem.from(error) }
+                    guard let http = response as? HTTPURLResponse else { throw GideonProblem.unreachable }
                     if http.statusCode == 401 { throw APIError.unauthorized }
                     if !(200..<300).contains(http.statusCode) {
                         var text = ""
                         for try await line in bytes.lines { text += line; if text.count > 4000 { break } }
-                        let msg = ((try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? RawJSON)?["error"] as? String
-                        throw APIError.transport(msg ?? T("GIDEON couldn't write that. Try again."))
+                        let obj = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? RawJSON
+                        // 429 rate_limited (60 AI edits an hour), 503 when GIDEON is not connected, a proxy's
+                        // 502/504: worded in the app's language (QA 13 Oct 2026).
+                        throw GideonProblem.http(status: http.statusCode, code: obj?["code"] as? String, message: obj?["error"] as? String)
                     }
                     for try await line in bytes.lines {
                         guard line.hasPrefix("data:") else { continue }
@@ -88,7 +92,7 @@ extension GideonClient {
                             }
                             continuation.yield(.final(text: o["content"] as? String ?? "", doc: o["doc"] as? RawJSON, items: items))
                         case "error":
-                            throw APIError.transport(o["content"] as? String ?? T("GIDEON couldn't write that. Try again."))
+                            throw GideonProblem.stream(o["content"] as? String ?? "GIDEON couldn't write that. Try again.")
                         case "done":
                             continuation.finish()
                             return
@@ -98,7 +102,8 @@ extension GideonClient {
                     }
                     continuation.finish()
                 } catch {
-                    continuation.finish(throwing: error)
+                    // A connection dropped mid-answer reads "can't be reached", not URLSession's sentence.
+                    continuation.finish(throwing: (error is URLError) ? GideonProblem.unreachable : error)
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
@@ -196,7 +201,7 @@ struct GideonWriteSheet: View {
             .navigationTitle(request.label)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(T("Discard")) { runTask?.cancel(); dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(T("Discard")) { runTask?.cancel(); dismiss() }.keyboardShortcut(.cancelAction) }
             }
             .safeAreaInset(edge: .bottom) { actions }
         }

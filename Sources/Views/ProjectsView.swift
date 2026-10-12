@@ -984,6 +984,8 @@ struct CreateProjectSheet: View {
     @State private var starter = true
     /// People added to the new project from the start, any type (owner, 11 Oct 2026).
     @State private var memberIds: Set<String> = []
+    /// Their access (Notion-style, owner 13 Oct 2026); the creator is the Project Owner (Full access).
+    @State private var memberLevel: ProjectAccessLevel = .edit
     @State private var busy = false
     @State private var err: String?
 
@@ -1028,6 +1030,12 @@ struct CreateProjectSheet: View {
                             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
                         }
                         field(T("Members")) {
+                            HStack(alignment: .top, spacing: 8) {
+                                Text(T("Optional. You're the Project Owner (Full access); the people you pick get the access chosen here."))
+                                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 4)
+                                AccessLevelMenu(value: memberLevel, disabled: busy, accessibilityName: nil, onChange: { memberLevel = $0 })
+                            }
                             NewProjectMembersPicker(picked: $memberIds, selfUserId: auth.session?.userId)
                         }
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
@@ -1083,7 +1091,7 @@ struct CreateProjectSheet: View {
                 // A new, empty board every time (owner, 11 Oct 2026: the one-company-board rule is gone),
                 // opened straight away like an outlet.
                 let made = try await APIClient.shared.pipelineBoardCreate(workspaceId: workspaceId, name: trimmed,
-                                                                          memberIds: Array(memberIds))
+                                                                          memberIds: Array(memberIds), memberLevel: memberLevel)
                 await onCreated()
                 dismiss()
                 onOpenProject(made)
@@ -1092,7 +1100,8 @@ struct CreateProjectSheet: View {
                 // Any number of outlets, one project each (owner, 10 Oct 2026, for Ryan); it opens on its
                 // Overview once the list knows it.
                 let made = try await APIClient.shared.outletProjectCreate(workspaceId: workspaceId, name: trimmed,
-                                                                          folderId: folder?.id, memberIds: Array(memberIds))
+                                                                          folderId: folder?.id, memberIds: Array(memberIds),
+                                                                          memberLevel: memberLevel)
                 await onCreated()
                 dismiss()
                 onOpenProject(made)
@@ -1104,7 +1113,7 @@ struct CreateProjectSheet: View {
                 workspaceId: workspaceId, name: trimmed,
                 description: brief.trimmingCharacters(in: .whitespacesAndNewlines),
                 folderId: folder?.id, hiddenTabs: hiddenTabs.sorted(), memberIds: Array(memberIds),
-                templateId: pick?.template?.id, starter: starter)
+                memberLevel: memberLevel, templateId: pick?.template?.id, starter: starter)
             await onCreated()
             dismiss()
             onOpenProject(ProjectRef(id: id, name: trimmed, icon: nil))

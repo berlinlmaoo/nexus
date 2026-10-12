@@ -12,16 +12,19 @@ struct SpreadsheetTab: View {
     let projectId: String
     let lanes: [ProjectDetail.Lane]
     let onOpen: (String) -> Void
+    /// Rows dropped on a row (ids, that row's section, that row): a move like the List's (touch long-press drag).
+    var onDrop: (([String], String, String?) -> Void)? = nil
     @State private var fields: [CustomField] = []
     @State private var loading = true
 
     private struct SheetRow: Identifiable {
         let id: String
         let lane: String
+        let laneId: String
         let task: BoardTask
     }
     private var rows: [SheetRow] {
-        lanes.flatMap { l in (l.tasks ?? []).map { SheetRow(id: $0.id, lane: l.name, task: $0) } }
+        lanes.flatMap { l in (l.tasks ?? []).map { SheetRow(id: $0.id, lane: l.name, laneId: l.id, task: $0) } }
     }
 
     private let wTitle: CGFloat = 210
@@ -46,6 +49,12 @@ struct SpreadsheetTab: View {
                                 ForEach(rows) { r in
                                     Button { onOpen(r.task.id) } label: { bodyRow(r) }
                                         .buttonStyle(.plain)
+                                        .draggable(r.task.id)
+                                        .dropDestination(for: String.self) { ids, _ in
+                                            guard let onDrop, !ids.isEmpty, !ids.contains(r.task.id) else { return false }
+                                            onDrop(ids, r.laneId, r.task.id)
+                                            return true
+                                        }
                                     Divider().overlay(NX.border.opacity(0.6))
                                 }
                             }

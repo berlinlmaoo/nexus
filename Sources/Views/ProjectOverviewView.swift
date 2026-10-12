@@ -268,7 +268,7 @@ struct OverviewTab: View {
                 if s.sections.count > 1 { OverviewSectionsCard(stats: s, onDrill: onDrill) }
                 OverviewRecentCard(stats: s, onOpenTask: onOpenTask)
             }
-            OverviewStatusUpdatesCard(projectId: detail.id)
+            OverviewStatusUpdatesCard(projectId: detail.id, canPost: detail.canEditProject)
         }
     }
 }
@@ -526,7 +526,7 @@ private struct OverviewTaskRow: View {
                 Circle().strokeBorder(started ? OverviewStyle.sky : OverviewStyle.todo, lineWidth: 2)
                     .frame(width: 14, height: 14).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(task.title).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+                    Text(UntitledText.task(task.title)).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
                     if let section, !section.isEmpty {
                         Text(section).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     }
@@ -717,7 +717,7 @@ private struct OverviewTeamCard: View {
                         HStack(spacing: 6) {
                             Text(p.name).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
                             if p.isLead {
-                                Text(T("Lead")).font(NXFont.text(10, .bold)).foregroundStyle(NX.violetText)
+                                Text(T("Project Owner")).font(NXFont.text(10, .bold)).foregroundStyle(NX.violetText)
                                     .padding(.horizontal, 6).padding(.vertical, 1)
                                     .background(NX.accentBg, in: Capsule()).fixedSize()
                             }
@@ -735,7 +735,7 @@ private struct OverviewTeamCard: View {
         .buttonStyle(.plain)
         .disabled(p.open == 0 || onDrill == nil)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(p.name)\(p.isLead ? ", " + T("Lead") : ""). \(T("Open")) \(p.open), \(T("Overdue")) \(p.overdue), \(T("Done this month")) \(p.doneMonth)")
+        .accessibilityLabel("\(p.name)\(p.isLead ? ", " + T("Project Owner") : ""). \(T("Open")) \(p.open), \(T("Overdue")) \(p.overdue), \(T("Done this month")) \(p.doneMonth)")
         .accessibilityAddTraits(.isButton)
     }
 
@@ -774,6 +774,8 @@ private struct OverviewBriefCard: View {
     let onEdit: () -> Void
     let onOpenMember: (ProfileTarget) -> Void
     @State private var expanded = false
+    /// The brief is written in Project settings (Full access); below it there is nothing to edit here.
+    private var canEdit: Bool { detail.canManageProject }
 
     private var brief: String { (detail.description ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
     private var members: [ProjectDetail.ProjectMember] { (detail.members ?? []).filter { !$0.uid.isEmpty } }
@@ -781,21 +783,23 @@ private struct OverviewBriefCard: View {
 
     var body: some View {
         OverviewCard(title: T("Brief"), icon: "doc.text", action: {
-            if !brief.isEmpty { OverviewLinkButton(title: T("Edit"), action: onEdit) }
+            if !brief.isEmpty && canEdit { OverviewLinkButton(title: T("Edit"), action: onEdit) }
         }) {
             VStack(alignment: .leading, spacing: 12) {
                 if brief.isEmpty {
                     Text(T("No brief yet. Write what this project is for and what done looks like, so anyone who joins gets it at a glance."))
                         .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                         .fixedSize(horizontal: false, vertical: true)
-                    Button(action: onEdit) {
-                        Label(T("Write a brief"), systemImage: "pencil")
-                            .font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
-                            .padding(.horizontal, 12).frame(minHeight: 44)
-                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
-                            .contentShape(Rectangle())
+                    if canEdit {
+                        Button(action: onEdit) {
+                            Label(T("Write a brief"), systemImage: "pencil")
+                                .font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                                .padding(.horizontal, 12).frame(minHeight: 44)
+                                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 } else {
                     let long = brief.count > 280
                     Text(brief).font(NXFont.text(14)).foregroundStyle(NX.foreground.opacity(0.9))
@@ -962,7 +966,7 @@ private struct OverviewRecentCard: View {
                                 Image(systemName: "checkmark.circle.fill").font(.system(size: 15))
                                     .foregroundStyle(NX.success).accessibilityHidden(true)
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text(t.title).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
+                                    Text(UntitledText.task(t.title)).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
                                     if !meta.isEmpty {
                                         Text(meta).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                                     }
@@ -989,6 +993,8 @@ private struct OverviewRecentCard: View {
 
 private struct OverviewStatusUpdatesCard: View {
     let projectId: String
+    /// Posting (and drafting) an update needs Can edit (server: project write). Below it: read only.
+    var canPost = true
     @State private var updates: [ProjectStatusUpdate] = []
     @State private var loading = true
     @State private var text = ""
@@ -1017,6 +1023,7 @@ private struct OverviewStatusUpdatesCard: View {
 
     var body: some View {
         OverviewCard(title: T("Status updates"), icon: "text.bubble", action: {
+            if canPost {
             Button { Task { await draft() } } label: {
                 HStack(spacing: 4) {
                     if drafting { ProgressView().controlSize(.mini) } else { Image(systemName: "sparkles").font(.system(size: 11, weight: .semibold)) }
@@ -1029,8 +1036,10 @@ private struct OverviewStatusUpdatesCard: View {
             .buttonStyle(.plain)
             .disabled(drafting)
             .accessibilityHint(T("Draft an update from this project's tasks"))
+            }
         }) {
             VStack(alignment: .leading, spacing: 10) {
+                if canPost {
                 TextField(T("How is the project going? Wins, blockers, what's next."), text: $text, axis: .vertical)
                     .lineLimit(2...10)
                     .font(NXFont.text(14))
@@ -1057,10 +1066,11 @@ private struct OverviewStatusUpdatesCard: View {
                     .buttonStyle(.plain)
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || posting)
                 }
+                }
                 if loading {
                     ProgressView().frame(maxWidth: .infinity).padding(.vertical, 8)
                 } else if updates.isEmpty {
-                    Text(T("No updates yet. Post one so the team and BoD can follow along without asking."))
+                    Text(canPost ? T("No updates yet. Post one so the team and BoD can follow along without asking.") : T("No updates yet."))
                         .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
@@ -1124,6 +1134,8 @@ private struct OverviewStatusUpdatesCard: View {
         do {
             let content = try await APIClient.shared.draftStatusUpdate(projectId: projectId)
             if !content.isEmpty { text = content }
+        } catch APIError.http(503, let message) where (message ?? "").lowercased().contains("not connected") {
+            self.error = T("GIDEON isn't connected on this server.")
         } catch {
             self.error = T("Couldn't draft an update. Try again, or write it yourself.")
         }

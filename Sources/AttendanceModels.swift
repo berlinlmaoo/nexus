@@ -142,7 +142,20 @@ struct AttendanceHistoryResponse: Decodable, Sendable {
     let roster: [RosterEntry]?
     var all: [AttendanceRow] { rows ?? records ?? [] }
     /// `leftAt`: the last working day of someone who left (offboarded, 8 Oct 2026); nil otherwise.
-    struct RosterEntry: Decodable, Sendable { let id: String; let name: String?; let dayOffQuota: Int?; let leftAt: String? }
+    /// `owed` (servers from 13 Oct 2026): what this person's Score is out of — the same rule as the record.
+    struct RosterEntry: Decodable, Sendable { let id: String; let name: String?; let dayOffQuota: Int?; let leftAt: String?; var owed: AttendanceOwed? = nil }
+}
+
+/// What an attendance Score is out of (server lib/attendance-score.ts, QA S-20, 13 Oct 2026): someone who
+/// joined during the period owes only the days from their first day, with the day-off allowance prorated.
+/// One rule for the crew board and the person record, so the two never disagree.
+struct AttendanceOwed: Decodable, Sendable, Equatable {
+    let days: Int
+    let allowance: Int
+    /// yyyy-MM-dd: the day they owe attendance from (the period's first day for everyone else).
+    let from: String?
+    /// Working days owed = days − allowance, never below 0.
+    var working: Int { max(0, days - allowance) }
 }
 struct AttendanceRow: Decodable, Identifiable, Sendable {
     let id: String?
@@ -155,7 +168,7 @@ struct AttendanceRow: Decodable, Identifiable, Sendable {
     /// `dayOffQuota`: that person's weekly-rest quota (servers from 28 Sep 2026; absent → 4).
     /// `leftAt` (ISO): the last working day of someone who left the company (offboarding, 8 Oct
     /// 2026). The recaps keep them for the periods they were part of; nil for everyone else.
-    struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String?; let dayOffQuota: Int?; let leftAt: String? }
+    struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String?; let dayOffQuota: Int?; let leftAt: String?; var owed: AttendanceOwed? = nil }
     var idv: String { id ?? ((user?.id ?? "") + (attendanceDate ?? "")) }
 
     // The rest of what the history endpoint has always sent and the board never read — the

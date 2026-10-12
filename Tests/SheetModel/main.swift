@@ -1,7 +1,13 @@
 import Foundation
 
-// Linux test of the spreadsheet's plain model: selection rules and the per-sheet pending writes.
-// Run: swiftc -o t Sources/Sheets/SheetModel.swift Tests/SheetModel/main.swift && ./t
+// Linux test of the spreadsheet's plain model: selection rules, the per-sheet pending writes, the filter
+// (every case of the web's lib/sheet-filter.test.mjs) and the grid's pure parity pieces (borders, merges,
+// overflow, colours, freeze). Run from the repo root:
+//   docker run --rm -v "$PWD":/w -w /w swift:5.10-jammy bash -c "swiftc -O -o /tmp/t \
+//     Sources/Sheets/SheetModel.swift Sources/Sheets/SheetFilter.swift Sources/Sheets/SheetGridModel.swift \
+//     Sources/Sheets/SheetFormula*.swift Sources/Sheets/SheetNumFmt.swift Sources/Sheets/SheetValidation.swift \
+//     Sources/Sheets/SheetCF.swift Sources/Sheets/SheetTypes.swift Sources/Sheets/SheetClipboard.swift \
+//     Tests/SheetModel/*.swift && /tmp/t"
 
 var checks = 0, fails = 0
 func check(_ ok: Bool, _ what: String) {
@@ -50,4 +56,7 @@ check(back.count == q.count && back.order == q.order, "disk round trip")
 let cleared = SheetPendingWrites(json: ["values": ["z": ["a": NSNull()]]])
 check(cleared.order == ["z"] && cleared.pendingValue(row: "z", col: "a") != nil, "order rebuilt from keys")
 
+runFilterTests()
+runGridModelTests()
 print("checks \(checks), fails \(fails)")
+exit(fails == 0 ? 0 : 1)

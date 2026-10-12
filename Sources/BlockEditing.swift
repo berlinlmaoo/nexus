@@ -71,12 +71,21 @@ struct BlockRow: Identifiable, Equatable {
     /// The list it came from: its attrs (e.g. `start`) and a number shared by its items.
     var listAttrs: RawJSON? = nil
     var listGroup: Int? = nil
+    /// The line's marks were changed in the app (a link added, changed or removed with ⌘K): it is sent
+    /// rebuilt even though its text may be the same. `marksRevision` makes such a change an edit.
+    var marksEdited = false
+    var marksRevision = 0
 
     static func == (a: BlockRow, b: BlockRow) -> Bool {
-        a.id == b.id && a.kind == b.kind && a.text == b.text && a.checked == b.checked
+        a.id == b.id && a.kind == b.kind && a.text == b.text && a.checked == b.checked && a.marksRevision == b.marksRevision
     }
 
-    var isUnchanged: Bool { raw != nil && kind == originalKind && text == originalText && checked == originalChecked }
+    var isUnchanged: Bool { raw != nil && !marksEdited && kind == originalKind && text == originalText && checked == originalChecked }
+
+    /// A link can be put on this line (its marks survive the trip back): not a quote, not a kept block.
+    var takesLinks: Bool {
+        ![BlockKind.quote, .other].contains(kind) && ![BlockKind.quote, .other].contains(originalKind)
+    }
 
     static func new(_ kind: BlockKind, _ text: String = "") -> BlockRow {
         BlockRow(kind: kind, text: text, originalKind: kind, originalText: "\u{0}")
@@ -430,6 +439,89 @@ enum BlockConvert {
     }
 
     static func doc(_ blocks: [RawJSON]) -> RawJSON { ["type": "doc", "content": blocks] }
+
+    // MARK: links (⌘K, web QA 13 Oct 2026)
+
+    /// The link mark the web editor writes.
+    static func linkMark(_ href: String) -> RawJSON {
+        ["type": "link", "attrs": ["href": href, "target": "_blank", "rel": "noopener noreferrer nofollow"]]
+    }
+
+    private static func href(of marks: [Any]?) -> String? {
+        for m in marks ?? [] {
+            if let o = m as? RawJSON, (o["type"] as? String) == "link" { return (o["attrs"] as? RawJSON)?["href"] as? String }
+        }
+        return nil
+    }
+
+    /// The links on a line, in order.
+    static func links(_ r: BlockRow) -> [ExistingLink] {
+        var out: [ExistingLink] = []
+        for (i, n) in inlineFor(r).enumerated() {
+            guard let o = n as? RawJSON, (o["type"] as? String) == "text", let h = href(of: o["marks"] as? [Any]) else { continue }
+            out.append(ExistingLink(index: i, text: o["text"] as? String ?? h, href: h))
+        }
+        return out
+    }
+
+    /// The row with `inline` as its line: the node it came from is rebuilt around the new inline content
+    /// (shaped by its ORIGINAL kind, which is where `originalInline` reads it), and the text follows.
+    static func row(_ r: BlockRow, withInline inline: [Any]) -> BlockRow? {
+        guard r.takesLinks else { return nil }
+        var shell: RawJSON
+        switch r.originalKind {
+        case .paragraph, .h1, .h2, .h3:
+            shell = r.raw ?? ["type": "paragraph"]
+            shell["content"] = inline
+        case .bullet, .numbered, .todo:
+            shell = r.raw ?? ["type": r.originalKind == .todo ? "taskItem" : "listItem"]
+            var kids = (shell["content"] as? [Any]) ?? []
+            if let i = kids.firstIndex(where: { (($0 as? RawJSON)?["type"] as? String) == "paragraph" }) {
+                kids[i] = paragraph(content: inline)
+            } else {
+                kids.insert(paragraph(content: inline), at: 0)
+            }
+            shell["content"] = kids
+        case .toggle:
+            shell = r.raw ?? ["type": "details", "content": [["type": "detailsContent", "content": [["type": "paragraph"]]]]]
+            var kids = (shell["content"] as? [Any]) ?? []
+            var summary: RawJSON = ["type": "detailsSummary"]
+            if !inline.isEmpty { summary["content"] = inline }
+            if let i = kids.firstIndex(where: { (($0 as? RawJSON)?["type"] as? String) == "detailsSummary" }) { kids[i] = summary } else { kids.insert(summary, at: 0) }
+            shell["content"] = kids
+        case .quote, .other:
+            return nil
+        }
+        var out = r
+        out.raw = shell
+        let text = inlineText(inline)
+        out.originalText = text
+        out.text = text
+        out.marksEdited = true
+        out.marksRevision += 1
+        return out
+    }
+
+    /// The line with a new link at its end ("text" shown, `href` behind it; no text = the address itself).
+    static func addingLink(_ r: BlockRow, text: String, href: String) -> BlockRow? {
+        var inline = inlineFor(r)
+        let shown = text.isEmpty ? href : text
+        let current = inlineText(inline)
+        if !current.isEmpty && !current.hasSuffix(" ") && !current.hasSuffix("\n") { inline.append(["type": "text", "text": " "]) }
+        inline.append(["type": "text", "text": shown, "marks": [linkMark(href)]])
+        return row(r, withInline: inline)
+    }
+
+    /// One link changed to `href`, or (nil) turned back into plain text.
+    static func editingLink(_ r: BlockRow, at index: Int, href: String?) -> BlockRow? {
+        var inline = inlineFor(r)
+        guard inline.indices.contains(index), var node = inline[index] as? RawJSON else { return nil }
+        var marks = (node["marks"] as? [Any] ?? []).filter { (($0 as? RawJSON)?["type"] as? String) != "link" }
+        if let href { marks.append(linkMark(href)) }
+        if marks.isEmpty { node.removeValue(forKey: "marks") } else { node["marks"] = marks }
+        inline[index] = node
+        return row(r, withInline: inline)
+    }
 }
 
 // MARK: - server calls
@@ -532,6 +624,11 @@ final class BlockEditOutbox {
 
     /// Sends what waits; a conflict stays here until its page is opened, where the person decides.
     func flush() async {
+        // Copies of edits that never reached a save (the app was closed or killed mid-edit) join the
+        // outbox first — except for a body whose editor is open right now.
+        for (ref, base, doc) in BlockEditMirror.shared.takeClosed() where !hasPending(ref) {
+            keep(ref, base: base, doc: doc)
+        }
         guard !flushing, !items.isEmpty else { return }
         flushing = true
         defer { flushing = false }
@@ -544,6 +641,72 @@ final class BlockEditOutbox {
                 drop(p.ref)   // refused for good: never retried
             } catch {}
         }
+    }
+}
+
+/// A running copy of every edit the server has not confirmed yet, written while the person types (400 ms
+/// after the last change), not only when a save fails or the screen closes (web E-BUG-2 follow-up, QA 13 Oct
+/// 2026: "offline edits kept even before the drop is noticed"). If the app is closed or killed mid-edit the
+/// page opens with the edit again, and the next launch sends it. A file in Application Support, like the
+/// outbox; cleared by a save that went through.
+@MainActor
+final class BlockEditMirror {
+    static let shared = BlockEditMirror()
+    private struct Copy: Codable { let ref: BlockBodyRef; let base: Data; let doc: Data; let savedAt: Date }
+    private var items: [String: Copy] = [:]
+    /// Bodies whose editor is on screen: their copy is the editor's business, not the launch flush's.
+    private var open: Set<String> = []
+    private let url: URL? = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+        .appendingPathComponent("block-edit-mirror.json")
+
+    private init() {
+        if let url, let data = try? Data(contentsOf: url), let decoded = try? JSONDecoder().decode([String: Copy].self, from: data) {
+            items = decoded
+        }
+    }
+
+    private func key(_ ref: BlockBodyRef) -> String { "\(ref.kind):\(ref.id)" }
+
+    func opened(_ ref: BlockBodyRef) { open.insert(key(ref)) }
+    func closed(_ ref: BlockBodyRef) { open.remove(key(ref)) }
+
+    func write(_ ref: BlockBodyRef, base: RawJSON, doc: RawJSON) {
+        guard let b = try? JSONSerialization.data(withJSONObject: base), let d = try? JSONSerialization.data(withJSONObject: doc) else { return }
+        items[key(ref)] = Copy(ref: ref, base: b, doc: d, savedAt: Date())
+        persist()
+    }
+
+    func drop(_ ref: BlockBodyRef) {
+        guard items[key(ref)] != nil else { return }
+        items[key(ref)] = nil
+        persist()
+    }
+
+    func copy(_ ref: BlockBodyRef) -> (base: RawJSON, doc: RawJSON)? {
+        guard let c = items[key(ref)],
+              let base = (try? JSONSerialization.jsonObject(with: c.base)) as? RawJSON,
+              let doc = (try? JSONSerialization.jsonObject(with: c.doc)) as? RawJSON else { return nil }
+        return (base, doc)
+    }
+
+    /// The copies of bodies not open on screen, removed from here (the outbox takes them).
+    func takeClosed() -> [(BlockBodyRef, RawJSON, RawJSON)] {
+        var out: [(BlockBodyRef, RawJSON, RawJSON)] = []
+        for (k, c) in items where !open.contains(k) {
+            if let base = (try? JSONSerialization.jsonObject(with: c.base)) as? RawJSON,
+               let doc = (try? JSONSerialization.jsonObject(with: c.doc)) as? RawJSON {
+                out.append((c.ref, base, doc))
+            }
+            items[k] = nil
+        }
+        if !out.isEmpty { persist() }
+        return out
+    }
+
+    private func persist() {
+        guard let url else { return }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if let data = try? JSONEncoder().encode(items) { try? data.write(to: url, options: .atomic) }
     }
 }
 
@@ -564,15 +727,64 @@ final class BlockEditorModel {
 
     init(ref: BlockBodyRef) { self.ref = ref }
 
+    /// The pending copy write (BlockEditMirror), restarted by every change.
+    @ObservationIgnored private var mirrorTask: Task<Void, Never>?
+
+    /// Called on every change of the rows: 400 ms after the last one, what is typed is copied to the
+    /// device (or the copy dropped when nothing differs from the server any more).
+    func noteEdit() {
+        guard loaded, canEdit else { return }
+        mirrorTask?.cancel()
+        mirrorTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard let self, !Task.isCancelled else { return }
+            if self.isDirty { BlockEditMirror.shared.write(self.ref, base: self.base, doc: self.currentDoc) }
+            else { BlockEditMirror.shared.drop(self.ref) }
+        }
+    }
+
+    /// ⌘K: a link at the end of a line. False when this line cannot hold one (a quote, a kept block).
+    @discardableResult
+    func addLink(_ id: UUID, text: String, href: String) -> Bool {
+        guard let i = rows.firstIndex(where: { $0.id == id }), let new = BlockConvert.addingLink(rows[i], text: text, href: href) else { return false }
+        rows[i] = new
+        return true
+    }
+
+    /// ⌘K on a line with links: change one's address, or (nil) take the link off its words.
+    func editLink(_ id: UUID, _ link: ExistingLink, href: String?) {
+        guard let i = rows.firstIndex(where: { $0.id == id }), let new = BlockConvert.editingLink(rows[i], at: link.index, href: href) else { return }
+        rows[i] = new
+    }
+
+    func links(_ id: UUID) -> [ExistingLink] {
+        guard let r = rows.first(where: { $0.id == id }) else { return [] }
+        return BlockConvert.links(r)
+    }
+
     var currentDoc: RawJSON { BlockConvert.doc(BlockConvert.blocks(from: rows)) }
     var isDirty: Bool { rows.contains { !$0.isUnchanged } || rows.count != BlockConvert.rows(from: blocks(of: base)).count }
 
     private func blocks(of doc: RawJSON) -> [RawJSON] { (doc["content"] as? [Any] ?? []).compactMap { $0 as? RawJSON } }
 
     func load() async {
+        BlockEditMirror.shared.opened(ref)
+        // Already showing an edit that is not on the server yet (the card scrolled away and back): keep it.
+        // Reading the server's copy here would put the old text over what was just typed.
+        if loaded && isDirty && conflictDoc == nil { return }
         do {
             let r = try await APIClient.shared.blockBody(ref)
             canEdit = r.canEdit
+            if BlockEditOutbox.shared.pending(ref) == nil, r.canEdit, let copy = BlockEditMirror.shared.copy(ref) {
+                // Typed here before and never saved (the app was closed mid-edit): shown again on its own
+                // base, and sent now — a conflict is asked about, as always.
+                base = copy.base
+                rows = BlockConvert.rows(from: blocks(of: copy.doc))
+                loaded = true
+                note = T("Changes you made earlier on this device were brought back and are being saved.")
+                await save()
+                return
+            }
             if let waiting = BlockEditOutbox.shared.pending(ref) {
                 // An edit made offline: shown again on its own base, and sent now.
                 base = waiting.base
@@ -583,7 +795,7 @@ final class BlockEditorModel {
             }
             set(r.doc)
         } catch {
-            if let waiting = BlockEditOutbox.shared.pending(ref) {
+            if let waiting = BlockEditOutbox.shared.pending(ref) ?? BlockEditMirror.shared.copy(ref) {
                 base = waiting.base
                 rows = BlockConvert.rows(from: blocks(of: waiting.doc))
                 note = T("Offline: your changes are kept on this phone and sent when you are back online.")
@@ -615,12 +827,15 @@ final class BlockEditorModel {
             switch try await APIClient.shared.applyBlockEdit(ref, base: base, doc: doc, keepBoth: keepBoth) {
             case .saved(let live):
                 BlockEditOutbox.shared.drop(ref)
+                BlockEditMirror.shared.drop(ref)
+                mirrorTask?.cancel()
                 conflictDoc = nil
                 note = nil
                 set(live)
                 return true
             case .conflict(let live):
                 BlockEditOutbox.shared.keep(ref, base: base, doc: doc)
+                BlockEditMirror.shared.drop(ref)
                 conflictDoc = live
                 return false
             case .queued:
@@ -632,6 +847,7 @@ final class BlockEditorModel {
         } catch APIError.http(let code, let message) where (400..<500).contains(code) && code != 409 {
             // Refused for good (no edit right, the page is gone): not kept, said instead.
             BlockEditOutbox.shared.drop(ref)
+            BlockEditMirror.shared.drop(ref)
             note = message ?? T("You can't edit this page.")
             return false
         } catch let failure as APIError where failure.nobodyAnswered {
@@ -648,14 +864,19 @@ final class BlockEditorModel {
     /// Throw this device's edit away and show the document as it is now.
     func discardMine() {
         BlockEditOutbox.shared.drop(ref)
+        BlockEditMirror.shared.drop(ref)
+        mirrorTask?.cancel()
         if let live = conflictDoc { set(live) }
         conflictDoc = nil
     }
 
     /// Sends what is typed without waiting (the screen is closing).
     func saveOnClose() {
-        guard loaded, canEdit, isDirty else { return }
+        mirrorTask?.cancel()
+        BlockEditMirror.shared.closed(ref)
+        guard loaded, canEdit, isDirty else { BlockEditMirror.shared.drop(ref); return }
         BlockEditOutbox.shared.keep(ref, base: base, doc: currentDoc)
+        BlockEditMirror.shared.drop(ref)
         Task { await BlockEditOutbox.shared.flush() }
     }
 

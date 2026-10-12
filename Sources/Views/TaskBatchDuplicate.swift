@@ -344,7 +344,7 @@ struct TaskDuplicateSheet: View {
             .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(T("Cancel")) { dismiss() }.disabled(working)
+                    Button(T("Cancel")) { dismiss() }.disabled(working).keyboardShortcut(.cancelAction)
                 }
             }
         }

@@ -44,6 +44,11 @@ struct MemberRecord: Decodable, Sendable {
         let working: Int
         let surplus: Int?
         let totalWorked: Int?
+        /// The days the score is out of and their allowance, and the day they count from — set when
+        /// someone joined during the period (servers from 13 Oct 2026, QA S-20). nil from older servers.
+        var days: Int? = nil
+        var allowance: Int? = nil
+        var from: String? = nil
     }
     struct Counts: Decodable, Sendable {
         let present: Int?

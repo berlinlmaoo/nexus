@@ -13,6 +13,12 @@ struct BlockEditorView: View {
     /// GIDEON's writing actions (web Ask AI) on the focused block or the whole page.
     var onAI: ((GideonWriteRequest) -> Void)? = nil
     @FocusState private var focused: UUID?
+    /// The line ⌘K (or the keyboard bar's link button) adds a link to.
+    @State private var linkTarget: LinkTarget?
+    @State private var linkRefused = false
+    private struct LinkTarget: Identifiable { let id: UUID }
+    /// This editor's name for EditorKeys (who owns ⌘K while it has the keyboard).
+    @State private var keysOwner = "blocks-" + UUID().uuidString
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -38,6 +44,41 @@ struct BlockEditorView: View {
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) { keyboardBar }
         }
+        // ⌘K adds a link to the line being typed in (web QA 13 Oct 2026, S-07: it opened the app's search
+        // over the editor). Bound only while a line has the keyboard, so it is never the app's ⌘K.
+        .background {
+            if let id = focused, model.canEdit {
+                Button("") { openLink(id) }
+                    .keyboardShortcut("k", modifiers: .command)
+                    .opacity(0).accessibilityHidden(true)
+            }
+        }
+        .onChange(of: focused) { _, now in
+            if now != nil { EditorKeys.shared.claim(keysOwner) } else { EditorKeys.shared.release(keysOwner) }
+        }
+        .onDisappear { EditorKeys.shared.release(keysOwner) }
+        // Every change is copied to the device shortly after it is made (BlockEditMirror), so a closed or
+        // killed app never loses it.
+        .onChange(of: model.rows) { _, _ in model.noteEdit() }
+        .sheet(item: $linkTarget) { target in
+            LinkInsertSheet(existing: model.links(target.id),
+                            onInsert: { text, href in
+                                if !model.addLink(target.id, text: text, href: href) { linkRefused = true }
+                                focused = target.id
+                            },
+                            onEdit: { link, href in
+                                model.editLink(target.id, link, href: href)
+                                focused = target.id
+                            })
+        }
+        .alert(T("Links can't go in this block"), isPresented: $linkRefused) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(T("Put the link in a text, heading, list or toggle line.")) }
+    }
+
+    private func openLink(_ id: UUID) {
+        guard let row = model.rows.first(where: { $0.id == id }) else { return }
+        if row.takesLinks { linkTarget = LinkTarget(id: id) } else { linkRefused = true }
     }
 
     // MARK: keyboard bar
@@ -52,6 +93,10 @@ struct BlockEditorView: View {
             if row.kind == .todo {
                 Button { toggleChecked(id) } label: { Image(systemName: row.checked ? "checkmark.square.fill" : "square") }
                     .accessibilityLabel(row.checked ? T("Mark not done") : T("Mark done"))
+            }
+            if row.takesLinks {
+                Button { openLink(id) } label: { Image(systemName: "link") }
+                    .accessibilityLabel(T("Add a link"))
             }
             if let onAI {
                 Menu {
@@ -149,6 +194,11 @@ struct BlockEditorRowView<MenuContent: View>: View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             marker
             content
+            // The field shows plain text, so a line that carries a link says so (⌘K lists and edits them).
+            if row.takesLinks && !BlockConvert.links(row).isEmpty {
+                Image(systemName: "link").font(.system(size: fontSize - 4, weight: .semibold)).foregroundStyle(NX.violetText)
+                    .accessibilityLabel(T("Has a link"))
+            }
         }
         .padding(.vertical, 2)
         .contextMenu { menu() }

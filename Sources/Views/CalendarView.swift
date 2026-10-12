@@ -304,7 +304,8 @@ struct CalendarView: View {
         if memo.linesKey != key {
             let byDay = visibleByDay
             var out: [String: CalMonthDay] = [:]
-            for d in days where d.hasPrefix(month) {
+            // Every grid day, the neighbouring months' included (web QA B18): they are in the loaded range.
+            for d in days {
                 out[d] = CalendarCore.monthDay(byDay[d] ?? [], ix, focus: focus, today: today, now: now, windowDays: windowDays)
             }
             memo.lines = out

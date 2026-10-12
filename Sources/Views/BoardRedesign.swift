@@ -14,9 +14,22 @@ import SwiftUI
 
 // MARK: - inline new card
 
+/// Whether the inline card can still take a failed title back (web inline-draft `kept()`, QA 13 Oct 2026).
+/// A reference held in @State: the save outlives the card, and a closed card's value state is gone, but
+/// this object is still the one the save's closure asks. Only touched on the main thread (the card and the
+/// board's save both run there).
+final class InlineDraftKeeper {
+    var closed = false
+    var fieldEmpty = true
+    /// True when the card will put the title back into its field, so the board must NOT offer its own
+    /// "Try again" (two keepers made the task twice).
+    func takesBack() -> Bool { !closed && fieldEmpty }
+}
+
 struct InlineDraftCard: View {
-    /// Creates the task; answers its id, or nil when it failed (the title is then put back).
-    let onSave: (String) async -> String?
+    /// Creates the task; answers its id, or nil when it failed. The second argument says whether this card
+    /// takes the title back (then the caller keeps quiet); else the caller keeps it with Try again.
+    let onSave: (String, @escaping @MainActor () -> Bool) async -> String?
     /// Opens a saved task (⤢).
     let onOpen: (String) -> Void
     let onClose: () -> Void
@@ -25,6 +38,7 @@ struct InlineDraftCard: View {
     @State private var queue: [String] = []
     @State private var running = false
     @State private var failed: String?
+    @State private var keeper = InlineDraftKeeper()
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -37,6 +51,7 @@ struct InlineDraftCard: View {
                     .focused($focused)
                     .submitLabel(.next)
                     .onChange(of: title) { _, v in
+                        keeper.fieldEmpty = v.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         // Return in a vertical field arrives as a newline: that is "save and next".
                         if v.contains("\n") {
                             let parts = v.components(separatedBy: "\n")
@@ -71,7 +86,8 @@ struct InlineDraftCard: View {
         .padding(12)
         .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.violet.opacity(0.45)))
-        .onAppear { focused = true }
+        .onAppear { focused = true; keeper.closed = false }
+        .onDisappear { keeper.closed = true }
         // Tapping elsewhere keeps the card's title as a task (Notion), an empty card just closes.
         .onChange(of: focused) { _, now in if !now { finish() } }
     }
@@ -83,13 +99,16 @@ struct InlineDraftCard: View {
         queue.append(t)
         guard !running else { return }
         running = true
+        let keeper = keeper
         Task {
             while !queue.isEmpty {
                 let next = queue.removeFirst()
-                if await onSave(next) == nil {
-                    // Put it back where it can be seen and sent again.
+                if await onSave(next, { keeper.takesBack() }) == nil, keeper.takesBack() {
+                    // Put it back where it can be seen and sent again. When the card has closed (or the
+                    // field holds something new) the board keeps it instead, with Try again — one keeper.
                     failed = T("Couldn't add the task. It's back in the box.")
-                    if title.isEmpty { title = next }
+                    title = next
+                    keeper.fieldEmpty = false
                 }
             }
             running = false
@@ -99,12 +118,14 @@ struct InlineDraftCard: View {
     /// Leaving the card (Esc, a tap elsewhere): a typed title is saved, then the card closes. The save
     /// carries on after the card is gone (it calls the board, not this view).
     private func finish() {
+        keeper.closed = true
         enqueue(title)
         title = ""
         onClose()
     }
 
     private func discard() {
+        keeper.closed = true
         title = ""
         onClose()
     }
@@ -113,8 +134,10 @@ struct InlineDraftCard: View {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
         title = ""
-        if let id = await onSave(t) { onClose(); onOpen(id) }
-        else { title = t; failed = T("Couldn't add the task. It's back in the box.") }
+        keeper.fieldEmpty = true
+        let keeper = keeper
+        if let id = await onSave(t, { keeper.takesBack() }) { keeper.closed = true; onClose(); onOpen(id) }
+        else if keeper.takesBack() { title = t; keeper.fieldEmpty = false; failed = T("Couldn't add the task. It's back in the box.") }
     }
 }
 
@@ -176,6 +199,9 @@ struct ViewChipsBar: View {
     let onFilter: (ProjectViewFull) -> Void
     let onRename: (ProjectViewFull) -> Void
     let onDelete: (ProjectViewFull) -> Void
+    /// Can edit and up (access levels round 2): New view, Rename and Delete. Below it only Filter and
+    /// sort, on screen (Notion: view-only people filter and sort but don't save views).
+    var canEdit = true
 
     private var active: ProjectViewFull? { views.first { $0.id == activeId } ?? views.first }
 
@@ -203,9 +229,9 @@ struct ViewChipsBar: View {
                     .contextMenu { menuItems(v) }
                 }
                 Menu {
-                    Button { onNew() } label: { Label(T("New view"), systemImage: "plus") }
+                    if canEdit { Button { onNew() } label: { Label(T("New view"), systemImage: "plus") } }
                     if let active {
-                        Divider()
+                        if canEdit { Divider() }
                         menuItems(active)
                     }
                 } label: {
@@ -220,9 +246,11 @@ struct ViewChipsBar: View {
 
     @ViewBuilder private func menuItems(_ v: ProjectViewFull) -> some View {
         Button { onFilter(v) } label: { Label(T("Filter and sort…"), systemImage: "line.3.horizontal.decrease.circle") }
-        Button { onRename(v) } label: { Label(T("Rename…"), systemImage: "pencil") }
-        if v.canDelete {
-            Button(role: .destructive) { onDelete(v) } label: { Label(T("Delete view"), systemImage: "trash") }
+        if canEdit {
+            Button { onRename(v) } label: { Label(T("Rename…"), systemImage: "pencil") }
+            if v.canDelete {
+                Button(role: .destructive) { onDelete(v) } label: { Label(T("Delete view"), systemImage: "trash") }
+            }
         }
     }
 
@@ -249,6 +277,11 @@ struct ViewFilterSheet: View {
     let members: [ProjectDetail.ProjectMember]
     /// Saves `{ filter: { simple, advanced }, sort, groupBy }`.
     let onSave: ([String: Any]) async -> String?
+    /// Can view / Can comment (access levels round 2): the filter and sort apply on this screen only and
+    /// nothing is saved to the view. nil = saved to the view, as before.
+    var onApplyLocal: ((ProjectViewConfig) -> Void)? = nil
+    /// What the sheet starts from when it differs from the saved view (an on-screen filter).
+    var startConfig: ProjectViewConfig? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var rules: [ViewFilterRule] = []
@@ -316,20 +349,25 @@ struct ViewFilterSheet: View {
                 if let problem {
                     Text(problem).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
                 }
+                if onApplyLocal != nil {
+                    Text(T("Only on this screen. Saving a filter to the view needs Can edit access."))
+                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                }
             }
             .navigationTitle(view.title(fieldName: { id in fields.first { $0.id == id }?.name }))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction) }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button { Task { await save() } } label: { if saving { ProgressView() } else { Text(T("Save")).bold() } }
+                    Button { Task { await save() } } label: { if saving { ProgressView() } else { Text(onApplyLocal == nil ? T("Save") : T("Apply")).bold() } }
                         .disabled(saving)
                 }
             }
             .onAppear {
-                rules = view.config.simple
-                sort = view.config.sort
-                groupBy = view.config.groupBy ?? "section"
+                let start = startConfig ?? view.config
+                rules = start.simple
+                sort = start.sort
+                groupBy = start.groupBy ?? "section"
             }
         }
     }
@@ -369,6 +407,15 @@ struct ViewFilterSheet: View {
 
     private func save() async {
         guard !saving else { return }
+        if let onApplyLocal {
+            var c = startConfig ?? view.config
+            if c.advanced == nil { c.simple = rules }
+            c.sort = sort
+            c.groupBy = groupBy
+            onApplyLocal(c)
+            dismiss()
+            return
+        }
         saving = true
         defer { saving = false }
         var patch: [String: Any] = ["sort": sort.map(\.json), "groupBy": groupBy]

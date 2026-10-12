@@ -26,11 +26,17 @@ struct ProjectDetail: Decodable, Sendable {
     /// The template it was built from (project templates, 12 Oct 2026; DEV server): its tab is where the
     /// project opens, and its "My …" preset is offered. nil for every other project.
     let templateId: String?
+    /// The viewer's access here (Notion-style levels, owner 13 Oct 2026; DEV server): "FULL" | "EDIT" |
+    /// "COMMENT" | "VIEW". nil from an older server. Read through ProjectAccess.swift (viewerLevel).
+    let viewerAccessLevel: String?
+    /// Full access, the rule every manage route uses (settings, members, statuses, delete). nil = older server.
+    let viewerCanManage: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case id, name, color, icon, description, workspaceId, taskLists, members
         case autoAssignEnabled, autoAssignAssigneeIds
         case type, hiddenTabs, templateId
+        case viewerAccessLevel, viewerCanManage
     }
 
     /// Written out only so type and hiddenTabs can be read leniently. Every other field decodes
@@ -50,6 +56,8 @@ struct ProjectDetail: Decodable, Sendable {
         type = try? c.decodeIfPresent(String.self, forKey: .type)
         hiddenTabs = try? c.decodeIfPresent([String].self, forKey: .hiddenTabs)
         templateId = try? c.decodeIfPresent(String.self, forKey: .templateId)
+        viewerAccessLevel = try? c.decodeIfPresent(String.self, forKey: .viewerAccessLevel)
+        viewerCanManage = try? c.decodeIfPresent(Bool.self, forKey: .viewerCanManage)
     }
 
     struct Lane: Decodable, Identifiable, Sendable {
@@ -67,8 +75,11 @@ struct ProjectDetail: Decodable, Sendable {
     }
     struct ProjectMember: Decodable, Identifiable, Sendable {
         let userId: String?
-        /// "LEAD" | "MEMBER" | … — the Overview's Lead badge and "Led by".
+        /// "LEAD" | "MEMBER" | "GUEST" | "VIEWER" — LEAD is the Project Owner (Overview badge, "Led by").
         let role: String?
+        /// "FULL" | "EDIT" | "COMMENT" | "VIEW" (servers from 13 Oct 2026). Read through `level`
+        /// (ProjectAccess.swift), which follows the server's rule when role and this disagree.
+        var accessLevel: String? = nil
         let user: UserRef?
         struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String? }
         var uid: String { userId ?? user?.id ?? "" }

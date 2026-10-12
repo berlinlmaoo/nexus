@@ -1600,12 +1600,19 @@ struct StreakBoardCard: View {
         /// The last working day of someone who left the company (offboarding, 8 Oct 2026): the board
         /// keeps them for the periods they were part of, marked "Left · 10 Oct".
         var leftAt: String? = nil
+        /// What the Score is out of, from the server (QA S-20): nil from an older server.
+        var owed: AttendanceOwed? = nil
         /// Days worked in the period: a check-in, an approved permit or WFH — everything green or blue.
         var workedDays: Int { cells.values.filter { $0 == .present || $0 == .permit || $0 == .wfh }.count }
     }
     /// The period's working days: its calendar days minus the weekly-rest quota (4 by default), so 31
     /// days give 27 and 30 give 26 — the web board's Score column uses the same rule.
     static func workingDays(_ periodDays: Int, dayOffQuota: Int = 4) -> Int { max(0, periodDays - dayOffQuota) }
+    /// The Score's target for one person: the server's `owed` (someone who joined mid-period owes only the
+    /// days from their start, prorated allowance — the record's rule), else the whole period minus the quota.
+    static func scoreTarget(_ m: Member, periodDays: Int) -> Int {
+        m.owed?.working ?? workingDays(periodDays, dayOffQuota: m.quota)
+    }
     /// "22/22 +3": capped at the working days with the surplus beside it, as on the web. A day cut from
     /// the quota for being >120 min late is still a day worked, so worked can exceed the target.
     static func scoreText(worked: Int, target: Int) -> Text {
@@ -1621,13 +1628,14 @@ struct StreakBoardCard: View {
             for r in rs { if let k = Self.dayKey(r.attendanceDate) { cells[k] = AttTone.of(r); rowByDay[k] = r } }
             return Member(id: uid, name: rs.first?.user?.name ?? T("You"), cells: cells, rowByDay: rowByDay,
                           quota: rs.compactMap { $0.user?.dayOffQuota }.first ?? 4,
-                          leftAt: rs.compactMap { $0.user?.leftAt }.first)
+                          leftAt: rs.compactMap { $0.user?.leftAt }.first,
+                          owed: rs.compactMap { $0.user?.owed }.first ?? roster?.first(where: { $0.id == uid })?.owed)
         }
         // Everyone the server lists for the board gets a line, rows or not: on the first day of a
         // period most of the crew has no row yet, and the board used to show only a handful of names.
         for person in roster ?? [] where groups[person.id] == nil {
             members.append(Member(id: person.id, name: person.name ?? T("Unknown"), cells: [:], rowByDay: [:],
-                                  quota: person.dayOffQuota ?? 4, leftAt: person.leftAt))
+                                  quota: person.dayOffQuota ?? 4, leftAt: person.leftAt, owed: person.owed))
         }
         return members.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
@@ -1883,7 +1891,7 @@ struct StreakBoardCard: View {
     private var scoreColumn: some View {
         VStack(alignment: .trailing, spacing: gap) {
             ForEach(members) { m in
-                Self.scoreText(worked: m.workedDays, target: Self.workingDays(periodDays.count, dayOffQuota: m.quota))
+                Self.scoreText(worked: m.workedDays, target: Self.scoreTarget(m, periodDays: periodDays.count))
                     .font(NXFont.text(10, .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .frame(width: scoreW, height: cell, alignment: .trailing)
@@ -2022,7 +2030,7 @@ struct StreakBoardCard: View {
                 VStack(alignment: .trailing, spacing: gap) {
                     Text(T("Score")).font(.system(size: 9, weight: .semibold)).foregroundStyle(NX.mutedFg).frame(height: 26, alignment: .bottom)
                     ForEach(members) { m in
-                        StreakBoardCard.scoreText(worked: m.workedDays, target: StreakBoardCard.workingDays(periodDays.count, dayOffQuota: m.quota))
+                        StreakBoardCard.scoreText(worked: m.workedDays, target: StreakBoardCard.scoreTarget(m, periodDays: periodDays.count))
                             .font(NXFont.text(11, .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
                             .frame(height: cell, alignment: .trailing)
                     }

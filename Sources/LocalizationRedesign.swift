@@ -481,6 +481,7 @@ extension AppLanguage {
         "wrap text": "bungkus teks",
         "Wrap text": "Bungkus teks",
         "You're offline. Rows, columns and sheets can be changed once you're back online.": "Kamu sedang offline. Baris, kolom, dan sheet bisa diubah setelah online lagi.",
+        "Tools": "Alat",
         // ── marker: entries are appended above this line by tooling; keep it last ──
         "__redesign_end__": "__redesign_end__",
     ]

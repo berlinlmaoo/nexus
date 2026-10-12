@@ -652,7 +652,8 @@ struct PipelineNewDealSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     PipelineFieldBox(T("Deal name")) {
-                        TextField(T("Deal name"), text: $name)
+                        // Asked first; nothing is created until it is saved (web QA B48: no blank deals, no burnt codes).
+                        TextField(T("e.g. Brand activation, Jakarta Fair"), text: $name)
                             .font(NXFont.text(16)).focused($nameFocused).submitLabel(.next)
                             .padding(12)
                             .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))

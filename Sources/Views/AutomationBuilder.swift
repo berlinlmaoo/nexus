@@ -373,7 +373,7 @@ struct AutomationBuilder: View {
             try await APIClient.shared.saveAutomation(id: automation?.id, projectId: projectId, body: body)
             await onSaved()
         } catch {
-            self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save. Only project leads can edit automations.")
+            self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save. Only people with Full access can edit automations.")
         }
     }
 

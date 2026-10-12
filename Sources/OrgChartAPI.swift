@@ -111,3 +111,23 @@ extension APIClient {
         s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s
     }
 }
+
+
+/// GET /api/admin/approval-chart — every person with their approver edge, in one call. Read by the Approval
+/// chart for its edges only: the members list leaves approverId out for people outside a Manager's own chain
+/// since 13 Oct 2026 (personal attendance data), the chart endpoint does not. Shift / Flexi / Mobile come
+/// back neutral there with `personalHidden` for the same people.
+struct ApprovalChartPayload: Decodable, Sendable {
+    let people: [Person]?
+    struct Person: Decodable, Sendable {
+        let userId: String?
+        let approverId: String?
+        let personalHidden: Bool?
+    }
+}
+
+extension APIClient {
+    func approvalChartEdges() async throws -> ApprovalChartPayload {
+        try await orgRun(makeRequest("/api/admin/approval-chart"), decode: ApprovalChartPayload.self)
+    }
+}

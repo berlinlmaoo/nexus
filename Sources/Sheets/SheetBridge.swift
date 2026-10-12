@@ -44,9 +44,25 @@ struct SheetCellDisplay {
     var checkbox: Bool?
     var chips: [SheetChip] = []
     var invalid = false
+    /// Has unresolved comments (amber corner, as on the web).
+    var commented = false
     var fontSize: CGFloat?
     /// 0 top, 1 middle, 2 bottom (Sheets' default).
     var verticalAlign = 2
+    /// "o" overflow (default), "w" wrap, "c" clip.
+    var wrapMode = "o"
+    /// The computed value is a number (numbers never overflow into neighbours).
+    var numeric = false
+    /// Nothing stored in the cell (an empty neighbour that overflowing text may run over).
+    var blank = true
+    /// A validation rule or a dropdown column covers the cell (text never runs over it).
+    var hasRule = false
+    /// Rotated text (never overflows).
+    var rotated = false
+    /// Drawn borders (bx, legacy bd).
+    var borders = SheetGridStyle.Borders()
+    /// The header row of the filter: nil = not a filter header, false / true = the column filters nothing / something.
+    var filterHead: Bool?
 }
 
 /// The active cell's dropdown.
@@ -131,7 +147,11 @@ enum SheetBridge {
             }
             if let rule {
                 d.invalid = !SheetValidation.validateCell(rule, raw, computed, engine: engine, shape: shape, at: (row, col))
+                d.hasRule = true
             }
+            if let s = raw as? String { d.blank = s.isEmpty } else { d.blank = raw == nil || raw is NSNull }
+            d.numeric = Self.isNumber(computed)
+            d.borders = SheetGridStyle.cellBorders(st)
 
             d.text = text(raw: raw, computed: computed, column: c, rowId: r.id, style: st)
             d.isError = SheetFormula.isError(computed)
@@ -185,8 +205,16 @@ enum SheetBridge {
             case "m": d.verticalAlign = 1
             default: d.verticalAlign = 2
             }
-            d.wrap = SheetFormula.jsTruthy(st["w"]) || (st["wr"] as? String) == "w"
-            if let fs = (st["fs"] as? NSNumber)?.doubleValue { d.fontSize = CGFloat(min(max(fs, 8), 40)) }
+            d.wrapMode = SheetGridStyle.wrapMode(st)
+            d.wrap = d.wrapMode == "w"
+            if let px = SheetGridStyle.fontPx(st) { d.fontSize = CGFloat(min(max(px, 8), 96)) }
+            d.rotated = st["rt"] != nil
+            // A hex fill without a text colour gets black or white text, so a light fill stays readable in
+            // dark mode (web styleInline).
+            if st["fc"] == nil, let bg = st["bg"] as? String, SheetGridStyle.isHex(bg),
+               let readable = SheetBridge.hexColor(SheetGridStyle.readableText(bg)) {
+                d.textColor = readable
+            }
         }
 
         private static func applyRule(_ style: String, to d: inout SheetCellDisplay) {
@@ -201,6 +229,44 @@ enum SheetBridge {
         }
 
         private func hexColor(_ s: String) -> UIColor? { SheetBridge.hexColor(s) }
+
+        // MARK: filter (lib/sheet-filter.ts through SheetFilter)
+
+        private lazy var rowIndex: [String: Int] = {
+            var o: [String: Int] = [:]
+            for (i, r) in rows.enumerated() { o[r.id] = i }
+            return o
+        }()
+        private lazy var colIndex: [String: Int] = {
+            var o: [String: Int] = [:]
+            for (i, c) in columns.enumerated() { o[c.id] = i }
+            return o
+        }()
+
+        /// The text "Filter by values" compares (web displayCell, not the number-format text).
+        func filterDisplay(_ rowId: String, _ colId: String) -> String {
+            guard let r = rowIndex[rowId], let c = colIndex[colId] else { return "" }
+            return SheetTypes.displayCell(columns[c].type, rows[r].cells[colId], (engine: engine, rowId: rowId, colId: colId))
+        }
+
+        /// The fill / text colour a cell shows (conditional formatting over its own format), as hex.
+        func filterStyle(_ rowId: String, _ colId: String) -> (bg: String?, fc: String?)? {
+            guard let r = rowIndex[rowId], let c = colIndex[colId] else { return nil }
+            let own = rows[r].styles[colId]
+            let cf = condAt(r, c)
+            let bg = cf?.bg ?? SheetGridStyle.toHex(own?["bg"] as? String)
+            let fc = cf?.fc ?? SheetGridStyle.toHex(own?["fc"] as? String)
+            return bg != nil || fc != nil ? (bg, fc) : nil
+        }
+
+        func filterOpts(slicers: [(colId: String, crit: SheetFilter.Crit?)] = []) -> SheetFilter.Opts {
+            SheetFilter.Opts(shape: shape, engine: engine,
+                             display: { r, c in self.filterDisplay(r, c) },
+                             styleOf: { r, c in self.filterStyle(r, c) },
+                             slicers: slicers)
+        }
+
+        func value(_ rowId: String, _ colId: String) -> SheetCellValue { engine.value(rowId, colId) }
 
         // MARK: editing
 

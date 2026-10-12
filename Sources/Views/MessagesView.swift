@@ -136,7 +136,7 @@ struct MessagesView: View {
             if let c = convos.first(where: { $0.id == f.id }) ?? focusedConvos[f.id] {
                 ChatThreadView(conversationId: c.id, title: c.title(meId: meId),
                                members: c.members ?? [], projectId: c.projectId, type: c.type,
-                               canManageMembers: c.canManageMembers)
+                               canManageMembers: c.canManageMembers, canPost: c.canPost != false)
             }
         }
         .navigationTitle(T("Messages"))
@@ -215,7 +215,8 @@ struct MessagesView: View {
                            onLeft: {
                                selected = nil
                                Task { await refreshQuietly() }
-                           })
+                           },
+                           canPost: c.canPost != false)
                 // Keyed by id: without it, switching conversations reuses the same view and the
                 // previous chat's messages sit under the new one's title until the fetch lands.
                 .id(c.id)
@@ -261,7 +262,8 @@ struct MessagesView: View {
                                         NavigationLink {
                                             ChatThreadView(conversationId: c.id, title: c.title(meId: meId),
                                                            members: c.members ?? [], projectId: c.projectId,
-                                                           type: c.type, canManageMembers: c.canManageMembers)
+                                                           type: c.type, canManageMembers: c.canManageMembers,
+                                                           canPost: c.canPost != false)
                                         } label: {
                                             ConvoRow(convo: c, meId: meId,
                                                      projectIcon: c.projectId.flatMap { projectIcons[$0] })
@@ -511,6 +513,9 @@ struct ChatThreadView: View {
     /// deleted elsewhere. The split layout clears its selection; nil (a pushed thread) closes the
     /// thread itself and goes back to the list.
     var onLeft: (() -> Void)? = nil
+    /// False in a project room the viewer may only read (Can view, project access levels 13 Oct 2026):
+    /// no composer, a line that says so.
+    var canPost: Bool = true
     @Environment(AuthStore.self) private var auth
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
@@ -850,7 +855,16 @@ struct ChatThreadView: View {
                     .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
                 }
 
-                composer
+                if canPost {
+                    composer
+                } else {
+                    // Can view in a project room: read, no composer (web ChatThread readOnly, QA R2 N-03).
+                    Text(T("View only: you can read this project's chat but not post in it. Ask its Project Owner for Can comment access."))
+                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.vertical, 12)
+                        .overlay(alignment: .top) { Rectangle().fill(NX.border).frame(height: 1) }
+                }
             }
         }
         .background(NX.background.ignoresSafeArea())
@@ -949,6 +963,8 @@ struct ChatThreadView: View {
         .onAppear {
             ChatPresence.visibleConversationId = conversationId
             ChatPresence.clearDelivered(conversationId: conversationId)
+            // What was typed here and never sent comes back into the box.
+            if input.isEmpty { input = LocalDrafts.text("chat:\(conversationId)") }
         }
         // `message-created` goes only to the conversation's room, as on the web (ChatThread.tsx).
         .realtimeRoom("conversation:\(conversationId)")
@@ -1229,8 +1245,21 @@ struct ChatThreadView: View {
                     .focused($composerFocused)
                     // "typing" while there is text and keys are pressed; an emptied box (a send
                     // clears it) says "stopped" (ChatTyping).
-                    .onChange(of: input) { _, text in typing.composerChanged(conversationId, text: text) }
+                    .onChange(of: input) { _, text in
+                        // Only typing counts: a kept draft coming back into the box on open is not.
+                        if composerFocused || text.isEmpty { typing.composerChanged(conversationId, text: text) }
+                        // Kept on the phone until the server has it (QA 13 Oct 2026): a send that fails
+                        // offline, or leaving the chat before trying, never loses the words.
+                        LocalDrafts.set("chat:\(conversationId)", text)
+                    }
                     .onChange(of: composerFocused) { _, focused in if !focused { typing.stop(conversationId) } }
+                    // Hardware keyboard (iPad, Mac): Enter sends, Shift+Enter is a new line (web chat).
+                    // The on-screen keyboard's Return is not a key press and still makes a new line.
+                    .onKeyPress(keys: [.return], phases: .down) { press in
+                        if press.modifiers.contains(.shift) || press.modifiers.contains(.option) { return .ignored }
+                        Task { await send() }
+                        return .handled
+                    }
 
                 Button { Task { await send() } } label: {
                     Image(systemName: sending ? "ellipsis" : "paperplane.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(ChatInk.onMine)
@@ -2040,7 +2069,7 @@ struct TaskLinkPicker: View {
             .searchable(text: $query, prompt: T("Search a task"))
             .navigationTitle(T("Link to a task"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction) } }
             .task { await load() }
         }
     }
@@ -2049,7 +2078,7 @@ struct TaskLinkPicker: View {
         if let projectId, let tasks = try? await APIClient.shared.projectTasks(projectId) {
             items = tasks.map { ChatTaskRef(id: $0.id, title: $0.title) }
         } else if let meId, let mine = try? await APIClient.shared.myTasks(assigneeId: meId) {
-            items = mine.map { ChatTaskRef(id: $0.id, title: $0.title ?? "Untitled") }
+            items = mine.map { ChatTaskRef(id: $0.id, title: $0.title ?? T("Untitled task")) }
         }
         loading = false
     }

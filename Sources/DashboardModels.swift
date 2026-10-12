@@ -165,6 +165,9 @@ struct XpLogResponse: Decodable, Sendable {
     /// The person the log belongs to, as the SERVER resolved them — the one identity on the
     /// profile screen that does not come from the row that opened it.
     let user: AppUser?
+    /// True when the viewer gets only the public part: gains, without penalties and attendance rows (personal
+    /// attendance data, owner 13 Oct 2026; servers from then). nil from an older server.
+    var restricted: Bool? = nil
 }
 
 /// Inbox notification (GET /api/notifications).
@@ -185,13 +188,22 @@ struct NexusNotification: Decodable, Identifiable, Sendable {
     let projectId: String?
     /// The path the server itself chose for this signal ("/attendance", "/tasks/<id>").
     let link: String?
+    /// Who caused it (servers since 13 Oct 2026, from `Notification.actorId`): the row shows their avatar
+    /// with the kind as a small badge. nil = a system signal, or a row written before the sender was kept.
+    let actor: Actor?
 
     var isRead: Bool { read == true }
 
     struct LocalizedText: Decodable, Sendable { let title: String?; let message: String? }
+    struct Actor: Decodable, Sendable {
+        let id: String
+        let name: String?
+        let avatar: String?
+        var initial: String { String((name ?? "?").trimmingCharacters(in: .whitespaces).first ?? "?").uppercased() }
+    }
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, read, createdAt, taskId, projectId, link, texts
+        case id, type, read, createdAt, taskId, projectId, link, texts, actor
         case rawTitle = "title"
         case rawMessage = "message"
     }

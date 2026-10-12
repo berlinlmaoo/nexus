@@ -9,6 +9,19 @@ struct RoomBookingView: View {
     @State private var loading = true
     @State private var error: String?
     @State private var scope: Scope = .upcoming
+    /// The composer: a new booking (nil booking) or one to edit (web BookingComposer, QA 13 Oct 2026).
+    @State private var composing: ComposerTarget?
+    @State private var viewer = Viewer.shared
+
+    struct ComposerTarget: Identifiable {
+        let id = UUID()
+        let booking: RoomBooking?
+    }
+    /// The person who booked it, or a Manager and above (the server's canManageBooking).
+    private func canEdit(_ b: RoomBooking) -> Bool {
+        if let me = auth.session?.userId, b.createdBy?.id == me { return true }
+        return viewer.canAdminister
+    }
 
     enum Scope: String, CaseIterable, Identifiable {
         case upcoming, past
@@ -39,14 +52,26 @@ struct RoomBookingView: View {
                         // Colour the chip by room, not by scope. Greying out History made the whole
                         // screen read as one flat grey sheet, and the segmented control already
                         // says which scope you're in. Same room = same colour, every launch.
-                        AgendaRow(time: "\(AgendaRange.timeLabel(b.startsAt))–\(AgendaRange.timeLabel(b.endsAt))",
-                                  title: b.title, chip: b.room, sub: b.createdBy?.name,
-                                  tone: ChipTone.forLabel(b.room))
+                        // 24-hour times (HH:mm, WIB) and the room as the app names it (web roomLabel).
+                        let row = AgendaRow(time: "\(AgendaRange.timeLabel(b.startsAt))–\(AgendaRange.timeLabel(b.endsAt))",
+                                            title: b.title, chip: b.roomLabel, sub: b.createdBy?.name,
+                                            tone: ChipTone.forLabel(b.room))
+                        if canEdit(b) {
+                            Button { composing = ComposerTarget(booking: b) } label: { row.contentShape(Rectangle()) }
+                                .buttonStyle(.plain)
+                                .accessibilityHint(T("Edit booking"))
+                        } else {
+                            row
+                        }
                     }
                 }
             }
         }
         .task(id: scope) { await load() }
+        .task { await viewer.loadIfNeeded() }
+        .sheet(item: $composing) { target in
+            RoomBookingComposer(booking: target.booking) { await load() }
+        }
     }
 
     private var scopePicker: some View {
@@ -54,7 +79,11 @@ struct RoomBookingView: View {
         // which is translucent and reflective over a light background - the control nearly
         // disappears and reads as foreign next to the solid cards on this screen. Ours is a solid
         // capsule with one moving pill, painted from the app's own palette.
-        NXSegmented(selection: $scope, options: Scope.allCases, label: { $0.label }).frame(width: 190)
+        HStack(spacing: 8) {
+            NXSegmented(selection: $scope, options: Scope.allCases, label: { $0.label }).frame(width: 190)
+            Button { composing = ComposerTarget(booking: nil) } label: { Image(systemName: "plus") }
+                .accessibilityLabel(T("New booking"))
+        }
     }
 
     private func load() async {

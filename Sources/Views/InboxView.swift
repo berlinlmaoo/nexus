@@ -194,17 +194,7 @@ struct NotificationRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            ZStack {
-                if let symbol = notification.symbol {
-                    // Outside the office: the crew board's own mark, amber.
-                    Circle().fill(ChipTone.warning.bg).frame(width: 38, height: 38)
-                    Image(systemName: symbol).font(.system(size: 16, weight: .bold)).foregroundStyle(ChipTone.warning.fg)
-                } else {
-                    Circle().fill(NX.violet.opacity(0.12)).frame(width: 38, height: 38)
-                    Text("N").font(NXFont.display(15, .black)).foregroundStyle(NX.violetText)
-                }
-            }
-            .accessibilityHidden(true)
+            mark.accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(notification.title ?? notification.typeLabel).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                 Text(notification.message ?? T("New notification")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(2)
@@ -222,6 +212,37 @@ struct NotificationRow: View {
         .padding(14)
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
+    }
+
+    /// The sender's avatar with the kind as a small badge (web inbox, 13 Oct 2026, from `actor`); system
+    /// signals and rows from before the server kept the sender show the kind's mark instead.
+    @ViewBuilder private var mark: some View {
+        if let actor = notification.actor {
+            AvatarView(url: actor.avatar, initial: actor.initial, size: 38)
+                .overlay(alignment: .bottomTrailing) {
+                    kindMark(size: 18)
+                        .overlay(Circle().strokeBorder(NX.card, lineWidth: 2))
+                        .offset(x: 3, y: 3)
+                }
+        } else {
+            kindMark(size: 38)
+        }
+    }
+
+    /// The kind's own circle: outside the office = the crew board's walking figure in amber, else "N".
+    private func kindMark(size: CGFloat) -> some View {
+        ZStack {
+            if let symbol = notification.symbol {
+                Circle().fill(ChipTone.warning.bg)
+                Image(systemName: symbol).font(.system(size: size * 0.42, weight: .bold)).foregroundStyle(ChipTone.warning.fg)
+            } else {
+                // On the card colour first, so the small badge is not see-through over the avatar.
+                Circle().fill(NX.card)
+                Circle().fill(NX.violet.opacity(0.12))
+                Text("N").font(NXFont.display(size * 0.4, .black)).foregroundStyle(NX.violetText)
+            }
+        }
+        .frame(width: size, height: size)
     }
 
     /// The web's own meta line, hint included: a row that opens something says so, and a row that

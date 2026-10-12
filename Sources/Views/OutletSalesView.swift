@@ -345,7 +345,7 @@ struct OutletSalesTab: View {
         Group {
             if store.forbidden {
                 EmptyState(icon: "lock", title: T("This outlet is for its project members"),
-                           subtitle: T("Ask the project lead or a manager to add you to the project."))
+                           subtitle: T("Ask the Project Owner or a BoD to add you to the project."))
             } else if !store.loaded {
                 if let err = store.loadError {
                     ErrorState(message: err, icon: "storefront") {
@@ -690,7 +690,7 @@ struct OutletOverviewView: View {
                         Text(String(format: T("Target set by %@"), who))
                     } else if store.target?.salesTarget == nil && store.target?.paxTarget == nil {
                         Text(String(format: T("No target for %@ yet."), monthName))
-                        if !store.canManageTargets { Text(T("The project lead or a manager sets it.")) }
+                        if !store.canManageTargets { Text(T("The Project Owner or a BoD sets it.")) }
                     }
                 }
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)

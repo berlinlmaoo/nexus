@@ -120,11 +120,21 @@ web; the old grid of tasks is the tab **Table** (key `table`), matching the web'
 | Paste: NEXUS JSON (formulas move with the paste), HTML table, or TSV from other apps; **auto-expands columns and rows** when the block is bigger than what is left | SheetStore.paste |
 | Realtime: room `sheet:<id>`; `sheet-cells` applied live except this app's own echo (**X-Nexus-Tab originTab**), never over the cell being edited or with an older row; `sheet-structure` re-reads the sheet | RealtimeClient, SheetStore |
 | Sheet tabs: switch, add, rename, duplicate, delete (centred alert; lead+ and never the first sheet); Sum of a selected block in the bottom bar | SheetViews.swift |
+| **Freeze rows / columns** (settings.frozenRows / frozenCols): the layout pins the frozen cells to the visible edge (frame + contentOffset; a bounds-change invalidation limited to the frozen items), the header strips keep the frozen letters / numbers put with Sheets' grey bar, the selection is drawn in four clipped panes so it never shows through a frozen pane, keyboard / taps / drags scroll past the frozen edge. View › Freeze: none / 1 / 2 / up to the active row (≤ 20) or column (≤ 10), also in the cell menu; refused when the line cuts a merged block (Sheets' sentence) | SheetGrid.swift, SheetGridStore.swift |
+| **Column width / row height**: drag a header edge with the pointer (resize pointer on iPad trackpad / Mac), or with a finger the round handle on the edge of selected whole columns / rows; several selected columns / rows take the same size; live preview, one PATCH (columns width, rows `heights`) and one undo step | SheetGrid.swift (SheetHeaderStrip), SheetGridStore.swift |
+| **Long text overflow**: unwrapped text runs over EMPTY neighbours (left-aligned → right, right-aligned → left, centred both ways), stops at the first non-empty / dropdown / checkbox / merged cell and at the frozen edge; numbers, wrapped, clipped and rotated text never spill; gridlines under the text hidden; taps still select the cell under the finger | SheetGridModel.swift (SheetSpill), SheetGrid.swift |
+| **Merged cells** (settings.merges by row / column id): drawn as one cell, hidden rows / columns inside shrink it; selection, arrows, Tab / Enter and ⇧-extend snap to whole blocks; Format › Merge all / vertically / horizontally / Unmerge (bar, iPhone Format sheet, cell menu) | SheetGridModel.swift (SheetMerges), SheetStore.swift, SheetGridStore.swift |
+| **Borders** (style `bx` per side with line + colour, legacy `bd`): drawn inside the cell (thin / medium / thick / dotted / dashed / double); Borders panel with the web's ten presets, line style and colour (remembered per device), shared edges stored once and the neighbour's shared edge cleared, exactly like the web's applyBorderPreset; gridlines on / off (settings.noGrid) | SheetGridModel.swift (SheetGridStyle), SheetGridFormat.swift |
+| **Filter**: Data › Create a filter / Remove filter (the data block around the selection); a funnel on the filter's header row (solid when the column filters something) opens the column menu: Sort A → Z / Z → A (rows of the block really reordered, formulas shifted, one undo step), Filter by colour, Filter by condition (all 19 conditions, dates, custom formula), Filter by values (search, Select all / Clear, counts, (Blanks)); filtered rows leave the grid. Filter views: open one (per viewer), create a new one; slicers made on the web are honoured. lib/sheet-filter.ts ported 1:1 (SheetFilter.swift) | SheetFilter.swift, SheetFilterMenu.swift, SheetStore.rebuild |
+| **Hide / unhide rows and columns** (cell menu, Rows & columns menu; ◂▸ arrows on the header where something is hidden — tap to show it; View › Show hidden rows / columns), collapsed row / column groups made on the web stay hidden | SheetGridStore.swift, SheetGrid.swift |
+| **Formats**: text and fill colour (Sheets' 80 swatches, hex like the web; a hex fill without a text colour gets black / white text), font size in points (`fp`, 6–36), vertical align, wrapping (overflow / wrap / clip, `wr`), number formats (automatic, plain text, number, percent, scientific, accounting, Rupiah, date, time, date time, duration) with decimal places − / +, clear formatting. iPad / Mac: in the format bar (popovers); iPhone: More › Format… sheet | SheetViews.swift, SheetGridFormat.swift |
+| Tests on Linux (Tests/SheetModel, command in main.swift): every case of the web's sheet-filter.test.mjs, plus borders, merges, overflow, colours, fonts, decimals, hidden gaps — **103 checks, 0 fails**; SheetStore / SheetBridge / SheetGridStore type-checked on Linux with a UIKit shim | Tests/SheetModel |
 
-Not on the phone/tablet yet (web only): charts, pivot tables, filter views / slicers, borders / merges /
-freeze panes, column resize, comments and version history panels, find & replace, conditional-format and
+Not on the phone/tablet yet (web only): charts, pivot tables, slicer panels (their filtering applies),
+renaming / deleting filter views, sort by colour, text rotation, font family, custom number formats,
+the freeze-bar drag, comments and version history panels, find & replace, conditional-format and
 validation EDITORS (the rules made on the web apply here), protected-range editing UI (the server still
-enforces it). Long text is clipped at the cell edge (no overflow into empty neighbours yet).
+enforces it).
 
 ## Notification language (13 Oct 2026)
 
@@ -132,6 +142,136 @@ Notifications and pushes are English unless the person chose Indonesian. The app
 language (never the phone's): `X-Nexus-Lang: en|id` on every request, and `PATCH /api/user/profile
 { uiLanguage }` on launch / sign-in and whenever the language picker changes. The inbox shows
 `texts[appLanguage]` when the server sent both languages, else the stored title / message.
+
+## QA web fixes ported (13 Oct) — part 1
+
+Work, people and projects, from the dev web commits afa857f, 0c1f523, 0a89f86, 45cf033, 3f8b3ca, 458d9af,
+6720b8c, 0b0b64a (QA 13 Oct 2026). Indonesian in `LocalizationQAWork.swift` (`indonesianQAWork`).
+
+- **Project access levels** (`ProjectAccess.swift`): Full access / Can edit / Can comment / Can view from
+  `viewerAccessLevel` + `viewerCanManage` (GET project) and `accessLevel` on members; "Lead" reads
+  **Project Owner** everywhere. Project settings: read-only for anyone without Full access (one line says
+  why), level dropdown on every member row (change / Remove, `PATCH …/members`, 409 LAST_OWNER shown with
+  the server's sentence), a level for the batch in Add members, Invite by email and New project
+  (`memberAccessLevel`). Delete = Full access; Duplicate = BoD. An older server sends no level: nothing is
+  hidden. Board/chat/task-detail gating lives in files owned by part 2 (patches handed to the lead).
+- **Personal attendance privacy**: a peer's profile shows "XP gained this period" (`restricted` XP log,
+  gains only) with the privacy line; Control Room user detail says approver / hours / mode are private when
+  `personalHidden`; the Approval chart takes its edges from `/api/admin/approval-chart` (the members list
+  now withholds `approverId` outside a Manager's chain, which drew everyone as "not placed").
+- **Quests by IP & Division**: New quest picks chart units (`unitIds`, sub-units count), quest rows say who
+  it is for ("Deleted division", "Everyone (was for a team…)").
+- **Leaderboard ties**: equal XP share a rank, the next skips (1, 1, 1, 4); the podium prints the shared rank.
+- **Errors / failed writes** (`FailureText.swift`): one wording for failures (never "Internal server
+  error"), `LoadErrorView` (offline / not found / no access / server) used by the Vault; Reports use the
+  shared wording; `ProjectUnavailableView` (Project not found → Go to Projects, no access → who to ask)
+  for the project page; `failureToast` for failed writes that keep the person's input.
+- **My Tasks**: Overdue · Due soon · Later · Done recently (lib/my-tasks.ts rules, WIB day for date-only
+  dues), most urgent first, "Show all N" instead of a silent cut, due + "Nd late" on every row, "+" New
+  task assigned to me (`assigneeIds`).
+- **Reports**: past period at its end (`work.asOf`: "At the end of the period"), "Other projects" and
+  "Task in a project you're not in" rows without links.
+- **Calendar**: neighbouring-month days show their dots, lines and counts (quieter) and stay tappable.
+- **Pipeline**: the name is asked first (nothing is created on Cancel).
+- **Room booking**: New / edit / delete booking (creator or Manager+), 24-hour quarter-hour times, next
+  quarter hour by default, ended slots refused, ROOM_TAKEN / BOOKING_IN_PAST said in the app's language,
+  rooms named as the web does.
+- **Attendance Score**: board + record use the server's `owed` (joined mid-period = days from their start,
+  prorated allowance); the record says "from <date>".
+- **Untitled** → "Tanpa judul" / "Task tanpa judul" / "Project tanpa judul" (`UntitledText`) on My Tasks,
+  Home, Calendar, Docs, folder and Overview rows, Reports.
+
+## QA web fixes ported (13 Oct) — part 2
+
+Interaction, chat, GIDEON, editors, from the dev web commits 3c74c80, 7987b45, 3462249, 5a9bb7c, 30baf06,
+79f65da, 3f8b3ca, 458d9af, 0b0b64a, 74979ab, 33ab776, 45cf033 (QA 13 Oct 2026). Shared pieces in
+`QAInteractKit.swift`; Indonesian in `LocalizationQAInteract.swift` (`indonesianQAInteract`).
+
+- **GIDEON failures** (`GideonProblem`): every refusal is worded in the app's language from its status /
+  `code` / the route's fixed sentences, never raw ("Gideon error (503).", the Indonesian-only "File
+  terlalu besar…", "Gideon lagi gak bisa dihubungi…"): busy (429), can't be reached (502–504, a dropped
+  connection), not connected on this server (503 `not_configured` / `GIDEON_UNAVAILABLE`), the editor's
+  `rate_limited`, file too large / unreadable (413/415). The empty-answer placeholder "(Gideon balas
+  kosong…)" counts as no answer. **Try again** under the error re-asks the failed question (nothing is
+  stored server-side for a failed turn, so no duplicate) or reopens a conversation that failed to load;
+  a conversation that is gone says so; the Chats list shows a failure with Try again instead of "No
+  chats yet". Reply scrub is server-side (tickets, served to every client): nothing to port.
+- **Offline keep-draft**: inline new card = one keeper (web `kept()`): the card takes a failed title back
+  while it is open, otherwise the board keeps it in an alert with Try again / Discard (offline only; a
+  refusal is just said). Chat composer and task comment box keep unsent text per chat / task on the
+  device (`LocalDrafts`, cleared once the server has it). A task rename that fails while closing offline
+  is kept and sent the next time the task opens. Page / description edits are copied to the device 400 ms
+  after each change (`BlockEditMirror`), not only on a failed save: a closed or killed app reopens the
+  page with the edit and the next launch sends it (outbox → conflict asked as before); a card scrolling
+  away and back no longer reloads over unsaved text.
+- **Board / List / Table**: long-press then drag is the native `.draggable` (cards and rows; the menu
+  shows on a long press without moving). The iOS edge swipe only starts at the screen edge, so a sideways
+  board swipe never navigates back (the web bug was Chromium's swipe-back). Order for equal positions comes
+  from the server (position, createdAt, id) and the app keeps it (stable sorts). Table drag: patch handed
+  to the lead (ProjectTabExtras is not part 2's file).
+- **Notifications**: the Inbox row shows the sender's avatar (`actor`, servers since 13 Oct) with the
+  kind as a badge; `title` / `message` come from `texts[lang]` everywhere (Inbox, Home bell). Pushes are
+  written by the server in the person's language; the Notification Service extension only adds images.
+- **Search**: a person opens the DM with them (`POST /api/conversations` DM); their record only for
+  themselves and BoD / One Above All (web S-08). Tasks and pages show their project; "Untitled" pages read
+  "Tanpa judul"; hardware keyboard ↑ ↓ Enter, ⌘F back to the box.
+- **Chat**: long-press Reply / Copy was already there (context menu on the bubble); Enter sends,
+  Shift+Enter is a new line on a hardware keyboard (also GIDEON and task comments).
+- **Keyboard**: ⌘K in the block editor (pages, task description) adds a link to the focused line, or
+  changes / removes one already there (`LinkInsertSheet`; also a link button on the keyboard bar; a line
+  with a link shows a link mark); ⌘K in the comment box writes the address in (comments render links).
+  ⌘K is bound only while an editor has the keyboard (`EditorKeys`), so the app-wide ⌘K search (patch for
+  the lead) never fires over an editor. ⌘O = new GIDEON chat (anywhere, and in the panel). Esc closes the
+  GIDEON panel, Chats, Personalize, Save as doc, Ask AI, view filter, duplicate, assignee, new task, edit
+  group, link-to-task sheets and the iPad task sheet.
+- **Access-level gating from part 1** (in part 2's files): Add task needs Can edit; status columns and
+  their menus need Full access; a read-only level chip next to the project name; 403 / 404 use
+  `ProjectOpenFailure` + `ProjectUnavailableView`; project chat read-only below Can comment ("Can view"
+  instead of the composer); Delete task needs Can edit.
+- **Checked on Linux**: every changed file `swiftc -parse`; link add / edit / remove round-trip on the
+  "Event SOP" page + new rows of every kind (83 checks, 0 fails); GIDEON error wording (0 fails).
+
+## iPad trackpad / pointer (13 Oct 2026)
+
+`UIApplicationSupportsIndirectInputEvents = YES` (Sources/Info.plist), Apple's standard key for pointer
+support: trackpad and mouse clicks arrive as pointer touches instead of fake finger touches. Effects:
+- Spreadsheet: click-drag selects a range, right-click opens the cell menu, header edges show a resize pointer.
+- Everywhere: click-dragging a list or scroll view no longer scrolls it (two-finger scroll / wheel do, as in
+  Apple's own apps); drag & drop, context menus (right-click / two-finger click), swipe actions and buttons
+  keep working.
+Test on iPad with a trackpad: scroll lists (two fingers), drag a board card and a list row, right-click a
+card / a chat message, swipe-to-delete rows, the approval chart pan / zoom, the photo viewer pinch, the
+Vault media viewer, sheets and popovers closing.
+
+## QA round 2 additions (13 Oct, lead)
+
+- Date-only due dates (00:00 UTC or 00:00 WIB) show the day only, everywhere (task detail fixed; My Tasks,
+  Calendar and boards already did).
+- Person record score starts on the WIB join day: the app shows the server's `score.from`.
+- GIDEON chats titled by a web suggestion chip show in the app's language (GideonChatTitle.swift).
+- Notification language (PATCH uiLanguage + `texts[lang]`): done in 5aaa3fb.
+- Spreadsheet panels wired into the screen (Tools menu on iPad/Mac, More on iPhone, Comment in the cell menu,
+  amber corner on cells with comments); viewers reach comments, history and charts too.
+
+## Access levels round 2 (13 Oct)
+
+Port of web 5e416d9 + e74a735. Gated on `ProjectDetail.canEditProject` / `canCommentProject`; an older
+server that sends no level gates nothing.
+- Can view / Can comment see a project read-only: no Add task / New form / ⌘N, no inline New task, no drag,
+  drop, Move to, selection or bulk bar (Board, List, Table), no Add task on a calendar date, no Write / Edit
+  brief, no status-update composer, Forms tab = fill in only (no builder, publish, New form).
+- Saved views: New view, Rename, Delete only from Can edit; below it Filter and sort applies on this screen
+  only (`screenConfigs`, nothing saved).
+- Task detail: one-line notice; title, status/priority/dates, assignees, fields, description, subtask
+  toggles and add, attachment add/delete disabled; Can comment keeps the comment box, Can view does not.
+- Pages: Edit hidden below Can edit (project level read once per page).
+- Project chat: `Conversation.canPost` (server) + level; the composer becomes the web's "View only" line, in
+  the Messages tab too.
+- 403 / 404 opening a task or page: LoadErrorView ("You can't open this task / page"), not the cache.
+- Readable refusals: `AccessRefusal` maps NEEDS_EDIT_ACCESS / NEEDS_COMMENT_ACCESS / NEEDS_FULL_ACCESS (and
+  older "MEMBER role" / "LEAD role" lines) in `APIClient.serverMessage`, so every APIError.http message reads
+  as a sentence; raw 5xx lines become "Something went wrong on our side". ID strings:
+  `indonesianAccessR2` (LocalizationAccessR2.swift).
 
 ## Server pieces that must ship to production WITH the app
 

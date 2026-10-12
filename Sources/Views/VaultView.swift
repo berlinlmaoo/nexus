@@ -54,6 +54,8 @@ struct VaultView: View {
     @State private var listing: VaultListing?
     @State private var loading = true
     @State private var problem: String?
+    /// The failed load itself, so the page can tell offline / gone / locked / server apart (web LoadError).
+    @State private var loadError: Error?
     @State private var trash = false
     @State private var query = ""
     @State private var searchTask: Task<Void, Never>?
@@ -166,6 +168,13 @@ struct VaultView: View {
                 if loading && listing == nil {
                     ProgressView().tint(NX.violetText)
                         .frame(maxWidth: .infinity, minHeight: 260)
+                } else if let loadError, listing == nil {
+                    // A failed load is not an empty folder: the shared error state (web QA 13 Oct 2026).
+                    LoadErrorView(error: loadError, what: T("the vault"),
+                                  notFoundTitle: T("This folder doesn't exist any more."),
+                                  forbiddenMessage: T("It's locked to certain roles."),
+                                  retry: { Task { loading = true; await load() } })
+                        .frame(minHeight: 260)
                 } else if let problem, listing == nil {
                     empty(icon: "externaldrive.badge.xmark", title: T("Vault unavailable"), msg: problem)
                         .frame(minHeight: 260)
@@ -1002,7 +1011,7 @@ struct VaultView: View {
     // MARK: Actions
 
     private func load(quiet: Bool = false) async {
-        if !quiet { problem = nil }
+        if !quiet { problem = nil; loadError = nil }
         do {
             let fresh = try await APIClient.shared.vaultList(
                 parentId: trash ? nil : parentId,
@@ -1011,13 +1020,14 @@ struct VaultView: View {
             )
             listing = fresh
             problem = nil
+            loadError = nil
             // What left the folder (moved, trashed, by anyone) leaves the selection too.
             if !selection.isEmpty { selection.formIntersection(Set(fresh.items.map(\.id))) }
         } catch APIError.unauthorized {
             auth.logout()
         } catch {
             // A background refresh that fails leaves what is on screen alone.
-            if !quiet { problem = Self.message(error) }
+            if !quiet { problem = Self.message(error); loadError = error }
         }
         loading = false
     }

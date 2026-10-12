@@ -55,6 +55,9 @@ struct ProjectFormsBuilderTab: View {
     /// Raised to the project screen, which owns the one New form destination — the same one its
     /// "+" opens on this tab.
     let onNewForm: () -> Void
+    /// Can edit and up build forms (server: MEMBER). Can view / Can comment get the list to fill in only
+    /// (access levels round 2): no New form, no builder, no publish.
+    var canEdit = true
 
     @Environment(AuthStore.self) private var auth
     @State private var forms: [BuilderForm] = []
@@ -92,24 +95,30 @@ struct ProjectFormsBuilderTab: View {
             ScrollView {
                 EmptyState(icon: "list.clipboard", title: T("No forms in this project yet"),
                            subtitle: T("A form is an intake page — a request, a reimbursement, a report. Every submission becomes a task in this project."),
-                           actionTitle: T("New form"), actionIcon: "plus", action: onNewForm)
+                           actionTitle: canEdit ? T("New form") : nil, actionIcon: "plus", action: canEdit ? onNewForm : nil)
                     .padding(.horizontal, 24).padding(.top, 48)
             }
             .refreshable { await load() }
         } else {
             List {
-                Section {
-                    Button(action: onNewForm) {
-                        Label(T("New form"), systemImage: "plus.circle.fill")
-                            .font(NXFont.text(15, .semibold)).foregroundStyle(NX.violetText)
+                if canEdit {
+                    Section {
+                        Button(action: onNewForm) {
+                            Label(T("New form"), systemImage: "plus.circle.fill")
+                                .font(NXFont.text(15, .semibold)).foregroundStyle(NX.violetText)
+                        }
+                    } footer: {
+                        Text(T("Tap a form to edit it. Touch and hold it to fill it in, copy or share its link, or publish it."))
                     }
-                } footer: {
-                    Text(T("Tap a form to edit it. Touch and hold it to fill it in, copy or share its link, or publish it."))
                 }
                 Section {
                     ForEach(forms) { f in
                         NavigationLink {
-                            FormBuilderView(projectId: projectId, projectName: projectName, formId: f.id)
+                            if canEdit {
+                                FormBuilderView(projectId: projectId, projectName: projectName, formId: f.id)
+                            } else {
+                                FormFillView(formId: f.id, title: f.name)
+                            }
                         } label: {
                             FormBuilderRow(form: f, busy: busyId == f.id)
                         }
@@ -132,8 +141,10 @@ struct ProjectFormsBuilderTab: View {
         if f.isPublic == true {
             Button { copy(f.publicURL) } label: { Label(T("Copy public link"), systemImage: "doc.on.doc") }
             ShareLink(item: f.publicURL) { Label(T("Share link"), systemImage: "square.and.arrow.up") }
-            Button { Task { await setPublic(f, false) } } label: { Label(T("Unpublish"), systemImage: "eye.slash") }
-        } else {
+            if canEdit {
+                Button { Task { await setPublic(f, false) } } label: { Label(T("Unpublish"), systemImage: "eye.slash") }
+            }
+        } else if canEdit {
             Button { Task { await setPublic(f, true) } } label: { Label(T("Publish"), systemImage: "globe") }
         }
     }

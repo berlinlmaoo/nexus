@@ -13,13 +13,28 @@ struct LeaderboardView: View {
     /// the ForEach would build every profile on the way past.
     @State private var openProfile: ProfileTarget?
 
-    /// BoD+ (atBottom) sink below staff; then by XP desc, then name.
+    /// BoD+ (atBottom) sink below staff; then by XP desc, then name (case-insensitive, as the web).
     private var ranked: [LeaderboardRow] {
         rows.sorted {
             if ($0.atBottom ?? false) != ($1.atBottom ?? false) { return !($0.atBottom ?? false) }
             if $0.totalXp != $1.totalXp { return $0.totalXp > $1.totalXp }
-            return ($0.name ?? "") < ($1.name ?? "")
+            return ($0.name ?? "").localizedCaseInsensitiveCompare($1.name ?? "") == .orderedAscending
         }
+    }
+    /// Standard competition ranking (web lib/competition-rank.ts, QA 13 Oct 2026): equal XP shares a rank
+    /// and the next one skips (1, 1, 1, 4). Before, seven people on 1,000 XP got ranks 1–7. A BoD row that
+    /// sinks to the bottom never ties with the staff above it.
+    private var ranks: [Int] {
+        let list = ranked
+        var out: [Int] = []
+        for (i, r) in list.enumerated() {
+            if i > 0, list[i - 1].totalXp == r.totalXp, (list[i - 1].atBottom ?? false) == (r.atBottom ?? false) {
+                out.append(out[i - 1])
+            } else {
+                out.append(i + 1)
+            }
+        }
+        return out
     }
 
     var body: some View {
@@ -66,15 +81,16 @@ struct LeaderboardView: View {
                         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(NX.border))
 
                     if ranked.count >= 1 {
-                        Podium(rows: Array(ranked.prefix(3))) { row in
+                        Podium(rows: Array(ranked.prefix(3)), labels: Array(ranks.prefix(3))) { row in
                             openProfile = ProfileTarget(userId: row.userId, name: row.name, avatar: row.avatar)
                         }
                     }
 
                     VStack(spacing: 0) {
+                        let shared = ranks
                         ForEach(Array(ranked.enumerated()), id: \.element.id) { idx, r in
                             if idx > 0 { Divider().overlay(NX.border) }
-                            RankRow(rank: idx + 1, row: r) {
+                            RankRow(rank: idx < shared.count ? shared[idx] : idx + 1, row: r) {
                                 openProfile = ProfileTarget(userId: r.userId, name: r.name, avatar: r.avatar)
                             }
                         }
@@ -117,6 +133,8 @@ struct LeaderboardView: View {
 
 struct Podium: View {
     let rows: [LeaderboardRow]   // already ranked 1..3
+    /// The rank to print on each place when it differs from the place (a tie: two people on rank 1).
+    var labels: [Int] = []
     let onOpen: (LeaderboardRow) -> Void
     // Visual order: 2nd · 1st · 3rd
     private var slots: [(rank: Int, row: LeaderboardRow?)] {
@@ -145,7 +163,7 @@ struct Podium: View {
                         ZStack {
                             AvatarView(url: row.avatar, initial: row.initial, size: avatar)
                                 .overlay(Circle().strokeBorder(ring, lineWidth: 3))
-                            if rank == 1 { Image(systemName: "crown.fill").font(.system(size: 18)).foregroundStyle(crown).offset(y: -avatar/2 - 6) }
+                            if label(rank) == 1 { Image(systemName: "crown.fill").font(.system(size: 18)).foregroundStyle(crown).offset(y: -avatar/2 - 6) }
                         }
                         Text(row.name ?? "—").font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
                         Text("\(row.totalXp.formatted(.number.grouping(.automatic))) XP").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
@@ -156,11 +174,15 @@ struct Podium: View {
             }
             ZStack(alignment: .top) {
                 RoundedRectangle(cornerRadius: 12, style: .continuous).fill(barColor).frame(height: height)
-                Text("\(rank)").font(NXFont.display(22, .black)).foregroundStyle(.white.opacity(0.9)).padding(.top, 8)
+                Text("\(label(rank))").font(NXFont.display(22, .black)).foregroundStyle(.white.opacity(0.9)).padding(.top, 8)
             }
         }
         .frame(maxWidth: .infinity)
         .opacity(row == nil ? 0 : 1)
+    }
+    /// The shared rank for a podium place (1-based), else the place itself.
+    private func label(_ place: Int) -> Int {
+        place - 1 < labels.count ? labels[place - 1] : place
     }
 }
 

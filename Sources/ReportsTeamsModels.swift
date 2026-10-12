@@ -92,7 +92,7 @@ struct Team: Decodable, Identifiable, Sendable {
 
         var idv: String { id ?? projectId ?? project?.id ?? "?" }
         var pid: String? { projectId ?? project?.id }
-        var displayName: String { project?.name ?? "Untitled" }
+        var displayName: String { UntitledText.project(project?.name) }
     }
 
     var memberCount: Int { members?.count ?? 0 }

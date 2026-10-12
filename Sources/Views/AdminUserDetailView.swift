@@ -66,6 +66,14 @@ struct AdminUserDetailView: View {
                 if isBod { attendanceModeCard }
                 if isBod { restDaysCard }
                 if isBod { workHoursCard }
+                // Not in this viewer's approval chain: approver, hours and mode arrive neutral (personal
+                // attendance data, owner 13 Oct 2026). Say so instead of drawing the neutral values.
+                if member.isPersonalHidden && !isBod {
+                    card(T("Attendance")) {
+                        Text(T("Their approver, work hours and attendance mode are visible only to the people above them in the Approval chart and to the BoD."))
+                            .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
                 if canEdit { googleCard }
                 membershipCard
                 if canOffboard { offboardCard }

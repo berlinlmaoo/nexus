@@ -122,6 +122,10 @@ struct ReportOverdueTask: Decodable, Sendable, Identifiable {
     /// This person's share of the task (1 / assigneeCount).
     let share: Double?
 
+    /// A task in a project the viewer isn't a member of (servers from 13 Oct 2026): counted, but sent with
+    /// no id or title, under projectId "other". Drawn without a link.
+    var isHiddenProject: Bool { projectId == "other" || id.isEmpty }
+
     private enum CodingKeys: String, CodingKey {
         case id, title, projectId, projectName, dueDate, dueKey, daysOverdue, priority, assigneeCount, share
     }
@@ -165,6 +169,8 @@ struct ReportProjectLine: Decodable, Sendable, Identifiable {
     let open: Double
     let overdue: Double
     var id: String { projectId ?? projectName ?? "?" }
+    /// The projects the viewer can't open, counted together (servers from 13 Oct 2026).
+    var isOtherProjects: Bool { projectId == "other" }
 
     private enum CodingKeys: String, CodingKey { case projectId, projectName, completed, open, overdue }
     init(from decoder: Decoder) throws {
@@ -211,10 +217,20 @@ struct PersonWork: Decodable, Sendable {
     let cycleSample: Double?
     let weekly: [ReportWeek]
     let perProject: [ReportProjectLine]
+    /// The WIB day ("yyyy-MM-dd") the open / overdue figures describe: today for the running period, the
+    /// period's last day for a past one (servers from 13 Oct 2026; QA B02). nil from an older server.
+    let asOf: String?
+
+    /// A past period's day, when the open / overdue cards describe its end rather than today.
+    var pastAsOf: String? {
+        guard let asOf, !asOf.isEmpty else { return nil }
+        let today = AgendaRange.dayKey(ISO8601DateFormatter().string(from: Date()))
+        return asOf < today ? asOf : nil
+    }
 
     private enum CodingKeys: String, CodingKey {
         case assigned, completed, onTime, dueWithDate, overdueNow, overdueList, openTotal, openByPriority,
-             dueNext7, medianCycleDays, cycleSample, weekly, perProject
+             dueNext7, medianCycleDays, cycleSample, weekly, perProject, asOf
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -231,6 +247,7 @@ struct PersonWork: Decodable, Sendable {
         cycleSample = c.reportSoft(.cycleSample)
         weekly = c.reportList(.weekly)
         perProject = c.reportList(.perProject)
+        asOf = c.reportSoft(.asOf)
     }
 }
 

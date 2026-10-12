@@ -50,11 +50,21 @@ enum APIError: LocalizedError {
         switch self {
         case .http(let code, let message):
             // The server's own words win. It knows why it refused; this layer does not.
-            if let message, !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return message }
+            if let message, !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                // A raw 5xx line ("Internal server error") is not for a person (web friendlyError, QA R2 B31).
+                if code >= 500, message.range(of: "^(internal server error|request failed|bad gateway|service unavailable)",
+                                              options: [.regularExpression, .caseInsensitive]) != nil {
+                    return T("Something went wrong on our side. Try again in a moment.")
+                }
+                // T() is a pass-through for a sentence it has no translation of; the readable access
+                // refusals (AccessRefusal) and other known lines come out in the app's language.
+                return T(message)
+            }
             // No sentence AND a status only nginx or Cloudflare sends when the app is not there (a
             // deploy restart, a tunnel blip). "Server error (502)." reads as a fault report about
             // something that is really a 30-second gap, so it gets the same calm line as silence.
             if Self.isEdgeOnly(code) { return Self.unreachableText }
+            if code >= 500 { return T("Something went wrong on our side. Try again in a moment.") }
             return "Server error (\(code))."
         case .unauthorized: return T("Session expired — please log in again.")
         case .decoding: return T("Couldn't read data from the server.")
@@ -1175,6 +1185,26 @@ struct APIClient {
         let path = "/api/room-bookings?rangeStart=\(enc(start))&rangeEnd=\(enc(end))"
         return (try await run(makeRequest(path), decode: RoomBookingsResponse.self)).bookings ?? []
     }
+    /// POST /api/room-bookings. `room` is the stored (Indonesian) name; times are ISO instants. Refusals:
+    /// 409 ROOM_TAKEN (the room is booked then), 400 BOOKING_IN_PAST (the slot has ended) — RoomBookingError.
+    func createRoomBooking(room: String, title: String, startsAt: String, endsAt: String, description: String?) async throws {
+        var req = makeRequest("/api/room-bookings", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = ["room": room, "title": title, "startsAt": startsAt, "endsAt": endsAt]
+        if let description, !description.isEmpty { body["description"] = description }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        _ = try await run(req, decode: SuccessResponse.self)
+    }
+    /// PATCH /api/room-bookings/:id — the creator or a Manager and above.
+    func updateRoomBooking(id: String, fields: [String: Any]) async throws {
+        var req = makeRequest("/api/room-bookings/\(enc(id))", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: fields)
+        _ = try await run(req, decode: SuccessResponse.self)
+    }
+    func deleteRoomBooking(id: String) async throws {
+        _ = try await run(makeRequest("/api/room-bookings/\(enc(id))", method: "DELETE"), decode: SuccessResponse.self)
+    }
     /// `includeRegistered` = ikut membawa akun yang belum masuk workspace mana pun (Control Room
     /// memakainya untuk tombol "Masukkan"). Server menolak diam-diam untuk yang bukan Manager+:
     /// field-nya sekadar tidak ada.
@@ -1592,11 +1622,14 @@ struct APIClient {
         (try await run(makeRequest("/api/gamification/quests/admin?workspaceId=\(enc(workspaceId))"), decode: AdminQuestsResponse.self)).quests ?? []
     }
     @discardableResult
-    func createAdminQuest(workspaceId: String, title: String, requirementType: String, requiredCount: Int, xpReward: Int, deadline: String?) async throws -> Bool {
+    /// `unitIds`: IP & Division Chart units the quest is for (sub-units count too; empty = everyone). Servers
+    /// from 13 Oct 2026; the retired teams are no longer offered.
+    func createAdminQuest(workspaceId: String, title: String, requirementType: String, requiredCount: Int, xpReward: Int, deadline: String?, unitIds: [String] = []) async throws -> Bool {
         var req = makeRequest("/api/gamification/quests/admin", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var body: [String: Any] = ["workspaceId": workspaceId, "title": title, "requirementType": requirementType, "requiredCount": requiredCount, "xpReward": xpReward]
         if let deadline { body["deadline"] = deadline }
+        if !unitIds.isEmpty { body["unitIds"] = unitIds }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         _ = try await run(req, decode: SuccessResponse.self)
         return true
@@ -2180,8 +2213,10 @@ struct APIClient {
     /// gives a new task the status of the column it lands in, and a fixed "TODO" put a card made in the
     /// Done column into Done as an open task. `placement` "top" puts it first in its column (dev server;
     /// older servers ignore it and append).
-    func createTask(projectId: String, taskListId: String, title: String, parentId: String? = nil, status: String? = nil, priority: String? = nil, dueDate: String? = nil, placement: String? = nil) async throws -> String {
+    /// `assigneeIds`: who it is assigned to from the start (My Tasks' New task sends the creator, web QA S-03).
+    func createTask(projectId: String, taskListId: String, title: String, parentId: String? = nil, status: String? = nil, priority: String? = nil, dueDate: String? = nil, placement: String? = nil, assigneeIds: [String]? = nil) async throws -> String {
         var body: [String: Any] = ["projectId": projectId, "taskListId": taskListId, "title": title]
+        if let assigneeIds, !assigneeIds.isEmpty { body["assigneeIds"] = assigneeIds }
         if let status { body["status"] = status }
         if let placement { body["placement"] = placement }
         if let parentId { body["parentId"] = parentId }
@@ -2257,11 +2292,26 @@ struct APIClient {
     }
     /// Several people in one request (servers from 9 Oct 2026). People already in are skipped,
     /// not an error; the answer carries only the rows that were created.
-    func addProjectMembers(projectId: String, userIds: [String], role: String = "MEMBER") async throws -> [ProjectDetail.ProjectMember] {
+    /// `level`: the access everyone in this batch gets (servers from 13 Oct 2026, Notion-style). `role` is
+    /// sent alongside, matching it, for an older server that only reads role.
+    func addProjectMembers(projectId: String, userIds: [String], level: ProjectAccessLevel = .edit) async throws -> [ProjectDetail.ProjectMember] {
         var req = makeRequest("/api/projects/\(projectId)/members", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["userIds": userIds, "role": role] as [String: Any])
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["userIds": userIds, "accessLevel": level.rawValue,
+                                                                   "role": Self.roleForLevel(level)] as [String: Any])
         return try await run(req, decode: AddProjectMembersResult.self).added ?? []
+    }
+    /// The ProjectMember.role the server writes with a level (lib/rbac.ts roleForLevel).
+    static func roleForLevel(_ level: ProjectAccessLevel) -> String {
+        switch level { case .full: return "LEAD"; case .edit: return "MEMBER"; case .comment: return "GUEST"; case .view: return "VIEWER" }
+    }
+    /// PATCH /api/projects/:id/members { userId, accessLevel } — one member's level (Full access only).
+    /// 409 LAST_OWNER when it would leave the project without a Project Owner (ProjectAccessText).
+    func setProjectMemberAccess(projectId: String, userId: String, level: ProjectAccessLevel) async throws {
+        var req = makeRequest("/api/projects/\(projectId)/members", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["userId": userId, "accessLevel": level.rawValue])
+        _ = try await run(req, decode: SuccessResponse.self)
     }
     @discardableResult
     func removeProjectMember(projectId: String, userId: String) async throws -> Bool {
@@ -2272,10 +2322,12 @@ struct APIClient {
         return true
     }
     @discardableResult
-    func inviteProjectMember(projectId: String, email: String, role: String = "GUEST") async throws -> Bool {
+    func inviteProjectMember(projectId: String, email: String, level: ProjectAccessLevel = .edit) async throws -> Bool {
         var req = makeRequest("/api/projects/\(projectId)/invite", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["email": email, "role": role])
+        // An older server reads only role and refuses LEAD there: a Full-access invite falls back to MEMBER.
+        let legacyRole = level == .full ? "MEMBER" : Self.roleForLevel(level)
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["email": email, "accessLevel": level.rawValue, "role": legacyRole])
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
@@ -3043,6 +3095,9 @@ extension APIClient {
         // nil lets the status fall through to `unreachableText` like any other edge page.
         if (obj["code"] as? String) == "NEXUS_DOWN" || (obj["down"] as? Bool) == true { return nil }
         let text = (obj["error"] as? String) ?? (obj["message"] as? String)
+        // Access-level refusals (NEEDS_EDIT_ACCESS / NEEDS_COMMENT_ACCESS / NEEDS_FULL_ACCESS) read as a
+        // sentence for a person instead of "Forbidden: you need Can edit access…" (access levels round 2).
+        if let readable = AccessRefusal.readable(code: obj["code"] as? String, message: text) { return readable }
         guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return text
     }
@@ -3298,14 +3353,14 @@ extension APIClient {
     /// POST /api/projects for the New project gallery: blank (no templateId) or a template, built in the
     /// app's language. Returns the new project's id so it can open straight away, as on the web.
     func createProjectFromGallery(workspaceId: String, name: String, description: String?, folderId: String?,
-                                  hiddenTabs: [String], memberIds: [String],
+                                  hiddenTabs: [String], memberIds: [String], memberLevel: ProjectAccessLevel = .edit,
                                   templateId: String?, starter: Bool) async throws -> String {
         var req = makeRequest("/api/projects", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var body: [String: Any] = ["name": name, "workspaceId": workspaceId, "type": "TASK", "hiddenTabs": hiddenTabs]
         if let description, !description.isEmpty { body["description"] = description }
         if let folderId { body["folderId"] = folderId }
-        if !memberIds.isEmpty { body["memberIds"] = memberIds }
+        if !memberIds.isEmpty { body["memberIds"] = memberIds; body["memberAccessLevel"] = memberLevel.rawValue }
         if let templateId {
             body["templateId"] = templateId
             body["lang"] = AppLanguage.shared.lang == .id ? "id" : "en"

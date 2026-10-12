@@ -544,7 +544,7 @@ extension CalendarCore {
             let late = overdueState(i, today: today, now: now, windowDays: windowDays) == .recent
             if late { overdue += 1 }
             let bucket = i.placements.lazy.compactMap { ix.bucketOf($0.unitId, focus: focusId) }.first ?? "other"
-            return CalMonthLine(key: i.key, title: i.masked ? T("Internal task") : (i.title ?? ""), masked: i.masked,
+            return CalMonthLine(key: i.key, title: i.masked ? T("Internal task") : UntitledText.task(i.title), masked: i.masked,
                                 quiet: !isOpen(i), done: i.done, overdue: late,
                                 urgent: i.priority == "HIGH" || i.priority == "URGENT", unitId: bucket)
         }
@@ -669,12 +669,14 @@ private struct CalMonthGridBody: View {
     private func dayCell(_ day: String, weekend: Bool, height: CGFloat) -> some View {
         let g = grid
         let inMonth = day.hasPrefix(g.month)
-        let cell = inMonth ? g.cells[day] : nil
+        // Days of the neighbouring months show their tasks too, a little quieter (web QA B18, 13 Oct
+        // 2026: the loaded range covers all 42 days, and those days used to read "No tasks").
+        let cell = g.cells[day]
         let isToday = day == g.today
         let isSel = day == g.selected
         let holiday = g.holidays[day]
         let dots = cell?.dots ?? []
-        let info = inMonth ? (g.lines[day] ?? .empty) : .empty
+        let info = g.lines[day] ?? .empty
         let unitName: (CalDot) -> String = { dot in dot.unitId == "other" ? T("No division") : (g.ix.byId[dot.unitId]?.name ?? "") }
         return Button {
             Haptics.tap()
@@ -687,6 +689,7 @@ private struct CalMonthGridBody: View {
                     compactContent(day, dots: dots, info: info, inMonth: inMonth, isToday: isToday, isSel: isSel, holiday: holiday)
                 }
             }
+            .opacity(inMonth ? 1 : 0.6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .frame(height: height)
             // Weekends a shade off the weekdays; another month's days a shade further, so the month
@@ -863,8 +866,8 @@ private struct CalMonthGridBody: View {
 
     private func cellLabel(_ day: String, _ cell: CalDayCell?, _ info: CalMonthDay, _ holiday: String?, _ isToday: Bool) -> String {
         var parts = [CalFormat.day(day, "EEEEdMMMM")]
-        // A day of another month never has a count; only a loaded month may say "No tasks".
-        if grid.loaded && day.hasPrefix(grid.month) {
+        // Only a loaded range may say "No tasks"; it covers the neighbouring months' days on the grid too.
+        if grid.loaded {
             parts.append(cell.map { $0.count > 0 ? CalFormat.tasks($0.count) : T("No tasks") } ?? T("No tasks"))
         }
         if info.overdue > 0 {
@@ -998,7 +1001,7 @@ struct CalItemRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             let lines: Int? = large ? (compact ? 4 : nil) : (compact ? 1 : 2)
-            Text(item.title ?? "")
+            Text(UntitledText.task(item.title))
                 .font(NXFont.text(CalType.size(compact ? 12.5 : 13), .medium))
                 .foregroundStyle(item.done || od == .stale ? NX.mutedFg : NX.foreground)
                 .strikethrough(item.done, color: NX.mutedFg)
@@ -2044,7 +2047,7 @@ struct CalPeopleWeek: View {
             HStack(alignment: .top, spacing: 5) {
                 CalStatusGlyph(item: item, today: today, now: now, windowDays: windowDays, size: CalType.size(12), state: od)
                     .padding(.top, 1)
-                Text(item.masked ? T("Internal task") : (item.title ?? ""))
+                Text(item.masked ? T("Internal task") : UntitledText.task(item.title))
                     .font(NXFont.text(CalType.size(11.5), quiet ? .regular : .medium))
                     .italic(item.masked)
                     .foregroundStyle(quiet || item.masked ? NX.mutedFg : (od == .recent ? CalTone.overdue : NX.foreground))
@@ -2459,7 +2462,7 @@ struct CalTaskPreview: View {
             Label(String(format: T("from %@"), parent.title ?? ""), systemImage: "arrow.turn.down.right")
                 .font(NXFont.text(CalType.size(12))).foregroundStyle(NX.mutedFg)
         }
-        Text(t.title).font(NXFont.display(CalType.size(20), .bold)).foregroundStyle(NX.foreground)
+        Text(UntitledText.task(t.title)).font(NXFont.display(CalType.size(20), .bold)).foregroundStyle(NX.foreground)
             .accessibilityAddTraits(.isHeader)
         VStack(alignment: .leading, spacing: 8) {
             field(T("Status"), statusLabel(t.status))
@@ -2497,7 +2500,7 @@ struct CalTaskPreview: View {
                         HStack(spacing: 8) {
                             Image(systemName: s.isDone ? "checkmark.circle.fill" : "circle").foregroundStyle(s.isDone ? NX.success : NX.mutedFg)
                                 .accessibilityLabel(s.isDone ? T("Done") : T("To do"))
-                            Text(s.title ?? "").font(NXFont.text(CalType.size(13.5))).strikethrough(s.isDone, color: NX.mutedFg)
+                            Text(UntitledText.task(s.title)).font(NXFont.text(CalType.size(13.5))).strikethrough(s.isDone, color: NX.mutedFg)
                                 .foregroundStyle(s.isDone ? NX.mutedFg : NX.foreground)
                         }
                         .accessibilityElement(children: .combine)

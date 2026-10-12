@@ -18,6 +18,8 @@ struct AddProjectMembersSheet: View {
     @State private var search = ""
     @State private var adding = false
     @State private var error: String?
+    /// The access everyone added in this batch gets (Notion's invite dropdown, owner 13 Oct 2026).
+    @State private var level: ProjectAccessLevel = .edit
 
     /// Workspace people with an account who aren't in the project yet, A→Z.
     private var candidates: [WorkspaceRoster.Member] {
@@ -57,15 +59,22 @@ struct AddProjectMembersSheet: View {
             // One button for everyone picked (owner, 11 Oct 2026): "Add N people", no further step.
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if !candidates.isEmpty {
-                    Button { Task { await add() } } label: {
-                        HStack(spacing: 8) {
-                            if adding { ProgressView().tint(.white) }
-                            Text(addPeopleTitle(picked.count))
+                    VStack(spacing: 6) {
+                        HStack {
+                            Text(T("Access for the people you add")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                            Spacer(minLength: 6)
+                            AccessLevelMenu(value: level, disabled: adding, onChange: { level = $0 })
                         }
-                        .font(NXFont.text(15, .bold))
+                        Button { Task { await add() } } label: {
+                            HStack(spacing: 8) {
+                                if adding { ProgressView().tint(.white) }
+                                Text(addPeopleTitle(picked.count))
+                            }
+                            .font(NXFont.text(15, .bold))
+                        }
+                        .buttonStyle(NexusPrimaryButton())
+                        .disabled(picked.isEmpty || adding)
                     }
-                    .buttonStyle(NexusPrimaryButton())
-                    .disabled(picked.isEmpty || adding)
                     .padding(.horizontal, 16).padding(.vertical, 10)
                     .background(NX.background)
                 }
@@ -164,14 +173,18 @@ struct AddProjectMembersSheet: View {
         adding = true
         error = nil
         do {
-            let added = try await APIClient.shared.addProjectMembers(projectId: projectId, userIds: Array(picked))
+            let added = try await APIClient.shared.addProjectMembers(projectId: projectId, userIds: Array(picked), level: level)
             await onAdded(added)
             adding = false
             dismiss()
         } catch let failure {
             // Named, so it doesn't shadow this view's `@State var error`.
             adding = false
-            error = (failure as? LocalizedError)?.errorDescription ?? T("Couldn't add them. Try again.")
+            if case APIError.http(403, _) = failure {
+                error = T("Only people with Full access to the project can add members.")
+            } else {
+                error = (failure as? LocalizedError)?.errorDescription ?? T("Couldn't add them. Try again.")
+            }
         }
     }
 }

@@ -87,7 +87,7 @@ struct AutomationsTab: View {
                         header
                         if rules.isEmpty {
                             EmptyState(icon: "bolt", title: T("No automations yet"),
-                                       subtitle: canEdit ? T("Set one up: pick what starts it, filter which tasks, then what NEXUS should do.") : T("Project leads can set up automations here."),
+                                       subtitle: canEdit ? T("Set one up: pick what starts it, filter which tasks, then what NEXUS should do.") : T("People with Full access can set up automations here."),
                                        actionTitle: canEdit ? T("New automation") : nil,
                                        action: canEdit ? { sheet = .new } : nil)
                                 .padding(.top, 20)
@@ -396,7 +396,7 @@ struct AutomationReadView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 if !canEdit {
-                    Label(T("View only: project leads edit automations"), systemImage: "lock")
+                    Label(T("View only: people with Full access edit automations"), systemImage: "lock")
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 }
                 block(T("When"), icon: AutomationVocab.trigger(automation.trigger?.type)?.symbol ?? "bolt") {

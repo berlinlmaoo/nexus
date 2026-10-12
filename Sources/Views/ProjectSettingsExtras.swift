@@ -109,11 +109,11 @@ struct InviteByEmailView: View {
     let projectId: String
     @Environment(\.dismiss) private var dismiss
     @State private var email = ""
-    @State private var role = "GUEST"
+    /// The invitee's access (Notion's invite dropdown, owner 13 Oct 2026); default Can edit, as on the web.
+    @State private var level: ProjectAccessLevel = .edit
     @State private var busy = false
     @State private var done: String?
-
-    private let roles = ["GUEST", "MEMBER", "VIEWER"]
+    @State private var failed: String?
 
     var body: some View {
         ScrollView {
@@ -125,11 +125,18 @@ struct InviteByEmailView: View {
                         .padding(10).background(NX.muted, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                    SectionLabel("ROLE")
-                    Picker("", selection: $role) { ForEach(roles, id: \.self) { Text($0.capitalized).tag($0) } }.pickerStyle(.segmented)
+                    SectionLabel(T("Access for the person you invite"))
+                    HStack {
+                        Text(level.hint).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        Spacer(minLength: 6)
+                        AccessLevelMenu(value: level, disabled: busy, onChange: { level = $0 })
+                    }
                 }
                 if let done {
                     Text(done).font(NXFont.text(12, .semibold)).foregroundStyle(NX.success)
+                }
+                if let failed {
+                    Text(failed).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
                 }
                 Button { Task { await invite() } } label: {
                     Text(busy ? "Mengirim…" : T("Send invite")).font(NXFont.text(15, .bold))
@@ -143,9 +150,15 @@ struct InviteByEmailView: View {
 
     private func invite() async {
         busy = true
-        if (try? await APIClient.shared.inviteProjectMember(projectId: projectId, email: email.trimmingCharacters(in: .whitespaces), role: role)) != nil {
-            done = "Undangan terkirim ke \(email)."
+        done = nil; failed = nil
+        let address = email.trimmingCharacters(in: .whitespaces)
+        do {
+            _ = try await APIClient.shared.inviteProjectMember(projectId: projectId, email: address, level: level)
+            done = String(format: T("Invite sent to %@"), address)
             email = ""
+        } catch {
+            // The address stays in the field; say why it didn't go.
+            failed = T("Invite failed. Check the email and your access.")
         }
         busy = false
     }

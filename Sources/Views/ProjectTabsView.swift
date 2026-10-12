@@ -234,9 +234,19 @@ struct ListTab: View {
         }
     }
 
-    private func row(_ t: BoardTask, laneId: String, order: @escaping () -> [String]) -> some View {
-        ListTaskRow(task: t, status: statusOf(t) ?? RowStatus.plain(t), wide: hSize == .regular,
-                    onOpen: onOpen, selection: selection, order: order)
+    @ViewBuilder private func row(_ t: BoardTask, laneId: String, order: @escaping () -> [String]) -> some View {
+        let base = ListTaskRow(task: t, status: statusOf(t) ?? RowStatus.plain(t), wide: hSize == .regular,
+                               onOpen: onOpen, selection: selection, order: order)
+        if onDrop == nil {
+            // Read-only (Can view / Can comment): rows open, nothing drags.
+            base
+        } else {
+            draggableRow(base, t, laneId: laneId)
+        }
+    }
+
+    private func draggableRow(_ base: ListTaskRow, _ t: BoardTask, laneId: String) -> some View {
+        base
             .draggable(t.id)
             // Dropped on a row: just before it (manual order inside the group, or a move to that place).
             .dropDestination(for: String.self) { ids, _ in
@@ -441,6 +451,8 @@ struct CalendarTab: View {
     let tasks: [BoardTask]   // full set incl. merged subtasks, so dated subtasks land on the calendar too
     let onOpen: (String) -> Void
     var onCreate: (Date?) -> Void = { _ in }
+    /// False for Can view / Can comment (access levels round 2): no "Add task" on a date.
+    var canCreate = true
     /// Plot by (12 Oct 2026): nil = the due date, else the id of a DATE custom field.
     var dateFieldId: String? = nil
     /// Empty = the project has no DATE field, so there is nothing to choose and no menu.
@@ -513,8 +525,10 @@ struct CalendarTab: View {
                         HStack {
                             Text("\(T("Date")) \(sel)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
                             Spacer()
-                            Button { onCreate(dateFor(sel)) } label: {
-                                Label(T("Add task"), systemImage: "plus").font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+                            if canCreate {
+                                Button { onCreate(dateFor(sel)) } label: {
+                                    Label(T("Add task"), systemImage: "plus").font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+                                }
                             }
                         }
                         if let items = tasksByDay[sel], !items.isEmpty {
@@ -524,7 +538,7 @@ struct CalendarTab: View {
                         }
                     }
                 } else {
-                    Text(T("Pick a date to see its tasks, or tap + to create one."))
+                    Text(canCreate ? T("Pick a date to see its tasks, or tap + to create one.") : T("Pick a date to see its tasks."))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.top, 4)
                 }
             }.padding(16)
@@ -584,7 +598,7 @@ struct ProjectPagesTab: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         ForEach(docs) { doc in
-                            NavigationLink { DocReaderView(docId: doc.id, title: doc.title) } label: { DocCard(doc: doc) }.buttonStyle(.plain)
+                            NavigationLink { DocReaderView(docId: doc.id, title: DocTitle.display(doc.title)) } label: { DocCard(doc: doc) }.buttonStyle(.plain)
                         }
                     }.padding(16)
                 }
@@ -738,7 +752,7 @@ struct CreateTaskSheet: View {
             }
             .navigationTitle(T("New task"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction) } }
             .task { customFields = (try? await APIClient.shared.projectCustomFields(projectId)) ?? [] }
         }
     }
@@ -860,6 +874,8 @@ struct CreateTaskSheet: View {
 struct ProjectChatTab: View {
     let projectId: String
     let projectName: String
+    /// Posting needs Can comment (project access levels); reading is open to Can view.
+    var canPost: Bool = true
     @Environment(AuthStore.self) private var auth
     @State private var room: Conversation?
     @State private var loading = true
@@ -868,7 +884,8 @@ struct ProjectChatTab: View {
             if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
             else if let room {
                 ChatThreadView(conversationId: room.id, title: room.name ?? projectName,
-                               members: room.members ?? [], projectId: projectId)
+                               members: room.members ?? [], projectId: projectId,
+                               canPost: canPost && room.canPost != false)
             }
             else { TabEmpty(icon: "bubble.left.and.bubble.right", text: T("Project chat isn't available yet.")) }
         }

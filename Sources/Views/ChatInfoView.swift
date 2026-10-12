@@ -996,7 +996,7 @@ private struct ChatEditDetailsSheet: View {
             .navigationTitle(T("Edit group"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(T("Save")) { Task { await save() } }
                         .disabled(saving || nameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

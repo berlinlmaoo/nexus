@@ -42,6 +42,9 @@ struct MemberProfileView: View {
     /// progress bar needs; there is no peer equivalent for either.
     @State private var mine: Gamification?
     @State private var entries: [XpLogEntry] = []
+    /// The server sent only the public part of the log (gains; penalties and attendance rows are personal,
+    /// owner 13 Oct 2026): everyone may see that, with a line saying why the rest isn't there.
+    @State private var logRestricted = false
     @State private var teams: [Team] = []
     @State private var projects: [Project] = []
     @State private var serverName: String?
@@ -287,7 +290,7 @@ struct MemberProfileView: View {
         case .hidden:
             // Not this viewer's to see, or a server from before the record: the old ledger, for
             // the people who could always read it.
-            if canSeeActivity { activityCard }
+            if canSeeActivity || logRestricted { activityCard }
         case .loaded:
             if let record {
                 // A little more air above the period than between its cards: everything from here
@@ -389,8 +392,16 @@ struct MemberProfileView: View {
             }
             if let score, let days = r.period.days {
                 Label {
-                    Text(String(format: T("Days worked (present or permit) out of %d working days: %d days minus %d day-off allowance."), score.working, days, d?.quota ?? 4))
-                        .fixedSize(horizontal: false, vertical: true)
+                    // Joined during the period: the score counts from their first day, with a prorated
+                    // allowance (QA S-20, the board's rule too).
+                    if let owedDays = score.days, owedDays < days, let from = score.from, !from.isEmpty {
+                        Text(String(format: T("Days worked (present or permit) out of %d working days, from %@: %d days minus %d day-off allowance."),
+                                    score.working, AgendaRange.dayLabel(from), owedDays, score.allowance ?? 0))
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text(String(format: T("Days worked (present or permit) out of %d working days: %d days minus %d day-off allowance."), score.working, days, d?.quota ?? 4))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 } icon: {
                     Image(systemName: "info.circle")
                 }
@@ -649,7 +660,11 @@ struct MemberProfileView: View {
     /// The pre-record ledger, kept for a server without /api/members/<id>/record.
     private var activityCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(T("THIS PERIOD"))
+            SectionLabel(logRestricted ? T("XP gained this period") : T("THIS PERIOD"))
+            if logRestricted {
+                Text(T("Penalties and attendance details are private: only this person and the people above them can see them."))
+                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+            }
             if activityFailed {
                 Text(T("Couldn't load.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             } else if entries.isEmpty {
@@ -710,6 +725,7 @@ struct MemberProfileView: View {
             // a 0 XP entry so the penalty job knows to skip that day, and a deduction the BoD
             // removed reads 0) — a ledger line that moved nothing has nothing to say here.
             entries = (page.rows ?? []).filter { $0.amount != 0 }
+            logRestricted = page.restricted == true
             serverName = page.user?.name
             serverAvatar = page.user?.avatar
         } catch APIError.unauthorized {

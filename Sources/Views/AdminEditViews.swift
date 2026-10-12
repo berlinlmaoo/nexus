@@ -13,6 +13,44 @@ struct AdminQuest: Decodable, Identifiable, Sendable {
     let requiredCount: Int?
     let xpReward: Int?
     let deadline: String?
+    /// IP & Division Chart units it is for (13 Oct 2026); empty = everyone.
+    var unitIds: [String]? = nil
+    /// Teams from before the chart (Crew Hub, retired).
+    var teamIds: [String]? = nil
+    /// It pointed at deleted teams and was moved to everyone.
+    var teamsRetired: Bool? = nil
+}
+
+struct QuestUnitOption: Identifiable, Hashable { let id: String; let label: String }
+
+/// The pickable units of the IP & Division Chart as "IP › Division" paths (web AdminQuests unitPath).
+enum QuestUnits {
+    static func paths(_ units: [OrgUnitDTO]) -> [String: String] {
+        let byId = Dictionary(units.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var out: [String: String] = [:]
+        for u in units {
+            var parts: [String] = []
+            var cur: OrgUnitDTO? = u
+            var hops = 0
+            while let c = cur, hops < 8 {
+                parts.insert(c.name, at: 0)
+                cur = c.parentId.flatMap { byId[$0] }
+                hops += 1
+            }
+            out[u.id] = parts.joined(separator: " › ")
+        }
+        return out
+    }
+    /// Who a quest is for, as the web's quest list says it.
+    static func audience(_ q: AdminQuest, paths: [String: String]) -> String {
+        if let ids = q.unitIds, !ids.isEmpty {
+            return ids.map { paths[$0] ?? T("Deleted division") }.joined(separator: ", ")
+        }
+        if let teams = q.teamIds, !teams.isEmpty {
+            return teams.count == 1 ? T("1 team") : String(format: T("%d teams"), teams.count)
+        }
+        return q.teamsRetired == true ? T("Everyone (was for a team that no longer exists)") : T("Everyone")
+    }
 }
 /// GET /api/admin/app-installs — one row per person, their most recently seen device.
 struct AppInstalls: Decodable, Sendable {
@@ -557,6 +595,8 @@ struct AdminQuestsSection: View {
     @State private var quests: [AdminQuest] = []
     @State private var loading = true
     @State private var showCreate = false
+    /// unit id → "IP › Division", to say who each quest is for.
+    @State private var unitPaths: [String: String] = [:]
 
     var body: some View {
         Group {
@@ -587,6 +627,7 @@ struct AdminQuestsSection: View {
                     Text("+\(q.xpReward ?? 0) XP").font(NXFont.text(11, .bold)).foregroundStyle(NX.success)
                     if let d = q.deadline, let dt = ProjDate.parse(d) { Text("· s/d \(ProjDate.dayLabel(dt))").font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
                 }
+                Text("· " + QuestUnits.audience(q, paths: unitPaths)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2)
             }
             Spacer()
             Button { Task { try? await APIClient.shared.deleteAdminQuest(q.id); await load() } } label: {
@@ -597,6 +638,7 @@ struct AdminQuestsSection: View {
     private func load() async {
         guard let w = workspaceId else { loading = false; return }
         quests = (try? await APIClient.shared.adminQuests(workspaceId: w)) ?? []; loading = false
+        if let chart = try? await APIClient.shared.orgChart() { unitPaths = QuestUnits.paths(chart.units) }
     }
 }
 
@@ -612,6 +654,10 @@ struct CreateQuestSheet: View {
     @State private var deadline = Date()
     @State private var busy = false
     @State private var err: String?
+    /// Who it is for: IP & Division Chart units (owner, 13 Oct 2026; the Crew Hub teams are gone). Empty = everyone.
+    @State private var units: [QuestUnitOption] = []
+    @State private var unitsFailed = false
+    @State private var pickedUnits: Set<String> = []
 
     private let types: [(String, String)] = [("task_count", T("Complete N tasks")), ("overdue_cleared", "Clear N overdue"), ("priority_done", "Complete N Urgent"), ("has_overdue", T("Has ≥N overdue (penalty)"))]
 
@@ -634,6 +680,21 @@ struct CreateQuestSheet: View {
                             f("TARGET") { TextField("5", text: $count).keyboardType(.numberPad).font(NXFont.text(15)).padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border)) }
                             f("XP (maks 50)") { TextField("50", text: $xp).keyboardType(.numberPad).font(NXFont.text(15)).padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border)) }
                         }
+                        f(T("For")) {
+                            Text(T("(pick divisions from the IP & Division Chart · none = everyone · people in a sub-division count too)"))
+                                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+                            FlowLayout(spacing: 6) {
+                                unitChip(T("Everyone"), on: pickedUnits.isEmpty) { pickedUnits.removeAll() }
+                                ForEach(units) { u in
+                                    unitChip(u.label, on: pickedUnits.contains(u.id)) {
+                                        if pickedUnits.contains(u.id) { pickedUnits.remove(u.id) } else { pickedUnits.insert(u.id) }
+                                    }
+                                }
+                            }
+                            if unitsFailed {
+                                Text(T("Couldn't load the divisions. The quest goes to everyone.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                            }
+                        }
                         f("DEADLINE") {
                             Toggle(isOn: $hasDeadline.animation()) { Text("Pakai deadline").font(NXFont.text(14)).foregroundStyle(NX.foreground) }.tint(NX.violetText)
                             if hasDeadline { DatePicker("", selection: $deadline, displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violetText) }
@@ -646,6 +707,33 @@ struct CreateQuestSheet: View {
             }
             .navigationTitle("Quest baru").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
+            .task { await loadUnits() }
+        }
+    }
+    private func unitChip(_ label: String, on: Bool, _ tap: @escaping () -> Void) -> some View {
+        Button(action: tap) {
+            Text(label).font(NXFont.text(12, .semibold)).lineLimit(1)
+                .foregroundStyle(on ? NX.violetText : NX.mutedFg)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(on ? NX.violet.opacity(0.12) : Color.clear, in: Capsule())
+                .overlay(Capsule().strokeBorder(on ? NX.violetText : NX.border))
+                .frame(minHeight: 36).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+    /// Divisions and IPs, never the GROUP boxes (they only arrange cards), A→Z by path.
+    private func loadUnits() async {
+        guard units.isEmpty else { return }
+        do {
+            let chart = try await APIClient.shared.orgChart()
+            let paths = QuestUnits.paths(chart.units)
+            units = chart.units.filter { !$0.isGroup }
+                .map { QuestUnitOption(id: $0.id, label: paths[$0.id] ?? $0.name) }
+                .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
+            unitsFailed = false
+        } catch {
+            unitsFailed = true
         }
     }
     private func f<C: View>(_ l: String, @ViewBuilder _ c: () -> C) -> some View {
@@ -655,7 +743,8 @@ struct CreateQuestSheet: View {
         busy = true; defer { busy = false }
         let dl: String? = hasDeadline ? { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone; return f.string(from: deadline) }() : nil
         do {
-            _ = try await APIClient.shared.createAdminQuest(workspaceId: workspaceId, title: title.trimmingCharacters(in: .whitespaces), requirementType: reqType, requiredCount: Int(count) ?? 5, xpReward: min(50, max(0, Int(xp) ?? 0)), deadline: dl)
+            _ = try await APIClient.shared.createAdminQuest(workspaceId: workspaceId, title: title.trimmingCharacters(in: .whitespaces), requirementType: reqType, requiredCount: Int(count) ?? 5, xpReward: min(50, max(0, Int(xp) ?? 0)), deadline: dl,
+                                                              unitIds: Array(pickedUnits))
             await onCreated(); dismiss()
         } catch { err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't create the quest.") }
     }

@@ -117,6 +117,12 @@ extension APIClient {
         _ = try await sheetRun(try sheetRequest("/api/sheets/\(Self.sheetEnc(sheetId))/rows", method: "DELETE", body: ["rowIds": rowIds]))
     }
 
+    /// Row heights (layout only, no revision): [(rowId, height or nil = back to the default)].
+    func resizeSheetRows(_ sheetId: String, heights: [(String, Int?)]) async throws {
+        let list: [[String: Any]] = heights.map { ["rowId": $0.0, "height": $0.1.map { $0 as Any } ?? NSNull()] }
+        _ = try await sheetRun(try sheetRequest("/api/sheets/\(Self.sheetEnc(sheetId))/rows", method: "PATCH", body: ["heights": list]))
+    }
+
     func deleteSheetColumn(_ sheetId: String, columnId: String) async throws {
         _ = try await sheetRun(try sheetRequest("/api/sheets/\(Self.sheetEnc(sheetId))/columns/\(Self.sheetEnc(columnId))", method: "DELETE"))
     }

@@ -194,7 +194,8 @@ struct ReportRosterPane: View {
             }
         }
         catch {
-            drop((error as? LocalizedError)?.errorDescription ?? T("Couldn't load this"))
+            // Never the server's raw text ("Internal server error"): the shared wording (web QA B19).
+            drop(FailureText.text(error))
         }
     }
 

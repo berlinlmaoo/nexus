@@ -89,8 +89,8 @@ struct GideonMentionPicker: View {
         let low = q.lowercased()
         func score(_ t: String) -> Int { let l = t.lowercased(); return l == low ? 3 : (l.hasPrefix(low) ? 2 : (l.contains(low) ? 1 : 0)) }
         let projects = (r.projects ?? []).prefix(4).map { GideonRef(kind: "project", id: $0.id, title: $0.name, projectId: $0.id) }
-        let docs = (r.docs ?? []).filter { !$0.title.isEmpty && ($0.title != "Untitled" || "untitled".hasPrefix(low)) }.prefix(4)
-            .map { GideonRef(kind: "doc", id: $0.id, title: $0.title, projectId: nil) }
+        let docs = (r.docs ?? []).filter { !$0.title.isEmpty && ($0.title != "Untitled" || "untitled".hasPrefix(low) || T("Untitled").lowercased().hasPrefix(low)) }.prefix(4)
+            .map { GideonRef(kind: "doc", id: $0.id, title: DocTitle.display($0.title), projectId: nil) }
         let tasks = (r.tasks ?? []).prefix(6).map { GideonRef(kind: "task", id: $0.id, title: $0.title, projectId: nil) }
         hits = (Array(projects) + Array(docs) + Array(tasks)).sorted { score($0.title ?? "") > score($1.title ?? "") }
     }
@@ -135,7 +135,7 @@ struct GideonPersonalizeSheet: View {
             .navigationTitle(T("Personalize GIDEON"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button { Task { await save() } } label: { if saving { ProgressView() } else { Text(T("Save")).bold() } }
                         .disabled(saving || loading)
@@ -201,7 +201,7 @@ struct GideonSaveDocSheet: View {
             .searchable(text: $query, prompt: T("Search projects"))
             .navigationTitle(T("Save as doc"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction) } }
             .task { projects = (try? await APIClient.shared.projects()) ?? [] }
         }
     }

@@ -7,6 +7,18 @@ struct TaskDetailView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
     @State private var confirmDelete = false
+    /// The viewer's level on the task's project allows deleting (Can edit / Full access). True until known.
+    @State private var canDeleteTask = true
+    /// Can view / Can comment open the task read-only (access levels round 2, web TaskDetailPanel's disabled
+    /// fieldset): no field, title, subtask or file changes. Can comment keeps the comment box. Both true
+    /// until the project's level is known, and for an older server that sends none.
+    @State private var canEditTask = true
+    @State private var canCommentTask = true
+    /// The level, for the one-line notice ("You can comment on this task, but not change it.").
+    @State private var viewerLevel: ProjectAccessLevel?
+    /// Why the task did not load when there is nothing to show: 403 (not a member) and 404 get their own
+    /// state (LoadErrorView) instead of a grey line.
+    @State private var loadFailure: Error?
     @State private var task: TaskDetail?
     @State private var loading = true
     @State private var error: String?
@@ -38,6 +50,10 @@ struct TaskDetailView: View {
     @State private var fieldsRefresh = 0
     @FocusState private var titleFocused: Bool
     @FocusState private var descFocused: Bool
+    @FocusState private var commentFocused: Bool
+    /// ⌘K in the comment box: the link form (web QA 13 Oct 2026, the editor owns ⌘K).
+    @State private var commentLink = false
+    @State private var keysOwner = "comment-" + UUID().uuidString
 
     private let statuses = TaskStatusName.all
     private let priorities = TaskPriorityName.all
@@ -52,22 +68,34 @@ struct TaskDetailView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         if let cachedFrom { OfflineNotice(savedAt: cachedFrom) }
+                        if !canEditTask { readOnlyNotice }
                         header(task)
                         questBanner(task)
                         metaRow(task)
-                        if let pid = task.projectId { TaskCustomFieldsCard(projectId: pid, taskId: task.id, creatorLeft: task.creator?.deactivatedAt != nil, refreshToken: fieldsRefresh) }
+                        if let pid = task.projectId {
+                            TaskCustomFieldsCard(projectId: pid, taskId: task.id, creatorLeft: task.creator?.deactivatedAt != nil, refreshToken: fieldsRefresh)
+                                .disabled(!canEditTask)
+                        }
                         // The description is a block document, edited like a page (merged into the live
                         // document on the server, so web editors see it at once).
                         TaskBodyCard(taskId: task.id, projectId: task.projectId, title: task.title, refreshToken: fieldsRefresh)
+                            .disabled(!canEditTask)
                         subtasksCard(task)
                         // Payout proofs are ordinary attachments since 12 Oct 2026 (owner); Blocked by and
                         // Time tracked are gone from the task, as on the web.
-                        TaskAttachmentsCard(taskId: task.id)
+                        TaskAttachmentsCard(taskId: task.id, canEdit: canEditTask)
                         commentsCard(task)
                         TaskActivityCard(logs: task.activityLogs ?? [])
                     }
                     .padding(16)
                 }
+            } else if let loadFailure {
+                LoadErrorView(error: loadFailure, what: T("this task"),
+                              notFoundTitle: T("This task doesn't exist any more"),
+                              notFoundMessage: T("It was deleted, or the link is wrong. A BoD or manager can restore a deleted task from Control Room → Audit for 90 days."),
+                              forbiddenTitle: T("You can't open this task"),
+                              forbiddenMessage: T("It's in a project you're not a member of. Ask its Project Owner to add you."),
+                              retry: { Task { await load() } })
             } else {
                 Text(error ?? T("Couldn't load the task.")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
             }
@@ -82,9 +110,12 @@ struct TaskDetailView: View {
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button(role: .destructive) { confirmDelete = true } label: { Label(T("Delete task"), systemImage: "trash") }
-                } label: { Image(systemName: "ellipsis.circle") }
+                // Deleting a task needs Can edit or Full access (project access levels, 13 Oct 2026).
+                if canDeleteTask && task != nil {
+                    Menu {
+                        Button(role: .destructive) { confirmDelete = true } label: { Label(T("Delete task"), systemImage: "trash") }
+                    } label: { Image(systemName: "ellipsis.circle") }
+                }
             }
         }
         .alert(T("Couldn't do that"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
@@ -97,10 +128,14 @@ struct TaskDetailView: View {
         .sheet(isPresented: $showQuestComposer) {
             if let task { QuestComposerSheet(taskId: task.id, taskTitle: task.title) { await load() } }
         }
-        .task { await load() }
+        .task {
+            // A comment typed here earlier and never posted comes back into the box.
+            if newComment.isEmpty { newComment = LocalDrafts.text("comment:\(taskId)") }
+            await load()
+        }
         // Closing the task saves what was typed (bughunt C-BUG-1 / Notion): the title and the
         // description, when they differ from what the server has.
-        .onDisappear { flushEdits() }
+        .onDisappear { flushEdits(); EditorKeys.shared.release(keysOwner) }
         // Live (owner, 8 Oct 2026): a comment, a status or assignee change, a new subtask made on
         // another device shows here without a reload. Task events go only to the project's room, so
         // the screen holds it once the task has said which project it lives in.
@@ -179,6 +214,7 @@ struct TaskDetailView: View {
                     }
                 }
                 .onChange(of: titleFocused) { _, focused in if !focused { commitTitle(t) } }
+                .disabled(!canEditTask)
 
             // controls: status menu · priority menu · due
             ScrollView(.horizontal, showsIndicators: false) {
@@ -199,6 +235,8 @@ struct TaskDetailView: View {
                         controlChip(dueText(t.dueDate), system: "calendar", tone: .neutral)
                     }.buttonStyle(.plain)
                 }
+                // Not on the ScrollView: a disabled scroll view would not scroll the chips either.
+                .disabled(!canEditTask)
             }
         }
         .sheet(isPresented: $showDuePicker) {
@@ -276,7 +314,9 @@ struct TaskDetailView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 4) {
                             Text(T("Assignees")).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
-                            Image(systemName: "pencil").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.violetText)
+                            if canEditTask {
+                                Image(systemName: "pencil").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.violetText)
+                            }
                         }
                         if let people = t.assignees?.compactMap({ $0.user }).filter({ $0.name != nil }), !people.isEmpty {
                             // Faces before the names (owner, 10 Oct 2026: "profile picture tiap orang gaada").
@@ -292,6 +332,7 @@ struct TaskDetailView: View {
                         } else { Text(T("Unassigned")).font(NXFont.text(13)).foregroundStyle(NX.violetText) }
                     }
                 }.buttonStyle(.plain)
+                .disabled(!canEditTask)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(T("Due date")).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
                     Text(dueText(t.dueDate)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
@@ -368,6 +409,7 @@ struct TaskDetailView: View {
                             Image(systemName: st.isDone ? "checkmark.circle.fill" : "circle")
                                 .font(.system(size: 18)).foregroundStyle(st.isDone ? NX.success : NX.mutedFg.opacity(0.5))
                         }.buttonStyle(.plain)
+                        .disabled(!canEditTask)
                         // A subtask is a task: its title opens it, while the circle stays a
                         // separate button so ticking one off never navigates away.
                         Button { openTaskId = st.id } label: {
@@ -383,7 +425,8 @@ struct TaskDetailView: View {
                     }
                 }
             }
-            // add subtask
+            // add subtask (Can edit and up)
+            if canEditTask {
             HStack(spacing: 8) {
                 TextField(T("+ Add subtask (Enter)"), text: $newSubtask)
                     .font(NXFont.text(14)).onSubmit { addSubtask(t) }
@@ -397,6 +440,7 @@ struct TaskDetailView: View {
                 .disabled(newSubtask.trimmingCharacters(in: .whitespaces).isEmpty || addingSubtask)
             }
             .padding(.top, 4)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
     }
@@ -424,17 +468,48 @@ struct TaskDetailView: View {
                             Spacer()
                             Text(dateText(c.createdAt)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                         }
-                        Text(c.content ?? "").font(NXFont.text(13)).foregroundStyle(NX.foreground.opacity(0.9)).fixedSize(horizontal: false, vertical: true)
+                        Text(Linkified.text(c.content ?? "")).font(NXFont.text(13)).foregroundStyle(NX.foreground.opacity(0.9)).fixedSize(horizontal: false, vertical: true)
+                            .tint(NX.violetText)
                     }
                     .padding(10).frame(maxWidth: .infinity, alignment: .leading)
                     .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
             }
-            // add comment
+            // add comment (Can comment and up; Can view reads only)
+            if canCommentTask {
             HStack(spacing: 8) {
                 TextField(T("Write a comment…"), text: $newComment, axis: .vertical)
                     .font(NXFont.text(14)).lineLimit(1...3).onSubmit { addComment(t) }
+                    .focused($commentFocused)
+                    // Kept on the phone until the server has it (QA 13 Oct 2026): closing the task or a
+                    // failed post while offline never loses the words.
+                    .onChange(of: newComment) { _, v in LocalDrafts.set("comment:\(taskId)", v) }
+                    .onChange(of: commentFocused) { _, f in
+                        if f { EditorKeys.shared.claim(keysOwner) } else { EditorKeys.shared.release(keysOwner) }
+                    }
+                    // Hardware keyboard: Enter posts, Shift+Enter is a new line (web comment box).
+                    .onKeyPress(keys: [.return], phases: .down) { press in
+                        if press.modifiers.contains(.shift) || press.modifiers.contains(.option) { return .ignored }
+                        addComment(t)
+                        return .handled
+                    }
+                    .background {
+                        if commentFocused {
+                            Button("") { commentLink = true }
+                                .keyboardShortcut("k", modifiers: .command)
+                                .opacity(0).accessibilityHidden(true)
+                        }
+                    }
                     .padding(10).background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .sheet(isPresented: $commentLink) {
+                        LinkInsertSheet { text, href in
+                            // A comment is plain text: the address is written in (shown as a link).
+                            let piece = text.isEmpty ? href : "\(text) \(href)"
+                            let sep = newComment.isEmpty || newComment.hasSuffix(" ") || newComment.hasSuffix("\n") ? "" : " "
+                            newComment += sep + piece
+                            commentFocused = true
+                        }
+                    }
                 Button { addComment(t) } label: {
                     Group {
                         if postingComment { ProgressView().tint(.white).scaleEffect(0.7) }
@@ -447,18 +522,38 @@ struct TaskDetailView: View {
                 .disabled(newComment.trimmingCharacters(in: .whitespaces).isEmpty || postingComment)
             }
             .padding(.top, 4)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
     }
 
     // MARK: data
 
+    /// One line above a read-only task (web TaskDetailPanel, QA round 2).
+    private var readOnlyNotice: some View {
+        Text(viewerLevel == .comment ? T("You can comment on this task, but not change it.") : T("View only: you can read this task, but not change it."))
+            .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(NX.muted.opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
     private func load() async {
         error = nil
+        loadFailure = nil
         do {
             let t = try await APIClient.shared.taskDetail(taskId)
             task = t
             editTitle = t.title
+            // A rename that could not be sent when the task was closed offline: back in the field and
+            // sent now (a failure says so and leaves it in the field).
+            let keptTitle = LocalDrafts.text("tasktitle:\(t.id)").trimmingCharacters(in: .whitespacesAndNewlines)
+            LocalDrafts.clear("tasktitle:\(t.id)")
+            if !keptTitle.isEmpty, keptTitle != t.title {
+                editTitle = keptTitle
+                commitTitle(t)
+            }
             descDraft = blockText(t.description)
             descOriginal = descDraft
             await loadOptions(t.projectId)
@@ -468,6 +563,10 @@ struct TaskDetailView: View {
             cachedFrom = nil
         }
         catch APIError.unauthorized { auth.logout() }
+        // Not from the cache: 403 = not a member of the task's project (task read follows project access
+        // since 13 Oct 2026), 404 = deleted. Each gets its own state.
+        catch APIError.http(403, _) where task == nil { loadFailure = APIError.http(403, nil) }
+        catch APIError.http(404, _) where task == nil { loadFailure = APIError.http(404, nil) }
         catch {
             // The brief a person walked onto a site to read is worth more than the reason it could
             // not be refreshed. Editing still goes through the server and still fails loudly.
@@ -478,6 +577,7 @@ struct TaskDetailView: View {
                 descOriginal = descDraft
                 cachedFrom = hit.savedAt
             } else {
+                loadFailure = error
                 self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.")
             }
         }
@@ -508,11 +608,19 @@ struct TaskDetailView: View {
     /// older server) the project payload. Empty = plain statuses.
     private func loadOptions(_ projectId: String?) async {
         guard let projectId else { options = []; return }
+        // One project read: the access level (delete gating) and, when the options call fails, the lanes.
+        let project = try? await APIClient.shared.project(projectId)
+        if let project {
+            canDeleteTask = project.canEditProject
+            canEditTask = project.canEditProject
+            canCommentTask = project.canCommentProject
+            viewerLevel = project.viewerLevel
+        }
         if let rows = try? await APIClient.shared.statusOptions(projectId: projectId) {
             options = StatusOptions.ordered(rows.map {
                 ProjectDetail.Lane(id: $0.id, name: $0.name, tasks: nil, taskStatus: $0.taskStatus, color: $0.color, position: $0.position)
             })
-        } else if options.isEmpty, let lanes = try? await APIClient.shared.project(projectId).taskLists {
+        } else if options.isEmpty, let lanes = project?.taskLists {
             options = StatusOptions.ordered(lanes.map { $0.with(tasks: []) })
         }
     }
@@ -526,7 +634,14 @@ struct TaskDetailView: View {
         if !title.isEmpty, title != t.title { fields["title"] = title }
         guard !fields.isEmpty else { return }
         let id = t.id
-        Task { try? await APIClient.shared.updateTask(id, fields) }
+        Task {
+            do { try await APIClient.shared.updateTask(id, fields) }
+            catch {
+                // Offline / a blip while closing: the new title is kept on the phone and sent the next
+                // time this task opens (one keeper — it is cleared once the server has it).
+                if isTransientFailure(error), let title = fields["title"] as? String { LocalDrafts.set("tasktitle:\(id)", title) }
+            }
+        }
     }
     /// One field change. A refusal is said out loud (it used to vanish behind try?) and the screen goes
     /// back to what the server has.
@@ -607,7 +722,13 @@ struct TaskDetailView: View {
         let p = ISO8601DateFormatter(); p.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let d = p.date(from: iso) ?? { let q = ISO8601DateFormatter(); q.formatOptions = [.withInternetDateTime]; return q.date(from: iso) }()
         guard let d else { return "—" }
-        let f = DateFormatter(); f.dateFormat = "d MMM yyyy"; f.locale = Locale(identifier: AppLanguage.shared.lang == .id ? "id_ID" : "en_GB"); return f.string(from: d)
+        let f = DateFormatter()
+        f.locale = Locale(identifier: AppLanguage.shared.lang == .id ? "id_ID" : "en_GB")
+        // The WIB day, with its time only when it has one (web fmtDue, QA S-23): 00:00 UTC (how the apps
+        // store a picked day) and 00:00 WIB (the web's older picks) are a day, never "07:00".
+        f.timeZone = TimeZone(identifier: MyTaskGrouping.isDateOnly(d) && d.timeIntervalSince1970.truncatingRemainder(dividingBy: 86_400) == 0 ? "UTC" : "Asia/Jakarta")
+        f.dateFormat = MyTaskGrouping.isDateOnly(d) ? "d MMM yyyy" : "d MMM yyyy, HH:mm"
+        return f.string(from: d)
     }
     private func dateText(_ iso: String?) -> String {
         guard let iso else { return "" }
@@ -660,7 +781,7 @@ struct AssigneePicker: View {
             .navigationTitle(T("Assignees"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } }
+                ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction) }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { Task { saving = true; await onSave(selected); dismiss() } } label: {
                         if saving { ProgressView().tint(NX.violetText) } else { Text(T("Save")).bold() }
@@ -736,7 +857,7 @@ struct QuestComposerSheet: View {
             .background(NX.background.ignoresSafeArea())
             .navigationTitle(T("Make it a quest"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction) } }
         }
     }
 

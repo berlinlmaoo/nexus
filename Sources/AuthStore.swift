@@ -122,6 +122,8 @@ final class AuthStore {
         Keychain.clear()
         // A cached roster or task list must not outlive the session that fetched it.
         ResponseCache.clearAll()
+        // Unsent chat / comment / page drafts belong to the person signing out.
+        LocalDrafts.clearAll()
         // Including the files downloaded for offline use: those are somebody's project documents
         // and attendance selfies, and they are the last thing that should survive a handover.
         OfflineSync.shared.reset()

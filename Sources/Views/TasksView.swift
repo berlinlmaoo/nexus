@@ -1,16 +1,18 @@
 import SwiftUI
 
-/// Port of web my-tasks.tsx ("My Quest Log"): tasks grouped Hot today / In motion / Recently slayed,
-/// each a row with a done-toggle checkbox, title, lane · comments, priority chip.
+/// Port of web my-tasks.tsx: Overdue · Due soon · Later · Done recently (lib/my-tasks.ts, QA 13 Oct 2026),
+/// each most urgent first with "Show all" instead of a silent cut; each row a done-toggle checkbox, title,
+/// lane · comments · due (red with "Nd late" when overdue), priority chip. "+" makes a task assigned to you.
 struct TasksView: View {
     @Environment(AuthStore.self) private var auth
     @State private var tasks: [MyTask] = []
     @State private var loading = true
     @State private var error: String?
     @State private var openTaskId: String?
-
-    @State private var actionError: String?
-    @Environment(AppRouter.self) private var router
+    /// Groups opened past their first rows ("Show all", web QA S-04: nothing is silently cut).
+    @State private var expanded: Set<MyTaskGroupKey> = []
+    @State private var composerOpen = false
+    @State private var failure: FailureToastPayload?
     /// False when pushed into another stack — More's, where Tasks lives since Chat took its tab
     /// (owner, 9 Oct 2026). A NavigationStack nested inside another one loses the back button on
     /// everything above it (same rule as InboxView and MessagesView).
@@ -31,10 +33,17 @@ struct TasksView: View {
                 content
             }
             .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
-            .alert(T("Couldn't update the task"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
-            Button("OK") { actionError = nil }
-        } message: { Text(actionError ?? "") }
+            .failureToast($failure)
             .navigationTitle(T("My Tasks"))
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { composerOpen = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel(T("New task"))
+                }
+            }
+            .sheet(isPresented: $composerOpen) {
+                MyTaskComposer(myId: auth.session?.userId) { await load() }
+            }
             .task {
                 if tasks.isEmpty, let myId = auth.session?.userId,
                    let hit = ResponseCache.decoded("tasks-\(myId)", as: [MyTask].self) {
@@ -46,50 +55,65 @@ struct TasksView: View {
         }
     }
 
-    private var groups: [(label: String, items: [MyTask])] {
-        let open = tasks.filter { !$0.isDone }
-        let hot = open.filter { isDueSoon($0.dueDate) }
-        let motion = open.filter { !isDueSoon($0.dueDate) }
-        let done = tasks.filter { $0.isDone }
-        return [(T("Due soon"), Array(hot.prefix(8))), (T("Later"), Array(motion.prefix(12))), (T("Done recently"), Array(done.prefix(8)))]
-            .filter { !$0.1.isEmpty }
-    }
+    /// Overdue · Due soon · Later · Done recently, each most urgent first (web lib/my-tasks.ts).
+    private var groups: [MyTaskGroup] { MyTaskGrouping.group(tasks, now: Date()) }
 
     @ViewBuilder private var content: some View {
         if loading {
             SkeletonList()
         } else if let error {
             errorState(error)
-        } else if tasks.isEmpty {
+        } else if groups.isEmpty {
             EmptyState(icon: "checklist", title: T("No tasks yet"),
                        subtitle: T("Tasks assigned to you land here, from a project or a form. Nothing is waiting on you right now — pick something up from a project."),
-                       actionTitle: T("Browse projects"), actionIcon: "rectangle.stack") { router.go(.projects) }
+                       actionTitle: T("New task"), actionIcon: "plus") { composerOpen = true }
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
-                    ForEach(groups, id: \.label) { group in
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack(spacing: 6) {
-                                SectionLabel(group.label)
-                                Text("· \(group.items.count)").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg.opacity(0.7))
-                            }
-                            VStack(spacing: 0) {
-                                ForEach(Array(group.items.enumerated()), id: \.element.id) { idx, t in
-                                    if idx > 0 { Divider().overlay(NX.border) }
-                                    TaskRow(task: t, onToggle: { await toggle(t) }, onOpen: { openTaskId = t.id })
-                                }
-                            }
-                            .background {
-                                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NX.card)
-                                    .nexusShadowSoft()
-                                    .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
-                            }
-                        }
-                    }
+                    ForEach(groups) { group in groupSection(group) }
                 }
                 .padding(16)
             }
             .refreshable { await load() }
+        }
+    }
+
+    private func groupSection(_ group: MyTaskGroup) -> some View {
+        let first = group.key.firstRows
+        let all = expanded.contains(group.key)
+        let shown = all ? group.items : Array(group.items.prefix(first))
+        let now = Date()
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text(group.key.label.uppercased()).font(NXFont.text(11, .bold)).tracking(0.5)
+                    .foregroundStyle(group.key == .overdue ? NX.danger : NX.mutedFg)
+                Text("· \(group.items.count)").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg.opacity(0.7))
+            }
+            VStack(spacing: 0) {
+                ForEach(Array(shown.enumerated()), id: \.element.id) { idx, t in
+                    if idx > 0 { Divider().overlay(NX.border) }
+                    TaskRow(task: t, daysLate: MyTaskGrouping.daysLateIfOverdue(t, now: now),
+                            onToggle: { await toggle(t) }, onOpen: { openTaskId = t.id })
+                }
+                if group.items.count > first {
+                    Divider().overlay(NX.border)
+                    Button {
+                        if all { expanded.remove(group.key) } else { expanded.insert(group.key) }
+                    } label: {
+                        Text(all ? T("Show fewer") : String(format: T("Show all %d"), group.items.count))
+                            .font(NXFont.text(13, .medium)).foregroundStyle(NX.mutedFg)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .padding(.horizontal, 14)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .background {
+                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NX.card)
+                    .nexusShadowSoft()
+                    .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
+            }
         }
     }
 
@@ -111,18 +135,15 @@ struct TasksView: View {
     private func toggle(_ t: MyTask) async {
         if t.isDone { Haptics.tap() } else { Haptics.success() }
         do { _ = try await APIClient.shared.setTaskStatus(taskId: t.id, status: t.isDone ? "TODO" : "DONE") }
-        catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("The server refused it; the task is unchanged.") }
+        catch { failure = FailureToastPayload(title: T("Couldn't update the task"), error: error) }
         await load()
-    }
-
-    private func isDueSoon(_ iso: String?) -> Bool {
-        guard let d = ProjDate.parse(iso) else { return false }
-        return d.timeIntervalSinceNow < 2 * 24 * 60 * 60   // within ~2 days
     }
 }
 
 struct TaskRow: View {
     let task: MyTask
+    /// Whole WIB days late when the task is overdue (0 = due today, already past); nil = not overdue.
+    var daysLate: Int? = nil
     let onToggle: () async -> Void
     let onOpen: () -> Void
     @State private var working = false
@@ -146,12 +167,20 @@ struct TaskRow: View {
             Button(action: onOpen) {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(task.title ?? T("Untitled")).font(NXFont.text(14, .semibold))
+                        Text(UntitledText.task(task.title)).font(NXFont.text(14, .semibold))
                             .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
                             .strikethrough(task.isDone).lineLimit(1)
                         HStack(spacing: 10) {
-                            Label(task.laneName, systemImage: "sparkles").labelStyle(.titleAndIcon)
+                            Label(task.laneName, systemImage: "sparkles").labelStyle(.titleAndIcon).lineLimit(1)
                             if task.commentCount > 0 { Label("\(task.commentCount)", systemImage: "bubble.left") }
+                            // Due under the title on every width (web QA S-22: it was hidden on phones).
+                            if let due = MyTaskGrouping.dueLabel(task.dueDate) {
+                                Text(due).fontWeight(daysLate != nil ? .semibold : .regular)
+                                    .foregroundStyle(daysLate != nil ? NX.danger : NX.mutedFg)
+                            }
+                            if let late = daysLate, late > 0 {
+                                Text(String(format: T("%dd late"), late)).fontWeight(.semibold).foregroundStyle(NX.danger)
+                            }
                         }
                         .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     }

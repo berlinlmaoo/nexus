@@ -63,7 +63,10 @@ final class AppLanguage {
     func translate(_ english: String) -> String {
         guard lang == .id else { return english }
         // The dev-redesign table (LocalizationRedesign.swift) holds the strings added since 12 Oct 2026.
-        return Self.indonesian[english] ?? Self.indonesianRedesign[english] ?? english
+        // Later tables (13 Oct 2026): QA web fixes ported (work, interaction) and the spreadsheet.
+        return Self.indonesian[english] ?? Self.indonesianRedesign[english] ?? Self.indonesianQAWork[english]
+            ?? Self.indonesianQAInteract[english] ?? Self.indonesianSheetsGrid[english]
+            ?? Self.indonesianSheetsPanels[english] ?? Self.indonesianAccessR2[english] ?? english
     }
 
     /// English → Indonesian. Keys must match the source literal EXACTLY.
