@@ -4,9 +4,19 @@ import pg from 'pg'
 import { RETIRED_PROJECT_FLAGS } from '@/lib/project-retired-flags'
 import { dbIdleTimeoutMs, dbPoolMax, registerDbPool } from '@/lib/db-pool'
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient; __nexusPgPool?: pg.Pool }
 
-function createPrismaClient() {
+/**
+ * ONE connection pool per process, in production too (realtime bug 3, 13 Oct 2026). The App Router routes,
+ * the Pages API socket server and instrumentation are separate bundles, each with its own copy of this
+ * module; each used to open its own pool of DB_POOL_MAX connections, so one process could hold several
+ * pools' worth and two blue-green slots side by side ran Postgres out of connections ("too many clients")
+ * during a switch. The POOL is shared through globalThis; the PrismaClient stays per bundle, because a
+ * client must only ever see the `Prisma.sql` / `Prisma.join` fragments of its own bundle's runtime (a
+ * client shared across bundles turned those fragments into bind parameters: "syntax error at or near $3").
+ */
+function sharedPool(): pg.Pool {
+  if (globalForPrisma.__nexusPgPool) return globalForPrisma.__nexusPgPool
   const pool = new pg.Pool({
     connectionString: process.env.DATABASE_URL!,
     max: dbPoolMax(),
@@ -15,8 +25,15 @@ function createPrismaClient() {
     // Who holds the connections, by slot, in pg_stat_activity (deploy/bluegreen/RUNBOOK.md "Connections").
     application_name: `nexus-app-${process.env.NEXUS_SLOT || 'single'}`,
   })
+  // An idle client that dies (Postgres restart, network blip) must not crash the process.
+  pool.on('error', (err) => console.warn('[db] idle connection error', String(err)))
   registerDbPool(pool)
-  const adapter = new PrismaPg(pool)
+  globalForPrisma.__nexusPgPool = pool
+  return pool
+}
+
+function createPrismaClient() {
+  const adapter = new PrismaPg(sharedPool())
   // Secrets never leave the database by accident: 14 routes use `include: { user: true }` and used to
   // hand every signed-in caller the bcrypt hash of whoever they included. Omitted globally; the two
   // places that must read the hash (credentials-auth, user/password) ask with an explicit `select`.
@@ -40,14 +57,11 @@ function createPrismaClient() {
   }) as unknown as PrismaClient
 }
 
-// ONE client (and so one pool) per process, in production too (realtime bug 3, 13 Oct 2026). The App Router
-// routes, the Pages API socket server and instrumentation are separate bundles with their own copy of this
-// module; each used to build its own pool of DB_POOL_MAX connections, so one process could hold several
-// pools' worth, and two blue-green slots side by side ran Postgres out of connections ("too many clients")
-// during a switch. globalThis is shared by every bundle of the process.
 const prismaClient = globalForPrisma.prisma ?? createPrismaClient()
-globalForPrisma.prisma = prismaClient
 
 export const prisma: PrismaClient = prismaClient
+
+// Development: one client across hot reloads. Production: one client per bundle on the shared pool (above).
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prismaClient
 
 export default prismaClient

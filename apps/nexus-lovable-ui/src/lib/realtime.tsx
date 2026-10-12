@@ -361,6 +361,9 @@ export function RealtimeProvider({
           }
           if (typeof data.id !== "string") return;
           const r = applyRemoteTask(queryClient, evt === "task-created" ? "created" : "updated", data as Record<string, unknown> & { id: string });
+          // An open popup of this task re-reads its detail (section, activity, fields the card payload lacks):
+          // one request, and only in tabs that have that popup open.
+          if (evt === "task-updated") void queryClient.invalidateQueries({ queryKey: ["task", data.id] });
           // A new card may belong in a flat list (Calendar, Sheet task column) the payload can't place: refetch
           // those if on screen. An update was patched into them already.
           queueRefetch(r, evt === "task-created");
