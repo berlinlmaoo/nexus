@@ -16,6 +16,7 @@ import { TaskDetailPanel } from "@/components/tasks/TaskDetailPanel";
 import { fieldChoices } from "@/lib/project-views";
 import { qrMatrix, qrSvgPath } from "@/lib/qr";
 import { useLang } from "@/lib/lang";
+import { useRealtimeRoom } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
 import { FormHead, FormRenderer, QuestionControl } from "./FormRenderer";
 import {
@@ -795,8 +796,11 @@ function ShareTab({ url, saved, isPublic, onGoSettings }: { url: string | null; 
 
 const STATUS_LABEL: Record<string, string> = { TODO: "To do", IN_PROGRESS: "In progress", IN_REVIEW: "In review", DONE: "Done", CANCELLED: "Cancelled" };
 
-function ResponsesTab({ formId, onOpenProject, onTaskOpen }: { formId: string | null; onOpenProject: () => void; onTaskOpen: (open: boolean) => void }) {
+function ResponsesTab({ formId, projectId, onOpenProject, onTaskOpen }: { formId: string | null; projectId: string; onOpenProject: () => void; onTaskOpen: (open: boolean) => void }) {
   const { t, locale } = useLang();
+  // New responses arrive live ("form-responses-changed" to the project's room, lib/realtime.tsx), also when
+  // the builder was opened from the Forms page, where nothing else has joined the room.
+  useRealtimeRoom(projectId ? `project:${projectId}` : null);
   const [openTask, setOpenTask] = useState<string | null>(null);
   // The task popup (z-50, portalled) must sit over the builder (z-[70]): the builder steps down while it's open.
   useEffect(() => { onTaskOpen(!!openTask); }, [openTask, onTaskOpen]);
@@ -1390,7 +1394,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
         <div className="@container min-h-0 flex-1 overflow-y-auto bg-muted/20">
           {tab === "settings" && <SettingsTab draft={draft} change={change} projectName={projectName} members={members} responseCount={responseCount} />}
           {tab === "share" && <ShareTab url={url} saved={!!meta.id} isPublic={draft.isPublic} onGoSettings={() => setTab("settings")} />}
-          {tab === "responses" && <ResponsesTab formId={meta.id} onTaskOpen={setTaskOpen} onOpenProject={() => { void close(); navigate({ to: "/projects/$projectId", params: { projectId } }); }} />}
+          {tab === "responses" && <ResponsesTab formId={meta.id} projectId={projectId} onTaskOpen={setTaskOpen} onOpenProject={() => { void close(); navigate({ to: "/projects/$projectId", params: { projectId } }); }} />}
         </div>
       )}
 

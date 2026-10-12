@@ -71,6 +71,9 @@ function BlockEditorSession(props: BlockEditorProps & { onReset: () => void }) {
     const offReset = p.onReset((reason) => {
       if (!alive) return;
       if (reason === "external" || reason === "epoch") toast.message(t("This page was changed elsewhere. Showing the latest version."));
+      // Removed from the project or set to Can view while editing (server since 13 Oct 2026): it rejoins
+      // read-only, or falls back to the stored copy if it may no longer read it.
+      else if (reason === "access") toast.message(t("Your access to this page changed."));
       props.onExternalChange?.();
       onReset();
     });

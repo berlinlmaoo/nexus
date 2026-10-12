@@ -16,6 +16,8 @@ import { resolveAuditAccess } from "@/lib/audit-query"
 import { TypingGate, parseTypingEvent, type TypingRelay } from "@/lib/chat-typing"
 import { attachCollabSocket } from "@/lib/collab-rooms"
 import { onSlotDemoted } from "@/lib/bluegreen"
+import { cleanCursorMove, stripPrivatePeople } from "@/lib/realtime-payload"
+import type { Socket } from "socket.io"
 
 const log = createLogger("socket")
 
@@ -46,6 +48,15 @@ const AUDIT_ROOM = "audit"
 const AUDIT_PING_COALESCE_MS = 250
 /** How long a conversation's member list is reused for `typing` before it is read again. */
 const TYPING_MEMBERS_TTL_MS = 60_000
+/**
+ * How long a "may this user see this project" answer is trusted for a broadcast before it is read again
+ * (realtime bug 2, 13 Oct 2026). Membership changes don't wait for it: they re-check at once (ACCESS_CHANGED).
+ * This is the safety net for a path that changed access without saying so: at most this long, and only for
+ * the events sent while the re-check runs.
+ */
+const ROOM_ACCESS_TTL_MS = 30_000
+/** Re-checks after an ACCESS_CHANGED besides the immediate one: in case the change had not committed yet. */
+const ACCESS_RECHECK_DELAYS_MS = [300, 2_500]
 
 const ALLOWED_ORIGINS = [
   process.env.NEXTAUTH_URL || "http://localhost:3000",
@@ -118,29 +129,148 @@ export function initializeSocketServer(
    * Deny-by-default: an unrecognised prefix is refused rather than guessed at. The four below are
    * the only rooms either app actually joins (grep `useRealtimeRoom` / `join-room`).
    */
-  async function canJoinRoom(userId: string, room: string): Promise<boolean> {
+  async function canJoinRoom(userId: string, room: string): Promise<{ ok: boolean; projectId?: string }> {
     // `workspace:<id>`, `workspace-all` and `audit` are not joinable here on purpose: membership in
     // those comes from the database at connect time (serverAssignedRooms), never from a client request.
     const sep = room.indexOf(":")
-    if (sep < 1) return false
+    if (sep < 1) return { ok: false }
     const kind = room.slice(0, sep)
     const id = room.slice(sep + 1)
-    if (!id) return false
+    if (!id) return { ok: false }
 
     switch (kind) {
       // Your own notification stream, and nobody else's.
       case "user":
-        return id === userId
-      case "project":
-        return (await checkProjectAccess(userId, id, ["VIEWER"])).allowed
+        return { ok: id === userId }
+      case "project": {
+        const ok = (await checkProjectAccess(userId, id, ["VIEWER"])).allowed
+        rememberAccess(userId, id, ok)
+        return { ok, projectId: id }
+      }
       // A member row, and for a group/DM still being in its workspace (lib/chat-access.ts) — the
       // row alone outlived a removal from the company until 8 Oct 2026.
       case "conversation":
-        return (await conversationMemberAccess(userId, id)).ok
-      case "sheet":
-        return (await resolveSheetAccess(userId, id, ["VIEWER"])).allowed
+        return { ok: (await conversationMemberAccess(userId, id)).ok }
+      case "sheet": {
+        const access = await resolveSheetAccess(userId, id, ["VIEWER"])
+        if (!access.allowed) return { ok: false }
+        rememberAccess(userId, access.sheet.projectId, true)
+        return { ok: true, projectId: access.sheet.projectId }
+      }
       default:
-        return false
+        return { ok: false }
+    }
+  }
+
+  // ── Project access of the sockets in project / sheet rooms (realtime bugs 1-2, 13 Oct 2026) ──
+  //
+  // A socket was checked once, at join-room, and then heard everything said in the room until it
+  // reconnected, even after its user was removed from the project. Now:
+  //  - every project:/sheet: room a socket is in remembers its project (socket.data.roomProjects);
+  //  - ACCESS_CHANGED (member removed / level changed / out of the workspace / offboarded) re-checks those
+  //    users' rooms at once and takes the socket out ("join-denied" { room, reason: "revoked" } tells it);
+  //  - every broadcast into such a room skips a socket whose user is known to have lost access, and
+  //    re-reads an answer older than ROOM_ACCESS_TTL_MS in the background (safety net for any other path).
+  type AccessEntry = { ok: boolean; at: number; pending: Promise<boolean> | null }
+  const roomAccess = new Map<string, AccessEntry>()
+  const accessKey = (userId: string, projectId: string) => `${userId}|${projectId}`
+  function rememberAccess(userId: string, projectId: string, ok: boolean) {
+    roomAccess.set(accessKey(userId, projectId), { ok, at: Date.now(), pending: null })
+  }
+  function roomProjectsOf(socket: Socket): Map<string, string> {
+    let m = socket.data.roomProjects as Map<string, string> | undefined
+    if (!m) { m = new Map(); socket.data.roomProjects = m }
+    return m
+  }
+  /** Read the user's access to the project again; evict their sockets from its rooms if it is gone. */
+  function recheckAccess(userId: string, projectId: string): Promise<boolean> {
+    const key = accessKey(userId, projectId)
+    const hit = roomAccess.get(key)
+    if (hit?.pending) return hit.pending
+    const pending = checkProjectAccess(userId, projectId, ["VIEWER"])
+      .then((r) => r.allowed)
+      .catch((error) => {
+        log.warn("room access re-check failed; kept as it was", { userId, projectId, error: String(error) })
+        return hit?.ok ?? true
+      })
+      .then((ok) => {
+        roomAccess.set(key, { ok, at: Date.now(), pending: null })
+        if (!ok) evictFromProject(userId, projectId)
+        return ok
+      })
+    roomAccess.set(key, { ok: hit?.ok ?? true, at: hit?.at ?? 0, pending })
+    return pending
+  }
+  /** Every local socket of this user leaves every room of this project (project:<id> and its sheets). */
+  function evictFromProject(userId: string, projectId: string) {
+    for (const socket of io.sockets.sockets.values()) {
+      if (socket.data.userId !== userId) continue
+      for (const [room, pid] of [...roomProjectsOf(socket)]) {
+        if (pid !== projectId) continue
+        roomProjectsOf(socket).delete(room)
+        presenceLeave(socket, room)
+        socket.leave(room)
+        socket.emit("join-denied", { room, reason: "revoked" })
+        log.info("access revoked: socket taken out of the room", { userId, room })
+      }
+    }
+  }
+  /**
+   * Emit into a project:/sheet: room, skipping sockets whose user is known to have lost access to the
+   * room's project. A stale answer is re-read in the background (the socket is evicted if it fails).
+   */
+  function emitGuarded(room: string, event: string, payload: unknown) {
+    const ids = io.sockets.adapter.rooms.get(room)
+    if (!ids || ids.size === 0) return
+    const now = Date.now()
+    const skip: string[] = []
+    for (const sid of ids) {
+      const socket = io.sockets.sockets.get(sid)
+      const userId = socket?.data.userId as string | undefined
+      const projectId = socket ? roomProjectsOf(socket).get(room) : undefined
+      if (!socket || !userId || !projectId) continue
+      let hit = roomAccess.get(accessKey(userId, projectId))
+      if (!hit?.pending && (!hit || now - hit.at > ROOM_ACCESS_TTL_MS)) {
+        void recheckAccess(userId, projectId)
+        hit = roomAccess.get(accessKey(userId, projectId))
+      }
+      if (hit?.pending) {
+        // Being re-read (an access change, or an answer past its TTL): this socket gets the event once the
+        // answer says yes — a few ms later, in order (the callbacks run in the order they were added).
+        skip.push(sid)
+        const target = socket
+        void hit.pending.then((ok) => { if (ok && target.connected && target.rooms.has(room)) target.emit(event, payload) })
+        continue
+      }
+      if (hit && !hit.ok) skip.push(sid)
+    }
+    ;(skip.length ? io.to(room).except(skip) : io.to(room)).emit(event, payload)
+  }
+  /** ACCESS_CHANGED: forget the cached answers and re-check the rooms of the users (or project) named. */
+  function onAccessChanged(projectId: string | null, userIds: string[] | null) {
+    const users = userIds ? new Set(userIds) : null
+    for (const key of [...roomAccess.keys()]) {
+      const [u, p] = key.split("|")
+      if ((users === null || users.has(u)) && (projectId === null || p === projectId)) roomAccess.delete(key)
+    }
+    const pairs = new Set<string>()
+    for (const socket of io.sockets.sockets.values()) {
+      const userId = socket.data.userId as string | undefined
+      if (!userId || (users && !users.has(userId))) continue
+      for (const pid of roomProjectsOf(socket).values()) if (projectId === null || pid === projectId) pairs.add(accessKey(userId, pid))
+    }
+    if (pairs.size === 0) return
+    // At once (events for them wait for the answer, see emitGuarded), then again after the delays in case
+    // the change was announced inside a transaction that had not committed yet.
+    for (const key of pairs) { const [u, p] = key.split("|"); void recheckAccess(u, p) }
+    for (const delay of ACCESS_RECHECK_DELAYS_MS) {
+      setTimeout(() => {
+        for (const key of pairs) {
+          const [u, p] = key.split("|")
+          roomAccess.delete(key)
+          void recheckAccess(u, p)
+        }
+      }, delay).unref?.()
     }
   }
 
@@ -216,6 +346,25 @@ export function initializeSocketServer(
       sheetId: room.slice(6),
       members: Array.from(roomPresence.get(room)?.values() ?? []),
     })
+  }
+
+  /**
+   * Take a socket out of a room's legacy presence (`presence-update` / `presence-leave` / `sheet-presence`).
+   * `presence-leave` only when that user has no other socket left in the room: one of two open tabs closing
+   * used to announce the person as gone (realtime bug 8, 13 Oct 2026).
+   */
+  function presenceLeave(socket: Socket, room: string) {
+    ;(socket.data.presenceRooms as Set<string> | undefined)?.delete(room)
+    const members = roomPresence.get(room)
+    if (!members) return
+    const member = members.get(socket.id)
+    if (!members.delete(socket.id)) return
+    if (members.size === 0) roomPresence.delete(room)
+    else io.to(room).emit("presence-update", Array.from(members.values()))
+    if (member && ![...members.values()].some((m) => m.userId === member.userId)) {
+      io.to(room).except(socket.id).emit("presence-leave", { userId: member.userId })
+    }
+    broadcastSheetPresence(room)
   }
 
   // Authenticate socket connections via JWT
@@ -297,7 +446,8 @@ export function initializeSocketServer(
 
     socket.on("join-room", async (data: { room: string; userId: string; name: string; avatar?: string | null }) => {
       const me = socket.data.userId as string
-      if (!data?.room || !(await canJoinRoom(me, data.room))) {
+      const verdict = typeof data?.room === "string" && data.room.length <= 200 ? await canJoinRoom(me, data.room) : { ok: false }
+      if (!data?.room || !verdict.ok) {
         // Told, not ignored: a silent no-op looks identical to a working join from the client side,
         // which turns a permissions bug into an unexplained dead feature.
         socket.emit("join-denied", { room: data?.room ?? null })
@@ -308,8 +458,10 @@ export function initializeSocketServer(
       // own userId and name here, which meant anyone could show up in a presence list under someone
       // else's name. Only the avatar (cosmetic, not in the token) still comes from the client.
       const name = (socket.data.userName as string) || data.name || "Seseorang"
+      const avatar = typeof data.avatar === "string" && data.avatar.length <= 500 ? data.avatar : null
       currentRoom = data.room
-      currentUser = { userId: me, name, avatar: data.avatar || null }
+      currentUser = { userId: me, name, avatar }
+      if (verdict.projectId) roomProjectsOf(socket).set(data.room, verdict.projectId)
 
       socket.join(data.room)
 
@@ -318,51 +470,35 @@ export function initializeSocketServer(
         roomPresence.set(data.room, new Map())
       }
       const members = roomPresence.get(data.room)!
-      const color = getColor(members.size)
-      members.set(socket.id, {
-        userId: me,
-        name,
-        avatar: data.avatar || null,
-        color,
-        lastSeen: Date.now(),
-      })
+      const already = members.get(socket.id)
+      const otherTab = [...members.entries()].some(([sid, m]) => sid !== socket.id && m.userId === me)
+      const color = already?.color ?? getColor(members.size)
+      members.set(socket.id, { userId: me, name, avatar, color, lastSeen: Date.now() })
+      ;((socket.data.presenceRooms as Set<string> | undefined) ?? (socket.data.presenceRooms = new Set<string>())).add(data.room)
 
       // Broadcast presence update
       io.to(data.room).emit("presence-update", Array.from(members.values()))
       broadcastSheetPresence(data.room)
-      socket.to(data.room).emit("presence-join", {
-        userId: me,
-        name,
-        avatar: data.avatar || null,
-        color,
-      })
+      // A rejoin (reconnect, a second tab of the same person) is not a new arrival.
+      if (!already && !otherTab) socket.to(data.room).emit("presence-join", { userId: me, name, avatar, color })
     })
 
     socket.on("leave-room", (room: string) => {
+      if (typeof room !== "string") return
       socket.leave(room)
+      roomProjectsOf(socket).delete(room)
       // Left the thread while typing in it: the others' dots go now, not when they time out.
-      if (typeof room === "string" && room.startsWith("conversation:") && typingGate.stop(room)) {
+      if (room.startsWith("conversation:") && typingGate.stop(room)) {
         relayTyping(typingFrom(room.slice("conversation:".length), false))
       }
-      if (roomPresence.has(room)) {
-        const members = roomPresence.get(room)!
-        const member = members.get(socket.id)
-        members.delete(socket.id)
-        if (members.size === 0) {
-          roomPresence.delete(room)
-        } else {
-          io.to(room).emit("presence-update", Array.from(members.values()))
-        }
-        if (member) {
-          socket.to(room).emit("presence-leave", { userId: member.userId })
-        }
-        broadcastSheetPresence(room)
-      }
-      currentRoom = null
+      presenceLeave(socket, room)
+      if (currentRoom === room) currentRoom = null
     })
 
-    socket.on("cursor-move", (data: { x: number; y: number; blockId?: string }) => {
-      if (!currentRoom || !currentUser) return
+    // Legacy live cursors (the old Next.js pages): a position only, and only into a room this socket is in.
+    socket.on("cursor-move", (raw: unknown) => {
+      const data = cleanCursorMove(raw)
+      if (!data || !currentRoom || !currentUser || !socket.rooms.has(currentRoom)) return
       socket.to(currentRoom).emit("cursor-move", {
         socketId: socket.id,
         userId: currentUser.userId,
@@ -372,13 +508,10 @@ export function initializeSocketServer(
       })
     })
 
-    socket.on("content-change", (data: { blockId: string; content: string; type?: string }) => {
-      if (!currentRoom || !currentUser) return
-      socket.to(currentRoom).emit("content-change", {
-        userId: currentUser.userId,
-        ...data,
-      })
-    })
+    // `content-change` and `task-update` used to be relayed from one client to the room as they came —
+    // anything a client sent, under its own name, to everyone in the room. No released client sends either
+    // (web: none since the Phaethon SPA; iOS/Android: never — checked 13 Oct 2026), and every real change
+    // already travels from the server after it is saved (task-updated, doc-changed, ydoc:update). Dropped.
 
     // Which cell each person is parked on. Relayed client-to-client because it's ephemeral and
     // worthless to forge, but still only into a room this socket has actually been admitted to —
@@ -409,73 +542,67 @@ export function initializeSocketServer(
       relayTyping(typingFrom(event.conversationId, event.typing))
     })
 
-    socket.on("task-update", (data: Record<string, unknown>) => {
-      if (!currentRoom) return
-      socket.to(currentRoom).emit("task-update", data)
-    })
-
     socket.on("heartbeat", () => {
-      if (!currentRoom) return
-      const members = roomPresence.get(currentRoom)
-      if (members?.has(socket.id)) {
-        members.get(socket.id)!.lastSeen = Date.now()
+      const now = Date.now()
+      for (const room of (socket.data.presenceRooms as Set<string> | undefined) ?? []) {
+        const member = roomPresence.get(room)?.get(socket.id)
+        if (member) member.lastSeen = now
       }
     })
 
     socket.on("disconnect", () => {
       // Gone mid-sentence (tab closed, app backgrounded, link dropped): stop the dots everywhere.
       for (const room of typingGate.stopAll()) relayTyping(typingFrom(room.slice("conversation:".length), false))
-      if (currentRoom && roomPresence.has(currentRoom)) {
-        const members = roomPresence.get(currentRoom)!
-        const member = members.get(socket.id)
-        members.delete(socket.id)
-        if (members.size === 0) {
-          roomPresence.delete(currentRoom)
-        } else {
-          io.to(currentRoom).emit("presence-update", Array.from(members.values()))
-        }
-        if (member) {
-          io.to(currentRoom).emit("presence-leave", { userId: member.userId })
-        }
-        broadcastSheetPresence(currentRoom)
-      }
+      // Every room it was present in, not only the last one joined (the others used to linger for 90 s and
+      // then be announced as "left" by the sweep, realtime bug 8).
+      for (const room of [...((socket.data.presenceRooms as Set<string> | undefined) ?? [])]) presenceLeave(socket, room)
     })
   })
 
-  // Cleanup stale connections every 60s
+  // Presence of sockets that are gone without a disconnect event (should not happen; belt and braces). A
+  // CONNECTED socket stays present however long it has been quiet: the old 90 s heartbeat rule announced
+  // people as "left" from every room but the last one they joined (only that one got heartbeats).
   setInterval(() => {
-    const staleThreshold = Date.now() - 90000 // 90s
-    const rooms = Array.from(roomPresence.entries())
-    for (const [room, members] of rooms) {
-      const entries = Array.from(members.entries())
-      for (const [socketId, member] of entries) {
-        if (member.lastSeen < staleThreshold) {
-          members.delete(socketId)
-          io.to(room).emit("presence-leave", { userId: member.userId })
-        }
+    for (const [room, members] of Array.from(roomPresence.entries())) {
+      for (const socketId of Array.from(members.keys())) {
+        if (io.sockets.sockets.has(socketId)) continue
+        const member = members.get(socketId)!
+        members.delete(socketId)
+        if (![...members.values()].some((m) => m.userId === member.userId)) io.to(room).emit("presence-leave", { userId: member.userId })
+        if (members.size === 0) roomPresence.delete(room)
+        else io.to(room).emit("presence-update", Array.from(members.values()))
+        broadcastSheetPresence(room)
       }
-      if (members.size === 0) roomPresence.delete(room)
-      else io.to(room).emit("presence-update", Array.from(members.values()))
-      broadcastSheetPresence(room)
     }
-  }, 60000)
+  }, 60000).unref?.()
 
   // ── Event bus → Socket.IO bridge ───────────────────────────
   // API routes publish to the event bus; we relay to Socket.IO rooms.
+  // Project rooms: emitGuarded (above) skips a socket whose user lost access; people in the payload are cut
+  // down to id/name/avatar (lib/realtime-payload.ts) — the task routes load full user rows.
   eventBus.on(BUS_EVENTS.TASK_CREATED, (data: { projectId: string; task: unknown }) => {
-    io.to(`project:${data.projectId}`).emit("task-created", data.task)
+    emitGuarded(`project:${data.projectId}`, "task-created", stripPrivatePeople(data.task))
   })
 
   eventBus.on(BUS_EVENTS.TASK_UPDATED, (data: { projectId: string; task: unknown }) => {
-    io.to(`project:${data.projectId}`).emit("task-updated", data.task)
+    emitGuarded(`project:${data.projectId}`, "task-updated", stripPrivatePeople(data.task))
   })
 
   eventBus.on(BUS_EVENTS.TASK_DELETED, (data: { projectId: string; taskId: string }) => {
-    io.to(`project:${data.projectId}`).emit("task-deleted", { taskId: data.taskId })
+    emitGuarded(`project:${data.projectId}`, "task-deleted", { taskId: data.taskId })
   })
 
   eventBus.on(BUS_EVENTS.COMMENT_ADDED, (data: { projectId: string; taskId: string; comment: unknown }) => {
-    io.to(`project:${data.projectId}`).emit("comment-added", { taskId: data.taskId, comment: data.comment })
+    emitGuarded(`project:${data.projectId}`, "comment-added", { taskId: data.taskId, comment: stripPrivatePeople(data.comment) })
+  })
+
+  eventBus.on(BUS_EVENTS.ACCESS_CHANGED, (data: { projectId: string | null; userIds: string[] | null }) => {
+    onAccessChanged(data?.projectId ?? null, Array.isArray(data?.userIds) ? data.userIds : null)
+  })
+
+  // A form got a response: its owner's open Responses tab refetches (realtime bug 6). Ids only.
+  eventBus.on(BUS_EVENTS.FORM_RESPONSES_CHANGED, (data: { projectId: string; formId: string }) => {
+    emitGuarded(`project:${data.projectId}`, "form-responses-changed", { projectId: data.projectId, formId: data.formId })
   })
 
   eventBus.on(BUS_EVENTS.NOTIFICATION, (data: { userId: string; notification: unknown }) => {
@@ -483,7 +610,7 @@ export function initializeSocketServer(
   })
 
   eventBus.on(BUS_EVENTS.SPRINT_UPDATED, (data: { projectId: string; sprint: unknown }) => {
-    io.to(`project:${data.projectId}`).emit("sprint-updated", data.sprint)
+    emitGuarded(`project:${data.projectId}`, "sprint-updated", stripPrivatePeople(data.sprint))
   })
 
   // Re-checked per socket against the roster the route sent along: a socket that joined while its user
@@ -532,11 +659,11 @@ export function initializeSocketServer(
 
   // originTab (additive): the browser tab that wrote it, so only that tab skips the echo.
   eventBus.on(BUS_EVENTS.SHEET_CELLS, (data: { sheetId: string; rows: unknown; actorId: string; originTab?: string | null }) => {
-    io.to(`sheet:${data.sheetId}`).emit("sheet-cells", { rows: data.rows, actorId: data.actorId, originTab: data.originTab ?? null })
+    emitGuarded(`sheet:${data.sheetId}`, "sheet-cells", { rows: data.rows, actorId: data.actorId, originTab: data.originTab ?? null })
   })
 
   eventBus.on(BUS_EVENTS.SHEET_STRUCTURE, (data: { sheetId: string; actorId: string; originTab?: string | null }) => {
-    io.to(`sheet:${data.sheetId}`).emit("sheet-structure", { actorId: data.actorId, originTab: data.originTab ?? null })
+    emitGuarded(`sheet:${data.sheetId}`, "sheet-structure", { actorId: data.actorId, originTab: data.originTab ?? null })
   })
 
   // Projects/folders of a workspace changed (lib/socket-emitter.ts emitWorkspaceChanged). The payload is
@@ -551,25 +678,25 @@ export function initializeSocketServer(
   // A deal of a Pipeline Dashboard project changed (lib/socket-emitter.ts emitPipelineChanged): ids only,
   // to the project's room, which a socket joins only with VIEWER access to the project.
   eventBus.on(BUS_EVENTS.PIPELINE_CHANGED, (data: { projectId: string; dealId: string | null; actorId: string | null }) => {
-    io.to(`project:${data.projectId}`).emit("pipeline-changed", { projectId: data.projectId, dealId: data.dealId, actorId: data.actorId })
+    emitGuarded(`project:${data.projectId}`, "pipeline-changed", { projectId: data.projectId, dealId: data.dealId, actorId: data.actorId })
   })
 
   // An event or target of an Outlet Sales Dashboard project changed (lib/socket-emitter.ts
   // emitOutletSalesChanged): ids only, to the project's room (VIEWER access to join, as for the pipeline).
   eventBus.on(BUS_EVENTS.OUTLET_SALES_CHANGED, (data: { projectId: string; eventId: string | null; month: string | null; actorId: string | null }) => {
-    io.to(`project:${data.projectId}`).emit("outlet-sales-changed", { projectId: data.projectId, eventId: data.eventId, month: data.month, actorId: data.actorId })
+    emitGuarded(`project:${data.projectId}`, "outlet-sales-changed", { projectId: data.projectId, eventId: data.eventId, month: data.month, actorId: data.actorId })
   })
 
   // A project's automations changed or ran (lib/socket-emitter.ts emitAutomationsChanged): ids only, to the
   // project's room (VIEWER access to join). The Automations tab refetches its list and run log.
   eventBus.on(BUS_EVENTS.AUTOMATIONS_CHANGED, (data: { projectId: string; automationId: string | null; actorId: string | null }) => {
-    io.to(`project:${data.projectId}`).emit("automations-changed", { projectId: data.projectId, automationId: data.automationId, actorId: data.actorId })
+    emitGuarded(`project:${data.projectId}`, "automations-changed", { projectId: data.projectId, automationId: data.automationId, actorId: data.actorId })
   })
 
   // A doc's body or header changed (block editor, lib/block-bodies.ts / docs routes): ids only, to the
   // project's room, so its Pages list and any open copy of the page refetch.
   eventBus.on(BUS_EVENTS.DOC_CHANGED, (data: { projectId: string; docId: string; actorId: string | null }) => {
-    io.to(`project:${data.projectId}`).emit("doc-changed", { projectId: data.projectId, docId: data.docId, actorId: data.actorId })
+    emitGuarded(`project:${data.projectId}`, "doc-changed", { projectId: data.projectId, docId: data.docId, actorId: data.actorId })
   })
 
   // Some audit row was written. Folded: the first write of a burst starts the clock and the ping goes

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { restorableDelete } from "@/lib/deletion-snapshot"
+import { emitFormResponsesChanged, emitTaskDeleted } from "@/lib/socket-emitter"
 import { amountOf, categoryFields, columnOf, dateOf, legacyProcStatus, needsAction, proofAttachmentsWhere, submissionKind } from "@/lib/my-submissions"
 
 type FormField = { id: string; name?: string; type?: string }
@@ -134,6 +135,13 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         await tx.formSubmission.delete({ where: { id: sub.id } })
       },
     })
+
+    // Live: the card leaves every open board, and the form's open Responses tab drops the row (13 Oct 2026;
+    // the task used to vanish only on the next refetch).
+    if (projectId) {
+      if (taskId) emitTaskDeleted(projectId, taskId)
+      emitFormResponsesChanged(projectId, sub.formId)
+    }
 
     return NextResponse.json({ deleted: true })
   } catch (error) {

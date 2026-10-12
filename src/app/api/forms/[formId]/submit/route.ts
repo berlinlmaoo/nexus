@@ -15,7 +15,7 @@ import {
 import { getFormAccessStatus } from "@/lib/form-access-schedule"
 import { executeAutomations, runAutomations } from "@/lib/automation-engine"
 import { resolveAutoAssignAssigneeIds } from "@/lib/project-auto-assign"
-import { emitTaskCreated } from "@/lib/socket-emitter"
+import { emitFormResponsesChanged, emitTaskCreated } from "@/lib/socket-emitter"
 import { formResponseLimit, normalizeFormSettings, RESPONSE_LIMIT_MESSAGE } from "@/lib/form-settings"
 import { createInAppNotification } from "@/lib/notification-service"
 import { pickStatusSection } from "@/lib/status-sections"
@@ -681,6 +681,8 @@ export async function POST(
 
 
     emitTaskCreated(form.projectId, JSON.parse(JSON.stringify(result.task)))
+    // The form's open Responses tab (web FormStudio) refetches its list (realtime bug 6, 13 Oct 2026).
+    emitFormResponsesChanged(form.projectId, form.id)
 
     // "Notify people" (form settings, 12 Oct 2026): in-app + push to each chosen project member, never
     // to the sender. Fire-and-forget: a failed notification must not fail the response.

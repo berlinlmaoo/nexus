@@ -43,4 +43,13 @@ export const BUS_EVENTS = {
   DOC_CHANGED: "doc-changed",
   /** A block-editor body was written outside its live room (REST save, an app) → that room reloads (lib/collab-rooms.ts). */
   COLLAB_EXTERNAL_WRITE: "collab-external-write",
+  /**
+   * Someone's access to a project changed (removed, level changed, out of the workspace, offboarded): the
+   * socket server re-checks those users' open project/sheet/live-page rooms at once and takes them out or
+   * down to read-only (13 Oct 2026, realtime bugs 1-2). `projectId` null = every project; `userIds` null =
+   * everyone in that project's rooms.
+   */
+  ACCESS_CHANGED: "access-changed",
+  /** A form got a response (or lost one) → `project:<id>` ("form-responses-changed", ids only). */
+  FORM_RESPONSES_CHANGED: "form-responses-changed",
 } as const

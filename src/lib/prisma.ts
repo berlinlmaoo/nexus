@@ -2,16 +2,20 @@ import { PrismaClient } from '@/generated/prisma'
 import { PrismaPg } from '@prisma/adapter-pg'
 import pg from 'pg'
 import { RETIRED_PROJECT_FLAGS } from '@/lib/project-retired-flags'
+import { dbIdleTimeoutMs, dbPoolMax, registerDbPool } from '@/lib/db-pool'
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
 
 function createPrismaClient() {
   const pool = new pg.Pool({
     connectionString: process.env.DATABASE_URL!,
-    max: parseInt(process.env.DB_POOL_MAX || '20', 10),
-    idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000', 10),
+    max: dbPoolMax(),
+    idleTimeoutMillis: dbIdleTimeoutMs(),
     connectionTimeoutMillis: parseInt(process.env.DB_CONNECT_TIMEOUT || '5000', 10),
+    // Who holds the connections, by slot, in pg_stat_activity (deploy/bluegreen/RUNBOOK.md "Connections").
+    application_name: `nexus-app-${process.env.NEXUS_SLOT || 'single'}`,
   })
+  registerDbPool(pool)
   const adapter = new PrismaPg(pool)
   // Secrets never leave the database by accident: 14 routes use `include: { user: true }` and used to
   // hand every signed-in caller the bcrypt hash of whoever they included. Omitted globally; the two
@@ -36,10 +40,14 @@ function createPrismaClient() {
   }) as unknown as PrismaClient
 }
 
+// ONE client (and so one pool) per process, in production too (realtime bug 3, 13 Oct 2026). The App Router
+// routes, the Pages API socket server and instrumentation are separate bundles with their own copy of this
+// module; each used to build its own pool of DB_POOL_MAX connections, so one process could hold several
+// pools' worth, and two blue-green slots side by side ran Postgres out of connections ("too many clients")
+// during a switch. globalThis is shared by every bundle of the process.
 const prismaClient = globalForPrisma.prisma ?? createPrismaClient()
+globalForPrisma.prisma = prismaClient
 
 export const prisma: PrismaClient = prismaClient
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prismaClient
 
 export default prismaClient

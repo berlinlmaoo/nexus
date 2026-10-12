@@ -353,7 +353,10 @@ export async function POST(request: NextRequest) {
 
 
     // Real-time: broadcast to project room
-    emitTaskCreated(taskList.projectId, JSON.parse(JSON.stringify(task)))
+    // The seeded custom field values travel with the event (additive), so an open board can add the card
+    // as it is without refetching the whole project (realtime bug 5, 13 Oct 2026). The response is unchanged.
+    const customFieldValues = await prisma.customFieldValue.findMany({ where: { taskId: task.id }, select: { customFieldId: true, value: true } }).catch(() => null)
+    emitTaskCreated(taskList.projectId, JSON.parse(JSON.stringify(customFieldValues ? { ...task, customFieldValues } : task)))
 
     return NextResponse.json(task, { status: 201 })
   } catch (error) {

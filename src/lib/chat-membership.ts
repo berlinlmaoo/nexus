@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma"
 import { createLogger } from "@/lib/logger"
 import { isDeletedAccountEmail } from "@/lib/account-deletion"
 import { groupRoomAllows } from "@/lib/chat-rules"
-import { emitConversationMembersRemoved, emitConversationUpdated } from "@/lib/socket-emitter"
+import { emitAccessChanged, emitConversationMembersRemoved, emitConversationUpdated } from "@/lib/socket-emitter"
 
 /**
  * Keeps ConversationMember in step with who may actually be in a room (CHAT-CONTRACT "Membership").
@@ -211,6 +211,9 @@ export async function syncProjectRoomSafe(projectId: string, why: string): Promi
 }
 
 export async function syncUserRoomsSafe(userId: string, why: string): Promise<void> {
+  // Every caller is a change to who this person is in the org (workspace joined/left/role, team, offboarded,
+  // account deleted): their open project/sheet/live-page rooms are re-checked as well (realtime bugs 1-2).
+  emitAccessChanged(null, [userId])
   try {
     await syncUserRooms(userId)
   } catch (error) {

@@ -76,7 +76,7 @@ export async function shrinkRangesAfterDeletion(
           UPDATE "SheetRow"
           SET "cells" = "cells" || ${JSON.stringify(patch)}::jsonb,
               "updatedById" = ${userId},
-              "updatedAt" = NOW()
+              "updatedAt" = GREATEST(clock_timestamp()::timestamp(3), "updatedAt" + interval '1 millisecond')
           WHERE "id" = ${rowId} AND "sheetId" = ${sheetId}
           RETURNING "id", "cells", "updatedAt"
         `

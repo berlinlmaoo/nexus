@@ -28,6 +28,25 @@ export function emitCommentAdded(projectId: string, taskId: string, comment: Rec
   pingSubmitterLater(taskId)
 }
 
+/**
+ * Access to a project changed for these users (or, with `userIds` null, for whoever is in its rooms). The
+ * socket server re-checks their open realtime rooms (project, sheet, live page) and evicts or downgrades
+ * them; without this a removed member kept receiving events and could keep typing into an open page until
+ * they reconnected. `projectId` null = re-check every project room those users are in (workspace removal,
+ * offboarding, a role change). Never throws; safe to call inside a transaction (the server re-checks
+ * twice, shortly after and a couple of seconds later, so a write committed a moment later is still seen).
+ */
+export function emitAccessChanged(projectId: string | null, userIds: Array<string | null | undefined> | null) {
+  const ids = userIds === null ? null : Array.from(new Set(userIds.filter((x): x is string => typeof x === "string" && !!x)))
+  if (ids !== null && ids.length === 0) return
+  eventBus.emit(BUS_EVENTS.ACCESS_CHANGED, { projectId, userIds: ids })
+}
+
+/** A form's responses changed (a submission, a deleted one): its open Responses tab refetches. Ids only. */
+export function emitFormResponsesChanged(projectId: string, formId: string) {
+  eventBus.emit(BUS_EVENTS.FORM_RESPONSES_CHANGED, { projectId, formId })
+}
+
 /** Emit a notification to a specific user's room */
 export function emitNotification(userId: string, notification: Record<string, unknown>) {
   eventBus.emit(BUS_EVENTS.NOTIFICATION, { userId, notification })

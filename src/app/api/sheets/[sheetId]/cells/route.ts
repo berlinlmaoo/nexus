@@ -91,12 +91,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
 
     // `sheetId` in the WHERE is the second lock on the door: even with a valid rowId from another
     // sheet, the update matches nothing.
+    //
+    // updatedAt is the row's VERSION for every client ("newer wins", realtime bug 4, 13 Oct 2026): strictly
+    // increasing per row, in the order the writes commit. NOW() was the transaction's START time, so of two
+    // writes racing on one cell the one that committed last could carry the older stamp; browsers that saw
+    // both kept the wrong one and the screens disagreed with the server. clock_timestamp() is read after the
+    // row lock is granted (the SET is evaluated on the locked row), and "+1 ms over the stored value" keeps it
+    // strictly increasing at the column's millisecond precision even within the same millisecond.
     const updated = await prisma.$transaction([
       ...patches.map(({ rowId, patch }) => prisma.$executeRaw`
         UPDATE "SheetRow"
         SET "cells" = jsonb_strip_nulls("cells" || ${JSON.stringify(patch)}::jsonb),
             "updatedById" = ${me},
-            "updatedAt" = NOW()
+            "updatedAt" = GREATEST(clock_timestamp()::timestamp(3), "updatedAt" + interval '1 millisecond')
         WHERE "id" = ${rowId} AND "sheetId" = ${sheetId}
       `),
       // A null style drops the key; an empty map goes back to NULL.
@@ -104,7 +111,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
         UPDATE "SheetRow"
         SET "styles" = NULLIF(jsonb_strip_nulls(COALESCE("styles", '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb), '{}'::jsonb),
             "updatedById" = ${me},
-            "updatedAt" = NOW()
+            "updatedAt" = GREATEST(clock_timestamp()::timestamp(3), "updatedAt" + interval '1 millisecond')
         WHERE "id" = ${rowId} AND "sheetId" = ${sheetId}
       `),
     ])

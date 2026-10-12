@@ -4,7 +4,7 @@ import type { Socket } from "socket.io-client";
 import { getSocket } from "./socket";
 import { invalidateAuditViews, invalidateProjectViews } from "./invalidate";
 import { bindTypingSocket } from "./chat-typing";
-import { patchTaskInCaches, taskCachesMatch, taskWriteInFlight } from "./task-cache";
+import { applyRemoteTask, applyRemoteTaskDeleted, taskWriteInFlight, type RemoteApplyResult } from "./task-cache";
 
 // SOCKET event names → query invalidation.
 //
@@ -28,13 +28,11 @@ const REALTIME_EVENTS = [
 ] as const;
 
 // Each event invalidates any query whose key contains one of these terms (substring, case-insensitive).
+// Task events are NOT here any more (realtime bug 5, 13 Oct 2026): they patch the cache from their payload
+// (lib/task-cache.ts applyRemoteTask) and refetch only what that could not cover — see TASK_EVENTS below.
 const INVALIDATION: Record<string, string[]> = {
-  "task-created": ["task", "dashboard", "project"],
-  "task-updated": ["task", "dashboard", "project"],
-  "task-deleted": ["task", "dashboard", "project"],
-  "comment-added": ["task", "comment"],
   "new-notification": ["notification"],
-  "sprint-updated": ["sprint", "project", "dashboard"],
+  "sprint-updated": ["sprint", "dashboard"],
   "message-created": ["messages", "conversation"],
   "conversation-updated": ["conversation"],
 };
@@ -95,9 +93,19 @@ const PING_DEBOUNCE_MS = 500;
  */
 const TASK_DEBOUNCE_MS = 250;
 const TASK_MAX_WAIT_MS = 1_000;
-const BATCHED_EVENTS = new Set(["task-created", "task-updated", "task-deleted", "comment-added", "sprint-updated"]);
-const LIVE_TASK_FIELDS = ["title", "status", "priority", "dueDate", "startDate", "tags"] as const;
+const TASK_EVENTS = new Set(["task-created", "task-updated", "task-deleted", "comment-added"]);
 const PING_MAX_WAIT_MS = 2_000;
+
+/**
+ * Task lists OTHER than a project's own payload that a task event can change: My Tasks, the dashboard, the
+ * Master Calendar, folder task lists. Refetched only if on screen (an invalidation refetches active queries
+ * only; the rest just goes stale). The project list, folders, pins, views and custom fields are never
+ * touched by a task event any more.
+ */
+function isOtherTaskList(key: readonly unknown[]): boolean {
+  if (key[0] === "dashboard") return true;
+  return key[0] === "nexus" && (key[1] === "tasks" || key[1] === "dashboard" || key[1] === "calendar-tasks" || key[1] === "folder-tasks");
+}
 
 function keyHasTerm(key: unknown, terms: string[]): boolean {
   const parts = Array.isArray(key) ? key.map((k) => String(k).toLowerCase()) : [String(key).toLowerCase()];
@@ -148,7 +156,10 @@ export function RealtimeProvider({
 }) {
   const queryClient = useQueryClient();
   const socketRef = useRef<Socket | null>(null);
-  const joinedRooms = useRef<Set<string>>(new Set());
+  // Rooms → how many mounted components hold them. Counted (13 Oct 2026): the task popup and the form
+  // Responses tab join the same `project:<id>` room as the project page under them, and closing the popup
+  // used to LEAVE the room for the whole tab, so the board stopped hearing events until the next reconnect.
+  const joinedRooms = useRef<Map<string, number>>(new Map());
   const [connected, setConnected] = useState(false);
   // State as well as a ref, so consumers re-render once the socket actually exists.
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -166,7 +177,7 @@ export function RealtimeProvider({
 
         const joinAll = () => {
           socket.emit("join-room", { room: `user:${userId}`, userId, name: userName });
-          joinedRooms.current.forEach((room) =>
+          joinedRooms.current.forEach((_count, room) =>
             socket.emit("join-room", { room, userId, name: userName }),
           );
         };
@@ -277,7 +288,13 @@ export function RealtimeProvider({
         cleanups.push(() => { socket.off("doc-changed", onDocChanged); if (docBurst.timer) clearTimeout(docBurst.timer); });
         if (socket.connected) onConnect();
 
-        const taskBurst = { terms: new Set<string>(), timer: null as ReturnType<typeof setTimeout> | null, startedAt: 0, heldSince: 0 };
+        // What task events could not patch, refetched once per burst: exact project payloads, the flat lists
+        // of the projects touched (only if on screen), subtask lists, comment threads, other task lists.
+        const taskBurst = {
+          projects: new Set<string>(), flat: new Set<string>(), parents: new Set<string>(), comments: new Set<string>(),
+          others: false, sprint: false,
+          timer: null as ReturnType<typeof setTimeout> | null, startedAt: 0, heldSince: 0,
+        };
         const flushTasks = () => {
           if (taskBurst.timer) clearTimeout(taskBurst.timer);
           // A batch move of this tab is still running (multi-drag): its events are its own echo, and a
@@ -291,28 +308,100 @@ export function RealtimeProvider({
           taskBurst.heldSince = 0;
           taskBurst.timer = null;
           taskBurst.startedAt = 0;
-          const terms = [...taskBurst.terms];
-          taskBurst.terms.clear();
-          if (terms.length) void queryClient.invalidateQueries({ predicate: (q) => keyHasTerm(q.queryKey, terms) }, { cancelRefetch: false });
+          const opts = { cancelRefetch: false } as const;
+          taskBurst.projects.forEach((id) => void queryClient.invalidateQueries({ queryKey: ["nexus", "project", id], exact: true }, opts));
+          taskBurst.flat.forEach((id) => void queryClient.invalidateQueries({ queryKey: ["nexus", "project-calendar-tasks", id], exact: true }, opts));
+          if (taskBurst.parents.size) {
+            void queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] === "nexus" && q.queryKey[1] === "project-calendar-tasks" && q.queryKey[3] === "subtasks" }, opts);
+            taskBurst.parents.forEach((id) => void queryClient.invalidateQueries({ queryKey: ["task", id] }, opts));
+          }
+          if (taskBurst.others) void queryClient.invalidateQueries({ predicate: (q) => isOtherTaskList(q.queryKey) }, opts);
+          taskBurst.projects.clear();
+          taskBurst.flat.clear();
+          taskBurst.parents.clear();
+          taskBurst.others = false;
         };
-        cleanups.push(() => { if (taskBurst.timer) clearTimeout(taskBurst.timer); });
+        const scheduleTasks = () => {
+          const now = Date.now();
+          if (!taskBurst.startedAt) taskBurst.startedAt = now;
+          if (taskBurst.timer) clearTimeout(taskBurst.timer);
+          taskBurst.timer = setTimeout(flushTasks, Math.max(0, Math.min(TASK_DEBOUNCE_MS, taskBurst.startedAt + TASK_MAX_WAIT_MS - now)));
+        };
+        const queueRefetch = (r: RemoteApplyResult, flat: boolean) => {
+          r.refetchProjects.forEach((id) => taskBurst.projects.add(id));
+          if (flat) r.touchedProjects.forEach((id) => taskBurst.flat.add(id));
+          r.parentIds.forEach((id) => taskBurst.parents.add(id));
+          taskBurst.others = true;
+          scheduleTasks();
+        };
+        // A comment: the open thread and popup of that task refetch at once (folded per 60 ms), nothing else.
+        let commentTimer: ReturnType<typeof setTimeout> | null = null;
+        const onTaskEvent = (evt: string, payload: unknown) => {
+          const data = (payload && typeof payload === "object" ? payload : {}) as Record<string, unknown>;
+          if (evt === "comment-added") {
+            if (typeof data.taskId !== "string") return;
+            taskBurst.comments.add(data.taskId);
+            if (!commentTimer) commentTimer = setTimeout(() => {
+              commentTimer = null;
+              taskBurst.comments.forEach((id) => {
+                void queryClient.invalidateQueries({ queryKey: ["task-comments", id] });
+                void queryClient.invalidateQueries({ queryKey: ["task", id] });
+              });
+              taskBurst.comments.clear();
+            }, 60);
+            return;
+          }
+          if (evt === "task-deleted") {
+            if (typeof data.taskId !== "string") return;
+            const r = applyRemoteTaskDeleted(queryClient, data.taskId);
+            // A deleted task's open popup finds out (404) instead of showing a ghost.
+            void queryClient.invalidateQueries({ queryKey: ["task", data.taskId] });
+            queueRefetch(r, false);
+            return;
+          }
+          if (typeof data.id !== "string") return;
+          const r = applyRemoteTask(queryClient, evt === "task-created" ? "created" : "updated", data as Record<string, unknown> & { id: string });
+          // A new card may belong in a flat list (Calendar, Sheet task column) the payload can't place: refetch
+          // those if on screen. An update was patched into them already.
+          queueRefetch(r, evt === "task-created");
+        };
+        cleanups.push(() => { if (taskBurst.timer) clearTimeout(taskBurst.timer); if (commentTimer) clearTimeout(commentTimer); });
+
+        // A form got a response (server since 13 Oct 2026, realtime bug 6): its Responses tab and the forms
+        // list (response counts) refetch, if on screen.
+        const onFormResponses = (payload?: unknown) => {
+          const data = (payload && typeof payload === "object" ? payload : {}) as { formId?: unknown };
+          if (typeof data.formId === "string") void queryClient.invalidateQueries({ queryKey: ["nexus", "form-responses", data.formId] });
+          void queryClient.invalidateQueries({ queryKey: ["nexus", "forms"] });
+        };
+        socket.on("form-responses-changed", onFormResponses);
+        cleanups.push(() => socket.off("form-responses-changed", onFormResponses));
+
+        // Taken out of a project (or sheet) room because access to the project ended (server since 13 Oct 2026):
+        // the open project refetches and shows the no-access state instead of silently going quiet; the
+        // project tree drops it.
+        const onJoinDenied = (payload?: unknown) => {
+          const data = (payload && typeof payload === "object" ? payload : {}) as { room?: unknown; reason?: unknown };
+          if (data.reason !== "revoked" || typeof data.room !== "string") return;
+          if (data.room.startsWith("project:")) void queryClient.invalidateQueries({ queryKey: ["nexus", "project", data.room.slice("project:".length)] });
+          if (data.room.startsWith("sheet:")) void queryClient.invalidateQueries({ queryKey: ["nexus", "sheet", data.room.slice("sheet:".length)] });
+          pending.tree = true;
+          schedulePings();
+        };
+        socket.on("join-denied", onJoinDenied);
+        cleanups.push(() => socket.off("join-denied", onJoinDenied));
 
         const eventHandlers = REALTIME_EVENTS.map((evt) => {
           const handler = (payload?: unknown) => {
             const terms = [...(INVALIDATION[evt] ?? [])];
-            if (BATCHED_EVENTS.has(evt)) {
+            if (TASK_EVENTS.has(evt)) {
               if (debug) console.debug("[realtime]", evt);
-              if (evt === "task-updated" && payload && typeof payload === "object" && typeof (payload as { id?: unknown }).id === "string") {
-                const task = payload as Record<string, unknown>;
-                const patch = Object.fromEntries(LIVE_TASK_FIELDS.filter((k) => k in task).map((k) => [k, task[k]]));
-                // Skipped when the card already shows it (the echo of an optimistic edit, e.g. a multi-drag).
-                if (Object.keys(patch).length && !taskCachesMatch(queryClient, task.id as string, patch)) patchTaskInCaches(queryClient, task.id as string, patch);
-              }
-              terms.forEach((x) => taskBurst.terms.add(x));
-              const now = Date.now();
-              if (!taskBurst.startedAt) taskBurst.startedAt = now;
-              if (taskBurst.timer) clearTimeout(taskBurst.timer);
-              taskBurst.timer = setTimeout(flushTasks, Math.max(0, Math.min(TASK_DEBOUNCE_MS, taskBurst.startedAt + TASK_MAX_WAIT_MS - now)));
+              onTaskEvent(evt, payload);
+              return;
+            }
+            if (evt === "sprint-updated") {
+              if (debug) console.debug("[realtime]", evt);
+              void queryClient.invalidateQueries({ predicate: (q) => keyHasTerm(q.queryKey, terms) }, { cancelRefetch: false });
               return;
             }
             const data = (payload && typeof payload === "object" ? payload : {}) as { type?: unknown; conversationId?: unknown; reason?: unknown; kind?: unknown };
@@ -381,13 +470,15 @@ export function RealtimeProvider({
 
   const join = useCallback(
     (room: string) => {
-      joinedRooms.current.add(room);
+      joinedRooms.current.set(room, (joinedRooms.current.get(room) ?? 0) + 1);
       socketRef.current?.emit("join-room", { room, userId, name: userName });
     },
     [userId, userName],
   );
 
   const leave = useCallback((room: string) => {
+    const left = (joinedRooms.current.get(room) ?? 1) - 1;
+    if (left > 0) { joinedRooms.current.set(room, left); return; }
     joinedRooms.current.delete(room);
     socketRef.current?.emit("leave-room", room);
   }, []);

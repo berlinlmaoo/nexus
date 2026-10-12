@@ -91,6 +91,7 @@ export const ID_EDITOR: Record<string, string> = {
   "Text color": "Warna teks",
   "This page can't be opened": "Halaman ini tidak bisa dibuka",
   "This page was changed elsewhere. Showing the latest version.": "Halaman ini diubah di tempat lain. Menampilkan versi terbaru.",
+  "Your access to this page changed.": "Akses kamu ke halaman ini berubah.",
   "This site can't be embedded; it opens in a new tab.": "Situs ini tidak bisa disematkan; dibuka di tab baru.",
   "Time (optional)": "Jam (opsional)",
   "To-do list": "Daftar to-do",

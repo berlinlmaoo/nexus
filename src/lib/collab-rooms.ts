@@ -41,8 +41,15 @@ const log = createLogger("collab")
 const SAVE_DEBOUNCE_MS = 1200
 const SAVE_MAX_WAIT_MS = 5000
 const MAX_UPDATE_BYTES = 2_000_000
+/**
+ * A live editor's write right is re-read when it is older than this (realtime bug 1, 13 Oct 2026). It was
+ * checked once at join, so someone removed from the project (or set to Can view) could keep typing into an
+ * open page — saved on the server — until they reconnected. Membership changes re-check at once
+ * (ACCESS_CHANGED below); this TTL is the net under any path that changes access without saying so.
+ */
+const ACCESS_TTL_MS = 30_000
 
-type Member = { userId: string; canWrite: boolean; clientIds: Set<number> }
+type Member = { userId: string; canWrite: boolean; clientIds: Set<number>; checkedAt: number; checking: Promise<boolean> | null }
 type Room = {
   key: string
   kind: BodyKind
@@ -60,6 +67,8 @@ type Room = {
   editors: Set<string>
   title: string
   dead: boolean
+  /** The project the body belongs to (from the first join's access check), for ACCESS_CHANGED. */
+  projectId: string | null
 }
 
 type CollabGlobal = {
@@ -120,7 +129,7 @@ async function createRoom(key: string): Promise<Room | null> {
     key, kind: parsed.kind, id: parsed.id, ydoc, epoch,
     members: new Map(), persisted: body.json, persistedCanon: canon,
     dirty: false, firstDirtyAt: 0, timer: null, saving: null,
-    lastEditorId: null, editors: new Set(), title: body.title, dead: false,
+    lastEditorId: null, editors: new Set(), title: body.title, dead: false, projectId: null,
   }
 }
 
@@ -242,6 +251,59 @@ function removeMember(socket: Socket, key: string) {
   void closeIfEmpty(room)
 }
 
+/**
+ * Read a live editor's access again. Lost read → out of the room ("ydoc:reset" reason "access": the editor
+ * rejoins and is refused, or gets the page read-only). Lost write → the same reset, and the rejoin answers
+ * canWrite false. Gained write → canWrite true from now on (their next rejoin shows it). False = drop the
+ * update that asked.
+ */
+function recheckMember(room: Room, socketId: string, member: Member): Promise<boolean> {
+  if (member.checking) return member.checking
+  const run = bodyAccess(member.userId, room.kind, room.id)
+    .then((access) => {
+      member.checkedAt = Date.now()
+      if (access.projectId) room.projectId = access.projectId
+      const socket = state.io?.sockets.sockets.get(socketId)
+      if (!access.read || (member.canWrite && !access.write)) {
+        log.info("live editor's access changed: reset", { key: room.key, userId: member.userId, read: access.read, write: access.write })
+        socket?.emit("ydoc:reset", { room: room.key, reason: "access" })
+        if (socket) removeMember(socket, room.key)
+        else room.members.delete(socketId)
+        return false
+      }
+      member.canWrite = access.write
+      return true
+    })
+    .catch((error) => {
+      // The database hiccuped: keep what we knew, try again on the next update.
+      log.warn("live editor access re-check failed", { key: room.key, error: String(error) })
+      return member.canWrite
+    })
+    .finally(() => { member.checking = null })
+  member.checking = run
+  return run
+}
+
+/** ACCESS_CHANGED (lib/socket-emitter.ts emitAccessChanged): re-check the editors named, now and once more. */
+function onAccessChanged(projectId: string | null, userIds: string[] | null) {
+  const users = userIds ? new Set(userIds) : null
+  const recheck = () => {
+    for (const room of state.rooms.values()) {
+      if (room.dead || (projectId !== null && room.projectId !== null && room.projectId !== projectId)) continue
+      for (const [socketId, member] of [...room.members]) {
+        if (users && !users.has(member.userId)) continue
+        member.checkedAt = 0
+        void recheckMember(room, socketId, member)
+      }
+    }
+  }
+  // Now (the next update from them waits for the answer), soon, and once more in case the caller emitted
+  // inside a transaction that had not committed yet.
+  recheck()
+  setTimeout(recheck, 300).unref?.()
+  setTimeout(recheck, 2_500).unref?.()
+}
+
 /** Wire the collab events on one connected socket (pages/api/socket.ts). */
 export function attachCollabSocket(io: IOServer, socket: Socket) {
   state.io = io
@@ -262,7 +324,8 @@ export function attachCollabSocket(io: IOServer, socket: Socket) {
       if (!room) return reply({ ok: false, error: "not_found" })
       const clientIds = new Set<number>()
       if (typeof data?.clientId === "number" && Number.isFinite(data.clientId)) clientIds.add(data.clientId)
-      room.members.set(socket.id, { userId, canWrite: access.write, clientIds })
+      if (access.projectId) room.projectId = access.projectId
+      room.members.set(socket.id, { userId, canWrite: access.write, clientIds, checkedAt: Date.now(), checking: null })
       ;(socket.data.collabRooms as Set<string>).add(key)
       await socket.join(ioRoom(key))
       // The others resend their cursor/presence so the newcomer sees them at once.
@@ -285,6 +348,18 @@ export function attachCollabSocket(io: IOServer, socket: Socket) {
     }
     const update = toU8(data?.update)
     if (!update || update.byteLength > MAX_UPDATE_BYTES) return
+    // Write right older than ACCESS_TTL_MS (or being re-read): wait for the answer. Yjs updates commute, so
+    // applying this one a few ms later than the next one from the same editor is harmless.
+    if (member.checking || Date.now() - member.checkedAt > ACCESS_TTL_MS) {
+      void recheckMember(room, socket.id, member).then((ok) => {
+        if (ok && member.canWrite && !room.dead && room.members.get(socket.id) === member) applyEditorUpdate(room, member, key, update)
+      })
+      return
+    }
+    applyEditorUpdate(room, member, key, update)
+  })
+
+  function applyEditorUpdate(room: Room, member: Member, key: string, update: Uint8Array) {
     try {
       Y.applyUpdate(room.ydoc, update, socket.id)
     } catch (error) {
@@ -297,7 +372,7 @@ export function attachCollabSocket(io: IOServer, socket: Socket) {
     room.lastEditorId = member.userId
     room.editors.add(member.userId)
     schedule(room)
-  })
+  }
 
   socket.on("ydoc:awareness", (data: { room?: unknown; update?: unknown; clientId?: unknown }) => {
     const key = typeof data?.room === "string" ? data.room : ""
@@ -325,6 +400,9 @@ function bindBus() {
   eventBus.on(BUS_EVENTS.COLLAB_EXTERNAL_WRITE, (data: { key?: string }) => {
     const room = data?.key ? state.rooms.get(data.key) : undefined
     if (room) resetRoom(room, "external")
+  })
+  eventBus.on(BUS_EVENTS.ACCESS_CHANGED, (data: { projectId?: string | null; userIds?: string[] | null }) => {
+    onAccessChanged(data?.projectId ?? null, Array.isArray(data?.userIds) ? data.userIds : null)
   })
 }
 

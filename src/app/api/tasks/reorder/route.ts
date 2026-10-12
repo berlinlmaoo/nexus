@@ -57,7 +57,9 @@ export async function POST(request: NextRequest) {
     const moved = movedId && known.has(movedId)
       ? await prisma.task.findUnique({ where: { id: movedId }, include: { assignees: { include: { user: { select: { id: true, name: true, email: true, avatar: true } } } }, taskList: true } })
       : null
-    if (moved && writes.length) emitTaskUpdated(list.projectId, JSON.parse(JSON.stringify(moved)))
+    // `listOrder` (additive, 13 Oct 2026): the section's whole new order, so open boards place every card
+    // without refetching the project (the other tasks' positions changed too but get no event of their own).
+    if (moved && writes.length) emitTaskUpdated(list.projectId, { ...JSON.parse(JSON.stringify(moved)), listOrder: { taskListId, ids: full } })
     return NextResponse.json({ ok: true, updated: writes.length })
   } catch (error) {
     console.error("Error reordering tasks:", error)

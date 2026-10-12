@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { leaderInfo } from "@/lib/bluegreen"
+import { dbPoolStats } from "@/lib/db-pool"
 
 /**
  * Where this instance is running. The office VM and the VPS warm standby run the same image; the
@@ -32,6 +33,8 @@ export async function GET() {
         checks: {
           database: "up",
         },
+        // Connections this process holds (one pool per process, lib/db-pool.ts): counts only.
+        db: dbPoolStats(),
         timestamp: new Date().toISOString(),
       },
       { status: 200 }

@@ -1,6 +1,7 @@
 import fs from "fs"
 import pg from "pg"
 import { createLogger } from "@/lib/logger"
+import { setDbPoolStandby } from "@/lib/db-pool"
 
 /**
  * Blue-green slots (12 Oct 2026, deploy/bluegreen/README.md).
@@ -133,6 +134,8 @@ async function check(reason = "tick"): Promise<void> {
   s.busy = true
   try {
     const live = isLiveSlot()
+    // The idle slot's pool lets idle connections go within seconds (lib/db-pool.ts, realtime bug 3).
+    setDbPoolStandby(!live)
     const now = Date.now()
     const c = await connect(s)
     // A read-only replica (the VPS warm standby) runs no clocks at all: nobody leads there. After a
@@ -218,6 +221,7 @@ export function startSingletonLeader(): void {
   setInterval(() => { void check() }, CHECK_MS).unref?.()
   process.on("SIGUSR2", () => {
     const live = isLiveSlot()
+    setDbPoolStandby(!live)
     log.info("SIGUSR2 from the deploy script", { slot: slotName(), live: readLiveSlot(), thisSlotLive: live })
     void check("signal")
     if (live) return
