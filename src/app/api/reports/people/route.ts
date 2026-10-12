@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { logAudit } from "@/lib/audit"
+import { logAudit, logViewOncePerDay } from "@/lib/audit"
 import { reportableUserIds } from "@/lib/attendance-approvers"
 import { buildPeopleReports, publicPeriod, resolveReportWindows, rosterFlags } from "@/lib/people-reports"
 import { leftKeyOf } from "@/lib/former-members"
@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.flagCount - a.flagCount || (a.name ?? "").localeCompare(b.name ?? ""))
 
     if (ids.some((id) => id !== viewerId)) {
-      await logAudit({
+      await logViewOncePerDay({
         action: "view",
         entityType: "person_report_roster",
         entityId: team?.id ?? workspaceId,

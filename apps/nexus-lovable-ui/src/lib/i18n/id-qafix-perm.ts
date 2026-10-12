@@ -141,4 +141,9 @@ export const ID_QAFIX_PERM: Record<string, string> = {
   "You can view this project but not change it. Ask its Project Owner for Can edit access.": "Kamu bisa melihat project ini tapi tidak bisa mengubahnya. Minta Pemilik Project akses Bisa edit.",
   "You can view this project but not comment. Ask its Project Owner for Can comment access.": "Kamu bisa melihat project ini tapi tidak bisa berkomentar. Minta Pemilik Project akses Bisa komentar.",
   "Only people with Full access to the project can do this.": "Hanya yang punya Akses penuh ke project yang bisa melakukan ini.",
+  "Remove {name} from this project? They lose access right away.": "Keluarkan {name} dari project ini? Aksesnya langsung hilang.",
+  "Remove them from this project? They lose access right away.": "Keluarkan dari project ini? Aksesnya langsung hilang.",
+  "Search divisions": "Cari divisi",
+  "{n} divisions": "{n} divisi",
+  "No division matches “{q}”.": "Tidak ada divisi yang cocok dengan “{q}”.",
 };

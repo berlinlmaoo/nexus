@@ -608,7 +608,8 @@ function NotificationsSection() {
 
 // Was a static mock with two made-up rules and a dead "+ New rule" button (fixed 12 Oct 2026). Automations
 // belong to a project; this points there.
-const MCP_URL = "https://nexus.patsgroup.id/api/mcp";
+// The server this page is on (dev, prod, a LAN shortcut), not a hard-coded prod address (QA B19).
+const MCP_URL = typeof window !== "undefined" ? `${window.location.origin}/api/mcp` : "https://nexus.patsgroup.id/api/mcp";
 
 function CopyBox({ label, value, mono = true }: { label?: string; value: string; mono?: boolean }) {
   const { t } = useLang();

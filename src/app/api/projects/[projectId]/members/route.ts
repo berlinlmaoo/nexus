@@ -197,6 +197,13 @@ export async function DELETE(
     if (!existing) {
       return NextResponse.json({ error: "Member not found" }, { status: 404 })
     }
+    // Same rule as PATCH: removing the last Project Owner would leave nobody but the BoD to manage it (QA BoD R2 N01).
+    if (existing.role === "LEAD") {
+      const owners = await prisma.projectMember.count({ where: { projectId: (await params).projectId, role: "LEAD" } })
+      if (owners <= 1) {
+        return NextResponse.json({ error: "A project keeps at least one Project Owner. Give someone else Full access first.", code: "LAST_OWNER" }, { status: 409 })
+      }
+    }
 
     await prisma.projectMember.delete({
       where: {

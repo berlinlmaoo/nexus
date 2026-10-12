@@ -59,6 +59,7 @@ export function friendlyError(e: unknown): string | undefined {
   }
   // Access-level refusals (Notion levels, 13 Oct 2026), and the old role wording older servers still send.
   const code = (e as { payload?: { code?: string } } | null)?.payload?.code;
+  if (code === "LAST_OWNER") return t("A project keeps at least one Project Owner. Give someone else Full access first.");
   if (code === "NEEDS_EDIT_ACCESS" || /Can edit access|MEMBER role/i.test(msg)) return t("You can view this project but not change it. Ask its Project Owner for Can edit access.");
   if (code === "NEEDS_COMMENT_ACCESS") return t("You can view this project but not comment. Ask its Project Owner for Can comment access.");
   if (code === "NEEDS_FULL_ACCESS" || /Full access|LEAD role/i.test(msg)) return t("Only people with Full access to the project can do this.");

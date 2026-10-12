@@ -367,7 +367,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
                   <MiniAvatar user={m.user} />
                   <span className="flex-1 truncate text-sm font-semibold">{m.user?.name ?? m.user?.email ?? m.userId}</span>
                   {canManage ? (
-                    <AccessLevelPicker value={memberLevelOf(m)} disabled={setLevel.isPending || removeMember.isPending}
+                    <AccessLevelPicker value={memberLevelOf(m)} removeName={m.user?.name ?? m.user?.email ?? undefined} disabled={setLevel.isPending || removeMember.isPending}
                       ariaLabel={t("Access for {name}", { name: m.user?.name ?? m.user?.email ?? "" })}
                       onChange={(level) => { const id = m.userId || m.user?.id; if (id) setLevel.mutate({ userId: id, level }); }}
                       onRemove={() => { const id = m.userId || m.user?.id; if (id) removeMember.mutate(id); }} />
