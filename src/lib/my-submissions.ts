@@ -109,10 +109,17 @@ export function needsAction(section: { name: string } | null | undefined, commen
   return last.userId !== submitterId
 }
 
-/** The old apps' column for a task: the custom STATUS value, else the column name past To-do. */
-export function legacyProcStatus(customStatus: string | null | undefined, column: BoardColumn | null) {
+const DONE_WORD = /^(done|selesai|complete|completed|finished|paid|lunas|cair)$/i
+
+/**
+ * The old apps' column for a task: the custom STATUS value, else the column name past To-do.
+ * The Done checkbox wins both ways (owner, 12 Oct 2026): a task checked done never reads "On Progress"
+ * (its Complete column's name, else "Done"), and a value "Done" on a task that is not done is ignored.
+ */
+export function legacyProcStatus(customStatus: string | null | undefined, column: BoardColumn | null, taskStatus?: string | null) {
   const v = (customStatus ?? "").trim()
-  if (v) return v
+  if (taskStatus === "DONE") return column && column.group === "complete" ? column.name : v && DONE_WORD.test(v) ? v : "Done"
+  if (v && !(taskStatus && DONE_WORD.test(v))) return v
   if (column && column.group !== "todo") return column.name
   return null
 }

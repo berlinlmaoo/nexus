@@ -15,6 +15,7 @@ import {
   groupLabelIsBuiltin,
   isDoneStatus,
   optionColor,
+  formatNumberProp,
   propDef,
   taskColor,
   taskValues,
@@ -48,7 +49,7 @@ const pill = "inline-flex max-w-[160px] shrink-0 items-center gap-1 truncate rou
 
 /** One property of a task, compact, for cards and rows. Null when the task has nothing there. */
 export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; ctx: ViewCtx }) {
-  const { t } = useLang();
+  const { t, locale } = useLang();
   const fmt = useDateFmt();
   const vals = taskValues(task, def.key);
   switch (def.key) {
@@ -99,8 +100,8 @@ export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; c
   }
   if (def.kind === "number") {
     const n = Number(vals[0]);
-    const idr = def.fieldType === "NUMBER";
-    const text = Number.isNaN(n) ? vals[0] : idr ? new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n) : String(n);
+    // Rp only for Rupiah fields; any other number field is a plain grouped number.
+    const text = Number.isNaN(n) ? vals[0] : formatNumberProp(n, def.numberFormat, 2, locale);
     return <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground" title={def.label}>{text}</span>;
   }
   if (def.kind === "checkbox") return vals[0] === "true" ? <span className={cn(pill, "bg-muted text-muted-foreground")}><CircleCheck className="h-3 w-3" />{def.label}</span> : null;

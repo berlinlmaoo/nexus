@@ -79,7 +79,7 @@ export function newId(): string {
 export type PropKind = "title" | "text" | "select" | "multi" | "person" | "date" | "number" | "checkbox" | "count";
 export type PropOption = { value: string; label: string; color?: string | null };
 /** `hidden`: still evaluated (old saved filters keep working) but not offered in pickers. */
-export type PropDef = { key: string; label: string; kind: PropKind; options?: PropOption[]; fieldType?: string; builtin: boolean; hidden?: boolean };
+export type PropDef = { key: string; label: string; kind: PropKind; options?: PropOption[]; fieldType?: string; /** NUMBER fields: "currency-idr" shows Rp, "plain" a grouped number. */ numberFormat?: "plain" | "currency-idr"; builtin: boolean; hidden?: boolean };
 
 export type ViewCtx = {
   /** The project's sections. With a taskStatus they are its status options (lib/status-options.ts). */
@@ -161,9 +161,16 @@ export function propDefs(ctx: ViewCtx): PropDef[] {
     const kind = fieldKind(f.type ?? "");
     const colors = fieldOptionColors(f);
     const options = kind === "select" || kind === "multi" ? fieldChoices(f).map((v) => ({ value: v, label: v, color: colors[v] ?? null })) : kind === "person" ? ctx.people.map((p) => ({ value: p.id, label: p.name })) : undefined;
-    defs.push({ key: `cf:${f.id}`, label: f.name, kind, options, fieldType: (f.type ?? "").toUpperCase(), builtin: false });
+    const fieldType = (f.type ?? "").toUpperCase();
+    defs.push({ key: `cf:${f.id}`, label: f.name, kind, options, fieldType, numberFormat: fieldType === "NUMBER" ? numberFieldFormat(f.options) : undefined, builtin: false });
   }
   return defs;
+}
+
+/** A number property for display: Rupiah fields as "Rp 1.500.000", other numbers grouped in the UI locale. */
+export function formatNumberProp(n: number, format: PropDef["numberFormat"], maxFractionDigits = 2, locale = "id-ID"): string {
+  if (format === "currency-idr") return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: maxFractionDigits }).format(n);
 }
 
 export function propDef(defs: PropDef[], key: string | null | undefined): PropDef | undefined {
@@ -601,9 +608,9 @@ export function groupCalcValue(tasks: NexusTask[], calc: GroupCalc, defs: PropDe
       const nums = tasks.map((t) => Number(taskValues(t, def.key)[0])).filter((n) => !Number.isNaN(n));
       const sum = nums.reduce((a, b) => a + b, 0);
       const v = calc.kind === "sum" ? sum : nums.length ? sum / nums.length : 0;
-      const isIdr = def.fieldType === "NUMBER";
-      const text = new Intl.NumberFormat("id-ID", { maximumFractionDigits: calc.kind === "avg" ? 1 : 0 }).format(v);
-      return { value: isIdr ? text : text, label: calc.kind === "sum" ? `Sum of ${def.label}` : `Average ${def.label}` };
+      // Only a Rupiah field reads as "Rp …"; a plain number field is just grouped (owner, 12 Oct 2026).
+      const text = formatNumberProp(v, def.numberFormat, calc.kind === "avg" ? 1 : 0);
+      return { value: text, label: calc.kind === "sum" ? `Sum of ${def.label}` : `Average ${def.label}` };
     }
     default:
       return { value: String(tasks.length), label: "Count" };

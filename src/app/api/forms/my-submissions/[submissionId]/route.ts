@@ -79,7 +79,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       taskTitle: task?.title ?? null,
       status: task?.status ?? null,
       stage: task?.taskList?.name ?? null,
-      procStatus: legacyProcStatus(values.find((v) => v.customField.type === "STATUS")?.value, column),
+      procStatus: legacyProcStatus(values.find((v) => v.customField.type === "STATUS")?.value, column, task?.status ? String(task.status) : null),
       proofs: (task?.attachments ?? []).map((a) => ({ id: a.id, name: a.filename, url: a.url, mimeType: a.mimeType, size: a.size })), // Bukti Pencairan from the finance team
       answers,
       column,

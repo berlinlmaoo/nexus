@@ -76,7 +76,7 @@ export async function GET() {
         taskTitle: task?.title ?? null,
         status: task?.status ?? null, // task enum (TODO/DONE/…)
         stage: task?.taskList?.name ?? null, // board column (taskList)
-        procStatus: legacyProcStatus(customStatus, column), // released apps' column; null = "New"
+        procStatus: legacyProcStatus(customStatus, column, task?.status ? String(task.status) : null), // released apps' column; null = "New"
         proofs: (task?.attachments ?? []).map((a) => ({ id: a.id, name: a.filename, url: a.url, mimeType: a.mimeType, size: a.size })), // Bukti Pencairan
         column,
         kind: submissionKind(s.form?.project?.name, s.form?.project?.folder?.name),
