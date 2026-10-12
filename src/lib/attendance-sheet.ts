@@ -41,10 +41,10 @@ import { formerMembersOf, isExemptRole } from "@/lib/former-recaps"
  * here decides a status on its own.
  *
  * Google access is the OAuth refresh token of account@znetworks.id (GOOGLE_OAUTH_*; scopes
- * drive.file + spreadsheets — the same credentials finance-dashboard-data.ts reads with). drive.file
+ * drive.file + spreadsheets). drive.file
  * means the app only sees files it created, so the spreadsheet is created by this code on the first
- * run and its id kept in AppSetting["attendance-sheet"]. The GOOGLE_SERVICE_ACCOUNT_* (finance) and
- * GOOGLE_DIRECTORY_* (directory) credentials are deliberately not used.
+ * run and its id kept in AppSetting["attendance-sheet"]. The GOOGLE_DIRECTORY_* (directory)
+ * credentials are deliberately not used.
  *
  * Quota: one spreadsheets.get + ONE spreadsheets.batchUpdate per run (both tabs in the same batch on
  * the first day of a period), plus a one-off create and one permissions.create per new reader.
@@ -390,7 +390,7 @@ export function spreadsheetUrl(id: string) {
 
 type OAuthClient = InstanceType<typeof google.auth.OAuth2>
 
-/** The same OAuth path as finance-dashboard-data.ts. null when the env is not set. */
+/** OAuth refresh-token client (GOOGLE_OAUTH_*). null when the env is not set. */
 export function googleAttendanceSheetApi(opts: { rootUrl?: string; auth?: OAuthClient } = {}): AttendanceSheetApi | null {
   let auth = opts.auth
   if (!auth) {
