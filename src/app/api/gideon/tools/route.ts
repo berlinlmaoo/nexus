@@ -1255,7 +1255,39 @@ async function addTaskComment(actor: User, input: Record<string, unknown>) {
 /** The support-ticket tools (the requester's own attendance day, remedy proposals, closing a ticket). */
 const ATTENDANCE_ACTIONS = new Set(['get_attendance_day', 'propose_attendance_correction', 'propose_penalty_cancellation', 'resolve_ticket'])
 
-async function dispatch(actor: User, action: string, input: Record<string, unknown>): Promise<unknown> {
+/**
+ * Model arguments arrive in several spellings (project_id, project, projectName, q, text…). The first
+ * call of a run often used one of those and failed with "projectId is required", then the model retried
+ * — the user saw a red "1 failed" step (owner, 12 Oct 2026). Normalise before validating: snake_case →
+ * camelCase, query aliases → query, and a project NAME → the id of a project the actor can see.
+ */
+async function normalizeToolInput(actor: User, action: string, raw: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const input: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(raw ?? {})) input[k.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())] = v
+  if (!asString(input.query)) {
+    const q = asString(input.q) || asString(input.text) || asString(input.search) || asString(input.question) || asString(input.keyword) || asString(input.keywords)
+    if (q) input.query = q
+  }
+  const wantsProject = action === 'get_project_summary' || action === 'list_custom_fields' || action === 'create_doc' || action === 'create_task' || action === 'list_tasks'
+  if (wantsProject && !asString(input.projectId)) {
+    const name = asString(input.project) || asString(input.projectName) || (action === 'get_project_summary' ? asString(input.name) || asString(input.query) : '')
+    if (name) {
+      const match = await prisma.project.findFirst({
+        where: { ...actorScopedProjectWhere(actor, {}), name: { equals: name, mode: 'insensitive' } },
+        select: { id: true },
+      }) ?? await prisma.project.findFirst({
+        where: { ...actorScopedProjectWhere(actor, {}), name: { contains: name, mode: 'insensitive' } },
+        select: { id: true },
+        orderBy: { updatedAt: 'desc' },
+      })
+      if (match) input.projectId = match.id
+    }
+  }
+  return input
+}
+
+async function dispatch(actor: User, action: string, rawInput: Record<string, unknown>): Promise<unknown> {
+  const input = await normalizeToolInput(actor, action, rawInput)
   switch (action) {
     case 'list_projects':
       return listProjects(actor, input)

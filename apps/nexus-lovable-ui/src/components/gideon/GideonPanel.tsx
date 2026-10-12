@@ -959,7 +959,10 @@ function AssistantTurn({ turn, onDecided, question, projectId, editorTarget }: {
   const { t } = L;
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const steps = turn.steps ?? [];
+  // A step that failed on its arguments and was retried (the same tool succeeded later) is GIDEON's own
+  // detour, not something the person must know about: hidden here, still in the run log (Insights).
+  const allSteps = turn.steps ?? [];
+  const steps = turn.streaming ? allSteps : allSteps.filter((s, i) => s.status !== "error" || !(/\bis required\b/i.test(s.error ?? "") || allSteps.slice(i + 1).some((x) => x.tool === s.tool && x.status === "done")));
   const running = steps.filter((s) => s.status === "running");
   const failed = steps.filter((s) => s.status === "error").length;
   // Only what the answer names (the server already filters new turns; older saved turns are filtered here).
