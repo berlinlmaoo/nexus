@@ -96,10 +96,12 @@ struct InlineDraftCard: View {
         }
     }
 
+    /// Leaving the card (Esc, a tap elsewhere): a typed title is saved, then the card closes. The save
+    /// carries on after the card is gone (it calls the board, not this view).
     private func finish() {
         enqueue(title)
         title = ""
-        if queue.isEmpty && !running { onClose() }
+        onClose()
     }
 
     private func discard() {
@@ -330,50 +332,8 @@ struct ViewFilterSheet: View {
         }
     }
 
-    @ViewBuilder private func ruleRow(_ rule: Binding<ViewFilterRule>) -> some View {
-        let r = rule.wrappedValue
-        VStack(alignment: .leading, spacing: 6) {
-            Text(propName(r.prop)).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
-            switch r.prop {
-            case "due", "start":
-                Picker(T("When"), selection: rule.op) {
-                    Text(T("Overdue")).tag("overdue")
-                    Text(T("Today")).tag("today")
-                    Text(T("This week")).tag("this_week")
-                    Text(T("Next 7 days")).tag("next_days")
-                    Text(T("Not set")).tag("empty")
-                    Text(T("Set")).tag("not_empty")
-                }
-            case "title":
-                TextField(T("Contains…"), text: Binding(get: { r.value.strings.first ?? "" }, set: { rule.wrappedValue.value = .text($0) }))
-            default:
-                let opts = options(r.prop)
-                Picker(T("Condition"), selection: rule.op) {
-                    Text(T("Is any of")).tag("any_of")
-                    Text(T("Is none of")).tag("none_of")
-                    Text(T("Is empty")).tag("empty")
-                    Text(T("Is not empty")).tag("not_empty")
-                }
-                if r.op == "any_of" || r.op == "none_of" {
-                    ForEach(opts, id: \.value) { o in
-                        let on = r.value.strings.contains(o.value)
-                        Button {
-                            var cur = r.value.strings
-                            if on { cur.removeAll { $0 == o.value } } else { cur.append(o.value) }
-                            rule.wrappedValue.value = .list(cur)
-                        } label: {
-                            HStack {
-                                Text(o.label).foregroundStyle(NX.foreground)
-                                Spacer()
-                                if on { Image(systemName: "checkmark").foregroundStyle(NX.violetText) }
-                            }
-                            .frame(minHeight: 36).contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
+    private func ruleRow(_ rule: Binding<ViewFilterRule>) -> ViewFilterRuleRow {
+        ViewFilterRuleRow(rule: rule, title: propName(rule.wrappedValue.prop), options: options(rule.wrappedValue.prop))
     }
 
     private func propName(_ p: String) -> String {
@@ -389,8 +349,6 @@ struct ViewFilterSheet: View {
             return p
         }
     }
-
-    private struct FilterOption: Hashable { let value: String; let label: String }
 
     private func options(_ prop: String) -> [FilterOption] {
         switch prop {
@@ -473,4 +431,79 @@ struct ReorderUndo: Identifiable {
     let laneId: String
     let order: [String]
     let count: Int
+}
+
+
+/// One value a filter can pick.
+struct FilterOption: Hashable {
+    let value: String
+    let label: String
+}
+
+/// One filter rule's editor, split out of ViewFilterSheet so each piece type-checks on its own.
+struct ViewFilterRuleRow: View {
+    @Binding var rule: ViewFilterRule
+    let title: String
+    let options: [FilterOption]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+            editor
+        }
+    }
+
+    @ViewBuilder private var editor: some View {
+        if rule.prop == "due" || rule.prop == "start" {
+            datePicker
+        } else if rule.prop == "title" {
+            TextField(T("Contains…"), text: titleBinding)
+        } else {
+            choicePicker
+            if rule.op == "any_of" || rule.op == "none_of" {
+                ForEach(options, id: \.value) { o in optionRow(o) }
+            }
+        }
+    }
+
+    private var datePicker: some View {
+        Picker(T("When"), selection: $rule.op) {
+            Text(T("Overdue")).tag("overdue")
+            Text(T("Today")).tag("today")
+            Text(T("This week")).tag("this_week")
+            Text(T("Next 7 days")).tag("next_days")
+            Text(T("Not set")).tag("empty")
+            Text(T("Set")).tag("not_empty")
+        }
+    }
+
+    private var choicePicker: some View {
+        Picker(T("Condition"), selection: $rule.op) {
+            Text(T("Is any of")).tag("any_of")
+            Text(T("Is none of")).tag("none_of")
+            Text(T("Is empty")).tag("empty")
+            Text(T("Is not empty")).tag("not_empty")
+        }
+    }
+
+    private var titleBinding: Binding<String> {
+        Binding(get: { rule.value.strings.first ?? "" }, set: { rule.value = .text($0) })
+    }
+
+    private func optionRow(_ o: FilterOption) -> some View {
+        let on = rule.value.strings.contains(o.value)
+        return Button {
+            var cur = rule.value.strings
+            if on { cur.removeAll { $0 == o.value } } else { cur.append(o.value) }
+            rule.value = .list(cur)
+        } label: {
+            HStack {
+                Text(o.label).foregroundStyle(NX.foreground)
+                Spacer()
+                if on { Image(systemName: "checkmark").foregroundStyle(NX.violetText) }
+            }
+            .frame(minHeight: 36).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
 }

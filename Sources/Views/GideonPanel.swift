@@ -425,52 +425,68 @@ struct GideonPanel: View {
         return String((prev.components(separatedBy: "\n").first ?? "").prefix(120))
     }
 
+    /// Under an answer, each piece its own small function (type-checks fast): Save as doc, what GIDEON
+    /// did, the sources, what it made, and changes waiting for Apply.
     @ViewBuilder private func answerExtras(_ turn: GideonTurn) -> some View {
-        if !turn.content.isEmpty && !chat.sending {
-            Button {
-                let q = question(before: turn)
-                saveRequest = GideonSaveRequest(title: q.isEmpty ? T("GIDEON answer") : q, markdown: turn.content)
-            } label: {
-                Label(T("Save as doc"), systemImage: "doc.badge.plus").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
-                    .frame(minHeight: 28).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+        if !turn.content.isEmpty && !chat.sending { saveAsDocButton(turn) }
+        stepsLine(turn)
+        if !turn.sources.isEmpty { sourcesBlock(turn.sources) }
+        ForEach(turn.cards) { card in cardRow(card) }
+        ForEach(turn.proposals) { p in proposalCard(p) }
+    }
+
+    private func saveAsDocButton(_ turn: GideonTurn) -> some View {
+        Button {
+            let q = question(before: turn)
+            saveRequest = GideonSaveRequest(title: q.isEmpty ? T("GIDEON answer") : q, markdown: turn.content)
+        } label: {
+            Label(T("Save as doc"), systemImage: "doc.badge.plus").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                .frame(minHeight: 28).contentShape(Rectangle())
         }
-        let shownSteps = turn.steps.filter { $0.status != "error" }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder private func stepsLine(_ turn: GideonTurn) -> some View {
+        let shownSteps: [GideonStep] = turn.steps.filter { $0.status != "error" }
         if let last = shownSteps.last, let label = last.label, !label.isEmpty {
             HStack(spacing: 5) {
-                if last.status == "running" && turn.content.isEmpty { ProgressView().scaleEffect(0.55) }
-                else { Image(systemName: "checkmark.circle").font(.system(size: 10)) }
+                if last.status == "running" && turn.content.isEmpty {
+                    ProgressView().scaleEffect(0.55)
+                } else {
+                    Image(systemName: "checkmark.circle").font(.system(size: 10))
+                }
                 Text(shownSteps.count > 1 ? "\(label) · \(shownSteps.count)" : label).lineLimit(1)
             }
             .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
         }
-        if !turn.sources.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(T("Sources")).font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
-                FlowLayout(spacing: 5) {
-                    ForEach(turn.sources) { ref in refChip(ref) }
-                }
+    }
+
+    private func sourcesBlock(_ sources: [GideonRef]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(T("Sources")).font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
+            FlowLayout(spacing: 5) {
+                ForEach(sources) { ref in refChip(ref) }
             }
         }
-        ForEach(turn.cards) { card in
-            Button { openRef = GideonRef(kind: card.kind == "doc" ? "doc" : "task", id: card.id, title: card.title, projectId: nil) } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: card.action == "created" ? "plus.circle.fill" : "pencil.circle.fill").foregroundStyle(NX.success)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(card.title ?? T("Task")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Text([cardActionLabel(card.action), card.projectName].compactMap { $0 }.joined(separator: " · "))
-                            .font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
+    }
+
+    private func cardRow(_ card: GideonCard) -> some View {
+        let kind: String = card.kind == "doc" ? "doc" : "task"
+        let sub: String = [cardActionLabel(card.action), card.projectName].compactMap { $0 }.joined(separator: " · ")
+        return Button { openRef = GideonRef(kind: kind, id: card.id, title: card.title, projectId: nil) } label: {
+            HStack(spacing: 6) {
+                Image(systemName: card.action == "created" ? "plus.circle.fill" : "pencil.circle.fill").foregroundStyle(NX.success)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(card.title ?? T("Task")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    Text(sub).font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
-                .padding(8).background(NX.success.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .contentShape(Rectangle())
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.plain)
-            .disabled(card.kind == "doc" || card.kind == "comment")
+            .padding(8).background(NX.success.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(Rectangle())
         }
-        ForEach(turn.proposals) { p in proposalCard(p) }
+        .buttonStyle(.plain)
+        .disabled(card.kind == "comment")
     }
 
     private func cardActionLabel(_ a: String?) -> String {
@@ -492,8 +508,8 @@ struct GideonPanel: View {
             .background(NX.violet.opacity(0.10), in: Capsule())
         }
         .buttonStyle(.plain)
-        // Only what the app can open; pages and messages are named but not linked here.
-        .disabled(!(ref.kind == "task" || ref.kind == "project"))
+        // Only what the app can open; comments, forms and messages are named but not linked here.
+        .disabled(!(ref.kind == "task" || ref.kind == "project" || ref.kind == "doc"))
     }
 
     private func proposalCard(_ p: GideonProposal) -> some View {
