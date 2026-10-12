@@ -73,13 +73,9 @@ export function AppSidebar() {
   const orgRoleQuery = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
   const canManageOrg = ["ONE_ABOVE_ALL", "BOD", "MANAGER"].includes(orgRoleQuery.data?.role ?? "");
   const canManageAttendance = ["ONE_ABOVE_ALL", "BOD"].includes(orgRoleQuery.data?.role ?? "");
-  const canSeeRestricted = orgRoleQuery.data?.role === "ONE_ABOVE_ALL";
   // No "Pipeline" entry here (owner, 9 Oct 2026: "kenapa pipeline masuk ke mission? … yg masuk ke project
   // doang"): the board is a project like any other, opened from Projects.
-  // Threads / Integrity are visible in nav to ALL roles, but Manager-and-below land on a
-  // "Coming Soon" page (gated inside each route component) — no ETA yet, so we tease, not hide.
   const MANAGER_ONLY_URLS = new Set(["/admin", "/teams"]);
-  const ONE_ABOVE_ALL_URLS = new Set(["/social"]);
 
   // Live nav badges. Inbox = unread notifications (shared cache w/ the inbox page). Attendance =
   // pending offsite-checkout approvals (BoD only). Both refresh every 45s + on relevant mutations.
@@ -95,7 +91,7 @@ export function AppSidebar() {
   };
   const badgeText = (n: number) => (n > 9 ? "9+" : String(n));
   const visibleGroups = groups
-    .map((g) => ({ ...g, items: g.items.filter((item) => (canManageOrg || !MANAGER_ONLY_URLS.has(item.url)) && (canSeeRestricted || !ONE_ABOVE_ALL_URLS.has(item.url))) }))
+    .map((g) => ({ ...g, items: g.items.filter((item) => (canManageOrg || !MANAGER_ONLY_URLS.has(item.url))) }))
     .filter((g) => g.items.length > 0);
 
   const [loggingOut, setLoggingOut] = useState(false);

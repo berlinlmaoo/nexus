@@ -911,41 +911,6 @@ export async function notifyFeedComment(data: {
   }
 }
 
-// ── Integrity (peer reports / "cepu") ────────────────────────
-
-/** Tell the reported person a report was filed about them (reporter stays anonymous) — due-process so they can rebut. */
-export async function notifyPeerReportFiled(data: { reportedUserId: string; categoryLabel: string }) {
-  if (await isUserDnd(data.reportedUserId)) return
-  const user = await prisma.user.findUnique({ where: { id: data.reportedUserId }, select: { name: true, phoneNumber: true } })
-  if (!user) return
-  const prefs = await getUserPrefs(data.reportedUserId)
-  const base = publicBaseUrl()
-  const link = `/peer-reports`
-  await createInAppNotification({
-    userId: data.reportedUserId,
-    type: "peer_report_filed",
-    title: "Ada laporan tentang kamu",
-    message: `Soal: ${data.categoryLabel}. Kamu bisa kasih bantahan sebelum BoD memutuskan.`,
-    link,
-    // The only chance to rebut, and it sat in the in-app bell alone.
-    push: true,
-  })
-  const waRecipient = prefs.waPhone || user.phoneNumber
-  if (waRecipient && (prefs.waEnabled || envFlagEnabled("NEXUS_WA_MENTIONS_DEFAULT_ENABLED", true))) {
-    await sendWA(waRecipient, `[NEXUS] Ada laporan tentang kamu soal "${data.categoryLabel}". Buka Integrity buat kasih bantahan${base ? `: ${base}${link}` : ""}.`)
-  }
-}
-
-/** Broadcast a verified-violation announcement to EVERY workspace member (the public "pengumuman"). */
-export async function notifyViolationAnnouncement(data: { reportedName: string; categoryLabel: string }) {
-  const members = await prisma.workspaceMember.findMany({ select: { userId: true }, distinct: ["userId"] })
-  const title = "⚠️ Pelanggaran terbukti"
-  const message = `${data.reportedName} terbukti melanggar: ${data.categoryLabel}`
-  await Promise.allSettled(
-    members.map((m) => createInAppNotification({ userId: m.userId, type: "violation_announcement", title, message, link: "/peer-reports" })),
-  )
-}
-
 /// An announcement, delivered.
 ///
 /// Until now posting one only wrote a row: the pop-up was picked up the next time somebody happened

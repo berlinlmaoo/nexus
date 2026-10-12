@@ -70,7 +70,6 @@ const EXACT: Record<string, AndroidChannelId> = {
   quest_claimable: "tasks",
 
   system_gideon: "tickets",
-  violation_announcement: "tickets",
 
   announcement: "announcements",
 
@@ -84,7 +83,6 @@ const PREFIX: Array<[string, AndroidChannelId]> = [
   ["comment_", "tasks"],
   ["booking_", "tasks"],
   ["complaint_", "tickets"],
-  ["peer_report_", "tickets"],
   ["google_workspace_", "system"],
 ]
 

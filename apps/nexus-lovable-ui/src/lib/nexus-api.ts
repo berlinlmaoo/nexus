@@ -142,37 +142,6 @@ export type FeedPost = {
 export type FeedPage = { posts: FeedPost[]; nextCursor: string | null; hasMore: boolean };
 export type FeedComment = { id: string; text: string; createdAt: string; author: FeedAuthor };
 
-// --- Integrity (Peer Reports / "cepu") — BoD-and-above beta ---
-export type PeerReportUser = { id: string; name: string; avatar?: string | null };
-export type PeerReportStatus = "PENDING" | "VERIFIED" | "REJECTED" | "WITHDRAWN";
-export type PeerReport = {
-  id: string;
-  category: string;
-  reason: string | null;
-  evidenceUrl: string | null;
-  status: PeerReportStatus;
-  rebuttal: string | null;
-  rebuttalAt: string | null;
-  reviewNote: string | null;
-  reviewedAt: string | null;
-  reportedPenaltyXp: number;
-  xpApplied: boolean;
-  createdAt: string;
-  reporter: PeerReportUser | null;   // null when anonymized (non-BoD viewer)
-  reporterHidden: boolean;
-  reportedUser: PeerReportUser;
-  reviewer: { id: string; name: string } | null;
-  isMine: boolean;
-  isAgainstMe: boolean;
-  canDecide: boolean;
-  canWithdraw: boolean;
-  canRebut: boolean;
-};
-export type PeerReportList = { reports: PeerReport[]; counts: Record<string, number>; viewerIsBod: boolean };
-export type HallOfShameEntry = { id: string; category: string; at: string; reportedUser: PeerReportUser };
-export type HallOfShameOffender = { user: PeerReportUser; count: number };
-export type HallOfShame = { entries: HallOfShameEntry[]; offenders: HallOfShameOffender[] };
-
 // --- Project spreadsheet ---
 export type NexusSheetColumnType = "text" | "number" | "currency" | "date" | "select" | "multiselect" | "checkbox" | "task" | "link";
 export type NexusSheetRuleOp = "gt" | "lt" | "gte" | "lte" | "eq" | "neq" | "contains" | "empty" | "notEmpty";
@@ -1918,18 +1887,6 @@ export type NexusStatusUpdate = {
   author?: NexusUser | null;
 };
 
-export type BufferChannel = { id: string; name: string; service: string; avatar?: string | null };
-export type BufferDraft = {
-  id: string;
-  text: string;
-  status: string;
-  createdAt?: string | null;
-  dueAt?: string | null;
-  channel: BufferChannel | null;
-  media: string[];
-};
-export type BufferDraftsResponse = { configured: boolean; drafts: BufferDraft[]; channels: BufferChannel[]; error?: string; stale?: boolean; rateLimited?: boolean; cached?: boolean };
-
 /** GET /api/app/android/release — the sideloaded Android build the /download/android page offers. */
 export type AndroidReleaseInfo =
   | { available: false; minSupported: string; latest: string | null }
@@ -2639,21 +2596,6 @@ export const nexusApi = {
   postComments: (id: string) => apiFetch<{ comments: FeedComment[] }>(`/api/feed/posts/${id}/comments`),
   addPostComment: (id: string, payload: { text: string; mentions: string[] }) => apiFetch<FeedComment>(`/api/feed/posts/${id}/comments`, { method: "POST", body: JSON.stringify(payload) }),
 
-  // --- Integrity (Peer Reports) ---
-  peerReports: (status?: string) => apiFetch<PeerReportList>(`/api/peer-reports${status && status !== "ALL" ? `?status=${status}` : ""}`),
-  createPeerReport: (payload: { reportedUserId: string; category: string; reason: string; evidence: File }) => {
-    const fd = new FormData();
-    fd.set("reportedUserId", payload.reportedUserId);
-    fd.set("category", payload.category);
-    fd.set("reason", payload.reason);
-    fd.set("evidence", payload.evidence);
-    return apiFetch<PeerReport>("/api/peer-reports", { method: "POST", body: fd });
-  },
-  peerReportVerdict: (id: string, payload: { action: "verify" | "reject"; reviewNote?: string }) => apiFetch<PeerReport>(`/api/peer-reports/${id}/verdict`, { method: "POST", body: JSON.stringify(payload) }),
-  withdrawPeerReport: (id: string) => apiFetch<PeerReport>(`/api/peer-reports/${id}/withdraw`, { method: "POST" }),
-  rebutPeerReport: (id: string, rebuttal: string) => apiFetch<PeerReport>(`/api/peer-reports/${id}/rebuttal`, { method: "POST", body: JSON.stringify({ rebuttal }) }),
-  hallOfShame: () => apiFetch<HallOfShame>("/api/peer-reports/hall-of-shame"),
-
   // --- Legal document generation (invoice / PKS) ---
   generateLegalDocument: (taskId: string) =>
     apiFetch<{
@@ -2975,9 +2917,6 @@ export const nexusApi = {
     apiFetch<NexusOffboardResult>(`/api/admin/users/${userId}/offboard`, { method: "POST", body: JSON.stringify(body) }),
   reinstateUser: (userId: string) => apiFetch<NexusReinstateResult>(`/api/admin/users/${userId}/reinstate`, { method: "POST", body: JSON.stringify({}) }),
   deleteUser: (userId: string) => apiFetch<{ ok: boolean; deletedUser: { id: string; name: string; email: string }; reassigned: Record<string, number>; purged: Record<string, number> }>(`/api/admin/users/${userId}`, { method: "DELETE" }),
-  bufferDrafts: () => apiFetch<BufferDraftsResponse>("/api/buffer/drafts"),
-  bufferApprove: (postId: string, mode: "queue" | "schedule" | "now", dueAt?: string) => apiFetch<{ ok: boolean }>("/api/buffer/approve", { method: "POST", body: JSON.stringify({ postId, mode, dueAt }) }),
-  bufferReject: (postId: string) => apiFetch<{ ok: boolean }>("/api/buffer/reject", { method: "POST", body: JSON.stringify({ postId }) }),
   updateProfile: (payload: { name?: string; phoneNumber?: string | null; dndUntil?: string | null; markOnboarded?: boolean }) => apiFetch<{ user?: NexusUser }>("/api/user/profile", { method: "PATCH", body: JSON.stringify(payload) }),
   requestEmailChange: (email: string, currentPassword: string) => apiFetch<{ ok: boolean; resendInSeconds?: number }>("/api/user/email/request", { method: "POST", body: JSON.stringify({ email, currentPassword }) }),
   verifyEmailChange: (email: string, code: string) => apiFetch<{ ok: boolean; email: string }>("/api/user/email/verify", { method: "POST", body: JSON.stringify({ email, code }) }),

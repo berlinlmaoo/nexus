@@ -118,6 +118,7 @@ model User {
   postMentions         PostMention[]       @relation("PostMentionUser")
   postLikes            PostLike[]          @relation("PostLikeUser")
   postComments         PostComment[]       @relation("PostCommentAuthor")
+  // retired 12 Oct 2026 (Integrity removed) — relations kept only while the PeerReport tables exist
   peerReportsFiled     PeerReport[]        @relation("PeerReportReporter")
   peerReportsAgainst   PeerReport[]        @relation("PeerReportReported")
   peerReportsReviewed  PeerReport[]        @relation("PeerReportReviewer")
@@ -2774,6 +2775,10 @@ model PostComment {
 }
 
 // ─── INTEGRITY (PEER REPORTS / "cepu") ───────────────────────
+// RETIRED 12 Oct 2026 (owner): the Integrity feature was removed completely — no API, page,
+// notification or XP path touches these models any more. The tables and rows are kept on purpose
+// (dropping is irreversible); prisma/sql/2026-10-12-retire-social-integrity-DROP.sql archives and
+// drops them once the owner approves. Do not build on these models.
 // BETA: BoD-and-above only. Reports of policy violations; on VERIFY, XP can move
 // (reporter +bounty, reported −penalty) — but XP is gated behind PEER_REPORT_XP_ENABLED
 // (default OFF) until governance sign-off. Snapshot XP onto the row so config changes

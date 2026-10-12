@@ -148,7 +148,8 @@ function classify(p, d) {
   const cats = secs.filter((s) => !statusWord(s.name))
   if (cats.length === 0) return { cls: "status", secs }
   const realStatus = secs.filter((s) => statusWord(s.name) && !isGenericDone(s.name))
-  if (realStatus.length > 0) return { cls: "mixed", secs, cats }
+  // One category beside real statuses (Social Media Nightlife's "OMAR TASK"): not worth a field (owner, 12 Oct).
+  if (realStatus.length > 0) return cats.length === 1 ? { cls: "single", secs, cats } : { cls: "mixed", secs, cats }
   if (cats.length === 1) return { cls: "single", secs, cats }
   return { cls: CALENDARISH.test(p.name) ? "calendar" : "category", secs, cats }
 }
@@ -164,7 +165,13 @@ function planProject(p, d) {
   if (c.cls === "dashboard" || c.cls === "empty") return plan
 
   if (c.cls === "status") {
-    for (const s of secs) if (!s.taskStatus) plan.bind.push({ id: s.id, name: s.name, from: null, to: statusWord(s.name) || "TODO" })
+    // Unbound sections take their word's status; one left on the default To-do binding whose word says
+    // otherwise moves too ("Upload" → In progress, owner 12 Oct 2026).
+    for (const s of secs) {
+      const word = statusWord(s.name)
+      if (!s.taskStatus) plan.bind.push({ id: s.id, name: s.name, from: null, to: word || "TODO" })
+      else if (s.taskStatus === "TODO" && word && word !== "TODO") plan.bind.push({ id: s.id, name: s.name, from: s.taskStatus, to: word })
+    }
     return plan
   }
 
@@ -196,8 +203,21 @@ function planProject(p, d) {
       const to = want.get(s.id)
       if (to && to !== s.taskStatus) plan.bind.push({ id: s.id, name: s.name, from: s.taskStatus, to })
     }
-    const off = real.filter((s) => want.get(s.id) !== "DONE").reduce((n, s) => n + (d.tasksBy.get(s.id) || []).filter((t) => t.status === "DONE").length, 0)
-    if (off) plan.notes.push(`${off} task(s) are DONE but sit in an earlier stage (left where they are)`)
+    // DONE tasks still sitting in an earlier stage move to the completion column, in stage order, their
+    // subtasks with them (owner, 12 Oct 2026).
+    const doneSec = completion >= 0 ? real[completion] : trailing[0]
+    if (doneSec) {
+      let pos = Math.max(-1, ...(d.tasksBy.get(doneSec.id) || []).map((t) => t.position)) + 1
+      for (const s of secs) {
+        if (s.id === doneSec.id || GROUP[want.get(s.id) || s.taskStatus] === "complete") continue
+        const inSec = d.tasksBy.get(s.id) || []
+        const movedParents = new Set(inSec.filter((t) => !t.parentId && t.status === "DONE").map((t) => t.id))
+        for (const t of inSec) {
+          if (!(movedParents.has(t.id) || (t.parentId && movedParents.has(t.parentId)))) continue
+          plan.moves.push({ taskId: t.id, from: s.id, to: doneSec.id, toName: doneSec.name, position: pos++, category: s.name, status: t.status, subtask: !!t.parentId })
+        }
+      }
+    }
     return plan
   }
 
@@ -431,7 +451,7 @@ async function snapshot(db, plans, d) {
     if (!(p.bind.length || p.create.length || p.remove.length || p.moves.length || p.linkMoves.length || p.field || p.view || p.forms.length || p.autos.length || p.viewEdits.length)) continue
     const secIds = (d.sectionsBy.get(p.projectId) || []).map((s) => s.id)
     const sections = (await db.query(`SELECT * FROM "TaskList" WHERE "projectId" = $1`, [p.projectId])).rows
-    const tasks = secIds.length ? (await db.query(`SELECT id, "taskListId", position FROM "Task" WHERE "taskListId" = ANY($1)`, [secIds])).rows : []
+    const tasks = secIds.length ? (await db.query(`SELECT id, "taskListId", position, status::text AS status FROM "Task" WHERE "taskListId" = ANY($1)`, [secIds])).rows : []
     const links = secIds.length ? (await db.query(`SELECT id, "taskListId", position FROM "TaskProject" WHERE "taskListId" = ANY($1)`, [secIds])).rows : []
     const views = (await db.query(`SELECT id, position, config FROM "ProjectView" WHERE "projectId" = $1`, [p.projectId])).rows
     let fieldValues = null
@@ -510,10 +530,137 @@ async function applyPlan(db, p, d, backupEntry) {
   }
 }
 
+// ── follow-ups on a converted project (owner, 12 Oct 2026) ─────────────────────────────────────────
+// Run after the conversion in the same transaction, and on projects converted before these rules:
+//  - an option that is another option + "On Prog" / "OP" / "WIP" ("AI & Tech On Prog") merges into it, and
+//    its tasks that are not done become In progress (moved to the In-progress column, order kept);
+//  - form answers mapped to the category field that are not options yet become options (with colours);
+//  - a "Category"/"Kategori" field left with ONE option is dropped with its "By category" view (values kept
+//    in the backup).
+
+const MERGE_SUFFIX = /^(.*\S)\s+(on prog|on progress|in progress|progress|op|wip)$/i
+
+async function planFollowups(db) {
+  const views = (await db.query(`SELECT v.*, p.name AS "projectName" FROM "ProjectView" v JOIN "Project" p ON p.id = v."projectId" WHERE v.builtin = 'category' AND v."ownerId" IS NULL ORDER BY p.name`)).rows
+  const out = []
+  for (const v of views) {
+    const fieldId = String((v.config || {}).groupBy || "").replace(/^cf:/, "")
+    const field = (await db.query(`SELECT * FROM "CustomField" WHERE id = $1`, [fieldId])).rows[0]
+    if (!field) continue
+    const f = { projectId: v.projectId, name: v.projectName, fieldId, fieldName: field.name, merges: [], statusMoves: [], addOptions: [], drop: false, viewId: v.id, forms: [] }
+    let options = choiceList(field.options)
+    const colors = { ...((field.options && field.options.optionColors) || {}) }
+    const sections = (await db.query(`SELECT id, name, position, "taskStatus"::text AS "taskStatus" FROM "TaskList" WHERE "projectId" = $1 ORDER BY position`, [v.projectId])).rows
+    const forms = (await db.query(`SELECT id, name, fields FROM "Form" WHERE "projectId" = $1`, [v.projectId])).rows
+
+    if (options.length === 1 && /^(category|kategori)$/i.test(field.name)) {
+      f.drop = true
+      for (const fm of forms) {
+        const list = Array.isArray(fm.fields) ? fm.fields : []
+        if (!list.some((x) => x && x.mapping && x.mapping.customFieldId === fieldId)) continue
+        f.forms.push({ id: fm.id, name: fm.name, before: fm.fields, after: list.map((x) => (x && x.mapping && x.mapping.customFieldId === fieldId ? { ...x, mapping: { target: "none" } } : x)) })
+      }
+      out.push(f)
+      continue
+    }
+
+    // merges
+    for (const o of options) {
+      const m = MERGE_SUFFIX.exec(o)
+      const base = m && options.find((x) => x.toLowerCase() === m[1].toLowerCase() && x !== o)
+      if (base) f.merges.push({ from: o, to: base })
+    }
+    if (f.merges.length) {
+      const ip = sections.find((s) => s.taskStatus === "IN_PROGRESS") || sections.find((s) => GROUP[s.taskStatus] === "in_progress")
+      const secIds = sections.map((s) => s.id)
+      let pos = ip ? (await db.query(`SELECT coalesce(max(position), -1) + 1 AS n FROM "Task" WHERE "taskListId" = $1`, [ip.id])).rows[0].n : 0
+      const rows = (await db.query(`SELECT t.id, t."taskListId", t.position, t.status::text AS status, x.value FROM "CustomFieldValue" x JOIN "Task" t ON t.id = x."taskId" JOIN "TaskList" tl ON tl.id = t."taskListId" WHERE x."customFieldId" = $1 AND x.value = ANY($2) AND t."taskListId" = ANY($3) ORDER BY tl.position, t.position`, [fieldId, f.merges.map((m) => m.from), secIds])).rows
+      for (const t of rows) {
+        if (t.status === "DONE" || t.status === "CANCELLED") continue
+        if (!ip) continue
+        if (t.status === "IN_PROGRESS" && t.taskListId === ip.id) continue
+        f.statusMoves.push({ taskId: t.id, from: t.taskListId, to: ip.id, toName: ip.name, position: pos++, status: t.status, value: t.value })
+      }
+      options = options.filter((o) => !f.merges.some((m) => m.from === o))
+      for (const m of f.merges) delete colors[m.from]
+    }
+    // form answers that are not options yet
+    for (const fm of forms) {
+      for (const x of Array.isArray(fm.fields) ? fm.fields : []) {
+        if (!(x && x.mapping && x.mapping.target === "custom_field" && x.mapping.customFieldId === fieldId)) continue
+        for (const o of Array.isArray(x.options) ? x.options.map((y) => String(y).trim()).filter(Boolean) : []) {
+          if (![...options, ...f.addOptions].some((y) => y.toLowerCase() === o.toLowerCase())) f.addOptions.push(o)
+        }
+      }
+    }
+    const used = new Set(Object.values(colors))
+    let i = options.length
+    for (const o of f.addOptions) {
+      const free = PALETTE.find((c) => !used.has(c))
+      colors[o] = free || PALETTE[i % PALETTE.length]
+      used.add(colors[o]); i++
+    }
+    f.newOptions = { ...(field.options || {}), options: [...options, ...f.addOptions], optionColors: colors }
+    if (f.merges.length || f.addOptions.length) out.push(f)
+  }
+  return out
+}
+
+async function snapshotFollowup(db, f) {
+  const field = (await db.query(`SELECT * FROM "CustomField" WHERE id = $1`, [f.fieldId])).rows[0]
+  const values = (await db.query(`SELECT * FROM "CustomFieldValue" WHERE "customFieldId" = $1`, [f.fieldId])).rows
+  const tasks = f.statusMoves.length ? (await db.query(`SELECT id, "taskListId", position, status::text AS status FROM "Task" WHERE id = ANY($1)`, [f.statusMoves.map((m) => m.taskId)])).rows : []
+  const views = f.drop ? (await db.query(`SELECT * FROM "ProjectView" WHERE id = $1`, [f.viewId])).rows : []
+  return { kind: "followup", projectId: f.projectId, name: f.name, field, values, tasks, views, forms: f.forms.map((x) => ({ id: x.id, fields: x.before })) }
+}
+
+async function applyFollowup(db, f) {
+  const now = new Date()
+  for (const x of f.forms) await db.query(`UPDATE "Form" SET fields = $2::jsonb, "updatedAt" = $3 WHERE id = $1`, [x.id, JSON.stringify(x.after), now])
+  if (f.drop) {
+    await db.query(`DELETE FROM "ProjectView" WHERE id = $1`, [f.viewId])
+    await db.query(`DELETE FROM "CustomField" WHERE id = $1`, [f.fieldId])
+    return
+  }
+  for (const m of f.merges) await db.query(`UPDATE "CustomFieldValue" SET value = $3 WHERE "customFieldId" = $1 AND value = $2`, [f.fieldId, m.from, m.to])
+  for (const m of f.statusMoves) await db.query(`UPDATE "Task" SET "taskListId" = $2, position = $3, status = 'IN_PROGRESS' WHERE id = $1`, [m.taskId, m.to, m.position])
+  await db.query(`UPDATE "CustomField" SET options = $2::jsonb WHERE id = $1`, [f.fieldId, JSON.stringify(f.newOptions)])
+}
+
+async function rollbackFollowup(db, p) {
+  console.log(`rollback follow-up ${p.name}`)
+  const fl = p.field
+  const exists = (await db.query(`SELECT 1 FROM "CustomField" WHERE id = $1`, [fl.id])).rows.length
+  if (exists) await db.query(`UPDATE "CustomField" SET name = $2, options = $3::jsonb, position = $4 WHERE id = $1`, [fl.id, fl.name, JSON.stringify(fl.options), fl.position])
+  else await db.query(`INSERT INTO "CustomField" (id, name, type, options, position, "projectId", "libraryId") VALUES ($1, $2, $3::"CustomFieldType", $4::jsonb, $5, $6, $7)`, [fl.id, fl.name, fl.type, JSON.stringify(fl.options), fl.position, fl.projectId, fl.libraryId ?? null])
+  await db.query(`DELETE FROM "CustomFieldValue" WHERE "customFieldId" = $1`, [fl.id])
+  for (const v of p.values) await db.query(`INSERT INTO "CustomFieldValue" (id, value, "customFieldId", "taskId") VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`, [v.id, v.value, v.customFieldId, v.taskId])
+  for (const t of p.tasks) await db.query(`UPDATE "Task" SET "taskListId" = $2, position = $3, status = $4::"TaskStatus" WHERE id = $1`, [t.id, t.taskListId, t.position, t.status])
+  for (const v of p.views) {
+    const keys = Object.keys(v)
+    await db.query(`INSERT INTO "ProjectView" (${keys.map((k) => `"${k}"`).join(", ")}) VALUES (${keys.map((k, i) => (k === "config" ? `$${i + 1}::jsonb` : `$${i + 1}`)).join(", ")}) ON CONFLICT DO NOTHING`, keys.map((k) => (k === "config" ? JSON.stringify(v[k]) : v[k])))
+  }
+  for (const x of p.forms) await db.query(`UPDATE "Form" SET fields = $2::jsonb WHERE id = $1`, [x.id, JSON.stringify(x.fields)])
+}
+
+function printFollowups(list) {
+  if (!list.length) return
+  console.log(`\n# Follow-ups on converted projects (${list.length})`)
+  for (const f of list) {
+    console.log(`\n## ${f.name}  [follow-up, field "${f.fieldName}"]`)
+    if (f.drop) { console.log(`  drop    field "${f.fieldName}" (one option) and its "By category" view; values kept in the backup`); for (const x of f.forms) console.log(`  form    ${x.name}: answer no longer mapped to "${f.fieldName}"`); continue }
+    for (const m of f.merges) console.log(`  merge   option "${m.from}" → "${m.to}"`)
+    if (f.statusMoves.length) console.log(`  status  ${f.statusMoves.length} not-done task(s) of the merged option(s) → In progress ("${f.statusMoves[0].toName}")`)
+    if (f.addOptions.length) console.log(`  options + ${f.addOptions.join(" / ")} (form answers)`)
+  }
+}
+
 // ── rollback ───────────────────────────────────────────────────────────────────────────────────────
 
 async function rollback(db, backup) {
-  for (const p of backup.projects) {
+  // Newest first: the follow-ups were written after the conversion of the same run.
+  for (const p of [...backup.projects].reverse()) {
+    if (p.kind === "followup") { await rollbackFollowup(db, p); continue }
     console.log(`rollback ${p.name} [${p.cls}]`)
     const cols = (row) => Object.keys(row)
     // sections back (re-created with their old ids when removed)
@@ -526,7 +673,10 @@ async function rollback(db, backup) {
         await db.query(`INSERT INTO "TaskList" (${keys.map((k) => `"${k}"`).join(", ")}) VALUES (${keys.map((k, i) => (k === "taskStatus" ? `$${i + 1}::"TaskStatus"` : `$${i + 1}`)).join(", ")})`, keys.map((k) => s[k]))
       }
     }
-    for (const t of p.tasks) await db.query(`UPDATE "Task" SET "taskListId" = $2, position = $3 WHERE id = $1`, [t.id, t.taskListId, t.position])
+    for (const t of p.tasks) {
+      if (t.status) await db.query(`UPDATE "Task" SET "taskListId" = $2, position = $3, status = $4::"TaskStatus" WHERE id = $1 AND (status::text <> $4 OR "taskListId" <> $2 OR position <> $3)`, [t.id, t.taskListId, t.position, t.status])
+      else await db.query(`UPDATE "Task" SET "taskListId" = $2, position = $3 WHERE id = $1`, [t.id, t.taskListId, t.position])
+    }
     for (const l of p.links) await db.query(`UPDATE "TaskProject" SET "taskListId" = $2, position = $3 WHERE id = $1`, [l.id, l.taskListId, l.position])
     for (const f of p.forms) await db.query(`UPDATE "Form" SET fields = $2::jsonb WHERE id = $1`, [f.id, JSON.stringify(f.fields)])
     for (const a of p.automations) await db.query(`UPDATE "Automation" SET trigger = $2::jsonb, action = $3::jsonb, actions = $4::jsonb, conditions = $5::jsonb WHERE id = $1`,
@@ -568,18 +718,26 @@ async function main() {
       if (APPLY) { await db.query("COMMIT"); console.log("Rolled back.") } else { await db.query("ROLLBACK"); console.log("Rollback DRY RUN ok (add --apply to write).") }
       return
     }
-    await db.query(APPLY ? "BEGIN" : "BEGIN READ ONLY")
+    // The dry run executes everything inside a transaction and rolls it back, so the follow-ups it prints are
+    // planned on the converted state exactly as --apply would.
+    await db.query("BEGIN")
     const d = await load(db)
     const projects = d.projects.filter((p) => !ONLY.length || ONLY.includes(p.name))
     const plans = projects.map((p) => planProject(p, d))
     if (JSON_OUT) console.log(JSON.stringify(plans.map((p) => ({ ...p, moves: p.moves.length, linkMoves: p.linkMoves.length, values: p.values.length, forms: p.forms.map((f) => ({ name: f.name, notes: f.notes })), autos: p.autos.map((a) => ({ name: a.name, notes: a.notes })) })), null, 2))
     else printPlan(plans)
-    if (!APPLY) { await db.query("ROLLBACK"); console.log("\nDRY RUN — nothing written. Add --apply (and --backup <file>) to write."); return }
     const backup = await snapshot(db, plans, d)
     for (const p of plans) {
-      const entry = backup.projects.find((b) => b.projectId === p.projectId)
+      const entry = backup.projects.find((b) => b.projectId === p.projectId && !b.kind)
       if (entry) await applyPlan(db, p, d, entry)
     }
+    const follow = (await planFollowups(db)).filter((f) => !ONLY.length || ONLY.includes(f.name))
+    printFollowups(follow)
+    for (const f of follow) {
+      backup.projects.push(await snapshotFollowup(db, f))
+      await applyFollowup(db, f)
+    }
+    if (!APPLY) { await db.query("ROLLBACK"); console.log("\nDRY RUN — executed in a transaction and rolled back; nothing written. Add --apply (and --backup <file>) to write."); return }
     fs.writeFileSync(BACKUP, JSON.stringify(backup))
     await db.query("COMMIT")
     fs.writeFileSync(BACKUP, JSON.stringify(backup)) // again, now with the built-in views that were made
