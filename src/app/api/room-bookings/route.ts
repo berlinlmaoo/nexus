@@ -128,8 +128,8 @@ export async function POST(req: NextRequest) {
       type: "booking_confirmed",
       ...bi(
         [`Room booked: ${roomName(room, "en")}`, `${title.trim()} · ${formatBookingSlot(start, end, "en")}. A reminder comes before it starts.`],
-        [`Ruangan dibooking: ${room}`, `${title.trim()} · ${formatBookingSlot(start, end)}. Pengingat dikirim sebelum mulai.`],
-      ),
+        [`Ruangan dibooking: ${room}`, `${title.trim()} · ${formatBookingSlot(start, end)}. Pengingat dikirim sebelum mulai.`]
+),
       link: "/room-booking",
       push: true,
     }).catch(() => null)

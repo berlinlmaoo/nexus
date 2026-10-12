@@ -14,6 +14,12 @@ const { mockTransaction } = vi.hoisted(() => ({
   mockTransaction: vi.fn(),
 }))
 
+// Project access is rbac.ts's own unit (rbac.test.ts); here the actor may write.
+vi.mock('@/lib/rbac', async (orig) => ({ ...(await orig<typeof import('@/lib/rbac')>()), checkProjectAccess: vi.fn(async () => ({ allowed: true, role: 'LEAD' })) }))
+
+vi.mock('@/lib/gideon-identity', async (orig) => ({ ...(await orig<typeof import('@/lib/gideon-identity')>()), getGideonUserId: vi.fn(async () => 'gideon-user') }))
+vi.mock('@/lib/status-sections', async (orig) => ({ ...(await orig<typeof import('@/lib/status-sections')>()), sectionForStatus: vi.fn(async () => null) }))
+
 vi.mock('@/lib/prisma', () => {
   const prismaMock = {
     $transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(prismaMock)),
@@ -304,7 +310,8 @@ describe('POST /api/gideon/tools', () => {
     const body = await json(response)
 
     expect(response.status).toBe(200)
-    expect(mockCommentCreate).toHaveBeenCalledWith(expect.objectContaining({ data: { taskId: 'task-1', userId: 'actor-1', content: 'Progress noted' } }))
+    // Written by the GIDEON account and signed with who asked (the comment is never put under the actor's name).
+    expect(mockCommentCreate).toHaveBeenCalledWith(expect.objectContaining({ data: { taskId: 'task-1', userId: 'gideon-user', content: expect.stringContaining('Progress noted') } }))
     expect(body).toEqual({ ok: true, data: { task: expect.objectContaining({ id: 'task-1' }), comment: { ...comment, createdAt: '2026-04-28T00:00:00.000Z' } } })
   })
 
