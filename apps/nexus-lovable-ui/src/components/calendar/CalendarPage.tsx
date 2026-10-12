@@ -571,7 +571,7 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
         {/* On a phone with ‹ month › in the header the title is for screen readers only (the tab bar already
             says Calendar): two rows instead of three (audit 12 Oct 2026). */}
         <div className={cn("flex items-center gap-2", phone && !weekBar && "sr-only")}>
-          <span className="grid size-8 place-items-center rounded-xl bg-cal-accent text-cal-accent-foreground"><CalendarDays className="h-4 w-4" /></span>
+          <span className="grid size-8 place-items-center rounded-xl bg-cal-accent text-cal-accent-foreground dark:bg-muted dark:text-foreground"><CalendarDays className="h-4 w-4" /></span>
           <h1 className="font-display text-xl font-bold tracking-tight md:text-2xl">{t("Calendar")}</h1>
         </div>
         {/* In reading order on every size: a phone has ‹ month › and Filters on the first line, the two
@@ -612,7 +612,7 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
                     <button type="button" data-cal-crumb="" aria-current={current ? "location" : undefined}
                       onClick={current ? undefined : id === ix.top?.id ? leaveFocus : () => setSearch({ focus: id })}
                       className={cn("inline-flex h-7 items-center rounded-md px-1.5", coarseText, FOCUS_PILL,
-                        current ? "cursor-default bg-cal-accent text-cal-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground")}>
+                        current ? "cursor-default bg-cal-accent text-cal-accent-foreground dark:bg-primary dark:text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground")}>
                       {i === 0 ? t("All divisions") : ix.byId.get(id)?.name}
                     </button>
                   </span>

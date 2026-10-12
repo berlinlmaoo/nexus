@@ -437,4 +437,5 @@ export const ID_I18N_ADMIN: Record<string, string> = {
   "Search and add members…": "Cari & tambah member…",
   "Search and link projects…": "Cari & tautkan project…",
   "Something didn't go through. Check your access and connection.": "Ada yang gagal. Cek akses dan koneksimu.",
+  "Short updates from the team. Tag someone with @ and they get notified.": "Kabar singkat dari tim. Tag seseorang pakai @ biar dia dapat notifikasi.",
 }

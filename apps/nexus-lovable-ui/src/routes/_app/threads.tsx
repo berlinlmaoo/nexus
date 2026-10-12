@@ -1,9 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AtSign, ArrowUp, Loader2, X } from "lucide-react";
 import { AvatarStack } from "@/components/Avatar";
+import { PageHeader } from "@/components/PageHeader";
 import { celebrate } from "@/components/Celebration";
 import { cn } from "@/lib/utils";
 import { ApiError, nexusApi, type FeedPage, type FeedPost, type NexusUser } from "@/lib/nexus-api";
@@ -46,6 +47,17 @@ function FeedPage() {
   const { post: focusId } = Route.useSearch();
   const [tab, setTab] = useState<Tab>("all");
   const key = useMemo(() => ["feed", tab] as const, [tab]);
+  // Height of the (md+ sticky) page header, so the new-posts pill sticks right under it.
+  const headRef = useRef<HTMLDivElement>(null);
+  const [headH, setHeadH] = useState(0);
+  useLayoutEffect(() => {
+    const el = headRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setHeadH(el.offsetHeight));
+    ro.observe(el);
+    setHeadH(el.offsetHeight);
+    return () => ro.disconnect();
+  }, []);
 
   // The post a notification opened, fetched on its own: it may be far down the feed or not loaded.
   const focus = useQuery({
@@ -180,22 +192,31 @@ function FeedPage() {
   const empty = !feed.isLoading && posts.length === 0;
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-[600px] sm:border-x sm:border-border">
-      {/* slim sticky header */}
-      <div className="sticky top-0 z-20 flex items-center justify-center border-b border-border bg-background/80 py-3 backdrop-blur-md">
-        <h1 className="font-display text-lg font-black tracking-tight">{t("Threads")}</h1>
+    <div>
+      {/* The app's standard header (title, subtitle, the All / Mentions switch in its tabs row) at full
+          width, like every other page; it was a centred 600px column with its own slim bar (audit 12 Oct
+          2026). The wrapper carries the header's md+ stickiness so its height can be measured for the
+          new-posts pill, which sits just under it. */}
+      <div ref={headRef} className="md:sticky md:top-0 md:z-40">
+        <PageHeader
+          title={t("Threads")}
+          subtitle={t("Short updates from the team. Tag someone with @ and they get notified.")}
+          tabs={
+            <div role="tablist" aria-label={t("Threads")} className="mb-3 inline-flex items-center gap-1 rounded-lg border border-border bg-background p-0.5">
+              {([["all", "All"], ["mentions", "Mentions"]] as const).map(([tk, label]) => (
+                <button key={tk} type="button" role="tab" aria-selected={tab === tk} onClick={() => setTab(tk)}
+                  className={cn("rounded-md px-4 py-1 text-sm font-semibold transition-colors", tab === tk ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>
+                  {t(label)}
+                </button>
+              ))}
+            </div>
+          }
+        />
       </div>
 
-      {/* underline tabs */}
-      <div className="sticky top-[49px] z-20 flex border-b border-border bg-background/80 backdrop-blur-md">
-        {([["all", "All"], ["mentions", "Mentions"]] as const).map(([tk, label]) => (
-          <button key={tk} onClick={() => setTab(tk)} className="relative flex-1 py-3.5 text-sm font-bold transition hover:bg-muted/30">
-            <span className={cn(tab === tk ? "text-foreground" : "text-muted-foreground")}>{t(label)}</span>
-            {tab === tk && <motion.span layoutId="wire-tab" className="absolute bottom-0 left-1/2 h-1 w-14 -translate-x-1/2 rounded-full bg-primary" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
-          </button>
-        ))}
-      </div>
-
+      {/* Same gutters as the other pages; the feed keeps a readable column, left-aligned like the lists. */}
+      <div className="p-4 md:p-8">
+      <div className="max-w-2xl overflow-clip rounded-2xl border border-border bg-card shadow-soft">
       {focusId && (
         <div className="border-b-4 border-border/60">
           <div className="flex items-center justify-between px-4 pt-2.5 text-xs font-semibold text-muted-foreground">
@@ -217,7 +238,7 @@ function FeedPage() {
       {tab === "all" && me && <Composer me={{ id: me.id, name: me.name, avatar: me.avatar }} members={members} onPost={onPost} />}
 
       {/* new-posts pill */}
-      <div className="pointer-events-none sticky top-[104px] z-10 flex justify-center">
+      <div className="pointer-events-none sticky top-2 z-10 flex justify-center md:top-[calc(var(--threads-head,0px)+0.5rem)]" style={{ "--threads-head": `${headH}px` } as CSSProperties}>
         <AnimatePresence>
           {newPosts.length > 0 && (
             <motion.button
@@ -253,6 +274,8 @@ function FeedPage() {
 
         <div ref={sentinel} className="h-8" />
         {feed.isFetchingNextPage && <div className="flex justify-center py-4 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
+      </div>
+      </div>
       </div>
     </div>
   );

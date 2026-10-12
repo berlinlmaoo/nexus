@@ -65,7 +65,7 @@ export function Segmented<T extends string>({ value, options, onChange, label, s
               size === "md" ? "min-h-8 px-3 py-1.5" : "min-h-7 px-2.5 py-1",
               TOUCH_ROW,
               FOCUS_PILL,
-              on ? "bg-cal-accent text-cal-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              on ? "bg-cal-accent text-cal-accent-foreground dark:bg-primary dark:text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
             {o.icon}

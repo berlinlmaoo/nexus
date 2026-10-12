@@ -165,7 +165,7 @@ export const MonthGrid = memo(function MonthGrid({
                     <span className={cn("flex items-start gap-1", compact ? "justify-center" : "justify-between")}>
                       <span className={cn(
                         "grid h-6 min-w-6 place-items-center rounded-full px-1 text-xs font-semibold tabular-nums md:h-7 md:min-w-7 md:text-sm",
-                        isToday ? "bg-cal-accent text-cal-accent-foreground"
+                        isToday ? "bg-cal-accent text-cal-accent-foreground dark:bg-primary dark:text-primary-foreground"
                           : !inMonth ? "text-muted-foreground"
                           : holiday ? "text-cal-holiday" : "text-foreground",
                         compact && inMonth && holiday && HOLIDAY_CUE,

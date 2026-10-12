@@ -113,16 +113,18 @@ function ComplaintsPage() {
   const invalidate = () => { qc.invalidateQueries({ queryKey: ["complaints"] }); };
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
+    <div>
       <PageHeader
         title={t("Tickets")}
         subtitle={t("A direct line to the BoD for work or HR issues. Only the BoD can read it.")}
         icon={<Ticket className="h-6 w-6 text-primary" />}
-        actions={<button onClick={() => setComposing(true)} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-bold text-primary-foreground shadow-sm transition active:scale-[0.97]"><Plus className="h-4 w-4" /> {t("New ticket")}</button>}
+        actions={<button onClick={() => setComposing(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New ticket")}</button>}
       />
 
-      {/* The page's content gets the same gutters as every other page (it ran edge to edge on a phone). */}
-      <div className="px-4 pb-8 pt-4 md:px-8">
+      {/* Full-width header and the same p-4 md:p-8 gutters as the other list pages; the list keeps a
+          readable width, left-aligned like them (it was a centred 3xl column, header included). */}
+      <div className="p-4 md:p-8">
+      <div className="max-w-3xl">
       {viewerIsBod && (
         <div className="mb-3 flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1">
           {([["open", "Inbox"], ["review", "In review"], ["all", "All"]] as [Tab, string][]).map(([tk, label]) => (
@@ -151,6 +153,7 @@ function ComplaintsPage() {
               : <EmptyAction onClick={() => setComposing(true)}><Plus className="h-4 w-4" /> {t("New ticket")}</EmptyAction>} />
         )}
         {complaints.map((c) => <ComplaintCard key={c.id} c={c} viewerIsBod={viewerIsBod} onOpen={() => setOpenId(c.id)} />)}
+      </div>
       </div>
       </div>
 

@@ -61,7 +61,7 @@ function Admin() {
   const wsId = wsm.data?.workspaceId;
   const viewerRole = wsm.data?.role;
   const viewerAssignable = assignableRoles(viewerRole);
-  const orgInfoByUser = new Map(wsMembers.map((m) => [m.userId, { memberId: m.id, role: m.role, shiftStart: m.attendanceShiftStartTime ?? null, shiftEnd: m.attendanceShiftEndTime ?? null, shiftByDay: m.attendanceShiftByDay ?? null, flexi: m.flexiTimeEnabled ?? false, noGeofence: m.noGeofenceMode ?? false, approverName: m.approver?.name ?? null }] as const));
+  const orgInfoByUser = new Map(wsMembers.map((m) => [m.userId, { memberId: m.id, role: m.role, shiftStart: m.attendanceShiftStartTime ?? null, shiftEnd: m.attendanceShiftEndTime ?? null, shiftByDay: m.attendanceShiftByDay ?? null, flexi: m.flexiTimeEnabled ?? false, noGeofence: m.noGeofenceMode ?? false, approverName: m.approver?.name ?? null, joinedAt: m.joinedAt ?? null }] as const));
   const orgCount = (role: string) => wsMembers.filter((m) => m.role === role).length;
   // Per-person shift (jam masuk/keluar) bisa diatur BoD ke atas, di sini di Members.
   const canManageShift = viewerRole === "BOD" || viewerRole === "ONE_ABOVE_ALL";
@@ -613,7 +613,7 @@ type UserRowProps = {
   onTeamAdd: (teamId: string) => void; onTeamOpen: (teamId: string) => void; onTeamCreated: (teamId: string) => void; onTeamExit: (team: { id: string; name: string }, losing: string[]) => void;
   gwConfigured: boolean; gwAccounts: GoogleWorkspaceAccount[]; gwDomains: string[]; canLinkGoogle: boolean;
   user: NexusAdminUser;
-  orgInfo?: { memberId: string; role: string; shiftStart: string | null; shiftEnd: string | null; shiftByDay: Record<string, { start: string; end: string }> | null; flexi: boolean; noGeofence: boolean; approverName: string | null };
+  orgInfo?: { memberId: string; role: string; shiftStart: string | null; shiftEnd: string | null; shiftByDay: Record<string, { start: string; end: string }> | null; flexi: boolean; noGeofence: boolean; approverName: string | null; joinedAt?: string | null };
   assignable: OrgRole[]; canEdit: boolean; onOrgRole: (role: string) => void; pending: boolean;
   canManageShift: boolean; shiftPending: boolean; onSaveShift: (start: string | null, end: string | null) => void;
   shiftByDayPending: boolean; onSaveShiftByDay: (byDay: Record<string, { start: string; end: string }>) => void;
@@ -639,6 +639,14 @@ type UserRowProps = {
  * tabel ini — "orang ini jamnya berapa, perannya apa" — karena jawabannya tenggelam di antara
  * tombol yang jarang dipakai. Ringkasannya sekarang hanya menyebut yang MENYALA.
  */
+/** When someone joined the workspace (WorkspaceMember.joinedAt), as a short date in the interface
+ *  language with the year: people joined years apart. null = no membership row. */
+function fmtJoined(value: string | null | undefined, locale: string): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" }).replace(/\bSept\b/, "Sep");
+}
+
 function UserRow(props: UserRowProps) {
   const { user, orgInfo, isMember, canDelete, canJoin, joinPending, onJoin, onDelete, workspaceName, memberships, membershipsLoading, gwConfigured, canReinstate, onReinstate } = props;
   const [open, setOpen] = useState(false);
@@ -682,7 +690,7 @@ function UserRow(props: UserRowProps) {
             </div>
           </div>
         </td>
-        <td className="hidden px-4 py-3 text-xs text-muted-foreground md:table-cell">{user.joinedAt ? fmtDate(user.joinedAt) : ""}</td>
+        <td className="hidden whitespace-nowrap px-4 py-3 text-xs text-muted-foreground md:table-cell">{fmtJoined(orgInfo?.joinedAt ?? user.joinedAt, locale) ?? <span className="text-muted-foreground/60">—</span>}</td>
         <td className="px-4 py-3">
           {!orgInfo ? (
             <span className="text-xs text-muted-foreground/60">—</span>
@@ -762,7 +770,8 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
   };
   const projectCount = memberships?.projects.length ?? 0;
   const teamCount = memberships?.teams.length ?? 0;
-  const { t, tn } = useLang();
+  const { t, tn, locale } = useLang();
+  const joined = fmtJoined(orgInfo?.joinedAt ?? user.joinedAt, locale);
 
   // Esc menutup — kartu ini dibuka berkali-kali berturut-turut, dan mengejar tombol × 49 kali
   // adalah cara membuat orang berhenti memakainya.
@@ -812,7 +821,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
             </div>
             <div className="truncate text-sm text-muted-foreground">{user.email}</div>
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground">
-              {user.joinedAt && <span>{t("Joined {date}", { date: fmtDate(user.joinedAt) })}</span>}
+              {joined && <span>{t("Joined {date}", { date: joined })}</span>}
               {user.googleWorkspaceEmail && <span className="inline-flex items-center gap-1"><AtSign className="h-3 w-3" /> {user.googleWorkspaceEmail}</span>}
               <span>{tn(teamCount, "{n} team", "{n} teams")} · {tn(projectCount, "{n} project", "{n} projects")}</span>
             </div>

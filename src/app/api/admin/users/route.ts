@@ -5,6 +5,7 @@ import type { Prisma, SystemRole } from "@/generated/prisma/client"
 import prisma from "@/lib/prisma"
 import { SYSTEM_USER_EMAILS } from "@/lib/system-users"
 import { getAdminSessionContext } from "@/lib/admin-access"
+import { ORG_WORKSPACE_ID } from "@/lib/org"
 
 const SYSTEM_ROLES: SystemRole[] = ["ADMIN", "MEMBER"]
 const MEMBERSHIP_FILTERS = ["all", "workspace-members", "non-members", "system-admins"] as const
@@ -69,10 +70,11 @@ export async function GET(request: NextRequest) {
             select: { workspaceId: true, leftAt: true, reason: true, workspace: { select: { name: true } } },
             orderBy: { leftAt: "desc" },
           },
+          // All memberships (a person has a handful at most): the earliest gives firstJoinedAt, the
+          // company workspace's gives joinedAt (the Control Room's "Joined" column). Additive.
           workspaceMembers: {
-            select: { joinedAt: true },
+            select: { joinedAt: true, workspaceId: true },
             orderBy: { joinedAt: "asc" },
-            take: 1,
           },
           _count: {
             select: { workspaceMembers: true },
@@ -94,6 +96,7 @@ export async function GET(request: NextRequest) {
         googleWorkspaceEmail: user.googleWorkspaceEmail,
         createdAt: user.createdAt,
         firstJoinedAt: user.workspaceMembers[0]?.joinedAt ?? null,
+        joinedAt: user.workspaceMembers.find((m) => m.workspaceId === ORG_WORKSPACE_ID)?.joinedAt ?? null,
         workspaceMembershipCount: user._count.workspaceMembers,
         deactivatedAt: user.deactivatedAt,
         formerMemberships: user.formerMemberships.map((f) => ({

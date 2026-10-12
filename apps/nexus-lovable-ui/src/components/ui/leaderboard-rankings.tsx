@@ -70,7 +70,7 @@ const LeaderboardRankings = React.forwardRef<HTMLDivElement, LeaderboardRankings
                   className={cn(
                     "flex w-full items-center gap-3 px-3 py-3 text-left sm:px-4",
                     onSelectUser && "cursor-pointer hover:bg-muted/40",
-                    isMe && "rounded-xl bg-muted/40 ring-2 ring-foreground/70"
+                    isMe && "rounded-xl bg-muted/40 ring-2 ring-foreground/70 dark:bg-accent dark:ring-1 dark:ring-inset dark:ring-ring/60 dark:hover:bg-accent"
                   )}
                 >
                   <span className="w-5 shrink-0 text-center text-sm font-bold tabular-nums text-muted-foreground">{item.rank}</span>
