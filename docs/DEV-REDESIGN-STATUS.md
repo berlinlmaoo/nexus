@@ -8,6 +8,7 @@ XP / Quest), with native Apple conventions (SF Symbols, navigation, sheets, cent
 iPad sidebar, Mac keyboard shortcuts). Where Notion and NEXUS dev differ, NEXUS dev wins.
 
 Build on the Mac: `git fetch && git switch dev && git pull && xcodegen generate`, then ⌘B / ⌘R.
+**Start with "Device test checklist" at the end of this file** — the single, risk-ordered list.
 **Nothing here has been compiled.** Linux can only `swiftc -parse` each file (all changed files pass), plus
 these real checks that do compile and run on Linux (swift:5.10 in Docker):
 - `./scripts/check-localization.sh` — no duplicate Indonesian key across `Sources/Localization*.swift`
@@ -383,30 +384,67 @@ production they answer 404 or behave the old way, so they go out in the same rel
 | `User.uiLanguage`, `PATCH /api/user/profile { uiLanguage }`, `X-Nexus-Lang`, `Notification.texts` | notification / push language |
 | `GET /api/calendar/task?id=…&detail=1` (the `task` payload; prod answers without it, so the app says "This task no longer exists") and the calendar showing every non-private project's tasks to everyone (80a286c) | Calendar read-only task for non-members |
 
-## Residual risks
+## Device test checklist — THE list for the owner's build (ordered by risk)
 
-1. **Not compiled.** The first ⌘B will tell; the likeliest trouble is long SwiftUI expressions (split where
-   found) and argument labels. Needs Xcode 16 or later (the editor model is created in view initialisers,
-   fine because `View` is main-actor on the iOS 18+ SDK).
-2. In-column reorder needs a drop exactly on a card; between cards there is no insertion line.
-3. Editing a line keeps every mark and mention outside the edited stretch (Linux test on 6 real dev pages,
-   257 checks); a mention or date the edit cuts into becomes plain text, as in an editor.
-4. What's New entries stay English by design.
+Detail for each item is in its section above; this is the order to go through them. Use the DEV server
+(Settings › Server). QA projects: "ZZ …".
 
-## Verify on device first
+**A. Build & launch (blocking)**
+1. `git pull && xcodegen generate`, ⌘B with Xcode 16+. Nothing has been compiled; expect a handful of fixes
+   (argument labels, actor isolation in Swift 5 mode, a slow-to-type-check SwiftUI expression). The likeliest
+   places: Sources/Sheets (SheetGrid, SheetGridObjects, SheetPanelCharts/Pivot/Slicer, SheetChartExport),
+   SheetCover.swift, KeyboardShortcutsHelp.swift, UnitTreePicker.swift, CalendarTaskReadOnly.swift.
+2. Launch, sign in, switch to Bahasa once and back (a duplicate localisation key crashes at launch; the
+   script says none, 4247 keys) — open Spreadsheet, Settings, a task in Bahasa.
 
-1. ⌘B; then switch to Bahasa once (no launch crash).
-2. Finance Suwara board: colours; A ⏎ B ⏎ C in a new card; drag a selection → Undo; drop a card on another
-   card in the same column (order changes, Undo).
-3. A Rupiah field: type 369000, close the task at once, reopen.
-4. Pages: open ZZ Blocks QA › Event SOP, Edit, change a line and add a to-do, Done — check on the web live;
-   edit the same line on the web and in the app (conflict alert). Airplane mode → edit → Done → back
-   online → reopen (sent).
-5. Task description editing, then GIDEON ✨ in the keyboard bar (Improve writing → Replace).
-6. GIDEON: @ a project, Personalize name, Save as doc → Open page; a proposal Apply.
-7. Tickets as BoD (lands on the first non-empty queue); Settings tabs; Notifications tabs.
-8. iPad + keyboard: sidebar ⌘1–⌘7, GIDEON page, task sheet, ⌘N / ⌘F / ⌘[ ⌘].
-9. Spreadsheet (ZZ Bughunt sheet): scroll both ways; type 1.500 and =SUM(…) via the formula bar; press-and-
-   hold then drag a range → Copy → Paste elsewhere (formula shifts); delete a column → ⌘Z (values and
-   formulas back); airplane mode → edit → badge → back online (sent); edit on the web → appears live.
-10. Bahasa → a new notification arrives in Indonesian; English → English.
+**B. App-wide changes that can break existing screens (high)**
+3. iPad trackpad (new Info.plist pointer key): two-finger scroll lists, drag a board card / list row,
+   right-click a card / chat message, swipe-to-delete, approval chart pan/zoom, photo & Vault viewers.
+4. 44 pt tap areas (`touchTarget44`): close "x" buttons, My Tasks done circles, attendance header arrows,
+   member chips — taps land, nothing shifted.
+5. Keys stay in the top sheet: with the task popup open on iPad/Mac, ⌘N / ⌘[ / ⌘1 / ⌘K / ⌘A don't act behind
+   it; ⌘Z in a text field doesn't undo a board move; ⌘/ opens the shortcut list; ⌘K search.
+6. Access levels (needs members at Can view / Can comment / Can edit / Full access on a QA project): read-only
+   board/list/table/calendar/pages/forms/overview, task detail notice, comment box only from Can comment,
+   chat "View only", level picker, LAST_OWNER sentence on demote and remove, remove confirmation; Full access
+   behaves exactly as before (regression).
+7. Error states: airplane mode on Control Room tabs, Tickets, Reports, Vault — error + Try again, never an
+   empty list; open a task/page link of a non-member project → "no access".
+
+**C. Spreadsheet (new, large)**
+8. Grid: scroll both ways (and bounce), tap / double-tap / type to edit, formula bar (Esc cancels, tap cells
+   to insert references), press-and-hold drag range (touch), click-drag (iPad pointer, Mac), ⌘-click, arrows /
+   Tab / Enter.
+9. Copy → paste (formula shifts), paste wider than the sheet (columns added), delete a column → ⌘Z (values,
+   formulas, validation back), undo/redo on iPhone.
+10. Offline: airplane mode → edit → badge → back online → sent; kill the app mid-edit → relaunch → sent.
+11. Realtime: edit on the web → appears live (not over the cell being edited); edit in the app → web.
+12. Freeze (menu + corner drag), resize (pointer edge, touch handle), overflow text, merges, borders, wrap +
+    auto row height, rotation, fonts, custom number formats, filters / filter views / slicers, hide/unhide.
+13. Panels: find & replace, comments (amber corner, thread, resolve), version history, validation editor
+    (dropdown chips), conditional formats, alternating colours, charts (floating, drag/resize, editor, PNG
+    download), pivot, column stats, named + protected ranges (warn prompt, restricted refusal).
+
+**D. Earlier redesign items (medium)**
+14. Board: colours; A ⏎ B ⏎ C in a new card; multi-select drag → Undo; drop a card on a card (order, Undo);
+    long-press drag on Board / List / Table; Table rows don't lift below Can edit.
+15. Pages: ZZ Blocks QA › Event SOP → Edit, change a line (bold/links kept), add a to-do, Done → live on the
+    web; conflict alert when both edit; ⌘K link; airplane mode edit → sent later.
+16. Task description + GIDEON ✨ (Improve writing → Replace); a Rupiah field 369000 → close at once → reopen.
+17. GIDEON: @ a project, Personalize, Save as doc, proposal Apply; 503 wording with the shim stopped; chip-
+    titled chats in Bahasa.
+18. Calendar: neighbour-month days; ⌥⌘1/⌥⌘2 lens keys; a non-member task opens the read-only "view only"
+    sheet (needs the dev server's `&detail=1`); a private one stays "Internal task".
+19. My Tasks (Overdue / Show all / "+" assigns to me), date-only dues show no time, Reports past period,
+    room booking (24h, taken slot, ended slot), leaderboard ties (podium), quest "For" division tree, MCP URL
+    shows the dev host, Active sessions (sign out one / others).
+20. Notifications: Bahasa ↔ English text, sender avatars, search a person → DM; chat drafts survive, Reply /
+    Copy, Enter sends.
+
+**E. Known limits (not bugs)**
+- In-column reorder needs a drop exactly on a card (no insertion line between cards).
+- A mention or date an edit cuts into becomes plain text, as in an editor.
+- What's New entries stay English by design.
+- Sheets: SVG chart export is web-only; ⌘K can't link a selected word (iOS 17 TextField has no selection API).
+- Everything in "Server pieces that must ship to production WITH the app" must be deployed with the release;
+  on today's prod those features answer 404 or behave the old way.

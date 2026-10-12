@@ -70,6 +70,9 @@ private struct SheetScreen: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .nexusSheetStructure)) { note in
             store.receiveStructure(Self.payload(note) ?? [:])
+            // Catch-up after a reconnect (or a structure change): comment threads and markers too —
+            // open thread panels read from this model, so they follow.
+            Task { await comments.reload() }
         }
         .onChange(of: store.editing) { _, editing in
             // A frame later: the field is created in this same update and focus set on it now may not stick.
