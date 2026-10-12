@@ -106,6 +106,12 @@ export async function GET(request: NextRequest) {
     if (taskListId) {
       where.taskListId = taskListId
     }
+    // `?subtasksOnly=1` (web board/list, perf pass 12 Oct 2026): only tasks that have a parent. The project
+    // payload already carries the top-level tasks, so the board needs just these to show subtask cards.
+    // Servers without it return every task, which the web handles the same way.
+    if (searchParams.get("subtasksOnly") === "1") {
+      where.parentId = { not: null }
+    }
     if (status) {
       const statuses = status
         .split(",")

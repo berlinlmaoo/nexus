@@ -40,6 +40,7 @@ import { TierBadge } from "@/components/gamification/TierBadge";
 import { Reveal, AnimatedBar, CountUp } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { monthGrid, sameMonth, shiftMonth } from "@/lib/calendar/core";
+import { thumbUrl } from "@/lib/thumb";
 
 export const Route = createFileRoute("/_app/dashboard")({
   // `quest` comes from the quest_claimable notification: "<questKey>:<periodKey>".
@@ -735,7 +736,7 @@ function ProfileCard({ userName, avatarUrl }: { userName: string; avatarUrl?: st
     <section className="rounded-3xl border border-border bg-card p-5 shadow-soft">
       <div className="flex items-center gap-4">
         {avatarUrl ? (
-          <img src={avatarUrl} alt={t("Your avatar")} className="h-20 w-20 shrink-0 rounded-2xl object-cover" />
+          <img src={thumbUrl(avatarUrl, 80)} loading="lazy" decoding="async" alt={t("Your avatar")} className="h-20 w-20 shrink-0 rounded-2xl object-cover" />
         ) : (
           <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-success/10 dark:bg-success/15">
             <img src={learner} alt={t("Your avatar")} className="h-[68px] w-[68px] object-contain" />
@@ -917,7 +918,7 @@ function LeaderboardCard() {
               </span>
               <div className="shrink-0">
                 {r.avatar ? (
-                  <img src={r.avatar} alt="" className="h-9 w-9 rounded-full object-cover ring-1 ring-border" />
+                  <img src={thumbUrl(r.avatar, 40)} loading="lazy" decoding="async" alt="" className="h-9 w-9 rounded-full object-cover ring-1 ring-border" />
                 ) : (
                   <span className="grid h-9 w-9 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary ring-1 ring-border">{(r.name ?? "?").trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")}</span>
                 )}
@@ -985,7 +986,7 @@ function LeaderboardExpandModal({ origin, originScale, onClose, onSelect, myId }
           {rows.map((r, i) => (
             <motion.button variants={{ hide: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }} transition={{ duration: 0.24, ease: "easeOut" }} key={r.userId} onClick={() => onSelect(r)} className={cn("flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-accent active:scale-[0.99]", r.userId === myId && "bg-primary/10")}>
               <span className="w-6 shrink-0 text-center text-xs font-bold tabular-nums text-muted-foreground">{i === 0 ? <Crown className="mx-auto h-4 w-4 text-amber-500" /> : i + 1}</span>
-              {r.avatar ? <img src={r.avatar} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-border" /> : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary ring-1 ring-border">{(r.name ?? "?").trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")}</span>}
+              {r.avatar ? <img src={thumbUrl(r.avatar, 40)} loading="lazy" decoding="async" alt="" className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-border" /> : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary ring-1 ring-border">{(r.name ?? "?").trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")}</span>}
               <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{r.name ?? t("Member")}{r.userId === myId ? ` ${t("(you)")}` : ""}</div><div className="flex items-center gap-1 text-[11px] text-muted-foreground"><TierBadge level={r.level} size={14} rounded="rounded" /> {r.levelName ?? `Lv. ${r.level}`}</div></div>
               <span className="shrink-0 text-xs font-bold tabular-nums">{r.totalXp.toLocaleString(locale)} XP</span>
             </motion.button>

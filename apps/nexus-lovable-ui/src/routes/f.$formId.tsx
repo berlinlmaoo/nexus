@@ -7,6 +7,7 @@ import { ApiError, nexusApi, type NexusFormField } from "@/lib/nexus-api";
 import { RupiahInput } from "@/components/RupiahInput";
 import { cn } from "@/lib/utils";
 import { t as tr, useDocumentLang, useLang } from "@/lib/lang";
+import { thumbUrl } from "@/lib/thumb";
 
 export const Route = createFileRoute("/f/$formId")({ component: PublicForm });
 
@@ -181,7 +182,7 @@ function PublicForm() {
             {me.data?.user && (
               <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-border bg-muted/40 px-3 py-2">
                 {me.data.user.avatar
-                  ? <img src={me.data.user.avatar} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
+                  ? <img src={thumbUrl(me.data.user.avatar, 40)} loading="lazy" decoding="async" alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
                   : <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary">{(me.data.user.name ?? me.data.user.email ?? "?").slice(0, 1).toUpperCase()}</span>}
                 <div className="min-w-0 flex-1 leading-tight">
                   <div className="text-[11px] text-muted-foreground">{t("Sending as")}</div>

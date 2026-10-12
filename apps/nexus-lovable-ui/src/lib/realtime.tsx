@@ -4,6 +4,7 @@ import type { Socket } from "socket.io-client";
 import { getSocket } from "./socket";
 import { invalidateAuditViews, invalidateProjectViews } from "./invalidate";
 import { bindTypingSocket } from "./chat-typing";
+import { patchTaskInCaches } from "./task-cache";
 
 // SOCKET event names → query invalidation.
 //
@@ -84,6 +85,18 @@ const NEVER_BLANKET_INVALIDATE = ["sheet"];
  * own pings are NOT skipped: their other tabs and devices have to move too.
  */
 const PING_DEBOUNCE_MS = 500;
+
+/**
+ * Task events (task-created/updated/deleted, comment-added, sprint-updated) are folded the same way
+ * (perf pass, 12 Oct 2026): a bulk move or an import is dozens of events within a second, and each used to
+ * refetch the whole project. Now: one refetch per burst, a quarter second after it ends (at most one second
+ * after it starts), and a refetch already in flight is reused rather than cancelled and restarted.
+ * A task-updated carrying the task patches its card at once, so the change shows before that refetch.
+ */
+const TASK_DEBOUNCE_MS = 250;
+const TASK_MAX_WAIT_MS = 1_000;
+const BATCHED_EVENTS = new Set(["task-created", "task-updated", "task-deleted", "comment-added", "sprint-updated"]);
+const LIVE_TASK_FIELDS = ["title", "status", "priority", "dueDate", "startDate", "tags"] as const;
 const PING_MAX_WAIT_MS = 2_000;
 
 function keyHasTerm(key: unknown, terms: string[]): boolean {
@@ -264,9 +277,34 @@ export function RealtimeProvider({
         cleanups.push(() => { socket.off("doc-changed", onDocChanged); if (docBurst.timer) clearTimeout(docBurst.timer); });
         if (socket.connected) onConnect();
 
+        const taskBurst = { terms: new Set<string>(), timer: null as ReturnType<typeof setTimeout> | null, startedAt: 0 };
+        const flushTasks = () => {
+          if (taskBurst.timer) clearTimeout(taskBurst.timer);
+          taskBurst.timer = null;
+          taskBurst.startedAt = 0;
+          const terms = [...taskBurst.terms];
+          taskBurst.terms.clear();
+          if (terms.length) void queryClient.invalidateQueries({ predicate: (q) => keyHasTerm(q.queryKey, terms) }, { cancelRefetch: false });
+        };
+        cleanups.push(() => { if (taskBurst.timer) clearTimeout(taskBurst.timer); });
+
         const eventHandlers = REALTIME_EVENTS.map((evt) => {
           const handler = (payload?: unknown) => {
             const terms = [...(INVALIDATION[evt] ?? [])];
+            if (BATCHED_EVENTS.has(evt)) {
+              if (debug) console.debug("[realtime]", evt);
+              if (evt === "task-updated" && payload && typeof payload === "object" && typeof (payload as { id?: unknown }).id === "string") {
+                const task = payload as Record<string, unknown>;
+                const patch = Object.fromEntries(LIVE_TASK_FIELDS.filter((k) => k in task).map((k) => [k, task[k]]));
+                if (Object.keys(patch).length) patchTaskInCaches(queryClient, task.id as string, patch);
+              }
+              terms.forEach((x) => taskBurst.terms.add(x));
+              const now = Date.now();
+              if (!taskBurst.startedAt) taskBurst.startedAt = now;
+              if (taskBurst.timer) clearTimeout(taskBurst.timer);
+              taskBurst.timer = setTimeout(flushTasks, Math.max(0, Math.min(TASK_DEBOUNCE_MS, taskBurst.startedAt + TASK_MAX_WAIT_MS - now)));
+              return;
+            }
             const data = (payload && typeof payload === "object" ? payload : {}) as { type?: unknown; conversationId?: unknown; reason?: unknown; kind?: unknown };
             if (debug) console.debug("[realtime]", evt, { conversationId: data.conversationId, reason: data.reason, kind: data.kind });
             // Servers before 8 Oct 2026 send no conversation-updated, but do write a bell

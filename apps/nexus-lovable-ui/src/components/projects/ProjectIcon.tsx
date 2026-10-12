@@ -3,6 +3,7 @@
 // named icon ("folder", "rocket", ...). We map names → emoji.
 import { useLogoTone } from "@/lib/calendar/tone";
 import { cn } from "@/lib/utils";
+import { thumbUrl } from "@/lib/thumb";
 
 const EMOJI_MAP: Record<string, string> = {
   folder: "📁", rocket: "🚀", star: "⭐", zap: "⚡", target: "🎯",
@@ -41,7 +42,7 @@ export function ProjectIcon({ icon, className }: { icon?: string | null; classNa
  */
 function UploadedMark({ src, className }: { src: string; className?: string }) {
   const tone = useLogoTone(src);
-  return <img src={src} alt="" className={cn(className ?? "h-full w-full rounded-md object-cover", tone === "dark" && "dark:bg-white")} />;
+  return <img src={thumbUrl(src, 64)} alt="" loading="lazy" decoding="async" className={cn(className ?? "h-full w-full rounded-md object-cover", tone === "dark" && "dark:bg-white")} />;
 }
 
 /**

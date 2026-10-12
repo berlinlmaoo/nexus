@@ -92,3 +92,6 @@ export function projectSettingsErrorText(code: unknown): string | null {
       return null;
   }
 }
+
+/** Shared-layout id of the "Project settings" button and the drawer it morphs into. */
+export const TUNE_MORPH_ID = "project-tune-card";

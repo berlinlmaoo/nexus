@@ -5,6 +5,7 @@ import { Crown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { localeOf } from "@/lib/lang"
+import { thumbUrl } from "@/lib/thumb";
 
 export interface LeaderboardRanking {
   userId: string
@@ -27,7 +28,7 @@ const PODIUM_STYLE: Record<number, { bar: string; barText: string; ring: string;
 
 function PodiumAvatar({ item, size, ring }: { item: LeaderboardRanking; size: number; ring: string }) {
   return item.avatarUrl ? (
-    <img src={item.avatarUrl} alt={item.userName} className={cn("rounded-full object-cover ring-2", ring)} style={{ width: size, height: size }} />
+    <img src={thumbUrl(item.avatarUrl, 40)} loading="lazy" decoding="async" alt={item.userName} className={cn("rounded-full object-cover ring-2", ring)} style={{ width: size, height: size }} />
   ) : (
     <span className={cn("inline-grid place-items-center rounded-full bg-muted font-bold text-foreground ring-2", ring)} style={{ width: size, height: size, fontSize: size * 0.34 }}>
       {initialsOf(item.userName)}

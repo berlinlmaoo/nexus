@@ -14,7 +14,9 @@ import { cn } from "@/lib/utils";
 import { Avatar, AvatarFace } from "@/components/Avatar";
 
 // Shared layout id so the modal morphs out of the "Tune" button (same as board task cards).
-export const TUNE_MORPH_ID = "project-tune-card";
+// Lives in project-tabs.ts so the project page can use it without loading this drawer (perf pass, 12 Oct 2026).
+import { TUNE_MORPH_ID } from "./project-tabs";
+export { TUNE_MORPH_ID };
 
 const STATUSES = ["ACTIVE", "ARCHIVED", "COMPLETED"];
 

@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { motion } from "framer-motion";
 import { ChevronRight, CircleCheck, Clock, ImageOff, ListChecks, MessageSquare, Plus } from "lucide-react";
 import type { ReactNode } from "react";
 import { Avatar } from "@/components/Avatar";
@@ -9,6 +8,7 @@ import { nexusApi, type NexusTask } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
 import { priorityTone } from "@/lib/calendar/tone";
 import { cn } from "@/lib/utils";
+import { Incremental } from "./incremental";
 import {
   COLOR_PRESETS,
   groupCalcValue,
@@ -192,9 +192,8 @@ function GalleryCard({ task, cover, keys, defs, ctx, cfg, onOpen }: { task: Nexu
   const done = isDoneStatus(task.status);
   const tint = cardTint(task, cfg, defs, ctx);
   return (
-    <motion.button
+    <button
       type="button"
-      layoutId={`gallery-taskcard-${task.id}`}
       data-morph-id={`gallery-taskcard-${task.id}`}
       style={{ borderRadius: 10, ...tint }}
       {...props}
@@ -213,7 +212,7 @@ function GalleryCard({ task, cover, keys, defs, ctx, cfg, onOpen }: { task: Nexu
         <span className={cn("line-clamp-2 text-sm font-medium leading-snug", done && "text-muted-foreground line-through")}>{task.title}</span>
         <PropLine task={task} keys={keys} defs={defs} ctx={ctx} />
       </div>
-    </motion.button>
+    </button>
   );
 }
 
@@ -227,7 +226,7 @@ export function GalleryView({ projectId, groups, groupBy, cfg, keys, defs, ctx, 
   const cover = (id: string) => covers.data?.covers[id]?.url;
   const grid = (tasks: NexusTask[]) => (
     <div className={cn("grid gap-3", GALLERY_COLS[cfg.cardSize])}>
-      {tasks.map((task) => <GalleryCard key={task.id} task={task} cover={cover(task.id)} keys={keys} defs={defs} ctx={ctx} cfg={cfg} onOpen={onOpen} />)}
+      <Incremental items={tasks} first={40} step={40} markerClassName="col-span-full h-px" keyOf={(task) => task.id} render={(task) => <GalleryCard task={task} cover={cover(task.id)} keys={keys} defs={defs} ctx={ctx} cfg={cfg} onOpen={onOpen} />} />
       <button type="button" onClick={onCreate} className="grid min-h-24 place-items-center rounded-[10px] border border-dashed border-border text-sm text-muted-foreground transition-colors hover:border-foreground/20 hover:bg-muted/50 hover:text-foreground">
         <span className="inline-flex items-center gap-1.5"><Plus className="h-4 w-4" />{t("New task")}</span>
       </button>

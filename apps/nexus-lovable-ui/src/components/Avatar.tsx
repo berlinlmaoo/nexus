@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { nexusApi } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
+import { thumbUrl } from "@/lib/thumb";
 
 /** "Dadio Emerald" → "DE"; "?" when there is no name. */
 export function initialsOf(name?: string | null): string {
@@ -61,8 +62,12 @@ export function AvatarFace({
   if (avatar && avatar !== brokenSrc) {
     return (
       <img
-        src={avatar}
+        src={thumbUrl(avatar, size)}
         alt={decorative ? "" : label ?? ""}
+        width={size}
+        height={size}
+        loading="lazy"
+        decoding="async"
         aria-hidden={decorative || undefined}
         title={label}
         onError={() => setBrokenSrc(avatar)}

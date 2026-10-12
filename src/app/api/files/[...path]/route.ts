@@ -42,9 +42,10 @@ export async function GET(
 
   // Avatar thumbnails (perf pass, 12 Oct 2026): `?w=` on an avatar answers a small WebP instead of the
   // full photo (1-2.5 MB). Without it nothing changes: the released apps use the plain URL.
-  const avatarsDir = join(base, 'avatars')
+  // Project icons too (a 2 MB PNG drawn at 36 px in the sidebar, 85 of them for some people).
+  const thumbDirs = [join(base, 'avatars'), join(base, 'project-icons')]
   const w = avatarThumbWidth(req.nextUrl.searchParams.get('w'))
-  if (w && filePath.startsWith(avatarsDir + sep)) {
+  if (w && thumbDirs.some((d) => filePath.startsWith(d + sep))) {
     const thumb = await avatarThumbnail(filePath, w)
     if (thumb) {
       if (req.headers.get('if-none-match') === thumb.etag) {

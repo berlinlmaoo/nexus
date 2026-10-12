@@ -15,6 +15,7 @@ import { useLang } from "@/lib/lang";
 import { useChatUnread } from "@/lib/chat-unread";
 import { cn } from "@/lib/utils";
 import { GideonMark } from "@/components/gideon/GideonMark";
+import { thumbUrl } from "@/lib/thumb";
 
 /* Primary destinations live in the floating bar; everything else lives in the
    "More" glass sheet (replaces the old left slide-out sidebar on mobile). */
@@ -305,7 +306,7 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
               {/* profile footer */}
               <Link to="/settings" onClick={onClose} className="mt-1 flex items-center gap-3 rounded-2xl border border-border/60 bg-background/40 px-3 py-2.5">
                 {me?.avatar ? (
-                  <img src={me.avatar} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-border" />
+                  <img src={thumbUrl(me.avatar, 40)} loading="lazy" decoding="async" alt="" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-border" />
                 ) : (
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-bold text-primary ring-1 ring-border">{initials}</span>
                 )}

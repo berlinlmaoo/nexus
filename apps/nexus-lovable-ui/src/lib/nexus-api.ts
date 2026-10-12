@@ -2971,6 +2971,8 @@ export const nexusApi = {
 
   // --- Forms ---
   forms: (projectId: string) => apiFetch<NexusForm[]>(`/api/forms?projectId=${encodeURIComponent(projectId)}`),
+  /** The forms of many projects in one request (server since 12 Oct 2026; up to 300 ids; projects the caller can't open are skipped). */
+  formsMany: (projectIds: string[]) => apiFetch<NexusForm[]>(`/api/forms?projectIds=${projectIds.map(encodeURIComponent).join(",")}`),
   form: (formId: string) => apiFetch<NexusForm>(`/api/forms/${formId}`),
   createForm: (payload: { name: string; description?: string | null; fields: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; projectId: string; accessSchedule?: unknown }) => apiFetch<NexusForm>("/api/forms", { method: "POST", body: JSON.stringify(payload) }),
   updateForm: (formId: string, payload: { name?: string; description?: string | null; fields?: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; accessSchedule?: unknown }) => apiFetch<NexusForm>(`/api/forms/${formId}`, { method: "PATCH", body: JSON.stringify(payload) }),

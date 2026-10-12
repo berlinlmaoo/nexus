@@ -10,6 +10,7 @@ import { useEdgeFade } from "@/hooks/use-edge-fade";
 import { passkeysSupported, registerPasskey } from "@/lib/passkey";
 import { useTheme, type Theme } from "@/lib/theme";
 import { useLang, type Lang } from "@/lib/lang";
+import { thumbUrl } from "@/lib/thumb";
 
 export const Route = createFileRoute("/_app/settings")({ component: Settings });
 
@@ -155,7 +156,7 @@ function WorkspaceMembersSection() {
               const isSelf = m.userId === me?.id;
               return (
                 <div key={m.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                  {m.avatar ? <img src={m.avatar} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-border" /> : <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-bold text-primary ring-1 ring-border">{(m.name ?? m.email ?? "?").trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")}</span>}
+                  {m.avatar ? <img src={thumbUrl(m.avatar, 40)} loading="lazy" decoding="async" alt="" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-border" /> : <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-bold text-primary ring-1 ring-border">{(m.name ?? m.email ?? "?").trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")}</span>}
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold">{m.name}{isSelf && <span className="ml-1 text-xs font-normal text-muted-foreground">{t("(you)")}</span>}</div>
                     <div className="truncate text-xs text-muted-foreground">{m.email}</div>
@@ -369,7 +370,7 @@ function ProfileSection() {
         <div className="flex items-center gap-4">
           <div className="relative">
             {u?.avatar ? (
-              <img src={u.avatar} alt="" className="h-20 w-20 rounded-full object-cover ring-2 ring-border" />
+              <img src={thumbUrl(u.avatar, 80)} loading="lazy" decoding="async" alt="" className="h-20 w-20 rounded-full object-cover ring-2 ring-border" />
             ) : (
               <div className="grid h-20 w-20 place-items-center rounded-full bg-primary/10 text-xl font-black text-primary ring-2 ring-border">{ini}</div>
             )}

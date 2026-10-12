@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight, Crown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { localeOf } from "@/lib/lang"
 import { type MorphOrigin } from "@/components/motion/MorphPanel"
+import { thumbUrl } from "@/lib/thumb";
 
 export interface LeaderboardRankingItem {
   userId: string
@@ -80,7 +81,7 @@ const LeaderboardRankings = React.forwardRef<HTMLDivElement, LeaderboardRankings
                   </span>
                   <div className="shrink-0">
                     {item.avatarUrl ? (
-                      <img src={item.avatarUrl} alt={item.userName} className="h-10 w-10 rounded-full object-cover" />
+                      <img src={thumbUrl(item.avatarUrl, 40)} loading="lazy" decoding="async" alt={item.userName} className="h-10 w-10 rounded-full object-cover" />
                     ) : (
                       <span className="grid h-10 w-10 place-items-center rounded-full bg-muted text-xs font-bold text-muted-foreground">{initialsOf(item.userName)}</span>
                     )}

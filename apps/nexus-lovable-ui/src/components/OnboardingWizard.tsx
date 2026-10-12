@@ -4,6 +4,7 @@ import { Loader2, ImagePlus, ArrowRight, ArrowLeft, Check, Sparkles, PartyPopper
 import { nexusApi } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
+import { thumbUrl } from "@/lib/thumb";
 
 type Slide = { key: string; title: string; img: string; imgMobile: string; points: string[] };
 
@@ -102,7 +103,7 @@ export function OnboardingWizard() {
               <h2 className="text-xl font-black tracking-tight">{t("Set up your profile")}</h2>
               <p className="text-sm text-muted-foreground">{t("First, add a profile photo.")}</p>
               <div className="mx-auto grid h-28 w-28 place-items-center overflow-hidden rounded-full bg-primary/10 ring-2 ring-border">
-                {me.avatar ? <img src={me.avatar} alt="" className="h-full w-full object-cover" /> : <ImagePlus className="h-8 w-8 text-muted-foreground" />}
+                {me.avatar ? <img src={thumbUrl(me.avatar, 40)} loading="lazy" decoding="async" alt="" className="h-full w-full object-cover" /> : <ImagePlus className="h-8 w-8 text-muted-foreground" />}
               </div>
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); }} />
               <button onClick={() => fileRef.current?.click()} disabled={upload.isPending} className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold transition hover:bg-accent disabled:opacity-50">

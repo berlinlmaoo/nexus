@@ -1,7 +1,6 @@
 import { Outlet, createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { SearchModal } from "@/components/SearchModal";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Loader2, WifiOff } from "lucide-react";
 import { isAuthError, nexusApi } from "@/lib/nexus-api";
 import { GideonLauncher } from "@/components/gideon/GideonLauncher";
@@ -17,6 +16,19 @@ import { RealtimeProvider } from "@/lib/realtime";
 import { ChatUnreadTitle } from "@/lib/chat-unread";
 import { VaultUploadPanel } from "@/components/vault/VaultUploadPanel";
 import { useLang } from "@/lib/lang";
+
+const SearchModal = lazy(() => import("@/components/SearchModal").then((m) => ({ default: m.SearchModal })));
+
+/**
+ * "This browser was signed in last time" (perf pass, 12 Oct 2026). With it the shell and the page render
+ * while the session check is still in flight, so the page's own requests run in parallel with it instead
+ * of after it. A failed check still sends the visitor to /login, as before; without the hint (first visit,
+ * signed out) the "Signing you in…" card shows as it always has.
+ */
+const SESSION_HINT = "nexus-session-hint";
+function hadSession(): boolean {
+  try { return localStorage.getItem(SESSION_HINT) === "1"; } catch { return false; }
+}
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -42,6 +54,18 @@ function AppLayout() {
     staleTime: 60_000,
     enabled: !isPublicAuthRoute,
   });
+
+  const qc = useQueryClient();
+  const [optimistic] = useState(hadSession);
+  useEffect(() => {
+    if (profile.data) {
+      try { localStorage.setItem(SESSION_HINT, "1"); } catch { /* private mode */ }
+      // Several screens read the same profile under ["profile"]: hand them this answer instead of a second request.
+      if (!qc.getQueryData(["profile"])) qc.setQueryData(["profile"], profile.data);
+    } else if (profile.error && isAuthError(profile.error)) {
+      try { localStorage.removeItem(SESSION_HINT); } catch { /* private mode */ }
+    }
+  }, [profile.data, profile.error, qc]);
 
   useEffect(() => {
     if (isPublicAuthRoute) return;
@@ -70,7 +94,7 @@ function AppLayout() {
     return <Outlet />;
   }
 
-  if (profile.isLoading) {
+  if (profile.isLoading && !optimistic) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
         <div className="rounded-3xl border border-border bg-card px-8 py-6 text-center shadow-sm">
@@ -140,5 +164,5 @@ function GlobalSearch() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
   if (!open) return null;
-  return <SearchModal onClose={() => setOpen(false)} />;
+  return <Suspense fallback={null}><SearchModal onClose={() => setOpen(false)} /></Suspense>;
 }

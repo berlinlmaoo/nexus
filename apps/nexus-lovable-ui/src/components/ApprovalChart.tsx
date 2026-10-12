@@ -7,6 +7,7 @@ import { ApiError, nexusApi, ORG_ROLE_LABEL, type ApprovalChartPerson } from "@/
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/Avatar";
 import { useLang } from "@/lib/lang";
+import { thumbUrl } from "@/lib/thumb";
 
 /**
  * Bagan Approval — siapa menyetujui absensi siapa. Rantai bebas, digambar sebagai bagan organisasi.
@@ -423,7 +424,7 @@ function PersonCard({ p, busy, dragging, over, droppable, reports, rootless, com
         )}
       >
         {p.avatar ? (
-          <img src={p.avatar} alt="" className={cn("h-7 w-7 shrink-0 rounded-full object-cover", filled && "ring-1 ring-white/30")} />
+          <img src={thumbUrl(p.avatar, 40)} loading="lazy" decoding="async" alt="" className={cn("h-7 w-7 shrink-0 rounded-full object-cover", filled && "ring-1 ring-white/30")} />
         ) : (
           <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-bold", filled ? "bg-white/15" : "bg-primary/10 text-primary")}>{initialsOf(p.name)}</span>
         )}

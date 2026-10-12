@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowDownAZ, ArrowUpAZ, ListFilter, Minus, Table2, BetweenHorizontalStart, BetweenVerticalStart, ChevronDown, ClipboardPaste, Copy,
@@ -28,25 +28,18 @@ import {
   buildRuleIndex, checkboxValue, dropdownOptions, invalidMessage, isChecked, isDropdown, newRuleId, pickedValues,
   rangeFromA1, rangeRect, rangeToA1, validateCell, type ValidationRule,
 } from "@/lib/sheet-validation";
-import { DataValidationPanel, type PanelRule } from "./DataValidationPanel";
+import type { PanelRule } from "./DataValidationPanel";
 import { useQuery } from "@tanstack/react-query";
 import { nexusApi } from "@/lib/nexus-api";
-import { ConditionalFormatPanel } from "./ConditionalFormatPanel";
-import { AlternatingColorsPanel } from "./AlternatingColorsPanel";
 import { FilterMenu } from "./FilterMenu";
 import { FindReplaceDialog, RemoveDuplicatesDialog, SortRangeDialog, SplitSeparatorChip, type FindOpts } from "./DataDialogs";
 import { NamedRangesPanel, ProtectedRangesPanel, ProtectionWarningDialog } from "./SheetRangesPanel";
 import { ColumnStatsPanel } from "./SheetStatsPanel";
-import { ThemePanel } from "./SheetThemePanel";
 import { SheetSettingsDialog, ShortcutsDialog } from "./SheetSettingsPanel";
-import { VersionHistoryPanel } from "./SheetVersionPanel";
 import { SlicerChip, SlicerPanel } from "./SheetSlicerPanel";
 import { DatePicker, NotePopover } from "./sheet-popovers";
-import { ChartEditor } from "./ChartEditor";
-import { ChartObject } from "./SheetChart";
 import { ColorPicker } from "./ColorPicker";
 import { CurrencyFormatDialog, CustomNumberFormatDialog, DateTimeFormatDialog } from "./FormatDialogs";
-import { PivotCreateDialog } from "./PivotEditor";
 import { SheetDialog, SidePanel, primaryBtn } from "./sheet-shell";
 import type { MenuNode } from "./sheet-menus";
 import { dedupe, replaceText, textMatches, type SplitSep } from "@/lib/sheet-datatools";
@@ -92,6 +85,16 @@ import { STANDARD_THEME, toHex } from "@/lib/sheet-palette";
 import { applyFilter, colorsInColumn, critActive, distinctValues, sortedRowIds } from "@/lib/sheet-filter";
 import { buildCondFormatter } from "@/lib/sheet-cf";
 import type { Banding, SheetFilter, SheetTheme, TableSpec } from "@/lib/sheet-model";
+
+import { PivotCreateDialog } from "./PivotEditor";
+// Charts (recharts) and the side panels load when first shown, not with every sheet (perf pass, 12 Oct 2026).
+const ChartEditor = lazy(() => import("./ChartEditor").then((m) => ({ default: m.ChartEditor })));
+const ChartObject = lazy(() => import("./SheetChart").then((m) => ({ default: m.ChartObject })));
+const ConditionalFormatPanel = lazy(() => import("./ConditionalFormatPanel").then((m) => ({ default: m.ConditionalFormatPanel })));
+const DataValidationPanel = lazy(() => import("./DataValidationPanel").then((m) => ({ default: m.DataValidationPanel })));
+const VersionHistoryPanel = lazy(() => import("./SheetVersionPanel").then((m) => ({ default: m.VersionHistoryPanel })));
+const ThemePanel = lazy(() => import("./SheetThemePanel").then((m) => ({ default: m.ThemePanel })));
+const AlternatingColorsPanel = lazy(() => import("./AlternatingColorsPanel").then((m) => ({ default: m.AlternatingColorsPanel })));
 
 // Mirrors ROW_HEIGHT_MIN / ROW_HEIGHT_MAX in src/lib/project-sheets.ts — the server clamps to the
 // same bounds, so a hand-crafted request can't produce a row the grid won't render sanely.
@@ -2994,7 +2997,7 @@ export function SheetGrid({
               if (!p) return null;
               return (
                 <div key={ch.id} className="pointer-events-auto">
-                  <ChartObject
+                  <Suspense fallback={null}><ChartObject
                     spec={ch}
                     data={data}
                     engine={engine}
@@ -3010,7 +3013,7 @@ export function SheetGrid({
                     onEdit={() => { setSelectedObject(ch.id); setPanel({ kind: "chart", id: ch.id }); }}
                     onDelete={() => { onSettings({ charts: (settings.charts ?? []).filter((x) => x.id !== ch.id).length ? (settings.charts ?? []).filter((x) => x.id !== ch.id) : null }, t("delete chart")); setSelectedObject(null); if (panel?.kind === "chart") setPanel(null); }}
                     onCopy={() => onSettings({ charts: [...(settings.charts ?? []), { ...ch, id: newId("ch"), at: { ...ch.at, dx: (ch.at.dx ?? 0) + 24, dy: (ch.at.dy ?? 0) + 24 } }] }, t("copy chart"))}
-                  />
+                  /></Suspense>
                 </div>
               );
             })}
@@ -3091,7 +3094,7 @@ export function SheetGrid({
       </div>
     </div>
     {panel?.kind === "cf" && (
-      <ConditionalFormatPanel
+      <Suspense fallback={null}><ConditionalFormatPanel
         rules={settings.condFormats ?? []}
         shape={data.shape}
         sheetName={sheetName ?? "Sheet1"}
@@ -3101,12 +3104,12 @@ export function SheetGrid({
         onPreview={(r) => setCfPreview(r)}
         onSave={(r) => { setCfPreview(null); onSettings({ condFormats: r.length ? r : null }, t("conditional formatting")); }}
         onClose={() => { setCfPreview(null); setPanel(null); }}
-      />
+      /></Suspense>
     )}
     {panel?.kind === "alt" && (() => {
       const here = (settings.bandings ?? []).find((b) => { const rc = rangeRect(b.range, data.shape); return rc && rc.top <= (view[rect.top]?.rawIndex ?? 0) && rc.bottom >= (view[rect.top]?.rawIndex ?? 0) && rc.left <= rect.left && rc.right >= rect.left; }) ?? null;
       return (
-        <AlternatingColorsPanel
+        <Suspense fallback={null}><AlternatingColorsPanel
           banding={here}
           selectionRange={selectionA1 || nameBox}
           shape={data.shape}
@@ -3114,7 +3117,7 @@ export function SheetGrid({
           onSave={(b) => { setBandPreview(null); onSettings({ bandings: [...(settings.bandings ?? []).filter((x) => x.id !== b.id && x.id !== here?.id), b] }, t("alternating colours")); }}
           onRemove={() => { setBandPreview(null); if (here) onSettings({ bandings: (settings.bandings ?? []).filter((x) => x.id !== here.id).length ? (settings.bandings ?? []).filter((x) => x.id !== here.id) : null }, t("remove alternating colours")); setPanel(null); }}
           onClose={() => { setBandPreview(null); setPanel(null); }}
-        />
+        /></Suspense>
       );
     })()}
     {panel?.kind === "named" && (
@@ -3145,7 +3148,7 @@ export function SheetGrid({
     {panel?.kind === "chart" && (() => {
       const spec = chartsShown.find((c) => c.id === panel.id);
       return spec ? (
-        <ChartEditor
+        <Suspense fallback={null}><ChartEditor
           spec={spec}
           shape={data.shape}
           sheetName={sheetName ?? "Sheet1"}
@@ -3155,7 +3158,7 @@ export function SheetGrid({
           theme={theme?.accents}
           onChange={editChart}
           onClose={() => setPanel(null)}
-        />
+        /></Suspense>
       ) : null;
     })()}
     {panel?.kind === "slicer" && (() => {
@@ -3185,15 +3188,15 @@ export function SheetGrid({
       />
     )}
     {panel?.kind === "theme" && (
-      <ThemePanel
+      <Suspense fallback={null}><ThemePanel
         theme={settings.theme}
         onPreview={setThemePreview}
         onSave={(th) => { setThemePreview(null); onSettings({ theme: th }, t("theme")); }}
         onClose={() => { setThemePreview(null); setPanel(null); }}
-      />
+      /></Suspense>
     )}
     {panel?.kind === "versions" && (
-      <VersionHistoryPanel
+      <Suspense fallback={null}><VersionHistoryPanel
         revisions={historyQ.data?.revisions ?? []}
         loading={historyQ.isLoading}
         named={settings.versions ?? []}
@@ -3204,7 +3207,7 @@ export function SheetGrid({
         onRestore={restoreVersion}
         onName={(at, name) => onSettings({ versions: [...(settings.versions ?? []).filter((v) => v.at !== at), { id: newId("ver"), name, at }] }, t("name version"))}
         onClose={() => { setVersionAt(null); setPanel(null); }}
-      />
+      /></Suspense>
     )}
     {panel?.kind === "comments" && (
       <SidePanel title={t("Comments")} onClose={() => setPanel(null)}>
@@ -3228,7 +3231,7 @@ export function SheetGrid({
     )}
     {!panel && !dvOpen && aside}
     {dvOpen && (
-      <DataValidationPanel
+      <Suspense fallback={null}><DataValidationPanel
         rules={[...(columnRules.filter(Boolean) as PanelRule[]), ...explicitRules]}
         shape={data.shape}
         sheetName={sheetName ?? "Sheet1"}
@@ -3239,7 +3242,7 @@ export function SheetGrid({
         onRemove={removeRuleFromPanel}
         onClose={() => { setDvOpen(false); setDvEditId(null); }}
         onEditChange={setDvEditId}
-      />
+      /></Suspense>
     )}
     </div>
 
@@ -3345,11 +3348,11 @@ export function SheetGrid({
       <CurrencyFormatDialog locale={settings.locale ?? "id-ID"} onApply={(pt) => { applyStyle({ nf: "custom", pt, dp: null }); setDialog(null); }} onClose={() => setDialog(null)} />
     )}
     {dialog?.kind === "pivot" && (
-      <PivotCreateDialog
+      <Suspense fallback={null}><PivotCreateDialog
         defaultRange={`${sheetName ?? "Sheet1"}!${rangeToA1(storedOf(selInfo.single ? currentRegion() : rect) ?? "", data.shape)}`}
         onCreate={(o) => { setDialog(null); const r = rangeFromA1(o.range, data.shape); if (r) host?.createPivot(r); else alert(t("That range isn't valid.")); }}
         onClose={() => setDialog(null)}
-      />
+      /></Suspense>
     )}
     {(dialog?.kind === "resizeRows" || dialog?.kind === "resizeCols") && (
       <ResizeDialog

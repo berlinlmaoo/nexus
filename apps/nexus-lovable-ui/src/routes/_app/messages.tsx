@@ -220,7 +220,17 @@ function Messages() {
       <div className={cn("grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[300px_minmax(0,1fr)]", infoOpen && active && "lg:grid-cols-[300px_minmax(0,1fr)_360px]")}>
         {/* conversation list */}
         <aside className={cn("min-h-0 overflow-y-auto overscroll-contain border-border md:border-r", phoneThread && "hidden md:block")}>
-          {convos.isLoading && <div className="flex justify-center py-10 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
+          {/* Rows shaped like the list (avatar + two lines), not a spinner: nothing moves when it fills in. */}
+          {convos.isLoading && (
+            <div className="space-y-1 px-2 py-2 md:pl-6" aria-busy>
+              {Array.from({ length: 7 }, (_, i) => (
+                <div key={i} className="flex items-center gap-3 rounded-lg px-2 py-2.5">
+                  <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-muted" />
+                  <div className="min-w-0 flex-1 space-y-1.5"><div className="h-3 w-2/5 animate-pulse rounded bg-muted" /><div className="h-3 w-4/5 animate-pulse rounded bg-muted/70" /></div>
+                </div>
+              ))}
+            </div>
+          )}
           {!convos.isLoading && rows.length === 0 && (
             <div className="px-4 py-3 md:pl-8">
               <EmptyState icon={MessageSquare} title={t("No chats yet")} compact
@@ -322,7 +332,7 @@ function Messages() {
               </div>
             </div>
           ) : convos.isLoading ? (
-            <div className="grid h-full place-items-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
+            <div className="h-full" aria-busy />
           ) : (
             <div className="grid h-full place-items-center text-center text-muted-foreground"><div><MessageCircle className="mx-auto mb-3 h-10 w-10 opacity-40" /><p className="text-sm">{t("Pick a conversation or start a new chat.")}</p></div></div>
           )}
