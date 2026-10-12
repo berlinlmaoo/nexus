@@ -686,7 +686,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
             {!canEditTask && (
               <p className="rounded-xl bg-muted/60 px-3 py-2 text-xs text-muted-foreground">{lvl === "COMMENT" ? tr("You can comment on this task, but not change it.") : tr("View only: you can read this task, but not change it.")}</p>
             )}
-            <fieldset disabled={!canEditTask} className="contents">
+            <fieldset disabled={!canEditTask} className="contents [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-60 [&_input:disabled]:opacity-60">
             {/* toolbar: mark done + status + priority (old-NEXUS pills). Phone: Mark done on its own row, status and
                 priority side by side below it (they wrapped raggedly, audit 12 Oct 2026). */}
             <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
