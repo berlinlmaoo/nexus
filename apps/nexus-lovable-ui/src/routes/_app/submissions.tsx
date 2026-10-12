@@ -2,7 +2,10 @@ import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router"
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CalendarDays, Download, FileText, Inbox, Loader2, Lock, MessageSquare, Paperclip, Send, Tag, Trash2, X } from "lucide-react";
+import { AlertCircle, CalendarDays, Check, ChevronDown, Download, FileText, FolderKanban, Inbox, Loader2, Lock, MessageSquare, Paperclip, Send, Tag, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useSubmitGuard } from "@/hooks/use-submit-guard";
 import { PageHeader } from "@/components/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -112,13 +115,16 @@ function SubmissionDetail({ id, onClose }: { id: string; onClose: () => void }) 
   const del = useMutation({
     mutationFn: () => nexusApi.deleteSubmission(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["my-submissions"] }); onClose(); },
-    onError: (e) => alert(e instanceof Error ? e.message : t("Couldn't delete the submission.")),
+    onError: (e) => toast.error(e instanceof Error ? e.message : t("Couldn't delete the submission.")),
   });
   const send = useMutation({
     mutationFn: () => nexusApi.replyToSubmission(id, reply.trim()),
     onSuccess: () => { setReply(""); qc.invalidateQueries({ queryKey: ["submission-detail", id] }); qc.invalidateQueries({ queryKey: ["my-submissions"] }); },
-    onError: (e) => alert(e instanceof Error ? e.message : t("Couldn't send the reply.")),
+    onError: (e) => toast.error(e instanceof Error ? e.message : t("Couldn't send the reply.")),
   });
+  // Double-click Send posted the reply twice (bughunt N-BUG-2): one reply in flight at a time.
+  const [guardSend, sending] = useSubmitGuard();
+  const sendReply = () => { if (reply.trim()) guardSend(() => send.mutateAsync()); };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -141,7 +147,7 @@ function SubmissionDetail({ id, onClose }: { id: string; onClose: () => void }) 
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {d.isLoading && <div className="space-y-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full rounded-lg" />)}</div>}
-          {d.isError && <p className="text-sm text-destructive">{t("Couldn't load the details.")}</p>}
+          {d.isError && <p className="text-sm text-destructive">{(d.error as { status?: number } | null)?.status === 404 ? t("This submission no longer exists, or the link is wrong.") : t("Couldn't load the details.")}</p>}
           {sub && (
             <div className="space-y-5">
               <div className="flex flex-wrap items-center gap-2">
@@ -218,12 +224,12 @@ function SubmissionDetail({ id, onClose }: { id: string; onClose: () => void }) 
                   ))}
                 </ul>
                 {sub.taskId && (
-                  <form onSubmit={(e) => { e.preventDefault(); if (reply.trim()) send.mutate(); }} className="flex items-end gap-2">
+                  <form onSubmit={(e) => { e.preventDefault(); sendReply(); }} className="flex items-end gap-2">
                     <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={2} placeholder={t("Reply to the team…")} aria-label={t("Reply to the team…")}
-                      onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && reply.trim()) { e.preventDefault(); send.mutate(); } }}
+                      onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && reply.trim()) { e.preventDefault(); sendReply(); } }}
                       className="min-h-[44px] flex-1 resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
-                    <button type="submit" disabled={!reply.trim() || send.isPending} className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">
-                      {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{t("Send")}
+                    <button type="submit" disabled={!reply.trim() || send.isPending || sending} className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">
+                      {send.isPending || sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{t("Send")}
                     </button>
                   </form>
                 )}
@@ -232,7 +238,8 @@ function SubmissionDetail({ id, onClose }: { id: string; onClose: () => void }) 
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-3">
+        {/* Only for a submission that loaded: an unknown or inaccessible id has nothing to delete (bughunt N-BUG-6). */}
+        {sub && <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-3">
           <p className="text-[11px] text-muted-foreground">{t("Deleting this submission also deletes its task in the project.")}</p>
           <button
             onClick={() => { if (window.confirm(t("Delete this submission? Its task in the project is deleted too."))) del.mutate(); }}
@@ -241,7 +248,7 @@ function SubmissionDetail({ id, onClose }: { id: string; onClose: () => void }) 
           >
             {del.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} {t("Delete")}
           </button>
-        </div>
+        </div>}
       </div>
     </div>
   );
@@ -253,6 +260,21 @@ function MySubmissions() {
   const subs = q.data?.submissions ?? [];
   const [filter, setFilter] = useState<Filter>("all");
   const [mine, setMine] = useState(false);
+  // Per-project filter (owner, 12 Oct 2026). Remembered on this device; a project with no submission left is ignored.
+  const [projectFilter, setProjectFilterState] = useState<string | null>(() => { try { return localStorage.getItem("nx-submissions-project"); } catch { return null; } });
+  const setProjectFilter = (v: string | null) => { setProjectFilterState(v); try { if (v) localStorage.setItem("nx-submissions-project", v); else localStorage.removeItem("nx-submissions-project"); } catch { /* private mode */ } };
+  const projectOptions = useMemo(() => {
+    const m = new Map<string, { id: string; name: string; count: number }>();
+    for (const s of subs) {
+      if (!s.projectId) continue;
+      const cur = m.get(s.projectId) ?? { id: s.projectId, name: s.projectName || t("Untitled project"), count: 0 };
+      cur.count++;
+      m.set(s.projectId, cur);
+    }
+    return [...m.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [subs, t]);
+  const activeProject = projectFilter && projectOptions.some((p) => p.id === projectFilter) ? projectFilter : null;
+  const inProject = (s: NexusMySubmission) => !activeProject || s.projectId === activeProject;
 
   // Columns: the target projects' status options. Older servers send only names (statusColumns): those
   // become columns after "New", as before.
@@ -262,12 +284,12 @@ function MySubmissions() {
   }, [q.data, t]);
   const keyOf = (s: NexusMySubmission) => s.column?.key ?? (s.procStatus?.trim() || "new");
 
-  const shown = subs.filter((s) => (filter === "all" || s.kind === filter) && (!mine || s.needsAction));
-  const needCount = subs.filter((s) => (filter === "all" || s.kind === filter) && s.needsAction).length;
+  const shown = subs.filter((s) => (filter === "all" || s.kind === filter) && inProject(s) && (!mine || s.needsAction));
+  const needCount = subs.filter((s) => (filter === "all" || s.kind === filter) && inProject(s) && s.needsAction).length;
   const kinds = new Set(subs.map((s) => s.kind));
   // The columns of the filtered requests' projects (empty ones too, as on their board), so a finance-only
   // view has no multimedia columns.
-  const projects = new Set(subs.filter((s) => filter === "all" || s.kind === filter).map((s) => s.projectId).filter(Boolean));
+  const projects = new Set(subs.filter((s) => (filter === "all" || s.kind === filter) && inProject(s)).map((s) => s.projectId).filter(Boolean));
   const visibleCols = columns.filter((c) => (c.projectIds ? c.projectIds.some((id) => projects.has(id)) : true) || shown.some((s) => keyOf(s) === c.key));
 
   // `/submissions?id=<submissionId>` opens straight onto that submission (the `submission_status`
@@ -302,6 +324,30 @@ function MySubmissions() {
               <button className={chip(filter === "all")} onClick={() => setFilter("all")}>{t("All")}</button>
               {kinds.has("finance") && <button className={chip(filter === "finance")} onClick={() => setFilter("finance")}>{t("Finance")}</button>}
               {kinds.has("multimedia") && <button className={chip(filter === "multimedia")} onClick={() => setFilter("multimedia")}>{t("Multimedia")}</button>}
+              {projectOptions.length > 1 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className={cn(chip(!!activeProject), "inline-flex max-w-[16rem] items-center gap-1")} aria-label={t("Filter by project")}>
+                      <FolderKanban className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{activeProject ? projectOptions.find((p) => p.id === activeProject)?.name : t("All projects")}</span>
+                      <ChevronDown className="h-3 w-3 shrink-0" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="max-h-80 w-64 overflow-y-auto">
+                    <DropdownMenuItem onSelect={() => setProjectFilter(null)}>
+                      <Check className={cn("mr-2 h-3.5 w-3.5", activeProject ? "opacity-0" : "opacity-100")} />{t("All projects")}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {projectOptions.map((p) => (
+                      <DropdownMenuItem key={p.id} onSelect={() => setProjectFilter(p.id)}>
+                        <Check className={cn("mr-2 h-3.5 w-3.5 shrink-0", activeProject === p.id ? "opacity-100" : "opacity-0")} />
+                        <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                        <span className="ml-2 text-xs tabular-nums text-muted-foreground">{p.count}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               <span className="mx-1 h-5 w-px bg-border" aria-hidden />
               <button className={cn(chip(mine), "inline-flex items-center gap-1")} onClick={() => setMine((v) => !v)} aria-pressed={mine}>
                 <AlertCircle className="h-3.5 w-3.5" />{t("Needs my action")}{needCount > 0 && <span className="rounded-full bg-amber-500 px-1.5 text-[10px] text-white">{needCount}</span>}
@@ -312,7 +358,7 @@ function MySubmissions() {
             {shown.length === 0 ? (
               <EmptyState icon={FileText} title={mine ? t("Nothing needs your action") : t("No submissions here")}
                 message={mine ? t("When the team asks for a revision or replies to you, the request shows up here.") : t("Try another filter.")}
-                action={<EmptyAction onClick={() => { setFilter("all"); setMine(false); }}>{t("Show all")}</EmptyAction>} />
+                action={<EmptyAction onClick={() => { setFilter("all"); setMine(false); setProjectFilter(null); }}>{t("Show all")}</EmptyAction>} />
             ) : (
               <div className="flex gap-3 overflow-x-auto pb-4">
                 {visibleCols.map((col, i) => {

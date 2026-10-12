@@ -21,6 +21,7 @@ import { buildSheetData, displayCell } from "./sheet-types";
 import { engineFor } from "@/lib/sheet-formula";
 import { rangeFromA1, rangeRect, rangeToA1 } from "@/lib/sheet-validation";
 import type { PivotSpec } from "@/lib/sheet-model";
+import { useSubmitGuard } from "@/hooks/use-submit-guard";
 
 type SettingsPatch = { [K in keyof NexusSheetSettings]?: NexusSheetSettings[K] | null };
 
@@ -58,6 +59,15 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
     mutationFn: (name: string) => nexusApi.createSheet(projectId, name),
     onSuccess: (created) => { setActiveId(created.id); refreshList(); },
     onError: (e) => alert(e instanceof Error ? e.message : t("Couldn't create the sheet.")),
+  });
+  // Double-click "Add sheet" made two calls (one 500) and repeated names (bughunt S-BUG-17): one call in flight,
+  // and the first free "Sheet N".
+  const [guardAddSheet] = useSubmitGuard();
+  const newSheet = () => guardAddSheet(() => {
+    const taken = new Set(sheets.map((x) => x.name.trim().toLowerCase()));
+    let n = sheets.length + 1;
+    while (taken.has(`sheet ${n}`) || taken.has(`sheet${n}`)) n++;
+    return addSheet.mutateAsync(`Sheet ${n}`);
   });
   const removeSheet = useMutation({
     mutationFn: (id: string) => nexusApi.deleteSheet(id),
@@ -711,7 +721,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
       canEdit={sheet.canEdit}
       canManage={sheet.canManage}
       onSelect={(id) => setActiveId(id)}
-      onAdd={() => addSheet.mutate(`Sheet${sheets.length + 1}`)}
+      onAdd={() => newSheet()}
       onRename={(id, name) => void renameSheet(id, name)}
       onDuplicate={(id) => void duplicateSheet(id)}
       onDelete={(id) => {
@@ -847,7 +857,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
               importFile: () => fileRef.current?.click(),
               download: (f) => { void nexusApi.exportSheet(sheet.id, f, `${sheet.name}.${f}`).catch((e) => alert(e instanceof Error ? e.message : t("Export failed."))); },
               renameSheet: () => { const name = window.prompt(t("Rename"), sheet.name); if (name?.trim()) void renameSheet(sheet.id, name.trim()); },
-              insertSheet: () => addSheet.mutate(`Sheet${sheets.length + 1}`),
+              insertSheet: () => newSheet(),
               setSheetHidden: (id, hidden) => void hideSheet(id, hidden),
               reorderRows,
               reorderColumns: (ids) => editColumns(ids.map((cid) => sheet.columns.find((c) => c.id === cid)!).filter(Boolean), t("move columns")),

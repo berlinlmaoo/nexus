@@ -196,7 +196,9 @@ export async function POST(request: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { allowed: rlAllowed, resetAt } = checkRateLimit(request, session.user.id, { limit: 30, windowSeconds: 60 })
+    // 120/min per user (was 30): a person chaining inline "Enter" cards, pasting a list or working in two tabs
+    // hit 30 (bughunt N-BUG-9). Still a ceiling for a runaway client or script.
+    const { allowed: rlAllowed, resetAt } = checkRateLimit(request, session.user.id, { limit: 120, windowSeconds: 60 })
     if (!rlAllowed) return rateLimitResponse(resetAt)
 
     const body = await request.json()
