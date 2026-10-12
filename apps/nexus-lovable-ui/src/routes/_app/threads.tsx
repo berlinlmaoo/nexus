@@ -7,7 +7,7 @@ import { AvatarStack } from "@/components/Avatar";
 import { PageHeader } from "@/components/PageHeader";
 import { PageBody, PageTabs } from "@/components/PageLayout";
 import { EmptyState } from "@/components/EmptyState";
-import { LoadError } from "@/components/LoadError";
+import { LoadError, retryTransient } from "@/components/LoadError";
 import { celebrate } from "@/components/Celebration";
 import { ApiError, nexusApi, type FeedPage, type FeedPost, type NexusUser } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
@@ -98,6 +98,7 @@ function FeedPage() {
     queryFn: ({ pageParam }) => nexusApi.feedPosts({ cursor: pageParam as string | undefined, mentions: tab === "mentions" ? "me" : undefined }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
+    retry: retryTransient,
   });
 
   const posts: FeedPostUI[] = useMemo(() => (feed.data?.pages ?? []).flatMap((pg) => pg.posts as FeedPostUI[]), [feed.data]);
