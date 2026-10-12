@@ -561,7 +561,7 @@ export async function POST(
       // A response limit is checked again inside the transaction, one response of this form at a time,
       // so two people sending at once can't both take the last place.
       if (responseLimit !== null) {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"form-submit:" + form.id}))`
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"form-submit:" + form.id})::int8)`
         if ((await tx.formSubmission.count({ where: { formId: form.id } })) >= responseLimit) throw new ResponseLimitReachedError()
       }
       const task = await tx.task.create({
