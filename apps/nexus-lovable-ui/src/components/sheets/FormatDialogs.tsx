@@ -199,7 +199,7 @@ export function DateTimeFormatDialog({ initial, sample, locale, onApply, onClose
             type="button"
             role="option"
             aria-selected={p === pattern}
-            title={p}
+            aria-label={p} title={p}
             onClick={() => setParts(normalizeParts(parseDatePattern(p)))}
             onDoubleClick={() => onApply(p)}
             className={cn(rowClass, p === pattern && "bg-muted")}

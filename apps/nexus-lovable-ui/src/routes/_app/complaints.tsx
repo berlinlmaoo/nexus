@@ -121,6 +121,8 @@ function ComplaintsPage() {
         actions={<button onClick={() => setComposing(true)} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-bold text-primary-foreground shadow-sm transition active:scale-[0.97]"><Plus className="h-4 w-4" /> {t("New ticket")}</button>}
       />
 
+      {/* The page's content gets the same gutters as every other page (it ran edge to edge on a phone). */}
+      <div className="px-4 pb-8 pt-4 md:px-8">
       {viewerIsBod && (
         <div className="mb-3 flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1">
           {([["open", "Inbox"], ["review", "In review"], ["all", "All"]] as [Tab, string][]).map(([tk, label]) => (
@@ -149,6 +151,7 @@ function ComplaintsPage() {
               : <EmptyAction onClick={() => setComposing(true)}><Plus className="h-4 w-4" /> {t("New ticket")}</EmptyAction>} />
         )}
         {complaints.map((c) => <ComplaintCard key={c.id} c={c} viewerIsBod={viewerIsBod} onOpen={() => setOpenId(c.id)} />)}
+      </div>
       </div>
 
       <AnimatePresence>

@@ -224,7 +224,8 @@ export function PhotoLightbox({ src, title, onClose }: { src: string; title?: st
         )}
       </div>
       <p className="px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1 text-center text-[11px] text-white/70">
-        {t("Scroll, pinch or double-click to zoom · Esc to close")}
+        <span className="pointer-coarse:hidden">{t("Scroll, pinch or double-click to zoom · Esc to close")}</span>
+        <span className="hidden pointer-coarse:inline">{t("Pinch or double-tap to zoom")}</span>
       </p>
     </div>,
     document.body,

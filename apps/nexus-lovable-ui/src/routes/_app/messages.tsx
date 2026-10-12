@@ -90,8 +90,9 @@ const WIDE = "(min-width: 1024px)";
 function LiveDot({ connected }: { connected: boolean }) {
   const label = connected ? t("Live") : t("Reconnecting…");
   return (
-    <span role="status" title={label} aria-label={label} className="inline-grid h-8 w-6 place-items-center">
-      <span className={cn("h-2 w-2 rounded-full", connected ? "bg-success" : "animate-pulse bg-warning")} />
+    <span role="status" title={label} className="inline-flex h-8 items-center gap-1.5 px-1 text-xs text-muted-foreground">
+      <span aria-hidden className={cn("h-2 w-2 rounded-full", connected ? "bg-success" : "animate-pulse bg-warning")} />
+      {label}
     </span>
   );
 }
@@ -204,8 +205,10 @@ function Messages() {
     // The page itself never scrolls: it fills the screen under the app header (above the phone's tab
     // bar, which the app shell pads for with 7rem), and the list, the thread and the info panel each
     // scroll on their own. Until 8 Oct 2026 the page was taller than the screen, so scrolling the
-    // thread past its end scrolled the whole page and pushed the list out of view.
-    <div lang={lang} className="flex h-[calc(100dvh-7rem)] flex-col overflow-hidden md:h-[100dvh]">
+    // thread past its end scrolled the whole page and pushed the list out of view. On a phone it ends just
+    // above the floating tab bar (7rem left a dead band, audit 12 Oct 2026); -mb-8 gives back the shell's
+    // extra padding so the page still doesn't scroll.
+    <div lang={lang} className="-mb-8 flex h-[calc(100dvh-5rem-env(safe-area-inset-bottom))] flex-col overflow-hidden md:mb-0 md:h-[100dvh]">
       <div className={cn("shrink-0", phoneThread && "hidden md:block")}>
         <PageHeader title={t("Messages")} subtitle={t("Chat with your team and in project rooms.")} actions={
           <>
@@ -216,7 +219,7 @@ function Messages() {
       </div>
       <div className={cn("grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[300px_minmax(0,1fr)]", infoOpen && active && "lg:grid-cols-[300px_minmax(0,1fr)_360px]")}>
         {/* conversation list */}
-        <aside className={cn("min-h-0 overflow-y-auto overscroll-contain border-r border-border", phoneThread && "hidden md:block")}>
+        <aside className={cn("min-h-0 overflow-y-auto overscroll-contain border-border md:border-r", phoneThread && "hidden md:block")}>
           {convos.isLoading && <div className="flex justify-center py-10 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
           {!convos.isLoading && rows.length === 0 && (
             <div className="p-3">

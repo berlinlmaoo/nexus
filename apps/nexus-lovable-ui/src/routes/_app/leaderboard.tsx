@@ -85,7 +85,8 @@ function Leaderboard() {
 
           {!board.isLoading && !board.isError && ranked.length > 0 && (
             <LeaderboardCard
-              title={t("Leaderboard")}
+              // The page header already says "Leaderboard" (it showed twice, audit 12 Oct 2026).
+              title=""
               subtitle={t("XP ranking for everyone")}
               podiumRankings={podiumRankings}
               rankings={rankings}

@@ -309,4 +309,16 @@ export const ID_I18N_SHELL: Record<string, string> = {
   "VIP Meeting Room": "Ruang Meeting VIP",
   "Meeting Room": "Ruang Meeting",
   "Studio": "Studio",
+  // Phone audit (12 Oct 2026): touch-neutral copy, report deltas, short search placeholder.
+  "{n} failed — run it again to retry (safe).": "{n} gagal — jalankan lagi untuk mengulang (aman).",
+  "No fields yet. Add one with New field.": "Belum ada field. Tambahkan lewat Field baru.",
+  "Pinch or double-tap to zoom": "Cubit atau ketuk dua kali untuk memperbesar",
+  "(or just tap anywhere)": "(atau ketuk di mana saja)",
+  "Select someone to see their XP history": "Pilih seseorang untuk melihat riwayat XP-nya",
+  "Green = present or permit, red = absent, orange = sick, purple = day off, yellow = leave. Select a day for its detail.": "Hijau = hadir atau izin, merah = tidak hadir, oranye = sakit, ungu = day off, kuning = cuti. Pilih satu hari untuk detailnya.",
+  "Drag the pin onto the office entrance, or pick the spot on the map. The circle is where people can check in.": "Geser pin ke pintu masuk kantor, atau pilih titiknya di peta. Lingkarannya adalah area untuk check-in.",
+  "Drag a card onto their approver's card, or select it.": "Seret kartu ke kartu atasannya, atau pilih kartunya.",
+  "No change": "Tidak berubah",
+  "Changes are compared with {range}.": "Perubahan dibandingkan dengan {range}.",
+  "Search everything…": "Cari apa saja…",
 }

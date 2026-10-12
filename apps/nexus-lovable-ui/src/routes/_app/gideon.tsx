@@ -13,7 +13,7 @@ export const Route = createFileRoute("/_app/gideon")({
 function GideonPage() {
   const { chat } = Route.useSearch();
   return (
-    <div className="h-[calc(100dvh-7rem)] md:h-dvh">
+    <div className="-mb-8 h-[calc(100dvh-5rem-env(safe-area-inset-bottom))] md:mb-0 md:h-dvh">
       <GideonPanel variant="page" initialChatId={chat ?? null} startNew={!chat} />
     </div>
   );

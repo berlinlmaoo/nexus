@@ -142,7 +142,8 @@ function LoginPage() {
         </div>
 
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold tracking-[0.2em] text-foreground uppercase">
+          {/* Phone: smaller and tighter, so "NEXUS PHAËTHON" stays on one line in the padded card. */}
+          <h1 className="whitespace-nowrap text-xl font-bold tracking-[0.12em] text-foreground uppercase sm:text-2xl sm:tracking-[0.2em]">
             NEXUS{" "}
             {/* easter egg: clicking PHAËTHON opens the hidden /phaethon page */}
             <Link to="/phaethon" className="rounded transition-colors duration-300 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" aria-label="Phaëthon">Phaëthon</Link>

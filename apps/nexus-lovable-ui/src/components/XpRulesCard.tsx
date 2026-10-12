@@ -26,8 +26,9 @@ function Row({ xp, rule, note, auto, tone }: { xp: string; rule: string; note: s
     <div className="flex items-start gap-3 py-1.5">
       <span className={cn("w-24 shrink-0 text-sm font-black tabular-nums", tone === "red" ? "text-rose-600" : "text-emerald-600")}>{xp}</span>
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-semibold text-foreground">{tr(rule)}</div>
-        <div className="text-[11px] text-muted-foreground">{tr(note)}</div>
+        {/* text-pretty: no one-word last line in the narrow phone column (audit 12 Oct 2026). */}
+        <div className="text-sm font-semibold text-pretty text-foreground">{tr(rule)}</div>
+        <div className="text-[11px] text-pretty text-muted-foreground">{tr(note)}</div>
       </div>
       <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", auto ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>{auto ? tr("Automatic") : tr("Manual")}</span>
     </div>

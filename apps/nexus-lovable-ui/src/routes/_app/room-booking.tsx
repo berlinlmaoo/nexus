@@ -131,9 +131,9 @@ function RoomBooking() {
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-display text-xl font-bold tracking-tight">{viewMonth.toLocaleDateString(locale, { month: "long", year: "numeric" })}</h2>
           <div className="flex items-center gap-1">
-            <button onClick={() => shiftMonth(-1)} aria-label={t("Previous month")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-95"><ChevronLeft className="h-4 w-4" /></button>
-            <button onClick={() => setViewMonth(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); })} className="rounded-md border border-border px-3 py-1 text-xs font-semibold transition-colors hover:bg-accent">{t("Today")}</button>
-            <button onClick={() => shiftMonth(1)} aria-label={t("Next month")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-95"><ChevronRight className="h-4 w-4" /></button>
+            <button onClick={() => shiftMonth(-1)} aria-label={t("Previous month")} className="grid h-11 w-11 place-items-center rounded-lg text-muted-foreground md:h-8 md:w-8 transition-colors hover:bg-accent hover:text-foreground active:scale-95"><ChevronLeft className="h-4 w-4" /></button>
+            <button onClick={() => setViewMonth(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); })} className="h-9 rounded-md border border-border px-3 text-xs font-semibold transition-colors hover:bg-accent md:h-7">{t("Today")}</button>
+            <button onClick={() => shiftMonth(1)} aria-label={t("Next month")} className="grid h-11 w-11 place-items-center rounded-lg text-muted-foreground md:h-8 md:w-8 transition-colors hover:bg-accent hover:text-foreground active:scale-95"><ChevronRight className="h-4 w-4" /></button>
           </div>
         </div>
 

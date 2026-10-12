@@ -35,11 +35,11 @@ function DocsList() {
     <div>
       <PageHeader title={t("Pages")} subtitle={t("SOPs, meeting notes, briefs and reference pages from every project you're in.")} icon={<BookOpen className="h-6 w-6 text-primary" />} actions={
         <>
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Search pages…")} className="pl-7 pr-3 py-1.5 text-sm rounded-md border border-border bg-background w-56 outline-none focus:border-primary" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Search pages…")} className="pl-7 pr-3 py-1.5 text-sm rounded-md border border-border bg-background w-full sm:w-56 outline-none focus:border-primary" />
           </div>
-          <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New page")}</button>
+          <button onClick={() => setOpen(true)} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New page")}</button>
         </>
       } />
       <div className="p-4 md:p-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -64,7 +64,7 @@ function DocTreeNode({ doc, allDocs, depth }: { doc: NexusDoc; allDocs: NexusDoc
   const children = allDocs.filter((d) => d.parentId === doc.id);
   return (
     <div>
-      <Link to="/docs/$docId" params={{ docId: doc.id }} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent" style={{ paddingLeft: `${depth * 14 + 8}px` }}>
+      <Link to="/docs/$docId" params={{ docId: doc.id }} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent pointer-coarse:min-h-11" style={{ paddingLeft: `${depth * 14 + 8}px` }}>
         <span className="shrink-0">{emojiForDoc(doc)}</span>
         <span className="truncate">{doc.title}</span>
       </Link>

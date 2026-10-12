@@ -242,6 +242,16 @@
   scroll-padding-bottom: var(--cal-foot-room);
 }
 
+/* iOS Safari zooms the page into any field under 16px when it gets focus (and stays zoomed). On phones
+   every field is 16px; unlayered, so it wins over the text-sm / text-xs utilities. */
+@media (max-width: 767.98px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 /* Overlays under "reduce motion": tooltips, popovers, dialogs and sheets fade, but no longer zoom or
    slide (tw-animate's enter / exit keyframes read these variables). Unlayered, so it wins over the
    zoom-in / slide-in utilities on the same element. The phone drawer (vaul, which injects its own

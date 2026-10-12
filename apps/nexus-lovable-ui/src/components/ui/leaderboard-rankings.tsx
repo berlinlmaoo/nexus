@@ -5,6 +5,7 @@ import { motion } from "framer-motion"
 import { ChevronLeft, ChevronRight, Crown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { localeOf } from "@/lib/lang"
 import { type MorphOrigin } from "@/components/motion/MorphPanel"
 
 export interface LeaderboardRankingItem {
@@ -23,8 +24,8 @@ function initialsOf(name?: string | null) {
 }
 
 function formatValue(value: number) {
-  // Show the full XP number (e.g. 1,100) — no "k" abbreviation.
-  return value.toLocaleString("en-US")
+  // Show the full XP number (1,100 / 1.100 in Indonesian) — no "k" abbreviation.
+  return value.toLocaleString(localeOf())
 }
 
 const CROWN_COLOR: Record<number, string> = {

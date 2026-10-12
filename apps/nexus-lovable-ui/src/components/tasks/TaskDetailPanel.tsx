@@ -20,6 +20,7 @@ import {
   ListChecks,
   Loader2,
   MessageCircle,
+  MoreHorizontal,
   Paperclip,
   Plus,
   Search,
@@ -48,6 +49,11 @@ import {
   type NexusUser,
 } from "@/lib/nexus-api";
 import { RupiahInput } from "@/components/RupiahInput";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { pushGideonPage } from "@/lib/gideon-ai";
 import { useAutofillMarks } from "@/components/gideon/AutofillPanel";
@@ -253,7 +259,8 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   // this (parent) panel must ignore Esc — otherwise one keypress closes the whole stack at once.
   const openSubRef = useRef<string | null>(null);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !openSubRef.current) requestClose(); };
+    // defaultPrevented: Esc already closed a menu or the delete alert (Radix) — leave the panel open.
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented && !openSubRef.current) requestClose(); };
     document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -279,6 +286,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   const wsMembers = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), staleTime: 300_000, retry: false });
   const canMakeQuest = wsMembers.data?.role === "BOD" || wsMembers.data?.role === "ONE_ABOVE_ALL";
   const [questOpen, setQuestOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const projectId = task.data?.taskList?.project?.id || task.data?.taskList?.projectId;
   const ai = useAutofillMarks(projectId);
   // While the task is open, GIDEON's context chip is this task (Notion AI's page chip).
@@ -481,30 +489,35 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               transition={{ delay: morph ? 0.05 : 0, duration: 0.16 }}
               className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
             >
-            {/* header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-card/85 px-5 py-4 backdrop-blur sm:px-8">
+            {/* header. On a phone (audit 12 Oct 2026): the actions row first with 44px targets and Close at the far
+                end, the secondary actions in a ⋯ menu (Delete no longer sits next to Close), the breadcrumb on its own line. */}
+        <div className="sticky top-0 z-10 flex flex-col-reverse gap-0.5 border-b border-border bg-card/85 px-5 pb-2.5 pt-1.5 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-8 sm:py-4">
           <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-muted-foreground">
             {t?.taskList?.project && (
               <>
-                <span className="h-2.5 w-2.5 rounded-full" style={{ background: t.taskList.project.color ?? "#7b68ee" }} />
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: t.taskList.project.color ?? "#7b68ee" }} />
                 <span className="truncate">{t.taskList.project.name}</span>
                 <span className="text-muted-foreground/50">/</span>
                 <span className="truncate">{t.taskList?.name}</span>
               </>
             )}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="-mr-3 flex items-center justify-end gap-0.5 sm:mr-0 sm:gap-1">
             <button
               onClick={() => followMut.mutate()}
-              className={cn("inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition-colors active:scale-[0.97]", followers.data?.isFollowing ? "text-primary" : "text-muted-foreground hover:bg-accent")}
+              className={cn("inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition-colors active:scale-[0.97] sm:h-auto sm:min-w-0", followers.data?.isFollowing ? "text-primary" : "text-muted-foreground hover:bg-accent")}
               title={followers.data?.isFollowing ? tr("Following") : tr("Follow")}
+              aria-label={followers.data?.isFollowing ? tr("Following") : tr("Follow")}
+              aria-pressed={!!followers.data?.isFollowing}
             >
               <Eye className="h-4 w-4" /> {followers.data?.followers?.length ?? 0}
             </button>
             <button
               onClick={() => favMut.mutate()}
-              className={cn("rounded-lg p-1.5 transition-colors active:scale-[0.95]", isFavorited ? "text-amber-500" : "text-muted-foreground hover:bg-accent")}
+              className={cn("hidden rounded-lg p-1.5 transition-colors active:scale-[0.95] sm:inline-flex", isFavorited ? "text-amber-500" : "text-muted-foreground hover:bg-accent")}
               title={tr("Favorite")}
+              aria-label={tr("Favorite")}
+              aria-pressed={isFavorited}
             >
               <Star className={cn("h-4 w-4", isFavorited && "fill-amber-500")} />
             </button>
@@ -513,29 +526,62 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               // POST on this route TOGGLES, so a double-click sent two POSTs and the second one took
               // the like straight back off. One request at a time.
               disabled={likeMut.isPending}
-              className={cn("inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition-colors active:scale-[0.97] disabled:opacity-60", t?.liked ? "text-destructive" : "text-muted-foreground hover:bg-accent")}
+              className={cn("inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition-colors active:scale-[0.97] disabled:opacity-60 sm:h-auto sm:min-w-0", t?.liked ? "text-destructive" : "text-muted-foreground hover:bg-accent")}
               title={tr("Like")}
+              aria-label={tr("Like")}
+              aria-pressed={!!t?.liked}
             >
               <Heart className={cn("h-4 w-4", t?.liked && "fill-destructive")} /> {t?.likeCount ?? 0}
             </button>
             {canMakeQuest && t && (
-              <button onClick={() => setQuestOpen(true)} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary" title={tr("Make it a goal")}>
+              <button onClick={() => setQuestOpen(true)} className="hidden rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary sm:inline-flex" title={tr("Make it a goal")} aria-label={tr("Make it a goal")}>
                 <Trophy className="h-4 w-4" />
               </button>
             )}
             {/* Copy this one task into another project (the bulk bar covers many at once, but it's
                 gated behind the project's duplicate-mode toggle — this is always available). */}
-            <button onClick={() => setCopyOpen(true)} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary" title={tr("Copy to another project")}>
+            <button onClick={() => setCopyOpen(true)} className="hidden rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary sm:inline-flex" title={tr("Copy to another project")} aria-label={tr("Copy to another project")}>
               <FolderInput className="h-4 w-4" />
             </button>
-            <button onClick={() => { if (confirm(tr("Delete this task?"))) delTask.mutate(); }} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title={tr("Delete task")}>
+            <button onClick={() => setConfirmDelete(true)} className="hidden rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive sm:inline-flex" title={tr("Delete task")} aria-label={tr("Delete task")}>
               <Trash2 className="h-4 w-4" />
             </button>
-            <button onClick={requestClose} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent" title={tr("Close")}>
+            {/* Phone: the secondary actions behind ⋯ */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="grid h-11 w-11 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent sm:hidden" aria-label={tr("More actions")}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="z-[60] w-56">
+                <DropdownMenuItem onSelect={() => favMut.mutate()} className="min-h-11">
+                  <Star className={cn("h-4 w-4", isFavorited && "fill-amber-500 text-amber-500")} />{tr("Favorite")}
+                </DropdownMenuItem>
+                {canMakeQuest && t && (
+                  <DropdownMenuItem onSelect={() => setQuestOpen(true)} className="min-h-11"><Trophy className="h-4 w-4" />{tr("Make it a goal")}</DropdownMenuItem>
+                )}
+                <DropdownMenuItem onSelect={() => setCopyOpen(true)} className="min-h-11"><FolderInput className="h-4 w-4" />{tr("Copy to another project")}</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setConfirmDelete(true)} className="min-h-11 text-destructive focus:text-destructive"><Trash2 className="h-4 w-4" />{tr("Delete task")}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <button onClick={requestClose} className="grid h-11 w-11 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent sm:h-auto sm:w-auto sm:p-1.5" title={tr("Close")} aria-label={tr("Close")}>
               <X className="h-4 w-4" />
             </button>
           </div>
         </div>
+        <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+          <AlertDialogContent className="w-[calc(100vw-2rem)] max-w-md rounded-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>{tr("Delete this task?")}</AlertDialogTitle>
+              <AlertDialogDescription>{tr("The task is deleted and can be restored from Control Room → Audit for 90 days.")}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{tr("Cancel")}</AlertDialogCancel>
+              <AlertDialogAction onClick={() => delTask.mutate()} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">{tr("Delete task")}</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {task.isLoading && (
           <div className="flex flex-1 items-center justify-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
@@ -558,9 +604,10 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 </div>
               </div>
             ))}
-            {/* toolbar: mark done + status + priority (old-NEXUS pills) */}
-            <div className="flex flex-wrap items-center gap-2">
-              <button onClick={() => update.mutate({ status: (isDoneStatus(t.status) ? "TODO" : "DONE") as never })} className={cn("inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-bold transition-colors", isDoneStatus(t.status) ? "border-success/30 bg-success/10 text-success" : "border-border bg-card text-foreground hover:bg-accent")}>
+            {/* toolbar: mark done + status + priority (old-NEXUS pills). Phone: Mark done on its own row, status and
+                priority side by side below it (they wrapped raggedly, audit 12 Oct 2026). */}
+            <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
+              <button onClick={() => update.mutate({ status: (isDoneStatus(t.status) ? "TODO" : "DONE") as never })} className={cn("col-span-2 inline-flex items-center justify-center gap-2 rounded-full sm:justify-start border px-3.5 py-2 text-xs font-bold transition-colors", isDoneStatus(t.status) ? "border-success/30 bg-success/10 text-success" : "border-border bg-card text-foreground hover:bg-accent")}>
                 {isDoneStatus(t.status) ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4 text-muted-foreground" />} {isDoneStatus(t.status) ? tr("Done") : tr("Mark done")}
               </button>
               {/* Section = the project's board column (TaskList). Falls back to global status if the
@@ -574,29 +621,29 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                   value={t.taskListId}
                   onPick={(id) => update.mutate({ taskListId: id } as never)}
                   trigger={
-                    <button type="button" className="inline-flex items-center gap-1 rounded-full border border-border bg-card py-1 pl-1 pr-2.5 transition-colors hover:bg-muted" aria-label={tr("Status")}>
+                    <button type="button" className="inline-flex min-w-0 items-center justify-between gap-1 rounded-full border border-border bg-card py-1 pl-1 pr-2.5 transition-colors hover:bg-muted" aria-label={tr("Status")}>
                       <StatusPill option={sections.find((x) => x.id === t.taskListId) ?? null} size="md" />
                       <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
                   }
                 />
               ) : sections.length > 0 ? (
-                <div className="relative">
-                  <select value={t.taskListId ?? ""} onChange={(e) => update.mutate({ taskListId: e.target.value } as never)} className="max-w-[200px] appearance-none truncate rounded-full border border-border bg-card px-3.5 py-2 pr-8 text-xs font-bold uppercase tracking-wider outline-none transition focus:border-primary">
+                <div className="relative min-w-0">
+                  <select value={t.taskListId ?? ""} onChange={(e) => update.mutate({ taskListId: e.target.value } as never)} className="w-full appearance-none sm:w-auto sm:max-w-[200px] truncate rounded-full border border-border bg-card px-3.5 py-2 pr-8 text-xs font-bold uppercase tracking-wider outline-none transition focus:border-primary">
                     {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 </div>
               ) : (
-                <div className="relative">
-                  <select value={t.status ?? "TODO"} onChange={(e) => update.mutate({ status: e.target.value as never })} className="appearance-none rounded-full border border-border bg-card px-3.5 py-2 pr-8 text-xs font-bold uppercase tracking-wider outline-none transition focus:border-primary">
+                <div className="relative min-w-0">
+                  <select value={t.status ?? "TODO"} onChange={(e) => update.mutate({ status: e.target.value as never })} className="w-full appearance-none sm:w-auto rounded-full border border-border bg-card px-3.5 py-2 pr-8 text-xs font-bold uppercase tracking-wider outline-none transition focus:border-primary">
                     {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 </div>
               )}
-              <div className="relative">
-                <select value={t.priority ?? "NONE"} onChange={(e) => update.mutate({ priority: e.target.value as never })} className="appearance-none rounded-full border border-border bg-card px-3.5 py-2 pr-8 text-xs font-bold outline-none transition focus:border-primary">
+              <div className="relative min-w-0">
+                <select value={t.priority ?? "NONE"} onChange={(e) => update.mutate({ priority: e.target.value as never })} className="w-full appearance-none sm:w-auto rounded-full border border-border bg-card px-3.5 py-2 pr-8 text-xs font-bold outline-none transition focus:border-primary">
                   {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{statusLabel(p)}</option>)}
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -696,7 +743,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     ))}
                   </div>
                 ) : !cfAdding ? (
-                  <p className="text-xs text-muted-foreground">{tr("No fields yet. Click New field to add one.")}</p>
+                  <p className="text-xs text-muted-foreground">{tr("No fields yet. Add one with New field.")}</p>
                 ) : null}
               </SecCard>
             )}
@@ -871,8 +918,8 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     )}
                     <button onClick={() => setPreviewAtt(att)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-primary hover:underline">{att.name || tr("(unnamed)")}</button>
                     {att.size != null && <span className="shrink-0 text-xs text-muted-foreground">{Math.round(att.size / 1024)} KB</span>}
-                    <button onClick={() => setPreviewAtt(att)} title={tr("Preview")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
-                    {att.url && <a href={`${att.url}?download=${encodeURIComponent(att.name || "file")}`} download={att.name || ""} title={tr("Download")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-3.5 w-3.5" /></a>}
+                    <button onClick={() => setPreviewAtt(att)} aria-label={tr("Preview")} title={tr("Preview")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
+                    {att.url && <a href={`${att.url}?download=${encodeURIComponent(att.name || "file")}`} download={att.name || ""} aria-label={tr("Download")} title={tr("Download")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-3.5 w-3.5" /></a>}
                     <button onClick={() => delAttachment.mutate(att.id)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
@@ -921,8 +968,8 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     )}
                     <button onClick={() => setPreviewAtt(att)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-primary hover:underline">{att.name || tr("(unnamed)")}</button>
                     {att.size != null && <span className="shrink-0 text-xs text-muted-foreground">{Math.round(att.size / 1024)} KB</span>}
-                    <button onClick={() => setPreviewAtt(att)} title={tr("Preview")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
-                    {att.url && <a href={`${att.url}?download=${encodeURIComponent(att.name || "file")}`} download={att.name || ""} title={tr("Download")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-3.5 w-3.5" /></a>}
+                    <button onClick={() => setPreviewAtt(att)} aria-label={tr("Preview")} title={tr("Preview")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
+                    {att.url && <a href={`${att.url}?download=${encodeURIComponent(att.name || "file")}`} download={att.name || ""} aria-label={tr("Download")} title={tr("Download")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-3.5 w-3.5" /></a>}
                     <button onClick={() => delAttachment.mutate(att.id)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
@@ -943,7 +990,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                       <div className="truncate text-xs text-muted-foreground">{previewAtt.mimeType ?? tr("file")}{previewAtt.size != null ? ` · ${Math.round(previewAtt.size / 1024)} KB` : ""}</div>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
-                      {previewAtt.url && <a href={`${previewAtt.url}?download=${encodeURIComponent(previewAtt.name || "file")}`} download={previewAtt.name || ""} title={tr("Download")} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-4 w-4" /></a>}
+                      {previewAtt.url && <a href={`${previewAtt.url}?download=${encodeURIComponent(previewAtt.name || "file")}`} download={previewAtt.name || ""} aria-label={tr("Download")} title={tr("Download")} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-4 w-4" /></a>}
                       <button onClick={() => setPreviewAtt(null)} aria-label={tr("Close")} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"><X className="h-4 w-4" /></button>
                     </div>
                   </div>
@@ -1282,7 +1329,7 @@ function FileFieldEditor({ projectId, value, onSet }: { projectId?: string; valu
           {files.map((f) => (
             <div key={f.url} className="group relative">
               {isImg(f) ? (
-                <a href={f.url} target="_blank" rel="noopener noreferrer" title={f.name}>
+                <a href={f.url} target="_blank" rel="noopener noreferrer" aria-label={f.name} title={f.name}>
                   <img src={f.url} alt={f.name} className="h-14 w-14 rounded-lg border border-border object-cover" />
                 </a>
               ) : (

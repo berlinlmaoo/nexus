@@ -223,7 +223,7 @@ function NameCell({ task, onRename, onOpen }: { task: NexusTask; onRename: (titl
         className={cn("min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium outline-none hover:border-border focus:border-primary focus:bg-background", done && "text-muted-foreground line-through")}
       />
       {xp > 0 && <span title={t("Goal XP")} className="shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">+{xp} XP</span>}
-      <button onClick={onOpen} title={t("Open")} className="shrink-0 text-muted-foreground/0 transition-colors hover:text-primary group-hover:text-muted-foreground"><ChevronRight className="h-3.5 w-3.5" /></button>
+      <button onClick={onOpen} aria-label={t("Open")} title={t("Open")} className="shrink-0 text-muted-foreground/0 transition-colors hover:text-primary group-hover:text-muted-foreground"><ChevronRight className="h-3.5 w-3.5" /></button>
     </div>
   );
 }

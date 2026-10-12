@@ -236,7 +236,7 @@ function Attendance() {
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["attendance-today"] });
       qc.invalidateQueries({ predicate: (q) => q.queryKey.map(String).includes("attendance-history") });
-      const failNote = r.failed > 0 ? " " + tr("{n} failed — click again to retry (safe).", { n: r.failed }) : "";
+      const failNote = r.failed > 0 ? " " + tr("{n} failed — run it again to retry (safe).", { n: r.failed }) : "";
       celebrate(tr("System-down day {date} refunded — XP returned to {n} people (+{xp} XP), {days} day off restored.", { date: r.date, n: r.refundedMembers, xp: r.totalXpRefunded, days: r.totalDayOffsRestored }) + failNote);
     },
     onError: (e) => { alert(e instanceof Error ? e.message : tr("Couldn’t refund the system-down day.")); },
@@ -602,7 +602,7 @@ function Attendance() {
                               </span>
                               <button
                                 type="button"
-                                title={tr("Export this person's attendance (xlsx): one row per day, check-in/out times, lateness, notes")}
+                                aria-label={tr("Export this person's attendance (xlsx): one row per day, check-in/out times, lateness, notes")} title={tr("Export this person's attendance (xlsx): one row per day, check-in/out times, lateness, notes")}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   const slug = (u.name || "staff").toLowerCase().replace(/[^a-z0-9]+/g, "-");

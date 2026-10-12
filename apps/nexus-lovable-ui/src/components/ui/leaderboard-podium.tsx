@@ -4,6 +4,7 @@ import * as React from "react"
 import { Crown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { localeOf } from "@/lib/lang"
 
 export interface LeaderboardRanking {
   userId: string
@@ -58,7 +59,7 @@ const LeaderboardPodium = React.forwardRef<HTMLDivElement, LeaderboardPodiumProp
                 </span>
               </div>
               <div className="max-w-full truncate text-sm font-semibold">{item.userName}</div>
-              <div className="mb-2 text-sm text-muted-foreground tabular-nums">{item.value.toLocaleString()}</div>
+              <div className="mb-2 text-sm text-muted-foreground tabular-nums">{item.value.toLocaleString(localeOf())}</div>
               <div className={cn("flex w-full items-start justify-center rounded-t-xl pt-3 text-2xl font-bold", s.bar, s.barText, s.height)}>
                 {rank}
               </div>

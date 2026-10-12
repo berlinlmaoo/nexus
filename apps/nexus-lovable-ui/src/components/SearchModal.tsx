@@ -4,12 +4,15 @@ import { useQuery } from "@tanstack/react-query";
 import { CheckSquare, FileText, FolderKanban, Loader2, Search, Target, Users, X } from "lucide-react";
 import { nexusApi } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type ResultItem = { id: string; label: string; sub?: string; to: () => void; icon: typeof Search };
 
 export function SearchModal({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const { t } = useLang();
+  // The full list of what it searches is cut off on a phone; there it says it more briefly.
+  const phone = useIsMobile();
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
 
@@ -43,9 +46,9 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
         <div className="flex items-center gap-2 border-b border-border px-4">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
           {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search tasks, projects, docs, goals, people…")} className="flex-1 bg-transparent py-3.5 text-sm outline-none placeholder:text-muted-foreground" />
+          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={phone ? t("Search everything…") : t("Search tasks, projects, docs, goals, people…")} className="min-w-0 flex-1 text-ellipsis bg-transparent py-3.5 text-sm outline-none placeholder:text-muted-foreground" />
           {search.isFetching && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-          <button onClick={onClose} aria-label={t("Close")} className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label={t("Close")} className="grid h-11 w-11 place-items-center rounded-lg text-muted-foreground md:h-auto md:w-auto md:p-1 transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
         <div className="max-h-[55vh] overflow-y-auto p-2">
           {debounced.length < 2 && <p className="px-3 py-8 text-center text-sm text-muted-foreground">{t("Type at least 2 characters to search.")}</p>}
