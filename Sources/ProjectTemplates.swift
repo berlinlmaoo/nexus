@@ -140,18 +140,10 @@ enum ProjectTemplateStore {
 
 /// Notion's option colours, as the web draws them (TemplateGallery.tsx CHIP).
 enum TemplateTint {
+    /// A template's section / option colour: the same nine-colour option palette the board draws its
+    /// status columns in (StatusOptions.swift), so a template's preview matches the board it makes.
     static func color(_ name: String?) -> Color {
-        switch name {
-        case "brown": return Color(hex: "#92400e")
-        case "orange": return Color(hex: "#f97316")
-        case "yellow": return Color(hex: "#ca8a04")
-        case "green": return Color(hex: "#10b981")
-        case "blue": return Color(hex: "#0ea5e9")
-        case "purple": return Color(hex: "#8b5cf6")
-        case "pink": return Color(hex: "#ec4899")
-        case "red": return Color(hex: "#f43f5e")
-        default: return Color(hex: "#64748b")
-        }
+        StatusColor.swatch(StatusColor.normalize(name) ?? "gray").dot
     }
 
     /// lucide-react icon names from the registry → SF Symbols. Unknown names fall back to a checklist,
