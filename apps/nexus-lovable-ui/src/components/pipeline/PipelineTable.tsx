@@ -11,7 +11,7 @@ import {
 } from "@/lib/pipeline";
 import { servicesOf, type PipelineDeal, type PipelineDealPatch } from "@/lib/pipeline-api";
 import { CELL, DateField, MoneyField, SelectField } from "./fields";
-import { HEALTH_ORDER, HealthPill, dealPayment, fmtIdr, fmtPct, personName, useVocabLabels } from "./pipeline-ui";
+import { HEALTH_ORDER, HEALTH_TEXT, HealthPill, dealPayment, fmtIdr, fmtIdrFull, fmtPct, personName, useVocabLabels } from "./pipeline-ui";
 
 type SortKey = "code" | "name" | "stage" | "probability" | "netValue" | "outstandingReceivable" | "daysOverdue" | "nextActionDate" | "health" | "pm";
 
@@ -28,7 +28,7 @@ export function PipelineTable({
   onPatch: (id: string, patch: PipelineDealPatch) => void;
   canEdit: boolean;
 }) {
-  const { t, lang, locale } = useLang();
+  const { t, lang } = useLang();
   const labels = useVocabLabels();
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "stage", dir: 1 });
 
@@ -66,30 +66,30 @@ export function PipelineTable({
   const th = (k: SortKey, children: string, className?: string) => {
     const on = sort.key === k;
     return (
-      <th key={k} scope="col" aria-sort={on ? (sort.dir === 1 ? "ascending" : "descending") : "none"} className={cn("whitespace-nowrap px-2 py-2 text-left font-semibold", className)}>
+      <th key={k} scope="col" aria-sort={on ? (sort.dir === 1 ? "ascending" : "descending") : "none"} className={cn("group/th whitespace-nowrap px-2 py-2 text-left font-normal", className)}>
         <button
           type="button"
           onClick={() => setSort((s) => ({ key: k, dir: s.key === k ? (s.dir === 1 ? -1 : 1) : 1 }))}
-          className="inline-flex items-center gap-1 rounded text-2xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          className={cn("inline-flex items-center gap-1 rounded text-xs font-medium transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring", on ? "text-foreground" : "text-muted-foreground")}
         >
           {children}
-          {on ? (sort.dir === 1 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ChevronsUpDown className="h-3 w-3 opacity-40" />}
+          {on ? (sort.dir === 1 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ChevronsUpDown className="h-3 w-3 opacity-0 transition-opacity group-hover/th:opacity-40" />}
         </button>
       </th>
     );
   };
 
   const plainTh = (label: string, className?: string) => (
-    <th scope="col" className={cn("whitespace-nowrap px-2 py-2 text-left text-2xs font-semibold uppercase tracking-wider text-muted-foreground", className)}>{label}</th>
+    <th scope="col" className={cn("whitespace-nowrap px-2 py-2 text-left text-xs font-medium text-muted-foreground", className)}>{label}</th>
   );
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-soft [scrollbar-width:thin]">
+    <div className="overflow-x-auto rounded-xl border border-border bg-card [scrollbar-width:thin]">
       <table className="w-full min-w-[72rem] border-collapse text-sm">
-        <thead className="border-b border-border bg-muted/40">
+        <thead className="border-b border-border bg-card">
           <tr>
             {th("code", t("Code"), "hidden w-24 pl-4 sm:table-cell")}
-            {th("name", t("Deal"), "sticky left-0 z-10 min-w-56 bg-muted")}
+            {th("name", t("Deal"), "sticky left-0 z-10 min-w-56 bg-card")}
             {plainTh(t("Services"), "min-w-40")}
             {th("stage", t("Stage"), "min-w-48")}
             {th("probability", t("Prob."), "w-24")}
@@ -107,13 +107,13 @@ export function PipelineTable({
         </thead>
         <tbody>
           {rows.map((d) => (
-            <tr key={d.id} className="group border-b border-border/70 last:border-b-0 hover:bg-muted/30">
+            <tr key={d.id} className="group border-b border-border/70 last:border-b-0 transition-colors hover:bg-[var(--row-hover)] [--row-hover:color-mix(in_oklab,var(--muted)_55%,var(--card))]">
               <td className="hidden whitespace-nowrap pl-4 pr-2 text-xs tabular-nums text-muted-foreground sm:table-cell">{d.code}</td>
-              <td className="sticky left-0 z-10 bg-card px-2 py-1.5 group-hover:bg-muted">
+              <td className="sticky left-0 z-10 bg-card px-2 py-1.5 transition-colors group-hover:bg-[var(--row-hover)]">
                 <button
                   type="button"
                   onClick={() => onOpen(d.id)}
-                  className="block max-w-40 truncate sm:max-w-72 rounded text-left font-semibold underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                  className="block max-w-40 truncate sm:max-w-72 rounded text-left font-medium underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
                   title={d.name}
                 >
                   {d.name || t("Untitled deal")}
@@ -126,21 +126,21 @@ export function PipelineTable({
               <td className="px-1"><SelectField cell className="min-w-[11.5rem]" label={t("Stage")} value={d.stage} options={PIPELINE_STAGES} labelOf={labels.stage} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { stage: v })} /></td>
               <td className="px-1"><SelectField cell className="min-w-[5.5rem]" label={t("Probability")} value={d.probability} options={PROBABILITY_OPTIONS as readonly number[]} labelOf={fmtPct} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { probability: v })} /></td>
               <td className="px-1"><MoneyField cell className="min-w-[9rem]" label={t("Net value")} value={d.netValue} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { netValue: v })} /></td>
-              <td className="px-1"><SelectField cell className="min-w-[9.5rem]" label={t("Contract status")} value={d.contractStatus} options={CONTRACT_STATUS_OPTIONS} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { contractStatus: v })} /></td>
+              <td className="px-1"><SelectField cell className="min-w-[9.5rem]" label={t("Contract status")} value={d.contractStatus} options={CONTRACT_STATUS_OPTIONS} labelOf={labels.status} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { contractStatus: v })} /></td>
               <td className="px-1"><SelectField cell className="min-w-[7rem]" label={t("Deliverable risk")} value={d.deliverableRisk} options={DELIVERABLE_RISK_OPTIONS} labelOf={labels.risk} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { deliverableRisk: v })} /></td>
               {/* A deal paid per term: status and receivable come from its terms, edited in the drawer. */}
               {d.termSummary ? (
                 <>
-                  <td className="px-2.5 text-sm" title={t("From the payment terms")}>{d.termSummary.paymentStatus}</td>
-                  <td className="px-2.5 text-right text-sm tabular-nums" title={t("From the payment terms")}>{fmtIdr(d.termSummary.outstanding, lang)}</td>
+                  <td className="whitespace-nowrap px-2.5 text-sm" title={t("From the payment terms")}>{labels.status(d.termSummary.paymentStatus)}</td>
+                  <td className="whitespace-nowrap px-2.5 text-right text-sm tabular-nums" title={t("From the payment terms")}>{d.termSummary.outstanding ? fmtIdrFull(d.termSummary.outstanding, lang) : ""}</td>
                 </>
               ) : (
                 <>
-                  <td className="px-1"><SelectField cell className="min-w-[7rem]" label={t("Payment status")} value={d.paymentStatus} options={PAYMENT_STATUS_OPTIONS} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { paymentStatus: v })} /></td>
+                  <td className="px-1"><SelectField cell className="min-w-[7rem]" label={t("Payment status")} value={d.paymentStatus} options={PAYMENT_STATUS_OPTIONS} labelOf={labels.status} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { paymentStatus: v })} /></td>
                   <td className="px-1"><MoneyField cell className="min-w-[9rem]" label={t("Outstanding receivable")} value={d.outstandingReceivable} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { outstandingReceivable: v })} /></td>
                 </>
               )}
-              <td className={cn("px-2 text-right tabular-nums", d.daysOverdue > 7 ? "font-semibold text-red-700 dark:text-red-300" : d.daysOverdue > 0 ? "text-amber-800 dark:text-amber-300" : "text-muted-foreground")}>
+              <td className={cn("px-2 text-right tabular-nums", d.daysOverdue > 7 ? cn("font-medium", HEALTH_TEXT.CRITICAL) : d.daysOverdue > 0 ? HEALTH_TEXT.ATTENTION : "text-muted-foreground")}>
                 {d.daysOverdue > 0 ? t("{n}d", { n: d.daysOverdue }) : ""}
               </td>
               <td className="px-1">
@@ -156,14 +156,14 @@ export function PipelineTable({
             </tr>
           ))}
         </tbody>
-        <tfoot className="border-t border-border bg-muted/40 text-sm font-semibold tabular-nums">
+        <tfoot className="border-t border-border bg-card text-sm font-medium tabular-nums">
           <tr>
             <td className="hidden pl-4 sm:table-cell" />
-            <td className="sticky left-0 z-10 bg-muted px-2 py-2">{t("{n} deals", { n: rows.length })}</td>
+            <td className="sticky left-0 z-10 bg-card px-2 py-2.5 text-muted-foreground">{t("{n} deals", { n: rows.length })}</td>
             <td colSpan={3} />
-            <td className="px-2 text-right" title={new Intl.NumberFormat(locale).format(totals.net)}>{fmtIdr(totals.net, lang)}</td>
+            <td className="px-2 text-right" title={fmtIdrFull(totals.net, lang)}>{fmtIdr(totals.net, lang)}</td>
             <td colSpan={3} />
-            <td className="px-2 text-right">{fmtIdr(totals.outstanding, lang)}</td>
+            <td className="px-2 text-right" title={fmtIdrFull(totals.outstanding, lang)}>{fmtIdr(totals.outstanding, lang)}</td>
             <td colSpan={5} />
           </tr>
         </tfoot>

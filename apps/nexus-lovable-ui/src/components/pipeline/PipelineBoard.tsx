@@ -6,7 +6,8 @@ import { AvatarFace } from "@/components/Avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PIPELINE_STAGES, daysBetween, dealValue, stageGroupOf } from "@/lib/pipeline";
 import { servicesOf, type PipelineDeal } from "@/lib/pipeline-api";
-import { BlockerBanner, GROUP_TONE, HealthPill, PhaseTrack, fmtDayShort, fmtIdr, fmtIdrFull, personName, useReasonText, useVocabLabels } from "./pipeline-ui";
+import { COLOR_PRESETS } from "@/lib/project-views";
+import { BlockerBanner, GROUP_COLOR, GROUP_TONE, HEALTH_TEXT, HealthPill, PhaseTrack, StagePill, fmtDayShort, fmtIdr, fmtIdrFull, personName, useReasonText, useVocabLabels } from "./pipeline-ui";
 
 const DRAG_TYPE = "application/x-nexus-deal";
 
@@ -147,6 +148,7 @@ export function PipelineBoard({
             const total = list.reduce((sum, d) => sum + dealValue(d), 0);
             const sorted = [...list].sort(bySeverity);
             const group = stageGroupOf(stage);
+            const tone = COLOR_PRESETS[GROUP_COLOR[group] ?? "gray"];
             return (
               <section
                 key={stage}
@@ -154,20 +156,18 @@ export function PipelineBoard({
                 onDragOver={canEdit ? (e) => { if (e.dataTransfer.types.includes(DRAG_TYPE)) { e.preventDefault(); setOver(stage); } } : undefined}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(null); }}
                 onDrop={canEdit ? drop(stage) : undefined}
-                className={cn(
-                  "flex w-[calc(100vw-2.5rem)] max-w-[22rem] shrink-0 snap-start flex-col rounded-2xl border bg-muted/40 transition-colors md:h-full md:w-[18rem] md:max-w-none",
-                  over === stage ? "border-primary/60 bg-accent/60" : "border-border/70",
-                )}
+                // A tinted column with its stage as a pill, like a task board's status columns (12 Oct 2026).
+                style={{ backgroundColor: tone.lane, ...(over === stage ? { boxShadow: `inset 0 0 0 1.5px ${tone.dot}` } : {}) }}
+                className="group/lane flex w-[calc(100vw-2.5rem)] max-w-[22rem] shrink-0 snap-start flex-col rounded-lg transition-shadow md:h-full md:w-[18rem] md:max-w-none"
               >
-                <header className="flex items-start gap-2 px-3 pb-2 pt-2.5">
+                <header className="flex items-start gap-1.5 px-2 pb-1.5 pt-2" style={{ color: tone.text }}>
                   <div className="min-w-0 flex-1">
-                    <h3 className="flex items-center gap-2 text-sm font-semibold leading-6">
-                      <span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", GROUP_TONE[group])} />
-                      <span className="truncate">{labels.stage(stage)}</span>
-                      <span className="shrink-0 rounded-md bg-background px-1.5 text-xs font-semibold leading-5 tabular-nums text-muted-foreground ring-1 ring-border">{list.length}</span>
+                    <h3 className="flex min-w-0 items-center gap-1.5">
+                      <StagePill stage={stage} />
+                      <span className="shrink-0 text-xs tabular-nums">{list.length}</span>
                     </h3>
                     {/* Same height in every column, so the first cards line up across the board. */}
-                    <p className="h-4 pl-4 text-xs leading-4 tabular-nums text-muted-foreground" title={total > 0 ? fmtIdrFull(total, lang) : undefined}>
+                    <p className="mt-0.5 h-4 pl-2 text-xs leading-4 tabular-nums opacity-80" title={total > 0 ? fmtIdrFull(total, lang) : undefined}>
                       {total > 0 ? fmtIdr(total, lang) : ""}
                     </p>
                   </div>
@@ -177,18 +177,18 @@ export function PipelineBoard({
                       onClick={() => onAdd(stage)}
                       aria-label={t("Add a deal in {stage}", { stage: labels.stage(stage) })}
                       title={t("Add a deal in {stage}", { stage: labels.stage(stage) })}
-                      className="-mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:size-10"
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-md opacity-70 transition-[opacity,background-color] hover:bg-black/5 hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring dark:hover:bg-white/10 pointer-coarse:size-10"
                     >
                       <Plus className="h-4 w-4" />
                     </button>
                   )}
                 </header>
-                <div className="flex min-h-16 flex-1 flex-col gap-2 overscroll-y-contain px-2 pb-2 [scrollbar-width:thin] md:overflow-y-auto">
+                <div className="flex min-h-16 flex-1 flex-col gap-1.5 overscroll-y-contain px-1.5 pb-1.5 [scrollbar-width:thin] md:overflow-y-auto">
                   {sorted.map((d) => (
                     <DealCard key={d.id} deal={d} today={today} onOpen={onOpen} onMove={onMove} canEdit={canEdit} />
                   ))}
                   {sorted.length === 0 && (
-                    <p className={cn("rounded-xl px-2 py-3 text-xs text-muted-foreground/80", over === stage && "border border-dashed border-primary/50 text-center text-foreground")}>
+                    <p className={cn("rounded-md px-2 py-3 text-xs", over === stage ? "border border-dashed text-center" : "opacity-70")} style={{ color: tone.text, borderColor: over === stage ? tone.dot : undefined }}>
                       {over === stage ? t("Drop a deal here") : t("No deals")}
                     </p>
                   )}
@@ -255,20 +255,20 @@ const DealCard = memo(function DealCard({
       // dragged to another stage (owner, 9 Oct 2026). Clicks on the card's own controls are theirs.
       onClick={(e) => { if (!(e.target as HTMLElement).closest("button,a,input,select,textarea,[role='dialog']")) onOpen(deal.id); }}
       className={cn(
-        "group relative shrink-0 rounded-xl border border-border bg-card px-3 py-2.5 shadow-soft transition-[box-shadow,border-color,opacity] hover:border-control-border hover:shadow-pop",
+        "group relative shrink-0 rounded-lg border border-border bg-card px-3 py-2.5 shadow-[0_1px_2px_rgba(15,15,15,0.05)] transition-[box-shadow,border-color,opacity] duration-150 hover:border-foreground/15 hover:shadow-[0_2px_8px_rgba(15,15,15,0.08)]",
         canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
         dragging && "opacity-50",
       )}
     >
       <div className="flex items-center gap-1.5">
-        <span className="min-w-0 truncate text-xs font-semibold tabular-nums text-muted-foreground">{deal.code}</span>
+        <span className="min-w-0 truncate text-xs tabular-nums text-muted-foreground">{deal.code}</span>
         <span className="ml-auto flex shrink-0 items-center gap-1">
           {deal.health.key !== "NONE" && <HealthPill health={deal.health.key} />}
           {canEdit && <MoveMenu deal={deal} onMove={onMove} />}
         </span>
       </div>
       {/* The title stays a real button for the keyboard; the mouse can click anywhere (see onClick above). */}
-      <h4 className="mt-1 text-sm font-semibold leading-snug">
+      <h4 className="mt-1 text-sm font-medium leading-snug">
         <button
           type="button"
           onClick={() => onOpen(deal.id)}
@@ -289,7 +289,7 @@ const DealCard = memo(function DealCard({
       <PhaseTrack deal={deal} className="mt-2.5" />
       <BlockerBanner deal={deal} lines={2} className="mt-2" />
       {firstReason && (
-        <p className={cn("mt-2 flex items-start gap-1.5 text-xs", deal.health.key === "CRITICAL" ? "text-red-700 dark:text-red-300" : "text-amber-800 dark:text-amber-300")}>
+        <p className={cn("mt-2 flex items-start gap-1.5 text-xs", deal.health.key === "CRITICAL" ? HEALTH_TEXT.CRITICAL : HEALTH_TEXT.ATTENTION)}>
           <AlertTriangle aria-hidden className="mt-px h-3.5 w-3.5 shrink-0" />
           <span className="line-clamp-2">
             {reason(firstReason)}
@@ -305,7 +305,7 @@ const DealCard = memo(function DealCard({
             </span>
           )}
           {needsPm ? (
-            <span className="min-w-0 truncate font-medium text-red-700 dark:text-red-300">{t("No PM yet")}</span>
+            <span className={cn("min-w-0 truncate font-medium", HEALTH_TEXT.CRITICAL)}>{t("No PM yet")}</span>
           ) : people.length > 0 ? (
             <span className="min-w-0 truncate text-muted-foreground">
               {people.map((p, i) => (
@@ -319,8 +319,8 @@ const DealCard = memo(function DealCard({
                 title={deal.nextAction ? `${t("Next action")}: ${deal.nextAction}` : t("Next action date")}
                 className={cn(
                   "inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 tabular-nums",
-                  due < 0 ? "bg-destructive/10 font-medium text-red-700 dark:text-red-300"
-                    : due === 0 ? "bg-warning/15 font-medium text-amber-800 dark:text-amber-300"
+                  due < 0 ? "bg-[var(--st-red-bg)] font-medium text-[var(--st-red-fg)]"
+                    : due === 0 ? "bg-[var(--st-yellow-bg)] font-medium text-[var(--st-yellow-fg)]"
                       : "text-muted-foreground",
                 )}
               >

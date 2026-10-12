@@ -65,7 +65,7 @@ export function ServicesField({
               onClick={() => toggle(s)}
               className={cn(
                 "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default pointer-coarse:min-h-[36px]",
-                on ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
+                on ? "border-transparent bg-[var(--st-blue-bg)] text-[var(--st-blue-fg)]" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
               {on && <Check aria-hidden className="h-3 w-3" />}
@@ -74,14 +74,14 @@ export function ServicesField({
           );
         })}
         {custom.map((s) => (
-          <span key={s} className="inline-flex items-center gap-1 rounded-full border border-primary bg-primary/10 py-1 pl-2.5 pr-1 text-xs font-medium">
+          <span key={s} className="inline-flex items-center gap-1 rounded-full border border-transparent bg-[var(--st-blue-bg)] py-1 pl-2.5 pr-1 text-xs font-medium text-[var(--st-blue-fg)]">
             {s}
             {!disabled && (
               <button
                 type="button"
                 aria-label={t("Remove {name}", { name: s })}
                 onClick={() => toggle(s)}
-                className="grid h-4 w-4 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:size-[28px]"
+                className="grid h-4 w-4 place-items-center rounded-full opacity-70 hover:bg-black/10 hover:opacity-100 dark:hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:size-[28px]"
               >
                 <X className="h-3 w-3" />
               </button>

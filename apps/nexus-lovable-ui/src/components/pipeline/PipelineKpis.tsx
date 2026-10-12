@@ -32,7 +32,7 @@ export function PipelineKpis({ s }: { s: PipelineSummary }) {
     { kind: "count", label: t("Deliverables on track"), value: String(s.deliverablesOnTrack), zero: !s.deliverablesOnTrack, sub: t("{n} completed", { n: s.deliverablesDone }) },
   ];
   return (
-    <section data-pl="kpis" aria-label={t("Pipeline at a glance")} className="relative overflow-hidden rounded-2xl border border-border bg-border shadow-soft">
+    <section data-pl="kpis" aria-label={t("Pipeline at a glance")} className="relative overflow-hidden rounded-xl border border-border bg-border">
       <div className="overflow-x-auto overscroll-x-contain [scrollbar-width:none] sm:overflow-visible">
         <dl className="flex w-max min-w-full items-stretch gap-px sm:grid sm:w-auto sm:grid-cols-12 xl:grid-cols-7">
           {tiles.map((tile) => (

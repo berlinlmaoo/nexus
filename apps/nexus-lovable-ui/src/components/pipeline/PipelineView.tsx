@@ -8,7 +8,7 @@ import { useLang } from "@/lib/lang";
 import { nexusApi } from "@/lib/nexus-api";
 import { useRealtime, useRealtimeRoom } from "@/lib/realtime";
 import { EmptyAction, EmptyState } from "@/components/EmptyState";
-import { PIPELINE_STAGES, stageGroupOf, summarize, type HealthKey } from "@/lib/pipeline";
+import { PIPELINE_STAGES, summarize, type HealthKey } from "@/lib/pipeline";
 import { pipelineApi, pipelineKey, servicesOf, type PipelineDeal, type PipelineDealPatch, type PipelineResponse } from "@/lib/pipeline-api";
 import { PipelineKpis } from "./PipelineKpis";
 import { PipelineBoard } from "./PipelineBoard";
@@ -16,7 +16,7 @@ import { PipelineTable } from "./PipelineTable";
 import { PipelineHealth } from "./PipelineHealth";
 import { DealDrawer } from "./DealDrawer";
 import type { PersonOption } from "./fields";
-import { GROUP_TONE, HEALTH_DOT, HEALTH_LABEL, HEALTH_ORDER, applyLocal, personName, useVocabLabels } from "./pipeline-ui";
+import { HEALTH_DOT, HEALTH_LABEL, HEALTH_ORDER, StagePill, applyLocal, personName } from "./pipeline-ui";
 
 type View = "board" | "table" | "health";
 const VIEW_KEY = "nexus-pipeline-view";
@@ -211,9 +211,9 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
   if (q.isLoading) {
     return (
       <div className="space-y-4 p-4 md:p-8" aria-busy="true" aria-label={t("Loading the pipeline")}>
-        <div className="h-[5.5rem] animate-pulse rounded-2xl bg-muted" />
-        <div className="h-10 w-2/3 animate-pulse rounded-xl bg-muted" />
-        <div className="flex gap-3 overflow-hidden">{[0, 1, 2, 3].map((i) => <div key={i} className="h-72 w-[17.5rem] shrink-0 animate-pulse rounded-2xl bg-muted" />)}</div>
+        <div className="h-[5.25rem] animate-pulse rounded-xl bg-muted" />
+        <div className="h-9 w-2/3 animate-pulse rounded-lg bg-muted" />
+        <div className="flex gap-3 overflow-hidden">{[0, 1, 2, 3].map((i) => <div key={i} className="h-72 w-[18rem] shrink-0 animate-pulse rounded-lg bg-muted/70" />)}</div>
       </div>
     );
   }
@@ -233,7 +233,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
   }
 
   const viewSwitch = (
-    <div role="radiogroup" aria-label={t("View")} className="grid grid-cols-3 gap-0.5 rounded-xl border border-border bg-card p-0.5 lg:inline-grid">
+    <div role="radiogroup" aria-label={t("View")} className="grid grid-cols-3 gap-0.5 rounded-lg bg-muted p-0.5 lg:inline-grid">
       {([
         ["board", t("Board"), KanbanSquare],
         ["table", t("Table"), Table2],
@@ -246,8 +246,8 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
           aria-checked={view === v}
           onClick={() => setView(v)}
           className={cn(
-            "inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[40px]",
-            view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            "inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[40px]",
+            view === v ? "bg-card text-foreground shadow-[0_1px_2px_rgba(15,15,15,0.08)]" : "text-muted-foreground hover:text-foreground",
           )}
         >
           <Icon aria-hidden className="h-3.5 w-3.5" /> {label}
@@ -255,8 +255,13 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
       ))}
     </div>
   );
-  const pickerControl = "h-9 rounded-xl bg-card pointer-coarse:h-11";
-  const control = "h-9 rounded-xl border border-border bg-card text-sm transition-colors hover:border-control-border focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11";
+  const pickerControl = "h-9 rounded-lg bg-card pointer-coarse:h-11";
+  const control = "h-9 rounded-lg border border-border bg-card text-sm transition-colors hover:border-control-border focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11";
+  // "All PMs" reads as just "PM" on a phone, where the three filters share one row (they were "Semu…").
+  const allLabel = (short: string, long: string) => (o: { value: string; label: string } | null) =>
+    o && o.value !== ALL ? <span className="truncate">{o.label}</span> : (
+      <span className="truncate text-muted-foreground"><span className="lg:hidden">{short}</span><span className="hidden lg:inline">{long}</span></span>
+    );
 
   return (
     <div className="flex flex-col gap-4 p-4 md:p-8">
@@ -283,10 +288,10 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
                   className={cn(control, "w-full pl-9 pr-3 placeholder:text-muted-foreground/80")}
                 />
               </label>
-              <SelectPicker variant="field" ariaLabel={t("Filter by PM")} value={pm} onChange={setPm} options={[{ value: ALL, label: t("All PMs") }, ...pmNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-3 min-w-0 flex-1 px-3 lg:w-36 lg:flex-none", pm && "border-primary/60 text-foreground")} />
-              <SelectPicker variant="field" ariaLabel={t("Filter by BD")} value={bd} onChange={setBd} options={[{ value: ALL, label: t("All BDs") }, ...bdNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-4 min-w-0 flex-1 px-3 lg:w-36 lg:flex-none", bd && "border-primary/60 text-foreground")} />
+              <SelectPicker variant="field" ariaLabel={t("Filter by PM")} value={pm} onChange={setPm} renderValue={allLabel("PM", t("All PMs"))} options={[{ value: ALL, label: t("All PMs") }, ...pmNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-3 min-w-0 flex-1 px-3 lg:w-36 lg:flex-none", pm && "border-foreground/30 text-foreground")} />
+              <SelectPicker variant="field" ariaLabel={t("Filter by BD")} value={bd} onChange={setBd} renderValue={allLabel("BD", t("All BDs"))} options={[{ value: ALL, label: t("All BDs") }, ...bdNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-4 min-w-0 flex-1 px-3 lg:w-36 lg:flex-none", bd && "border-foreground/30 text-foreground")} />
               {serviceNames.length > 1 && (
-                <SelectPicker variant="field" ariaLabel={t("Filter by service")} value={service} onChange={setService} options={[{ value: ALL, label: t("All services") }, ...serviceNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-4 min-w-0 flex-1 px-3 lg:w-40 lg:flex-none", service && "border-primary/60 text-foreground")} />
+                <SelectPicker variant="field" ariaLabel={t("Filter by service")} value={service} onChange={setService} renderValue={allLabel(t("Service"), t("All services"))} options={[{ value: ALL, label: t("All services") }, ...serviceNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-4 min-w-0 flex-1 px-3 lg:w-40 lg:flex-none", service && "border-foreground/30 text-foreground")} />
               )}
               <button
                 type="button"
@@ -304,7 +309,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
                 onClick={() => create.mutate("Incoming")}
                 disabled={create.isPending}
                 aria-label={t("New deal")}
-                className="order-2 inline-flex h-9 w-11 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-soft transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:h-11 lg:order-6 lg:w-auto lg:px-3.5"
+                className="order-2 inline-flex h-9 w-11 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary text-sm font-semibold text-primary-foreground shadow-soft transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:h-11 lg:order-6 lg:w-auto lg:px-3.5"
               >
                 {create.isPending ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : <Plus aria-hidden className="h-4 w-4" />}
                 <span className="hidden lg:inline">{create.isPending ? t("Adding…") : t("New deal")}</span>
@@ -324,14 +329,14 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
                       aria-pressed={on}
                       onClick={() => setHealth(k)}
                       className={cn(
-                        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[36px]",
-                        on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:text-foreground",
+                        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[36px]",
+                        on ? "border-foreground/25 bg-muted text-foreground" : "border-border bg-card text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                         !on && k && n === 0 && "opacity-60",
                       )}
                     >
                       {k && <span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", HEALTH_DOT[k])} />}
                       {k ? t(HEALTH_LABEL[k]) : t("All")}
-                      <span className={cn("tabular-nums", on ? "opacity-80" : "opacity-60")}>{n}</span>
+                      <span className={cn("tabular-nums", on ? "opacity-70" : "opacity-60")}>{n}</span>
                     </button>
                   );
                 })}
@@ -394,21 +399,17 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
  */
 function FirstDeal({ adding, onAdd }: { adding: boolean; onAdd: () => void }) {
   const { t } = useLang();
-  const labels = useVocabLabels();
   const road = PIPELINE_STAGES.filter((s) => s !== "Lost / Cancelled");
   return (
-    <section className="rounded-2xl border border-border bg-card px-5 py-10 text-center shadow-soft md:px-10 md:py-14">
-      <h2 className="text-lg font-bold text-balance">{t("No deals in this pipeline yet")}</h2>
+    <section className="rounded-xl border border-border bg-card px-5 py-10 text-center md:px-10 md:py-14">
+      <h2 className="text-lg font-semibold text-balance">{t("No deals in this pipeline yet")}</h2>
       <p className="mx-auto mt-2 max-w-lg text-sm text-pretty text-muted-foreground">
         {t("Every client job goes here, from the first brief to paid and closed. Add the first one, then BD, Legal, PM and Finance fill in their parts on the same card.")}
       </p>
       <ol aria-label={t("How a deal moves")} className="mx-auto mt-6 flex max-w-2xl flex-wrap items-center justify-center gap-x-1 gap-y-2">
         {road.map((s, i) => (
           <li key={s} className="flex items-center gap-1">
-            <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
-              <span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", GROUP_TONE[stageGroupOf(s)])} />
-              {labels.stage(s)}
-            </span>
+            <StagePill stage={s} className="text-xs" />
             {i < road.length - 1 && <ChevronRight aria-hidden className="h-3.5 w-3.5 text-muted-foreground/60" />}
           </li>
         ))}
@@ -417,7 +418,7 @@ function FirstDeal({ adding, onAdd }: { adding: boolean; onAdd: () => void }) {
         type="button"
         onClick={onAdd}
         disabled={adding}
-        className="mt-7 inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-soft transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]"
+        className="mt-7 inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-soft transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]"
       >
         {adding ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : <Plus aria-hidden className="h-4 w-4" />}
         {adding ? t("Adding…") : t("Add your first deal")}
