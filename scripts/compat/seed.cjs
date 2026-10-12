@@ -136,6 +136,24 @@ async function main() {
 
   const calendar = await seedCalendar(prisma, { workspace, project, list, bod, manager, staff })
 
+  // A public form with Email / Link questions (12 Oct 2026): released apps send malformed answers and
+  // must keep getting them accepted; only the web (X-Nexus-Client web/*) gets INVALID_EMAIL / INVALID_URL.
+  const form = typeof prisma.form?.create === "function"
+    ? await prisma.form.create({
+        data: {
+          name: "Compat Intake",
+          projectId: project.id,
+          isPublic: true,
+          requireAuth: true,
+          fields: [
+            { id: "q_title", name: "Title", label: "Title", type: "text", required: true, mapping: { target: "task_title" } },
+            { id: "q_mail", name: "Email", label: "Email", type: "email", required: false },
+            { id: "q_url", name: "Link", label: "Link", type: "url", required: false },
+          ],
+        },
+      })
+    : null
+
   await prisma.$disconnect()
   await pool.end()
 
@@ -150,6 +168,7 @@ async function main() {
     manager,
     staff,
     calendar,
+    formId: form?.id ?? null,
   }
   process.stdout.write("\n" + JSON.stringify(world) + "\n")
 }

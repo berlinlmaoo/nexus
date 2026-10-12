@@ -889,7 +889,9 @@ function IconPicker({ value, onChange, children }: { value?: string; onChange: (
 
 /* ------------------------------------------------------------------ the builder */
 
-export function FormBuilder({ projectId, form, onClose }: { projectId: string; form?: NexusForm; onClose: () => void }) {
+export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId: string; form?: NexusForm; onClose: () => void; /** A new form got its id (first save): the address can name it. */ onCreated?: (id: string) => void }) {
+  const onCreatedRef = useRef(onCreated);
+  onCreatedRef.current = onCreated;
   const { t, tn } = useLang();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -955,6 +957,7 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
         const id = metaRef.current.id;
         const out = id ? await nexusApi.updateForm(id, payload) : await nexusApi.createForm({ ...payload, projectId });
         setMeta((m) => ({ ...m, id: out.id, slug: out.slug ?? m.slug }));
+        if (!id) onCreatedRef.current?.(out.id);
         setSave(dirty.current ? "pending" : "saved");
         qc.invalidateQueries({ queryKey: ["nexus", "forms"] });
       } catch {

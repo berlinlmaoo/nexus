@@ -9,14 +9,17 @@ import { nexusApi, type NexusForm, type NexusProject } from "@/lib/nexus-api";
 import { Reveal } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLang } from "@/lib/lang";
-import { FormCard, FormBuilder } from "@/components/forms/form-kit";
+import { FormCard, FormBuilder, useFormBuilderParam } from "@/components/forms/form-kit";
 
-export const Route = createFileRoute("/_app/forms")({ component: Forms });
+export const Route = createFileRoute("/_app/forms")({
+  component: Forms,
+  // The open builder (?form=<id> | new): Back closes it, refresh reopens it (useFormBuilderParam).
+  validateSearch: (s: Record<string, unknown>): { form?: string } => ({ form: typeof s.form === "string" && s.form.length > 0 && s.form.length <= 64 ? s.form : undefined }),
+});
 
 function Forms() {
   const { t } = useLang();
   const [filter, setFilter] = useState("all");
-  const [builder, setBuilder] = useState<{ form?: NexusForm; projectId: string } | null>(null);
   // Member-scoped projects → derive workspaces → fetch ALL projects per workspace
   // (workspace owners/admins can access forms in projects they aren't a member of).
   const memberProjects = useQuery({ queryKey: ["nexus", "projects"], queryFn: nexusApi.projects, retry: false });
@@ -60,6 +63,9 @@ function Forms() {
   const allRows = forms.data ?? [];
   const rows = filter === "all" ? allRows : allRows.filter((f) => f.projectId === filter);
   const builderProjectId = filter !== "all" ? filter : projectList[0]?.id ?? "";
+  const { builder, open, close, onCreated } = useFormBuilderParam(forms.data, forms.isSuccess || forms.isError);
+  // A new form goes into the filtered project (or the first), remembered while its builder is open.
+  const [newProjectId, setNewProjectId] = useState("");
 
   return (
     <div>
@@ -76,7 +82,7 @@ function Forms() {
               options={[{ value: "all", label: t("All projects") }, ...projectList.map((p) => ({ value: p.id, label: p.name }))]}
               className="min-w-0 flex-1 rounded-md px-3 font-semibold sm:max-w-[16rem] sm:flex-none"
             />
-            <button disabled={!builderProjectId} onClick={() => setBuilder({ projectId: builderProjectId })} className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50"><Plus className="h-3.5 w-3.5" /> {t("New form")}</button>
+            <button disabled={!builderProjectId} onClick={() => { setNewProjectId(builderProjectId); open(); }} className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50"><Plus className="h-3.5 w-3.5" /> {t("New form")}</button>
           </>
         }
       />
@@ -96,10 +102,10 @@ function Forms() {
             message={t("A form is a page people fill in, like a request, a reimbursement or a report. Each answer becomes a task. Make the first one and it shows up here for everyone to fill in.")} />
         )}
         <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {rows.map((f, i) => <Reveal key={f.id} delay={Math.min(i, 8) * 0.05} className="h-full min-w-0"><FormCard form={f} projectName={projectName(f.projectId)} onEdit={() => setBuilder({ form: f, projectId: f.projectId ?? builderProjectId })} /></Reveal>)}
+          {rows.map((f, i) => <Reveal key={f.id} delay={Math.min(i, 8) * 0.05} className="h-full min-w-0"><FormCard form={f} projectName={projectName(f.projectId)} onEdit={() => open(f)} /></Reveal>)}
         </div>
       </div>
-      {builder && <FormBuilder projectId={builder.projectId} form={builder.form} onClose={() => setBuilder(null)} />}
+      {builder && (builder.form?.projectId || newProjectId || builderProjectId) && <FormBuilder projectId={builder.form?.projectId ?? (newProjectId || builderProjectId)} form={builder.form} onClose={close} onCreated={onCreated} />}
     </div>
   );
 }
