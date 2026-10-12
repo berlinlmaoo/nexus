@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { docTitle } from "@/lib/doc-title";
+import { isEditableTarget, modKey } from "@/lib/keyboard";
 import { SelectPicker } from "@/components/SelectPicker";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
@@ -245,6 +247,9 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "o") {
+        // GIDEON's own box takes it; a field or editor elsewhere on the page keeps the key (QA B32).
+        if (e.defaultPrevented) return;
+        if (isEditableTarget(e.target) && e.target !== inputRef.current) return;
         e.preventDefault();
         newChat();
       }
@@ -473,7 +478,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
           <History className="h-4 w-4" />
         </button>
       )}
-      <button type="button" onClick={newChat} title={t("New chat (⌘O)")} aria-label={t("New chat")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><SquarePen className="h-4 w-4" /></button>
+      <button type="button" onClick={newChat} title={t("New chat ({keys})", { keys: modKey("O") })} aria-label={t("New chat")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><SquarePen className="h-4 w-4" /></button>
       <span className="hidden sm:contents" title={GIDEON_TIERS.find((x) => x.id === tier)?.blurb}>
         <SelectPicker
           variant="field"
@@ -782,7 +787,7 @@ function MentionPicker({ query, onPick, onClose }: { query: string; onPick: (r: 
         const untitled = (title: string) => !title || title === "Untitled";
         const next: PickItem[] = [
           ...(res.projects ?? []).slice(0, 4).map((p) => ({ kind: "project" as const, id: p.id, title: p.name, sub: null })),
-          ...(res.docs ?? []).filter((d) => !untitled(d.title) || "untitled".startsWith(lower)).slice(0, 4).map((d) => ({ kind: "doc" as const, id: d.id, title: d.title || t("Untitled"), sub: d.project?.name ?? null })),
+          ...(res.docs ?? []).filter((d) => !untitled(d.title) || "untitled".startsWith(lower)).slice(0, 4).map((d) => ({ kind: "doc" as const, id: d.id, title: docTitle(d.title), sub: d.project?.name ?? null })),
           ...(res.tasks ?? []).slice(0, 6).map((x) => ({ kind: "task" as const, id: x.id, title: x.title, sub: x.taskList?.project?.name ?? null })),
         ];
         const score = (title: string) => { const s = title.toLowerCase(); return s === lower ? 3 : s.startsWith(lower) ? 2 : s.includes(lower) ? 1 : 0; };
@@ -877,7 +882,7 @@ export function ChatHistoryList({ activeId, onPick, onNew }: { activeId: string 
           <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search chats")} aria-label={t("Search chats")} className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
         </label>
-        <button type="button" onClick={onNew} title={t("New chat (⌘O)")} aria-label={t("New chat")} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border hover:bg-accent"><SquarePen className="h-4 w-4" /></button>
+        <button type="button" onClick={onNew} title={t("New chat ({keys})", { keys: modKey("O") })} aria-label={t("New chat")} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border hover:bg-accent"><SquarePen className="h-4 w-4" /></button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {rows === null && <div className="grid h-24 place-items-center"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>}
@@ -901,7 +906,7 @@ export function ChatHistoryList({ activeId, onPick, onNew }: { activeId: string 
                   </button>
                 )}
                 {renaming?.id !== r.id && (
-                  <span className="flex shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                  <span className="flex shrink-0 opacity-0 pointer-coarse:opacity-100! transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                     <button type="button" onClick={() => setRenaming({ id: r.id, title: r.title ?? "" })} aria-label={t("Rename")} className="rounded-md p-1 text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
                     <button type="button" onClick={() => setDeleting(r)} aria-label={t("Delete this chat")} className="rounded-md p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
                   </span>

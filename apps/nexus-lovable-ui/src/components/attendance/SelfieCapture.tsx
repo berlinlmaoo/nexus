@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { EscClose } from "@/hooks/use-escape";
 import { createPortal } from "react-dom";
 import { Camera, Loader2, RefreshCw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -132,7 +133,8 @@ export const SelfieCapture = forwardRef<SelfieCaptureHandle, SelfieCaptureProps>
       {stream &&
         createPortal(
           <div className="fixed inset-0 z-[95] grid place-items-center bg-black/80 p-4">
-            <div className="flex w-full max-w-md flex-col items-center gap-4">
+      <EscClose onClose={stop} />
+            <div role="dialog" aria-modal="true" aria-label={t("Close camera")} className="flex w-full max-w-md flex-col items-center gap-4">
               <div className="relative w-full overflow-hidden rounded-3xl bg-black shadow-pop">
                 <video ref={videoRef} playsInline muted className="h-auto w-full -scale-x-100" />
                 <button onClick={stop} aria-label={t("Close camera")} className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"><X className="h-4 w-4" /></button>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEscape } from "@/hooks/use-escape";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { createFileRoute } from "@tanstack/react-router";
@@ -363,10 +364,12 @@ function Messages() {
 }
 
 function Shell({ title, hint, onClose, children }: { title: string; hint?: string; onClose: () => void; children: React.ReactNode }) {
+  // Esc closes it (QA S-09: Add people / Rename stayed open).
+  useEscape(onClose);
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between"><h2 className="font-display text-lg font-bold tracking-tight">{title}</h2><button onClick={onClose} title={t("Close")} aria-label={t("Close")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button></div>
+      <div role="dialog" aria-modal="true" aria-label={title} className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between"><h2 className="font-display text-lg font-bold tracking-tight">{title}</h2><button onClick={onClose} title={t("Close")} aria-label={t("Close")} className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent pointer-coarse:size-11"><X className="h-4 w-4" /></button></div>
         {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
         {children}
       </div>
@@ -477,6 +480,7 @@ function AddPeople({ target, onClose }: { target: AddPeopleTarget; onClose: () =
 }
 
 function NewChat({ onClose, onCreated, meId }: { onClose: () => void; onCreated: (id: string) => void; meId?: string }) {
+  useEscape(onClose);
   const qc = useQueryClient();
   const [selected, setSelected] = useState<string[]>([]);
   const [groupName, setGroupName] = useState("");
@@ -495,8 +499,8 @@ function NewChat({ onClose, onCreated, meId }: { onClose: () => void; onCreated:
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between"><h2 className="font-display text-lg font-bold tracking-tight">{t("New chat")}</h2><button onClick={onClose} title={t("Close")} aria-label={t("Close")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button></div>
+      <div role="dialog" aria-modal="true" aria-label={t("New chat")} className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between"><h2 className="font-display text-lg font-bold tracking-tight">{t("New chat")}</h2><button onClick={onClose} title={t("Close")} aria-label={t("Close")} className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent pointer-coarse:size-11"><X className="h-4 w-4" /></button></div>
         <p className="mt-1 text-xs text-muted-foreground">{t("Pick 1 person for a DM, or several for a group.")}</p>
         <label className={cn("mt-3 flex items-center gap-3 rounded-xl border border-border px-3 py-2.5", selected.length > 1 ? "opacity-60" : "cursor-pointer")}>
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><UsersIcon className="h-4 w-4" /></span>

@@ -151,8 +151,8 @@ function NotificationRow({ notification, idx }: { notification: NexusNotificatio
         {(markRead.isError || remove.isError) && <p className="mt-1 text-xs font-semibold text-destructive">{t("That didn't work. Check your connection and try again.")}</p>}
       </div>
       <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-        {!notification.read && <button disabled={busy} onClick={() => markRead.mutate()} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50">{t("Mark as read")}</button>}
-        <button disabled={busy} onClick={() => remove.mutate()} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50" title={t("Delete notification")} aria-label={t("Delete notification")}>
+        {!notification.read && <button disabled={busy} onClick={() => markRead.mutate()} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50 pointer-coarse:min-h-9">{t("Mark as read")}</button>}
+        <button disabled={busy} onClick={() => remove.mutate()} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50 pointer-coarse:min-h-9 pointer-coarse:min-w-9" title={t("Delete notification")} aria-label={t("Delete notification")}>
           {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
         </button>
         {!notification.read && <span className="h-2 w-2 rounded-full bg-primary ml-1" />}

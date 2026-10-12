@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { EscClose } from "@/hooks/use-escape";
 import { createFileRoute, useParams, useNavigate, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -468,7 +469,8 @@ function ProjectPicker({ folderId, allProjects, selected, usingAll, onClose }: {
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 dark:bg-scrim p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-[28px] border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
+      <EscClose onClose={onClose} />
+      <div role="dialog" aria-modal="true" aria-label={t("Pick projects")} className="w-full max-w-md rounded-[28px] border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
           <h3 className="text-lg font-bold">{t("Pick projects")}</h3>
           <button onClick={onClose} aria-label={t("Close")} className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>

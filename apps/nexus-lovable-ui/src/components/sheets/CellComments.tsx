@@ -114,7 +114,7 @@ export function CellCommentThread({
                     <p className="whitespace-pre-wrap break-words text-xs">{c.body}</p>
                   </div>
                   {canEdit && (
-                    <div className="flex shrink-0 flex-col gap-0.5 opacity-0 transition group-hover:opacity-100">
+                    <div className="flex shrink-0 flex-col gap-0.5 opacity-0 pointer-coarse:opacity-100! transition group-hover:opacity-100">
                       <button
                         onClick={() => onResolve(c.id, !c.resolvedAt)}
                         aria-label={c.resolvedAt ? t("Reopen") : t("Mark resolved")} title={c.resolvedAt ? t("Reopen") : t("Mark resolved")}
@@ -186,7 +186,7 @@ export function CellCommentThread({
                       onClick={() => onRestore(r.oldValue)}
                       title={t("Restore to {value}", { value: show(r.oldValue) })}
                       aria-label={t("Restore to {value}", { value: show(r.oldValue) })}
-                      className="shrink-0 self-start rounded p-0.5 text-muted-foreground opacity-0 transition hover:text-primary group-hover:opacity-100"
+                      className="shrink-0 self-start rounded p-0.5 text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition hover:text-primary group-hover:opacity-100"
                     ><RotateCcw className="h-3 w-3" /></button>
                   )}
                 </div>

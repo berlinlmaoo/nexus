@@ -98,7 +98,7 @@ function TaskRow({ task, onOpen }: { task: NexusTask; onOpen: () => void }) {
   return (
     <motion.div layoutId={`mytasks-taskcard-${task.id}`} data-morph-id={`mytasks-taskcard-${task.id}`} style={{ borderRadius: 12 }} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/40">
       <button
-        className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40", isDone(task.status) ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-transparent hover:border-primary hover:text-primary")}
+        className={cn("tap-area grid h-5 w-5 shrink-0 place-items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40", isDone(task.status) ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-transparent hover:border-primary hover:text-primary")}
         disabled={update.isPending}
         onClick={() => update.mutate()}
         aria-label={nextStatus === "DONE" ? t("Mark done") : t("Reopen task")}

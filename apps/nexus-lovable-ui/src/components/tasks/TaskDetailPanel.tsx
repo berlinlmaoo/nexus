@@ -748,7 +748,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     <span key={a.user?.id} className="group inline-flex items-center gap-1.5 rounded-full bg-muted py-1 pl-1 pr-2 text-xs font-semibold">
                       <MiniAvatar user={a.user} size={22} /> {a.user?.name}
                       {a.user?.deactivatedAt && <PersonLeftTag />}
-                      <button aria-label={tr("Remove {name}", { name: a.user?.name ?? tr("assignee") })} onClick={() => a.user?.id && assignMut.mutate({ userId: a.user.id, add: false })} className="rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
+                      <button aria-label={tr("Remove {name}", { name: a.user?.name ?? tr("assignee") })} onClick={() => a.user?.id && assignMut.mutate({ userId: a.user.id, add: false })} className="tap-area rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
                     </span>
                   ))}
                   <div className="relative">
@@ -1340,7 +1340,7 @@ function FileFieldEditor({ projectId, value, onSet }: { projectId?: string; valu
                   <span className="truncate">{f.name}</span>
                 </a>
               )}
-              <button type="button" onClick={() => remove(f.url)} className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-foreground/80 text-background opacity-0 transition-opacity group-hover:opacity-100" aria-label={tr("Remove")}>
+              <button type="button" onClick={() => remove(f.url)} className="tap-area absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center pointer-coarse:size-6 rounded-full bg-foreground/80 text-background opacity-0 pointer-coarse:opacity-100! transition-opacity group-hover:opacity-100" aria-label={tr("Remove")}>
                 <X className="h-2.5 w-2.5" />
               </button>
             </div>

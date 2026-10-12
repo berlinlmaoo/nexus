@@ -88,7 +88,9 @@ export function OnboardingWizard() {
 
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center bg-black/60 dark:bg-scrim p-4 backdrop-blur-sm">
-      <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-pop">
+      {/* Required (profile photo + full name): no Esc, no close. A modal for assistive tech and the app's
+          own shortcuts all the same. */}
+      <div role="dialog" aria-modal="true" aria-label={t("Welcome to NEXUS")} className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-pop">
         {/* progress */}
         <div className="flex items-center gap-1.5 border-b border-border px-6 py-3">
           {Array.from({ length: TOTAL + 1 }).map((_, i) => (

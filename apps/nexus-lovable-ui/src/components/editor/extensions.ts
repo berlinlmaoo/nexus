@@ -108,6 +108,45 @@ const AskAiShortcut = Extension.create({
   },
 });
 
+/**
+ * ⌘/Ctrl+K adds a link to the selection (Notion, Google Docs; QA 13 Oct 2026 S-07: it opened the app's
+ * search over the editor). With no selection it takes the link the caret is in, else the word under it.
+ * The selection toolbar (Toolbars.tsx) registers `open`, which shows its link field.
+ */
+const LinkShortcut = Extension.create({
+  name: "linkShortcut",
+  addStorage() {
+    return { open: null as (() => void) | null };
+  },
+  addKeyboardShortcuts() {
+    return {
+      "Mod-k": () => {
+        const ed = this.editor;
+        if (!ed.isEditable) return false;
+        if (ed.isActive("codeBlock")) return true;
+        if (ed.state.selection.empty) {
+          if (ed.isActive("link")) ed.chain().extendMarkRange("link").run();
+          else {
+            const { $from } = ed.state.selection;
+            const text = $from.parent.textBetween(0, $from.parent.content.size, undefined, "\ufffc");
+            let a = $from.parentOffset;
+            let b = a;
+            while (a > 0 && /\S/.test(text[a - 1]) && text[a - 1] !== "\ufffc") a--;
+            while (b < text.length && /\S/.test(text[b]) && text[b] !== "\ufffc") b++;
+            if (b > a) ed.commands.setTextSelection({ from: $from.start() + a, to: $from.start() + b });
+          }
+        }
+        // Nothing to link (an empty line): the key is still the editor's, never the app's search.
+        if (ed.state.selection.empty) return true;
+        const open = (this.storage as { open: (() => void) | null }).open;
+        // The toolbar shows once the new selection is drawn.
+        if (open) window.setTimeout(open, 0);
+        return true;
+      },
+    };
+  },
+});
+
 /** "> " + space → toggle list (Notion). */
 const ToggleShortcut = Extension.create({
   name: "toggleShortcut",
@@ -310,6 +349,7 @@ export function buildExtensions(o: BuildOptions): AnyExtension[] {
     ToggleShortcut,
     BlockShortcuts,
     AskAiShortcut,
+    LinkShortcut,
     BlockAttrs,
     TaskList,
     TaskItem.configure({ nested: true }),

@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEscape } from "@/hooks/use-escape";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -106,6 +107,13 @@ function ComplaintsPage() {
     setOpenId(search.id);
   }, [search.id]);
 
+  // Closing the thread also drops ?id=, so Back / reload don't open it again (QA B36).
+  const navigateTickets = useNavigate();
+  const closeThread = () => {
+    setOpenId(null);
+    if (search.id) void navigateTickets({ to: "/complaints", search: {}, replace: true });
+  };
+
   const roleQ = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
   const viewerIsBod = ["ONE_ABOVE_ALL", "BOD"].includes(roleQ.data?.role ?? "");
   const shownTab: Tab = tab ?? "open";
@@ -200,7 +208,7 @@ function ComplaintsPage() {
         {composing && <Composer onClose={() => setComposing(false)} onDone={() => { setComposing(false); invalidate(); }} />}
       </AnimatePresence>
       <AnimatePresence>
-        {openId && <ComplaintThread id={openId} viewerIsBod={viewerIsBod} onClose={() => setOpenId(null)} onChanged={invalidate} />}
+        {openId && <ComplaintThread id={openId} viewerIsBod={viewerIsBod} onClose={closeThread} onChanged={invalidate} />}
       </AnimatePresence>
     </div>
   );
@@ -272,11 +280,13 @@ function TicketRow({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: bool
   );
 }
 
-function Backdrop({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+/** The ticket composer / thread: a modal dialog that Esc closes (QA S-09, B36, B16). */
+function Backdrop({ children, onClose, label, wide }: { children: React.ReactNode; onClose: () => void; label: string; wide?: boolean }) {
+  useEscape(onClose);
   return (
     <motion.div className="fixed inset-0 z-50 grid place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div initial={{ opacity: 0, scale: 0.96, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }} transition={{ duration: 0.18, ease: "easeOut" }}
-        className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
+      <motion.div role="dialog" aria-modal="true" aria-label={label} initial={{ opacity: 0, scale: 0.96, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }} transition={{ duration: 0.18, ease: "easeOut" }}
+        className={cn("flex max-h-[88vh] w-full flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-pop", wide ? "max-w-lg lg:max-w-2xl" : "max-w-lg")} onClick={(e) => e.stopPropagation()}>
         {children}
       </motion.div>
     </motion.div>
@@ -315,10 +325,10 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
   const create = useMutation({ mutationFn: () => nexusApi.createComplaint({ category, subject: subject.trim(), body: body.trim(), evidence }), onSuccess: onDone });
 
   return (
-    <Backdrop onClose={onClose}>
+    <Backdrop onClose={onClose} label={t("New ticket")}>
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
         <h2 className="text-lg font-black">{t("New ticket")}</h2>
-        <button onClick={onClose} aria-label={t("Close")} className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+        <button onClick={onClose} aria-label={t("Close")} className="grid h-8 w-8 pointer-coarse:size-11 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
       </div>
       <div className="space-y-4 overflow-y-auto p-5">
         <div className="space-y-1.5">
@@ -438,7 +448,7 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
   const st = c ? statusOf(c.status) : null;
 
   return (
-    <Backdrop onClose={onClose}>
+    <Backdrop onClose={onClose} label={c?.subject ?? t("Ticket")} wide>
       <div className="flex items-center gap-2 border-b border-border px-5 py-3.5">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
@@ -447,7 +457,7 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
           </div>
           <div className="mt-0.5 line-clamp-1 text-sm font-black">{c?.subject ?? "…"}</div>
         </div>
-        <button onClick={onClose} aria-label={t("Close")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+        <button onClick={onClose} aria-label={t("Close")} className="grid h-8 w-8 pointer-coarse:size-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
       </div>
 
       {/* Reporter identity strip (BoD view) */}
@@ -900,11 +910,7 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
  */
 function PhotoZoom({ url, onClose }: { url: string; onClose: () => void }) {
   const { t } = useLang();
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscape(onClose);
   return createPortal(
     <motion.div className="fixed inset-0 z-[60] grid place-items-center bg-black/85 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <img src={url} alt={t("Evidence, full size")} className="max-h-full max-w-full rounded-xl object-contain" onClick={(e) => e.stopPropagation()} />

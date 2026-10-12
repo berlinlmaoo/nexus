@@ -1,4 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { openGlobalSearch } from "@/lib/search-event";
+import { modKey } from "@/lib/keyboard";
 import { AndroidAppBanner } from "@/components/attendance/IosAppCheckInCard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -134,10 +136,17 @@ function TopBar({ userName, unread }: { userName: string; unread: number }) {
       </div>
       {/* rail zone: search + notifications */}
       <div className="flex items-center gap-3">
-        <label className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-full border border-border bg-card px-5 text-muted-foreground transition-shadow focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+        {/* Opens the app's search (⌘K): the box used to be an input with nothing behind it (QA B12). */}
+        <button
+          type="button"
+          onClick={openGlobalSearch}
+          aria-haspopup="dialog"
+          className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-full border border-border bg-card px-5 text-left text-muted-foreground transition-shadow hover:border-primary/40 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+        >
           <Search className="h-4 w-4 shrink-0" />
-          <input placeholder={t("Search…")} aria-label={t("Search")} className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground" />
-        </label>
+          <span className="min-w-0 flex-1 truncate text-sm">{t("Search…")}</span>
+          <kbd className="hidden rounded bg-muted px-1.5 py-0.5 text-[10px] pointer-fine:inline">{modKey("K")}</kbd>
+        </button>
         <NotificationsBell unread={unread} />
       </div>
     </div>
@@ -297,7 +306,7 @@ function Section({ title, action, className, children, morphId, contentHidden, d
 
 function SeeAll({ to, label }: { to: string; label?: string }) {
   const { t } = useLang();
-  return <Link to={to} className="rounded text-xs font-medium text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">{label ?? t("See all")}</Link>;
+  return <Link to={to} className="tap-area rounded text-xs font-medium text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">{label ?? t("See all")}</Link>;
 }
 
 /** Tasks assigned to the currently logged-in user (uses /api/tasks?assigneeId=me). */

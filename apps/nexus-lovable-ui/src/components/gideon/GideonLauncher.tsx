@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { globalModShortcut, modKey } from "@/lib/keyboard";
 import { useRouterState } from "@tanstack/react-router";
 import { GideonMark } from "./GideonMark";
 import { clearGideonContext, closeGideon, openGideon, useGideonLauncher } from "@/lib/gideon";
@@ -43,7 +44,8 @@ export function GideonLauncher() {
   useEffect(() => {
     if (open || onFullPage) return;
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "o") {
+      // Not while typing in a field or an editor (QA B32): there the key stays the field's.
+      if (globalModShortcut(e) && !e.shiftKey && e.key.toLowerCase() === "o") {
         e.preventDefault();
         openGideon(null, { newChat: true });
       }
@@ -79,7 +81,7 @@ export function GideonLauncher() {
           onPointerEnter={() => void loadPanel()}
           onFocus={() => void loadPanel()}
           aria-label={t("Open {assistant}", { assistant: name })}
-          title={t("Open {assistant} (⌘O for a new chat)", { assistant: name })}
+          title={t("Open {assistant} ({keys} for a new chat)", { assistant: name, keys: modKey("O") })}
           className="fixed bottom-6 right-6 z-50 hidden h-12 w-12 place-items-center rounded-2xl border border-border bg-card text-foreground shadow-pop transition-all hover:scale-105 active:scale-95 md:grid"
         >
           <GideonMark className="h-5 w-5" />

@@ -1,11 +1,15 @@
 import { Toaster as Sonner } from "sonner";
+import { useLang } from "@/lib/lang";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
 const Toaster = ({ ...props }: ToasterProps) => {
+  // The toast region's name is read out by screen readers ("Notifications alt+T" stayed English, QA S-29).
+  const { t } = useLang();
   return (
     <Sonner
       className="toaster group"
+      containerAriaLabel={t("Notifications")}
       toastOptions={{
         classNames: {
           toast:

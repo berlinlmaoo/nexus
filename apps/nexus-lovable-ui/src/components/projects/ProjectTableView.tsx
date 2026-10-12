@@ -1,4 +1,5 @@
 import { DateField } from "@/components/DateField";
+import { EscClose } from "@/hooks/use-escape";
 import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, Plus, Sparkles, X } from "lucide-react";
@@ -183,7 +184,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
               return (
                 <div key={key} className="group flex items-center justify-between gap-1 border-l border-border px-3 py-2">
                   <span className="flex min-w-0 items-center gap-1.5"><PropIcon def={def} /><span className="truncate">{propLabel(def)}</span>{key.startsWith("cf:") && ai.aiFields.has(key.slice(3)) && <Sparkles aria-label={t("AI Autofill")} className="h-3 w-3 shrink-0 text-primary" />}</span>
-                  {canEditColumns && <button type="button" onClick={() => setColumns(columns.filter((c) => c !== key))} title={t("Hide column")} aria-label={t("Hide column")} className="opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"><X className="h-3 w-3" /></button>}
+                  {canEditColumns && <button type="button" onClick={() => setColumns(columns.filter((c) => c !== key))} title={t("Hide column")} aria-label={t("Hide column")} className="tap-area opacity-0 pointer-coarse:opacity-100! transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"><X className="h-3 w-3" /></button>}
                 </div>
               );
             })}
@@ -229,7 +230,8 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
 
       {addingField && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={() => setAddingField(false)}>
-          <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+      <EscClose onClose={() => setAddingField(false)} />
+          <div role="dialog" aria-modal="true" aria-label={t("New field")} className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <FieldEditor saving={createField.isPending} onSave={(p) => createField.mutate(p)} onCancel={() => setAddingField(false)} />
           </div>
         </div>

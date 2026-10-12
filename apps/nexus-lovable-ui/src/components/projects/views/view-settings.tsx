@@ -175,8 +175,8 @@ function PropertiesEditor({ cfg, layout, defs, onPatch }: { cfg: ViewConfig; lay
           <div key={k} className="group flex items-center gap-1.5 rounded-md px-1 py-0.5 hover:bg-muted">
             <PropIcon def={def} />
             <span className="min-w-0 flex-1 truncate text-sm">{label(def)}</span>
-            <button type="button" disabled={i === 0} onClick={() => move(i, -1)} aria-label={t("Move up")} className="grid h-7 w-6 place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 disabled:hidden group-hover:opacity-100"><ArrowUp className="h-3.5 w-3.5" /></button>
-            <button type="button" disabled={i === shown.length - 1} onClick={() => move(i, 1)} aria-label={t("Move down")} className="grid h-7 w-6 place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 disabled:hidden group-hover:opacity-100"><ArrowDown className="h-3.5 w-3.5" /></button>
+            <button type="button" disabled={i === 0} onClick={() => move(i, -1)} aria-label={t("Move up")} className="grid h-7 w-6 place-items-center rounded text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition-opacity hover:text-foreground focus-visible:opacity-100 disabled:hidden group-hover:opacity-100"><ArrowUp className="h-3.5 w-3.5" /></button>
+            <button type="button" disabled={i === shown.length - 1} onClick={() => move(i, 1)} aria-label={t("Move down")} className="grid h-7 w-6 place-items-center rounded text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition-opacity hover:text-foreground focus-visible:opacity-100 disabled:hidden group-hover:opacity-100"><ArrowDown className="h-3.5 w-3.5" /></button>
             <button type="button" onClick={() => set(shown.filter((x) => x !== k))} aria-label={t("Hide {name}", { name: label(def) })} className="grid h-7 w-7 place-items-center rounded text-foreground hover:bg-card"><Eye className="h-3.5 w-3.5" /></button>
           </div>
         );
@@ -373,7 +373,7 @@ export function ViewTabMenu({ view, canEdit, onRename, onSettings, onDuplicate, 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" aria-label={t("View options")} className="-mr-1 grid h-5 w-5 place-items-center rounded text-muted-foreground hover:bg-card hover:text-foreground"><ChevronDown className="h-3.5 w-3.5" /></button>
+        <button type="button" aria-label={t("View options")} className="tap-area -mr-1 grid h-5 w-5 place-items-center rounded text-muted-foreground hover:bg-card hover:text-foreground"><ChevronDown className="h-3.5 w-3.5" /></button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-52 p-1">
         <button type="button" disabled={!canEdit} onClick={run(onRename)} className={menuItemCls}><Pencil className="h-3.5 w-3.5 text-muted-foreground" />{t("Rename")}</button>

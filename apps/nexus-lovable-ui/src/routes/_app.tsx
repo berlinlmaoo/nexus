@@ -15,6 +15,9 @@ import { RealtimeProvider } from "@/lib/realtime";
 import { ChatUnreadTitle } from "@/lib/chat-unread";
 import { VaultUploadPanel } from "@/components/vault/VaultUploadPanel";
 import { useLang } from "@/lib/lang";
+import { globalModShortcut, isEditableTarget, modalOpen } from "@/lib/keyboard";
+import { ShortcutsHelp, OPEN_SHORTCUTS_EVENT } from "@/components/ShortcutsHelp";
+import { OPEN_SEARCH_EVENT } from "@/lib/search-event";
 
 const SearchModal = lazy(() => import("@/components/SearchModal").then((m) => ({ default: m.SearchModal })));
 
@@ -154,13 +157,36 @@ function AppLayout() {
 
 function GlobalSearch() {
   const [open, setOpen] = useState(false);
+  const [help, setHelp] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setOpen(true); }
+      // ⌘/Ctrl+K = search, but not inside a text field or editor: there it adds a link (Notion, Docs),
+      // and the spreadsheet grid uses it for "Insert link" (QA S-07).
+      if (e.key.toLowerCase() === "k" && !e.shiftKey && globalModShortcut(e)) { e.preventDefault(); setOpen(true); return; }
+      // "?" or ⌘/Ctrl+/ = the shortcut list. Decided after the event has gone everywhere: the calendar
+      // and the sheet answer the same keys with their own lists and mark the event handled.
+      const slash = e.key === "/" && (e.metaKey || e.ctrlKey) && !e.altKey;
+      const question = e.key === "?" && !e.metaKey && !e.ctrlKey && !e.altKey;
+      if (!slash && !question) return;
+      if (isEditableTarget(e.target)) return;
+      if (question && modalOpen()) return;
+      window.setTimeout(() => { if (!e.defaultPrevented) setHelp(true); }, 0);
     };
+    const onOpenSearch = () => setOpen(true);
+    const onOpenHelp = () => setHelp(true);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener(OPEN_SEARCH_EVENT, onOpenSearch);
+    window.addEventListener(OPEN_SHORTCUTS_EVENT, onOpenHelp);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(OPEN_SEARCH_EVENT, onOpenSearch);
+      window.removeEventListener(OPEN_SHORTCUTS_EVENT, onOpenHelp);
+    };
   }, []);
-  if (!open) return null;
-  return <Suspense fallback={null}><SearchModal onClose={() => setOpen(false)} /></Suspense>;
+  return (
+    <>
+      {open && <Suspense fallback={null}><SearchModal onClose={() => setOpen(false)} /></Suspense>}
+      <ShortcutsHelp open={help} onOpenChange={setHelp} />
+    </>
+  );
 }

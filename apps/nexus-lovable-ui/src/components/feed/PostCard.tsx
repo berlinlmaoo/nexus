@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { EscClose } from "@/hooks/use-escape";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Heart, MessageCircle, MoreHorizontal, Trash2, Pencil, Loader2, RotateCw, Send } from "lucide-react";
@@ -64,10 +65,11 @@ export function PostCard({ post, members, onLike, onDelete, onEdit, onRetry, onC
             {post.editedAt && !pending && <span className="text-sm text-muted-foreground">· {t("edited")}</span>}
             {!pending && !failed && (post.canDelete || post.canEdit) && (
               <div className="relative ml-auto">
-                <button onClick={() => setMenu((m) => !m)} aria-label={t("More options")} className="-mr-1.5 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition hover:bg-accent"><MoreHorizontal className="h-4 w-4" /></button>
+                <button onClick={() => setMenu((m) => !m)} aria-label={t("More options")} aria-expanded={menu} className="-mr-1.5 grid h-8 w-8 pointer-coarse:size-11 place-items-center rounded-full text-muted-foreground transition hover:bg-accent"><MoreHorizontal className="h-4 w-4" /></button>
                 {menu && (
                   <>
                     <div className="fixed inset-0 z-20" onClick={() => setMenu(false)} />
+                    <EscClose onClose={() => setMenu(false)} />
                     <div className="absolute right-0 z-30 mt-1 w-36 overflow-hidden rounded-xl border border-border bg-popover py-1 shadow-pop">
                       {post.canEdit && <button onClick={() => { setEditing(true); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent"><Pencil className="h-3.5 w-3.5" /> {t("Edit")}</button>}
                       {post.canDelete && <button onClick={() => { onDelete(post); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"><Trash2 className="h-3.5 w-3.5" /> {t("Delete")}</button>}

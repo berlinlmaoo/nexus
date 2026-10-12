@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { EscClose } from "@/hooks/use-escape";
 import { SelectPicker } from "@/components/SelectPicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
@@ -211,7 +212,8 @@ function PasswordResetModal({ target, onClose }: { target: { memberId: string; n
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
+      <EscClose onClose={onClose} />
+      <div role="dialog" aria-modal="true" aria-label={t("Reset password")} className="w-full max-w-md rounded-2xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2"><KeyRound className="h-4 w-4 text-primary" /><h3 className="font-bold">{t("Reset password")}</h3></div>
           <button onClick={onClose} aria-label={t("Close")} className="rounded-full p-1.5 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
@@ -442,6 +444,7 @@ function DeleteAccountDialog({ onClose }: { onClose: () => void }) {
   const busy = del.isPending || del.isSuccess;
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm" onClick={busy ? undefined : onClose}>
+      <EscClose onClose={() => { if (!busy) onClose(); }} />
       <div role="dialog" aria-modal="true" aria-labelledby="delete-account-title" className="w-full max-w-md rounded-2xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-destructive" /><h3 id="delete-account-title" className="font-bold">{t("Delete your account?")}</h3></div>

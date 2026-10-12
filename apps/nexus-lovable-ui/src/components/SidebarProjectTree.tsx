@@ -352,7 +352,7 @@ export function SidebarProjectTree() {
                     type="button"
                     data-row-action
                     aria-label={t("More for {name}", { name: f.name })}
-                    className="hidden h-6 w-6 shrink-0 place-items-center rounded-md text-sidebar-foreground/60 hover:bg-sidebar-border/60 hover:text-sidebar-foreground focus-visible:grid group-hover/folder:grid group-focus-within/folder:grid data-[state=open]:grid [@media(hover:none)]:grid"
+                    className="hidden h-6 w-6 shrink-0 place-items-center rounded-md text-sidebar-foreground/60 hover:bg-sidebar-border/60 hover:text-sidebar-foreground focus-visible:grid group-hover/folder:grid pointer-coarse:grid group-focus-within/folder:grid data-[state=open]:grid [@media(hover:none)]:grid"
                   >
                     <MoreHorizontal className="h-4 w-4" />
                   </button>

@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { modKey } from "@/lib/keyboard";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -566,7 +567,7 @@ function ContextMenu({ menu, count, reduce, onSelect, onSelectAll, onDuplicate, 
         <>
           <div className="truncate px-2 py-1.5 text-[11px] font-semibold text-muted-foreground">{many ? tn(count, "{n} task selected", "{n} tasks selected") : menu.task.title || t("Task")}</div>
           {!many && <MenuRow icon={CheckSquare} label={t("Select multiple")} onClick={onSelect} />}
-          <MenuRow icon={ListChecks} label={t("Select all")} hint="⌘A" onClick={onSelectAll} />
+          <MenuRow icon={ListChecks} label={t("Select all")} hint={modKey("A")} onClick={onSelectAll} />
           <hr className="my-1 border-border" />
           <MenuRow icon={CircleDot} label={t("Status")} more onClick={() => setSub("status")} />
           <MenuRow icon={Flag} label={t("Priority")} more onClick={() => setSub("priority")} />
@@ -590,7 +591,8 @@ function MenuRow({ icon: Icon, label, onClick, more, danger, disabled, hint }: {
     <button role="menuitem" type="button" disabled={disabled} onClick={onClick} className={cn("flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors active:scale-[0.98] disabled:opacity-50", danger ? "text-destructive hover:bg-destructive/10" : "hover:bg-accent")}>
       <Icon className={cn("h-4 w-4 shrink-0", danger ? "" : "text-muted-foreground")} />
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {hint && <span className="text-[11px] text-muted-foreground">{hint}</span>}
+      {/* A key hint means nothing on a touch screen (QA B44). */}
+      {hint && <span className="text-[11px] text-muted-foreground pointer-coarse:hidden">{hint}</span>}
       {more && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
     </button>
   );

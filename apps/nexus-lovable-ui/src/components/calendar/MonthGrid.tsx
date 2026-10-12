@@ -1,4 +1,4 @@
-import { memo, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject } from "react";
+import { memo, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject, type TouchEvent } from "react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -47,13 +47,15 @@ function weekdays(locale: string, weekday: "narrow" | "long"): string[] {
  * which ones only have done or status-less tasks (the ticks). The tooltip is for the pointer only.
  */
 export const MonthGrid = memo(function MonthGrid({
-  days, month, cells, selected, today, holidays, ix, onSelect, busy, compact, fill = false, refocus,
+  days, month, cells, selected, today, holidays, ix, onSelect, busy, compact, fill = false, refocus, onSwipe,
 }: {
   days: string[]; month: string; cells: Map<string, MonthCell>; selected: string; today: string
   holidays: Map<string, string>; ix: CalIndex
   onSelect: (day: string) => void; busy: boolean; compact: boolean; fill?: boolean
   /** The page sets it before a shortcut pressed on a day (T, J / K) selects another one: focus follows. */
   refocus?: MutableRefObject<boolean>
+  /** A horizontal swipe on a touch screen: 1 = next month (finger to the left), -1 = previous. */
+  onSwipe?: (dir: 1 | -1) => void
 }) {
   const { t, tn, locale, lang } = useLang();
   const names = weekdayNames(locale);
@@ -86,10 +88,29 @@ export const MonthGrid = memo(function MonthGrid({
     want.current = true;
     onSelect(to);
   };
+  // Swipe between months on a touch screen (QA S-11): a clearly sideways stroke of 50 px or more.
+  const swipe = useRef<{ x: number; y: number; t: number } | null>(null);
+  const onTouchStart = (e: TouchEvent<HTMLDivElement>) => {
+    const tp = e.touches[0];
+    swipe.current = onSwipe && e.touches.length === 1 ? { x: tp.clientX, y: tp.clientY, t: Date.now() } : null;
+  };
+  const onTouchEnd = (e: TouchEvent<HTMLDivElement>) => {
+    const st = swipe.current;
+    swipe.current = null;
+    const tp = e.changedTouches[0];
+    if (!st || !tp || !onSwipe || Date.now() - st.t > 800) return;
+    const dx = tp.clientX - st.x;
+    const dy = tp.clientY - st.y;
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    onSwipe(dx < 0 ? 1 : -1);
+  };
   return (
     <div
       ref={gridRef}
       role="grid"
+      onTouchStart={onSwipe ? onTouchStart : undefined}
+      onTouchEnd={onSwipe ? onTouchEnd : undefined}
+      onTouchCancel={onSwipe ? () => { swipe.current = null; } : undefined}
       data-cal-grid=""
       data-cal-region="grid"
       aria-label={fmtDay(`${month}-01`, { month: "long", year: "numeric" }, locale)}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { EscClose } from "@/hooks/use-escape";
 import { createPortal } from "react-dom";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Loader2, Minus, Plus, ScrollText, Search, SlidersHorizontal, X } from "lucide-react";
@@ -197,7 +198,8 @@ function XpAdjustModal({ onClose }: { onClose: () => void }) {
   if (typeof document === "undefined") return null;
   return createPortal(
     <div className="fixed inset-0 z-[95] grid place-items-center bg-foreground/40 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
+      <EscClose onClose={onClose} />
+      <div role="dialog" aria-modal="true" aria-label={tr("Adjust XP")} className="w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
           <div>
             <h2 className="font-display text-lg font-bold tracking-tight">{tr("Adjust XP")}</h2>

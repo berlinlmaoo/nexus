@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Inbox, CheckSquare, FolderKanban, Menu, X,
   MessageCircle, Calendar, CalendarClock, Users, Trophy,
   ClipboardCheck, Settings, Shield, LogOut, Loader2, FileText, AtSign, Ticket, Sun, Moon,
- HardDrive, Languages,
+ HardDrive, Languages, Search,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { nexusApi, activeNotifications } from "@/lib/nexus-api";
@@ -16,6 +16,7 @@ import { useChatUnread } from "@/lib/chat-unread";
 import { cn } from "@/lib/utils";
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { thumbUrl } from "@/lib/thumb";
+import { openGlobalSearch } from "@/lib/search-event";
 
 /* Primary destinations live in the floating bar; everything else lives in the
    "More" glass sheet (replaces the old left slide-out sidebar on mobile). */
@@ -270,9 +271,18 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
             {/* grab handle */}
             <div className="relative flex items-center justify-between px-5 pt-3">
               <div className="mx-auto h-1.5 w-10 rounded-full bg-foreground/15" />
-              <button onClick={onClose} aria-label={t("Close")} className="absolute right-3 top-2.5 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><X className="h-4 w-4" /></button>
+              <button onClick={onClose} aria-label={t("Close")} className="absolute right-2 top-1 grid h-11 w-11 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><X className="h-4 w-4" /></button>
             </div>
             <div className="relative max-h-[calc(82vh-3.5rem)] overflow-y-auto px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
+              {/* The app's search on a phone (QA S-08 / B17: it was reachable only by ⌘K on a keyboard). */}
+              <button
+                type="button"
+                onClick={() => { onClose(); window.setTimeout(openGlobalSearch, 0); }}
+                className="mb-3 flex min-h-11 w-full items-center gap-3 rounded-2xl border border-border/60 bg-background/60 px-3 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              >
+                <Search className="h-[18px] w-[18px] shrink-0" />
+                <span className="flex-1">{t("Search tasks, projects, docs, people…")}</span>
+              </button>
               {visibleGroups.map((g) => (
                 <div key={g.label} className="mb-3">
                   <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t(g.label)}</div>
