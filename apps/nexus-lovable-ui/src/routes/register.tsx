@@ -94,7 +94,7 @@ function RegisterPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#fdfcfb] p-6" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>
+    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#fdfcfb] p-6 force-light" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>
       <div className="absolute left-[-10%] top-[-10%] h-[50%] w-[50%] animate-pulse rounded-full bg-primary/20 blur-[120px]" />
       <div className="absolute bottom-[-10%] right-[-10%] h-[50%] w-[50%] animate-pulse rounded-full bg-orange-200/40 blur-[120px]" style={{ animationDelay: "1s" }} />
 

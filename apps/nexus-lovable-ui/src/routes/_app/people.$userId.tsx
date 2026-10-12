@@ -33,9 +33,9 @@ export const Route = createFileRoute("/_app/people/$userId")({
 
 const REQ_LABEL: Record<string, string> = { LEAVE: "Leave", SICK: "Sick", PERMIT: "Permit", DAY_OFF: "Day off", RED_DATE: "Public holiday" };
 const STATUS_TONE: Record<string, string> = {
-  APPROVED: "bg-emerald-100 text-emerald-700",
-  PENDING: "bg-amber-100 text-amber-700",
-  REJECTED: "bg-rose-100 text-rose-700",
+  APPROVED: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+  PENDING: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+  REJECTED: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
   CANCELED: "bg-muted text-muted-foreground",
   CANCELLED: "bg-muted text-muted-foreground",
 };
@@ -207,7 +207,7 @@ function SummaryCard({ data }: { data: NexusMemberRecord }) {
       <div className="grid gap-3 lg:grid-cols-[minmax(0,14rem)_1fr]">
         <div className="rounded-2xl bg-primary/5 p-4" title={tr("Days worked (present or permit) out of the period's working days — the board's Score column")}>
           <div className="text-[11px] font-bold uppercase tracking-wider text-primary">{tr("Score")}</div>
-          <div className="mt-1 text-3xl font-black tabular-nums">{score.worked}/{score.working}{score.surplus > 0 && <span className="ml-1 text-lg text-emerald-600">+{score.surplus}</span>}</div>
+          <div className="mt-1 text-3xl font-black tabular-nums">{score.worked}/{score.working}{score.surplus > 0 && <span className="ml-1 text-lg text-emerald-600 dark:text-emerald-400">+{score.surplus}</span>}</div>
           <div className="mt-1 text-xs text-muted-foreground">{tr(score.totalWorked === 1 ? "{n} day worked" : "{n} days worked", { n: score.totalWorked })}{data.period.isCurrent ? ` · ${tr("day {x} of {n}", { x: data.period.daysElapsed, n: data.period.days })}` : ""}</div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
@@ -219,10 +219,10 @@ function SummaryCard({ data }: { data: NexusMemberRecord }) {
           <Stat label={tr("Absent (TK)")} value={counts.absent} tone={sCls.absent} />
           <Stat label={tr("Late")} value={counts.lateMinutes > 0 ? tr("{n} min", { n: counts.lateMinutes }) : "—"} hint={tr(counts.lateDays === 1 ? "{n} late day" : "{n} late days", { n: counts.lateDays })} />
           <Stat label={tr("Day-off balance")} value={tr("{n} left", { n: dayOff.remaining })} hint={tr("Used {used} of {quota}: {base} base{bonus}. Includes days cut automatically for TK or >120 min late.", { used: dayOff.usedRaw, quota: dayOff.quota, base: dayOff.baseQuota, bonus })} />
-          <Stat label={tr("XP this period")} value={<span><span className="text-emerald-600">+{xp.gained}</span> <span className="text-rose-600">{xp.lost}</span></span>} hint={xp.removed > 0 ? tr("{n} XP of deductions removed by the BoD", { n: xp.removed }) : undefined} />
+          <Stat label={tr("XP this period")} value={<span><span className="text-emerald-600 dark:text-emerald-400">+{xp.gained}</span> <span className="text-rose-600 dark:text-rose-400">{xp.lost}</span></span>} hint={xp.removed > 0 ? tr("{n} XP of deductions removed by the BoD", { n: xp.removed }) : undefined} />
         </div>
       </div>
-      {dayOff.bonusDays > 0 && <p className="mt-2 text-xs text-emerald-700">{tr("Day-off allowance {quota} = {base} + {n} extra for this period ({reasons}).", { quota: dayOff.quota, base: dayOff.baseQuota, n: dayOff.bonusDays, reasons: dayOff.bonusGrants.map((g) => `${g.days}: ${g.reason}`).join("; ") })}</p>}
+      {dayOff.bonusDays > 0 && <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">{tr("Day-off allowance {quota} = {base} + {n} extra for this period ({reasons}).", { quota: dayOff.quota, base: dayOff.baseQuota, n: dayOff.bonusDays, reasons: dayOff.bonusGrants.map((g) => `${g.days}: ${g.reason}`).join("; ") })}</p>}
     </Card>
   );
 }
@@ -273,7 +273,7 @@ function DayDetail({ data, day, rec, onClose }: { data: NexusMemberRecord; day: 
   const place = rec?.checkInAt ? recordPlace(rec) : null;
   const where = place?.label || rec?.checkInAddress || null;
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -284,7 +284,7 @@ function DayDetail({ data, day, rec, onClose }: { data: NexusMemberRecord; day: 
         </div>
         <dl className="mt-3 space-y-1.5 text-sm">
           {rec?.checkInAt && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("In / out")}</dt><dd className="font-semibold tabular-nums">{fmtTime(rec.checkInAt)} – {rec.checkOutAt ? fmtTime(rec.checkOutAt) : tr("no check-out")}</dd></div>}
-          {day.lateMinutes > 0 && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("Late")}</dt><dd className="font-semibold text-rose-600">{tr("{n} min", { n: day.lateMinutes })}</dd></div>}
+          {day.lateMinutes > 0 && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("Late")}</dt><dd className="font-semibold text-rose-600 dark:text-rose-400">{tr("{n} min", { n: day.lateMinutes })}</dd></div>}
           {where && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("Location")}</dt><dd className="min-w-0 text-right"><div className="truncate font-semibold" title={rec?.checkInAddress ?? undefined}>{where}</div>{place?.away && <div className="text-[11px] text-muted-foreground">{tr("Away from the office")}</div>}</dd></div>}
           {rec?.requestType && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("Request")}</dt><dd className="font-semibold">{REQ_LABEL[rec.requestType] ? tr(REQ_LABEL[rec.requestType]) : rec.requestType}{rec.reviewedBy?.name ? ` · ${tr("approved by {name}", { name: rec.reviewedBy.name })}` : ""}</dd></div>}
           {rec?.notes && <div className="rounded-xl bg-muted/40 p-2.5 text-sm"><div className="mb-0.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Reason")}</div><p className="whitespace-pre-wrap">{rec.notes}</p></div>}
@@ -332,19 +332,19 @@ function XpRow({ entry: e, data, compact = false }: { entry: NexusRecordXpEntry;
   const pos = e.originalAmount >= 0;
   return (
     <div className={cn("flex items-center gap-3", compact ? "rounded-xl bg-muted/30 px-3 py-2" : "px-4 py-2.5 md:px-5")}>
-      {!compact && <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full", removed ? "bg-muted text-muted-foreground" : pos ? "bg-emerald-500/10 text-emerald-600" : "bg-rose-500/10 text-rose-600")}><ScrollText className="h-4 w-4" /></span>}
+      {!compact && <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full", removed ? "bg-muted text-muted-foreground" : pos ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-rose-500/10 text-rose-600 dark:text-rose-400")}><ScrollText className="h-4 w-4" /></span>}
       <div className="min-w-0 flex-1">
         <div className={cn("truncate text-sm font-semibold", removed && "text-muted-foreground line-through")}>{e.label}</div>
         <div className="truncate text-[11px] text-muted-foreground">
           {e.dateKey ? `${tr("for {date}", { date: dayLabel(e.dateKey) })} · ` : ""}{fmtDate(e.createdAt)} {fmtTime(e.createdAt)}
         </div>
         {e.removed && (
-          <div className="truncate text-[11px] font-semibold text-emerald-700">
+          <div className="truncate text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
             {tr("Removed by {name}", { name: e.removed.by?.name ?? tr("a BoD") })} · {fmtDate(e.removed.at)}{e.removed.note ? ` — ${e.removed.note}` : ""}
           </div>
         )}
       </div>
-      <div className={cn("shrink-0 text-sm font-black tabular-nums", removed ? "text-muted-foreground line-through" : pos ? "text-emerald-600" : "text-rose-600")}>{signed(e.originalAmount)} XP</div>
+      <div className={cn("shrink-0 text-sm font-black tabular-nums", removed ? "text-muted-foreground line-through" : pos ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>{signed(e.originalAmount)} XP</div>
       {e.canRemove && (
         <button onClick={ask} disabled={remove.isPending} title={tr("Remove this deduction (BoD)")} className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-bold text-muted-foreground transition hover:border-primary hover:text-primary disabled:opacity-50">
           {remove.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />} {tr("Remove")}
@@ -376,7 +376,7 @@ function XpLog({ data }: { data: NexusMemberRecord }) {
   const t = data.summary.xp;
   return (
     <Card title={tr("XP log")} hint={tr("Every XP change written in the period, with the reason. Attendance penalties name the day they are for.")}
-      right={<div className="text-xs font-semibold tabular-nums text-muted-foreground"><span className="text-emerald-600">+{t.gained}</span> · <span className="text-rose-600">{t.lost}</span>{t.removed > 0 && <> · <span className="text-emerald-700">{tr("{n} removed", { n: t.removed })}</span></>}</div>}>
+      right={<div className="text-xs font-semibold tabular-nums text-muted-foreground"><span className="text-emerald-600 dark:text-emerald-400">+{t.gained}</span> · <span className="text-rose-600 dark:text-rose-400">{t.lost}</span>{t.removed > 0 && <> · <span className="text-emerald-700 dark:text-emerald-300">{tr("{n} removed", { n: t.removed })}</span></>}</div>}>
       <div className="-mx-4 divide-y divide-border md:-mx-5">
         {sections.map((s, i) => (
           <div key={s.period}>
@@ -392,7 +392,7 @@ function XpLog({ data }: { data: NexusMemberRecord }) {
           </div>
         ))}
       </div>
-      {err && <p className="mt-2 text-xs text-rose-600">{err}</p>}
+      {err && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{err}</p>}
       {last.hasOlder && last.olderPeriod && (
         <button onClick={loadOlder} disabled={loading} className="mt-3 w-full rounded-xl border border-border bg-muted/40 py-2 text-xs font-semibold transition-colors hover:bg-muted disabled:opacity-60">
           {loading ? tr("Loading…") : tr("Load older (period ending {label})", { label: last.olderPeriod })}

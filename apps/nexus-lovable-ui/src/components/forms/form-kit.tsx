@@ -272,7 +272,7 @@ function AdvancedFieldEditor({ field, others, taskLists, members, customFields, 
                 )}
               </>
             ) : (
-              <p className="mt-2 font-semibold text-amber-600">{t("This project has no sections yet. Add a section on the board first, then this mapping will work.")}</p>
+              <p className="mt-2 font-semibold text-amber-600 dark:text-amber-400">{t("This project has no sections yet. Add a section on the board first, then this mapping will work.")}</p>
             )}
           </div>
         )}
@@ -397,7 +397,7 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
 
   return (
     <div className="fixed inset-0 z-[70] flex justify-end">
-      <div className="absolute inset-0 bg-foreground/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-foreground/30 dark:bg-scrim backdrop-blur-sm" onClick={onClose} />
       <aside className="relative flex h-full w-full max-w-xl flex-col overflow-y-auto rounded-l-3xl border-l border-border bg-card shadow-pop">
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card/95 px-5 py-4 backdrop-blur">
           <h2 className="font-display text-lg font-bold tracking-tight">{editing ? t("Edit form") : t("New form")}</h2>
@@ -449,9 +449,9 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
                         aria-checked={f.required ?? false}
                         aria-label={t("Required")}
                         onClick={() => update(f.id, { required: !f.required })}
-                        className={cn("relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors", f.required ? "bg-primary" : "bg-muted")}
+                        className={cn("relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors", f.required ? "bg-primary" : "bg-muted dark:bg-control-border")}
                       >
-                        <span className={cn("inline-block h-4 w-4 rounded-full bg-card shadow transition-transform", f.required ? "translate-x-4" : "translate-x-0.5")} />
+                        <span className={cn("inline-block h-4 w-4 rounded-full bg-card shadow transition-transform dark:bg-background", f.required ? "translate-x-4" : "translate-x-0.5")} />
                       </button>
                     </div>
                   </div>
@@ -465,9 +465,9 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
                         aria-checked={!!f.attachmentEnabled}
                         aria-label={t("Allow file attachment")}
                         onClick={() => update(f.id, { attachmentEnabled: !f.attachmentEnabled })}
-                        className={cn("relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors", f.attachmentEnabled ? "bg-primary" : "bg-muted")}
+                        className={cn("relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors", f.attachmentEnabled ? "bg-primary" : "bg-muted dark:bg-control-border")}
                       >
-                        <span className={cn("inline-block h-4 w-4 rounded-full bg-card shadow transition-transform", f.attachmentEnabled ? "translate-x-4" : "translate-x-0.5")} />
+                        <span className={cn("inline-block h-4 w-4 rounded-full bg-card shadow transition-transform dark:bg-background", f.attachmentEnabled ? "translate-x-4" : "translate-x-0.5")} />
                       </button>
                       <span className="inline-flex items-center gap-1"><Paperclip className="h-3.5 w-3.5" /> {t("Allow file attachment (optional)")}</span>
                     </label>
@@ -550,7 +550,7 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
       </aside>
 
       {dupOpen && (
-        <div className="fixed inset-0 z-[80] grid place-items-center bg-black/50 p-4" onClick={() => setDupOpen(false)}>
+        <div className="fixed inset-0 z-[80] grid place-items-center bg-black/50 dark:bg-scrim p-4" onClick={() => setDupOpen(false)}>
           <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-4 shadow-pop" onClick={(e) => e.stopPropagation()}>
             <div className="mb-1 flex items-center justify-between">
               <h3 className="font-display text-base font-bold">{t("Duplicate form")}</h3>

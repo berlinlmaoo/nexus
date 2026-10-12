@@ -273,7 +273,7 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
 
       {/* The forgotten check-out of a previous day, said before anything else. */}
       {forcePending && !iosOnly && (
-        <div className="rounded-xl border border-amber-300/60 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-800">
+        <div className="rounded-xl border border-amber-300/60 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
           {t("You still have an earlier shift that was never checked out.")} {reflectionCount >= REFLECTION_MIN ? t("Tap Check out to close it first, then you can check in again.") : t("Write the daily reflection below first. Check out unlocks at {n} characters.", { n: REFLECTION_MIN })}
         </div>
       )}
@@ -283,7 +283,7 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
         <div className="rounded-2xl border border-border bg-card p-3 shadow-soft">
           <div className="flex items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1.5 text-sm font-bold text-foreground"><PenLine className="h-4 w-4 text-primary" /> {t("Daily reflection")}</span>
-            <span className={`text-xs font-bold tabular-nums ${reflectionCount >= REFLECTION_MIN ? "text-emerald-600" : "text-amber-600"}`}>{reflectionCount}/{REFLECTION_MIN}</span>
+            <span className={`text-xs font-bold tabular-nums ${reflectionCount >= REFLECTION_MIN ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>{reflectionCount}/{REFLECTION_MIN}</span>
           </div>
           <p className="mt-0.5 text-[11px] text-muted-foreground">{t("Required before check-out. What you worked on today, the progress, any blockers, what's next.")}</p>
           <textarea
@@ -295,7 +295,7 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
             className={`mt-2 w-full resize-none rounded-xl border bg-background px-3 py-2 text-sm leading-relaxed outline-none transition focus:ring-2 focus:ring-primary/20 ${reflectionCount >= REFLECTION_MIN ? "border-emerald-400/60" : "border-border focus:border-primary"}`}
           />
           {reflectionCount < REFLECTION_MIN && (
-            <p className="mt-1 text-[11px] font-semibold text-amber-600">{t("{n} more characters needed before you can check out.", { n: REFLECTION_MIN - reflectionCount })}</p>
+            <p className="mt-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">{t("{n} more characters needed before you can check out.", { n: REFLECTION_MIN - reflectionCount })}</p>
           )}
         </div>
       )}
@@ -308,12 +308,12 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
 
       {/* Offsite checkout prompt — shown when the user is outside the office geofence on check-out */}
       {offsitePrompt && (
-        <div className="space-y-2 rounded-2xl border border-amber-300 bg-amber-50 p-3">
-          <div className="text-sm font-bold text-amber-800">{t("You’re outside the office area")}</div>
-          <p className="text-xs text-amber-700">{t("±{m}m from {office}. Check out from here? A reason is required, and it waits for BoD approval first.", { m: Math.round(offsitePrompt.distanceMeters), office: offsitePrompt.officeName })}</p>
-          <textarea value={offsiteReason} onChange={(e) => setOffsiteReason(e.target.value)} rows={2} placeholder={t("Reason (e.g. content shoot or client meeting at X)")} className="w-full resize-none rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500" />
+        <div className="space-y-2 rounded-2xl border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/40 dark:bg-amber-500/10">
+          <div className="text-sm font-bold text-amber-800 dark:text-amber-300">{t("You’re outside the office area")}</div>
+          <p className="text-xs text-amber-700 dark:text-amber-300">{t("±{m}m from {office}. Check out from here? A reason is required, and it waits for BoD approval first.", { m: Math.round(offsitePrompt.distanceMeters), office: offsitePrompt.officeName })}</p>
+          <textarea value={offsiteReason} onChange={(e) => setOffsiteReason(e.target.value)} rows={2} placeholder={t("Reason (e.g. content shoot or client meeting at X)")} className="w-full resize-none rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500 dark:border-amber-500/40 dark:bg-background" />
           <div className="flex gap-2">
-            <button onClick={() => { setOffsitePrompt(null); setOffsiteReason(""); }} disabled={busy} className="flex-1 rounded-lg border border-border bg-white py-2 text-xs font-semibold text-muted-foreground transition hover:bg-accent disabled:opacity-50">{t("Cancel")}</button>
+            <button onClick={() => { setOffsitePrompt(null); setOffsiteReason(""); }} disabled={busy} className="flex-1 rounded-lg border border-border bg-white py-2 text-xs font-semibold dark:bg-background text-muted-foreground transition hover:bg-accent disabled:opacity-50">{t("Cancel")}</button>
             <button onClick={submitOffsite} disabled={!offsiteReason.trim() || busy} className="flex-[1.6] rounded-lg bg-amber-600 py-2 text-xs font-bold text-white transition hover:bg-amber-700 disabled:opacity-50">{busy ? t("Sending…") : t("Check out and request approval")}</button>
           </div>
         </div>
@@ -321,21 +321,21 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
 
       {/* Pending offsite-checkout state */}
       {today?.today?.checkOutApproval === "PENDING" && !offsitePrompt && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-700">{t("Offsite check-out — waiting for BoD approval")}</div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">{t("Offsite check-out — waiting for BoD approval")}</div>
       )}
       {today?.today?.checkOutApproval === "REJECTED" && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-center text-xs font-semibold text-rose-700">{t("Your offsite check-out was rejected by the BoD.")}</div>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-center text-xs font-semibold text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">{t("Your offsite check-out was rejected by the BoD.")}</div>
       )}
 
       {msg && (
-        <div className={`rounded-xl border px-3 py-2 text-center text-xs font-semibold ${msgOk ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
+        <div className={`rounded-xl border px-3 py-2 text-center text-xs font-semibold ${msgOk ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300" : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300"}`}>
           {msg}
         </div>
       )}
 
       <input ref={fileRef} type="file" accept="image/*" capture="user" onChange={onSelfie} className="hidden" />
       {fallbackMode && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-800">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
           {t("The live face check isn't available in this browser.")}{" "}
           <button type="button" className="underline" onClick={() => { const m = fallbackMode; setFallbackMode(null); pendingMode.current = m; fileRef.current?.click(); }}>{t("Take a plain selfie instead")}</button>
         </div>

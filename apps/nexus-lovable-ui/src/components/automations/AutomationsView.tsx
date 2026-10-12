@@ -194,8 +194,8 @@ export function AutomationsView({ projectId }: { projectId: string }) {
             const nCond = a.conditions?.rules.length ?? 0;
             return (
               <div key={a.id} className="grid grid-cols-[2.5rem_1fr_2rem] items-center gap-3 border-b border-border px-4 py-3 last:border-b-0 md:grid-cols-[2.5rem_1fr_9rem_2rem]">
-                <button type="button" role="switch" aria-checked={!!a.enabled} aria-label={t("Turn {name} on or off", { name: a.name })} disabled={!canEdit || toggle.isPending} onClick={() => toggle.mutate({ id: a.id, enabled: !a.enabled })} className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed", a.enabled ? "bg-primary" : "bg-muted", !canEdit && "opacity-70")}>
-                  <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all", a.enabled ? "left-[18px]" : "left-0.5")} />
+                <button type="button" role="switch" aria-checked={!!a.enabled} aria-label={t("Turn {name} on or off", { name: a.name })} disabled={!canEdit || toggle.isPending} onClick={() => toggle.mutate({ id: a.id, enabled: !a.enabled })} className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed", a.enabled ? "bg-primary" : "bg-muted dark:bg-control-border", !canEdit && "opacity-70")}>
+                  <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all dark:bg-background", a.enabled ? "left-[18px]" : "left-0.5")} />
                 </button>
                 <button type="button" onClick={() => setEditing({ id: a.id, tab: "rule" })} className="min-w-0 text-left">
                   <div className={cn("truncate text-sm font-semibold", !a.enabled && "text-muted-foreground")}>{a.name}</div>

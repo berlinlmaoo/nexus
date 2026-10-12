@@ -47,7 +47,7 @@ export function PostCard({ post, members, onLike, onDelete, onEdit, onRetry, onC
       initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={failed && !reduce ? { opacity: 1, y: 0, x: [0, -6, 6, -4, 4, 0] } : { opacity: 1, y: 0, x: 0 }}
       transition={failed ? { x: { duration: 0.4 } } : { duration: 0.25 }}
-      className={cn("relative border-b border-border px-4 py-3 transition-colors", failed ? "bg-rose-50/40" : "hover:bg-muted/20")}
+      className={cn("relative border-b border-border px-4 py-3 transition-colors", failed ? "bg-rose-50/40 dark:bg-rose-500/10" : "hover:bg-muted/20")}
     >
       {/* sending hairline */}
       {pending && (
@@ -70,7 +70,7 @@ export function PostCard({ post, members, onLike, onDelete, onEdit, onRetry, onC
                     <div className="fixed inset-0 z-20" onClick={() => setMenu(false)} />
                     <div className="absolute right-0 z-30 mt-1 w-36 overflow-hidden rounded-xl border border-border bg-popover py-1 shadow-pop">
                       {post.canEdit && <button onClick={() => { setEditing(true); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent"><Pencil className="h-3.5 w-3.5" /> {t("Edit")}</button>}
-                      {post.canDelete && <button onClick={() => { onDelete(post); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-rose-600 hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" /> {t("Delete")}</button>}
+                      {post.canDelete && <button onClick={() => { onDelete(post); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"><Trash2 className="h-3.5 w-3.5" /> {t("Delete")}</button>}
                     </div>
                   </>
                 )}
@@ -117,7 +117,7 @@ export function PostCard({ post, members, onLike, onDelete, onEdit, onRetry, onC
           )}
 
           {failed && (
-            <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-rose-600">
+            <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-rose-600 dark:text-rose-400">
               {t("Couldn't send.")}
               <button onClick={() => onRetry(post)} className="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-white"><RotateCw className="h-3.5 w-3.5" /> {t("Try again")}</button>
               <button onClick={() => onDelete(post)} className="text-muted-foreground hover:text-foreground">{t("Discard")}</button>

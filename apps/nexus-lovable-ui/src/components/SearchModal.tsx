@@ -38,7 +38,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   const total = groups.reduce((n, g) => n + g.items.length, 0);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-start justify-center bg-foreground/30 p-4 pt-[12vh] backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-start justify-center bg-foreground/30 dark:bg-scrim p-4 pt-[12vh] backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2 border-b border-border px-4">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />

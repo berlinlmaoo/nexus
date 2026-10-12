@@ -122,7 +122,7 @@ function RunDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const q = useQuery({ queryKey: ["nexus", "gideon-run", id], queryFn: () => gideonRunDetail(id), retry: false });
   const r = q.data?.run;
   return (
-    <div className="fixed inset-0 z-[60] grid place-items-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
       <div role="dialog" aria-modal="true" lang={L.lang} className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start gap-2">
           <GideonMark className="mt-1 h-4 w-4" />
@@ -145,7 +145,7 @@ function RunDetail({ id, onClose }: { id: string; onClose: () => void }) {
               <ol className="space-y-1">
                 {q.data.steps.map((s) => (
                   <li key={s.id} className="flex items-start gap-2 text-xs">
-                    {s.ok === false ? <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" /> : <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />}
+                    {s.ok === false ? <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" /> : <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />}
                     <span className="min-w-0 flex-1">{s.label}{s.error && <span className="block text-destructive">{s.error}</span>}</span>
                     <span className="shrink-0 tabular-nums text-muted-foreground">{dur(s.durationMs)}</span>
                   </li>

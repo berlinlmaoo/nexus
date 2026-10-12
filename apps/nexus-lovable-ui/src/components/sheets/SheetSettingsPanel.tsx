@@ -166,9 +166,9 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
             role="switch"
             aria-checked={compat}
             onClick={toggle}
-            className={cn("relative h-4 w-7 shrink-0 rounded-full transition", compat ? "bg-primary" : "bg-muted-foreground/30")}
+            className={cn("relative h-4 w-7 shrink-0 rounded-full transition", compat ? "bg-primary" : "bg-muted-foreground/30 dark:bg-control-border")}
           >
-            <span className={cn("absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-all", compat ? "left-3.5" : "left-0.5")} />
+            <span className={cn("absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-all dark:bg-background", compat ? "left-3.5" : "left-0.5")} />
           </button>
           {t("Enable compatible spreadsheet shortcuts")}
         </label>

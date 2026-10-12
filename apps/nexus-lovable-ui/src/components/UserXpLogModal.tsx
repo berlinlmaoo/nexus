@@ -66,12 +66,12 @@ export function UserXpLogModal({ user, layoutId, onClose }: { user: XpUser; layo
                 const pos = r.amount >= 0;
                 return (
                   <div key={r.id} className="flex items-center gap-3 px-5 py-2.5">
-                    <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full", pos ? "bg-emerald-500/10 text-emerald-600" : "bg-rose-500/10 text-rose-600")}><ScrollText className="h-4 w-4" /></span>
+                    <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full", pos ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-rose-500/10 text-rose-600 dark:text-rose-400")}><ScrollText className="h-4 w-4" /></span>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold">{info.label}</div>
                       <div className="truncate text-[11px] text-muted-foreground">{info.sub ? `${info.sub} · ` : ""}{fmtDate(r.createdAt)} {fmtTime(r.createdAt)}</div>
                     </div>
-                    <div className={cn("shrink-0 text-sm font-black tabular-nums", pos ? "text-emerald-600" : "text-rose-600")}>{pos ? `+${r.amount}` : r.amount} XP</div>
+                    <div className={cn("shrink-0 text-sm font-black tabular-nums", pos ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>{pos ? `+${r.amount}` : r.amount} XP</div>
                   </div>
                 );
               })}

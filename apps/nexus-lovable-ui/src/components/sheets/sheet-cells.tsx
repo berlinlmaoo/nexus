@@ -98,7 +98,7 @@ export function ChoiceEditor({ col, multi, initial, onCommit, onCancel }: {
             ) : (
               <button
                 onClick={() => onCommit("")}
-                className="mt-1 w-full rounded-lg border border-dashed border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:border-rose-300 hover:text-rose-600"
+                className="mt-1 w-full rounded-lg border border-dashed border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:border-rose-300 hover:text-rose-600 dark:hover:border-rose-500/40 dark:hover:text-rose-400"
               >{t("Clear")}</button>
             )}
           </Floating>
@@ -199,7 +199,7 @@ export function ColumnPopover({ col, anchor, onClose, onSave }: {
                       <button onClick={() => {
                         setOptions((xs) => xs.filter((_, j) => j !== i));
                         setOptionColors((c) => { const n = { ...c }; delete n[o]; return n; });
-                      }} className="shrink-0 text-muted-foreground hover:text-rose-600"><X className="h-2.5 w-2.5" /></button>
+                      }} className="shrink-0 text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"><X className="h-2.5 w-2.5" /></button>
                     </div>
                     {palette === o && (
                       <div className="flex flex-wrap gap-1 py-1 pl-5">
@@ -290,7 +290,7 @@ export function ColumnPopover({ col, anchor, onClose, onSave }: {
                 <option value="bold">{t("bold")}</option>
               </select>
               <button onClick={() => setRules((rs) => rs.filter((_, j) => j !== i))}
-                className="shrink-0 text-muted-foreground hover:text-rose-600"><X className="h-3 w-3" /></button>
+                className="shrink-0 text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"><X className="h-3 w-3" /></button>
             </div>
           ))}
           {rules.length < 8 && (

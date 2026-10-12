@@ -154,7 +154,7 @@ function DocPage() {
           {d && <span className="truncate px-1 text-foreground">{icon ? `${icon} ` : ""}{title || t("Untitled")}</span>}
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <span className={cn("hidden items-center gap-1 text-xs text-muted-foreground sm:inline-flex", status === "offline" && "text-warning-foreground", status === "error" && "text-destructive")} aria-live="polite">
+          <span className={cn("hidden items-center gap-1 text-xs text-muted-foreground sm:inline-flex", status === "offline" && "text-warning-foreground dark:text-warning", status === "error" && "text-destructive")} aria-live="polite">
             {status === "saving" && <Loader2 className="h-3 w-3 animate-spin" />}
             {status === "saved" && savedAt && <Check className="h-3 w-3" />}
             {status === "offline" && <CloudOff className="h-3 w-3" />}

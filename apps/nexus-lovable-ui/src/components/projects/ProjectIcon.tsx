@@ -1,6 +1,8 @@
 // Resolves a NEXUS project `icon` value to something renderable.
 // Backend stores either an uploaded path ("/..."), an inline emoji, or a
 // named icon ("folder", "rocket", ...). We map names → emoji.
+import { useLogoTone } from "@/lib/calendar/tone";
+import { cn } from "@/lib/utils";
 
 const EMOJI_MAP: Record<string, string> = {
   folder: "📁", rocket: "🚀", star: "⭐", zap: "⚡", target: "🎯",
@@ -27,9 +29,19 @@ export function projectEmoji(icon?: string | null, fallback = "📁"): string {
 
 export function ProjectIcon({ icon, className }: { icon?: string | null; className?: string }) {
   if (icon && isUploaded(icon)) {
-    return <img src={icon} alt="" className={className ?? "h-full w-full rounded-md object-cover"} />;
+    return <UploadedMark src={icon} className={className} />;
   }
   return <span className={className}>{projectEmoji(icon)}</span>;
+}
+
+/**
+ * An uploaded project / folder image. A dark logo on a transparent background (a black wordmark) would
+ * vanish on the dark theme's surfaces, so there it sits on a white tile, as the Calendar's IP logos do.
+ * An opaque photo covers the tile; light mode is unchanged.
+ */
+function UploadedMark({ src, className }: { src: string; className?: string }) {
+  const tone = useLogoTone(src);
+  return <img src={src} alt="" className={cn(className ?? "h-full w-full rounded-md object-cover", tone === "dark" && "dark:bg-white")} />;
 }
 
 /**
@@ -41,7 +53,7 @@ export function ProjectIcon({ icon, className }: { icon?: string | null; classNa
  */
 export function ProjectMark({ icon, className }: { icon?: string | null; color?: string | null; className?: string }) {
   if (isProjectPhoto(icon)) {
-    return <img src={icon} alt="" className={className ?? "h-full w-full rounded-md object-cover"} />;
+    return <UploadedMark src={icon} className={className} />;
   }
   return <TaskTile />;
 }

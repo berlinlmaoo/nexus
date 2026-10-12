@@ -74,9 +74,9 @@ function TrackingBadges({ rec, isToday, className }: { rec?: HistRow | null; isT
   if (!web && !off && !outside) return null;
   return (
     <span className={cn("inline-flex flex-wrap items-center gap-1", className)}>
-      {web && <span title={tr("Checked in from a browser — the location isn’t tracked during the day")} className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700"><Globe className="h-3 w-3" /> {tr("Web check-in · location not tracked")}</span>}
-      {off && <span title={tr("Location access is off on this person’s phone — no trail is recorded")} className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600"><MapPinOff className="h-3 w-3" /> {tr("Location off")}</span>}
-      {outside && <span title={tr("Outside the office radius right now")} className="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-amber-700">{tr("Outside since {time}", { time: fmtTime(rec.outsideSince) })}</span>}
+      {web && <span title={tr("Checked in from a browser — the location isn’t tracked during the day")} className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700 dark:bg-sky-500/15 dark:text-sky-300"><Globe className="h-3 w-3" /> {tr("Web check-in · location not tracked")}</span>}
+      {off && <span title={tr("Location access is off on this person’s phone — no trail is recorded")} className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-500/15 dark:text-slate-400"><MapPinOff className="h-3 w-3" /> {tr("Location off")}</span>}
+      {outside && <span title={tr("Outside the office radius right now")} className="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">{tr("Outside since {time}", { time: fmtTime(rec.outsideSince) })}</span>}
     </span>
   );
 }
@@ -125,11 +125,11 @@ function SupportingDocument({ url, name, type, large = false }: { url: string; n
 function LeaveDetailDrawer({ record, onClose, canOverride }: { record: HistRow; onClose: () => void; canOverride?: boolean }) {
   const typeLabel = tr(REQ_LABEL[(record.requestType || "").toUpperCase()] || "Leave/Permit");
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
       <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-start justify-between">
           <div className="flex items-center gap-2">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-warning/20 text-warning-foreground"><Coffee className="h-4 w-4" /></span>
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-warning/20 text-warning-foreground dark:text-warning"><Coffee className="h-4 w-4" /></span>
             <div>
               <div className="font-display text-base font-bold tracking-tight">{typeLabel}</div>
               <div className="text-xs text-muted-foreground">{record.user?.name || tr("Unnamed")}</div>
@@ -139,7 +139,7 @@ function LeaveDetailDrawer({ record, onClose, canOverride }: { record: HistRow; 
         </div>
         <dl className="space-y-2 text-sm">
           <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("Date")}</dt><dd className="font-semibold">{fmtDate(record.attendanceDate)}</dd></div>
-          <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("Status")}</dt><dd className="font-semibold text-emerald-600">{tr("Approved")} ✓</dd></div>
+          <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("Status")}</dt><dd className="font-semibold text-emerald-600 dark:text-emerald-400">{tr("Approved")} ✓</dd></div>
           {record.reviewedBy?.name && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("Approved by")}</dt><dd className="font-semibold">{record.reviewedBy.name}</dd></div>}
           {record.reviewedAt && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("Approved on")}</dt><dd className="font-semibold">{fmtDate(record.reviewedAt)}</dd></div>}
         </dl>
@@ -175,11 +175,11 @@ function DeleteRecordPanel({ recordId, hasCheckOut, name, dateKey, onDone }: { r
     onError: (e) => alert(e instanceof Error ? e.message : tr("Couldn’t delete.")),
   });
   return (
-    <div className="mt-3 rounded-2xl border border-dashed border-rose-300/70 bg-rose-50/60 p-3">
-      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-600"><Trash2 className="h-3.5 w-3.5" /> {tr("Delete attendance data")}</div>
+    <div className="mt-3 rounded-2xl border border-dashed border-rose-300/70 bg-rose-50/60 p-3 dark:border-rose-500/30 dark:bg-rose-500/10">
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400"><Trash2 className="h-3.5 w-3.5" /> {tr("Delete attendance data")}</div>
       <div className="flex flex-wrap gap-1.5">
         {hasCheckOut && (
-          <button disabled={del.isPending} onClick={() => { if (window.confirm(tr("Delete the check-out for {date} ({name})?", { date: dateKey, name: name ?? tr("this person") }) + "\n\n" + tr("The check-in stays, and the record goes back to “still checked in”."))) del.mutate({ part: "checkout" }); }} className="rounded-full border border-rose-300 bg-card px-3 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-100 disabled:opacity-50">
+          <button disabled={del.isPending} onClick={() => { if (window.confirm(tr("Delete the check-out for {date} ({name})?", { date: dateKey, name: name ?? tr("this person") }) + "\n\n" + tr("The check-in stays, and the record goes back to “still checked in”."))) del.mutate({ part: "checkout" }); }} className="rounded-full border border-rose-300 bg-card px-3 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-100 disabled:opacity-50 dark:border-rose-500/40 dark:text-rose-400 dark:hover:bg-rose-500/15">
             {tr("Delete check-out")}
           </button>
         )}
@@ -487,8 +487,8 @@ function Attendance() {
                         <span className="truncate font-medium">{r.user?.name || tr("Unnamed")}</span>
                         <LeftTag leftAt={leftAtOf(r.user)} />
                         <span className="text-xs text-muted-foreground">{fmtDate(r.attendanceDate)}</span>
-                        {r.checkInAway === true && <span title={tr("Checked in away from the office")} className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">{tr("Away")}</span>}
-                        {r.checkOutOffsite && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">{tr("Offsite")}</span>}
+                        {r.checkInAway === true && <span title={tr("Checked in away from the office")} className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">{tr("Away")}</span>}
+                        {r.checkOutOffsite && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">{tr("Offsite")}</span>}
                         <TrackingBadges rec={r} isToday={(r.attendanceDate || "").slice(0, 10) === todayKey} />
                       </div>
                       <div className="mt-0.5 truncate text-xs text-muted-foreground">
@@ -576,19 +576,19 @@ function Attendance() {
                           // Amber once they're down to their last one, rose when it's gone — a
                           // number alone doesn't tell you when to worry.
                           const quotaTone = (remaining: number) =>
-                            remaining === 0 ? "bg-rose-100 text-rose-700 ring-rose-200"
-                              : remaining <= 1 ? "bg-amber-100 text-amber-700 ring-amber-200"
+                            remaining === 0 ? "bg-rose-100 text-rose-700 ring-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-500/30"
+                              : remaining <= 1 ? "bg-amber-100 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30"
                               : "bg-muted text-muted-foreground ring-border";
                           // XP sits at baseline 1000; below that means penalties are winning.
-                          const xpTone = d.xp.score < PERIOD_BASELINE_XP ? "bg-rose-100 text-rose-700 ring-rose-200"
-                            : d.xp.score > PERIOD_BASELINE_XP ? "bg-emerald-100 text-emerald-700 ring-emerald-200"
+                          const xpTone = d.xp.score < PERIOD_BASELINE_XP ? "bg-rose-100 text-rose-700 ring-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-500/30"
+                            : d.xp.score > PERIOD_BASELINE_XP ? "bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30"
                             : "bg-muted text-muted-foreground ring-border";
                           const pill = "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ring-1";
                           return (
                             <>
                               <span title={tr("Day off left this period: {left} of {quota} (used {used})", { left: d.remaining, quota: d.quota, used: d.used }) + (d.bonus && d.bonus.days > 0 ? "\n" + tr("Quota {base} + {n} extra ({reasons}) — expires on the 27th", { base: d.baseQuota ?? d.quota - d.bonus.days, n: d.bonus.days, reasons: d.bonus.grants.map((g) => `${g.days}: ${g.reason}`).join("; ") }) : "")}
-                                className={cn(pill, quotaTone(d.remaining), d.bonus && d.bonus.days > 0 && "ring-emerald-300")}>
-                                {d.remaining}/{d.quota} DO{d.bonus && d.bonus.days > 0 && <span className="ml-0.5 text-emerald-600">+</span>}
+                                className={cn(pill, quotaTone(d.remaining), d.bonus && d.bonus.days > 0 && "ring-emerald-300 dark:ring-emerald-400/60")}>
+                                {d.remaining}/{d.quota} DO{d.bonus && d.bonus.days > 0 && <span className="ml-0.5 text-emerald-600 dark:text-emerald-400">+</span>}
                               </span>
                               <span title={d.redDate.quota === 0
                                   ? tr("The BoD hasn't set this month's public-holiday allowance yet")
@@ -662,10 +662,10 @@ function Attendance() {
                             <span className="inline-block h-5 w-5 rounded-lg bg-muted/30" />
                           )}
                           {rec?.locationTrackingState === "denied" && (
-                            <span title={tr("Location off")} aria-label={tr("Location off")} className="pointer-events-none absolute right-0 top-1 grid h-3 w-3 place-items-center rounded-full bg-card text-slate-500 ring-1 ring-border"><MapPinOff className="h-2 w-2" /></span>
+                            <span title={tr("Location off")} aria-label={tr("Location off")} className="pointer-events-none absolute right-0 top-1 grid h-3 w-3 place-items-center rounded-full bg-card text-slate-500 ring-1 ring-border dark:text-slate-400"><MapPinOff className="h-2 w-2" /></span>
                           )}
                           {rec?.locationTrackingState === "web" && (
-                            <span title={tr("Web check-in · location not tracked")} aria-label={tr("Web check-in · location not tracked")} className="pointer-events-none absolute right-0 top-1 grid h-3 w-3 place-items-center rounded-full bg-card text-sky-600 ring-1 ring-border"><Globe className="h-2 w-2" /></span>
+                            <span title={tr("Web check-in · location not tracked")} aria-label={tr("Web check-in · location not tracked")} className="pointer-events-none absolute right-0 top-1 grid h-3 w-3 place-items-center rounded-full bg-card text-sky-600 ring-1 ring-border dark:text-sky-400"><Globe className="h-2 w-2" /></span>
                           )}
                           {pd.key === todayKey && rec?.outsideSince && !rec.checkOutAt && (
                             <span title={tr("Outside since {time}", { time: fmtTime(rec.outsideSince) })} className="pointer-events-none absolute bottom-0.5 left-1/2 h-1 w-3 -translate-x-1/2 rounded-full bg-amber-500" />
@@ -678,7 +678,7 @@ function Attendance() {
                       // cut from the quota for being >120 min late is still a day worked, so someone can
                       // work more days than "period − quota" — 22/22 +3 reads right, 25/22 does not.
                       const worked = presentCount(u.id), target = workDaysOf(u.id);
-                      return <>{Math.min(worked, target)}/{target}{worked > target && <span className="ml-1 text-emerald-600">+{worked - target}</span>}</>;
+                      return <>{Math.min(worked, target)}/{target}{worked > target && <span className="ml-1 text-emerald-600 dark:text-emerald-400">+{worked - target}</span>}</>;
                     })()}</td>
                   </tr>
                 ))}
@@ -708,7 +708,7 @@ function Attendance() {
           />
         )}
         {overrideTarget && (
-          <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={() => setOverrideTarget(null)}>
+          <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={() => setOverrideTarget(null)}>
             <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -765,11 +765,11 @@ function DeductionLogModal({ userId, name, monthKey, onClose }: { userId: string
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="text-sm font-semibold">{e.label}</span>
-          {e.cleared && <span className="rounded-full bg-emerald-100 px-1.5 text-[10px] font-bold text-emerald-700">{tr("removed")}</span>}
+          {e.cleared && <span className="rounded-full bg-emerald-100 px-1.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">{tr("removed")}</span>}
         </div>
         <div className="text-[11px] text-muted-foreground">{fmtDate(e.dateKey)}{e.detail ? ` · ${e.detail}` : ""}</div>
       </div>
-      <span className={cn("shrink-0 text-sm font-black tabular-nums", e.cleared ? "text-muted-foreground" : "text-rose-600")}>
+      <span className={cn("shrink-0 text-sm font-black tabular-nums", e.cleared ? "text-muted-foreground" : "text-rose-600 dark:text-rose-400")}>
         {e.unit === "XP" ? `${e.amount} XP` : tr("{n} day off", { n: e.amount })}
       </span>
       {!e.cleared && (
@@ -782,7 +782,7 @@ function DeductionLogModal({ userId, name, monthKey, onClose }: { userId: string
               clear.mutate(e.dateKey);
             }
           }}
-          className="shrink-0 rounded-lg border border-border p-1.5 text-muted-foreground transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+          className="shrink-0 rounded-lg border border-border p-1.5 text-muted-foreground transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50 dark:hover:border-rose-500/40 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
           title={tr("Remove this day's deduction")}
         >
           {clear.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
@@ -792,7 +792,7 @@ function DeductionLogModal({ userId, name, monthKey, onClose }: { userId: string
   );
 
   return (
-    <motion.div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm"
+    <motion.div className="fixed inset-0 z-50 grid place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.div initial={{ opacity: 0, scale: 0.96, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
         transition={{ duration: 0.18, ease: "easeOut" }} onClick={(e) => e.stopPropagation()}
@@ -816,14 +816,14 @@ function DeductionLogModal({ userId, name, monthKey, onClose }: { userId: string
             </div>
             <div className="rounded-xl bg-muted/40 px-3 py-2">
               <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{tr("XP deducted")}</div>
-              <div className="text-lg font-black tabular-nums text-rose-600">{q.data.totalXpLost}</div>
+              <div className="text-lg font-black tabular-nums text-rose-600 dark:text-rose-400">{q.data.totalXpLost}</div>
             </div>
           </div>
         )}
 
         <div className="flex-1 space-y-2 overflow-y-auto p-4">
           {q.isLoading && <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-muted" />)}</div>}
-          {q.isError && <p className="py-8 text-center text-sm font-semibold text-rose-600">{tr("Couldn't load the deductions.")}</p>}
+          {q.isError && <p className="py-8 text-center text-sm font-semibold text-rose-600 dark:text-rose-400">{tr("Couldn't load the deductions.")}</p>}
           {q.data && entries.length === 0 && (
             <p className="py-10 text-center text-sm text-muted-foreground">{tr("No deductions this period.")}</p>
           )}
@@ -918,8 +918,8 @@ function AttendanceEvidence({ kind, photoUrl, address, lat, lng, distanceMeters,
             <div className="grid h-20 w-20 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground/40"><Camera className="h-5 w-5" /></div>
           )}
           <div className="min-w-0 flex-1 space-y-1 text-xs">
-            {offsite && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">{tr("Offsite")}</span>}
-            {away && <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700">{tr("Away from the office")}</span>}
+            {offsite && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">{tr("Offsite")}</span>}
+            {away && <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">{tr("Away from the office")}</span>}
             {!away && officeName && <p className="font-semibold text-foreground">{officeName}</p>}
             <p className="leading-snug text-foreground/80">{address || (lat != null ? `${lat.toFixed(5)}, ${lng?.toFixed(5)}` : tr("Location not recorded"))}</p>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-muted-foreground">
@@ -1067,7 +1067,7 @@ function OfficesSection() {
               <div className="text-sm font-semibold">{o.name}</div>
               <div className="text-xs text-muted-foreground">{o.address || `${o.latitude?.toFixed(4)}, ${o.longitude?.toFixed(4)}`} · {o.radiusMeters}m</div>
             </div>
-            <button title={tr("Delete office")} aria-label={tr("Delete office")} disabled={del.isPending} onClick={() => { if (window.confirm(tr("Delete “{name}”? It disappears from the list and nobody can check in there anymore. Days already recorded there keep the office's name.", { name: o.name }))) del.mutate(o.id); }} className="rounded-lg border border-border p-1.5 text-muted-foreground transition-colors hover:border-rose-300 hover:text-rose-600 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /></button>
+            <button title={tr("Delete office")} aria-label={tr("Delete office")} disabled={del.isPending} onClick={() => { if (window.confirm(tr("Delete “{name}”? It disappears from the list and nobody can check in there anymore. Days already recorded there keep the office's name.", { name: o.name }))) del.mutate(o.id); }} className="rounded-lg border border-border p-1.5 text-muted-foreground transition-colors hover:border-rose-300 hover:text-rose-600 disabled:opacity-50 dark:hover:border-rose-500/40 dark:hover:text-rose-400"><Trash2 className="h-3.5 w-3.5" /></button>
             <button onClick={() => setEditOffice(o)} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><Pencil className="h-3.5 w-3.5" /> {tr("Edit")}</button>
             <button onClick={() => toggle.mutate({ id: o.id, isActive: !o.isActive })} className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold transition-colors ${o.isActive ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>{o.isActive ? tr("Active") : tr("Inactive")}</button>
           </div>
@@ -1102,7 +1102,7 @@ function OfficeComposer({ office, onClose, onCreated }: { office?: NexusOffice; 
     onError: (e: unknown) => alert(e instanceof Error ? e.message : tr("Couldn't save the office.")),
   });
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-display text-lg font-bold tracking-tight">{editing ? tr("Edit office") : tr("New office")}</h2>
         <div className="mt-4 space-y-3">
@@ -1407,7 +1407,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
               shoulder with leave/permit requests, and a reviewer has to see at a glance that this one
               is a check-out from outside the geofence, judged on distance and not on a date range. */}
           <div className="text-sm font-semibold">
-            <span className="mr-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 align-middle">{tr("Offsite check-out")}</span>
+            <span className="mr-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 align-middle dark:bg-amber-500/15 dark:text-amber-300">{tr("Offsite check-out")}</span>
             {it.user?.name ? <span className="font-normal text-muted-foreground">· {it.user.name}</span> : null}
           </div>
           <div className="text-xs text-muted-foreground">{fmtDateShort(it.attendanceDate)} · {tr("out {time}", { time: fmtTime(it.checkOutAt) })}{it.reason ? ` · ${it.reason}` : ""}</div>
@@ -1645,7 +1645,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
         {/* One list: requests and offsite check-outs, pending first and then newest decision first. */}
         {shown.map(renderEntry)}
       </div>
-      {canReview && pendingTotal > 0 && <div className="border-t border-border bg-warning/10 px-5 py-2 text-xs font-semibold text-warning-foreground">{tr("{n} waiting for review", { n: pendingTotal })}</div>}
+      {canReview && pendingTotal > 0 && <div className="border-t border-border bg-warning/10 px-5 py-2 text-xs font-semibold text-warning-foreground dark:text-warning">{tr("{n} waiting for review", { n: pendingTotal })}</div>}
       {composerOpen && <RequestComposer viewerId={viewerId} onClose={() => setComposerOpen(false)} onCreated={invalidate} />}
     </section>
   );
@@ -1868,7 +1868,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
   const missingTarget = granting && !targetUserId;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-display text-lg font-bold tracking-tight">{granting ? tr("Grant a request to someone") : tr("New attendance request")}</h2>
         {!granting && <p className="mt-1 text-xs text-muted-foreground">{tr("One day per request (annual leave: a range of days). Only the types you can use are listed.")}</p>}
@@ -2001,7 +2001,7 @@ function statusTone(status?: string | null) {
   const s = (status || "").toUpperCase();
   if (s === "APPROVED") return "bg-success/15 text-success";
   if (s === "REJECTED" || s === "CANCELED") return "bg-destructive/15 text-destructive";
-  return "bg-warning/15 text-warning-foreground";
+  return "bg-warning/15 text-warning-foreground dark:text-warning";
 }
 /** "23 Sep · 19:04" in Jakarta time, for the moment a request was settled. */
 function fmtDateTime(value?: string | null) {
@@ -2136,7 +2136,7 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
       </div>
 
       {forcePending && (
-        <div className="mt-4 flex items-start gap-2 rounded-2xl border border-amber-300/60 bg-amber-100 p-3 text-sm font-semibold text-amber-800">
+        <div className="mt-4 flex items-start gap-2 rounded-2xl border border-amber-300/60 bg-amber-100 p-3 text-sm font-semibold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{tr("You forgot to check out on {date}. Check out first before you check in today.", { date: pendingDateLabel || tr("the previous day") })}</span>
         </div>
@@ -2171,18 +2171,18 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
         </div>
       )}
       {offsitePrompt && (
-        <div className="mt-3 space-y-2 rounded-2xl border border-amber-300 bg-amber-50 p-3">
-          <div className="text-sm font-bold text-amber-800">{tr("You’re outside the office area")}</div>
-          <p className="text-xs text-amber-700">{tr("±{m}m from {office}. Check out from here? A reason is required, and it waits for BoD approval first.", { m: Math.round(offsitePrompt.distanceMeters), office: offsitePrompt.officeName })}</p>
-          <textarea value={offsiteReason} onChange={(e) => setOffsiteReason(e.target.value)} rows={2} placeholder={tr("Reason (e.g. content shoot or client meeting at X)")} className="w-full resize-none rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500" />
+        <div className="mt-3 space-y-2 rounded-2xl border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/40 dark:bg-amber-500/10">
+          <div className="text-sm font-bold text-amber-800 dark:text-amber-300">{tr("You’re outside the office area")}</div>
+          <p className="text-xs text-amber-700 dark:text-amber-300">{tr("±{m}m from {office}. Check out from here? A reason is required, and it waits for BoD approval first.", { m: Math.round(offsitePrompt.distanceMeters), office: offsitePrompt.officeName })}</p>
+          <textarea value={offsiteReason} onChange={(e) => setOffsiteReason(e.target.value)} rows={2} placeholder={tr("Reason (e.g. content shoot or client meeting at X)")} className="w-full resize-none rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500 dark:border-amber-500/40 dark:bg-background" />
           <div className="flex gap-2">
-            <button onClick={() => { setOffsitePrompt(null); setOffsiteReason(""); }} disabled={busy} className="flex-1 rounded-lg border border-border bg-white py-2 text-xs font-semibold text-muted-foreground transition hover:bg-accent disabled:opacity-50">{tr("Cancel")}</button>
+            <button onClick={() => { setOffsitePrompt(null); setOffsiteReason(""); }} disabled={busy} className="flex-1 rounded-lg border border-border bg-white py-2 text-xs font-semibold dark:bg-background text-muted-foreground transition hover:bg-accent disabled:opacity-50">{tr("Cancel")}</button>
             <button onClick={submitOffsite} disabled={!offsiteReason.trim() || busy} className="flex-[1.6] rounded-lg bg-amber-600 py-2 text-xs font-bold text-white transition hover:bg-amber-700 disabled:opacity-50">{busy ? tr("Sending…") : tr("Check out and request approval")}</button>
           </div>
         </div>
       )}
-      {okMessage && !offsitePrompt && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">{okMessage}</p>}
-      {checkOutApproval === "PENDING" && !offsitePrompt && !okMessage && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">{tr("Offsite check-out — waiting for BoD approval")}</p>}
+      {okMessage && !offsitePrompt && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">{okMessage}</p>}
+      {checkOutApproval === "PENDING" && !offsitePrompt && !okMessage && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">{tr("Offsite check-out — waiting for BoD approval")}</p>}
       {!iosOnly && message && <p className="mt-3 text-sm font-semibold text-destructive">{message}</p>}
     </section>
   );
@@ -2202,13 +2202,13 @@ function FunMetric({ icon, label, value, helper, tone, onClick }: { icon: React.
   const toneCls = {
     green: "bg-success/10 text-success border-success/30",
     purple: "bg-accent text-accent-foreground border-accent-foreground/20",
-    amber: "bg-warning/10 text-warning-foreground border-warning/30",
-    rose: "bg-rose-50 text-rose-700 border-rose-200",
+    amber: "bg-warning/10 text-warning-foreground dark:text-warning border-warning/30",
+    rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/30",
   }[tone];
   const inner = (
     <>
       <div className="flex items-center gap-3">
-        <span className="grid h-10 w-10 place-items-center rounded-2xl bg-white/70">{icon}</span>
+        <span className="grid h-10 w-10 place-items-center rounded-2xl bg-white/70 dark:bg-background/60">{icon}</span>
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide opacity-70">{label}</p>
           <h3 className="text-2xl font-black tracking-tight text-foreground">{value}</h3>
@@ -2281,7 +2281,7 @@ function DayOffLogModal({ kind, origin, onClose }: { kind: "DAY_OFF" | "RED_DATE
                 <div key={r.id} className="rounded-2xl border border-border bg-muted/20 p-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-semibold">{range}</span>
-                    {kind === "DAY_OFF" && <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", auto ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700")}>{auto ? tr("Auto · late >120m") : tr("Manual")}</span>}
+                    {kind === "DAY_OFF" && <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", auto ? "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300")}>{auto ? tr("Auto · late >120m") : tr("Manual")}</span>}
                   </div>
                   {r.reason && <p className="mt-1 text-xs text-muted-foreground">{r.reason}</p>}
                   <p className="mt-0.5 text-[11px] text-muted-foreground">{tr("Status")}: {statusLabel(r.status || "")}</p>

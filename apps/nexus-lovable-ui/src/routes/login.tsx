@@ -105,7 +105,7 @@ function LoginPage() {
 
   return (
     <div
-      className="min-h-screen w-full flex items-center justify-center p-6 relative overflow-hidden bg-[#fdfcfb]"
+      className="min-h-screen w-full flex items-center justify-center p-6 relative overflow-hidden bg-[#fdfcfb] force-light"
       style={{ fontFamily: "Plus Jakarta Sans, sans-serif", perspective: "1400px" }}
     >
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-primary/20 blur-[120px] animate-pulse will-change-[opacity]" />

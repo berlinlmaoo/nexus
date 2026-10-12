@@ -678,7 +678,7 @@ function AuditEntryDrawer({ id, row, onClose }: { id: string; row: NexusAuditLog
   const projectOrTask = tech.entityType === "project" || tech.entityType === "task";
 
   return (
-    <div lang={lang} className="fixed inset-0 z-50 flex justify-end bg-foreground/30 backdrop-blur-[2px]" onClick={onClose}>
+    <div lang={lang} className="fixed inset-0 z-50 flex justify-end bg-foreground/30 dark:bg-scrim backdrop-blur-[2px]" onClick={onClose}>
       <aside role="dialog" aria-modal="true" aria-label={t("Audit entry")}
         className="flex h-full w-full max-w-md flex-col border-l border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         <header className="flex items-start gap-3 border-b border-border px-4 py-4 sm:px-5">

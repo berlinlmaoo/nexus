@@ -235,7 +235,7 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
     <AnimatePresence>
       {open && (
         <div className="md:hidden fixed inset-0 z-[60]">
-          <motion.div className="absolute inset-0 bg-black/40 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+          <motion.div className="absolute inset-0 bg-black/40 dark:bg-scrim backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
           <motion.div
             role="dialog"
             aria-modal="true"

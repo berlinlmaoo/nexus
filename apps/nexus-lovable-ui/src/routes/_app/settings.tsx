@@ -129,12 +129,12 @@ function WorkspaceMembersSection() {
           {invite.isSuccess && invite.data && (() => {
             const r = invite.data;
             const to = r.member?.email ?? t("them");
-            if (r.emailSent === true) return <p className="text-xs font-semibold text-emerald-600">{t("Invite email sent to {email}.", { email: to })}</p>;
-            if (r.emailSent !== false) return <p className="text-xs font-semibold text-emerald-600">{t("Added {email}.", { email: to })}</p>;
+            if (r.emailSent === true) return <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{t("Invite email sent to {email}.", { email: to })}</p>;
+            if (r.emailSent !== false) return <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{t("Added {email}.", { email: to })}</p>;
             // Same link the email would have carried: a new account sets its password first.
             const origin = typeof window !== "undefined" ? window.location.origin : "";
             const signIn = r.accountCreated ? `${origin}/forgot-password?email=${encodeURIComponent(r.member?.email ?? "")}&invited=1` : `${origin}/login`;
-            return <p className="text-xs font-semibold text-amber-600">{t("Added {email}, but the email couldn't be sent. Share the sign-in link yourself:", { email: to })} <span className="select-all break-all font-mono font-normal">{signIn}</span></p>;
+            return <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">{t("Added {email}, but the email couldn't be sent. Share the sign-in link yourself:", { email: to })} <span className="select-all break-all font-mono font-normal">{signIn}</span></p>;
           })()}
         </div>
       )}
@@ -213,7 +213,7 @@ function PasswordResetModal({ target, onClose }: { target: { memberId: string; n
   const copy = () => { navigator.clipboard?.writeText(pw).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {}); };
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2"><KeyRound className="h-4 w-4 text-primary" /><h3 className="font-bold">{t("Reset password")}</h3></div>
@@ -222,7 +222,7 @@ function PasswordResetModal({ target, onClose }: { target: { memberId: string; n
         <div className="space-y-4 p-5">
           {reset.isSuccess ? (
             <div className="space-y-3">
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{t("{name}'s password was changed.", { name: target.name })}</div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">{t("{name}'s password was changed.", { name: target.name })}</div>
               <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
                 <code className="flex-1 truncate text-sm font-semibold">{pw}</code>
                 <button onClick={copy} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-primary hover:bg-accent">{copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}{copied ? t("Copied") : t("Copy")}</button>
@@ -284,7 +284,7 @@ function EmailChangeField({ currentEmail, onChanged }: { currentEmail: string; o
       <span className="text-xs font-medium text-muted-foreground">{t("Email")}</span>
       {mode === "idle" ? (
         <div className="mt-1 flex items-center gap-2">
-          <input value={currentEmail} disabled className="w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground" />
+          <input value={currentEmail} disabled className="w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground dark:text-foreground/80" />
           <button type="button" onClick={() => { setMode("editing"); setMsg(null); }} className="shrink-0 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-accent">{t("Change")}</button>
         </div>
       ) : (
@@ -444,7 +444,7 @@ function DeleteAccountDialog({ onClose }: { onClose: () => void }) {
   const confirmed = typed.trim() === "DELETE";
   const busy = del.isPending || del.isSuccess;
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm" onClick={busy ? undefined : onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm" onClick={busy ? undefined : onClose}>
       <div role="dialog" aria-modal="true" aria-labelledby="delete-account-title" className="w-full max-w-md rounded-2xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-destructive" /><h3 id="delete-account-title" className="font-bold">{t("Delete your account?")}</h3></div>

@@ -53,7 +53,7 @@ export function SuspectAttendanceAdmin() {
     <div className="space-y-4">
       <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
         <div className="flex flex-wrap items-center gap-3">
-          <ShieldAlert className="h-5 w-5 text-rose-600" />
+          <ShieldAlert className="h-5 w-5 text-rose-600 dark:text-rose-400" />
           <div className="min-w-0 flex-1">
             <div className="font-bold">{t("Attendance monitor")}</div>
             <p className="text-xs text-muted-foreground">
@@ -79,7 +79,7 @@ export function SuspectAttendanceAdmin() {
       {list.isError && <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">{list.error instanceof ApiError ? list.error.message : t("Couldn't load. Try again.")}</div>}
       {!list.isLoading && !list.isError && shown.length === 0 && (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
-          <ShieldCheck className="mx-auto mb-2 h-7 w-7 text-emerald-600" />
+          <ShieldCheck className="mx-auto mb-2 h-7 w-7 text-emerald-600 dark:text-emerald-400" />
           <div className="font-semibold">{tab === "fake" ? t("No fake GPS this period") : tab === "noface" ? t("Every selfie shows a face") : tab === "check" ? t("Nothing to look at") : t("Nothing reviewed yet")}</div>
           <p className="mt-1 text-xs text-muted-foreground">
             {tab === "fake" ? t("No phone reported a mock location and nobody jumped impossibly far.")
@@ -135,9 +135,9 @@ function FaceChip({ count }: { count: number | null }) {
 
 // English source labels; translated where they are shown.
 const LEVEL_BADGE: Record<NexusSuspectLevel, { label: string; cls: string }> = {
-  FAKE: { label: "Fake GPS", cls: "bg-rose-100 text-rose-700 ring-rose-200" },
-  NOFACE: { label: "No face", cls: "bg-orange-100 text-orange-700 ring-orange-200" },
-  CHECK: { label: "Worth a look", cls: "bg-amber-100 text-amber-800 ring-amber-200" },
+  FAKE: { label: "Fake GPS", cls: "bg-rose-100 text-rose-700 ring-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-500/30" },
+  NOFACE: { label: "No face", cls: "bg-orange-100 text-orange-700 ring-orange-200 dark:bg-orange-500/15 dark:text-orange-300 dark:ring-orange-500/30" },
+  CHECK: { label: "Worth a look", cls: "bg-amber-100 text-amber-800 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30" },
 };
 
 /** "2026-09-27" → "27 September" (a day key, so no time zone shift). */
@@ -229,8 +229,8 @@ function SuspectCard({ item, onDone }: { item: NexusSuspectItem; onDone: () => v
         {item.state === "open"
           ? item.level && <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold ring-1", LEVEL_BADGE[item.level].cls)}>{t(LEVEL_BADGE[item.level].label)}</span>
           : item.state === "invalid"
-            ? <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-700 ring-1 ring-rose-200"><ShieldX className="h-3 w-3" />{t("Not valid · TK")}</span>
-            : <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200"><CheckCircle2 className="h-3 w-3" />{t("Fine")}</span>}
+            ? <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-700 ring-1 ring-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-500/30"><ShieldX className="h-3 w-3" />{t("Not valid · TK")}</span>
+            : <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30"><CheckCircle2 className="h-3 w-3" />{t("Fine")}</span>}
       </div>
       <div className="mt-3 grid gap-2 md:grid-cols-2">
         <SideBlock label={t("Check-in")} s={item.checkIn} />
@@ -260,18 +260,18 @@ function SuspectCard({ item, onDone }: { item: NexusSuspectItem; onDone: () => v
           <button disabled={review.isPending} onClick={() => review.mutate("VALID")}
             className="rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-accent disabled:opacity-50">{t("It's fine")}</button>
           <button disabled={review.isPending} onClick={() => setWarning(true)}
-            className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50 dark:bg-amber-950/40 dark:text-amber-300">{t("Send warning…")}</button>
+            className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-500/40">{t("Send warning…")}</button>
           {fake && (confirming
             ? <button disabled={review.isPending || note.trim().length < 3} onClick={() => review.mutate("INVALID")}
                 className="rounded-xl bg-rose-600 px-3 py-2 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50">{t("Confirm: make it TK")}</button>
             : <button disabled={review.isPending} onClick={() => setConfirming(true)}
-                className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50 dark:bg-rose-950/40">{t("Not valid…")}</button>)}
+                className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50 dark:bg-rose-950/40 dark:border-rose-500/40 dark:text-rose-300">{t("Not valid…")}</button>)}
         </div>
       )}
       {item.state === "valid" && (
         <div className="mt-3 flex justify-end">
           <button onClick={() => setWarning(true)}
-            className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300">{t("Send warning…")}</button>
+            className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-500/40">{t("Send warning…")}</button>
         </div>
       )}
       {item.state !== "invalid" && <WarnDialog item={item} open={warning} onClose={() => setWarning(false)} onSent={onDone} />}

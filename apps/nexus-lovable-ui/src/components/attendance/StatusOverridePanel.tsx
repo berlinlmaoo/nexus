@@ -50,7 +50,7 @@ export function StatusOverridePanel({ userId, name, dateKey, onDone }: { userId:
           </button>
         ))}
       </div>
-      <button disabled={override.isPending} onClick={() => ask("CLEAR_PENALTY")} className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 transition hover:bg-amber-100 disabled:opacity-50">
+      <button disabled={override.isPending} onClick={() => ask("CLEAR_PENALTY")} className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 transition hover:bg-amber-100 disabled:opacity-50 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/15">
         {override.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scale className="h-3.5 w-3.5" />} {t("Clear penalty (restore XP and day off)")}
       </button>
       <p className="mt-1.5 text-[10px] text-muted-foreground">{t("Every action restores that day’s XP and day-off deductions automatically, and is recorded in the audit log.")}</p>

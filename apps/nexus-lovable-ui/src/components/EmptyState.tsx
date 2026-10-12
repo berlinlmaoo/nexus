@@ -27,10 +27,13 @@ export function EmptyState({
   compact?: boolean;
   className?: string;
 }) {
-  const tint = tone === "success" ? "text-emerald-600 bg-emerald-500" : tone === "muted" ? "text-muted-foreground bg-muted-foreground" : "text-primary bg-primary";
-  const [fg, bg] = tint.split(" ");
+  // Dark mode: success takes the theme's success token, and the default tone the accent violet (the
+  // near-white primary at 8–18% made a muddy grey stack); light is unchanged.
+  const [fg, bg] = tone === "success" ? ["text-emerald-600 dark:text-success", "bg-emerald-500 dark:bg-success"]
+    : tone === "muted" ? ["text-muted-foreground", "bg-muted-foreground"]
+    : ["text-primary dark:text-accent-foreground", "bg-primary dark:bg-accent-foreground"];
   return (
-    <div className={cn("rounded-2xl border border-dashed border-border bg-card/60 text-center", compact ? "px-6 py-8" : "px-6 py-14", className)}>
+    <div className={cn("rounded-2xl border border-dashed border-border bg-card/60 text-center dark:border-muted-foreground/30", compact ? "px-6 py-8" : "px-6 py-14", className)}>
       <div className="relative mx-auto mb-4 h-20 w-20" aria-hidden>
         <div className={cn("absolute inset-0 rounded-2xl opacity-[.08] -rotate-[9deg] -translate-x-3 translate-y-1", bg)} />
         <div className={cn("absolute inset-0 rounded-2xl opacity-[.13] rotate-[7deg] translate-x-2.5 translate-y-0.5", bg)} />

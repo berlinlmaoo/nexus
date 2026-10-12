@@ -203,7 +203,7 @@ function NotificationsModal({ open, onClose, list, unread, loading, error }: { o
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-[70] grid place-items-center p-4">
-          <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+          <motion.div className="absolute inset-0 bg-black/50 dark:bg-scrim backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
           <motion.div
             layoutId={reduce ? undefined : "notif-bell"}
             role="dialog"
@@ -413,7 +413,7 @@ function StatCardButton({ card, index, onOpen }: { card: StatCard; index: number
       transition={{ type: "spring", stiffness: 260, damping: 24, delay: index * 0.07 }}
       whileHover={reduce ? undefined : { y: -4 }}
       whileTap={reduce ? undefined : { scale: 0.98 }}
-      className="group relative flex h-full w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-3xl px-3 py-5 text-center text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 sm:px-4"
+      className="group relative flex h-full w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-3xl px-3 py-5 text-center text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 sm:px-4 dark:shadow-none!"
       style={{ backgroundImage: `linear-gradient(150deg, ${card.from} 0%, ${card.to} 100%)`, boxShadow: `0 12px 28px -12px ${card.glow}` }}
     >
       <span className="pointer-events-none absolute -right-6 -top-8 h-24 w-24 rounded-full bg-white/20 blur-2xl" />
@@ -451,7 +451,7 @@ function StatCardModal({ cards, active, onClose }: { cards: StatCard[]; active: 
       {active != null && card && (
         <div className="fixed inset-0 z-[70] grid place-items-center p-4">
           <motion.div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/50 dark:bg-scrim backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -635,7 +635,7 @@ function LevelChip() {
             <span className="font-display text-sm font-bold tracking-tight">{info.name}</span>
             <span className="text-[11px] font-semibold text-muted-foreground">Lv.{info.level}</span>
             {streak > 0 && (
-              <span className="ml-1 inline-flex items-center gap-0.5 text-[11px] font-semibold text-warning-foreground"><Flame className="h-3 w-3" />{streak}</span>
+              <span className="ml-1 inline-flex items-center gap-0.5 text-[11px] font-semibold text-warning-foreground dark:text-warning"><Flame className="h-3 w-3" />{streak}</span>
             )}
           </div>
           <div className="mt-1 flex items-center gap-2">
@@ -669,7 +669,7 @@ function LevelModal({ open, onClose, info, totalXp, streak }: { open: boolean; o
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-[70] grid place-items-center p-4">
-          <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+          <motion.div className="absolute inset-0 bg-black/50 dark:bg-scrim backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
           <motion.div
             layoutId={reduce ? undefined : "level-chip"}
             role="dialog"
@@ -690,7 +690,7 @@ function LevelModal({ open, onClose, info, totalXp, streak }: { open: boolean; o
                 <div className="flex items-baseline gap-2">
                   <span className="font-display text-xl font-bold tracking-tight">{info.name}</span>
                   <span className="text-xs font-semibold text-muted-foreground">Lv. {info.level}</span>
-                  {streak > 0 && <span className="ml-auto mr-8 inline-flex items-center gap-1 text-xs font-semibold text-warning-foreground"><Flame className="h-3.5 w-3.5" />{tn(streak, "{n} day", "{n} days")}</span>}
+                  {streak > 0 && <span className="ml-auto mr-8 inline-flex items-center gap-1 text-xs font-semibold text-warning-foreground dark:text-warning"><Flame className="h-3.5 w-3.5" />{tn(streak, "{n} day", "{n} days")}</span>}
                 </div>
                 <AnimatedBar pct={info.pct} className="mt-2 h-2 rounded-full bg-muted" barClassName="h-full rounded-full bg-primary" />
                 <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
@@ -712,7 +712,7 @@ function LevelModal({ open, onClose, info, totalXp, streak }: { open: boolean; o
                 const isCurrent = lv.level === info.level;
                 return (
                   <div key={lv.level} className={cn("flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors", isCurrent ? "bg-primary/10" : "")}>
-                    <TierBadge level={lv.level} size={28} rounded="rounded-lg" active={reached} className={isCurrent ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : undefined} />
+                    <TierBadge level={lv.level} size={28} rounded="rounded-lg" active={reached} className={isCurrent ? "ring-2 ring-primary ring-offset-1 ring-offset-card dark:ring-ring" : undefined} />
                     <span className={cn("flex-1 truncate text-sm", isCurrent ? "font-bold" : "font-medium", !reached && "text-muted-foreground")}>{lv.name}</span>
                     {isCurrent && <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">{t("Current")}</span>}
                     {reached && !isCurrent && <Check className="h-4 w-4 shrink-0 text-success" />}
@@ -815,7 +815,7 @@ function MessagesModal({ open, onClose, rows, unread, loading }: { open: boolean
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-[70] grid place-items-center p-4">
-          <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+          <motion.div className="absolute inset-0 bg-black/50 dark:bg-scrim backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
           <motion.div
             layoutId={reduce ? undefined : "messages-card"}
             role="dialog"

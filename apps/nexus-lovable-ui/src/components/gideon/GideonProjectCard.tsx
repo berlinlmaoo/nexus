@@ -113,8 +113,8 @@ export function GideonProjectCard({ projectId, projectName }: { projectId: strin
             {q.isError && <p className="mt-2 text-xs text-muted-foreground">{t("Couldn't load GIDEON's schedules.")}</p>}
             {schedules.map((s) => draft?.id === s.id ? null : (
               <div key={s.id} className="mt-2 flex flex-wrap items-center gap-3 rounded-lg bg-muted/40 px-3 py-2">
-                <button type="button" role="switch" aria-checked={s.enabled} aria-label={t("Turn the digest on or off")} disabled={!canManage || toggle.isPending} onClick={() => toggle.mutate(s)} className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed", s.enabled ? "bg-primary" : "bg-muted", !canManage && "opacity-70")}>
-                  <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all", s.enabled ? "left-[18px]" : "left-0.5")} />
+                <button type="button" role="switch" aria-checked={s.enabled} aria-label={t("Turn the digest on or off")} disabled={!canManage || toggle.isPending} onClick={() => toggle.mutate(s)} className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed", s.enabled ? "bg-primary" : "bg-muted dark:bg-control-border", !canManage && "opacity-70")}>
+                  <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all dark:bg-background", s.enabled ? "left-[18px]" : "left-0.5")} />
                 </button>
                 <div className="min-w-0 flex-1 text-xs">
                   <div className={cn("font-semibold", !s.enabled && "text-muted-foreground")}>{scheduleText(s, L)}</div>
