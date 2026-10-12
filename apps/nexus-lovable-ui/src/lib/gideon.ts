@@ -5,6 +5,7 @@
 // (the authoritative answer), `error`, `done`. Released iOS/Android keep the old one: `text` + `done`.
 import { useSyncExternalStore } from "react";
 import { getLang } from "@/lib/lang";
+import { ApiError } from "@/lib/nexus-api";
 
 /** The three GIDEON tiers. Which model each one runs is decided on the server side. */
 export const GIDEON_TIERS = [
@@ -259,7 +260,9 @@ export async function streamGideon(
 export async function loadGideonHistory(chatId?: string | null, onChat?: (chat: { id: string; title: string | null } | null) => void): Promise<GideonTurn[]> {
   try {
     const res = await fetch(`/api/gideon/history${chatId ? `?chatId=${encodeURIComponent(chatId)}` : ""}`, { credentials: "include", headers: { Accept: "application/json" } });
-    if (!res.ok) return [];
+    // A named conversation that can't be loaded is an error the page shows (QA 13 Oct 2026: it opened as an
+    // empty "new chat", hiding that it failed). The latest-chat load (no id) still falls back to empty.
+    if (!res.ok) { if (chatId) throw new ApiError(res.status, `history ${res.status}`, null); return []; }
     const data = (await res.json()) as { messages?: GideonTurn[]; chat?: { id: string; title: string | null } | null };
     onChat?.(data.chat ?? null);
     if (!Array.isArray(data.messages)) return [];
@@ -267,8 +270,9 @@ export async function loadGideonHistory(chatId?: string | null, onChat?: (chat: 
     // so this is not re-validation — it is the one thing the renderer would crash on if a build of
     // the server that predates the promise is ever what answers.
     return data.messages.map((row) => ({ ...row, attachments: Array.isArray(row?.attachments) ? row.attachments : [], meta: row?.meta && typeof row.meta === "object" ? row.meta : null }));
-  } catch {
-    // An unreachable history endpoint must not block a fresh chat.
+  } catch (e) {
+    // An unreachable history endpoint must not block a fresh chat; a named one says it failed.
+    if (chatId) throw e;
     return [];
   }
 }

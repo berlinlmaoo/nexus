@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { t as tr, useLang } from "@/lib/lang";
 import type { ReportRosterResponse, ReportRosterRow } from "@/lib/nexus-api";
 import { fmtNum, fmtPct, ratioPct, ROLE_LABEL } from "./report-format";
+import { HScroll } from "@/components/HScroll";
 
 type SortKey = "name" | "flags" | "completed" | "onTime" | "overdue" | "attendance" | "late" | "absent" | "reflections" | "xp";
 
@@ -109,7 +110,7 @@ export function TeamRosterView({ data, onOpen, teamId, onTeamChange, teamOptions
         <EmptyState compact icon={Search} tone="muted" title={tr("No one matches “{q}”", { q: query.trim() })} message={tr("Search by name, email or team.")} />
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
-          <div className="overflow-x-auto">
+          <HScroll className="">
             <table className="w-full min-w-[760px] border-separate border-spacing-0 text-sm">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -156,7 +157,7 @@ export function TeamRosterView({ data, onOpen, teamId, onTeamChange, teamOptions
                 ))}
               </tbody>
             </table>
-          </div>
+          </HScroll>
         </div>
       )}
       <p className="text-center text-[11px] text-muted-foreground">{tr("Tasks shared by several people are split between them, so counts can be fractional.")}</p>

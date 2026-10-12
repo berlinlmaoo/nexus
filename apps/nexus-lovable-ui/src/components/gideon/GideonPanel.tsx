@@ -30,6 +30,7 @@ import { citedSources } from "@/lib/gideon-cite";
 import { cn } from "@/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { LoadError } from "@/components/LoadError";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
@@ -145,6 +146,8 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   /** Why the last pick was refused before it was ever uploaded. Cleared by the next pick, or by sending. */
   const [attachError, setAttachError] = useState<string | null>(null);
   const [loading, setLoading] = useState(!startNew);
+  // A conversation that failed to load (QA 13 Oct 2026: the spinner stayed forever). Holds the id to retry.
+  const [loadFailed, setLoadFailed] = useState<{ id: string | null; error: unknown } | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [personalizeOpen, setPersonalizeOpen] = useState(false);
   /** The page context chip was removed for this conversation. */
@@ -203,6 +206,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
     setView("chat");
     setFresh(false);
     setLoading(true);
+    setLoadFailed(null);
     setTurns([]);
     setRefs([]);
     setPageDismissed(false);
@@ -217,6 +221,10 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
       const shown = new Set(restored.flatMap((r) => (r.proposals ?? []).map((p) => p.id)));
       setWaiting(pending.proposals.filter((p) => !shown.has(p.id)));
       setLoading(false);
+    }).catch((error: unknown) => {
+      if (cancelled) return;
+      setLoading(false);
+      setLoadFailed({ id, error });
     });
     return () => { cancelled = true; };
   }, []);
@@ -391,7 +399,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
       let tries = 0;
       const poll = () => {
         if (controller.signal.aborted || abortRef.current !== controller) return;
-        void loadGideonHistory(id).then((rows) => {
+        void loadGideonHistory(id).catch(() => []).then((rows) => {
           const last = rows[rows.length - 1];
           if (last && last.role === "assistant" && last.content?.trim()) setTurns(rows.map(fromHistory));
           else if (++tries < 12) window.setTimeout(poll, 5000);
@@ -546,7 +554,11 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
         {loading && turns.length === 0 && (
           <div className="grid h-40 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
         )}
-        {!loading && turns.length === 0 && (
+        {!loading && turns.length === 0 && loadFailed && (
+          <LoadError compact error={loadFailed.error} what={t("this conversation")} onRetry={() => openChat(loadFailed.id)}
+            notFoundTitle={t("This conversation doesn't exist any more")} notFoundMessage={t("It was deleted, or the link is wrong. Start a new chat below.")} />
+        )}
+        {!loading && turns.length === 0 && !loadFailed && (
           <div className={cn("flex flex-col items-center justify-center text-center", isPage ? "pt-[12vh]" : "pt-8")}>
             <span className="mb-3 grid h-14 w-14 place-items-center rounded-2xl border border-border bg-background"><GideonMark className="h-7 w-7 text-foreground/80" /></span>
             <p className={cn("font-bold tracking-tight", isPage ? "text-2xl" : "text-base")}>
@@ -850,13 +862,15 @@ export function ChatHistoryList({ activeId, onPick, onNew }: { activeId: string 
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
   const [rows, setRows] = useState<GideonChatRow[] | null>(null);
+  const [listError, setListError] = useState<unknown>(null);
   const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null);
   const [deleting, setDeleting] = useState<GideonChatRow | null>(null);
   const [tick, setTick] = useState(0);
   useEffect(() => { const h = window.setTimeout(() => setDebounced(q), 220); return () => window.clearTimeout(h); }, [q]);
   useEffect(() => {
     let alive = true;
-    listGideonChats(debounced).then((r) => alive && setRows(r.chats)).catch(() => alive && setRows([]));
+    // A failed list is not "No chats yet" (QA 13 Oct 2026). Keeps the last rows it had.
+    listGideonChats(debounced).then((r) => { if (alive) { setRows(r.chats); setListError(null); } }).catch((e: unknown) => { if (alive) { setListError(e); setRows((cur) => cur ?? []); } });
     return () => { alive = false; };
   }, [debounced, tick, activeId]);
   // Other places (sending a message) invalidate "gideon-chats"; follow along.
@@ -886,7 +900,8 @@ export function ChatHistoryList({ activeId, onPick, onNew }: { activeId: string 
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {rows === null && <div className="grid h-24 place-items-center"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>}
-        {rows !== null && rows.length === 0 && (
+        {listError != null && (rows ?? []).length === 0 && <LoadError compact error={listError} what={t("your chats")} onRetry={() => setTick((x) => x + 1)} />}
+        {rows !== null && rows.length === 0 && listError == null && (
           <div className="px-3 py-8 text-center text-xs text-muted-foreground">
             <MessageCircle className="mx-auto mb-2 h-5 w-5" />
             {debounced ? t("No chat mentions “{q}”.", { q: debounced }) : t("No chats yet. Ask something to start one.")}

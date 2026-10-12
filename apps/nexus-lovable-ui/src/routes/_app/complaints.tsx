@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEscape } from "@/hooks/use-escape";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -290,10 +291,12 @@ function TicketRow({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: bool
 /** The ticket composer / thread: a modal dialog that Esc closes (QA S-09, B36, B16). */
 function Backdrop({ children, onClose, label, wide }: { children: React.ReactNode; onClose: () => void; label: string; wide?: boolean }) {
   useEscape(onClose);
+  const boxRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(boxRef);
   return (
     <motion.div className="fixed inset-0 z-50 grid place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div role="dialog" aria-modal="true" aria-label={label} initial={{ opacity: 0, scale: 0.96, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }} transition={{ duration: 0.18, ease: "easeOut" }}
-        className={cn("flex max-h-[88vh] w-full flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-pop", wide ? "max-w-lg lg:max-w-2xl" : "max-w-lg")} onClick={(e) => e.stopPropagation()}>
+      <motion.div ref={boxRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={label} initial={{ opacity: 0, scale: 0.96, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }} transition={{ duration: 0.18, ease: "easeOut" }}
+        className={cn("flex max-h-[88vh] w-full flex-col overflow-hidden rounded-3xl border outline-none border-border bg-card shadow-pop", wide ? "max-w-lg lg:max-w-2xl" : "max-w-lg")} onClick={(e) => e.stopPropagation()}>
         {children}
       </motion.div>
     </motion.div>

@@ -12,6 +12,7 @@ import { LeaderboardCard } from "@/components/ui/leaderboard-card";
 import { XpAuditLog } from "@/components/XpAuditLog";
 import { UserXpLogModal } from "@/components/UserXpLogModal";
 import { useLang } from "@/lib/lang";
+import { competitionRank } from "@/lib/competition-rank";
 
 export const Route = createFileRoute("/_app/leaderboard")({ component: Leaderboard });
 
@@ -24,16 +25,15 @@ function Leaderboard() {
   const wsm = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 300_000 });
   const isAdmin = (ORG_HIERARCHY[wsm.data?.role ?? ""] ?? 0) >= 3; // BoD ke atas
 
-  const ranked = (board.data?.rows ?? [])
-    .slice()
-    // BoD+ are excluded server-side; rank the staff by XP then name.
-    .sort((a, b) => b.totalXp - a.totalXp || (a.name ?? "").localeCompare(b.name ?? ""))
-    .map((row, i) => ({ ...row, rank: i + 1 }));
+  // BoD+ are excluded server-side. Standard competition ranking: equal XP shares a rank, the next one skips
+  // (1, 1, 1, 4); within a tie the order is by name (lib/competition-rank.ts).
+  const ranked = competitionRank(board.data?.rows ?? [], (r) => r.totalXp, (r) => r.name ?? "");
 
-  const podiumRankings = ranked.slice(0, 3).map((r) => ({
+  const podiumRankings = ranked.slice(0, 3).map((r, i) => ({
     userId: r.userId,
     userName: r.name ?? "—",
-    rank: r.rank,
+    rank: i + 1,
+    label: r.rank,
     value: r.totalXp,
     avatarUrl: r.avatar,
   }));
