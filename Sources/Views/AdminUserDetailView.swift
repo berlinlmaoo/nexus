@@ -131,10 +131,10 @@ struct AdminUserDetailView: View {
             }
         }
         .alert(
-            exitTarget.map { "\(T("Keluarkan")) \($0.userName) \(T("dari")) \($0.teamName)?" } ?? "",
+            exitTarget.map { "\(T("Remove")) \($0.userName) \(T("from")) \($0.teamName)?" } ?? "",
             isPresented: Binding(get: { exitTarget != nil }, set: { if !$0 { exitTarget = nil } })
         ) {
-            Button(T("Keluarkan"), role: .destructive) {
+            Button(T("Remove"), role: .destructive) {
                 if let t = exitTarget {
                     exitTarget = nil
                     Task { await run { _ = try await APIClient.shared.teamRemoveMember(teamId: t.teamId, userId: t.userId) } }
@@ -144,8 +144,8 @@ struct AdminUserDetailView: View {
         } message: {
             Text(exitTarget.map { t in
                 t.losing.isEmpty
-                    ? T("Tim ini tidak menautkan project, jadi tidak ada akses yang hilang.")
-                    : "\(T("Ikut hilang: akses ke")) \(t.losing.count) project — \(t.losing.joined(separator: ", "))"
+                    ? T("This team links no projects, so no access is lost.")
+                    : "\(T("Also lost: access to")) \(t.losing.count) project — \(t.losing.joined(separator: ", "))"
             } ?? "")
         }
         .alert("\(T("Delete account")) \"\(member.displayName)\"?", isPresented: $confirmDelete) {
@@ -176,7 +176,7 @@ struct AdminUserDetailView: View {
         busy = true
         problem = nil
         do { try await body() } catch {
-            problem = (error as? LocalizedError)?.errorDescription ?? T("Gagal menyimpan.")
+            problem = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save.")
         }
         await onChanged()
         busy = false
@@ -202,7 +202,7 @@ struct AdminUserDetailView: View {
                     Button {
                         openProfile = ProfileTarget(userId: uid, name: member.displayName, avatar: member.avatarURL)
                     } label: {
-                        Label(T("Lihat profil"), systemImage: "person.crop.circle")
+                        Label(T("View profile"), systemImage: "person.crop.circle")
                             .font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
                             .padding(.horizontal, 12).padding(.vertical, 7)
                             .background(NX.accentBg, in: Capsule())
@@ -253,7 +253,7 @@ struct AdminUserDetailView: View {
     }
 
     private var roleCard: some View {
-        card(T("Peran"), T("Menentukan apa yang bisa dilihat dan diatur orang ini di NEXUS.")) {
+        card(T("Role"), T("Decides what this person can see and manage in NEXUS.")) {
             HStack(spacing: 8) {
                 ForEach(assignableRoles(viewerRole), id: \.self) { r in
                     let on = (member.role ?? "STAFF") == r
@@ -274,8 +274,8 @@ struct AdminUserDetailView: View {
     }
 
     private var accountCard: some View {
-        card(T("Akun")) {
-            navRow("person.text.rectangle", T("Foto, nama, email login, sandi"), nil) {
+        card(T("Account")) {
+            navRow("person.text.rectangle", T("Photo, name, sign-in email, password"), nil) {
                 if let uid = member.userId, let mid = member.id {
                     accountTarget = AccountEditTarget(id: uid, userId: uid, memberId: mid, name: member.displayName, email: member.emailText ?? "", avatar: member.avatarURL)
                 }
@@ -284,12 +284,12 @@ struct AdminUserDetailView: View {
     }
 
     private var approvalCard: some View {
-        card(T("Approval absensi"), T("Izin, cuti, dan sakit orang ini masuk ke atasannya. Tanpa atasan, request-nya jatuh ke semua BoD.")) {
+        card(T("Attendance approval"), T("This person's permits, leave and sick days go to their approver. Without one, requests go to every BoD.")) {
             HStack(spacing: 10) {
                 if let a = member.approver {
                     AvatarView(url: a.avatar, initial: String((a.name ?? "?").first ?? "?").uppercased(), size: 28)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(T("Atasan")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
+                        Text(T("Approver")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
                         Text(a.name ?? "—").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                     }
                 } else if member.role == "STAFF" || member.role == "MANAGER" {
@@ -297,7 +297,7 @@ struct AdminUserDetailView: View {
                     Text(T("Not placed on the Approval Chart")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.warning)
                 } else {
                     Image(systemName: "crown.fill").foregroundStyle(NX.violetText)
-                    Text(T("Puncak — tidak punya atasan")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                    Text(T("Top — no approver")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
                 }
                 Spacer(minLength: 0)
             }
@@ -308,7 +308,7 @@ struct AdminUserDetailView: View {
             }
             if !reports.isEmpty {
                 Divider().overlay(NX.border)
-                Text("\(T("Menyetujui request")) · \(reports.count)").font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
+                Text("\(T("Approves requests")) · \(reports.count)").font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
                 FlowLayout(spacing: 6) {
                     ForEach(reports, id: \.idv) { r in
                         HStack(spacing: 5) {
@@ -325,7 +325,7 @@ struct AdminUserDetailView: View {
     }
 
     private var attendanceModeCard: some View {
-        card(T("Mode absensi")) {
+        card(T("Attendance mode")) {
             Toggle(isOn: Binding(
                 get: { member.flexiTimeEnabled ?? false },
                 set: { v in
@@ -334,7 +334,7 @@ struct AdminUserDetailView: View {
                 })) {
                 VStack(alignment: .leading, spacing: 1) {
                     Label(T("Flexi Time"), systemImage: "bolt.fill").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
-                    Text(T("Masuk kapan saja 12:00–15:00, pulang = masuk + 9 jam. Jam kerja tetap diabaikan.")).font(NXFont.text(10.5)).foregroundStyle(NX.mutedFg)
+                    Text(T("Check in any time 12:00–15:00; check out = check-in + 9 hours. The fixed shift is ignored.")).font(NXFont.text(10.5)).foregroundStyle(NX.mutedFg)
                 }
             }
             .tint(NX.warning)
@@ -347,8 +347,8 @@ struct AdminUserDetailView: View {
                     Task { await run { _ = try await APIClient.shared.updateWorkspaceMemberAttendanceFlags(memberId: mid, workspaceId: wsId, noGeofence: v) } }
                 })) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Label(T("Mode Mobile"), systemImage: "iphone").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
-                    Text(T("Absen dari mana saja: geofence mati, check-out di luar kantor tanpa approval.")).font(NXFont.text(10.5)).foregroundStyle(NX.mutedFg)
+                    Label(T("Mobile mode"), systemImage: "iphone").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                    Text(T("Check in from anywhere: no geofence, check-out outside the office without approval.")).font(NXFont.text(10.5)).foregroundStyle(NX.mutedFg)
                 }
             }
             .tint(NX.violet)
@@ -396,8 +396,8 @@ struct AdminUserDetailView: View {
     }
 
     private var workHoursCard: some View {
-        card(T("Jam kerja & day off")) {
-            navRow("clock", T("Shift & jatah day off"),
+        card(T("Shift & days off")) {
+            navRow("clock", T("Shift & day-off quota"),
                    (member.flexiTimeEnabled ?? false) ? T("Flexi") : (member.shiftLabel ?? T("team / office default"))) {
                 openAttendance = true
             }
@@ -405,9 +405,9 @@ struct AdminUserDetailView: View {
     }
 
     private var googleCard: some View {
-        card(T("Google Workspace"), T("Alamat kantor yang dipakai NEXUS untuk kalender, Meet, dan email atas nama orang ini.")) {
+        card(T("Google Workspace"), T("The company address NEXUS uses for calendar, Meet and email on this person's behalf.")) {
             navRow("at", member.googleWorkspaceEmail == nil ? T("Link Google account") : T("Change Google account"),
-                   member.googleWorkspaceEmail ?? T("belum ditautkan")) {
+                   member.googleWorkspaceEmail ?? T("not linked yet")) {
                 if let uid = member.userId {
                     linkTarget = GoogleLinkTarget(id: uid, userId: uid, name: member.displayName, current: member.googleWorkspaceEmail)
                 }
@@ -443,7 +443,7 @@ struct AdminUserDetailView: View {
                     Menu {
                         Button(role: .destructive) {
                             Task { await run { _ = try await APIClient.shared.removeProjectMember(projectId: p.id, userId: uid) } }
-                        } label: { Label(T("Lepas dari project"), systemImage: "minus.circle") }
+                        } label: { Label(T("Remove from project"), systemImage: "minus.circle") }
                     } label: { chip }
                     .disabled(busy)
                 } else {
@@ -537,7 +537,7 @@ struct AdminUserDetailView: View {
     }
 
     private var dangerCard: some View {
-        card(T("Zona berbahaya")) {
+        card(T("Danger zone")) {
             navRow("trash", T("Delete account"), nil, tint: NX.danger) { confirmDelete = true }
             if let deleteProblem {
                 Text(deleteProblem).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)

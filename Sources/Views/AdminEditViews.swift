@@ -267,8 +267,8 @@ struct AdminUsersSection: View {
         let placed = members.filter { $0.approverId != nil }.count
         let n = unassignedStaff.count
         return n == 0
-            ? "\(placed) \(T("orang punya atasan, semua sudah ditaruh"))"
-            : "\(n) \(T("belum ditaruh — request-nya masuk ke semua BoD"))"
+            ? "\(placed) \(T("people have an approver; everyone is placed"))"
+            : "\(n) \(T("not placed yet — their requests go to every BoD"))"
     }
     private func count(_ r: String) -> Int { members.filter { $0.role == r }.count }
     private var rows: [WorkspaceRoster.Member] {
@@ -297,7 +297,7 @@ struct AdminUsersSection: View {
                                 HStack(spacing: 10) {
                                     Image(systemName: "arrow.triangle.branch").font(.system(size: 14, weight: .semibold)).foregroundStyle(NX.violetText)
                                     VStack(alignment: .leading, spacing: 1) {
-                                        Text(T("Bagan Approval")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                                        Text(T("Approval Chart")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                                         Text(chainSummary).font(NXFont.text(11)).foregroundStyle(unassignedStaff.isEmpty ? NX.mutedFg : NX.warning)
                                     }
                                     Spacer()
@@ -356,7 +356,7 @@ struct AdminUsersSection: View {
                                             Button {
                                                 Task { await join(r, wsId) }
                                             } label: {
-                                                Text(joining.contains(r.id) ? T("…") : T("Masukkan"))
+                                                Text(joining.contains(r.id) ? T("…") : T("Add"))
                                                     .font(NXFont.text(12, .semibold))
                                                     .padding(.horizontal, 10).padding(.vertical, 6)
                                                     .background(NX.success.opacity(0.12), in: Capsule())
@@ -1205,8 +1205,8 @@ struct GoogleLinkSheet: View {
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if data?.configured == false {
-                empty("link.badge.plus", T("Google Workspace belum disambungkan"),
-                      data?.error ?? T("Hubungi BoD untuk menyambungkannya."))
+                empty("link.badge.plus", T("Google Workspace isn't connected"),
+                      data?.error ?? T("Ask a BoD to connect it."))
             } else if let made {
                 madePanel(made)
             } else if making {
@@ -1220,18 +1220,18 @@ struct GoogleLinkSheet: View {
                         }
                         .disabled(busy)
                     } footer: {
-                        Text(T("Mengisi satu seat lisensi Workspace."))
+                        Text(T("Uses one Workspace licence seat."))
                             .font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
                     }
                     if let current = target.current {
                         Section {
                             Button(role: .destructive) { Task { await link(nil) } } label: {
-                                Label("\(T("Lepas tautan")) — \(current)", systemImage: "link.badge.plus")
+                                Label("\(T("Unlink")) — \(current)", systemImage: "link.badge.plus")
                             }
                             .disabled(busy)
                         }
                     }
-                    Section(T("Akun di Workspace")) {
+                    Section(T("Workspace account")) {
                         ForEach(rows) { a in
                             // Yang sudah dipakai orang LAIN tidak bisa dipilih, dan menyebut
                             // pemakainya. Indeks unik di server menolaknya juga, tapi ditolak
@@ -1250,7 +1250,7 @@ struct GoogleLinkSheet: View {
                                                 Text(T("suspended")).font(NXFont.text(10)).foregroundStyle(NX.warning)
                                             }
                                             if let owner = a.linkedTo, takenByOther {
-                                                Text("\(T("dipakai")) \(owner.name)").font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
+                                                Text("\(T("in use")) \(owner.name)").font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
                                             }
                                         }
                                     }
@@ -1320,16 +1320,16 @@ struct GoogleLinkSheet: View {
                         }
                     } label: {
                         HStack(spacing: 4) {
-                            Text(domain.isEmpty ? T("pilih") : domain).font(NXFont.text(13, .semibold))
+                            Text(domain.isEmpty ? T("choose") : domain).font(NXFont.text(13, .semibold))
                             Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold))
                         }
                         .foregroundStyle(NX.violetText)
                     }
                 }
             } header: {
-                Text(T("Alamat"))
+                Text(T("Address"))
             } footer: {
-                Text(T("Akun baru mengisi satu seat lisensi Workspace. Sandi sementaranya cuma bisa dilihat sekali."))
+                Text(T("A new account uses one Workspace licence seat. Its temporary password can be seen only once."))
                     .font(NXFont.text(10))
             }
             if let problem {
@@ -1338,7 +1338,7 @@ struct GoogleLinkSheet: View {
             Section {
                 Button { Task { await create() } } label: {
                     HStack {
-                        Text(busy ? T("Membuat…") : T("Buat akun")).font(NXFont.text(14, .semibold))
+                        Text(busy ? T("Creating…") : T("Create account")).font(NXFont.text(14, .semibold))
                         Spacer()
                         if busy { ProgressView() }
                     }
@@ -1354,9 +1354,9 @@ struct GoogleLinkSheet: View {
     private func madePanel(_ r: CreatedGoogleAccount) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Label("\(r.account.email) \(T("dibuat"))", systemImage: "checkmark.seal.fill")
+                Label("\(r.account.email) \(T("created"))", systemImage: "checkmark.seal.fill")
                     .font(NXFont.display(15, .bold)).foregroundStyle(NX.success)
-                Text(T("Sandi sementara — salin sekarang, tidak bisa dilihat lagi:"))
+                Text(T("Temporary password — copy it now, it can't be shown again:"))
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 HStack {
                     Text(r.account.temporaryPassword)
@@ -1373,24 +1373,24 @@ struct GoogleLinkSheet: View {
                 .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
 
-                Text(T("Dia wajib menggantinya saat login pertama."))
+                Text(T("They must change it at their first sign-in."))
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
 
                 if r.notified?.email == true {
-                    Text("\(T("Sandi sudah dikirim ke")) \(r.notified?.emailTo ?? "-"). \(T("Kamu tidak perlu meneruskannya."))")
+                    Text("\(T("The password was sent to")) \(r.notified?.emailTo ?? "-"). \(T("You don't need to pass it on."))")
                         .font(NXFont.text(11)).foregroundStyle(NX.success)
                 } else {
                     // Kegagalan email harus terlihat SEKARANG, selagi sandinya masih di layar.
                     // Ditemukan nanti lewat orang yang bingung berarti sandinya sudah hilang.
-                    Text(T("Email GAGAL terkirim — sampaikan sandi ini sendiri, dan jangan lewat chat grup."))
+                    Text(T("The email was NOT sent — give this password to them yourself, not in a group chat."))
                         .font(NXFont.text(11, .semibold)).foregroundStyle(NX.danger)
                 }
                 if r.linked == false {
-                    Text(r.error ?? T("Akunnya dibuat tapi belum tertaut ke profil ini."))
+                    Text(r.error ?? T("The account was created but isn't linked to this profile yet."))
                         .font(NXFont.text(11)).foregroundStyle(NX.warning)
                 }
 
-                Button(T("Sudah disalin")) {
+                Button(T("Copied")) {
                     made = nil
                     making = false
                     onDone()
@@ -1417,7 +1417,7 @@ struct GoogleLinkSheet: View {
         } catch {
             // Pesan server dibawa apa adanya: "alamat sudah dipakai" dan "domain tidak dikenal"
             // adalah dua hal berbeda, dan menggantinya dengan "gagal" membuang petunjuknya.
-            problem = (error as? LocalizedError)?.errorDescription ?? T("Gagal membuat akun.")
+            problem = (error as? LocalizedError)?.errorDescription ?? T("Couldn't create the account.")
         }
     }
 
@@ -1432,7 +1432,7 @@ struct GoogleLinkSheet: View {
 
     private func load() async {
         do { data = try await APIClient.shared.googleWorkspaceAccounts() }
-        catch { problem = (error as? LocalizedError)?.errorDescription ?? T("Gagal memuat daftar akun.") }
+        catch { problem = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load the accounts.") }
         loading = false
     }
 
@@ -1447,7 +1447,7 @@ struct GoogleLinkSheet: View {
         } catch {
             // Pesan server dibawa apa adanya: "sudah ditautkan ke X" dan "tidak ada di Google"
             // adalah dua hal berbeda, dan menggantinya dengan "gagal" membuang petunjuknya.
-            problem = (error as? LocalizedError)?.errorDescription ?? T("Gagal menautkan.")
+            problem = (error as? LocalizedError)?.errorDescription ?? T("Couldn't link it.")
         }
     }
 }
@@ -1611,7 +1611,7 @@ struct ApproverPickSheet: View {
     var body: some View {
         List {
             Section {
-                Text(T("Request absensinya akan masuk ke orang ini saja. BoD tetap bisa override."))
+                Text(T("Their attendance requests go to this person only. A BoD can still override."))
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
             ForEach(roleOrder, id: \.self) { role in
@@ -1637,7 +1637,7 @@ struct ApproverPickSheet: View {
             if target.current != nil {
                 Section {
                     Button(role: .destructive) { onPick(nil) } label: {
-                        Label(T("Lepas dari bagan — request-nya kembali ke BoD"), systemImage: "arrow.uturn.backward")
+                        Label(T("Remove from the chart — requests go back to the BoD"), systemImage: "arrow.uturn.backward")
                     }
                 }
             }
@@ -1699,29 +1699,29 @@ struct AccountEditSheet: View {
                     }
                     .disabled(busy)
                 }
-            } header: { Text(T("Foto profil")) }
+            } header: { Text(T("Profile photo")) }
 
             Section {
                 TextField(T("Name"), text: $name).textInputAutocapitalization(.words)
-                TextField(T("Email login"), text: $email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+                TextField(T("Sign-in email"), text: $email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
                 Button { Task { await saveIdentity() } } label: {
                     HStack { Text(T("Save name & email")); Spacer(); if busy { ProgressView() } }
                 }
                 .disabled(!identityDirty || busy)
-            } header: { Text(T("Identitas")) }
+            } header: { Text(T("Identity")) }
 
             Section {
                 // Teks biasa, bukan SecureField: yang mengetik BoD, dan sandi yang tidak terlihat
                 // adalah sandi yang salah ketik lalu disampaikan salah.
-                TextField(T("Sandi baru (min. 8 karakter)"), text: $password)
+                TextField(T("New password (min. 8 characters)"), text: $password)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
                     .font(.system(.body, design: .monospaced))
                 Button(role: .destructive) { Task { await savePassword() } } label: {
                     Text(T("Change password"))
                 }
                 .disabled(password.count < 8 || busy)
-            } header: { Text(T("Sandi")) } footer: {
-                Text(T("Sampaikan sandi barunya langsung ke orangnya, jangan lewat chat grup."))
+            } header: { Text(T("Password")) } footer: {
+                Text(T("Give the new password to the person directly, not in a group chat."))
             }
 
             if let notice { Section { Text(notice).font(NXFont.text(12)).foregroundStyle(NX.success) } }
@@ -1740,7 +1740,7 @@ struct AccountEditSheet: View {
         problem = nil; notice = nil
         defer { busy = false }
         do { try await work(); notice = done }
-        catch { problem = (error as? LocalizedError)?.errorDescription ?? T("Gagal.") }
+        catch { problem = (error as? LocalizedError)?.errorDescription ?? T("Failed.") }
     }
 
     private func saveIdentity() async {
@@ -1757,7 +1757,7 @@ struct AccountEditSheet: View {
     private func savePassword() async {
         let pw = password
         await run({ try await APIClient.shared.updateAdminAccount(userId: target.userId, password: pw) },
-                  done: T("Sandi diganti."))
+                  done: T("Password changed."))
         if problem == nil { password = "" }
     }
 
@@ -1777,7 +1777,7 @@ struct AccountEditSheet: View {
             // Tampilkan langsung dari data yang baru diunggah; URL server akan menggantikannya
             // saat daftar dimuat ulang sesudah sheet ditutup.
             avatarURL = nil
-        }, done: T("Foto profil diganti."))
+        }, done: T("Profile photo changed."))
     }
 }
 
@@ -1816,7 +1816,7 @@ struct ProjectPickSheet: View {
                 }
             }
             if rows.isEmpty {
-                Text(projects.isEmpty ? T("Sudah masuk semua project.") : T("Nothing matches that."))
+                Text(projects.isEmpty ? T("Already in every project.") : T("Nothing matches that."))
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }
         }
