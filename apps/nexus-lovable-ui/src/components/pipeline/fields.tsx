@@ -1,7 +1,9 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { SelectPicker } from "@/components/SelectPicker";
+import { DateField as AppDateField } from "@/components/DateField";
+import { groupIdrDigits, normalizeNumberFieldValue } from "@/lib/custom-field-number";
 
 /**
  * The Pipeline Dashboard's edit-in-place controls (owner, 9 Oct 2026). Each one keeps its own draft while
@@ -26,9 +28,11 @@ function useDraft<T>(value: T) {
 }
 
 export function TextField({
-  value, onCommit, placeholder, label, multiline = false, disabled, className, maxLength = 500, required = false,
+  value, onCommit, placeholder, label, multiline = false, autoGrow = false, disabled, className, maxLength = 500, required = false,
 }: {
   value: string; onCommit: (v: string) => void; placeholder?: string; label: string; multiline?: boolean;
+  /** One line of text that wraps instead of scrolling sideways (a long deal name on a phone); Enter saves. */
+  autoGrow?: boolean;
   disabled?: boolean; className?: string; maxLength?: number; required?: boolean;
 }) {
   const { draft, setDraft, focused } = useDraft(value);
@@ -40,7 +44,7 @@ export function TextField({
   };
   const onKey = (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (e.key === "Escape") { setDraft(value); focused.current = false; (e.target as HTMLElement).blur(); }
-    if (e.key === "Enter" && !multiline) (e.target as HTMLElement).blur();
+    if (e.key === "Enter" && !multiline) { e.preventDefault(); (e.target as HTMLElement).blur(); }
   };
   const common = {
     value: draft,
@@ -53,56 +57,74 @@ export function TextField({
     onBlur: commit,
     onKeyDown: onKey,
   };
+  if (autoGrow) {
+    return <textarea {...common} rows={1} onChange={(e) => setDraft(e.target.value.replace(/\n/g, " "))} className={cn(FIELD, "resize-none overflow-hidden [field-sizing:content]", className)} />;
+  }
   return multiline
     ? <textarea {...common} rows={3} className={cn(FIELD, "min-h-20 resize-y leading-relaxed", className)} />
     : <input {...common} type="text" className={cn(FIELD, className)} />;
 }
 
-/** Rupiah, typed as digits; shown with thousands separators when not being edited. */
+/**
+ * Rupiah (pipeline UI pass, 12 Oct 2026): grouped the Indonesian way while typing and at rest —
+ * "Rp 15.096.000" in both languages, the "Rp" right next to the amount (it used to sit at the far left of
+ * the box with the number at the far right, and English showed "15,096,000"). Typed separators are
+ * swallowed; a paste ("Rp 1.500.000,00", "17jt") is read whole, like the app's RupiahInput. Saves on blur
+ * or Enter; Esc puts the saved value back.
+ */
 export function MoneyField({
   value, onCommit, label, allowNegative = false, disabled, className, cell = false,
 }: {
   value: number; onCommit: (v: number) => void; label: string; allowNegative?: boolean; disabled?: boolean; className?: string; cell?: boolean;
 }) {
-  const { locale } = useLang();
-  // Nothing typed yet reads as empty, not as a bold "0" on every row (owner, 9 Oct 2026); "0" stays the
-  // placeholder, and a saved zero is still a zero.
-  const show = (n: number) => (n ? new Intl.NumberFormat(locale).format(n) : "");
-  const [draft, setDraft] = useState(show(value));
+  // The draft is plain digits (with a leading "-" for a negative amount); nothing typed reads as empty,
+  // not as a bold "0" on every row (owner, 9 Oct 2026). A saved zero is still a zero.
+  const raw = (n: number) => (n ? String(Math.round(n)) : "");
+  const [draft, setDraft] = useState(raw(value));
   const focused = useRef(false);
   useEffect(() => {
-    if (!focused.current) setDraft(show(value));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, locale]);
+    if (!focused.current) setDraft(raw(value));
+  }, [value]);
+  const clean = (text: string) => {
+    const neg = allowNegative && text.includes("-");
+    const digits = text.replace(/\D+/g, "").replace(/^0+(?=\d)/, "");
+    return digits ? `${neg ? "-" : ""}${digits}` : neg ? "-" : "";
+  };
   const commit = () => {
     focused.current = false;
-    const neg = allowNegative && /^\s*-/.test(draft);
-    const digits = draft.replace(/[^\d]/g, "");
-    const n = digits ? Number(digits) * (neg ? -1 : 1) : 0;
-    setDraft(show(n));
+    const digits = draft.replace(/\D+/g, "");
+    const n = digits ? Number(digits) * (draft.startsWith("-") ? -1 : 1) : 0;
+    setDraft(raw(n));
     if (n !== value) onCommit(n);
   };
+  const onPaste = (e: ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData("text");
+    if (!text.trim()) return;
+    e.preventDefault();
+    const n = normalizeNumberFieldValue(text, "currency-idr");
+    setDraft(clean(allowNegative ? n : n.replace("-", "")));
+  };
+  const grouped = draft === "-" ? "-" : groupIdrDigits(draft);
   return (
     <div className={cn("relative", className)}>
-      {/* In a table cell the "Rp" shows only next to an amount, so an empty column stays quiet. */}
-      {(!cell || draft !== "") && (
-        <span aria-hidden className={cn("pointer-events-none absolute top-1/2 -translate-y-1/2 text-xs text-muted-foreground", cell ? "left-1.5" : "left-2.5")}>Rp</span>
-      )}
       <input
         type="text"
         inputMode={allowNegative ? "text" : "numeric"}
+        autoComplete="off"
         aria-label={label}
-        value={draft}
-        placeholder={cell ? undefined : "0"}
+        // In a table cell the "Rp" shows only next to an amount, so an empty column stays quiet.
+        value={grouped ? `Rp ${grouped}` : ""}
+        placeholder={cell ? undefined : "Rp 0"}
         disabled={disabled}
-        onFocus={(e) => { focused.current = true; setDraft(value ? String(value) : ""); requestAnimationFrame(() => e.target.select()); }}
-        onChange={(e) => setDraft(e.target.value)}
+        onFocus={(e) => { focused.current = true; requestAnimationFrame(() => e.target.select()); }}
+        onChange={(e) => setDraft(clean(e.target.value))}
+        onPaste={onPaste}
         onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === "Enter") (e.target as HTMLElement).blur();
-          if (e.key === "Escape") { focused.current = false; setDraft(show(value)); (e.target as HTMLElement).blur(); }
+          if (e.key === "Escape") { focused.current = false; setDraft(raw(value)); (e.target as HTMLElement).blur(); }
         }}
-        className={cn(cell ? CELL : FIELD, "text-right tabular-nums", cell ? "pl-7" : "pl-8")}
+        className={cn(cell ? CELL : FIELD, "tabular-nums", cell && "text-right")}
       />
     </div>
   );
@@ -165,24 +187,28 @@ export function SelectField<T extends string | number>({
   );
 }
 
+/**
+ * A date: the app's DateField (calendar popover with Today / Clear, "14 Oct 2026" in the interface
+ * language) instead of the browser's "mm/dd/yyyy" box (pipeline UI pass, 12 Oct 2026). Saves on pick.
+ * The field variant keeps the bordered box of the drawer's other fields.
+ */
 export function DateField({
   value, onCommit, label, disabled, className, cell = false,
 }: { value: string | null; onCommit: (v: string | null) => void; label: string; disabled?: boolean; className?: string; cell?: boolean }) {
-  const { draft, setDraft, focused } = useDraft(value ?? "");
+  const { t } = useLang();
   return (
-    <input
-      type="date"
-      aria-label={label}
-      value={draft}
+    <AppDateField
+      value={value}
+      ariaLabel={label}
       disabled={disabled}
-      onFocus={() => { focused.current = true; }}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => {
-        focused.current = false;
-        const v = draft || null;
-        if (v !== (value ?? null)) onCommit(v);
-      }}
-      className={cn(cell ? CELL : FIELD, "tabular-nums", className)}
+      placeholder={cell ? "" : t("Pick a date")}
+      onChange={(v) => { if ((v ?? null) !== (value ?? null)) onCommit(v); }}
+      className={cn(
+        cell
+          ? "min-h-0 rounded-md border border-transparent px-1.5 py-1 hover:border-border hover:bg-transparent"
+          : "min-h-[34px] rounded-lg border border-border bg-background px-2.5 py-1.5 hover:border-control-border hover:bg-background disabled:opacity-60 pointer-coarse:min-h-[44px]",
+        className,
+      )}
     />
   );
 }

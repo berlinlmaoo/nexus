@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { daysBetween } from "@/lib/pipeline";
 import type { PipelineDeal } from "@/lib/pipeline-api";
-import { HealthPill, dealPayment, fmtDay, fmtIdr, personName, useReasonText, useVocabLabels } from "./pipeline-ui";
+import { HEALTH_TEXT, HealthPill, dealPayment, fmtDay, fmtIdr, personName, useReasonText, useVocabLabels } from "./pipeline-ui";
 import { bySeverity } from "./PipelineBoard";
 
 /**
@@ -34,7 +34,7 @@ export function PipelineHealth({ deals, today, onOpen }: { deals: PipelineDeal[]
   const blockers = live.filter((d) => d.blocker).sort(bySeverity);
 
   const DealLink = ({ d }: { d: PipelineDeal }) => (
-    <button type="button" onClick={() => onOpen(d.id)} className="min-w-0 truncate rounded text-left text-sm font-semibold underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+    <button type="button" onClick={() => onOpen(d.id)} className="block min-w-0 max-w-full truncate rounded text-left text-sm font-medium underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
       {d.name || t("Untitled deal")}
     </button>
   );
@@ -61,7 +61,7 @@ export function PipelineHealth({ deals, today, onOpen }: { deals: PipelineDeal[]
                   <p className="text-xs text-muted-foreground">{d.code} · {labels.stage(d.stage)}{personName(d.pm, d.pmName) ? ` · PM ${personName(d.pm, d.pmName)}` : ""}</p>
                   <ul className="mt-1.5 flex flex-wrap gap-1.5">
                     {d.health.reasons.map((r, i) => (
-                      <li key={i} className={cn("max-w-full truncate rounded-md px-1.5 py-0.5 text-xs", d.health.key === "CRITICAL" ? "bg-destructive/10 text-red-700 dark:text-red-300" : "bg-warning/15 text-amber-800 dark:text-amber-300")}>
+                      <li key={i} className={cn("max-w-full truncate rounded-md px-1.5 py-0.5 text-xs", d.health.key === "CRITICAL" ? "bg-[var(--st-red-bg)] text-[var(--st-red-fg)]" : "bg-[var(--st-yellow-bg)] text-[var(--st-yellow-fg)]")}>
                         {reason(r)}
                       </li>
                     ))}
@@ -80,12 +80,12 @@ export function PipelineHealth({ deals, today, onOpen }: { deals: PipelineDeal[]
           ) : (
             <div className="divide-y divide-border">
               {([
-                [t("Overdue"), overdueActions, "text-red-700 dark:text-red-300"],
+                [t("Overdue"), overdueActions, HEALTH_TEXT.CRITICAL],
                 [t("Today"), todayActions, "text-foreground"],
                 [t("This week"), weekActions, "text-muted-foreground"],
               ] as const).filter(([, list]) => list.length > 0).map(([label, list, tone]) => (
                 <div key={label} className="px-4 py-2.5">
-                  <h4 className={cn("text-2xs font-semibold uppercase tracking-wider", tone)}>{label}</h4>
+                  <h4 className={cn("text-xs font-medium", tone)}>{label}</h4>
                   <ul className="mt-1 space-y-2">
                     {list.map((d) => (
                       <li key={d.id} className="min-w-0">
@@ -110,11 +110,11 @@ export function PipelineHealth({ deals, today, onOpen }: { deals: PipelineDeal[]
             <ul className="divide-y divide-border">
               {late.map((d) => (
                 <li key={d.id} className="flex items-baseline justify-between gap-3 px-4 py-2.5">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <DealLink d={d} />
-                    <p className="text-xs text-muted-foreground">{dealPayment(d).status} · {fmtIdr(lateAmount(d), lang)}</p>
+                    <p className="text-xs text-muted-foreground">{labels.status(dealPayment(d).status)} · {fmtIdr(lateAmount(d), lang)}</p>
                   </div>
-                  <span className={cn("shrink-0 text-sm font-semibold tabular-nums", d.daysOverdue > 7 ? "text-red-700 dark:text-red-300" : "text-amber-800 dark:text-amber-300")}>
+                  <span className={cn("shrink-0 text-sm font-medium tabular-nums", d.daysOverdue > 7 ? HEALTH_TEXT.CRITICAL : HEALTH_TEXT.ATTENTION)}>
                     {tn(d.daysOverdue, "{n} day", "{n} days")}
                   </span>
                 </li>
@@ -131,7 +131,7 @@ export function PipelineHealth({ deals, today, onOpen }: { deals: PipelineDeal[]
               {blockers.map((d) => (
                 <li key={d.id} className="px-4 py-2.5">
                   <DealLink d={d} />
-                  <p className="text-xs text-amber-800 dark:text-amber-300">{d.blocker}</p>
+                  <p className={cn("text-xs", d.health.key === "CRITICAL" ? HEALTH_TEXT.CRITICAL : HEALTH_TEXT.ATTENTION)}>{d.blocker}</p>
                 </li>
               ))}
             </ul>
@@ -144,8 +144,8 @@ export function PipelineHealth({ deals, today, onOpen }: { deals: PipelineDeal[]
 
 function Panel({ icon, title, meta, children }: { icon: ReactNode; title: string; meta?: string; children: ReactNode }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
-      <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+    <section className="overflow-hidden rounded-xl border border-border bg-card">
+      <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
         <h3 className="flex items-center gap-2 text-sm font-semibold"><span className="text-muted-foreground">{icon}</span>{title}</h3>
         {meta && <span className="text-xs tabular-nums text-muted-foreground">{meta}</span>}
       </header>
@@ -157,7 +157,7 @@ function Panel({ icon, title, meta, children }: { icon: ReactNode; title: string
 function Calm({ text }: { text: string }) {
   return (
     <p className="flex items-start gap-2 px-4 py-4 text-sm text-muted-foreground">
-      <CircleCheck aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+      <CircleCheck aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-[var(--st-green-dot)]" />
       {text}
     </p>
   );

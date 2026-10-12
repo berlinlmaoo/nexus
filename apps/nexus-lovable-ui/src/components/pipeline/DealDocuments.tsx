@@ -137,13 +137,13 @@ export function DealDocuments({
 
   return (
     <div
-      className={cn("relative space-y-2 rounded-xl", dragging && "outline-2 outline-offset-4 outline-dashed outline-primary")}
+      className={cn("relative space-y-2 rounded-lg", dragging && "outline-2 outline-offset-4 outline-dashed outline-primary")}
       onDragOver={(e) => { if (canEdit && e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragging(true); } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
       onDrop={onDrop}
     >
       {dragging && (
-        <div aria-hidden className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-xl bg-background/85 text-sm font-medium text-primary">
+        <div aria-hidden className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-lg bg-background/85 text-sm font-medium text-primary">
           <span className="inline-flex items-center gap-1.5"><Paperclip className="h-4 w-4" /> {t("Drop files to attach them to this deal")}</span>
         </div>
       )}
@@ -151,13 +151,13 @@ export function DealDocuments({
       {deal.links.length === 0 && uploads.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("No SPK, contract, MOU or invoice yet. Attach the file or paste a link.")}</p>
       ) : (
-        <ul className="divide-y divide-border rounded-xl border border-border">
+        <ul className="divide-y divide-border rounded-lg border border-border">
           {deal.links.map((l) => {
             const isFile = l.kind === "file";
             const Icon = isFile ? iconFor(l) : Link2;
             return (
               <li key={l.id} className="flex items-center gap-2 px-3 py-2">
-                <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-2xs font-semibold">{labels.link(l.type)}</span>
+                <span className="shrink-0 whitespace-nowrap rounded-full bg-[var(--st-gray-bg)] px-2 text-xs font-medium leading-5 text-[var(--st-gray-fg)]">{labels.link(l.type)}</span>
                 <Icon aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <a href={l.url} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-1 text-sm font-medium text-primary underline-offset-2 hover:underline">
@@ -225,7 +225,7 @@ export function DealDocuments({
       )}
 
       {canEdit && (
-        <form onSubmit={(e) => { e.preventDefault(); addLink(); }} className="grid gap-2 sm:grid-cols-[8.5rem_1fr]">
+        <form onSubmit={(e) => { e.preventDefault(); addLink(); }} className="grid gap-2 sm:grid-cols-[10.5rem_1fr]">
           <SelectPicker variant="field" ariaLabel={t("Link type")} value={type} onChange={setType} options={LINK_TYPES.map((k) => ({ value: k, label: labels.link(k) }))} className="w-full rounded-lg px-2.5 py-1.5" />
           <div className="relative">
             <Link2 aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />

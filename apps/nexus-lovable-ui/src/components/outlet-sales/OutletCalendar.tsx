@@ -61,10 +61,10 @@ export function OutletCalendar({
 
   return (
     <div className="flex flex-col gap-4">
-      <div role="group" aria-label={monthLabel(data.month, locale)} className="overflow-clip rounded-2xl border border-border bg-card shadow-soft">
+      <div role="group" aria-label={monthLabel(data.month, locale)} className="overflow-clip rounded-xl border border-border bg-card">
         <div aria-hidden className="grid grid-cols-7 border-b border-border bg-muted/40">
           {weekdays.map((w) => (
-            <div key={w} className="truncate px-1 py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:px-2 sm:text-left">{w}</div>
+            <div key={w} className="truncate px-1 py-2 text-center text-xs font-medium text-muted-foreground sm:px-2 sm:text-left">{w}</div>
           ))}
         </div>
         <div className="grid grid-cols-7">
@@ -136,7 +136,7 @@ export function OutletCalendar({
           </button>
         </div>
         {dayEvents.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border bg-card/60 px-4 py-6 text-center text-sm text-muted-foreground">
+          <p className="rounded-xl border border-dashed border-border bg-card/60 px-4 py-6 text-center text-sm text-muted-foreground">
             {t("No event on this day. Add one to fill its report after the night.")}
           </p>
         ) : (

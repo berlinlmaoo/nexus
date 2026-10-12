@@ -1,5 +1,6 @@
 import { AlertTriangle, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { COLOR_PRESETS } from "@/lib/project-views";
 import { useLang, type Lang } from "@/lib/lang";
 import {
   daysOverdueOf,
@@ -36,10 +37,31 @@ export function fmtIdr(n: number | null | undefined, lang: Lang): string {
   return `${n < 0 ? "-" : ""}Rp${num}${s}`;
 }
 
-/** Full rupiah: Rp950.000.000. */
-export function fmtIdrFull(n: number | null | undefined, lang: Lang): string {
+/**
+ * Full rupiah: Rp950.000.000 — always grouped the Indonesian way (dots), in both languages (pipeline UI
+ * pass, 12 Oct 2026: "Rp1,000,000,000" in English read like dollars). `_lang` stays for the callers.
+ */
+export function fmtIdrFull(n: number | null | undefined, _lang?: Lang): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "–";
-  return `${n < 0 ? "-" : ""}Rp${new Intl.NumberFormat(lang === "en" ? "en-GB" : "id-ID").format(Math.abs(Math.round(n)))}`;
+  return `${n < 0 ? "-" : ""}Rp${IDR_GROUPING.format(Math.abs(Math.round(n)))}`;
+}
+
+/** id-ID digit grouping (1.250.000), for every amount on the pipeline whatever the interface language. */
+export const IDR_GROUPING = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
+
+/**
+ * Sentence case for a label shown on screen (Notion-style labels, 12 Oct 2026): "Fully Executed" →
+ * "Fully executed", "Waiting BAST" stays "Waiting BAST" (an all-caps word is an acronym), "N/A" stays.
+ * Display only — the stored values are the GM's keys and never change.
+ */
+export function sentenceCase(s: string): string {
+  if (!s) return s;
+  let first = true;
+  return s.replace(/[\p{L}][\p{L}'’]*/gu, (w) => {
+    const out = first ? w : w.length > 1 && w === w.toUpperCase() ? w : w.toLowerCase();
+    first = false;
+    return out;
+  });
 }
 
 export function fmtPct(p: number): string {
@@ -66,8 +88,10 @@ export function fmtDayShort(iso: string | null | undefined, locale: string): str
 export function useVocabLabels() {
   const { t } = useLang();
   return {
-    stage: (k: string) => t(k),
-    risk: (k: string) => (k === "Aman" ? t("On track") : t(k)),
+    stage: (k: string) => sentenceCase(t(k)),
+    risk: (k: string) => sentenceCase(k === "Aman" ? t("On track") : t(k)),
+    /** A status value of the GM's lists (contract, payment, closing …), as shown: sentence case. */
+    status: (k: string | null | undefined) => (k ? sentenceCase(t(k)) : ""),
     link: (k: string) => (k === "Kontrak" ? t("Contract") : k === "Lainnya" ? t("Other link") : k === "SPK" ? t("SPK (Work Order)") : k),
     plain: (k: string) => k,
   };
@@ -83,27 +107,36 @@ export const HEALTH_LABEL: Record<HealthKey, string> = {
   NONE: "Lost",
 };
 
-/** Text + soft background per health, from the app's semantic tokens (both themes). */
+/**
+ * Text + soft background per health, from the app's option palette (--st-*, the same nine Notion colours
+ * as task status pills; both themes come from the tokens).
+ */
 export const HEALTH_TONE: Record<HealthKey, string> = {
-  CRITICAL: "bg-destructive/10 text-red-700 dark:bg-destructive/15 dark:text-red-300",
-  ATTENTION: "bg-warning/15 text-amber-800 dark:text-amber-300",
-  HEALTHY: "bg-success/10 text-emerald-700 dark:text-emerald-300",
-  NOT_STARTED: "bg-muted text-muted-foreground",
-  NONE: "bg-muted text-muted-foreground",
+  CRITICAL: "bg-[var(--st-red-bg)] text-[var(--st-red-fg)]",
+  ATTENTION: "bg-[var(--st-yellow-bg)] text-[var(--st-yellow-fg)]",
+  HEALTHY: "bg-[var(--st-green-bg)] text-[var(--st-green-fg)]",
+  NOT_STARTED: "bg-[var(--st-gray-bg)] text-[var(--st-gray-fg)]",
+  NONE: "bg-[var(--st-gray-bg)] text-[var(--st-gray-fg)]",
 };
 
 export const HEALTH_DOT: Record<HealthKey, string> = {
-  CRITICAL: "bg-destructive",
-  ATTENTION: "bg-warning",
-  HEALTHY: "bg-success",
-  NOT_STARTED: "bg-muted-foreground/50",
-  NONE: "bg-muted-foreground/30",
+  CRITICAL: "bg-[var(--st-red-dot)]",
+  ATTENTION: "bg-[var(--st-yellow-dot)]",
+  HEALTHY: "bg-[var(--st-green-dot)]",
+  NOT_STARTED: "bg-[var(--st-gray-dot)]",
+  NONE: "bg-[var(--st-gray-dot)]",
+};
+
+/** Body text in a health's hue (a reason line, a late amount), readable on the card and the page. */
+export const HEALTH_TEXT: Record<"CRITICAL" | "ATTENTION", string> = {
+  CRITICAL: "text-red-700 dark:text-[var(--st-red-fg)]",
+  ATTENTION: "text-amber-800 dark:text-[var(--st-yellow-fg)]",
 };
 
 export function HealthPill({ health, className }: { health: HealthKey; className?: string }) {
   const { t } = useLang();
   return (
-    <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-semibold", HEALTH_TONE[health], className)}>
+    <span className={cn("inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 text-xs font-medium leading-5", HEALTH_TONE[health], className)}>
       <span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", HEALTH_DOT[health])} />
       {t(HEALTH_LABEL[health])}
     </span>
@@ -152,10 +185,10 @@ export const PHASE_STATE_LABEL: Record<PhaseState, string> = {
 // Amber for a phase under way, like the GM's board (owner, 9 Oct 2026: green done, amber in progress, red
 // problem, grey not started) — blue read as "info", not as "being worked on".
 const PHASE_TONE: Record<PhaseState, string> = {
-  done: "bg-success",
-  active: "bg-warning",
+  done: "bg-[var(--st-green-dot)]",
+  active: "bg-[var(--st-yellow-dot)]",
   pending: "bg-border",
-  bad: "bg-destructive",
+  bad: "bg-[var(--st-red-dot)]",
 };
 
 /**
@@ -198,7 +231,7 @@ export function usePhaseDetail() {
         if (deal.contractStatus === "Fully Executed") return t("Fully executed");
         if (deal.contractStatus === "Cancelled") return t("Contract cancelled");
         if (!deal.contractStatus || deal.contractStatus === "Not Started") return t("Not started");
-        return deal.contractStatus;
+        return sentenceCase(deal.contractStatus);
       case "readiness":
         if (deal.readiness === "Ready") return t("Ready to execute");
         if (deal.readiness === "Blocked") return t("Readiness blocked");
@@ -209,7 +242,7 @@ export function usePhaseDetail() {
         if (deal.deliverableRisk === "Overdue") return t("Deliverable overdue");
         if (deal.deliverableRisk === "At Risk") return t("Deliverable at risk");
         if (!deal.deliverableStatus || deal.deliverableStatus === "Not Started") return t("Not started");
-        return deal.deliverableStatus;
+        return sentenceCase(deal.deliverableStatus);
       case "payment": {
         const status = dealPayment(deal).status;
         if (status === "Paid") return t("Fully paid");
@@ -222,7 +255,7 @@ export function usePhaseDetail() {
       case "closing":
         if (deal.closingStatus === "Closed") return "Closed";
         if (!deal.closingStatus || deal.closingStatus === "Not Ready") return t("Not started");
-        return deal.closingStatus;
+        return sentenceCase(deal.closingStatus);
       default:
         return "";
     }
@@ -242,8 +275,8 @@ export function BlockerBanner({ deal, lines, className }: { deal: Pick<PipelineD
     <p
       title={lines ? text : undefined}
       className={cn(
-        "flex items-start gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold",
-        critical ? "bg-destructive/10 text-red-700 dark:bg-destructive/15 dark:text-red-300" : "bg-warning/15 text-amber-800 dark:text-amber-300",
+        "flex items-start gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium",
+        critical ? "bg-[var(--st-red-bg)] text-[var(--st-red-fg)]" : "bg-[var(--st-yellow-bg)] text-[var(--st-yellow-fg)]",
         className,
       )}
     >
@@ -255,10 +288,10 @@ export function BlockerBanner({ deal, lines, className }: { deal: Pick<PipelineD
 }
 
 const STEP_MARK: Record<PhaseState, string> = {
-  done: "bg-success text-white",
-  active: "border-2 border-warning bg-card",
+  done: "bg-[var(--st-green-dot)] text-white",
+  active: "border-2 border-[var(--st-yellow-dot)] bg-card",
   pending: "border-2 border-border bg-card",
-  bad: "bg-destructive text-white",
+  bad: "bg-[var(--st-red-dot)] text-white",
 };
 
 /**
@@ -271,25 +304,25 @@ export function PhaseStepper({ deal, className }: { deal: PipelineDeal; classNam
   const detail = usePhaseDetail();
   const blocker = deal.blocker?.trim();
   return (
-    <section aria-label={t("Phase progress")} className={cn("rounded-xl border border-border px-3 py-3", className)}>
-      <h3 className="mb-2 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">{t("Phase progress")}</h3>
+    <section aria-label={t("Phase progress")} className={cn("rounded-lg border border-border px-3.5 py-3", className)}>
+      <h3 className="mb-2.5 text-xs font-medium text-muted-foreground">{t("Phase progress")}</h3>
       <ol>
         {deal.phases.map((p, i) => {
           const last = i === deal.phases.length - 1;
           return (
             <li key={p.key} className="relative flex gap-3 pb-3 last:pb-0">
-              {!last && <span aria-hidden className={cn("absolute left-[9px] top-6 bottom-0 w-0.5 rounded-full", p.state === "done" ? "bg-success/60" : "bg-border")} />}
+              {!last && <span aria-hidden className={cn("absolute left-[9px] top-6 bottom-0 w-0.5 rounded-full", p.state === "done" ? "bg-[var(--st-green-dot)]/60" : "bg-border")} />}
               <span aria-hidden className={cn("relative mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-2xs font-bold", STEP_MARK[p.state])}>
                 {p.state === "done" ? <Check className="h-3 w-3" strokeWidth={3} /> : p.state === "bad" ? "!" : null}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold leading-5">
+                <p className="text-sm font-medium leading-5">
                   {t(PHASE_LABEL[p.key])}
                   <span className="sr-only">: {t(PHASE_STATE_LABEL[p.state])}</span>
                 </p>
-                <p className={cn("text-xs", p.state === "bad" ? "font-medium text-red-700 dark:text-red-300" : "text-muted-foreground")}>{detail(deal, p.key)}</p>
+                <p className={cn("text-xs", p.state === "bad" ? cn("font-medium", HEALTH_TEXT.CRITICAL) : "text-muted-foreground")}>{detail(deal, p.key)}</p>
                 {p.blocked && blocker && (
-                  <p className="mt-1 flex items-start gap-1 text-xs font-semibold text-red-700 dark:text-red-300">
+                  <p className={cn("mt-1 flex items-start gap-1 text-xs font-medium", HEALTH_TEXT.CRITICAL)}>
                     <AlertTriangle aria-hidden className="mt-px h-3 w-3 shrink-0" />
                     <span className="min-w-0 break-words">{blocker}</span>
                   </p>
@@ -304,14 +337,38 @@ export function PhaseStepper({ deal, className }: { deal: PipelineDeal; classNam
 }
 
 
-/** A stage group's mark in a column head. */
-export const GROUP_TONE: Record<StageGroup, string> = {
-  Pipeline: "bg-info",
-  "Pre-Execution": "bg-warning",
-  Execution: "bg-success",
-  Closed: "bg-foreground/60",
-  Lost: "bg-muted-foreground/40",
+/**
+ * A stage group's colour, from the app's option palette (COLOR_PRESETS keys): the board's tinted columns
+ * and pill headers, and every stage dot, share it — like a task board's status columns (12 Oct 2026).
+ */
+export const GROUP_COLOR: Record<StageGroup, "blue" | "orange" | "green" | "purple" | "gray"> = {
+  Pipeline: "blue",
+  "Pre-Execution": "orange",
+  Execution: "green",
+  Closed: "purple",
+  Lost: "gray",
 };
+
+/** A stage group's dot (class), the same hue as its column. */
+export const GROUP_TONE: Record<StageGroup, string> = {
+  Pipeline: "bg-[var(--st-blue-dot)]",
+  "Pre-Execution": "bg-[var(--st-orange-dot)]",
+  Execution: "bg-[var(--st-green-dot)]",
+  Closed: "bg-[var(--st-purple-dot)]",
+  Lost: "bg-[var(--st-gray-dot)]",
+};
+
+/** A stage as a pill (the column header, the drawer header): tinted background, dot, sentence-case name. */
+export function StagePill({ stage, className }: { stage: string; className?: string }) {
+  const labels = useVocabLabels();
+  const tone = COLOR_PRESETS[GROUP_COLOR[stageGroupOf(stage)] ?? "gray"];
+  return (
+    <span className={cn("inline-flex min-w-0 items-center gap-1.5 rounded-full px-2 text-sm font-medium leading-6", className)} style={{ backgroundColor: tone.bg, color: tone.text }}>
+      <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tone.dot }} />
+      <span className="truncate">{labels.stage(stage)}</span>
+    </span>
+  );
+}
 
 /** "Name" of a deal's BD or PM: the NEXUS user, else the free text, else null. */
 export function personName(user: { name: string | null } | null, text: string | null): string | null {
@@ -342,11 +399,11 @@ export function dealPayment(d: PipelineDeal): { fromTerms: boolean; status: stri
     : { fromTerms: false, status: d.paymentStatus, outstanding: d.outstandingReceivable, dueDate: d.paymentDueDate };
 }
 
-/** A term status pill's colors: paid green, overdue red, partly paid / invoiced amber / blue. */
+/** A term status pill's colours (option palette): paid green, overdue red, partly paid yellow, invoiced blue. */
 export const TERM_TONE: Record<TermStatus, string> = {
-  Paid: "bg-success/15 text-emerald-800 dark:text-emerald-200",
-  Overdue: "bg-destructive/10 text-red-800 dark:text-red-200",
-  Partial: "bg-warning/15 text-amber-900 dark:text-amber-200",
-  Invoiced: "bg-info/15 text-sky-900 dark:text-sky-200",
-  "Not Invoiced": "bg-muted text-muted-foreground",
+  Paid: "bg-[var(--st-green-bg)] text-[var(--st-green-fg)]",
+  Overdue: "bg-[var(--st-red-bg)] text-[var(--st-red-fg)]",
+  Partial: "bg-[var(--st-yellow-bg)] text-[var(--st-yellow-fg)]",
+  Invoiced: "bg-[var(--st-blue-bg)] text-[var(--st-blue-fg)]",
+  "Not Invoiced": "bg-[var(--st-gray-bg)] text-[var(--st-gray-fg)]",
 };

@@ -88,8 +88,8 @@ export function OutletSalesView({
     return (
       <div className="space-y-4 p-4 md:p-8" aria-busy="true" aria-label={t("Loading the outlet")}>
         <div className="h-10 w-64 animate-pulse rounded-xl bg-muted" />
-        <div className="grid gap-3 md:grid-cols-2">{[0, 1].map((i) => <div key={i} className="h-36 animate-pulse rounded-2xl bg-muted" />)}</div>
-        <div className="h-64 animate-pulse rounded-2xl bg-muted" />
+        <div className="grid gap-3 md:grid-cols-2">{[0, 1].map((i) => <div key={i} className="h-36 animate-pulse rounded-xl bg-muted" />)}</div>
+        <div className="h-64 animate-pulse rounded-xl bg-muted" />
       </div>
     );
   }
@@ -124,7 +124,7 @@ export function OutletSalesView({
         <button
           type="button"
           onClick={() => openForm({ date: selected ?? undefined })}
-          className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-primary px-3.5 text-sm font-semibold text-primary-foreground shadow-soft transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:h-11"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-sm font-semibold text-primary-foreground transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:h-11"
         >
           <Plus aria-hidden className="h-4 w-4" /> {t("Add event")}
         </button>
@@ -237,7 +237,7 @@ function Overview({
       </div>
       {editing && <TargetEditor projectId={projectId} data={data} onClose={() => setEditing(false)} />}
 
-      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border shadow-soft sm:grid-cols-5">
+      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-5">
         {([
           ["Events", String(s.eventCount)],
           ["Reported", String(s.reportedCount)],
@@ -253,7 +253,7 @@ function Overview({
       </dl>
 
       {waiting.length > 0 && (
-        <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
+        <section className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-100">
             <Info aria-hidden className="h-4 w-4" />
             {tn(waiting.length, "1 night is waiting for its report", "{n} nights are waiting for their report")}
@@ -270,13 +270,13 @@ function Overview({
         </section>
       )}
 
-      <section aria-labelledby="os-events" className="rounded-2xl border border-border bg-card shadow-soft">
+      <section aria-labelledby="os-events" className="rounded-xl border border-border bg-card">
         <h3 id="os-events" className="border-b border-border px-4 py-3 text-sm font-semibold">{t("Events in {month}", { month: monthName })}</h3>
         {data.events.length === 0 ? (
           <div className="px-4 py-8 text-center">
             <p className="text-sm font-semibold">{t("No events this month yet")}</p>
             <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">{t("Add the nights you have planned. After each one, the team fills its report and the totals above update.")}</p>
-            <button type="button" onClick={onAdd} className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-soft transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] pointer-coarse:min-h-[44px]">
+            <button type="button" onClick={onAdd} className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] pointer-coarse:min-h-[44px]">
               <CalendarPlus aria-hidden className="h-4 w-4" /> {t("Add event")}
             </button>
           </div>
@@ -308,7 +308,7 @@ function Overview({
 function Gauge({ title, hint, actual, target, pct }: { title: string; hint?: string; actual: string; target: string | null; pct: number | null }) {
   const { t } = useLang();
   return (
-    <article className="rounded-2xl border border-border bg-card p-4 shadow-soft md:p-5">
+    <article className="rounded-xl border border-border bg-card p-4 md:p-5">
       <h3 className="text-sm font-semibold">{title}</h3>
       {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
       <p className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 tabular-nums">
@@ -334,7 +334,7 @@ function digitsOf(v: string): number | null {
 function TargetEditor({ projectId, data, onClose }: { projectId: string; data: OutletMonthResponse; onClose: () => void }) {
   const { t, lang, locale } = useLang();
   const qc = useQueryClient();
-  const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "" : new Intl.NumberFormat(lang === "en" ? "en-GB" : "id-ID").format(n));
+  const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "" : new Intl.NumberFormat("id-ID").format(n));
   const [sales, setSales] = useState(fmt(data.target?.salesTarget));
   const [pax, setPax] = useState(fmt(data.target?.paxTarget));
   const save = useMutation({
@@ -350,7 +350,7 @@ function TargetEditor({ projectId, data, onClose }: { projectId: string; data: O
   return (
     <form
       onSubmit={(e) => { e.preventDefault(); save.mutate(); }}
-      className="grid gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+      className="grid gap-3 rounded-xl border border-border bg-card p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
     >
       <label className="text-xs font-medium text-muted-foreground">
         {t("Sales target for {month}", { month: monthLabel(data.month, locale) })}
@@ -365,7 +365,7 @@ function TargetEditor({ projectId, data, onClose }: { projectId: string; data: O
       </label>
       <div className="flex gap-2">
         <button type="button" onClick={onClose} className="h-10 rounded-xl px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:h-11">{t("Cancel")}</button>
-        <button type="submit" disabled={save.isPending} className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-soft transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] disabled:opacity-60 pointer-coarse:h-11">
+        <button type="submit" disabled={save.isPending} className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] disabled:opacity-60 pointer-coarse:h-11">
           {save.isPending ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : <Check aria-hidden className="h-4 w-4" />}
           {t("Save target")}
         </button>
@@ -406,7 +406,7 @@ function Board({ data, onOpen, onAdd }: { data: OutletMonthResponse; onOpen: (id
   return (
     <div className="grid gap-3 md:grid-cols-3">
       {STATUS_ORDER.map((status) => (
-        <section key={status} aria-labelledby={`os-col-${status}`} className="flex min-w-0 flex-col rounded-2xl border border-border bg-muted/30 p-2">
+        <section key={status} aria-labelledby={`os-col-${status}`} className="flex min-w-0 flex-col rounded-xl border border-border bg-muted/30 p-2">
           <h3 id={`os-col-${status}`} className="flex items-center gap-2 px-2 py-1.5 text-sm font-semibold">
             <span aria-hidden className={cn("h-2 w-2 rounded-full", STATUS_DOT[status])} />
             {t(STATUS_LABEL[status])}
@@ -418,7 +418,7 @@ function Board({ data, onOpen, onAdd }: { data: OutletMonthResponse; onOpen: (id
             <ul className="flex flex-col gap-2">
               {cols[status].map((e) => (
                 <li key={e.id}>
-                  <button type="button" onClick={() => onOpen(e.id)} className="w-full rounded-xl border border-border bg-card p-3 text-left shadow-soft transition-colors hover:border-control-border focus-visible:outline-2 focus-visible:outline-ring">
+                  <button type="button" onClick={() => onOpen(e.id)} className="w-full rounded-xl border border-border bg-card p-3 text-left transition-colors hover:border-control-border focus-visible:outline-2 focus-visible:outline-ring">
                     <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-xs tabular-nums text-muted-foreground">
                       <span>{dayShort(e.date, locale)}{e.date.slice(0, 4) !== data.month.slice(0, 4) && ` ${e.date.slice(0, 4)}`}</span>
                       {e.status === "WAITING_REPORT" && e.missing.length > 0 && (
