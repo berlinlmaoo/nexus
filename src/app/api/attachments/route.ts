@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { pingSubmitter } from "@/lib/submission-ping"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { writeFile, mkdir } from "fs/promises"
@@ -92,6 +93,7 @@ export async function POST(request: NextRequest) {
     })
 
     logAudit({ action: "create", entityType: "attachment", entityId: attachment.id, entityName: file.name, userId: session.user.id, request, metadata: { taskId, mimeType: file.type, size: file.size } })
+    void pingSubmitter(taskId, session.user.id) // Bukti Pencairan shows up on the submitter's board live
 
     return NextResponse.json(attachment, { status: 201 })
   } catch (error) {

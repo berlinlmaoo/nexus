@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { pingSubmitter } from "@/lib/submission-ping"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { emitVaultChanged } from "@/lib/socket-emitter"
@@ -376,6 +377,7 @@ export async function POST(request: NextRequest) {
           chunked: true,
         })
         committed = true
+      void pingSubmitter(taskId, userId) // Bukti Pencairan shows up on the submitter's board live
 
         const payload = serializeVaultItem((await replacedRow(replaceTarget.id)) as unknown as VaultItemRow, vaultActor)
         await writeFile(donePath, JSON.stringify(payload)).catch(() => {})
