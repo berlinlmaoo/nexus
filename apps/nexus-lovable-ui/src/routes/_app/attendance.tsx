@@ -8,6 +8,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
+import { LoadError } from "@/components/LoadError";
 import { Segmented } from "@/components/PageLayout";
 import { Avatar } from "@/components/Avatar";
 import { ApiError, downloadFile, fmtDate, fmtTime, nexusApi, statusLabel, type AttendanceActionPayload, type NexusAttendanceHistory, type NexusOffice, type NexusOffsiteCheckout } from "@/lib/nexus-api";
@@ -56,9 +57,11 @@ export const Route = createFileRoute("/_app/attendance")({
   // `?request=<id>` / `?offsite=<id>` is what a notification links to: the row is shown even if it
   // is settled, scrolled into view and highlighted, so the tap lands on THE request and not on the
   // page. iOS reads the same two keys (AttendanceRequestsCard).
-  validateSearch: (s: Record<string, unknown>): { request?: string; offsite?: string } => ({
+  // `?view=log` keeps the Board/Log choice across a reload / Back (QA 13 Oct 2026).
+  validateSearch: (s: Record<string, unknown>): { request?: string; offsite?: string; view?: "log" } => ({
     request: typeof s.request === "string" ? s.request : undefined,
     offsite: typeof s.offsite === "string" ? s.offsite : undefined,
+    view: s.view === "log" ? "log" : undefined,
   }),
 });
 
@@ -205,7 +208,10 @@ function Attendance() {
   // Default to the CURRENT payroll period (cut-off 28th → 27th): past the 27th, roll to next month.
   const [monthKey, setMonthKey] = useState(() => { const d = new Date(); const a = new Date(d.getFullYear(), d.getMonth() + (d.getDate() > 27 ? 1 : 0), 1); return `${a.getFullYear()}-${String(a.getMonth() + 1).padStart(2, "0")}`; });
   const [memberQuery, setMemberQuery] = useState("");
-  const [viewMode, setViewMode] = useState<"grid" | "log">("grid");
+  const attSearch = Route.useSearch();
+  const attNavigate = Route.useNavigate();
+  const viewMode: "grid" | "log" = attSearch.view === "log" ? "log" : "grid";
+  const setViewMode = (v: "grid" | "log") => { void attNavigate({ search: (prev) => ({ ...prev, view: v === "log" ? "log" : undefined }), replace: true }); };
   // Pull the WHOLE selected month (not just today) so every past day is auditable — backend defaults
   // the range to today when no month is sent, which left the streak grid empty for prior days.
   const canReview = Boolean(today.data?.canReviewAttendanceRequests);
@@ -380,7 +386,10 @@ function Attendance() {
         </div>
 
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Columns follow the space the cards actually get (a container query), not the window: at 1024 with
+            the sidebar open four columns left ~160px each and every title was cut ("Rea…", "4 a…"), QA 13 Oct 2026. */}
+        <div className="@container">
+        <section className="grid gap-4 @lg:grid-cols-2 @5xl:grid-cols-4">
           <FunMetric
             icon={<Coffee className="h-5 w-5" />}
             label={tr("Today’s status")}
@@ -419,6 +428,7 @@ function Attendance() {
             onClick={(origin) => setLogKind({ kind: "RED_DATE", origin })}
           />
         </section>
+        </div>
 
         <div className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
@@ -472,7 +482,9 @@ function Attendance() {
           {viewMode === "log" ? (
             <div className="divide-y divide-border">
               {history.isLoading && <div className="px-5 py-10 text-center text-sm text-muted-foreground"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>}
-              {!history.isLoading && logRows.length === 0 && (
+              {/* A failed request is not "no attendance" (QA 13 Oct 2026: a 500 read as an empty month). */}
+              {history.isError && !history.data && <LoadError compact error={history.error} what={tr("this month's attendance")} onRetry={() => void history.refetch()} />}
+              {!history.isLoading && !(history.isError && !history.data) && logRows.length === 0 && (
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">{q ? tr("No attendance from “{q}” this month.", { q: memberQuery.trim() }) : tr("No attendance recorded this month yet.")}</div>
               )}
               {logRows.map((r) => {
@@ -534,7 +546,10 @@ function Attendance() {
                 {history.isLoading && (
                   <tr><td colSpan={periodDays.length + 2} className="px-4 py-10 text-center text-sm text-muted-foreground"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></td></tr>
                 )}
-                {!history.isLoading && memberRows.length === 0 && (
+                {history.isError && !history.data && (
+                  <tr><td colSpan={periodDays.length + 2} className="px-4 py-2"><div className="sticky left-0 w-[min(100%,calc(100vw-3rem))] max-w-xl"><LoadError compact error={history.error} what={tr("this month's attendance")} onRetry={() => void history.refetch()} /></div></td></tr>
+                )}
+                {!history.isLoading && !(history.isError && !history.data) && memberRows.length === 0 && (
                   <tr><td colSpan={periodDays.length + 2} className="px-4 py-10 text-center text-sm text-muted-foreground">{q ? tr("No one matches “{q}”.", { q: memberQuery.trim() }) : tr("No attendance data for this month yet.")}</td></tr>
                 )}
                 {memberRows.map((u) => (
@@ -2205,8 +2220,8 @@ function FunMetric({ icon, label, value, helper, tone, onClick }: { icon: React.
       <div className="flex items-start gap-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/70 dark:bg-background/60">{icon}</span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-semibold uppercase leading-4 tracking-wide opacity-70">{label}</p>
-          <h3 title={value} className="truncate text-2xl font-black leading-7 tracking-tight text-foreground">{value}</h3>
+          <p className="line-clamp-2 text-xs font-semibold uppercase leading-4 tracking-wide opacity-70">{label}</p>
+          <h3 title={value} className="line-clamp-2 text-xl font-black leading-7 tracking-tight text-foreground [overflow-wrap:anywhere] xl:text-2xl">{value}</h3>
         </div>
         {onClick && <ChevronRight className="mt-3 h-4 w-4 shrink-0 opacity-40" />}
       </div>

@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { SelectPicker } from "@/components/SelectPicker";
 import { EmptyState } from "@/components/EmptyState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { LoadError } from "@/components/LoadError";
 import { Button, Card, CardContent as CardBody, Chip, Input } from "@heroui/react";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
@@ -604,7 +605,9 @@ function ProjectsPage() {
               <MiniStat
                 icon={<Users className="h-4 w-4" />}
                 label={tr("Members")}
-                value={`${computedProjects.reduce((sum, p) => sum + p.memberIds.length, 0)}`}
+                // Distinct people, not memberships summed over projects ("972 Members" in a 54-person
+                // workspace, QA 13 Oct 2026).
+                value={`${new Set(computedProjects.flatMap((p) => p.memberIds)).size}`}
               />
             </div>
           </div>
@@ -678,6 +681,10 @@ function ProjectsPage() {
               </div>
             );
 
+          // A failed request is not "no project matches" (QA 13 Oct 2026).
+          if (projectsQuery.isError && !projectsQuery.data) {
+            return <LoadError error={projectsQuery.error} what={tr("your projects")} onRetry={() => void projectsQuery.refetch()} />;
+          }
           if (visibleProjects.length === 0) {
             return (
               <EmptyState icon={Search} tone="muted" title={tr("No project matches that")}

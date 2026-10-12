@@ -1423,7 +1423,10 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
 
   const wsm = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
   const myRole = wsm.data?.role ?? "";
-  const canAdd = myRole === "BOD" || myRole === "ONE_ABOVE_ALL"; // BoD ke atas
+  // The server's rule for adding members (POST …/members: project LEAD = Manager and above, lib/rbac.ts),
+  // the same one Project settings uses. It said BoD-only here, so a Manager leading the project could add
+  // people from the settings drawer but not from this header (QA 13 Oct 2026).
+  const canAdd = myRole === "MANAGER" || myRole === "BOD" || myRole === "ONE_ABOVE_ALL";
 
   const ids = members.map((m) => m.userId || m.user?.id).filter(Boolean) as string[];
   const memberIds = new Set(ids);

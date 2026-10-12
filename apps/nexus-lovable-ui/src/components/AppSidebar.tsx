@@ -136,7 +136,9 @@ export function AppSidebar() {
         </button>
       </SidebarHeader>
 
-      <SidebarContent>
+      {/* Short desktop screens (≤960px tall, mouse): a denser nav, so the last entry (Control Room) is not
+          hidden under the footer at 1440×900 (QA 13 Oct 2026). Touch keeps its 32px+ rows. */}
+      <SidebarContent className="[@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group]]:py-1 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group-label]]:h-6 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu]]:gap-0.5 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu-button]]:h-7">
         {visibleGroups.map((g) => (
           <SidebarGroup key={g.label}>
             <SidebarGroupLabel>{t(g.label)}</SidebarGroupLabel>

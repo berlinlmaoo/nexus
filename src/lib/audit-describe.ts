@@ -947,13 +947,238 @@ function attendanceRequestTitle(
 
 // ─── public entry points ───────────────────────────────────────────────────────────────────────
 
+// ─── Indonesian ───────────────────────────────────────────────────────────────────────────────
+// The same sentences in Indonesian, for the web in Bahasa (QA 13 Oct 2026: every audit row stayed English
+// in ID, and a report view read "did “view” on a person report roster"). Chosen by the caller only when
+// the client asked for it exactly ("Accept-Language: id", what the web sends); every other client — the
+// released iOS/Android apps included — keeps getting the English sentence it always got.
+
+export type AuditLang = "en" | "id"
+
+/** "id" only for the web's exact header value; anything else (a browser/OS list like "id-ID,en") is "en". */
+export function auditLangOf(acceptLanguage: string | null | undefined): AuditLang {
+  return (acceptLanguage ?? "").trim().toLowerCase() === "id" ? "id" : "en"
+}
+
+const VERBS_ID: Record<string, string> = {
+  create: "membuat", update: "mengubah", delete: "menghapus", login: "masuk", logout: "keluar", grant: "memberikan",
+  export: "mengekspor", import: "mengimpor", invite: "mengundang", approve: "menyetujui", reject: "menolak",
+  restore: "memulihkan", archive: "mengarsipkan", upload: "mengunggah", duplicate: "menduplikasi", revoke: "mencabut",
+  replace: "mengganti", share: "membagikan", offboard: "meng-offboard", reinstate: "mengaktifkan kembali", view: "melihat",
+  refund: "mengembalikan",
+}
+
+const NOUNS_ID: Record<string, string> = {
+  task: "task", project: "project", custom_field_value: "custom field", custom_field: "custom field",
+  attendance_request: "pengajuan absensi", attendance_record: "catatan absensi", attendance_day: "hari absensi",
+  workspace_member: "anggota", user_profile: "profil", formSubmission: "kiriman form", form_submission: "kiriman form",
+  task_assignee: "penanggung jawab task", task_dependency: "dependensi task", task_relation: "relasi task",
+  project_page: "halaman project", notificationPreference: "pengaturan notifikasi", dayoff_bonus: "day off tambahan",
+  xp_transaction: "catatan XP", member_record: "rekap anggota", task_list: "seksi", project_folder: "folder",
+  project_sheet: "sheet", project_sheet_column: "kolom sheet", sheet_comment: "komentar sheet", sheet_rows: "baris sheet",
+  proof_annotation: "anotasi", saved_search: "pencarian tersimpan", project_view: "tampilan project",
+  room_booking: "booking ruangan", workflow_bundle: "paket workflow", org_unit: "unit bagan", org_unit_member: "penempatan di bagan",
+  calendar_event: "acara kalender", attendance_office: "kantor", vault_file: "file Vault", vault_folder: "folder Vault",
+  vault_trash: "sampah Vault", vault_file_version: "file Vault", pnl_expense: "pengeluaran", pnl_income: "pemasukan",
+  pnl_payment: "pembayaran", pnl_category: "kategori pengeluaran", pnl_stage: "tahap pemasukan",
+  pnl_recurring: "pengeluaran rutin", pnl_expense_attachment: "struk", pnl_budget: "anggaran", chat_group: "grup chat",
+  pipeline_deal: "deal pipeline", pipeline_term: "termin pembayaran", outlet_sales_event: "acara outlet",
+  outlet_sales_target: "target outlet", quest: "quest", announcement: "pengumuman", comment: "komentar",
+  attachment: "lampiran", notification: "notifikasi", person_report_roster: "laporan tim", person_report: "laporan orang",
+  team: "tim", division: "divisi", goal: "goal", doc: "dokumen", page: "halaman", form: "form",
+}
+
+const REQUEST_TYPE_NOUN_ID: Record<string, string> = {
+  DAY_OFF: "day off", SICK: "sakit", PERMIT: "izin", LEAVE: "cuti", RED_DATE: "tanggal merah",
+}
+
+function nounOfId(entityType: string): string {
+  return NOUNS_ID[entityType] ?? humanizeKey(entityType).toLowerCase()
+}
+
+function actorOfId(row: AuditRowLike): string {
+  const n = row.user?.name?.trim()
+  if (n) return n
+  const e = row.user?.email?.trim()
+  return e || "Seseorang"
+}
+
+function buildTitleId(row: AuditRowLike, names?: AuditNames): string {
+  const actor = actorOfId(row)
+  const meta = asRecord(row.metadata) ?? {}
+  const action = String(row.action || "")
+  const type = String(row.entityType || "")
+  const noun = nounOfId(type || "item")
+  const entityName = str(row.entityName)
+  const verb = VERBS_ID[action]
+  const person = (key: string): string | null => {
+    const id = meta[key]
+    return looksLikeId(id) ? nameOf(names, "user", id) : null
+  }
+  const taskName = (): string | null => {
+    const id = meta.taskId
+    return str(meta.taskTitle) ?? (looksLikeId(id) ? nameOf(names, "task", id) : null)
+  }
+
+  if (action === "login") return `${actor} masuk`
+  if (action === "logout") return `${actor} keluar`
+
+  if (type === "task") {
+    if (action === "delete") {
+      const projectName = str(meta.projectName) ?? (looksLikeId(meta.projectId) ? nameOf(names, "project", meta.projectId) : null)
+      return `${actor} menghapus task ${quote(entityName ?? str(meta.title) ?? "tanpa judul")}${projectName ? ` dari ${quote(projectName)}` : ""}`
+    }
+    if (action === "update") return `${actor} mengubah task ${quote(entityName ?? "tanpa judul")}`
+  }
+
+  if (type === "custom_field_value") {
+    const field = str(meta.fieldName) ?? entityName
+    const task = taskName()
+    const fieldText = field ? quote(field) : "sebuah custom field"
+    return task ? `${actor} mengubah ${fieldText} di task ${quote(task)}` : `${actor} mengubah custom field ${field ? quote(field) : ""}`.trim()
+  }
+
+  if (type === "task_assignee" && (action === "create" || action === "delete")) {
+    const who = person(action === "create" ? "assigneeUserId" : "removedUserId")
+    const task = entityName ?? taskName()
+    const onTask = task ? ` ${action === "create" ? "ke" : "dari"} task ${quote(task)}` : ""
+    if (action === "create") return who ? `${actor} menugaskan ${who}${onTask}` : `${actor} menambah penanggung jawab${onTask}`
+    return who ? `${actor} melepas ${who}${onTask}` : `${actor} melepas penanggung jawab${onTask}`
+  }
+
+  if (type === "attachment") {
+    const task = taskName()
+    const file = entityName ? quote(entityName) : "sebuah file"
+    if (action === "create") return `${actor} mengunggah ${file}${task ? ` ke task ${quote(task)}` : ""}`
+    if (action === "delete") return `${actor} menghapus lampiran ${file}`
+  }
+
+  if (type === "formSubmission" && action === "create") {
+    return entityName ? `${actor} mengisi form ${quote(entityName)}` : `${actor} mengisi sebuah form`
+  }
+
+  if (type === "user_profile") {
+    const own = row.entityId && row.userId ? row.entityId === row.userId : true
+    return own ? `${actor} mengubah profilnya` : `${actor} mengubah sebuah profil`
+  }
+
+  if (type === "notification") {
+    if (meta.markAllRead === true) return `${actor} menandai semua notifikasi sudah dibaca`
+    if (meta.clearRead === true) return `${actor} membersihkan notifikasi yang sudah dibaca`
+    if (action === "update") return `${actor} menandai notifikasi sudah dibaca`
+  }
+
+  if (type === "attendance_request") {
+    let reqType = str(meta.type)
+    let requester: string | null = person("targetUserId") ?? str(meta.requesterName)
+    if (entityName) {
+      const i = entityName.indexOf(":")
+      if (i > 0) {
+        const head = entityName.slice(0, i)
+        const tail = entityName.slice(i + 1).trim()
+        if (head === "auto-dayoff") return `Day off otomatis dipotong dari ${tail || actor} karena tidak masuk tanpa keterangan`
+        if (!reqType) reqType = head
+        if (!requester && tail) requester = tail
+      }
+    }
+    const kind = (reqType && REQUEST_TYPE_NOUN_ID[reqType]) ?? (reqType ? humanizeKey(reqType).toLowerCase() : "absensi")
+    const self = !requester || requester === actor
+    const theirs = self ? `pengajuan ${kind}-nya` : `pengajuan ${kind} ${requester}`
+    if (action === "create") return self ? `${actor} mengajukan ${kind}` : `${actor} mengajukan ${kind} untuk ${requester}`
+    if (action === "grant") return `${actor} memberikan ${kind} kepada ${self ? "dirinya sendiri" : requester}`
+    if (action === "delete") return `${actor} menghapus ${theirs}`
+    if (action === "update") {
+      const status = str(meta.status)
+      if (status === "APPROVED") return `${actor} menyetujui ${theirs}`
+      if (status === "REJECTED") return `${actor} menolak ${theirs}`
+      if (status === "CANCELED" || status === "CANCELLED") return `${actor} membatalkan ${theirs}`
+      return `${actor} mengubah ${theirs}`
+    }
+    return `${actor} ${VERBS_ID[action] ?? `melakukan “${humanizeKey(action).toLowerCase()}” pada`} ${theirs}`
+  }
+
+  if (type === "attendance_record") {
+    if (action === "create" && entityName && /check-in$/i.test(entityName)) {
+      const place = meta.checkInAway === true ? str(meta.checkInPlace) : null
+      return place ? `${actor} check-in di ${place} (di luar kantor)` : `${actor} check-in`
+    }
+    if (action === "update" && entityName && / check-out$/i.test(entityName) && !/hapus/i.test(entityName)) return `${actor} check-out`
+    if (typeof meta.offsiteApproval === "string") {
+      const who = person("targetUserId")
+      const decided = meta.offsiteApproval === "APPROVED" ? "menyetujui" : meta.offsiteApproval === "REJECTED" ? "menolak" : "meninjau"
+      return `${actor} ${decided} check-out di luar kantor${who ? ` milik ${who}` : ""}`
+    }
+  }
+
+  if (action === "attendance_status_override") {
+    const who = person("targetUserId")
+    const date = formatAuditDate(meta.date)
+    const what = str(meta.override)
+    return `${actor} mengganti status absensi${who ? ` ${who}` : ""}${date ? ` pada ${date}` : ""}${what ? ` (${humanizeKey(what).toLowerCase()})` : ""}`
+  }
+
+  if (type === "xp_transaction" && action === "refund") {
+    const who = person("targetUserId")
+    const amount = typeof meta.amount === "number" ? meta.amount : null
+    const date = formatAuditDate(meta.date)
+    const what = entityName ? entityName.toLowerCase() : "XP"
+    return `${actor} menghapus potongan ${amount !== null ? `${amount} XP ` : ""}${who ? `milik ${who} ` : ""}(${what}${date ? `, ${date}` : ""})`
+  }
+
+  if (type === "member_record" && action === "view") {
+    return `${actor} membuka rekap ${entityName ? entityName : "seorang anggota"}`
+  }
+
+  if (type === "dayoff_bonus") {
+    const period = str(meta.periodKey)
+    const days = typeof meta.days === "number" ? meta.days : null
+    const what = days !== null ? `${days} day off tambahan` : "day off tambahan"
+    const forPeriod = period ? ` untuk periode ${period}` : ""
+    if (action === "grant") {
+      const n = typeof meta.people === "number" ? meta.people : null
+      return `${actor} memberi ${n !== null ? `${n} orang` : "beberapa orang"} ${what}${forPeriod}`
+    }
+    if (action === "revoke") {
+      const who = person("targetUserId")
+      return `${actor} mencabut ${what}${who ? ` milik ${who}` : ""}${forPeriod}`
+    }
+  }
+
+  if (type === "workspace_member") {
+    const embedded = embeddedUserId(entityName)
+    if (embedded) {
+      const who = nameOf(names, "user", embedded)
+      const what = entityName?.startsWith("dayoff-quota:") ? "jatah day off" : "tanggal mulai kerja"
+      return `${actor} mengubah ${what}${who ? ` ${who}` : " seorang anggota"}`
+    }
+    const who = entityName ?? person("targetUserId")
+    if (action === "update") return who ? `${actor} mengubah anggota ${quote(who)}` : `${actor} mengubah seorang anggota`
+  }
+
+  if (verb) {
+    return entityName ? `${actor} ${verb} ${noun} ${quote(entityName)}` : `${actor} ${verb} ${noun}`
+  }
+  const act = humanizeKey(action || "acted").toLowerCase()
+  return entityName ? `${actor} melakukan “${act}” pada ${noun} ${quote(entityName)}` : `${actor} melakukan “${act}” pada ${noun}`
+}
+
+/** The row's sentence in the given language. Never throws. */
+export function auditTitleIn(row: AuditRowLike, lang: AuditLang, names?: AuditNames): string {
+  if (lang !== "id") return auditTitle(row, names)
+  try {
+    return buildTitleId(row, names)
+  } catch {
+    return auditTitle(row, names)
+  }
+}
+
 /** Cheap one-liner for list rows: no names, no queries. */
-export function auditSummary(row: AuditRowLike): string {
-  return auditTitle(row)
+export function auditSummary(row: AuditRowLike, lang: AuditLang = "en"): string {
+  return auditTitleIn(row, lang)
 }
 
 /** Full description for the detail endpoint. Never throws. */
-export function describeAuditEntry(row: AuditRowLike, names?: AuditNames): AuditDescription {
+export function describeAuditEntry(row: AuditRowLike, names?: AuditNames, lang: AuditLang = "en"): AuditDescription {
   let meta: Record<string, unknown> | null = null
   let changes: AuditChange[] = []
   let details: AuditDetail[] = []
@@ -970,5 +1195,5 @@ export function describeAuditEntry(row: AuditRowLike, names?: AuditNames): Audit
   } catch {
     details = [{ label: "Metadata", value: "Unreadable metadata" }]
   }
-  return { title: auditTitle(row, names), changes, details }
+  return { title: auditTitleIn(row, lang, names), changes, details }
 }

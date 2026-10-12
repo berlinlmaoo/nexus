@@ -17,6 +17,7 @@ import { useRealtime } from "@/lib/realtime";
 import { useTypingRooms } from "@/lib/chat-typing";
 import { t, useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
+import { LoadError } from "@/components/LoadError";
 
 export const Route = createFileRoute("/_app/messages")({
   component: Messages,
@@ -231,7 +232,11 @@ function Messages() {
               ))}
             </div>
           )}
-          {!convos.isLoading && rows.length === 0 && (
+          {/* A failed list is not "No chats yet" (QA 13 Oct 2026). */}
+          {convos.isError && !convos.data && (
+            <div className="px-4 py-3 md:pl-8"><LoadError compact error={convos.error} what={t("your chats")} onRetry={() => void convos.refetch()} /></div>
+          )}
+          {!convos.isLoading && !(convos.isError && !convos.data) && rows.length === 0 && (
             <div className="px-4 py-3 md:pl-8">
               <EmptyState icon={MessageSquare} title={t("No chats yet")} compact
                 message={t("Direct messages and group chats with colleagues live here, and every project has a room of its own.")}

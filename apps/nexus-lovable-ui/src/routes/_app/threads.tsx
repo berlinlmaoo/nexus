@@ -7,6 +7,7 @@ import { AvatarStack } from "@/components/Avatar";
 import { PageHeader } from "@/components/PageHeader";
 import { PageBody, PageTabs } from "@/components/PageLayout";
 import { EmptyState } from "@/components/EmptyState";
+import { LoadError } from "@/components/LoadError";
 import { celebrate } from "@/components/Celebration";
 import { ApiError, nexusApi, type FeedPage, type FeedPost, type NexusUser } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
@@ -18,7 +19,11 @@ export const Route = createFileRoute("/_app/threads")({
   component: ThreadsGate,
   // `?post=<id>` is what every Threads notification links to (new post, like, mention, comment). Until
   // 9 Oct 2026 the page ignored it and a tap landed on the top of the feed.
-  validateSearch: (s: Record<string, unknown>): { post?: string } => ({ post: typeof s.post === "string" && s.post ? s.post : undefined }),
+  // `?tab=mentions` keeps the Mentions tab across a reload / Back (QA 13 Oct 2026).
+  validateSearch: (s: Record<string, unknown>): { post?: string; tab?: "mentions" } => ({
+    post: typeof s.post === "string" && s.post ? s.post : undefined,
+    tab: s.tab === "mentions" ? "mentions" : undefined,
+  }),
 });
 
 // Threads is open to everyone. It spent its beta behind a BoD gate that lived in three places at
@@ -45,8 +50,9 @@ function FeedPage() {
   const { t, tn } = useLang();
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const { post: focusId } = Route.useSearch();
-  const [tab, setTab] = useState<Tab>("all");
+  const { post: focusId, tab: tabParam } = Route.useSearch();
+  const tab: Tab = tabParam ?? "all";
+  const setTab = (next: Tab) => { void navigate({ to: "/threads", search: { post: focusId, tab: next === "mentions" ? "mentions" : undefined }, replace: true }); };
   const key = useMemo(() => ["feed", tab] as const, [tab]);
   // Height of the (md+ sticky) page header, so the new-posts pill sticks right under it.
   const headRef = useRef<HTMLDivElement>(null);
@@ -68,7 +74,7 @@ function FeedPage() {
     retry: (n, e) => !(e instanceof ApiError && (e.status === 404 || e.status === 410)) && n < 2,
   });
   useEffect(() => { if (focusId) window.scrollTo({ top: 0 }); }, [focusId]);
-  const closeFocus = () => navigate({ to: "/threads", search: {} });
+  const closeFocus = () => navigate({ to: "/threads", search: tabParam ? { tab: tabParam } : {} });
 
   // One post lives in several caches at once — both tabs and the focused copy. A like or an edit
   // written into only the visible tab left the other copy stale, and whichever was shown next said
@@ -190,7 +196,8 @@ function FeedPage() {
   const onCommentAdded = (postId: string) => patchPost(postId, (p) => ({ ...p, commentCount: p.commentCount + 1 }));
 
   const loading = feed.isLoading;
-  const empty = !feed.isLoading && posts.length === 0;
+  const failed = feed.isError && !feed.data;
+  const empty = !feed.isLoading && !failed && posts.length === 0;
 
   return (
     <div>
@@ -251,6 +258,7 @@ function FeedPage() {
       <div>
         {loading && Array.from({ length: 5 }).map((_, i) => <PostSkeleton key={i} />)}
 
+        {failed && <LoadError compact error={feed.error} what={t("the posts")} onRetry={() => void feed.refetch()} />}
         {empty && (
           <EmptyState icon={AtSign} tone="muted" title={tab === "mentions" ? t("No mentions yet") : t("No posts yet")}
             message={tab === "mentions" ? t("When someone tags you, it shows up here.") : t("Share what you're working on today.")} />

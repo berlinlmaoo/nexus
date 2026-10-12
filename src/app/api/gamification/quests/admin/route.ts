@@ -16,8 +16,11 @@ export async function GET(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const workspaceId = req.nextUrl.searchParams.get("workspaceId")
     if (!workspaceId) return NextResponse.json({ quests: [] })
-    const member = await prisma.workspaceMember.findUnique({ where: { userId_workspaceId: { userId: session.user.id, workspaceId } }, select: { id: true } })
-    if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    // The admin list (every quest in the workspace, with its audience and the delete action) is for the
+    // people who may manage quests — the same rule as POST/DELETE. Any member passed before, so Staff got
+    // the whole list (QA 13 Oct 2026). A member's own quests come from GET /api/gamification/me. The
+    // released apps call this only from their admin screens and treat a failure as an empty list.
+    if (!(await canManage(session.user.id, workspaceId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     const quests = await prisma.quest.findMany({ where: { workspaceId, isActive: true }, orderBy: { createdAt: "desc" } })
     return NextResponse.json({ quests })
   } catch (error) {

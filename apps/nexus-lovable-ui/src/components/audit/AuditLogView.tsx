@@ -8,7 +8,7 @@ import {
   ApiError, nexusApi,
   type NexusAuditEntryDetail, type NexusAuditLink, type NexusAuditLog, type NexusAuditRestoreResult, type NexusRestoreOpen,
 } from "@/lib/nexus-api";
-import { useDocumentLang, useLang, type LangApi } from "@/lib/lang";
+import { getLang, useDocumentLang, useLang, type LangApi } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 
 /**
@@ -72,6 +72,9 @@ function actionLabel(action: string | null | undefined, t: LangApi["t"]) {
   const a = (action || "").trim();
   if (!a) return t("Event");
   const core = CORE_VERBS[a.toLowerCase()];
+  // "View" the verb, not "View" the noun: the shared dictionary has "View" → "Tampilan" (a project view),
+  // which made the audit chip read "Tampilan" for someone opening a report (QA 13 Oct 2026).
+  if (core === "View") return getLang() === "id" ? "Lihat" : "View";
   if (core) return t(core);
   const words = a.replace(/[_-]+/g, " ").toLowerCase();
   return words.charAt(0).toUpperCase() + words.slice(1);
@@ -189,7 +192,9 @@ export function AuditLogView() {
   const search = useDebounced(q.trim(), 300);
 
   const logs = useInfiniteQuery({
-    queryKey: ["nexus", "audit", search, action],
+    // The language is in the key: the server writes each row's sentence in it (Accept-Language), so a
+    // switch to Bahasa refetches instead of keeping the English rows (QA 13 Oct 2026).
+    queryKey: ["nexus", "audit", search, action, lang],
     initialPageParam: 0,
     queryFn: ({ pageParam }) => {
       const p = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(pageParam) });
@@ -252,7 +257,7 @@ export function AuditLogView() {
                   <button key={c.value || "all"} type="button" onClick={() => setAction(c.value)} aria-pressed={on}
                     className={cn("shrink-0 rounded-full px-3 py-1 text-xs font-semibold ring-1 transition-all active:scale-[0.97]",
                       on ? "bg-primary text-primary-foreground ring-primary" : "bg-background text-muted-foreground ring-border hover:text-foreground")}>
-                    {t(c.label)}
+                    {c.value ? actionLabel(c.value, t) : t(c.label)}
                   </button>
                 );
               })}
@@ -649,7 +654,7 @@ function RestoreSection({ entryId, entityType, entityId, entityName, restore }: 
 function AuditEntryDrawer({ id, row, onClose }: { id: string; row: NexusAuditLog | null; onClose: () => void }) {
   const L = useLang();
   const { lang, t } = L;
-  const detail = useQuery({ queryKey: ["nexus", "audit-entry", id], queryFn: () => nexusApi.auditEntry(id), retry: false, staleTime: 60_000 });
+  const detail = useQuery({ queryKey: ["nexus", "audit-entry", id, L.lang], queryFn: () => nexusApi.auditEntry(id), retry: false, staleTime: 60_000 });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);

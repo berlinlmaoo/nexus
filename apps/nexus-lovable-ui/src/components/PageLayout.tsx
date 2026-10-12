@@ -1,5 +1,7 @@
-import { useRef, type ComponentType, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode, type WheelEvent } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/lib/lang";
 
 /**
  * The page layout primitives every list page shares (UI sweep, 12 Oct 2026).
@@ -38,6 +40,35 @@ export function PageTabs<K extends string>({ tabs, value, onChange, label, class
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const { t: tr } = useLang();
+  // The row scrolls on its own when the tabs don't fit (Control Room has 11 sections: at 1440 "GIDEON" was
+  // cut to "GI…" and "App" sat off-screen with nothing saying there was more; on a phone/iPad the row could
+  // not be swiped). A fade + an arrow on the side that has more, a wheel that scrolls sideways, and the
+  // selected tab is brought into view (QA 13 Oct 2026).
+  const [edge, setEdge] = useState({ left: false, right: false });
+  const measure = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    setEdge({ left: el.scrollLeft > 2, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2 });
+  }, []);
+  useEffect(() => {
+    measure();
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [measure, tabs.length]);
+  useEffect(() => {
+    const el = ref.current?.querySelector<HTMLElement>(`[data-tab="${value}"]`);
+    el?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [value]);
+  const nudge = (dir: 1 | -1) => ref.current?.scrollBy({ left: dir * Math.max(160, (ref.current?.clientWidth ?? 0) * 0.6), behavior: "smooth" });
+  const onWheel = (e: WheelEvent<HTMLDivElement>) => {
+    const el = ref.current;
+    if (!el || el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    el.scrollLeft += e.deltaY;
+  };
   // Arrow keys move between tabs, as a tablist should (one Tab stop for the whole row).
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft" && e.key !== "Home" && e.key !== "End") return;
@@ -47,8 +78,10 @@ export function PageTabs<K extends string>({ tabs, value, onChange, label, class
     onChange(tabs[n].key);
     requestAnimationFrame(() => ref.current?.querySelector<HTMLButtonElement>(`[data-tab="${tabs[n].key}"]`)?.focus());
   };
+  const arrow = "absolute top-0 bottom-[2px] z-10 hidden w-10 items-center text-muted-foreground transition hover:text-foreground pointer-fine:flex";
   return (
-    <div ref={ref} role="tablist" aria-label={label} onKeyDown={onKey} className={cn("flex items-end gap-5 whitespace-nowrap", className)}>
+    <div className={cn("relative min-w-0", className)}>
+    <div ref={ref} role="tablist" aria-label={label} onKeyDown={onKey} onScroll={measure} onWheel={onWheel} className="flex items-end gap-5 overflow-x-auto overscroll-x-contain whitespace-nowrap [scrollbar-width:none] [touch-action:pan-x_pan-y] [&::-webkit-scrollbar]:hidden">
       {tabs.map((t) => {
         const on = t.key === value;
         const Icon = t.icon;
@@ -77,6 +110,19 @@ export function PageTabs<K extends string>({ tabs, value, onChange, label, class
           </button>
         );
       })}
+    </div>
+      {edge.left && (
+        <>
+          <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-background to-transparent" />
+          <button type="button" tabIndex={-1} aria-label={tr("Show earlier tabs")} onClick={() => nudge(-1)} className={cn(arrow, "left-0 justify-start")}><ChevronLeft className="h-4 w-4" /></button>
+        </>
+      )}
+      {edge.right && (
+        <>
+          <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-background to-transparent" />
+          <button type="button" tabIndex={-1} aria-label={tr("Show more tabs")} onClick={() => nudge(1)} className={cn(arrow, "right-0 justify-end")}><ChevronRight className="h-4 w-4" /></button>
+        </>
+      )}
     </div>
   );
 }

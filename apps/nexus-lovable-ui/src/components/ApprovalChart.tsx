@@ -92,16 +92,21 @@ export function ApprovalChart() {
   const clampS = (v: number) => Math.min(MAX_S, Math.max(MIN_S, v));
 
   /** Pas layar: muat seluruh bagan, rata tengah. Dipanggil saat mount, ganti mode, dan resize. */
-  const fitView = useCallback(() => {
+  const fitView = useCallback((mode: "all" | "auto" = "all") => {
     const w = wrapRef.current?.clientWidth ?? 0, h = wrapRef.current?.clientHeight ?? 0;
     const nw = innerRef.current?.scrollWidth ?? 0, nh = innerRef.current?.scrollHeight ?? 0;
     if (!w || !h || !nw || !nh) return;
-    const s = clampS(Math.min((w - 32) / nw, (h - 32) / nh, 1.2));
+    const fit = Math.min((w - 32) / nw, (h - 32) / nh, 1.2);
+    // "auto" (first paint, resize): on a phone/iPad the whole chart fits only at 20–30%, names unreadable
+    // (QA 13 Oct 2026). There it opens readable at the top-left corner and the person pans; "Fit to
+    // screen" and a double-click/tap still show everything.
+    if (mode === "auto" && w < 900 && fit < 0.55) { applyView({ s: clampS(0.7), x: 16, y: 16 }); return; }
+    const s = clampS(fit);
     applyView({ s, x: (w - nw * s) / 2, y: Math.max(16, (h - nh * s) / 2) });
   }, [applyView]); // eslint-disable-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
-    fitView();
-    const ro = new ResizeObserver(fitView);
+    fitView("auto");
+    const ro = new ResizeObserver(() => fitView("auto"));
     if (wrapRef.current) ro.observe(wrapRef.current);
     return () => ro.disconnect();
   }, [fitView, full, people.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -262,15 +267,18 @@ export function ApprovalChart() {
             menggantung di bawahnya — termasuk pohon tanpa atasan, karena request puncaknya memang
             jatuh ke Board. BoD yang punya bawahan muncul sebagai akar pohon, bukan di kotak. */}
         <section className={cn(full ? "fixed inset-0 z-[60] flex flex-col bg-card" : "border-b border-border")}>
-          <div className={cn("flex items-center gap-2 px-5", full ? "border-b border-border py-3" : "pt-4 pb-2")}>
-            <div className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-              {full ? t("Approval chart") : t("Approval chain")} <span className="normal-case tracking-normal text-muted-foreground/70">{t("· scroll/pinch = zoom · drag empty space = move · double-click = fit to screen")}</span>
+          {/* Wraps on a phone: the hint used to be squeezed one word per line and "Full screen" was cut off.
+              Touch screens get a touch hint (QA 13 Oct 2026). */}
+          <div className={cn("flex flex-wrap items-center gap-2 px-5", full ? "border-b border-border py-3" : "pt-4 pb-2")}>
+            <div className="min-w-0 flex-1 basis-56 text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+              {full ? t("Approval chart") : t("Approval chain")} <span className="normal-case tracking-normal text-muted-foreground/70 pointer-coarse:hidden">{t("· scroll/pinch = zoom · drag empty space = move · double-click = fit to screen")}</span>
+              <span className="mt-0.5 hidden normal-case tracking-normal text-muted-foreground/70 pointer-coarse:block">{t("Drag to move · pinch to zoom · Fit to screen shows everything")}</span>
             </div>
-            <div className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <div className="ml-auto flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
               <button type="button" onClick={() => zoomCenter(1 / 1.2)} className="rounded-md border border-border p-1 hover:bg-accent" aria-label={t("Zoom out")}><ZoomOut className="h-3.5 w-3.5" /></button>
               <span className="w-10 text-center tabular-nums">{zoomLabel}%</span>
               <button type="button" onClick={() => zoomCenter(1.2)} className="rounded-md border border-border p-1 hover:bg-accent" aria-label={t("Zoom in")}><ZoomIn className="h-3.5 w-3.5" /></button>
-              <button type="button" onClick={fitView} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent"><Scan className="h-3.5 w-3.5" /> {t("Fit to screen")}</button>
+              <button type="button" onClick={() => fitView()} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent"><Scan className="h-3.5 w-3.5" /> {t("Fit to screen")}</button>
               <button type="button" onClick={exportPng} disabled={exporting} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent disabled:opacity-50" title={t("Download the chart as a sharp PNG (2x), whatever the zoom on screen")}>
                 {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} PNG
               </button>

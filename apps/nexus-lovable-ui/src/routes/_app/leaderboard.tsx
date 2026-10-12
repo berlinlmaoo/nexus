@@ -54,7 +54,9 @@ function Leaderboard() {
           the content now runs full width like every list page, UI sweep 12 Oct 2026). */}
       <PageHeader title={t("Leaderboard")} subtitle={t("Everyone's XP this month. It resets on the 1st.")} actions={board.data?.period ? (
         <span className="text-xs text-muted-foreground" title={t("XP resets on the 1st at 00:00 WIB")}>
-          <span className="font-medium text-foreground">{t("Current period")}</span> · {fmtDate(board.data.period.start)} → {fmtDate(board.data.period.end)}
+          <span className="font-medium text-foreground">{t("Current period")}</span> · {/* `end` is exclusive (the 1st of next month): show the last day that counts, "1 Oct – 31 Oct"
+              (QA 13 Oct 2026: it read "1 Oct → 1 Nov"). */}
+          {fmtDate(board.data.period.start)} – {fmtDate(new Date(new Date(board.data.period.end).getTime() - 1).toISOString())}
         </span>
       ) : undefined} />
       <PageBody>

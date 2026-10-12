@@ -3,6 +3,7 @@
 // optional ANONYMOUS mode (reporter hidden even from BoD). (The public, punitive Integrity peer reports were retired 12 Oct 2026.)
 export { getUserOrgRole, isBodPlus } from "@/lib/feed" // reuse the org-role gate helpers
 import { GIDEON_EMAIL } from "@/lib/gideon-identity"
+import { scrubGideonReply } from "@/lib/gideon-reply-scrub"
 import {
   ATTENDANCE_CORRECTION_INCLUDE, serializeAttendanceCorrection, type AttendanceCorrectionRow,
 } from "@/lib/attendance-correction"
@@ -185,7 +186,9 @@ export function serializeComplaintDetail(c: ComplaintDetailRow, viewerId: string
   const base = serializeComplaint(c, viewerId, viewerIsBod)
   const messages = (c.messages ?? []).map((m) => ({
     id: m.id,
-    body: m.body,
+    // GIDEON's text without database ids or tool field names (lib/gideon-reply-scrub.ts), also for replies
+    // written before the prompt forbade them.
+    body: (m.author as { email?: string } | null)?.email === GIDEON_EMAIL ? scrubGideonReply(m.body) : m.body,
     fromReviewer: m.fromReviewer,
     createdAt: m.createdAt,
     author: m.author,

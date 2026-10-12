@@ -11,8 +11,11 @@ import { OrgChart } from "@/components/OrgChart";
 import { type NexusAdminAnnouncement, type NexusDayOffBonus } from "@/lib/nexus-api";
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { PageHeader } from "@/components/PageHeader";
-import { PageTabs } from "@/components/PageLayout";
-import { EmptyState } from "@/components/EmptyState";
+import { PageBody, PageTabs } from "@/components/PageLayout";
+import { EmptyState, EmptyAction } from "@/components/EmptyState";
+import { LoadError, isForbidden } from "@/components/LoadError";
+import { friendlyError } from "@/lib/task-undo";
+import { failureText, toastFailure } from "@/lib/failure";
 import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusAdminUser, type GoogleWorkspaceAccount, type NexusUserMemberships, type NexusTeam, type NexusOffboardResult, type OffboardReason } from "@/lib/nexus-api";
 // Crew Hub tidak punya halaman lagi. Pengaturan TIM-nya sendiri — nama, divisi, jam shift,
 // tautan project, hapus — dibuka dari chip tim di baris ORANGNYA, memakai kartu yang sama
@@ -27,7 +30,16 @@ import { CalendarSettingsAdmin } from "@/components/calendar/CalendarSettingsAdm
 import { useLang } from "@/lib/lang";
 import { LeftTag } from "@/components/LeftTag";
 
-export const Route = createFileRoute("/_app/admin")({ component: Admin });
+// The section is in the URL (?tab=audit), like Reports' ?tab=team: a reload, Back or a shared link lands
+// on the same section (QA 13 Oct 2026; it was memory-only and always reset to Users).
+const ADMIN_TABS = ["users", "approval", "org", "extra-dayoff", "suspects", "audit", "quests", "announcements", "gideon", "app", "calendar"] as const;
+type AdminTab = (typeof ADMIN_TABS)[number];
+export const Route = createFileRoute("/_app/admin")({
+  validateSearch: (s: Record<string, unknown>): { tab?: AdminTab } => ({
+    tab: typeof s.tab === "string" && (ADMIN_TABS as readonly string[]).includes(s.tab) && s.tab !== "users" ? (s.tab as AdminTab) : undefined,
+  }),
+  component: Admin,
+});
 
 function initialsOf(name?: string | null) {
   if (!name) return "?";
@@ -38,7 +50,10 @@ function Admin() {
   const qc = useQueryClient();
   const lang = useLang();
   const { t, tn } = lang;
-  const [view, setView] = useState<"users" | "approval" | "org" | "extra-dayoff" | "suspects" | "audit" | "quests" | "announcements" | "gideon" | "app" | "calendar">("users");
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const view: AdminTab = search.tab ?? "users";
+  const setView = (tab: AdminTab) => { void navigate({ search: (prev) => ({ ...prev, tab: tab === "users" ? undefined : tab }), replace: true }); };
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState<"ALL" | "ONE_ABOVE_ALL" | "BOD" | "MANAGER" | "STAFF">("ALL");
   const [dayoffUser, setDayoffUser] = useState<{ id: string; name: string } | null>(null);
@@ -77,7 +92,8 @@ function Admin() {
   const canDeleteUsers = viewerRole === "BOD" || viewerRole === "ONE_ABOVE_ALL";
   // Offboard / reinstate: the same people as delete, plus a system admin (POST …/offboard checks
   // again, including the rank rule). Never on your own row.
-  const me = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 }).data?.user;
+  const meQ = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 });
+  const me = meQ.data?.user;
   const isSystemAdmin = me?.role === "ADMIN";
   const canOffboard = canDeleteUsers || isSystemAdmin;
   // The same rule the server enforces in isBoD(). A MANAGER shown the compose form only ever gets a
@@ -206,6 +222,29 @@ function Admin() {
   });
   const toggleRole = (r: "ONE_ABOVE_ALL" | "BOD" | "MANAGER" | "STAFF") => setRoleFilter((cur) => (cur === r ? "ALL" : r));
 
+  // Who may be here at all: Manager and above in the company workspace, or a system admin — the rule the
+  // server applies to every Control Room API (lib/admin-access.ts). Staff reached this page by URL or the
+  // search's People result and got the shell, a wrong "system admin role" message and the quest admin form
+  // (QA 13 Oct 2026). Decided only once the role is KNOWN: a failed members request is a load error, never
+  // "no access".
+  const meLoaded = meQ.isFetched;
+  const isOrgAdmin = viewerRole === "BOD" || viewerRole === "MANAGER" || viewerRole === "ONE_ABOVE_ALL";
+  const notAllowed = wsm.isSuccess && meLoaded && !isOrgAdmin && !isSystemAdmin;
+  if (notAllowed || (wsm.isError && !isForbidden(wsm.error))) {
+    return (
+      <div>
+        <PageHeader title={t("Control Room")} />
+        <PageBody>
+          {notAllowed ? (
+            <EmptyState icon={Shield} tone="muted" title={t("Control Room isn't available for your role")} message={t("It's for managers and the BoD: people, roles, the audit log and quests. Your own attendance, XP and requests are in Attendance and on your profile.")} action={<EmptyAction to="/dashboard">{t("Go to the dashboard")}</EmptyAction>} />
+          ) : (
+            <LoadError error={wsm.error} what={t("the Control Room")} onRetry={() => { void wsm.refetch(); void users.refetch(); }} />
+          )}
+        </PageBody>
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Sections are the header's tabs, the same light underline row as every page (they were a black
@@ -243,7 +282,9 @@ function Admin() {
         {view === "gideon" && canAnnounce && <GideonAdmin />}
         {view === "app" && canAnnounce && <AppInstalls />}
 
-        {view === "users" && users.isError && <EmptyState icon={Shield} tone="muted" title={t("Admin access required")} message={t("You need the system admin role to manage users.")} />}
+        {view === "users" && users.isError && (isForbidden(users.error)
+          ? <EmptyState icon={Shield} tone="muted" title={t("Only managers and the BoD can manage people")} message={t("Ask a BoD if you need to change someone's role or hours.")} />
+          : <LoadError error={users.error} what={t("the people list")} onRetry={() => void users.refetch()} />)}
 
         {view === "users" && !users.isError && (
           <>
@@ -256,7 +297,7 @@ function Admin() {
             </div>
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
               <Shield className="h-3.5 w-3.5 shrink-0" />
-              <span>{t("Role hierarchy:")} <b className="text-foreground">One Above All › BoD › Manager › Staff</b>. {t("You can only give roles below your own level.")}</span>
+              <span>{t("Role hierarchy:")} <b className="text-foreground">One Above All › BoD › Manager › Staff</b>. {viewerAssignable.length === 0 ? t("Only the BoD and One Above All can change roles.") : t("You can only give roles below your own level.")}</span>
               <Link to="/settings" className="ml-auto font-semibold text-primary hover:underline">{t("Also in Settings › Members →")}</Link>
             </div>
 
@@ -278,14 +319,17 @@ function Admin() {
               )}
             </div>
 
-            <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
+            {/* iPad portrait (≈700px of content) cut the Role and Details columns off with no way to reach
+                them (QA 13 Oct 2026): Joined shows from xl, Work hours from sm (it's in Details too), the role
+                chip never wraps, and anything still too wide scrolls inside the card instead of being clipped. */}
+            <div className="overflow-x-auto overscroll-x-contain rounded-2xl border border-border bg-card shadow-soft">
               {users.isLoading && <div className="flex justify-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-border text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  <tr className="whitespace-nowrap border-b border-border text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                     <th className="px-4 py-2.5">{t("User")}</th>
-                    <th className="hidden px-4 py-2.5 md:table-cell">{t("Joined")}</th>
-                    <th className="px-4 py-2.5">{t("Work hours")}</th>
+                    <th className="hidden px-4 py-2.5 xl:table-cell">{t("Joined")}</th>
+                    <th className="hidden px-4 py-2.5 sm:table-cell">{t("Work hours")}</th>
                     <th className="px-4 py-2.5 text-right">{t("Role")}</th>
                   </tr>
                 </thead>
@@ -672,7 +716,7 @@ function UserRow(props: UserRowProps) {
   return (
     <>
       <tr className="border-b border-border last:border-0 hover:bg-muted/20">
-        <td className="px-4 py-3">
+        <td className="max-w-[55vw] px-4 py-3 sm:max-w-xs">
           <div className="flex items-center gap-3">
             {user.avatar ? (
               <img src={user.avatar} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-border" />
@@ -699,8 +743,8 @@ function UserRow(props: UserRowProps) {
             </div>
           </div>
         </td>
-        <td className="hidden whitespace-nowrap px-4 py-3 text-xs text-muted-foreground md:table-cell">{fmtJoined(orgInfo?.joinedAt ?? user.joinedAt, locale) ?? <span className="text-muted-foreground/60">—</span>}</td>
-        <td className="px-4 py-3">
+        <td className="hidden whitespace-nowrap px-4 py-3 text-xs text-muted-foreground xl:table-cell">{fmtJoined(orgInfo?.joinedAt ?? user.joinedAt, locale) ?? <span className="text-muted-foreground/60">—</span>}</td>
+        <td className="hidden px-4 py-3 sm:table-cell">
           {!orgInfo ? (
             <span className="text-xs text-muted-foreground/60">—</span>
           ) : (
@@ -721,7 +765,7 @@ function UserRow(props: UserRowProps) {
         <td className="px-4 py-3 text-right">
           <div className="flex items-center justify-end gap-2">
             {orgInfo ? (
-              <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", ORG_ROLE_TONE[orgInfo.role] ?? "bg-muted text-muted-foreground")}>{ORG_ROLE_LABEL[orgInfo.role] ?? orgInfo.role}</span>
+              <span className={cn("whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold", ORG_ROLE_TONE[orgInfo.role] ?? "bg-muted text-muted-foreground")}>{ORG_ROLE_LABEL[orgInfo.role] ?? orgInfo.role}</span>
             ) : deactivated ? (
               leftAt
                 ? <LeftTag leftAt={leftAt} className="px-2 text-[11px] font-bold" />
@@ -748,7 +792,7 @@ function UserRow(props: UserRowProps) {
               </button>
             )}
             {isMember && (
-              <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-semibold text-foreground transition hover:border-primary hover:text-primary">
+              <button type="button" onClick={() => setOpen(true)} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-semibold text-foreground transition hover:border-primary hover:text-primary pointer-coarse:min-h-11">
                 <Settings2 className="h-3.5 w-3.5" /> {t("Details")}
               </button>
             )}
@@ -848,7 +892,9 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                 {canEdit ? (
                   <SelectPicker variant="field" value={orgInfo.role} disabled={pending} onChange={onOrgRole} ariaLabel={t("Role")} options={[...assignable].reverse().map((r) => ({ value: r, label: ORG_ROLE_LABEL[r] }))} className="w-full bg-card px-3 py-2 font-semibold" />
                 ) : (
-                  <span className="text-sm text-muted-foreground">{t("This person's role is at or above yours, so you can't change it here.")}</span>
+                  // A Manager can't change anyone's role (server: BoD and up manage members), so "at or above
+                  // yours" was false for every Staff they opened (QA 13 Oct 2026).
+                  <span className="text-sm text-muted-foreground">{assignable.length === 0 ? t("Only the BoD and One Above All can change roles.") : t("This person's role is at or above yours, so you can't change it here.")}</span>
                 )}
               </Card>
 
@@ -1794,7 +1840,7 @@ const REQ_TYPES = [
   { value: "specific_tasks", label: "Complete specific tasks (pick tasks)" },
   { value: "task_count", label: "Complete N tasks" },
   { value: "overdue_cleared", label: "Clear N overdue" },
-  { value: "priority_done", label: "Complete N Urgent" },
+  { value: "priority_done", label: "Complete N urgent tasks" },
   { value: "has_overdue", label: "Have ≥N overdue tasks (penalty)" },
 ];
 
@@ -1810,7 +1856,20 @@ function AdminQuests() {
 
   const teamsQuery = useQuery({ queryKey: ["nexus", "teams"], queryFn: nexusApi.teams, retry: false });
   const teams = teamsQuery.data ?? [];
-  const teamName = (id: string) => teams.find((t) => t.id === id)?.name ?? id;
+  // A quest can point at a team that was deleted since (Crew Hub teams are gone: 0 rows). Its raw id meant
+  // nothing to anyone (QA 13 Oct 2026); say what it is — and nobody sees such a quest, so say that too.
+  const teamName = (id: string) => teams.find((t) => t.id === id)?.name ?? null;
+  const audienceText = (ids: string[]) => {
+    const names = ids.map(teamName);
+    const known = names.filter((n): n is string => !!n);
+    if (known.length === 0) return tq("Deleted team · nobody sees this quest");
+    const gone = names.length - known.length;
+    return gone > 0 ? `${known.join(", ")} · ${tn(gone, "{n} deleted team", "{n} deleted teams")}` : known.join(", ");
+  };
+  // Ended quests (deadline passed) no longer reach anyone (/api/gamification/me drops them), so they don't
+  // belong in the active list (QA: one that ended 16 Aug was listed as live).
+  const nowMs = Date.now();
+  const isEnded = (q: { deadline?: string | null }) => !!q.deadline && new Date(q.deadline).getTime() < nowMs;
 
   const [title, setTitle] = useState("");
   const [requirementType, setRequirementType] = useState("task_count");
@@ -1838,12 +1897,18 @@ function AdminQuests() {
       : nexusApi.createAdminQuest({ workspaceId, title: title.trim(), requirementType, requiredCount: Number(requiredCount), xpReward: Math.min(50, Math.max(0, Number(xpReward) || 0)), teamIds: Array.from(selectedTeams), deadline: deadline || null }),
     onSuccess: () => { setTitle(""); setDeadline(""); setSelectedTeams(new Set()); setQuestTasks([]); setTaskSearch(""); invalidate(); },
   });
-  const del = useMutation({ mutationFn: (id: string) => nexusApi.deleteAdminQuest(id), onSuccess: invalidate });
+  const del = useMutation({
+    mutationFn: (id: string) => nexusApi.deleteAdminQuest(id),
+    onSuccess: () => { invalidate(); toast.success(tq("Quest deleted")); },
+    onError: (e: unknown) => toast.error(tq("Couldn't delete the quest"), { description: isForbidden(e) ? tq("Only managers and the BoD can manage quests") : friendlyError(e) ?? tq("Try again.") }),
+  });
   const inputCls = "rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
 
   return (
     <div className="space-y-4">
-      {list.isError && <EmptyState icon={Trophy} tone="muted" title={tq("BoD access required")} message={tq("You need the BoD or Manager role to manage quests.")} />}
+      {list.isError && (isForbidden(list.error)
+        ? <EmptyState icon={Trophy} tone="muted" title={tq("Only managers and the BoD can manage quests")} message={tq("Your own quests are on the dashboard, in the Quests card.")} />
+        : <LoadError error={list.error} what={tq("the quests")} onRetry={() => void list.refetch()} />)}
       {!list.isError && (
         <>
           <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
@@ -1897,7 +1962,7 @@ function AdminQuests() {
               <div className="mt-3">
                 <span className="text-xs font-semibold text-muted-foreground">{tq("Assign to team")} <span className="font-normal">{tq("(pick one or more · empty = everyone)")}</span></span>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {teams.length === 0 && <span className="text-xs text-muted-foreground">{tq("No teams yet.")}</span>}
+                  {teams.length === 0 && <span className="text-xs text-muted-foreground">{teamsQuery.isError ? tq("Couldn't load the teams. The quest goes to everyone.") : tq("There are no teams in this workspace, so the quest goes to everyone.")}</span>}
                   {teams.map((t) => {
                     const on = selectedTeams.has(t.id);
                     return <button key={t.id} type="button" onClick={() => toggleTeam(t.id)} className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition", on ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}><span className="h-2 w-2 rounded-full" style={{ background: t.color ?? "#7b68ee" }} />{t.name}</button>;
@@ -1906,23 +1971,23 @@ function AdminQuests() {
               </div>
             )}
             <button disabled={!title.trim() || !workspaceId || create.isPending || (isTasks && questTasks.length === 0)} onClick={() => create.mutate()} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} {isTasks ? tq("Create quest") : tq("Assign quest")}</button>
-            {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">{tq("Couldn't save. Check your access.")}</span>}
+            {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">{tq("Couldn't save the quest.")} {failureText(create.error)}</span>}
           </div>
           <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
             {list.isLoading && <div className="flex justify-center py-10 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
             <div className="divide-y divide-border">
-              {rows.map((q) => (
-                <div key={q.id} className="flex items-center gap-3 px-4 py-3 text-sm">
-                  <Trophy className="h-4 w-4 shrink-0 text-warning-foreground dark:text-warning" />
+              {[...rows].sort((a, b) => Number(isEnded(a)) - Number(isEnded(b))).map((q) => (
+                <div key={q.id} className={cn("flex items-center gap-3 px-4 py-3 text-sm", isEnded(q) && "opacity-70")}>
+                  <Trophy className={cn("h-4 w-4 shrink-0", isEnded(q) ? "text-muted-foreground" : "text-warning-foreground dark:text-warning")} />
                   <div className="min-w-0 flex-1">
-                    <div className="font-semibold">{q.title}</div>
+                    <div className="flex flex-wrap items-center gap-2 font-semibold">{q.title}{isEnded(q) && <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">{tq("Ended")}</span>}</div>
                     <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                       <span>{(() => { const lbl = REQ_TYPES.find((r) => r.value === q.requirementType)?.label; return lbl ? tq(lbl) : q.requirementType; })()} · {q.requirementType === "specific_tasks" ? tn(q.requiredCount, "{n} task", "{n} tasks") : tq("target {n}", { n: q.requiredCount })}</span>
                       <span className="font-bold text-success">+{q.xpReward} XP</span>
                       {q.deadline && <span>· ⏰ {tq("until {date}", { date: fmtDate(q.deadline) })}</span>}
                       {q.requirementType === "specific_tasks"
                         ? <span>· {tq("members of the task's project")}</span>
-                        : <span>· {q.teamIds && q.teamIds.length > 0 ? q.teamIds.map(teamName).join(", ") : tq("Everyone")}</span>}
+                        : <span>· {q.teamIds && q.teamIds.length > 0 ? (teamsQuery.isSuccess ? audienceText(q.teamIds) : tn(q.teamIds.length, "{n} team", "{n} teams")) : tq("Everyone")}</span>}
                     </div>
                   </div>
                   <button aria-label={tq("Delete this quest")} onClick={() => { if (confirm(tq("Delete this quest?"))) del.mutate(q.id); }} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
@@ -1991,13 +2056,16 @@ function AnnouncementsAdmin() {
     onSuccess: () => { setTitle(""); setBody(""); setTone("info"); setAudience("all"); setTargetIds([]); setMemberSearch(""); setRepeatDays(0); setRepeatAtTime("09:00"); setSpOn(false); setAttachment(null); invalidate(); toast.success(t("Posted")); },
     onError: (e: unknown) => toast.error(t("Couldn't post"), { description: e instanceof ApiError ? e.message : t("Try again.") }),
   });
-  const toggle = useMutation({ mutationFn: ({ id, active }: { id: string; active: boolean }) => nexusApi.updateAnnouncement(id, { active }), onSuccess: invalidate });
-  const del = useMutation({ mutationFn: (id: string) => nexusApi.deleteAnnouncement(id), onSuccess: invalidate });
+  // A failed deactivate/delete used to look like nothing happened (QA 13 Oct 2026).
+  const toggle = useMutation({ mutationFn: ({ id, active }: { id: string; active: boolean }) => nexusApi.updateAnnouncement(id, { active }), onSuccess: invalidate, onError: (e: unknown, v) => toastFailure(v.active ? t("Couldn't turn the announcement back on") : t("Couldn't deactivate the announcement"), e) });
+  const del = useMutation({ mutationFn: (id: string) => nexusApi.deleteAnnouncement(id), onSuccess: () => { invalidate(); toast.success(t("Announcement deleted")); }, onError: (e: unknown) => toastFailure(t("Couldn't delete the announcement"), e) });
   const rows = list.data?.announcements ?? [];
 
   return (
     <div className="space-y-5">
-      {list.isError && <EmptyState icon={Megaphone} tone="muted" title={t("BoD access required")} message={t("You need the BoD role or above to manage announcements.")} />}
+      {list.isError && (isForbidden(list.error)
+        ? <EmptyState icon={Megaphone} tone="muted" title={t("BoD access required")} message={t("You need the BoD role or above to manage announcements.")} />
+        : <LoadError error={list.error} what={t("the announcements")} onRetry={() => void list.refetch()} />)}
       {!list.isError && (
         <>
           <div className="space-y-3 rounded-2xl border border-border bg-card p-4 shadow-soft">

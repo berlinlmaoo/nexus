@@ -12,12 +12,14 @@ import {
 } from "@/lib/nexus-api";
 import { NotificationFilterTabs } from "@/components/NotificationFilterTabs";
 import { PageBody } from "@/components/PageLayout";
-import { AtSign, UserPlus, MessageCircle, AlarmClock, Activity, Check, Trash2, Loader2, Inbox, Filter, Lock } from "lucide-react";
+import { AtSign, UserPlus, MessageCircle, AlarmClock, Activity, Check, Trash2, Loader2, Inbox, Filter } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
 import { Reveal } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLang } from "@/lib/lang";
 import { notificationMessage, notificationTitle } from "@/lib/server-text";
+import { toastFailure } from "@/lib/failure";
+import { LoadError } from "@/components/LoadError";
 
 export const Route = createFileRoute("/_app/inbox")({ component: InboxPage });
 
@@ -67,7 +69,7 @@ function InboxPage() {
                 <div className="flex-1 space-y-1.5"><Skeleton className="h-3.5 w-1/3" /><Skeleton className="h-3 w-2/3" /><Skeleton className="h-2.5 w-24" /></div>
               </div>
             ))}
-            {inbox.isError && <EmptyState icon={Lock} tone="muted" title={t("Couldn't load notifications")} message={t("Your session may have ended. Sign in again to see your notifications.")} compact />}
+            {inbox.isError && <LoadError compact error={inbox.error} what={t("your notifications")} onRetry={() => void inbox.refetch()} />}
             {!inbox.isLoading && !inbox.isError && notifications.length === 0 && (
               <EmptyState icon={Inbox} tone="success" title={t("No notifications")} compact
                 message={t("Requests to approve, replies to your tickets, mentions and announcements show up here the moment they happen. Nothing needs you right now.")} />
@@ -114,8 +116,8 @@ function NotificationRow({ notification, idx }: { notification: NexusNotificatio
   const navigate = useNavigate();
   const Icon = iconMap[idx % iconMap.length];
   const refresh = () => qc.invalidateQueries({ queryKey: ["nexus", "notifications"] });
-  const markRead = useMutation({ mutationFn: () => nexusApi.markNotificationRead(notification.id), onSuccess: refresh, onError: (e: unknown) => alert(e instanceof Error ? e.message : t("Couldn't mark it as read.")), });
-  const remove = useMutation({ mutationFn: () => nexusApi.deleteNotification(notification.id), onSuccess: () => { refresh(); celebrate(t("Notification deleted")); }, onError: (e: unknown) => alert(e instanceof Error ? e.message : t("Couldn't delete it.")), });
+  const markRead = useMutation({ mutationFn: () => nexusApi.markNotificationRead(notification.id), onSuccess: refresh, onError: (e: unknown) => toastFailure(t("Couldn't mark it as read."), e) });
+  const remove = useMutation({ mutationFn: () => nexusApi.deleteNotification(notification.id), onSuccess: () => { refresh(); celebrate(t("Notification deleted")); }, onError: (e: unknown) => toastFailure(t("Couldn't delete it."), e) });
   const busy = markRead.isPending || remove.isPending;
   const target = notificationTarget(notification);
 

@@ -51,11 +51,22 @@ export async function GET(request: NextRequest) {
     const where: Record<string, unknown> = { ...scope }
     // `in: []` when a caller asks for a status that does not exist: zero tickets are in it, which is
     // a truer answer than the whole list, and better than the 500 an unknown enum value used to give.
-    if (filtering) where.status = { in: wanted }
+    // A ticket that was closed (or marked resolved) while its attendance-fix proposal was still PENDING
+    // sat in no queue: the In review list asked only for IN_REVIEW/AWAITING_DECISION, yet the proposal
+    // card in it still waits for an Approve/Reject (QA 13 Oct 2026, 2 such tickets on prod data). The
+    // review queue now carries them until the decision is made; nothing about the ticket or the
+    // attendance data is changed here.
+    const closedWithPending = { status: { in: ["RESOLVED", "CLOSED"] as ComplaintStatusKey[] }, corrections: { some: { status: "PENDING" as const } } }
+    const reviewQueue = filtering && wanted.includes("IN_REVIEW")
+    if (filtering) {
+      if (reviewQueue) where.OR = [{ status: { in: wanted } }, closedWithPending]
+      else where.status = { in: wanted }
+    }
 
-    const [complaints, grouped] = await Promise.all([
+    const [complaints, grouped, closedPending] = await Promise.all([
       prisma.complaint.findMany({ where, include: COMPLAINT_LIST_INCLUDE, orderBy: { lastMessageAt: "desc" }, take: 200 }),
       prisma.complaint.groupBy({ by: ["status"], where: scope, _count: { _all: true } }),
+      prisma.complaint.count({ where: { ...scope, ...closedWithPending } }),
     ])
     const counts: Record<string, number> = {}
     for (const g of grouped) counts[g.status] = g._count._all
@@ -65,7 +76,7 @@ export async function GET(request: NextRequest) {
     // widened half is still here under its own key, so a client can show both.
     // counts[k] = jumlah baris yang benar-benar berstatus k. INBOX & REVIEW = jumlah untuk tab-nya.
     counts.INBOX = counts.OPEN ?? 0
-    counts.REVIEW = (counts.IN_REVIEW ?? 0) + (counts.AWAITING_DECISION ?? 0)
+    counts.REVIEW = (counts.IN_REVIEW ?? 0) + (counts.AWAITING_DECISION ?? 0) + closedPending
     void COMPLAINT_INBOX_STATUSES
 
     return NextResponse.json({ complaints: complaints.map((c) => serializeComplaint(c, me, viewerIsBod)), counts, viewerIsBod })
