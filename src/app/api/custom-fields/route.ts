@@ -22,6 +22,7 @@ import {
   formatCustomFieldValueForExport,
 } from "@/lib/custom-fields"
 import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
+import { numberFieldFormat } from "@/lib/custom-field-number"
 import { runAutomations } from "@/lib/automation-engine"
 
 /** A stored custom-field value as a person reads it (option label, "Rp 2.000.000", file names). */
@@ -481,6 +482,9 @@ export async function PATCH(req: NextRequest) {
       options !== undefined
         ? (normalizeCustomFieldOptions(normalizedType, optionsIn) ?? undefined) as InputJsonValue | undefined
         : undefined
+    // NUMBER values are stored per the field's format (Rupiah = integer digits), so writes use the
+    // options this request leaves the field with.
+    const effectiveOptions: unknown = options !== undefined ? normalizedOptionsJson ?? null : existingField.options
 
     if (taskId) {
       const task = await prisma.task.findFirst({
@@ -516,7 +520,7 @@ export async function PATCH(req: NextRequest) {
       const serializedValue =
         normalizedType === "CREATED"
           ? serializeCustomFieldValue(normalizedType, undefined, task.createdAt)
-          : serializeCustomFieldValue(normalizedType, value, task.createdAt)
+          : serializeCustomFieldValue(normalizedType, value, task.createdAt, effectiveOptions)
 
       const fieldValue = await prisma.customFieldValue.upsert({
         where: {
@@ -637,7 +641,14 @@ export async function PATCH(req: NextRequest) {
         })
       }
 
-      if (type !== undefined && previousFieldType && previousFieldType !== normalizedType) {
+      // A type change converts every value; so does a NUMBER field switching format (plain <-> Rupiah),
+      // so a field turned into Rupiah never keeps a "369.000" the board would read as Rp 369.
+      const numberFormatChanged =
+        normalizedType === "NUMBER" &&
+        options !== undefined &&
+        (previousFieldType ?? normalizedType) === "NUMBER" &&
+        numberFieldFormat(existingField.options) !== numberFieldFormat(effectiveOptions)
+      if ((type !== undefined && previousFieldType && previousFieldType !== normalizedType) || numberFormatChanged) {
         const existingValues = await tx.customFieldValue.findMany({
           where: { customFieldId: { in: linkedFieldIds } },
           include: {
@@ -651,7 +662,7 @@ export async function PATCH(req: NextRequest) {
 
         for (const fieldValue of existingValues) {
           const previousValue = parseCustomFieldValue(
-            previousFieldType,
+            previousFieldType ?? normalizedType,
             fieldValue.value,
             fieldValue.task.createdAt
           )
@@ -666,7 +677,8 @@ export async function PATCH(req: NextRequest) {
                   previousValue,
                   fieldValue.task.createdAt
                 ),
-                fieldValue.task.createdAt
+                fieldValue.task.createdAt,
+                effectiveOptions
               ),
             },
           })

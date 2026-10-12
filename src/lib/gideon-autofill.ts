@@ -109,7 +109,7 @@ export async function runAutofill(input: { projectId: string; fieldIds: string[]
         const value = coerceAutofillValue(f, raw)
         if (value === null) { skipped++; continue }
         const v = f.type === "NUMBER" ? String(value) : value
-        const serialized = serializeCustomFieldValue(f.type as SupportedCustomFieldType, v, t.createdAt)
+        const serialized = serializeCustomFieldValue(f.type as SupportedCustomFieldType, v, t.createdAt, rows.find((r) => r.id === f.id)?.options)
         const current = t.customFieldValues.find((x) => x.customFieldId === f.id)?.value ?? ""
         if (serialized === current) { skipped++; continue }
         updates.push({ field: f, value: v, serialized })

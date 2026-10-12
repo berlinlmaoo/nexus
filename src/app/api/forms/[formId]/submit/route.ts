@@ -511,7 +511,7 @@ export async function POST(
           return {
             customFieldId: customField.id,
             taskId: task.id,
-            value: serializeCustomFieldValue(type, coercedValue, task.createdAt),
+            value: serializeCustomFieldValue(type, coercedValue, task.createdAt, customField.options),
           }
         })
         .filter((value): value is { customFieldId: string; taskId: string; value: string } => Boolean(value))
@@ -521,7 +521,7 @@ export async function POST(
         const customField = form.project.customFields.find((item) => item.id === customFieldId)
         const type = normalizeCustomFieldType(customField?.type)
         if (!type) continue
-        customFieldValues.push({ customFieldId, taskId: task.id, value: serializeCustomFieldValue(type, coerceCustomFieldValueForType(type, value, task.createdAt), task.createdAt) })
+        customFieldValues.push({ customFieldId, taskId: task.id, value: serializeCustomFieldValue(type, coerceCustomFieldValueForType(type, value, task.createdAt), task.createdAt, customField?.options) })
       }
 
       if (customFieldValues.length > 0) {

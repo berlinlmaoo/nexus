@@ -3,6 +3,7 @@ import { createFileRoute, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Clock, Loader2, LogIn, Lock, Paperclip } from "lucide-react";
 import { ApiError, nexusApi, type NexusFormField } from "@/lib/nexus-api";
+import { RupiahInput } from "@/components/RupiahInput";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/f/$formId")({ component: PublicForm });
@@ -14,8 +15,6 @@ type Cond = {
 };
 // The backend returns richer fields than NexusFormField declares (name/showIf/…).
 type FField = NexusFormField & { name?: string; showIf?: Cond | null; attachmentEnabled?: boolean; autofill?: "name" | "email"; numberFormat?: "currency-idr" };
-
-const idr = (digits: string) => { const n = Number(digits); return n ? new Intl.NumberFormat("id-ID").format(n) : ""; };
 
 function fieldLabel(f: FField) {
   return f.name || f.label || "Field";
@@ -231,10 +230,7 @@ function PublicForm() {
                         <input type="file" multiple required={field.required} className="hidden" onChange={(e) => set(field.id, Array.from(e.target.files ?? []))} />
                       </label>
                     ) : field.type === "number" && field.numberFormat === "currency-idr" ? (
-                      <div className="relative">
-                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">Rp</span>
-                        <input required={field.required} inputMode="numeric" placeholder="0" value={idr(String(val ?? ""))} onChange={(e) => set(field.id, e.target.value.replace(/[^\d]/g, ""))} className={cn(input, "pl-9")} />
-                      </div>
+                      <RupiahInput required={field.required} value={String(val ?? "")} onChange={(digits) => set(field.id, digits)} className={input} ariaLabel={label} />
                     ) : field.autofill ? (
                       <div className="relative">
                         <input readOnly value={String(val ?? "")} className={cn(input, "cursor-not-allowed bg-muted/50 pr-9 text-muted-foreground")} />
