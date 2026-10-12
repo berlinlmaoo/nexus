@@ -132,3 +132,46 @@ export async function describeRefs(userId: string, refs: GideonContextRef[]) {
   const { refs: out } = await gatherContext(userId, { refs })
   return out.map((r) => ({ kind: r.kind, id: r.id, title: r.title, projectId: r.projectId ?? null, url: r.url }))
 }
+
+// ── The attached project as primary scope ─────────────────────────────────────────────────────────────
+
+const PRIORITY_WORD: Record<string, string> = { URGENT: "Urgent", HIGH: "High", MEDIUM: "Medium", LOW: "Low", NONE: "" }
+const OPEN_LIMIT = 40
+
+/**
+ * A compact digest of a project the question is scoped to (owner, 12 Oct 2026: "ada task apa aja?" asked
+ * from Finance Management was answered about another project): every status column with its count, the
+ * open tasks first (column, due date, priority, assignees — open ones by due date, at most 40), then how
+ * many are done with the most recent few. Read with the asker's access; null when they cannot see it.
+ * Labels only (column names, priority words): no ids or enum values reach the answer.
+ */
+export async function projectDigest(userId: string, projectId: string): Promise<{ name: string; lines: string[] } | null> {
+  if (!(await checkProjectAccess(userId, projectId, ["VIEWER"])).allowed) return null
+  const p = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true, name: true, description: true } })
+  if (!p) return null
+  const lists = await prisma.taskList.findMany({ where: { projectId }, select: { id: true, name: true, position: true, taskStatus: true }, orderBy: { position: "asc" } })
+  const tasks = await prisma.task.findMany({
+    where: { taskListId: { in: lists.map((l) => l.id) }, parentId: null },
+    select: { title: true, status: true, priority: true, dueDate: true, completedAt: true, updatedAt: true, taskListId: true, assignees: { select: { user: { select: { name: true } } } } },
+    take: 2000,
+  })
+  const colName = new Map(lists.map((l) => [l.id, l.name]))
+  const isDone = (t: { status: unknown }) => String(t.status) === "DONE" || String(t.status) === "CANCELLED"
+  const open = tasks.filter((t) => !isDone(t)).sort((a, b) => (a.dueDate?.getTime() ?? Infinity) - (b.dueDate?.getTime() ?? Infinity))
+  const done = tasks.filter(isDone).sort((a, b) => (b.completedAt ?? b.updatedAt).getTime() - (a.completedAt ?? a.updatedAt).getTime())
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const fmt = (d: Date) => d.toISOString().slice(0, 10)
+  const counts = lists.map((l) => `${l.name} ${tasks.filter((t) => t.taskListId === l.id).length}`).join(" · ")
+  const lines = [
+    `[KONTEKS UTAMA · project "${p.name}"] Ini project yang sedang dibuka/dilampirkan. ${tasks.length} task: ${counts}. ${open.length} masih terbuka, ${done.length} selesai.`,
+    ...(p.description ? [`Deskripsi project: ${p.description.slice(0, 500)}`] : []),
+    open.length ? `Task terbuka (urut tenggat${open.length > OPEN_LIMIT ? `, ${OPEN_LIMIT} dari ${open.length}` : ""}):` : "Tidak ada task terbuka.",
+    ...open.slice(0, OPEN_LIMIT).map((t) => {
+      const who = t.assignees.map((a) => a.user.name).filter(Boolean).join(", ")
+      const overdue = t.dueDate && t.dueDate < today ? " — LEWAT TENGGAT" : ""
+      return `- "${t.title}" · ${colName.get(t.taskListId) ?? ""}${t.dueDate ? ` · tenggat ${fmt(t.dueDate)}${overdue}` : ""}${PRIORITY_WORD[String(t.priority)] ? ` · ${PRIORITY_WORD[String(t.priority)]}` : ""}${who ? ` · ${who}` : ""}`
+    }),
+    ...(done.length ? [`Selesai terbaru: ${done.slice(0, 5).map((t) => `"${t.title}"`).join(", ")}${done.length > 5 ? ` (+${done.length - 5} lagi)` : ""}.`] : []),
+  ]
+  return { name: p.name, lines }
+}

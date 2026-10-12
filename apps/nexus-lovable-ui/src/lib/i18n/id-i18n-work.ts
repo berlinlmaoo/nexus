@@ -295,4 +295,5 @@ export const ID_I18N_WORK: Record<string, string> = {
   "Added a comment": "Menambahkan komentar",
   "Added an assignee": "Menambahkan assignee",
   "Removed an assignee": "Menghapus assignee",
+  "Reading {name}": "Membaca {name}",
 }

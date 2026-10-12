@@ -62,6 +62,7 @@ function stepText(s: GideonStep, t: LangApi["t"]): string {
     case "search_tasks": return a ? t("Searching tasks for “{q}”", { q: a }) : t("Searching tasks");
     case "search_workspace": return a ? t("Searching your workspace for “{q}”", { q: a }) : t("Searching your workspace");
     case "get_project_summary": return a ? t("Reading project {name}", { name: a }) : t("Reading a project");
+    case "read_context": return a ? t("Reading {name}", { name: a }) : t("Reading a project");
     case "list_custom_fields": return t("Reading the project's fields");
     case "get_task": return a ? t("Reading task {name}", { name: a }) : t("Reading a task");
     case "search_docs": return a ? t("Searching docs for “{q}”", { q: a }) : t("Searching docs");

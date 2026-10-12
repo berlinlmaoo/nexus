@@ -10,7 +10,7 @@ import { checkProjectAccess } from '@/lib/rbac'
 import {
   approvalPromptLine, finishRun, parseApprovalMode, publishRunEvent, recordStep, runMeta, citedRefs, startRun, subscribeRun, type ApprovalMode, type GideonRef, type RunEvent,
 } from '@/lib/gideon-runs'
-import { resolveGideonChat, gatherContext, personalPromptLines, touchGideonChat, type GideonContextRef } from '@/lib/gideon-assistant'
+import { resolveGideonChat, gatherContext, personalPromptLines, projectDigest, touchGideonChat, type GideonContextRef } from '@/lib/gideon-assistant'
 import { searchWorkspace } from '@/lib/workspace-search'
 
 // There is no SYSTEM_PROMPT constant here any more. One existed for months and was never sent:
@@ -295,20 +295,41 @@ export async function POST(req: NextRequest) {
       // Workspace Q&A: what the person can see that matches the question, searched BEFORE the model answers so
       // the answer stands on real records (and cites them) instead of a guess. Skipped for a file question.
       const searchLines: string[] = []
+      // The attached project (the page GIDEON was opened from, or a project chip) is the PRIMARY scope
+      // (owner, 12 Oct 2026): its digest is read here with the asker's access and the pre-search stays
+      // inside it, so "ada task apa aja?" answers about that project, not whatever the whole workspace
+      // search matched first.
+      const scopeProjectId = ctx?.projectId ?? gathered.refs.find((r) => r.kind === 'project')?.id ?? null
+      const scopeLines: string[] = []
+      if (scopeProjectId && !ctx?.taskId) {
+        const started = Date.now()
+        const digest = await projectDigest(userId, scopeProjectId).catch(() => null)
+        if (digest) {
+          scopeLines.push(...digest.lines)
+          if (runId) {
+            const stepId = `ctx${Date.now().toString(36)}`
+            publishRunEvent(runId, { type: 'step', step: { id: stepId, tool: 'read_context', arg: digest.name.slice(0, 80), label: `Reading ${digest.name}`, status: 'done' } })
+            await recordStep(runId, { tool: 'read_context', arg: digest.name.slice(0, 80), ok: true, durationMs: Date.now() - started })
+          }
+        }
+      }
       // The pre-search hits are offered to the model; only the ones its answer actually names become Sources.
       let preSearch: { stepId: string | null; refs: GideonRef[] } | null = null
       if (streamClient && wantsSearch !== false && asked && !documentBase64 && !imageBase64) {
         const started = Date.now()
         try {
-          const { hits } = await searchWorkspace(userId, asked, { limit: 8 })
+          const { hits } = await searchWorkspace(userId, asked, { limit: 8, ...(scopeProjectId ? { projectId: scopeProjectId } : {}) })
           if (hits.length) {
             searchLines.push('[HASIL PENCARIAN NEXUS — hanya yang boleh dilihat orang ini] Pakai ini sebagai sumber; sebut judulnya persis saat dipakai. Kalau tidak menjawab pertanyaannya, panggil nexus_search_workspace / tool lain dengan kata kunci lain. Jangan mengarang data yang tidak ada.')
             hits.forEach((h, i) => searchLines.push(`${i + 1}. [${h.kind}] "${h.title}"${h.projectName ? ` (project ${h.projectName})` : ''} — ${h.excerpt || '—'} (id ${h.id})`))
             const refs: GideonRef[] = hits.map((h) => ({ kind: h.kind, id: h.id, title: h.title, projectId: h.projectId ?? null, url: h.url, excerpt: h.excerpt || null }))
-            if (runId) {
+            if (runId && !scopeProjectId) {
               const stepId = `ws${Date.now().toString(36)}`
               publishRunEvent(runId, { type: 'step', step: { id: stepId, tool: 'search_workspace', arg: asked.slice(0, 80), label: 'Searching the workspace', status: 'done' } })
               preSearch = { stepId: await recordStep(runId, { tool: 'search_workspace', arg: asked.slice(0, 80), ok: true, durationMs: Date.now() - started }), refs }
+            } else if (runId) {
+              // Searched inside the attached project only: no separate "workspace" step; the read step covers it.
+              preSearch = { stepId: null, refs }
             }
           }
         } catch (error) {
@@ -319,12 +340,15 @@ export async function POST(req: NextRequest) {
       const extra = [
         ...prefsLines,
         ...gathered.lines,
+        ...scopeLines,
         ...searchLines,
         ctx
           ? (ctx.taskId
             ? `[KONTEKS HALAMAN] ${session.user?.name || 'Dia'} membuka GIDEON dari task "${ctx.taskTitle}" (taskId: ${ctx.taskId}) di project "${ctx.projectName}" (projectId: ${ctx.projectId}). Kalau pertanyaannya tidak menyebut hal lain, anggap tentang task ini.`
-            : `[KONTEKS HALAMAN] ${session.user?.name || 'Dia'} membuka GIDEON dari project "${ctx.projectName}" (projectId: ${ctx.projectId}). Kalau pertanyaannya tidak menyebut project lain, anggap tentang project ini.`)
-          : '',
+            : `[KONTEKS HALAMAN] ${session.user?.name || 'Dia'} membuka GIDEON dari project "${ctx.projectName}" (projectId: ${ctx.projectId}). Ini CAKUPAN UTAMA: "project ini", "ini", "di sini", "task apa aja/apa saja", "yang belum selesai", "siapa yang pegang" dan pertanyaan tanpa nama project lain SELALU tentang "${ctx.projectName}" — jawab dari [KONTEKS UTAMA] di atas (task terbuka dulu, ringkas kalau banyak: kelompokkan per kolom/tenggat). Cari di project lain HANYA kalau pertanyaannya jelas menyebut project/task lain. Pertanyaan bisa salah ketik (mis. "aka" = "aja"): pahami maksudnya, jangan dijadikan kata kunci.`)
+          : scopeProjectId
+            ? `[KONTEKS LAMPIRAN] Project terlampir di [KONTEKS UTAMA] adalah cakupan utama pertanyaan ini; cari di tempat lain hanya kalau pertanyaannya jelas menyebut hal lain. Pertanyaan bisa salah ketik: pahami maksudnya.`
+            : '',
         approvalPromptLine(approvalMode),
         rawUiLang === 'en'
           ? '[BAHASA ANTARMUKA] English. Reply in the language the person wrote their message in (Indonesian question → Indonesian answer). Use English only when the message language is unclear (a name, a link, an emoji). Titles stay as they are.'
