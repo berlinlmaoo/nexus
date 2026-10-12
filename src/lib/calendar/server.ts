@@ -6,8 +6,8 @@ import { auth } from "@/lib/auth"
 import { getAppSetting } from "@/lib/app-setting"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
 import {
-  buildItems, buildStructure, CALENDAR_SETTINGS_DEFAULTS, effectiveVisibility, inAudience, normalizeCalendarSettings, projectUnits,
-  type CalendarSettings, type CalItem, type CalStructure, type CalViewer, type ItemContext, type ProjectUnitWhy, type TaskRow,
+  buildItems, buildStructure, CALENDAR_SETTINGS_DEFAULTS, effectiveVisibility, inAudience, normalizeCalendarSettings,
+  type CalendarSettings, type CalItem, type CalStructure, type CalViewer, type ItemContext, type TaskRow,
 } from "@/lib/calendar/core"
 
 /**
@@ -105,18 +105,6 @@ export async function loadStructure(): Promise<LoadedStructure> {
   }
 }
 
-/**
- * Every company project → its division (core.ts projectUnits): where a task goes when none of its
- * PICs is in the Bagan. Archived projects included, so nothing moves when a project is archived.
- */
-export async function loadProjectUnits(s: LoadedStructure, settings: CalendarSettings): Promise<Map<string, { unitId: string; why: ProjectUnitWhy }>> {
-  const [projects, folders] = await Promise.all([
-    prisma.project.findMany({ where: { workspaceId: ORG_WORKSPACE_ID }, select: { id: true, name: true, folderId: true } }),
-    prisma.projectFolder.findMany({ where: { workspaceId: ORG_WORKSPACE_ID }, select: { id: true, name: true, parentFolderId: true } }),
-  ])
-  return projectUnits(projects, folders, s.units, settings)
-}
-
 // ── Tasks ──────────────────────────────────────────────────────────────────────────────────────────
 
 /** A safety cap; a month is ~200 tasks today. */
@@ -158,14 +146,16 @@ function toRow(t: TaskSelected, dueDate: Date): TaskRow {
 
 /**
  * Tasks of the company workspace (home project there and not archived), not cancelled, with a due
- * date matching `dueDate`. One query; the assignees come in the order they were assigned. `open`
- * = still to do: not done.
+ * date matching `dueDate` and at least one PIC (a task nobody is doing is not on the calendar, owner
+ * 12 Oct 2026; filtered here too so it never takes a place under the row cap). One query; the
+ * assignees come in the order they were assigned. `open` = still to do: not done.
  */
 export async function loadTaskRows(dueDate: Prisma.TaskWhereInput["dueDate"], opts: { open?: boolean; take?: number; order?: "asc" | "desc" } = {}): Promise<{ rows: TaskRow[]; truncated: boolean }> {
   const take = opts.take ?? ROW_CAP
   const found = await prisma.task.findMany({
     where: {
       dueDate,
+      assignees: { some: {} },
       status: opts.open ? { notIn: ["DONE", "CANCELLED"] } : { not: "CANCELLED" },
       taskList: { project: { workspaceId: ORG_WORKSPACE_ID, status: { not: "ARCHIVED" } } },
     },
@@ -188,7 +178,7 @@ export async function loadUndatedRows(assigneeId: string | null, take: number): 
       dueDate: null,
       status: { notIn: ["DONE", "CANCELLED"] },
       taskList: { project: { workspaceId: ORG_WORKSPACE_ID, status: { not: "ARCHIVED" } } },
-      ...(assigneeId ? { assignees: { some: { userId: assigneeId } } } : {}),
+      assignees: assigneeId ? { some: { userId: assigneeId } } : { some: {} },
     },
     orderBy: [{ priority: "asc" }, { updatedAt: "desc" }, { id: "asc" }],
     take,
@@ -215,16 +205,13 @@ export function maskKey(taskId: string): string {
   return `x_${createHmac("sha256", secret).update(`calendar-mask:${taskId}`).digest("base64url").slice(0, 16)}`
 }
 
-export function itemContext(caller: Extract<CalendarCaller, { kind: "ok" }>, s: LoadedStructure, projectUnitOf: Map<string, { unitId: string }>): ItemContext {
-  return {
-    viewer: caller.viewer, settings: caller.settings, homeUnitsOf: s.homeUnitsOf, unitRank: s.unitRank, maskKey,
-    projectUnitOf: new Map([...projectUnitOf].map(([id, v]) => [id, v.unitId])),
-  }
+export function itemContext(caller: Extract<CalendarCaller, { kind: "ok" }>, s: LoadedStructure): ItemContext {
+  return { viewer: caller.viewer, settings: caller.settings, homeUnitsOf: s.homeUnitsOf, unitRank: s.unitRank, maskKey }
 }
 
-/** The items of these rows for this caller: one query for the project divisions, the rest in memory. */
+/** The items of these rows for this caller (in memory; a row without a PIC is dropped, core.ts onCalendar). */
 export async function buildCalendarItems(rows: TaskRow[], caller: Extract<CalendarCaller, { kind: "ok" }>, s: LoadedStructure): Promise<CalItem[]> {
-  return buildItems(rows, itemContext(caller, s, await loadProjectUnits(s, caller.settings)))
+  return buildItems(rows, itemContext(caller, s))
 }
 
 /** Name and avatar of assignees who are not in the structure (former members, bots). */

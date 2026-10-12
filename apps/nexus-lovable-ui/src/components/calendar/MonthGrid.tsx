@@ -62,7 +62,7 @@ export const MonthGrid = memo(function MonthGrid({
   const maxDots = compact ? 3 : 4;
   const gridRef = useRef<HTMLDivElement>(null);
   const descId = useId();
-  const unitName = (unitId: string) => (unitId === "other" ? t("Other") : (ix.byId.get(unitId)?.name ?? "?"));
+  const unitName = (unitId: string) => (unitId === "other" ? t("No division") : (ix.byId.get(unitId)?.name ?? "?"));
   // A key pressed on a day keeps the keyboard focus on the newly selected day, also when that day is in
   // another month (the days are keyed by date, so the cell that had focus is gone then).
   const ownRefocus = useRef(false);

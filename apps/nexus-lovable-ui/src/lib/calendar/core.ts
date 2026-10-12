@@ -6,8 +6,10 @@
  * (placements); nothing here changes that.
  *
  * Owner's decisions (plan "Rencana Kalender NEXUS", numbered rules in section 10):
- *   - a task is under the Bagan cards of its PICs; without a PIC in the Bagan, under its project's
- *     division (placedBy "project") — there is no "no PIC" corner and no grey dot (10.5, 10.8);
+ *   - a task is under the Bagan cards of its PICs. A task with no PIC is not sent at all; one whose PICs
+ *     are all outside the Bagan has no placements: a neutral "other" dot, listed under "Not in the chart
+ *     yet" by its PICs, never in "My division" (owner, 12 Oct 2026 — replaces the old "project's division"
+ *     fallback, placedBy "project", which the server no longer sends);
  *   - overdue up to `overdueWindowDays` is shown as overdue; older stays on its date, grey (10.17);
  *   - counts are unique tasks: a task under two divisions counts once in the total (10.7);
  *   - order everywhere = Bagan canvas order (`rank`) (10.9).
@@ -338,7 +340,7 @@ export type TreeNode = {
   items: CalItem[]
   /** People placed exactly here with their tasks (lens "person"), in Bagan box order. */
   people: PersonRow[]
-  /** Tasks placed here without a person (no PIC → its project's division). Lens "person" shows them under the unit. */
+  /** Tasks placed here without a person (only the old "project's division" placement had none). Lens "person" shows them under the unit. */
   loose: CalItem[]
   children: TreeNode[]
 }
@@ -394,7 +396,9 @@ export function dayTree(items: CalItem[], ix: CalIndex, focusId: string, today: 
         who.add(u)
       }
     }
-    if (!inside) continue
+    // No placement at all (none of its PICs is in the Bagan): only at the top, where its "other" dot is.
+    const nowhere = i.placements.length === 0 && ix.top?.id === focusId
+    if (!inside && !nowhere) continue
     shown.add(i.key)
     if (i.placedBy === "pic") {
       for (const u of i.unplacedIds) {
@@ -460,7 +464,7 @@ export function weekRows(items: CalItem[], ix: CalIndex, focusId: string, monday
     for (const k of n.children) walk(k, depth + 1)
   }
   if (tree.root) walk(tree.root, 0)
-  if (tree.root && tree.unplaced.length) {
+  if (tree.unplaced.length) {
     out.push({ kind: "unplaced", depth: 0, count: tree.unplaced.length })
     for (const p of tree.unplaced) out.push({ kind: "person", unitId: null, userId: p.userId, depth: 1, days: split(p.items) })
   }

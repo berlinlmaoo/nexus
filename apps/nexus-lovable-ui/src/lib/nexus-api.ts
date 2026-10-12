@@ -1985,16 +1985,12 @@ export type CalendarSettings = {
   visibility: "all" | "all_except_private" | "masked_foreign" | "projects"
   privateProjectIds: string[]; notPrivateProjectIds: string[]; privateNamePrefixes: string[]
   overdueWindowDays: number; urgentDays: number
-  folderUnits: Record<string, string>; projectUnits: Record<string, string>
 };
 export type CalendarSettingsPayload = {
   settings: CalendarSettings
-  units: { id: string; name: string; depth: number }[]
-  folders: { id: string; name: string; parentFolderId: string | null; unitId: string | null }[]
   projects: {
     id: string; name: string; color: string; folderId: string | null
     private: boolean; privateBy: "list" | "prefix" | null
-    unitId: string | null; unitBy: "project" | "folder" | "folder-name" | "project-name" | "top" | null
   }[]
 };
 
