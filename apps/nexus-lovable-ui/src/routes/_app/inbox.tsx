@@ -16,6 +16,7 @@ import { celebrate } from "@/components/Celebration";
 import { Reveal } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLang } from "@/lib/lang";
+import { notificationMessage, notificationTitle } from "@/lib/server-text";
 
 export const Route = createFileRoute("/_app/inbox")({ component: InboxPage });
 
@@ -145,8 +146,8 @@ function NotificationRow({ notification, idx }: { notification: NexusNotificatio
         </span>
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold">{notification.title || t(typeTitle(notification))}</p>
-        <p className="text-sm text-muted-foreground mt-0.5">{notification.message || t("New notification")}</p>
+        <p className="text-sm font-semibold">{notificationTitle(notification)}</p>
+        <p className="text-sm text-muted-foreground mt-0.5">{notificationMessage(notification) || t("New notification")}</p>
         <p className="text-xs text-muted-foreground mt-1">{fmtDay(notification.createdAt, locale)}</p>
         {(markRead.isError || remove.isError) && <p className="mt-1 text-xs font-semibold text-destructive">{t("That didn't work. Check your connection and try again.")}</p>}
       </div>
@@ -167,8 +168,3 @@ function fmtDay(value: string | null | undefined, locale: string) {
   return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString(locale, { day: "numeric", month: "short" });
 }
 
-/** A notification with no title: its type in plain words ("task_assigned" → "Task assigned"). */
-function typeTitle(notification: NexusNotification) {
-  const type = (notification.type || "notification").toLowerCase().replace(/_/g, " ");
-  return type.charAt(0).toUpperCase() + type.slice(1);
-}

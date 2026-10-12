@@ -24,12 +24,13 @@ function MiniAvatar({ user, size = 26 }: { user?: NexusUser | null; size?: numbe
 }
 
 /** Pill switch matching the core-NEXUS "Customize Project" toggles. */
-function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+function Toggle({ checked, onChange, disabled, label }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; label?: string }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
@@ -90,7 +91,7 @@ function ProjectTabsSection({ project, canManage, roleKnown }: { project: NexusP
                 <div className={cn("text-sm font-medium", !shown && "text-muted-foreground")}>{t(PROJECT_TAB_LABELS[key])}</div>
                 {lastTaskView && <div className="text-[11px] text-muted-foreground">{t("Board or List stays on")}</div>}
               </div>
-              <Toggle checked={shown} onChange={(v) => toggle(key, v)} disabled={!canManage || lastTaskView || save.isPending} />
+              <Toggle label={t(PROJECT_TAB_LABELS[key])} checked={shown} onChange={(v) => toggle(key, v)} disabled={!canManage || lastTaskView || save.isPending} />
             </div>
           );
         })}
@@ -265,7 +266,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
                   <div className="text-sm font-semibold">{t("Auto assign")}</div>
                   <p className="mt-0.5 text-xs text-muted-foreground">{t("Automatically assign the selected members to new tasks in this project. If you pick an assignee manually while creating a task, auto assign is skipped.")}</p>
                 </div>
-                <Toggle checked={autoAssignEnabled} onChange={toggleAutoAssign} disabled={settings.isPending} />
+                <Toggle label={t("Auto assign")} checked={autoAssignEnabled} onChange={toggleAutoAssign} disabled={settings.isPending} />
               </div>
               {autoAssignError && <p className="text-xs font-semibold text-destructive">{autoAssignError}</p>}
 

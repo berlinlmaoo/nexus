@@ -60,7 +60,7 @@ export function ImageGrid({ images, onOpen }: { images: FeedImage[]; onOpen: (i:
     const im = images[0];
     const ratio = im.width && im.height ? `${im.width} / ${im.height}` : "4 / 3";
     return (
-      <button onClick={() => onOpen(0)} className="mt-2.5 block w-full overflow-hidden rounded-2xl border border-border bg-muted">
+      <button aria-label={tr("Open photo")} onClick={() => onOpen(0)} className="mt-2.5 block w-full overflow-hidden rounded-2xl border border-border bg-muted">
         <img src={im.url} loading="lazy" alt="" className="block w-full object-cover transition duration-300 hover:scale-[1.02]" style={{ aspectRatio: ratio, maxHeight: 680 }} />
       </button>
     );
@@ -70,9 +70,9 @@ export function ImageGrid({ images, onOpen }: { images: FeedImage[]; onOpen: (i:
   if (n === 3) {
     return (
       <div className="mt-2.5 grid aspect-[3/2] grid-cols-2 grid-rows-2 gap-1 overflow-hidden rounded-2xl border border-border">
-        <button onClick={() => onOpen(0)} className="row-span-2 overflow-hidden bg-muted"><img src={images[0].url} loading="lazy" alt="" className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" /></button>
-        <button onClick={() => onOpen(1)} className="overflow-hidden bg-muted"><img src={images[1].url} loading="lazy" alt="" className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" /></button>
-        <button onClick={() => onOpen(2)} className="overflow-hidden bg-muted"><img src={images[2].url} loading="lazy" alt="" className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" /></button>
+        <button aria-label={tr("Open photo {n} of {total}", { n: 1, total: 3 })} onClick={() => onOpen(0)} className="row-span-2 overflow-hidden bg-muted"><img src={images[0].url} loading="lazy" alt="" className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" /></button>
+        <button aria-label={tr("Open photo {n} of {total}", { n: 2, total: 3 })} onClick={() => onOpen(1)} className="overflow-hidden bg-muted"><img src={images[1].url} loading="lazy" alt="" className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" /></button>
+        <button aria-label={tr("Open photo {n} of {total}", { n: 3, total: 3 })} onClick={() => onOpen(2)} className="overflow-hidden bg-muted"><img src={images[2].url} loading="lazy" alt="" className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" /></button>
       </div>
     );
   }
@@ -81,7 +81,7 @@ export function ImageGrid({ images, onOpen }: { images: FeedImage[]; onOpen: (i:
   return (
     <div className="mt-2.5 grid grid-cols-2 gap-1 overflow-hidden rounded-2xl border border-border">
       {images.map((im, i) => (
-        <button key={im.id} onClick={() => onOpen(i)} className="relative aspect-square overflow-hidden bg-muted">
+        <button aria-label={tr("Open photo {n} of {total}", { n: i + 1, total: images.length })} key={im.id} onClick={() => onOpen(i)} className="relative aspect-square overflow-hidden bg-muted">
           <img src={im.url} loading="lazy" alt="" className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" />
         </button>
       ))}

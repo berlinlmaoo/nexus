@@ -26,6 +26,7 @@ import learner from "@/assets/philearn/learner.png";
 import sophia from "@/assets/philearn/sophia.png";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
+import { notificationMessage, notificationTitle } from "@/lib/server-text";
 import { chatUnreadTotal } from "@/lib/chat-unread";
 import { isSystemMessage, systemSentence } from "@/lib/chat-system";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
@@ -173,11 +174,6 @@ function NotificationsBell({ unread }: { unread: number }) {
   );
 }
 
-function notifTitle(n: NexusNotification) {
-  const s = (n.type || "notification").toLowerCase().replace(/_/g, " ");
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
 function NotificationsModal({ open, onClose, list, unread, loading, error }: { open: boolean; onClose: () => void; list: NexusNotification[]; unread: number; loading: boolean; error: boolean }) {
   const { t, locale } = useLang();
   const reduce = useReducedMotion();
@@ -252,8 +248,8 @@ function NotificationsModal({ open, onClose, list, unread, loading, error }: { o
                 >
                   <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Bell className="h-4 w-4" /></span>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold">{n.title || notifTitle(n)}</div>
-                    <div className="line-clamp-2 text-xs text-muted-foreground">{n.message || t("New notification")}</div>
+                    <div className="truncate text-sm font-semibold">{notificationTitle(n)}</div>
+                    <div className="line-clamp-2 text-xs text-muted-foreground">{notificationMessage(n) || t("New notification")}</div>
                     <div className="mt-0.5 text-[11px] text-muted-foreground">{fmtDay(n.createdAt, locale)}</div>
                   </div>
                   {!n.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />}

@@ -196,7 +196,7 @@ export function ColumnPopover({ col, anchor, onClose, onSave }: {
                       />
                       <span className={cn("min-w-0 flex-1 truncate rounded-full px-2 text-[11px] font-semibold leading-5",
                         optionColors[o] ? CHIP_COLOR_CLASS[optionColors[o]] : CHIP_COLOR_CLASS[CHIP_COLORS[i % CHIP_COLORS.length]])}>{o}</span>
-                      <button onClick={() => {
+                      <button aria-label={t("Remove option {name}", { name: o })} onClick={() => {
                         setOptions((xs) => xs.filter((_, j) => j !== i));
                         setOptionColors((c) => { const n = { ...c }; delete n[o]; return n; });
                       }} className="shrink-0 text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"><X className="h-2.5 w-2.5" /></button>
@@ -229,7 +229,7 @@ export function ColumnPopover({ col, anchor, onClose, onSave }: {
                 placeholder={t("Type a choice, Enter")}
                 className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-1 text-xs font-normal outline-none focus:border-primary"
               />
-              <button onClick={addOption} disabled={!draft.trim()}
+              <button aria-label={t("Add option")} onClick={addOption} disabled={!draft.trim()}
                 className="shrink-0 rounded-lg border border-border px-2 text-xs font-bold text-muted-foreground transition hover:border-primary/50 hover:text-primary disabled:opacity-40">+</button>
             </div>
           </div>
@@ -289,7 +289,7 @@ export function ColumnPopover({ col, anchor, onClose, onSave }: {
                 <option value="grey">{t("grey")}</option>
                 <option value="bold">{t("bold")}</option>
               </select>
-              <button onClick={() => setRules((rs) => rs.filter((_, j) => j !== i))}
+              <button aria-label={t("Remove rule")} onClick={() => setRules((rs) => rs.filter((_, j) => j !== i))}
                 className="shrink-0 text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"><X className="h-3 w-3" /></button>
             </div>
           ))}
@@ -371,7 +371,7 @@ export function TaskCell({ taskId, tasks, canEdit, onOpen, onPick }: {
         className={cn("min-w-0 truncate text-left text-xs font-semibold text-primary hover:underline", done && "line-through opacity-60")}
       >{task.title}</button>
       {canEdit && (
-        <button onClick={() => setPicking(true)} title={t("Change task")}
+        <button aria-label={t("Change task")} onClick={() => setPicking(true)} title={t("Change task")}
           className="shrink-0 text-[10px] text-muted-foreground hover:text-primary">✎</button>
       )}
     </span>

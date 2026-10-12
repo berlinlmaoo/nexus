@@ -750,7 +750,7 @@ export function ChatThread({
                   {!mine && <div className="mb-0.5 text-[11px] font-semibold text-muted-foreground">{m.user?.name}</div>}
                   {renderQuote(m.replyTo, mine)}
                   {href && (
-                    <a href={href} target="_blank" rel="noopener noreferrer" className="mb-1 block">
+                    <a aria-label={translate("Open image")} href={href} target="_blank" rel="noopener noreferrer" className="mb-1 block">
                       <img src={href} alt="" loading="lazy" onLoad={onMediaLoad} className="max-h-72 w-auto max-w-full rounded-xl object-cover" />
                     </a>
                   )}

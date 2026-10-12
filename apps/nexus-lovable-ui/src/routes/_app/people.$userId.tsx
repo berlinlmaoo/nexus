@@ -20,6 +20,7 @@ import { recordPlace } from "@/lib/attendance-place";
 import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_ROLE_TONE, type NexusMemberRecord, type NexusRecordXp, type NexusRecordXpEntry } from "@/lib/nexus-api";
 import { localeOf, t as tr, useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
+import { attendanceReasonText, periodEndText, periodRangeText, xpEntryLabel } from "@/lib/server-text";
 
 type RecordSearch = { period?: string };
 
@@ -120,7 +121,7 @@ function PeriodPicker({ data, onChange }: { data: NexusMemberRecord; onChange: (
   return (
     <div className="flex items-center gap-1.5">
       <button onClick={() => onChange(data.period.previousKey)} aria-label={tr("Previous period")} className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><ChevronLeft className="h-4 w-4" /></button>
-      <span className="min-w-[9.5rem] text-center text-sm font-semibold tabular-nums" title={tr("Attendance period: the 28th to the 27th")}>{data.period.label}</span>
+      <span className="min-w-[9.5rem] text-center text-sm font-semibold tabular-nums" title={tr("Attendance period: the 28th to the 27th")}>{periodRangeText(data.period.from, data.period.to)}</span>
       <button onClick={() => onChange(data.period.nextKey ?? undefined)} disabled={!data.period.nextKey} aria-label={tr("Next period")} className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
       {!data.period.isCurrent && <button onClick={() => onChange(undefined)} className="ml-1 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">{tr("This period")}</button>}
     </div>
@@ -203,7 +204,7 @@ function SummaryCard({ data }: { data: NexusMemberRecord }) {
   const { score, counts, dayOff, xp } = data.summary;
   const bonus = dayOff.bonusDays > 0 ? ` + ${tr("{n} extra ({reasons})", { n: dayOff.bonusDays, reasons: dayOff.bonusGrants.map((g) => g.reason).join(", ") })}` : "";
   return (
-    <Card title={data.period.isCurrent ? tr("This period") : tr("Attendance period")} hint={`${data.period.label} · ${tr("{days} days, {working} working days ({days} − {quota} day-off allowance)", { days: data.period.days, working: score.working, quota: dayOff.quota })}`}>
+    <Card title={data.period.isCurrent ? tr("This period") : tr("Attendance period")} hint={`${periodRangeText(data.period.from, data.period.to)} · ${tr("{days} days, {working} working days ({days} − {quota} day-off allowance)", { days: data.period.days, working: score.working, quota: dayOff.quota })}`}>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,14rem)_1fr]">
         <div className="rounded-2xl bg-primary/5 p-4" title={tr("Days worked (present or permit) out of the period's working days — the board's Score column")}>
           <div className="text-[11px] font-bold uppercase tracking-wider text-primary">{tr("Score")}</div>
@@ -323,7 +324,7 @@ function XpRow({ entry: e, data, compact = false }: { entry: NexusRecordXpEntry;
     },
   });
   const ask = () => {
-    const what = `${e.label}${e.dateKey ? ` (${dayLabel(e.dateKey)})` : ""}, ${e.originalAmount} XP`;
+    const what = `${xpEntryLabel(e)}${e.dateKey ? ` (${dayLabel(e.dateKey)})` : ""}, ${e.originalAmount} XP`;
     const note = window.prompt(`${tr("Remove this deduction for {name}?", { name: data.person.name ?? tr("this person") })}\n\n${what}\n\n${tr("The {n} XP goes back to them, the nightly jobs won’t take it again, and it is recorded in the audit log. They get a notification.", { n: -e.originalAmount })}\n\n${tr("Why? (optional)")}`, "");
     if (note === null) return;
     remove.mutate(note);
@@ -334,7 +335,7 @@ function XpRow({ entry: e, data, compact = false }: { entry: NexusRecordXpEntry;
     <div className={cn("flex items-center gap-3", compact ? "rounded-xl bg-muted/30 px-3 py-2" : "px-4 py-2.5 md:px-5")}>
       {!compact && <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full", removed ? "bg-muted text-muted-foreground" : pos ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-rose-500/10 text-rose-600 dark:text-rose-400")}><ScrollText className="h-4 w-4" /></span>}
       <div className="min-w-0 flex-1">
-        <div className={cn("truncate text-sm font-semibold", removed && "text-muted-foreground line-through")}>{e.label}</div>
+        <div className={cn("truncate text-sm font-semibold", removed && "text-muted-foreground line-through")}>{xpEntryLabel(e)}</div>
         <div className="truncate text-[11px] text-muted-foreground">
           {e.dateKey ? `${tr("for {date}", { date: dayLabel(e.dateKey) })} · ` : ""}{fmtDate(e.createdAt)} {fmtTime(e.createdAt)}
         </div>
@@ -372,7 +373,7 @@ function XpLog({ data }: { data: NexusMemberRecord }) {
       setLoading(false);
     }
   };
-  const sections = [{ period: data.period.key, label: data.period.label, xp: data.xp }, ...older.map((o) => ({ period: o.period, label: o.period, xp: o.xp }))];
+  const sections = [{ period: data.period.key, label: periodRangeText(data.period.from, data.period.to), xp: data.xp }, ...older.map((o) => ({ period: o.period, label: periodEndText(o.period), xp: o.xp }))];
   const t = data.summary.xp;
   return (
     <Card title={tr("XP log")} hint={tr("Every XP change written in the period, with the reason. Attendance penalties name the day they are for.")}
@@ -395,7 +396,7 @@ function XpLog({ data }: { data: NexusMemberRecord }) {
       {err && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{err}</p>}
       {last.hasOlder && last.olderPeriod && (
         <button onClick={loadOlder} disabled={loading} className="mt-3 w-full rounded-xl border border-border bg-muted/40 py-2 text-xs font-semibold transition-colors hover:bg-muted disabled:opacity-60">
-          {loading ? tr("Loading…") : tr("Load older (period ending {label})", { label: last.olderPeriod })}
+          {loading ? tr("Loading…") : tr("Load older (period ending {label})", { label: periodEndText(last.olderPeriod) })}
         </button>
       )}
     </Card>
@@ -420,7 +421,7 @@ function RequestsCard({ data }: { data: NexusMemberRecord }) {
                     <span className="text-sm font-semibold">{r.isAuto ? tr("Day off cut automatically") : REQ_LABEL[r.type] ? tr(REQ_LABEL[r.type]) : r.type}</span>
                     <span className="text-xs text-muted-foreground tabular-nums">{rangeLabel(r.startDate, r.endDate)}{r.days > 1 ? ` · ${tr("{n} days", { n: r.days })}` : ""}</span>
                   </div>
-                  <div className="truncate text-xs text-muted-foreground">{r.reason}</div>
+                  <div className="truncate text-xs text-muted-foreground">{attendanceReasonText(r.reason)}</div>
                   {r.reviewedBy?.name && <div className="truncate text-[11px] text-muted-foreground/80">{r.status === "REJECTED" ? tr("Rejected by {name}", { name: r.reviewedBy.name }) : tr("Reviewed by {name}", { name: r.reviewedBy.name })}{r.reviewNote ? ` — ${r.reviewNote}` : ""}</div>}
                 </div>
                 <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", STATUS_TONE[r.status] ?? "bg-muted text-muted-foreground")}>{statusLabel(r.status)}</span>

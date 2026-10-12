@@ -2,7 +2,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useLang } from "@/lib/lang";
+import { t as tr, useLang } from "@/lib/lang";
 import { isHexColor, readableText } from "@/lib/sheet-palette";
 import { CHIP_COLOR_CLASS } from "./sheet-types";
 import { Floating } from "./sheet-float";
@@ -56,7 +56,7 @@ export function DropdownCell({ picked, colors, display, canEdit, wrap, onOpen }:
       <span className="flex min-w-0 items-center gap-1">
         <span className={cn("min-w-0 flex-1", wrap ? "whitespace-pre-wrap break-words" : "truncate")}>{picked.join(", ")}</span>
         {canEdit && (
-          <button type="button" tabIndex={-1} onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); onOpen(); }}
+          <button aria-label={tr("Open options")} type="button" tabIndex={-1} onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); onOpen(); }}
             className="shrink-0 rounded text-muted-foreground hover:bg-muted hover:text-foreground"><ChevronDown className="h-3.5 w-3.5" /></button>
         )}
       </span>

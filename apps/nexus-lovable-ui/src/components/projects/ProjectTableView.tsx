@@ -415,10 +415,10 @@ function TagsCell({ task, onSave }: { task: NexusTask; onSave: (tags: string[]) 
   const remove = (t: string) => { const next = tags.filter((x) => x !== t); setTags(next); onSave(next); };
   return (
     <div className="flex flex-wrap items-center gap-1">
-      {tags.map((t) => (
-        <span key={t} className="inline-flex items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
-          {t}
-          <button onClick={() => remove(t)} className="hover:text-destructive"><X className="h-2.5 w-2.5" /></button>
+      {tags.map((tag) => (
+        <span key={tag} className="inline-flex items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
+          {tag}
+          <button aria-label={t("Remove tag {name}", { name: tag })} onClick={() => remove(tag)} className="hover:text-destructive"><X className="h-2.5 w-2.5" /></button>
         </span>
       ))}
       <input

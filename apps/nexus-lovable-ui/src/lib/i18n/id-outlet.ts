@@ -6,7 +6,7 @@
  */
 export const ID_OUTLET: Record<string, string> = {
   // Picking the type
-  "Outlet Sales Dashboard": "Outlet Sales Dashboard",
+  "Outlet Sales Dashboard": "Dasbor Penjualan Outlet",
   "One outlet: sales and pax against the month's target, a calendar of events, and a report form for every night.":
     "Satu outlet: sales dan pax dibanding target bulanan, kalender event, dan form laporan untuk tiap malam.",
   "Create project + open dashboard": "Buat project + buka dashboard",

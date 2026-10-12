@@ -734,7 +734,7 @@ function UserRow(props: UserRowProps) {
               </button>
             )}
             {canDelete && !isMember && (
-              <button type="button" onClick={onDelete} title={t("Delete account permanently")} className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700 transition hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/15">
+              <button aria-label={t("Delete account permanently")} type="button" onClick={onDelete} title={t("Delete account permanently")} className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700 transition hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/15">
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             )}
@@ -920,7 +920,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                           ) : tm.name}
                           {tm.division && <span className="font-normal text-muted-foreground">· {tm.division}</span>}
                           {canManageTeams && (
-                            <button type="button" disabled={teamPending} onClick={() => onTeamExit({ id: tm.id, name: tm.name }, losing)} title={t("Remove from this team")} className="rounded p-0.5 text-muted-foreground/50 transition hover:bg-rose-100 hover:text-rose-600 disabled:opacity-40 dark:hover:bg-rose-500/15 dark:hover:text-rose-400">
+                            <button aria-label={t("Remove from this team")} type="button" disabled={teamPending} onClick={() => onTeamExit({ id: tm.id, name: tm.name }, losing)} title={t("Remove from this team")} className="rounded p-0.5 text-muted-foreground/50 transition hover:bg-rose-100 hover:text-rose-600 disabled:opacity-40 dark:hover:bg-rose-500/15 dark:hover:text-rose-400">
                               <X className="h-3 w-3" />
                             </button>
                           )}
@@ -944,7 +944,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                         {pr.viaTeam && <span className="font-normal text-muted-foreground">{t("· via {team}", { team: pr.viaTeam })}</span>}
                         {pr.role !== "MEMBER" && <span className="rounded bg-primary/10 px-1 text-[10px] font-bold text-primary">{pr.role}</span>}
                         {canManageTeams && !pr.viaTeam ? (
-                          <button type="button" disabled={projectPending} onClick={() => onProjectRemove(pr.id)} title={t("Remove from this project")} className="rounded p-0.5 text-muted-foreground/50 transition hover:bg-rose-100 hover:text-rose-600 disabled:opacity-40 dark:hover:bg-rose-500/15 dark:hover:text-rose-400"><X className="h-3 w-3" /></button>
+                          <button aria-label={t("Remove from this project")} type="button" disabled={projectPending} onClick={() => onProjectRemove(pr.id)} title={t("Remove from this project")} className="rounded p-0.5 text-muted-foreground/50 transition hover:bg-rose-100 hover:text-rose-600 disabled:opacity-40 dark:hover:bg-rose-500/15 dark:hover:text-rose-400"><X className="h-3 w-3" /></button>
                         ) : <span className="w-1" />}
                       </span>
                     ))}
@@ -1216,7 +1216,7 @@ function ShiftCell({ start, end, canEdit, pending, onSave }: { start: string | n
           {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("Save")}
         </button>
       ) : hasShift ? (
-        <button type="button" disabled={pending} onClick={() => onSave(null, null)} title={t("Clear shift (back to default)")} className="ml-0.5 rounded-md border border-border px-1.5 py-1 text-[11px] font-semibold text-muted-foreground transition hover:bg-accent hover:text-rose-600 dark:hover:text-rose-400">×</button>
+        <button aria-label={t("Clear shift (back to default)")} type="button" disabled={pending} onClick={() => onSave(null, null)} title={t("Clear shift (back to default)")} className="ml-0.5 rounded-md border border-border px-1.5 py-1 text-[11px] font-semibold text-muted-foreground transition hover:bg-accent hover:text-rose-600 dark:hover:text-rose-400">×</button>
       ) : null}
     </div>
   );
@@ -1872,7 +1872,7 @@ function AdminQuests() {
                   {questTasks.map((t) => (
                     <div key={t.id} className="flex items-center gap-2 rounded-lg bg-muted px-2 py-1.5 text-sm">
                       <span className="min-w-0 flex-1 truncate">{t.title}</span>
-                      <button type="button" onClick={() => setQuestTasks((prev) => prev.filter((x) => x.id !== t.id))} className="rounded p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
+                      <button aria-label={tq("Remove {name}", { name: t.title })} type="button" onClick={() => setQuestTasks((prev) => prev.filter((x) => x.id !== t.id))} className="rounded p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
                     </div>
                   ))}
                 </div>
@@ -1923,7 +1923,7 @@ function AdminQuests() {
                         : <span>· {q.teamIds && q.teamIds.length > 0 ? q.teamIds.map(teamName).join(", ") : tq("Everyone")}</span>}
                     </div>
                   </div>
-                  <button onClick={() => { if (confirm(tq("Delete this goal?"))) del.mutate(q.id); }} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
+                  <button aria-label={tq("Delete this goal")} onClick={() => { if (confirm(tq("Delete this goal?"))) del.mutate(q.id); }} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
                 </div>
               ))}
             </div>
