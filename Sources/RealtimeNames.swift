@@ -50,6 +50,10 @@ extension Notification.Name {
     /// the clock (DEV server since 12 Oct 2026: `automations-changed` { projectId, automationId, actorId }
     /// to the project's room). userInfo, optional: `RealtimeKey.projectId`, `RealtimeKey.automationId`.
     static let nexusAutomationsChanged = Notification.Name("nexus.automations.changed")
+
+    /// A page (Doc) of a project changed (server `doc-changed` { projectId, docId, actorId } to the
+    /// project's room). userInfo, optional: `RealtimeKey.projectId`. An open page re-reads.
+    static let nexusDocChanged = Notification.Name("nexus.doc.changed")
 }
 
 /// The userInfo keys of the notifications above.

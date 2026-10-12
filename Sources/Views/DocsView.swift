@@ -111,6 +111,10 @@ struct DocReaderView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
         .task { await load() }
+        // Live: someone edits the page on the web (or another device): it re-reads, unless this person is
+        // editing it here (their edit is merged on save instead).
+        .realtimeRoom(doc?.projectId.map { "project:\($0)" })
+        .liveRefresh(every: 60, on: [.nexusDocChanged], projectId: doc?.projectId) { if !editing { await load() } }
         // Leaving the page saves what was typed (sent in the background; kept on the phone if offline).
         .onDisappear { if editing { model.saveOnClose() } }
         .sheet(item: $aiRequest) { r in aiSheet(r) }

@@ -161,6 +161,7 @@ final class RealtimeClient {
         center.post(name: .nexusPipelineChanged, object: nil)
         center.post(name: .nexusOutletSalesChanged, object: nil)
         center.post(name: .nexusAutomationsChanged, object: nil)
+        center.post(name: .nexusDocChanged, object: nil)
         chatMoved(nil)
         Task { await InboxBadge.shared.refresh(force: true) }
     }
@@ -226,6 +227,12 @@ final class RealtimeClient {
             if let projectId = payload?["projectId"]?.string { info[RealtimeKey.projectId] = projectId }
             if let automationId = payload?["automationId"]?.string { info[RealtimeKey.automationId] = automationId }
             center.post(name: .nexusAutomationsChanged, object: nil, userInfo: info)
+        case "doc-changed":
+            // A page's body or header changed (block editor on the web, an app edit merged into the live
+            // room, a REST save): ids only, to the project's room. An open page re-reads it.
+            var info: [String: String] = [:]
+            if let projectId = payload?["projectId"]?.string { info[RealtimeKey.projectId] = projectId }
+            center.post(name: .nexusDocChanged, object: nil, userInfo: info)
         default:
             // presence-*, sheet-*, cursor-move, content-change, the web's own task-update relay:
             // nothing on iOS draws them.
