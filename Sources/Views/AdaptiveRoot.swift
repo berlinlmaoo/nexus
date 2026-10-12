@@ -36,8 +36,8 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     var title: String {
         switch self {
         case .dashboard:    return T("Home")
-        case .tasks:        return T("Tasks")
-        case .inbox:        return T("Inbox")
+        case .tasks:        return T("My Tasks")
+        case .inbox:        return T("Notifications")
         case .projects:     return T("Projects")
         case .messages:     return T("Messages")
         case .threads:      return T("Threads")
@@ -46,13 +46,13 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .roomBooking:  return T("Room Booking")
         case .leaderboard:  return T("Leaderboard")
         case .reports:      return T("Reports")
-        case .docs:         return T("Knowledge Library")
+        case .docs:         return T("Pages")
         case .forms:        return T("Forms")
         case .vault:        return T("Z Vault")
         case .attendance:   return T("Attendance")
-        case .tickets:      return T("Ticket")
+        case .tickets:      return T("Tickets")
         case .teams:        return T("Teams")
-        case .settings:     return T("Tuning Room")
+        case .settings:     return T("Settings")
         case .admin:        return T("Control Room")
         }
     }
@@ -168,12 +168,13 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     /// Computed, not a stored `static let`: the titles go through T(), and a stored property is
     /// initialised once and frozen. Switching the app language would then leave every section
     /// header in the old language until the app was killed.
+    /// The plain names the web uses since 12 Oct 2026 (owner: no gimmicky terms): Home · Work · Team ·
+    /// System, with Projects, My Tasks and Notifications at the top.
     static var groups: [(title: String?, screens: [NXScreen])] { [
-        (nil,                 [.dashboard, .tasks, .inbox, .projects]),
-        (T("Home Base"),      [.messages, .threads, .submissions, .teamCalendar, .roomBooking]),
-        (T("Missions"),       [.leaderboard, .reports]),
-        (T("Knowledge"),      [.vault, .forms]),
-        (T("Pulse Check"),    [.attendance]),
+        (nil,                 [.dashboard, .projects, .tasks, .inbox]),
+        (T("Home"),           [.messages, .threads, .vault, .submissions, .teamCalendar, .roomBooking]),
+        (T("Work"),           [.leaderboard, .reports, .forms]),
+        (T("Team"),           [.attendance]),
         // `.teams` dilepas dari daftar: halaman daftar-tim sudah tidak ada di web maupun di HP.
         // Rute layarnya SENGAJA dibiarkan hidup di bawah — pintasan lama dan tautan dari
         // notifikasi masih bisa menunjuk ke sana, dan layar kosong lebih buruk daripada layar
@@ -283,7 +284,7 @@ struct TabRoot: View {
                     .tag(PhoneTab.calendar)
             } else {
                 InboxView()
-                    .tabItem { Label(T("Inbox"), systemImage: "tray.fill") }
+                    .tabItem { Label(T("Notifications"), systemImage: "tray.fill") }
                     .badge(badge.count)
                     .tag(PhoneTab.inbox)
             }

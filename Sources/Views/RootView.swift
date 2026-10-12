@@ -143,8 +143,8 @@ struct RootView: View {
 
 }
 
-/// "More" — app-launcher grid mirroring the web sidebar groups (Home Base / Missions /
-/// Knowledge / Pulse Check / System) + account footer.
+/// "More" — app-launcher grid mirroring the web sidebar groups (Home / Work / Team / System, the plain
+/// names since 12 Oct 2026) + account footer.
 struct MoreView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(AppRouter.self) private var router
@@ -159,10 +159,10 @@ struct MoreView: View {
                 NX.background.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 22) {
-                        MoreSection(T("Home Base")) {
+                        MoreSection(T("Home")) {
                             LazyVGrid(columns: cols, spacing: 12) {
-                                // Chat has a tab of its own and Tasks lives here (owner, 9 Oct 2026).
-                                MoreTile(T("Tasks"), "checklist", NX.success) { TasksView(providesOwnStack: false) }
+                                // Chat has a tab of its own and My Tasks lives here (owner, 9 Oct 2026).
+                                MoreTile(T("My Tasks"), "checklist", NX.success) { TasksView(providesOwnStack: false) }
                                 if viewer.isCompanyMember {
                                     MoreTile(T("Threads"), "text.bubble.fill", NX.violetText) { ThreadsView() }
                                 }
@@ -172,42 +172,38 @@ struct MoreView: View {
                                 // server's `flags.calendar` holds the Calendar back, Inbox keeps its
                                 // tab and neither has a tile.
                                 if RemoteConfig.shared.calendar {
-                                    MoreTile(T("Inbox"), "tray.fill", NX.blue, badge: badge.count) {
+                                    MoreTile(T("Notifications"), "tray.fill", NX.blue, badge: badge.count) {
                                         InboxView(providesOwnStack: false)
                                     }
                                 }
                                 MoreTile(T("Room Booking"), "door.left.hand.open", NX.coral) { RoomBookingView() }
-                            }
-                        }
-                        MoreSection(T("Missions")) {
-                            LazyVGrid(columns: cols, spacing: 12) {
-                                MoreTile(T("Leaderboard"), "trophy.fill", NX.warning) { LeaderboardView() }
-                                MoreTile(T("Reports"), "chart.bar.fill", NX.success) { ReportsView() }
-                                // No "Pipeline" tile (owner, 9 Oct 2026: "kenapa pipeline masuk ke mission?
-                                // … yg masuk ke project doang"): the board opens from Projects like any project.
-                            }
-                        }
-                        MoreSection(T("Knowledge")) {
-                            LazyVGrid(columns: cols, spacing: 12) {
                                 if viewer.isCompanyMember {
                                     MoreTile(T("Z Vault"), "externaldrive.fill", NX.violetText) { VaultView() }
                                 }
-                                MoreTile(T("Forms"), "doc.text.fill", NX.blue) { FormsView() }
                             }
                         }
-                        MoreSection(T("Pulse Check")) {
+                        MoreSection(T("Work")) {
+                            LazyVGrid(columns: cols, spacing: 12) {
+                                MoreTile(T("Leaderboard"), "trophy.fill", NX.warning) { LeaderboardView() }
+                                MoreTile(T("Reports"), "chart.bar.fill", NX.success) { ReportsView() }
+                                MoreTile(T("Forms"), "doc.text.fill", NX.blue) { FormsView() }
+                                // No "Pipeline" tile (owner, 9 Oct 2026): the board opens from Projects
+                                // like any project.
+                            }
+                        }
+                        MoreSection(T("Team")) {
                             LazyVGrid(columns: cols, spacing: 12) {
                                 MoreTile(T("Attendance"), "clock.badge.checkmark.fill", NX.success) { AttendanceView() }
                             }
                         }
                         MoreSection(T("System")) {
                             LazyVGrid(columns: cols, spacing: 12) {
-                                MoreTile(T("Ticket"), "ticket.fill", NX.blue) { TicketsView() }
+                                MoreTile(T("Tickets"), "ticket.fill", NX.blue) { TicketsView() }
                                 // Tile Teams dilepas: halaman daftar-tim sudah tidak ada juga di web.
                                 // Pengaturan tim dibuka dari chip tim di Control Room > Users, yaitu
                                 // di baris orang yang timnya sedang dibicarakan.
                                 MoreTile(T("What's new"), "sparkles", NX.violetText) { WhatsNewScreen() }
-                                MoreTile(T("Tuning Room"), "gearshape.fill", NX.mutedFg) { SettingsView() }
+                                MoreTile(T("Settings"), "gearshape.fill", NX.mutedFg) { SettingsView() }
                                 if viewer.canAdminister {
                                     MoreTile(T("Control Room"), "shield.fill", NX.danger) { AdminView() }
                                 }
