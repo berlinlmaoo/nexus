@@ -123,6 +123,14 @@ export function periodLabel(periodKey: string, lang: "id" | "en" = "id"): string
   return `${start.getUTCDate()} ${names[start.getUTCMonth()]}–${end.getUTCDate()} ${names[end.getUTCMonth()]}`
 }
 
+/** The in-app + push copy in both languages (notification-text.ts `bi` shape; no imports here — plain-node tests). */
+export function bonusGrantTexts(days: number, periodKey: string, reason: string) {
+  const r = reason.trim().replace(/\s+/g, " ").replace(/[.\s]+$/, "")
+  const en = { title: "Extra day off", message: `You got ${days} extra day${days === 1 ? "" : "s"} off for ${periodLabel(periodKey, "en")}${r ? ` — ${r}` : ""}. ${days === 1 ? "It expires" : "They expire"} after that period.` }
+  const id = bonusGrantNotice(days, periodKey, reason)
+  return { title: en.title, message: en.message, texts: { en, id } }
+}
+
 /** The in-app + push copy the person receives (Indonesian, like every push). */
 export function bonusGrantNotice(days: number, periodKey: string, reason: string) {
   // The sentence goes on after the reason, so a reason typed with its own full stop would read "..".

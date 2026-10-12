@@ -4,7 +4,7 @@
 // person typed, a new server string) is shown exactly as it came.
 //
 // Called at render time by components that use useLang(), so `t` follows the current language.
-import { localeOf, t } from "@/lib/lang";
+import { localeOf, t, getLang } from "@/lib/lang";
 
 // Dates -------------------------------------------------------------------------------------------------
 
@@ -194,12 +194,23 @@ function applyRules(text: string, rules: Rule[]) {
 }
 
 /** A notification's title in the UI language: the stored title when it is a known shape, else the type. */
-export function notificationTitle(n: { type?: string | null; title?: string | null }) {
+/** Both languages the server stored (servers since 13 Oct 2026, `Notification.texts`), in the UI language. */
+type NotifTexts = { en?: { title?: string; message?: string }; id?: { title?: string; message?: string } } | null | undefined;
+const storedText = (texts: NotifTexts) => {
+  const x = texts?.[getLang() === "id" ? "id" : "en"];
+  return x && typeof x.title === "string" ? x : null;
+};
+
+export function notificationTitle(n: { type?: string | null; title?: string | null; texts?: NotifTexts }) {
+  const x = storedText(n.texts);
+  if (x?.title) return x.title;
   return n.title ? applyRules(n.title, TITLE_RULES) : notificationTypeTitle(n.type);
 }
 
-/** A notification's message in the UI language when it is a known shape; else as stored. */
-export function notificationMessage(n: { message?: string | null }) {
+/** A notification's message in the UI language: the stored pair, else a known shape rewritten; else as stored. */
+export function notificationMessage(n: { message?: string | null; texts?: NotifTexts }) {
+  const x = storedText(n.texts);
+  if (x && typeof x.message === "string") return x.message;
   return n.message ? applyRules(n.message, MESSAGE_RULES) : "";
 }
 

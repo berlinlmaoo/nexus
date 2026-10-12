@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import type { SystemRole } from "@/generated/prisma/client"
 import prisma from "@/lib/prisma"
+import { bi } from "@/lib/notification-text"
 import { getAdminSessionContext } from "@/lib/admin-access"
 import { directoryConfigured, getDirectoryAccount } from "@/lib/google-directory"
 import { logAudit } from "@/lib/audit"
@@ -334,8 +335,10 @@ export async function PATCH(
       await createInAppNotification({
         userId: updated.id,
         type: "google_workspace_linked",
-        title: "Akun Google Workspace kamu ditautkan",
-        message: `${data.googleWorkspaceEmail} sekarang tersambung ke akun NEXUS kamu. Kalender, Meet, dan email kantor memakai alamat ini.`,
+        ...bi(
+          ["Your Google Workspace account is linked", `${data.googleWorkspaceEmail} is now connected to your NEXUS account. Calendar, Meet and work email use this address.`],
+          ["Akun Google Workspace kamu ditautkan", `${data.googleWorkspaceEmail} sekarang tersambung ke akun NEXUS kamu. Kalender, Meet, dan email kantor memakai alamat ini.`],
+        ),
         link: "/settings",
         push: true,
       }).catch(() => null)

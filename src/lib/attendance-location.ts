@@ -29,7 +29,10 @@ import {
   type OfficeGeo,
   type ResponseStage,
   type TrailPointInput,
+  outsidePushCopyEn,
+  outsideApproverCopyEn,
 } from "@/lib/attendance-outside"
+import { bi } from "@/lib/notification-text"
 
 /**
  * Live location while checked in — the database side. Decisions live in attendance-outside.ts (pure,
@@ -343,14 +346,15 @@ export async function advanceOutsideClock(recordId: string, opts: { now?: Date; 
   if (res.count !== 1) return result // someone else moved it first
 
   // `now`: the time left in the text is counted from the tick that decided this step.
-  const copy = outsidePushCopy(step.fire, { minutesOutside: step.minutesOutside, autoAt: step.autoAt, outsideSince: record.outsideSince, timeZone: tz, now })
+  const copyArgs = { minutesOutside: step.minutesOutside, autoAt: step.autoAt, outsideSince: record.outsideSince, timeZone: tz, now }
+  const copy = outsidePushCopy(step.fire, copyArgs)
+  const copyEn = outsidePushCopyEn(step.fire, copyArgs)
   // Sent regardless of do-not-disturb: this is not a nudge whose moment passes but the notice before
   // an automatic check-out. Staying silent would check someone out without telling them first.
   await createInAppNotification({
     userId: record.userId,
     type: copy.type,
-    title: copy.title,
-    message: copy.body,
+    ...bi([copyEn.title, copyEn.body], [copy.title, copy.body]),
     link: OUTSIDE_PERMIT_LINK,
     push: true,
     pushCategory: OUTSIDE_PUSH_CATEGORY,
@@ -382,14 +386,15 @@ async function notifyOutsideApprovers(
       select: { userId: true },
     })
     const userIds = [...new Set([...approvers, ...oaa.map((m) => m.userId)])].filter((id) => id !== record.userId)
-    const copy = outsideApproverCopy({ name: record.user?.name ?? null, minutesOutside, outsideSince: record.outsideSince!, timeZone: tz })
+    const approverArgs = { name: record.user?.name ?? null, minutesOutside, outsideSince: record.outsideSince!, timeZone: tz }
+    const copy = outsideApproverCopy(approverArgs)
+    const copyEn = outsideApproverCopyEn(approverArgs)
     for (const userId of userIds) {
       if (userId === record.userId) continue
       await createInAppNotification({
         userId,
         type: copy.type,
-        title: copy.title,
-        message: copy.body,
+        ...bi([copyEn.title, copyEn.body], [copy.title, copy.body]),
         link: "/attendance",
         push: true,
         pushData: { ...pushData, staffUserId: record.userId },
@@ -514,12 +519,13 @@ async function autoOffsiteCheckout(
   }).catch((err) => log.error("offsite checkout notify (auto) failed", { recordId: record.id, error: String(err) }))
 
   const mode = (await resolveAttendanceApprovers(record.userId, record.workspaceId).catch(() => null))?.mode
-  const copy = outsidePushCopy("auto", { minutesOutside: 0, autoAt: null, outsideSince, timeZone: tz, approverMode: mode })
+  const autoArgs = { minutesOutside: 0, autoAt: null, outsideSince, timeZone: tz, approverMode: mode }
+  const copy = outsidePushCopy("auto", autoArgs)
+  const copyEn = outsidePushCopyEn("auto", autoArgs)
   await createInAppNotification({
     userId: record.userId,
     type: copy.type,
-    title: copy.title,
-    message: copy.body,
+    ...bi([copyEn.title, copyEn.body], [copy.title, copy.body]),
     link: "/attendance",
     push: true,
     pushData: ctx.pushData,

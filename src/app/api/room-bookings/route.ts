@@ -5,7 +5,8 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { getUserWorkspaceIds } from "@/lib/workspace-scope"
 import { createRoomBookingSchema, validateBody } from "@/lib/validations"
-import { createInAppNotification } from "@/lib/notification-service"
+import { createInAppNotification, roomName } from "@/lib/notification-service"
+import { bi } from "@/lib/notification-text"
 import { formatBookingSlot } from "@/lib/room-booking-format"
 
 const bookingInclude = {
@@ -125,8 +126,10 @@ export async function POST(req: NextRequest) {
     await createInAppNotification({
       userId: session.user.id,
       type: "booking_confirmed",
-      title: `Ruangan dibooking: ${room}`,
-      message: `${title.trim()} · ${formatBookingSlot(start, end)}. Pengingat dikirim sebelum mulai.`,
+      ...bi(
+        [`Room booked: ${roomName(room, "en")}`, `${title.trim()} · ${formatBookingSlot(start, end, "en")}. A reminder comes before it starts.`],
+        [`Ruangan dibooking: ${room}`, `${title.trim()} · ${formatBookingSlot(start, end)}. Pengingat dikirim sebelum mulai.`],
+      ),
       link: "/room-booking",
       push: true,
     }).catch(() => null)

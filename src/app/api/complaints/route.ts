@@ -12,7 +12,7 @@ import { notifyComplaintFiled } from "@/lib/notification-service"
 import {
   getUserOrgRole, isBodPlus, COMPLAINT_CATEGORIES, SUBJECT_MIN, SUBJECT_MAX, BODY_MIN, BODY_MAX,
   COMPLAINT_LIST_INCLUDE, COMPLAINT_INBOX_STATUSES, COMPLAINT_STATUSES, serializeComplaint,
-  complaintCategoryLabel, type ComplaintCategoryKey, type ComplaintStatusKey,
+  complaintCategoryLabel, complaintCategoryLabelEn, type ComplaintCategoryKey, type ComplaintStatusKey,
 } from "@/lib/complaints"
 
 const EVIDENCE_MAX = 8 * 1024 * 1024 // 8MB per photo
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
     })
 
     logAudit({ action: "create", entityType: "complaint", entityId: created.id, userId: me, request, metadata: { category } })
-    void notifyComplaintFiled({ workspaceId: membership.workspaceId, complaintId: created.id, categoryLabel: complaintCategoryLabel(category) }).catch(() => {})
+    void notifyComplaintFiled({ workspaceId: membership.workspaceId, complaintId: created.id, categoryLabel: complaintCategoryLabel(category), categoryLabelEn: complaintCategoryLabelEn(category) }).catch(() => {})
 
     // ATTENDANCE, EXP and DAY_OFF tickets get a first pass from GIDEON: it reads the photo, checks the
     // day against the record, and either proposes a correction or says why it cannot. Fire-and-forget

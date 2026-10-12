@@ -8,7 +8,7 @@ import { getAttendanceWorkspaceContext } from "@/lib/attendance"
 import { createInAppNotification } from "@/lib/notification-service"
 import { idString, xpRefundBodySchema } from "@/lib/validations"
 import { describeXpReason } from "@/lib/xp-reason"
-import { refundXpTransaction, xpRefundNotice } from "@/lib/xp-refund"
+import { refundXpTransaction, xpRefundTexts } from "@/lib/xp-refund"
 
 /**
  * POST /api/gamification/xp-transactions/:id/refund — remove ONE XP deduction (BoD / One Above All).
@@ -85,8 +85,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       request: req,
     })
 
-    const notice = xpRefundNotice(r)
-    createInAppNotification({ userId: r.userId, type: "xp_deduction_removed", title: notice.title, message: notice.message, link: `/people/${r.userId}`, push: true })
+    const notice = xpRefundTexts(r)
+    createInAppNotification({ userId: r.userId, type: "xp_deduction_removed", ...notice, link: `/people/${r.userId}`, push: true })
       .catch((err) => console.error("[xp-refund] notify failed", err))
 
     const xp = await prisma.userXp.findUnique({ where: { userId: r.userId }, select: { totalXp: true } })

@@ -23,6 +23,9 @@ model User {
   /// theirs is deleted; see FormerMember.
   deactivatedAt   DateTime?
   deactivatedById String?
+  /// "en" | "id": the interface language this person last used on the web (notification-text.ts). Null =
+  /// unknown → English. Stored notification text and pushes are written in it.
+  uiLanguage      String?
   /// Passkeys registered from this person's devices. Additive: password sign-in stays, because a
   /// lost device must not become a lost account.
   passkeys       Passkey[]
@@ -1105,6 +1108,9 @@ model Notification {
   read      Boolean  @default(false)
   link      String?
   createdAt DateTime @default(now())
+  /// The title + message in both languages, {en:{title,message},id:{title,message}} (13 Oct 2026). Null on
+  /// rows from before; title/message hold the recipient's language for old apps and the push.
+  texts     Json?
   /// Who caused it (a person), for the sender avatar on the row. Null = system, or a row from before 13 Oct 2026.
   /// No foreign key: a deleted person just loses the avatar.
   actorId   String?

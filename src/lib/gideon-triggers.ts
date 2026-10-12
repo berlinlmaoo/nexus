@@ -1,3 +1,4 @@
+import { bi } from "@/lib/notification-text"
 import prisma from "@/lib/prisma"
 import { createLogger } from "@/lib/logger"
 import { askGideon } from "@/lib/gideon-chat"
@@ -337,8 +338,10 @@ export async function answerGideonMention(commentId: string): Promise<void> {
       createInAppNotification({
         userId: comment.user.id,
         type: "gideon_proposal",
-        title: "GIDEON is waiting for your approval",
-        message: `${pending} change${pending === 1 ? "" : "s"} on “${task.title}”. Open GIDEON to review.`,
+        ...bi(
+          ["GIDEON is waiting for your approval", `${pending} change${pending === 1 ? "" : "s"} on “${task.title}”. Open GIDEON to review.`],
+          ["GIDEON menunggu persetujuanmu", `${pending} perubahan di “${task.title}”. Buka GIDEON untuk meninjau.`],
+        ),
         taskId: task.id,
         projectId,
         link: `/tasks/${task.id}`,

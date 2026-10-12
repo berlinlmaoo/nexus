@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma"
+import { bi } from "@/lib/notification-text"
 import { applyXpDelta } from "@/lib/gamification"
 import { describeXpReason, xpRefundDecision } from "@/lib/xp-reason"
 
@@ -114,6 +115,20 @@ export async function refundXpTransaction(opts: {
     if ((err as { code?: string })?.code === "P2002") return ALREADY
     throw err
   }
+}
+
+/** Both languages (notification-text.ts): the Indonesian copy below, plus English. */
+export function xpRefundTexts(refund: { reason: string; amount: number; refunded: number }) {
+  const info = describeXpReason(refund.reason, refund.amount)
+  const what: Record<string, string> = {
+    late: "late check-in", nocheckout: "missed check-out", alpha: "absence without notice (TK)",
+    peer_penalty: "integrity report", admin_adjust: "BoD adjustment", quest_penalty: "quest penalty",
+  }
+  const id = xpRefundNotice(refund)
+  return bi(
+    [`XP deduction removed · +${refund.refunded} XP`, `The BoD removed the ${what[info.kind] ?? "XP"} deduction${info.dateKey ? ` for ${info.dateKey}` : ""} (${refund.amount} XP). The XP is back.`],
+    [id.title, id.message],
+  )
 }
 
 /** The push/in-app copy for the person whose deduction was removed (Indonesian, like the other attendance pushes). */

@@ -1,3 +1,4 @@
+import { bi } from "@/lib/notification-text"
 import { after } from "next/server"
 import prisma from "@/lib/prisma"
 import { createLogger } from "@/lib/logger"
@@ -159,8 +160,10 @@ export async function fanOutChatMessage(input: FanOutInput): Promise<void> {
       const row = await createInAppNotification({
         userId: r.userId,
         type: "MESSAGE_MENTION",
-        title: convo.type === "DM" ? `${senderName} mentioned you` : `${senderName} mentioned you in ${content.data.conversationName}`,
-        message: content.data.text,
+        ...bi(
+          [convo.type === "DM" ? `${senderName} mentioned you` : `${senderName} mentioned you in ${content.data.conversationName}`, content.data.text],
+          [convo.type === "DM" ? `${senderName} menyebut kamu` : `${senderName} menyebut kamu di ${content.data.conversationName}`, content.data.text],
+        ),
         link: content.link,
         push: false,
       }).catch((error) => {

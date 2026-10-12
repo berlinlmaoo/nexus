@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { bi, recipientLang } from "@/lib/notification-text"
 import { logAudit } from "@/lib/audit"
 import { emitNotification } from "@/lib/socket-emitter"
 
@@ -14,15 +15,15 @@ export async function POST(request: NextRequest) {
     }
 
     const timestamp = new Date()
+    const hm = timestamp.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Jakarta" })
+    const { texts } = bi(["Test notification", `Desktop notification test at ${hm}`], ["Notifikasi tes", `Tes notifikasi desktop jam ${hm}`])
+    const lang = await recipientLang(session.user.id)
     const notification = await prisma.notification.create({
       data: {
         userId: session.user.id,
         type: "test_notification",
-        title: "Test Notification",
-        message: `Desktop notification test at ${timestamp.toLocaleTimeString("id-ID", {
-          hour: "2-digit",
-          minute: "2-digit",
-        })}`,
+        ...texts[lang],
+        texts,
         link: "/inbox",
       },
     })

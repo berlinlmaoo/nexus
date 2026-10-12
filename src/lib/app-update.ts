@@ -3,6 +3,14 @@ import { createInAppNotification } from "@/lib/notification-service"
 import { APP_STORE_URL, fetchLatestIosVersion } from "@/lib/app-store"
 import { compareVersions } from "@/lib/client-version"
 import { androidLatestVersion, androidStoreUrl, isPlayStoreUrl, withVersionParam } from "@/lib/android-app"
+import { bi } from "@/lib/notification-text"
+
+/** The update reminder's body in each language. */
+function updateLine(version: string | null | undefined, latest: string, lang: "en" | "id"): string {
+  if (!version) return lang === "en" ? "Your NEXUS is an older version. Update to get the latest fixes and features — it takes a minute." : "NEXUS kamu versi lama. Update untuk dapat perbaikan dan fitur terbaru — cuma semenit."
+  if (compareVersions(version, latest) < 0) return lang === "en" ? `You're on ${version}. Update to get the latest fixes and features — it takes a minute.` : `Kamu di versi ${version}. Update untuk dapat perbaikan dan fitur terbaru — cuma semenit.`
+  return lang === "en" ? `You're already on ${version} — nothing to do. This is what the reminder looks like.` : `Kamu sudah di versi ${version} — tidak perlu apa-apa. Begini bentuk pengingatnya.`
+}
 
 // The store lookup moved to app-store.ts (which also records every version Apple serves in
 // AppReleaseSeen — this reminder's daily lookup counts as a sighting) and the comparison to
@@ -63,12 +71,10 @@ export async function remindOutdatedApps(opts: { dryRun?: boolean; userIds?: str
     const created = await createInAppNotification({
       userId,
       type: "app_update",
-      title: `NEXUS ${latest} is on the App Store`,
-      message: !version
-        ? `Your NEXUS is an older version. Update to get the latest fixes and features — it takes a minute.`
-        : compareVersions(version, latest) < 0
-          ? `You're on ${version}. Update to get the latest fixes and features — it takes a minute.`
-          : `You're already on ${version} — nothing to do. This is what the reminder looks like.`,
+      ...bi(
+        [`NEXUS ${latest} is on the App Store`, updateLine(version, latest, "en")],
+        [`NEXUS ${latest} sudah ada di App Store`, updateLine(version, latest, "id")],
+      ),
       // The version rides in the link so the weekly dedupe is per release: a new release is a new reminder.
       link: `${APP_STORE_URL}?v=${latest}`,
       push: true,
@@ -125,12 +131,10 @@ async function remindOutdatedAndroid(opts: { dryRun?: boolean; userIds?: string[
     const created = await createInAppNotification({
       userId,
       type: "app_update",
-      title: isPlayStoreUrl(storeUrl) ? `NEXUS ${latest} is on Google Play` : `NEXUS ${latest} is ready to download`,
-      message: !version
-        ? `Your NEXUS is an older version. Update to get the latest fixes and features — it takes a minute.`
-        : compareVersions(version, latest) < 0
-          ? `You're on ${version}. Update to get the latest fixes and features — it takes a minute.`
-          : `You're already on ${version} — nothing to do. This is what the reminder looks like.`,
+      ...bi(
+        [isPlayStoreUrl(storeUrl) ? `NEXUS ${latest} is on Google Play` : `NEXUS ${latest} is ready to download`, updateLine(version, latest, "en")],
+        [isPlayStoreUrl(storeUrl) ? `NEXUS ${latest} sudah ada di Google Play` : `NEXUS ${latest} siap diunduh`, updateLine(version, latest, "id")],
+      ),
       // Per-release dedupe, as on iOS (the download page and Play both ignore the extra parameter).
       link: withVersionParam(storeUrl, latest),
       push: true,

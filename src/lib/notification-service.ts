@@ -15,6 +15,7 @@ import {
 } from "@/lib/email"
 import { createLogger } from "@/lib/logger"
 import { publicBaseUrl, publicUrl } from "./public-url"
+import { bi, dayText, recipientLang, recipientLangs, type NotifLang, type NotifTexts } from "@/lib/notification-text"
 
 const log = createLogger("notifications")
 
@@ -178,10 +179,16 @@ export async function createInAppNotification(data: {
   pushImage?: string | null
   /** Who caused it (a person), for the sender's avatar on the row (13 Oct 2026). Null = system. */
   actorId?: string | null
+  /** Both languages (notification-text.ts `bi`). title/message are then written in the recipient's language. */
+  texts?: NotifTexts
 }) {
   if (await isDeactivatedRecipient(data.userId)) {
     log.info("notification skipped: recipient offboarded", { userId: data.userId, type: data.type })
     return null
+  }
+  if (data.texts) {
+    const t = data.texts[await recipientLang(data.userId)]
+    data = { ...data, title: t.title, message: t.message }
   }
 
   if (data.dedupeWindowMs && data.dedupeWindowMs > 0) {
@@ -212,6 +219,7 @@ export async function createInAppNotification(data: {
       projectId: data.projectId || null,
       link: data.link || null,
       ...(data.actorId ? { actorId: data.actorId } : {}),
+      ...(data.texts ? { texts: data.texts } : {}),
     },
   })
 
@@ -260,15 +268,20 @@ export async function notifyAttendanceReminder(data: {
   })
   if (existing) return false
   const soon = off > 0 ? `${off} menit lagi` : "sekarang"
+  const t = data.shiftTime
+  const texts = data.kind === "checkin"
+    ? bi(
+        off > 0 ? [`Check-in in ${off} min`, `Your shift starts at ${t}. Don't forget to check in on NEXUS.`] : ["Time to check in", `It's ${t} — check in now so you're not marked late.`],
+        off > 0 ? [`Absen masuk ${soon}`, `Jam masuk ${t}. Jangan lupa check-in di NEXUS.`] : ["Waktunya absen masuk", `Sudah jam ${t} — check-in sekarang supaya tidak tercatat telat.`],
+      )
+    : bi(
+        off > 0 ? [`Check-out in ${off} min`, `Your shift ends at ${t}. Don't forget to check out.`] : ["Time to check out", `It's ${t} — don't forget to check out before you leave.`],
+        off > 0 ? [`Absen pulang ${soon}`, `Jam pulang ${t}. Jangan lupa check-out.`] : ["Waktunya absen pulang", `Sudah jam ${t} — jangan lupa check-out sebelum pulang.`],
+      )
   await createInAppNotification({
     userId: data.userId,
     type,
-    title: data.kind === "checkin"
-      ? (off > 0 ? `Absen masuk ${soon}` : "Waktunya absen masuk")
-      : (off > 0 ? `Absen pulang ${soon}` : "Waktunya absen pulang"),
-    message: data.kind === "checkin"
-      ? (off > 0 ? `Jam masuk ${data.shiftTime}. Jangan lupa check-in di NEXUS.` : `Sudah jam ${data.shiftTime} — check-in sekarang supaya tidak tercatat telat.`)
-      : (off > 0 ? `Jam pulang ${data.shiftTime}. Jangan lupa check-out.` : `Sudah jam ${data.shiftTime} — jangan lupa check-out sebelum pulang.`),
+    ...texts,
     link,
     push: true,
   })
@@ -302,14 +315,14 @@ export async function notifyAttendanceAbsentRecorded(data: {
   // Opens Attendance on both clients (iOS NotificationTarget(path:) → .screen(.attendance); web
   // /attendance). The date rides along as the dedupe key and for a client that later wants to focus it.
   const link = `/attendance?absent=${data.dateKey}`
-  const title = "Tercatat tanpa keterangan"
-  const day = new Date(`${data.dateKey}T00:00:00.000Z`).toLocaleDateString("id-ID", { day: "numeric", month: "short", timeZone: "UTC" })
+  const dayOf = (lang: NotifLang) => new Date(`${data.dateKey}T00:00:00.000Z`).toLocaleDateString(lang === "id" ? "id-ID" : "en-GB", { day: "numeric", month: "short", timeZone: "UTC" })
   // Never "lewat N hari": the allowance reads 4/4 at most, everywhere (see lib/day-off-usage).
   const remaining = Math.max(0, data.quota - data.used)
-  const balance = remaining > 0
-    ? `Jatah periode ini: sisa ${remaining} dari ${data.quota}.`
-    : `Jatah periode ini sudah habis (${data.quota}/${data.quota}).`
-  const message = `Kamu gak absen tanggal ${day} — dipotong 1 day off. ${balance}`
+  const texts = bi(
+    ["Recorded as absent", `You didn't check in on ${dayOf("en")} — 1 day off was used. ${remaining > 0 ? `This period: ${remaining} of ${data.quota} left.` : `This period's allowance is used up (${data.quota}/${data.quota}).`}`],
+    ["Tercatat tanpa keterangan", `Kamu gak absen tanggal ${dayOf("id")} — dipotong 1 day off. ${remaining > 0 ? `Jatah periode ini: sisa ${remaining} dari ${data.quota}.` : `Jatah periode ini sudah habis (${data.quota}/${data.quota}).`}`],
+  )
+  const { title, message } = texts.texts[await recipientLang(data.userId)]
   const push = !(await isUserDnd(data.userId))
 
   if (data.dryRun) {
@@ -324,7 +337,7 @@ export async function notifyAttendanceAbsentRecorded(data: {
       if (existing) return false
       // Written through the shared helper (own connection, committed on return) while this
       // transaction still holds the lock — so a second run waiting on the lock finds the row.
-      await createInAppNotification({ userId: data.userId, type, title, message, link, push })
+      await createInAppNotification({ userId: data.userId, type, ...texts, link, push })
       return true
     },
     // The push is awaited inside; APNs can take a few seconds per device.
@@ -344,6 +357,13 @@ const ATTENDANCE_TYPE_LABEL: Record<string, string> = {
   PERMIT: "Izin",
   DAY_OFF: "Day Off",
   RED_DATE: "Public Holiday",
+}
+const ATTENDANCE_TYPE_LABEL_EN: Record<string, string> = {
+  LEAVE: "Leave",
+  SICK: "Sick leave",
+  PERMIT: "Permission",
+  DAY_OFF: "Day off",
+  RED_DATE: "Public holiday",
 }
 
 /**
@@ -377,15 +397,18 @@ export async function notifyAttendanceRequestPending(requestId: string) {
   if (!targets.length) return
 
   const typeLabel = ATTENDANCE_TYPE_LABEL[req.type] ?? req.type
-  const who = req.user?.name || req.user?.email || "Seseorang"
-  const fmt = (d: Date) => d.toLocaleDateString("id-ID", { day: "numeric", month: "short", timeZone: "Asia/Jakarta" })
-  const start = fmt(req.startDate)
-  const end = fmt(req.endDate)
-  const when = start === end ? start : `${start} – ${end}`
+  const typeLabelEn = ATTENDANCE_TYPE_LABEL_EN[req.type] ?? req.type
+  const whoName = req.user?.name || req.user?.email || null
+  const whenOf = (lang: NotifLang) => {
+    const start = dayText(req.startDate, lang)
+    const end = dayText(req.endDate, lang)
+    return start === end ? start : `${start} – ${end}`
+  }
   const reasonSuffix = req.reason ? ` — “${req.reason}”` : ""
   // Izin: the reviewer is told what the requester has left of day off in that period, the same number
   // the queue shows as `requesterDayOff`. A hint only — if it cannot be read, the notification still goes.
   let dayOffNote = ""
+  let dayOffNoteEn = ""
   if (req.type === "PERMIT") {
     try {
       const periodKey = dayOffPeriodOf(req.startDate)
@@ -394,6 +417,9 @@ export async function notifyAttendanceRequestPending(requestId: string) {
         dayOffNote = b.remaining > 0
           ? ` Day off-nya periode ini: sisa ${b.remaining} dari ${b.quota}.`
           : ` Day off-nya periode ini sudah habis (${b.quota}/${b.quota}).`
+        dayOffNoteEn = b.remaining > 0
+          ? ` Their day off this period: ${b.remaining} of ${b.quota} left.`
+          : ` Their day off this period is used up (${b.quota}/${b.quota}).`
       }
     } catch (error) {
       log.error("day-off balance for izin notification failed", { error: String(error) })
@@ -409,8 +435,10 @@ export async function notifyAttendanceRequestPending(requestId: string) {
       createInAppNotification({
         userId,
         type: "attendance_request_pending",
-        title: `${who} mengajukan ${typeLabel.toLowerCase()}`,
-        message: `${when}${reasonSuffix}.${dayOffNote} Approve atau tolak di Attendance.`,
+        ...bi(
+          [`${whoName ?? "Someone"} requested ${typeLabelEn.toLowerCase()}`, `${whenOf("en")}${reasonSuffix}.${dayOffNoteEn} Approve or reject it in Attendance.`],
+          [`${whoName ?? "Seseorang"} mengajukan ${typeLabel.toLowerCase()}`, `${whenOf("id")}${reasonSuffix}.${dayOffNote} Approve atau tolak di Attendance.`],
+        ),
         link: `/attendance?request=${requestId}`,
         push: true,
       }).catch(() => null),
@@ -435,8 +463,10 @@ export async function notifyOffsiteCheckoutPending(data: {
       createInAppNotification({
         userId,
         type: "offsite_checkout_pending",
-        title: `${data.staffName} check-out di luar kantor`,
-        message: `Perlu approval${reasonSuffix}. Approve atau tolak di Attendance.`,
+        ...bi(
+          [`${data.staffName} checked out away from the office`, `Needs approval${reasonSuffix}. Approve or reject it in Attendance.`],
+          [`${data.staffName} check-out di luar kantor`, `Perlu approval${reasonSuffix}. Approve atau tolak di Attendance.`],
+        ),
         link: data.recordId ? `/attendance?offsite=${data.recordId}` : "/attendance",
         push: true,
       }).catch(() => null),
@@ -472,8 +502,10 @@ export async function notifyTaskAssigned(data: {
     userId: data.assigneeId,
     type: "task_assigned",
     // The lock screen shows the title and little else; "Task Assigned" said nothing 1,193 times.
-    title: `${data.assignedByName} assigned you: ${data.taskTitle}`,
-    message: data.projectName ? `In ${data.projectName}` : `${data.assignedByName} assigned you "${data.taskTitle}"`,
+    ...bi(
+      [`${data.assignedByName} assigned you: ${data.taskTitle}`, data.projectName ? `In ${data.projectName}` : `${data.assignedByName} assigned you "${data.taskTitle}"`],
+      [`${data.assignedByName} menugaskan kamu: ${data.taskTitle}`, data.projectName ? `Di ${data.projectName}` : `${data.assignedByName} menugaskan kamu "${data.taskTitle}"`],
+    ),
     taskId: data.taskId,
     projectId: data.projectId,
     link: `/projects/${data.projectId}/tasks/${data.taskId}`,
@@ -530,8 +562,10 @@ export async function notifyMention(data: {
     actorId: data.actorId,
     userId: data.mentionedUserId,
     type: "comment_mention",
-    title: `${data.mentionedByName} mentioned you on: ${data.taskTitle}`,
-    message: data.commentSnippet ? data.commentSnippet.slice(0, 140) : `${data.mentionedByName} mentioned you on "${data.taskTitle}"`,
+    ...bi(
+      [`${data.mentionedByName} mentioned you on: ${data.taskTitle}`, data.commentSnippet ? data.commentSnippet.slice(0, 140) : `${data.mentionedByName} mentioned you on "${data.taskTitle}"`],
+      [`${data.mentionedByName} menyebut kamu di: ${data.taskTitle}`, data.commentSnippet ? data.commentSnippet.slice(0, 140) : `${data.mentionedByName} menyebut kamu di "${data.taskTitle}"`],
+    ),
     taskId: data.taskId,
     projectId: data.projectId,
     link: data.projectId ? `/projects/${data.projectId}/tasks/${data.taskId}` : undefined,
@@ -578,8 +612,10 @@ export async function notifyDocMention(data: {
   await createInAppNotification({
     userId: data.mentionedUserId,
     type: "doc_mention",
-    title: `${data.mentionedByName} mentioned you in: ${data.docTitle || "Untitled"}`,
-    message: data.snippet ? data.snippet.slice(0, 140) : `${data.mentionedByName} mentioned you in "${data.docTitle || "Untitled"}"`,
+    ...bi(
+      [`${data.mentionedByName} mentioned you in: ${data.docTitle || "Untitled"}`, data.snippet ? data.snippet.slice(0, 140) : `${data.mentionedByName} mentioned you in "${data.docTitle || "Untitled"}"`],
+      [`${data.mentionedByName} menyebut kamu di: ${data.docTitle || "Tanpa judul"}`, data.snippet ? data.snippet.slice(0, 140) : `${data.mentionedByName} menyebut kamu di "${data.docTitle || "Tanpa judul"}"`],
+    ),
     projectId: data.projectId,
     link: `/docs/${data.docId}`,
     push: prefs.commentMention,
@@ -599,8 +635,10 @@ export async function notifyBlockReminder(data: {
   await createInAppNotification({
     userId: data.userId,
     type: "block_reminder",
-    title: `Reminder: ${data.title || "Untitled"}`,
-    message: data.text ? data.text.slice(0, 140) : data.title,
+    ...bi(
+      [`Reminder: ${data.title || "Untitled"}`, data.text ? data.text.slice(0, 140) : data.title],
+      [`Pengingat: ${data.title || "Tanpa judul"}`, data.text ? data.text.slice(0, 140) : data.title],
+    ),
     taskId: data.taskId,
     projectId: data.projectId,
     link: data.link,
@@ -616,9 +654,9 @@ export async function notifyBlockReminder(data: {
 const FEED_THREAD_ID = "feed"
 const FEED_BODY_MAX = 180
 /** What a push says about a post: its text, or "📷 Foto" for a photo with no words. */
-export function feedPushBody(text: string, hasPhoto: boolean, max = FEED_BODY_MAX): string {
+export function feedPushBody(text: string, hasPhoto: boolean, max = FEED_BODY_MAX, lang: NotifLang = "id"): string {
   const clean = text.replace(/\s+/g, " ").trim()
-  if (!clean) return hasPhoto ? "📷 Foto" : ""
+  if (!clean) return hasPhoto ? (lang === "en" ? "📷 Photo" : "📷 Foto") : ""
   return clean.length > max ? `${clean.slice(0, max - 1).trimEnd()}…` : clean
 }
 
@@ -644,8 +682,10 @@ export async function notifyFeedMention(data: {
     actorId: data.actorId,
     userId: data.mentionedUserId,
     type: "feed_mention",
-    title: "Mentioned on Threads",
-    message: `${data.mentionedByName} mentioned you in a post`,
+    ...bi(
+      ["Mentioned on Threads", `${data.mentionedByName} mentioned you in a post`],
+      ["Disebut di Threads", `${data.mentionedByName} menyebut kamu di sebuah post`],
+    ),
     link,
     push: prefs.commentMention,
     pushThreadId: FEED_THREAD_ID,
@@ -695,22 +735,26 @@ export async function notifyFeedPost(data: {
   if (recipients.length === 0) return
 
   const link = `/threads?post=${data.postId}`
-  const title = `${data.authorName} posted on Threads`
-  const message = feedPushBody(data.text, Boolean(data.imageId)) || "New post"
+  const texts = bi(
+    [`${data.authorName} posted on Threads`, feedPushBody(data.text, Boolean(data.imageId), FEED_BODY_MAX, "en") || "New post"],
+    [`${data.authorName} posting di Threads`, feedPushBody(data.text, Boolean(data.imageId), FEED_BODY_MAX, "id") || "Post baru"],
+  ).texts
+  const langs = await recipientLangs(recipients)
+  const textOf = (userId: string) => texts[langs.get(userId) ?? "en"]
   const image = pushImageUrl(data.imageId, publicBaseUrl())
 
   const CHUNK = 200
   for (let i = 0; i < recipients.length; i += CHUNK) {
     const ids = recipients.slice(i, i + CHUNK)
     const rows = await prisma.notification.createManyAndReturn({
-      data: ids.map((userId) => ({ userId, type: "feed_post", title, message, link, actorId: data.authorId })),
+      data: ids.map((userId) => ({ userId, type: "feed_post", ...textOf(userId), texts, link, actorId: data.authorId })),
     })
     for (const row of rows) emitNotification(row.userId, JSON.parse(JSON.stringify(row)))
 
     const items: Array<{ userId: string; payload: PushPayload }> = rows
       .map((row) => ({
         userId: row.userId,
-        payload: { title, body: message, type: "feed_post", link, threadId: FEED_THREAD_ID, image, notificationId: row.id },
+        payload: { title: row.title, body: row.message, type: "feed_post", link, threadId: FEED_THREAD_ID, image, notificationId: row.id },
       }))
     await sendPushToUsers(items, "feed_post").catch((error) => log.error("feed post push failed", { error: String(error) }))
   }
@@ -747,8 +791,9 @@ export async function notifyFeedLike(data: {
 
   const link = `/threads?post=${data.postId}`
   const title = `${data.likerName} liked your post`
+  // The marker: the liker as actor (rows since 13 Oct 2026), or their name in the English title (older rows).
   const already = await prisma.notification.findFirst({
-    where: { userId: data.authorId, type: "feed_like", link, title },
+    where: { userId: data.authorId, type: "feed_like", link, OR: [{ actorId: data.likerId }, { title }] },
     select: { id: true },
   })
   if (already) return
@@ -759,8 +804,10 @@ export async function notifyFeedLike(data: {
     actorId: data.likerId,
     userId: data.authorId,
     type: "feed_like",
-    title,
-    message: feedPushBody(data.postText, data.hasPhoto, 140) || "Your post on Threads",
+    ...bi(
+      [title, feedPushBody(data.postText, data.hasPhoto, 140, "en") || "Your post on Threads"],
+      [`${data.likerName} menyukai post kamu`, feedPushBody(data.postText, data.hasPhoto, 140, "id") || "Post kamu di Threads"],
+    ),
     link,
     push: !dnd && prefs.commentMention,
     // Likes on one post stack together, apart from new posts.
@@ -789,8 +836,10 @@ export async function notifyFeedComment(data: {
     actorId: data.actorId,
     userId: data.recipientUserId,
     type: "feed_comment",
-    title: data.reason === "author" ? `${data.commenterName} commented on your post` : `${data.commenterName} mentioned you`,
-    message: data.snippet ? data.snippet.slice(0, 140) : (data.reason === "author" ? "New comment on your post" : "Mentioned in a comment on Threads"),
+    ...bi(
+      [data.reason === "author" ? `${data.commenterName} commented on your post` : `${data.commenterName} mentioned you`, data.snippet ? data.snippet.slice(0, 140) : (data.reason === "author" ? "New comment on your post" : "Mentioned in a comment on Threads")],
+      [data.reason === "author" ? `${data.commenterName} mengomentari post kamu` : `${data.commenterName} menyebut kamu`, data.snippet ? data.snippet.slice(0, 140) : (data.reason === "author" ? "Komentar baru di post kamu" : "Disebut di komentar Threads")],
+    ),
     link,
     push: prefs.commentMention,
     pushThreadId: `feed:${data.postId}`,
@@ -871,15 +920,17 @@ export async function notifyDueSoon(data: {
 
   const prefs = await getUserPrefs(data.userId)
   const type = data.stage === "due" ? "task_due_now" : `task_due_${data.stage}`
-  const title = data.stage === "due"
-    ? `Due now: ${data.taskTitle}`
-    : data.stage === "1d" ? `Due tomorrow: ${data.taskTitle}` : `Due in 2 days: ${data.taskTitle}`
+  const texts = bi(
+    [data.stage === "due" ? `Due now: ${data.taskTitle}` : data.stage === "1d" ? `Due tomorrow: ${data.taskTitle}` : `Due in 2 days: ${data.taskTitle}`,
+      `"${data.taskTitle}" is due on ${data.dueAt ? dayText(new Date(data.dueAt), "en") : data.dueDate}`],
+    [data.stage === "due" ? `Jatuh tempo sekarang: ${data.taskTitle}` : data.stage === "1d" ? `Jatuh tempo besok: ${data.taskTitle}` : `Jatuh tempo 2 hari lagi: ${data.taskTitle}`,
+      `"${data.taskTitle}" jatuh tempo ${data.dueAt ? dayText(new Date(data.dueAt), "id") : data.dueDate}`],
+  )
 
   await createInAppNotification({
     userId: data.userId,
     type,
-    title,
-    message: `"${data.taskTitle}" is due on ${data.dueDate}`,
+    ...texts,
     taskId: data.taskId,
     projectId: data.projectId,
     link: `${data.projectId
@@ -928,13 +979,11 @@ export async function notifyProjectInvite(data: {
     actorId: data.actorId,
     userId: data.userId,
     type: "project_invite",
-    title: `${data.invitedByName} invited you to ${data.projectName}`,
-    // Says the access level (Notion-style, 13 Oct 2026); LEAD reads "the Project Owner", never "a lead".
-    message: data.role === "LEAD"
-      ? `You have Full access to "${data.projectName}".`
-      : data.role === "GUEST" ? `You can comment in "${data.projectName}".`
-        : data.role === "VIEWER" ? `You can view "${data.projectName}".`
-          : `You can edit "${data.projectName}".`,
+    // Says the access level (Notion-style, 13 Oct 2026); the Owner reads "Full access", never "a lead".
+    ...bi(
+      [`${data.invitedByName} invited you to ${data.projectName}`, data.role === "LEAD" ? `You have Full access to "${data.projectName}".` : data.role === "GUEST" ? `You can comment in "${data.projectName}".` : data.role === "VIEWER" ? `You can view "${data.projectName}".` : `You can edit "${data.projectName}".`],
+      [`${data.invitedByName} mengundang kamu ke ${data.projectName}`, data.role === "LEAD" ? `Kamu punya Akses penuh ke "${data.projectName}".` : data.role === "GUEST" ? `Kamu bisa berkomentar di "${data.projectName}".` : data.role === "VIEWER" ? `Kamu bisa melihat "${data.projectName}".` : `Kamu bisa mengedit "${data.projectName}".`],
+    ),
     projectId: data.projectId,
     link: `/projects/${data.projectId}`,
     push: prefs.projectInvite,
@@ -963,6 +1012,18 @@ export async function notifyProjectInvite(data: {
   }
 }
 
+const ROOM_EN: Record<string, string> = { "Ruang Meeting VIP": "VIP Meeting Room", "Ruang Meeting": "Meeting Room", Studio: "Studio" }
+export const roomName = (room: string, lang: NotifLang) => (lang === "en" ? ROOM_EN[room] ?? room : room)
+
+const HEALTH_WORD: Record<NotifLang, Record<string, string>> = {
+  en: { ON_TRACK: "on track", AT_RISK: "at risk", OFF_TRACK: "off track", COMPLETED: "completed", ON_HOLD: "on hold" },
+  id: { ON_TRACK: "sesuai rencana", AT_RISK: "berisiko", OFF_TRACK: "melenceng", COMPLETED: "selesai", ON_HOLD: "ditunda" },
+}
+const TASK_STATUS_WORD: Record<NotifLang, Record<string, string>> = {
+  en: { TODO: "to do", IN_PROGRESS: "in progress", IN_REVIEW: "in review", DONE: "done", CANCELLED: "cancelled" },
+  id: { TODO: "to do", IN_PROGRESS: "sedang dikerjakan", IN_REVIEW: "ditinjau", DONE: "selesai", CANCELLED: "dibatalkan" },
+}
+
 export async function notifyStatusUpdate(data: {
   projectId: string
   projectName: string
@@ -989,8 +1050,10 @@ export async function notifyStatusUpdate(data: {
     await createInAppNotification({
       userId: member.userId,
       type: "status_update",
-      title: "Status Update",
-      message: `${data.updatedByName} updated "${data.projectName}" status to ${data.status}`,
+      ...bi(
+        ["Status update", `${data.updatedByName} set "${data.projectName}" to ${HEALTH_WORD.en[data.status] ?? data.status}`],
+        ["Update status", `${data.updatedByName} mengubah status "${data.projectName}" jadi ${HEALTH_WORD.id[data.status] ?? data.status}`],
+      ),
       projectId: data.projectId,
       link: `/projects/${data.projectId}`,
       push: prefs.statusUpdate,
@@ -1064,8 +1127,10 @@ export async function notifySubmissionStatus(data: {
   await createInAppNotification({
     userId: data.submitterId,
     type: "submission_status",
-    title: "Submission update",
-    message: `${data.updatedByName} moved "${data.subject}" from ${human(data.fromStatus)} to ${human(data.toStatus)}`,
+    ...bi(
+      ["Submission update", `${data.updatedByName} moved "${data.subject}" from ${TASK_STATUS_WORD.en[data.fromStatus] ?? human(data.fromStatus)} to ${TASK_STATUS_WORD.en[data.toStatus] ?? human(data.toStatus)}`],
+      ["Update pengajuan", `${data.updatedByName} memindahkan "${data.subject}" dari ${TASK_STATUS_WORD.id[data.fromStatus] ?? human(data.fromStatus)} ke ${TASK_STATUS_WORD.id[data.toStatus] ?? human(data.toStatus)}`],
+    ),
     link: `/submissions?id=${data.submissionId}`,
     push: prefs.statusUpdate,
     dedupeWindowMs: SUBMISSION_STATUS_DEDUPE_MS,
@@ -1085,8 +1150,10 @@ export async function notifyStreakAtRisk(data: { userId: string; currentStreak: 
   await createInAppNotification({
     userId: data.userId,
     type: "streak_at_risk",
-    title: "Your streak ends at midnight",
-    message: `${data.currentStreak} day${data.currentStreak === 1 ? "" : "s"} on the line — finish something today to keep it.`,
+    ...bi(
+      ["Your streak ends at midnight", `${data.currentStreak} day${data.currentStreak === 1 ? "" : "s"} on the line — finish something today to keep it.`],
+      ["Streak kamu putus tengah malam", `${data.currentStreak} hari dipertaruhkan — selesaikan sesuatu hari ini supaya tetap jalan.`],
+    ),
     link: "/my-tasks",
     push: prefs.statusUpdate,
   })
@@ -1110,8 +1177,10 @@ export async function notifyQuotaLow(data: {
   await createInAppNotification({
     userId: data.userId,
     type: data.kind === "dayoff" ? "dayoff_quota_low" : "red_date_quota_low",
-    title: `${data.remaining} ${label} day left`,
-    message: `You've used ${data.quota - data.remaining} of ${data.quota} this month.`,
+    ...bi(
+      [`${data.remaining} ${label} day left`, `You've used ${data.quota - data.remaining} of ${data.quota} this month.`],
+      [`Sisa ${data.remaining} ${data.kind === "dayoff" ? "day off" : "jatah tanggal merah"}`, `Kamu sudah pakai ${data.quota - data.remaining} dari ${data.quota} bulan ini.`],
+    ),
     link: "/attendance",
     push: prefs.statusUpdate,
   })
@@ -1130,8 +1199,10 @@ export async function notifyBookingSoon(data: {
   await createInAppNotification({
     userId: data.userId,
     type: "booking_soon",
-    title: `${data.room} in ${data.minutes} min`,
-    message: data.title,
+    ...bi(
+      [`${roomName(data.room, "en")} in ${data.minutes} min`, data.title],
+      [`${roomName(data.room, "id")} ${data.minutes} menit lagi`, data.title],
+    ),
     // Doubles as the de-dupe key: one reminder per booking, forever (booking-reminder matches
     // `link contains <id>`, so reminders sent with the old /master-calendar link still count). Room
     // Booking is its own screen now; the Calendar no longer shows bookings.
@@ -1152,8 +1223,10 @@ export async function notifyQuestClaimable(data: {
   await createInAppNotification({
     userId: data.userId,
     type: "quest_claimable",
-    title: "Quest ready to claim",
-    message: `"${data.title}" is done — collect the XP before the week resets.`,
+    ...bi(
+      ["Quest ready to claim", `"${data.title}" is done — collect the XP before the week resets.`],
+      ["Quest siap diklaim", `"${data.title}" sudah selesai — ambil XP-nya sebelum minggu ini reset.`],
+    ),
     // The key doubles as the de-dupe marker: one nudge per quest per period.
     link: `/dashboard?quest=${data.questKey}:${data.periodKey}`,
     push: prefs.statusUpdate,
@@ -1188,8 +1261,10 @@ export async function notifyTaskCompleted(data: {
       actorId: data.completedById,
       userId,
       type: "task_completed",
-      title: `${data.completedByName} completed: ${data.taskTitle}`,
-      message: data.projectName ? `In ${data.projectName}` : `${data.completedByName} completed "${data.taskTitle}"`,
+      ...bi(
+        [`${data.completedByName} completed: ${data.taskTitle}`, data.projectName ? `In ${data.projectName}` : `${data.completedByName} completed "${data.taskTitle}"`],
+        [`${data.completedByName} menyelesaikan: ${data.taskTitle}`, data.projectName ? `Di ${data.projectName}` : `${data.completedByName} menyelesaikan "${data.taskTitle}"`],
+      ),
       taskId: data.taskId,
       projectId: data.projectId,
       link: `/projects/${data.projectId}/tasks/${data.taskId}`,
@@ -1256,8 +1331,10 @@ export async function notifyCommentAdded(data: {
       actorId: data.commentById,
       userId,
       type: "comment_added",
-      title: `${data.commentByName} commented on: ${data.taskTitle}`,
-      message: data.commentSnippet ? data.commentSnippet.slice(0, 140) : `${data.commentByName} commented on "${data.taskTitle}"`,
+      ...bi(
+        [`${data.commentByName} commented on: ${data.taskTitle}`, data.commentSnippet ? data.commentSnippet.slice(0, 140) : `${data.commentByName} commented on "${data.taskTitle}"`],
+        [`${data.commentByName} berkomentar di: ${data.taskTitle}`, data.commentSnippet ? data.commentSnippet.slice(0, 140) : `${data.commentByName} berkomentar di "${data.taskTitle}"`],
+      ),
       taskId: data.taskId,
       projectId: data.projectId,
       link: `/projects/${data.projectId}/tasks/${data.taskId}`,
@@ -1328,10 +1405,11 @@ async function complaintHeadline(complaintId: string) {
   })
   if (!c) return null
   const reporter = c.anonymous ? "Pelapor anonim" : (c.reporter?.name || c.reporter?.email || "Seseorang")
-  return { subject: c.subject, reporter, anonymous: c.anonymous }
+  const reporterEn = c.anonymous ? "An anonymous reporter" : (c.reporter?.name || c.reporter?.email || "Someone")
+  return { subject: c.subject, reporter, reporterEn, anonymous: c.anonymous }
 }
 
-export async function notifyComplaintFiled(data: { workspaceId: string; complaintId: string; categoryLabel: string }) {
+export async function notifyComplaintFiled(data: { workspaceId: string; complaintId: string; categoryLabel: string; categoryLabelEn?: string }) {
   const bod = await prisma.workspaceMember.findMany({
     where: { workspaceId: data.workspaceId, role: { in: ["BOD", "ONE_ABOVE_ALL"] } },
     select: { userId: true },
@@ -1342,8 +1420,10 @@ export async function notifyComplaintFiled(data: { workspaceId: string; complain
       createInAppNotification({
         userId: b.userId,
         type: "complaint_filed",
-        title: head ? `Tiket baru dari ${head.reporter}` : "Keluhan baru masuk",
-        message: head ? `${head.subject} · ${data.categoryLabel}` : `Kategori: ${data.categoryLabel}. Buka untuk menanggapi.`,
+        ...bi(
+          [head ? `New ticket from ${head.reporterEn}` : "A new ticket came in", head ? `${head.subject} · ${data.categoryLabelEn ?? data.categoryLabel}` : `Category: ${data.categoryLabelEn ?? data.categoryLabel}. Open it to respond.`],
+          [head ? `Tiket baru dari ${head.reporter}` : "Keluhan baru masuk", head ? `${head.subject} · ${data.categoryLabel}` : `Kategori: ${data.categoryLabel}. Buka untuk menanggapi.`],
+        ),
         link: `/complaints?id=${data.complaintId}`,
         push: true,
       }),
@@ -1355,6 +1435,7 @@ export async function notifyComplaintFiled(data: { workspaceId: string; complain
 export async function notifyComplaintReply(data: { complaintId: string; workspaceId: string; reporterId: string; fromReviewer: boolean; replierId: string; byGideon?: boolean; preview?: string | null }) {
   const head = await complaintHeadline(data.complaintId)
   const subject = head ? `“${head.subject}”` : "tiket"
+  const subjectEn = head ? `“${head.subject}”` : "your ticket"
   const snippet = data.preview?.trim() ? ` — ${data.preview.trim().length > 120 ? data.preview.trim().slice(0, 117) + "…" : data.preview.trim()}` : ""
   const link = `/complaints?id=${data.complaintId}`
   if (data.fromReviewer) {
@@ -1367,10 +1448,14 @@ export async function notifyComplaintReply(data: { complaintId: string; workspac
       actorId: data.byGideon ? null : data.replierId,
       userId: data.reporterId,
       type: "complaint_reply",
-      title: `${replier} membalas tiket kamu`,
-      message: data.byGideon
-        ? `${subject}: GIDEON sudah mengecek datanya dan menjawab. Kalau ada usulan, tinggal menunggu keputusan BoD.`
-        : `${subject}${snippet || " — buka untuk membaca balasannya."}`,
+      ...bi(
+        [`${replier} replied to your ticket`, data.byGideon
+          ? `${subjectEn}: GIDEON checked the data and answered. If it proposed something, it now waits for a BoD decision.`
+          : `${subjectEn}${snippet || " — open it to read the reply."}`],
+        [`${replier} membalas tiket kamu`, data.byGideon
+          ? `${subject}: GIDEON sudah mengecek datanya dan menjawab. Kalau ada usulan, tinggal menunggu keputusan BoD.`
+          : `${subject}${snippet || " — buka untuk membaca balasannya."}`],
+      ),
       link,
       push: true,
     }).catch(() => null)
@@ -1386,8 +1471,10 @@ export async function notifyComplaintReply(data: { complaintId: string; workspac
           actorId: data.byGideon ? null : data.replierId,
           userId: b.userId,
           type: "complaint_reply",
-          title: `${head?.reporter ?? "Pelapor"} membalas tiket`,
-          message: `${subject}${snippet || " — buka untuk menanggapi."}`,
+          ...bi(
+            [`${head?.reporterEn ?? "The reporter"} replied on a ticket`, `${head ? subject : "A ticket"}${snippet || " — open it to respond."}`],
+            [`${head?.reporter ?? "Pelapor"} membalas tiket`, `${subject}${snippet || " — buka untuk menanggapi."}`],
+          ),
           link,
           push: true,
         }),
@@ -1397,18 +1484,25 @@ export async function notifyComplaintReply(data: { complaintId: string; workspac
 }
 
 /** A complaint's status changed → tell the reporter. */
-export async function notifyComplaintStatus(data: { reporterId: string; complaintId: string; status: string; detail?: string }) {
+export async function notifyComplaintStatus(data: { reporterId: string; complaintId: string; status: string; detail?: string; detailEn?: string }) {
   const label: Record<string, string> = {
     OPEN: "dibuka kembali", AWAITING_DECISION: "nunggu keputusan BoD",
     IN_REVIEW: "lagi ditangani BoD", RESOLVED: "selesai", CLOSED: "ditutup",
   }
+  const labelEn: Record<string, string> = {
+    OPEN: "was reopened", AWAITING_DECISION: "is waiting for a BoD decision",
+    IN_REVIEW: "is being handled by the BoD", RESOLVED: "is resolved", CLOSED: "was closed",
+  }
   const head = await complaintHeadline(data.complaintId)
   const subject = head ? `“${head.subject}”` : "kamu"
+  const subjectEn = head ? `“${head.subject}”` : ""
   await createInAppNotification({
     userId: data.reporterId,
     type: "complaint_status",
-    title: data.status === "RESOLVED" ? `Tiket ${subject} selesai ✓` : `Update tiket ${subject}`,
-    message: data.detail ? `${data.detail}` : `Tiket ${subject} ${label[data.status] ?? data.status}.`,
+    ...bi(
+      [data.status === "RESOLVED" ? `Ticket ${subjectEn} resolved ✓`.replace("  ", " ") : `Ticket update ${subjectEn}`.trim(), data.detailEn ?? `Your ticket ${subjectEn} ${labelEn[data.status] ?? data.status.toLowerCase()}.`.replace("  ", " ")],
+      [data.status === "RESOLVED" ? `Tiket ${subject} selesai ✓` : `Update tiket ${subject}`, data.detail ? `${data.detail}` : `Tiket ${subject} ${label[data.status] ?? data.status}.`],
+    ),
     link: `/complaints?id=${data.complaintId}`,
     push: true,
   }).catch(() => null)
