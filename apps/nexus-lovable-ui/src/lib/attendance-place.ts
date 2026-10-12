@@ -1,3 +1,4 @@
+import { t } from "@/lib/lang";
 /**
  * "Which office" for one day — or, when the check-in was made AWAY from the office, the address it was
  * made at (owner decision, Berlin, 28 Sep 2026). Per record, not per person: a location-free member
@@ -46,5 +47,5 @@ export function recordPlace(rec: AttendancePlaceLike): { label: string; away: bo
   if (typeof rec.checkInLat === "number" && typeof rec.checkInLng === "number") {
     return { label: `${rec.checkInLat.toFixed(5)}, ${rec.checkInLng.toFixed(5)}`, away: true };
   }
-  return { label: "Away from the office", away: true };
+  return { label: t("Away from the office"), away: true };
 }

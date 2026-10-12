@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, ArrowRight, Clock, X } from "lucide-react";
 import { fmtDate, fmtTime, nexusApi } from "@/lib/nexus-api";
+import { useLang } from "@/lib/lang";
 
 /**
  * Daily check-in reminder. Shown while the user hasn't checked in today (and has no approved leave),
@@ -39,6 +40,7 @@ function nowMinutesInZone(timeZone = ATTENDANCE_TZ): number {
 }
 
 export function AttendanceReminderModal() {
+  const { t } = useLang();
   const navigate = useNavigate();
   const today = useQuery({ queryKey: ["attendance-today"], queryFn: nexusApi.attendanceToday, retry: 1, staleTime: 60_000 });
   // BoD ke atas (BoD / One Above All) nggak wajib absen → jangan munculin reminder ini.
@@ -95,18 +97,18 @@ export function AttendanceReminderModal() {
           >
             <div className="flex items-start justify-between gap-3 border-b border-border bg-gradient-to-br from-accent via-card to-secondary px-5 py-4">
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-primary">Attendance</p>
-                <h2 className="mt-0.5 font-display text-xl font-bold tracking-tight">{isCheckout ? "Wrap up yesterday's attendance" : "You haven't checked in today"}</h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">{isCheckout ? `You forgot to check out ${pending?.attendanceDate ? fmtDate(pending.attendanceDate) : "yesterday"}.` : "Time to clock in — open the attendance page for selfie + GPS."}</p>
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-primary">{t("Attendance")}</p>
+                <h2 className="mt-0.5 font-display text-xl font-bold tracking-tight">{isCheckout ? t("Finish your previous attendance") : t("You haven't checked in today")}</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">{isCheckout ? t("You forgot to check out on {date}.", { date: pending?.attendanceDate ? fmtDate(pending.attendanceDate) : t("the previous day") }) : t("Time to check in. Open the attendance page for the selfie and location.")}</p>
               </div>
-              <button onClick={() => setDismissed(true)} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+              <button onClick={() => setDismissed(true)} aria-label={t("Close")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
             </div>
 
             <div className="space-y-3 p-5">
               {isCheckout && (
                 <div className="flex items-start gap-2 rounded-2xl border border-amber-300/60 bg-amber-100 p-3 text-sm font-semibold text-amber-800">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>You need to check out first before you can check in today.</span>
+                  <span>{t("Check out first before you check in today.")}</span>
                 </div>
               )}
 
@@ -114,12 +116,12 @@ export function AttendanceReminderModal() {
                 onClick={goToAttendance}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.99]"
               >
-                {isCheckout ? "Check out yesterday" : "Check in now"} <ArrowRight className="h-4 w-4" />
+                {isCheckout ? t("Check out the previous day") : t("Check in now")} <ArrowRight className="h-4 w-4" />
               </button>
-              <p className="text-center text-[11px] text-muted-foreground">We'll send you to the attendance page — even if you're outside the office radius, you can use the offsite option there.</p>
-              <button onClick={() => setDismissed(true)} className="block w-full text-center text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground">Later</button>
+              <p className="text-center text-[11px] text-muted-foreground">{t("This opens the attendance page. If you're outside the office radius, you can use the offsite option there.")}</p>
+              <button onClick={() => setDismissed(true)} className="block w-full text-center text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground">{t("Later")}</button>
 
-              {data?.today?.checkOutAt && <p className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3 w-3" /> Out {fmtTime(data.today.checkOutAt)}</p>}
+              {data?.today?.checkOutAt && <p className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3 w-3" /> {t("Out {time}", { time: fmtTime(data.today.checkOutAt) })}</p>}
             </div>
           </motion.div>
         </div>

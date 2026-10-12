@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { PersonReportSkeleton, PersonReportView, ReportError } from "@/components/reports/PersonReportView";
 import { TeamRosterSkeleton, TeamRosterView } from "@/components/reports/TeamRosterView";
 import { PeriodSelect } from "@/components/reports/PeriodSelect";
-import { t } from "@/lib/lang";
+import { useLang } from "@/lib/lang";
 import { errorMessage, isPeriodKey, reportErrorCode, reportRetry, type ReportsSearch } from "@/components/reports/report-format";
 
 export const Route = createFileRoute("/_app/reports")({
@@ -33,6 +33,7 @@ function ReportsRoute() {
 }
 
 function Reports() {
+  const { t } = useLang();
   const search = Route.useSearch();
   const navigate = useNavigate({ from: "/reports" });
   const period = search.period;
@@ -68,12 +69,12 @@ function Reports() {
   // The server has the last word: if it says this viewer may only see themselves, there is no team tab.
   const selfOnly = !canSeeTeam || reportErrorCode(roster.error) === "REPORT_SELF_ONLY";
   const tab: "me" | "team" = wantTeam && !selfOnly ? "team" : "me";
-  const teamLabel = scope === "ALL" ? "Team" : "My team";
+  const teamLabel = scope === "ALL" ? t("Team") : t("My team");
 
   const teamOptions = (() => {
     const src = (teamId ? allRoster.data : roster.data)?.rows ?? [];
     const map = new Map<string, string>();
-    for (const r of src) for (const t of r.teams) map.set(t.id, t.name);
+    for (const r of src) for (const tm of r.teams) map.set(tm.id, tm.name);
     return [...map].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   })();
 
@@ -82,13 +83,13 @@ function Reports() {
   return (
     <div>
       <PageHeader
-        title="Reports"
+        title={t("Reports")}
         subtitle={tab === "team" ? (scope === "ALL" ? t("How everyone is doing this period.") : t("How your direct reports are doing this period.")) : t("Your work, attendance and XP for the period.")}
         icon={<BarChart3 className="h-6 w-6 text-primary" />}
         actions={<PeriodSelect value={period} onChange={(p) => setSearch({ period: p })} />}
         tabs={canSeeTeam && !selfOnly ? (
-          <div role="tablist" aria-label="Report view" className="mb-3 inline-flex items-center gap-1 rounded-lg border border-border bg-background p-0.5">
-            {([["me", "Me"], ["team", teamLabel]] as const).map(([key, label]) => (
+          <div role="tablist" aria-label={t("Report view")} className="mb-3 inline-flex items-center gap-1 rounded-lg border border-border bg-background p-0.5">
+            {([["me", t("Me")], ["team", teamLabel]] as const).map(([key, label]) => (
               <button
                 key={key}
                 role="tab"
@@ -105,11 +106,11 @@ function Reports() {
       <div className="mx-auto max-w-7xl p-4 md:p-8">
         {me.isLoading && search.tab === "team" ? <TeamRosterSkeleton /> : tab === "me" ? (
           me.isLoading ? <PersonReportSkeleton /> :
-          me.isError ? <ReportError title="Couldn't load your report" message={errorMessage(me.error)} onRetry={() => me.refetch()} retrying={me.isFetching} /> :
+          me.isError ? <ReportError title={t("Couldn't load your report")} message={errorMessage(me.error)} onRetry={() => me.refetch()} retrying={me.isFetching} /> :
           me.data ? <PersonReportView data={me.data} /> : null
         ) : (
           roster.isLoading ? <TeamRosterSkeleton /> :
-          roster.isError ? <ReportError title="Couldn't load the team" message={errorMessage(roster.error)} onRetry={() => roster.refetch()} retrying={roster.isFetching} /> :
+          roster.isError ? <ReportError title={t("Couldn't load the team")} message={errorMessage(roster.error)} onRetry={() => roster.refetch()} retrying={roster.isFetching} /> :
           roster.data ? (
             <TeamRosterView
               data={roster.data}

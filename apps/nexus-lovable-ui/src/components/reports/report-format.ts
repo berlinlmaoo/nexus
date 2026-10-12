@@ -2,17 +2,21 @@
 // SAME numbers: one decimal at most (multi-assignee tasks are split, so 2.5 happens), ".0" dropped,
 // percentages rounded to whole points, and a ratio with no denominator shown as "—" rather than 0%.
 import { ApiError, type ReportRatio } from "@/lib/nexus-api";
+import { localeOf, t } from "@/lib/lang";
 
 export const REPORT_TIMEZONE = "Asia/Jakarta";
 const CUTOFF_DAY = 27; // attendance period = 28th of the previous month → 27th of the key's month
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** Short month name (0-based) in the interface language: "Oct" / "Okt". */
+function monthShort(index: number): string {
+  return new Date(Date.UTC(2000, index, 1)).toLocaleDateString(localeOf(), { month: "short", timeZone: "UTC" });
+}
 
 /** 2 → "2", 2.5 → "2.5", 2.04 → "2", 1020 → "1,020", null → "—". */
 export function fmtNum(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return "—";
   const r = Math.round(n * 10) / 10;
-  return (r === 0 ? 0 : r).toLocaleString("en-US", { maximumFractionDigits: 1 });
+  return (r === 0 ? 0 : r).toLocaleString(localeOf(), { maximumFractionDigits: 1 });
 }
 
 /** Whole-point percentage, or null when there is nothing to divide by. */
@@ -27,19 +31,19 @@ export function fmtPct(r: ReportRatio | null | undefined): string {
 }
 
 export function fmtRatio(r: ReportRatio | null | undefined): string {
-  if (!r || !r.den) return "no data";
+  if (!r || !r.den) return t("no data");
   return `${fmtNum(r.num)}/${fmtNum(r.den)}`;
 }
 
 /** Minutes as hours with one decimal, like iOS: 492 → "8.2 h", null → "—". */
 export function fmtHours(minutes: number | null | undefined): string {
   if (minutes == null || !Number.isFinite(minutes)) return "—";
-  return `${fmtNum(minutes / 60)} h`;
+  return t("{n} h", { n: fmtNum(minutes / 60) });
 }
 
 export function fmtDays(d: number | null | undefined): string {
   if (d == null || !Number.isFinite(d)) return "—";
-  return `${fmtNum(d)}d`;
+  return t("{n}d", { n: fmtNum(d) });
 }
 
 const jakartaDay = new Intl.DateTimeFormat("en-CA", { timeZone: REPORT_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit" });
@@ -58,7 +62,7 @@ export function fmtDayKey(raw: string | null | undefined, withYear = false): str
   if (!key) return raw || "—";
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(key);
   if (!m) return key;
-  const label = `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]}`;
+  const label = `${Number(m[3])} ${monthShort(Number(m[2]) - 1)}`;
   return withYear ? `${label} ${m[1]}` : label;
 }
 
@@ -106,8 +110,8 @@ export function periodLabel(key: string): string {
   const startYear = m === 1 ? y - 1 : y;
   const thisYear = Number(currentPeriodKey().slice(0, 4));
   const showYear = startYear !== thisYear || y !== thisYear;
-  const from = `${CUTOFF_DAY + 1} ${MONTHS[startMonth - 1]}${showYear ? ` ${startYear}` : ""}`;
-  const to = `${CUTOFF_DAY} ${MONTHS[m - 1]}${showYear ? ` ${y}` : ""}`;
+  const from = `${CUTOFF_DAY + 1} ${monthShort(startMonth - 1)}${showYear ? ` ${startYear}` : ""}`;
+  const to = `${CUTOFF_DAY} ${monthShort(m - 1)}${showYear ? ` ${y}` : ""}`;
   return `${from} – ${to}`;
 }
 
@@ -151,11 +155,11 @@ export type ReportsSearch = { period?: string; tab?: "me" | "team" };
 /** Plain-English message for a failed report request. */
 export function errorMessage(e: unknown): string {
   const code = reportErrorCode(e);
-  if (code === "REPORT_OUT_OF_SCOPE") return "This report is outside what you can see. Managers see their direct reports; BoD sees everyone.";
-  if (code === "REPORT_SELF_ONLY") return "You can only see your own report.";
+  if (code === "REPORT_OUT_OF_SCOPE") return t("This report is outside what you can see. Managers see their direct reports; BoD sees everyone.");
+  if (code === "REPORT_SELF_ONLY") return t("You can only see your own report.");
   const status = reportErrorStatus(e);
-  if (status === 401) return "Your session has ended. Sign in again to see reports.";
-  if (status === 400) return "That period isn't valid. Pick another one from the list.";
-  if (status === 404) return "We couldn't find that person in this workspace.";
-  return e instanceof Error && e.message ? e.message : "Something went wrong. Try again in a moment.";
+  if (status === 401) return t("Your session has ended. Sign in again to see reports.");
+  if (status === 400) return t("That period isn't valid. Pick another one from the list.");
+  if (status === 404) return t("We couldn't find that person in this workspace.");
+  return e instanceof Error && e.message ? e.message : t("Something went wrong. Try again in a moment.");
 }

@@ -17,8 +17,8 @@ import { StatusOverridePanel } from "@/components/attendance/StatusOverridePanel
 import { LeftTag, leftAtOf } from "@/components/LeftTag";
 import { recTone, sCls, toneFromLetter, toneLabel, type HistRow } from "@/lib/attendance-tone";
 import { recordPlace } from "@/lib/attendance-place";
-import { ApiError, fmtDate, fmtTime, nexusApi, ORG_ROLE_LABEL, ORG_ROLE_TONE, type NexusMemberRecord, type NexusRecordXp, type NexusRecordXpEntry } from "@/lib/nexus-api";
-import { useLang } from "@/lib/lang";
+import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_ROLE_TONE, type NexusMemberRecord, type NexusRecordXp, type NexusRecordXpEntry } from "@/lib/nexus-api";
+import { localeOf, t as tr, useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 
 type RecordSearch = { period?: string };
@@ -49,7 +49,7 @@ function errorText(err: unknown, fallback: string) {
 }
 /** "14 Sep" from "2026-09-14" — a calendar day, never shifted by the browser's zone. */
 function dayLabel(key: string) {
-  return new Date(`${key}T00:00:00Z`).toLocaleDateString("en-US", { day: "numeric", month: "short", timeZone: "UTC" });
+  return new Date(`${key}T00:00:00Z`).toLocaleDateString(localeOf(), { day: "numeric", month: "short", timeZone: "UTC" });
 }
 function rangeLabel(a: string, b: string) {
   return a === b ? dayLabel(a) : `${dayLabel(a)} – ${dayLabel(b)}`;
@@ -59,6 +59,7 @@ function signed(n: number) {
 }
 
 function MemberRecordPage() {
+  useLang();
   const { userId } = Route.useParams();
   const { period } = Route.useSearch();
   const navigate = useNavigate({ from: "/people/$userId" });
@@ -82,12 +83,12 @@ function MemberRecordPage() {
   });
 
   const code = errorCode(record.error);
-  const title = data?.person.name ?? "Record";
+  const title = data?.person.name ?? tr("Record");
   return (
     <div>
       <PageHeader
         title={title}
-        subtitle={data ? (data.person.isSelf ? "Your attendance, XP and requests, one period at a time." : "Attendance, XP and requests, one period at a time.") : undefined}
+        subtitle={data ? (data.person.isSelf ? tr("Your attendance, XP and requests, one period at a time.") : tr("Attendance, XP and requests, one period at a time.")) : undefined}
         icon={<UserRound className="h-6 w-6 text-primary" />}
         actions={data ? <PeriodPicker data={data} onChange={setPeriod} /> : undefined}
       />
@@ -95,12 +96,12 @@ function MemberRecordPage() {
         {record.isLoading ? (
           <div className="grid place-items-center py-24 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
         ) : code === "FORBIDDEN" ? (
-          <EmptyState icon={Lock} tone="muted" title="Not in your view"
-            message="You can open your own record. A manager sees the people under them in the approval chart, and the BoD sees everyone."
-            action={<EmptyAction to="/people/me">Open my record</EmptyAction>} />
+          <EmptyState icon={Lock} tone="muted" title={tr("Not in your view")}
+            message={tr("You can open your own record. A manager sees the people under them in the approval chart, and the BoD sees everyone.")}
+            action={<EmptyAction to="/people/me">{tr("Open my record")}</EmptyAction>} />
         ) : record.isError || !data ? (
-          <EmptyState icon={AlertTriangle} tone="muted" title="Couldn’t load this record" message={errorText(record.error, "Check your connection and try again.")}
-            action={<EmptyAction onClick={() => record.refetch()}>Try again</EmptyAction>} />
+          <EmptyState icon={AlertTriangle} tone="muted" title={tr("Couldn’t load this record")} message={errorText(record.error, tr("Check your connection and try again."))}
+            action={<EmptyAction onClick={() => record.refetch()}>{tr("Try again")}</EmptyAction>} />
         ) : (
           <>
             <HeaderCard data={data} />
@@ -118,10 +119,10 @@ function MemberRecordPage() {
 function PeriodPicker({ data, onChange }: { data: NexusMemberRecord; onChange: (p: string | undefined) => void }) {
   return (
     <div className="flex items-center gap-1.5">
-      <button onClick={() => onChange(data.period.previousKey)} aria-label="Previous period" className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><ChevronLeft className="h-4 w-4" /></button>
-      <span className="min-w-[9.5rem] text-center text-sm font-semibold tabular-nums" title="Attendance period: the 28th to the 27th">{data.period.label}</span>
-      <button onClick={() => onChange(data.period.nextKey ?? undefined)} disabled={!data.period.nextKey} aria-label="Next period" className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
-      {!data.period.isCurrent && <button onClick={() => onChange(undefined)} className="ml-1 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">This period</button>}
+      <button onClick={() => onChange(data.period.previousKey)} aria-label={tr("Previous period")} className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><ChevronLeft className="h-4 w-4" /></button>
+      <span className="min-w-[9.5rem] text-center text-sm font-semibold tabular-nums" title={tr("Attendance period: the 28th to the 27th")}>{data.period.label}</span>
+      <button onClick={() => onChange(data.period.nextKey ?? undefined)} disabled={!data.period.nextKey} aria-label={tr("Next period")} className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
+      {!data.period.isCurrent && <button onClick={() => onChange(undefined)} className="ml-1 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">{tr("This period")}</button>}
     </div>
   );
 }
@@ -200,28 +201,28 @@ function Stat({ label, value, tone, hint }: { label: string; value: React.ReactN
 
 function SummaryCard({ data }: { data: NexusMemberRecord }) {
   const { score, counts, dayOff, xp } = data.summary;
-  const bonus = dayOff.bonusDays > 0 ? ` + ${dayOff.bonusDays} extra (${dayOff.bonusGrants.map((g) => g.reason).join(", ")})` : "";
+  const bonus = dayOff.bonusDays > 0 ? ` + ${tr("{n} extra ({reasons})", { n: dayOff.bonusDays, reasons: dayOff.bonusGrants.map((g) => g.reason).join(", ") })}` : "";
   return (
-    <Card title={data.period.isCurrent ? "This period" : "Period"} hint={`${data.period.label} · ${data.period.days} days, ${score.working} working days (${data.period.days} − ${dayOff.quota} day-off allowance)`}>
+    <Card title={data.period.isCurrent ? tr("This period") : tr("Attendance period")} hint={`${data.period.label} · ${tr("{days} days, {working} working days ({days} − {quota} day-off allowance)", { days: data.period.days, working: score.working, quota: dayOff.quota })}`}>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,14rem)_1fr]">
-        <div className="rounded-2xl bg-primary/5 p-4" title="Days worked (present or permit) out of the period's working days — the board's Score column">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-primary">Score</div>
+        <div className="rounded-2xl bg-primary/5 p-4" title={tr("Days worked (present or permit) out of the period's working days — the board's Score column")}>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-primary">{tr("Score")}</div>
           <div className="mt-1 text-3xl font-black tabular-nums">{score.worked}/{score.working}{score.surplus > 0 && <span className="ml-1 text-lg text-emerald-600">+{score.surplus}</span>}</div>
-          <div className="mt-1 text-xs text-muted-foreground">{score.totalWorked} day{score.totalWorked === 1 ? "" : "s"} worked{data.period.isCurrent ? ` · day ${data.period.daysElapsed} of ${data.period.days}` : ""}</div>
+          <div className="mt-1 text-xs text-muted-foreground">{tr(score.totalWorked === 1 ? "{n} day worked" : "{n} days worked", { n: score.totalWorked })}{data.period.isCurrent ? ` · ${tr("day {x} of {n}", { x: data.period.daysElapsed, n: data.period.days })}` : ""}</div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
-          <Stat label="Present" value={counts.present} tone={sCls.present} />
-          <Stat label="Permit" value={counts.permit} tone={sCls.permit} />
-          <Stat label="Leave" value={counts.leave} tone={sCls.leave} />
-          <Stat label="Sick" value={counts.sick} tone={sCls.sick} />
-          <Stat label="Day off" value={counts.dayOff} tone={sCls.dayoff} />
-          <Stat label="Absent (TK)" value={counts.absent} tone={sCls.absent} />
-          <Stat label="Late" value={counts.lateMinutes > 0 ? `${counts.lateMinutes} min` : "—"} hint={`${counts.lateDays} late day${counts.lateDays === 1 ? "" : "s"}`} />
-          <Stat label="Day-off balance" value={`${dayOff.remaining} left`} hint={`Used ${dayOff.usedRaw} of ${dayOff.quota}: ${dayOff.baseQuota} base${bonus}. Includes days cut automatically for TK or >120 min late.`} />
-          <Stat label="XP this period" value={<span><span className="text-emerald-600">+{xp.gained}</span> <span className="text-rose-600">{xp.lost}</span></span>} hint={xp.removed > 0 ? `${xp.removed} XP of deductions removed by the BoD` : undefined} />
+          <Stat label={tr("Present")} value={counts.present} tone={sCls.present} />
+          <Stat label={tr("Permit")} value={counts.permit} tone={sCls.permit} />
+          <Stat label={tr("Leave")} value={counts.leave} tone={sCls.leave} />
+          <Stat label={tr("Sick")} value={counts.sick} tone={sCls.sick} />
+          <Stat label={tr("Day off")} value={counts.dayOff} tone={sCls.dayoff} />
+          <Stat label={tr("Absent (TK)")} value={counts.absent} tone={sCls.absent} />
+          <Stat label={tr("Late")} value={counts.lateMinutes > 0 ? tr("{n} min", { n: counts.lateMinutes }) : "—"} hint={tr(counts.lateDays === 1 ? "{n} late day" : "{n} late days", { n: counts.lateDays })} />
+          <Stat label={tr("Day-off balance")} value={tr("{n} left", { n: dayOff.remaining })} hint={tr("Used {used} of {quota}: {base} base{bonus}. Includes days cut automatically for TK or >120 min late.", { used: dayOff.usedRaw, quota: dayOff.quota, base: dayOff.baseQuota, bonus })} />
+          <Stat label={tr("XP this period")} value={<span><span className="text-emerald-600">+{xp.gained}</span> <span className="text-rose-600">{xp.lost}</span></span>} hint={xp.removed > 0 ? tr("{n} XP of deductions removed by the BoD", { n: xp.removed }) : undefined} />
         </div>
       </div>
-      {dayOff.bonusDays > 0 && <p className="mt-2 text-xs text-emerald-700">Day-off allowance {dayOff.quota} = {dayOff.baseQuota} + {dayOff.bonusDays} extra for this period ({dayOff.bonusGrants.map((g) => `${g.days}: ${g.reason}`).join("; ")}).</p>}
+      {dayOff.bonusDays > 0 && <p className="mt-2 text-xs text-emerald-700">{tr("Day-off allowance {quota} = {base} + {n} extra for this period ({reasons}).", { quota: dayOff.quota, base: dayOff.baseQuota, n: dayOff.bonusDays, reasons: dayOff.bonusGrants.map((g) => `${g.days}: ${g.reason}`).join("; ") })}</p>}
     </Card>
   );
 }
@@ -242,7 +243,7 @@ function StreakRow({ data, rows, historyLoading }: { data: NexusMemberRecord; ro
             const tone = rec ? recTone(rec) : toneFromLetter(d.tone);
             return (
               <button key={d.date} disabled={d.isFuture} onClick={() => setOpen(d.date)}
-                title={`${dayLabel(d.date)} · ${toneLabel[tone] || (d.isFuture ? "Not yet" : "No record")}${d.lateMinutes > 0 ? ` · ${d.lateMinutes} min late` : ""}${d.penaltyXp < 0 ? ` · ${d.penaltyXp} XP` : ""}`}
+                title={`${dayLabel(d.date)} · ${toneLabel[tone] ? t(toneLabel[tone]) : (d.isFuture ? t("Not yet") : t("No record"))}${d.lateMinutes > 0 ? ` · ${t("{n} min late", { n: d.lateMinutes })}` : ""}${d.penaltyXp < 0 ? ` · ${d.penaltyXp} XP` : ""}`}
                 className={cn("flex w-8 flex-col items-center gap-1 rounded-lg py-1 transition-colors enabled:hover:bg-accent disabled:cursor-default", Number(d.day) === 1 && "border-l border-border/70")}>
                 <span className="text-[9px] font-medium uppercase text-muted-foreground">{d.weekday}</span>
                 <span className="text-[10px] font-semibold tabular-nums text-muted-foreground">{d.day}</span>
@@ -254,7 +255,7 @@ function StreakRow({ data, rows, historyLoading }: { data: NexusMemberRecord; ro
           })}
         </div>
       </div>
-      <p className="mt-2 text-[11px] text-muted-foreground">A red dot on a day = XP was deducted for it.</p>
+      <p className="mt-2 text-[11px] text-muted-foreground">{t("A red dot on a day = XP was deducted for it.")}</p>
       {day && <DayDetail data={data} day={day} rec={byDate.get(day.date) ?? null} onClose={() => setOpen(null)} />}
     </Card>
   );
@@ -276,22 +277,22 @@ function DayDetail({ data, day, rec, onClose }: { data: NexusMemberRecord; day: 
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="font-display text-lg font-bold tracking-tight">{new Date(`${day.date}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}</h3>
-            <div className="mt-1 flex items-center gap-1.5 text-sm"><span className={cn("inline-block h-3 w-3 rounded", sCls[tone])} />{toneLabel[tone] || "No record"}</div>
+            <h3 className="font-display text-lg font-bold tracking-tight">{new Date(`${day.date}T00:00:00Z`).toLocaleDateString(localeOf(), { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}</h3>
+            <div className="mt-1 flex items-center gap-1.5 text-sm"><span className={cn("inline-block h-3 w-3 rounded", sCls[tone])} />{toneLabel[tone] ? tr(toneLabel[tone]) : tr("No record")}</div>
           </div>
-          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label={tr("Close")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
         <dl className="mt-3 space-y-1.5 text-sm">
-          {rec?.checkInAt && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">In / out</dt><dd className="font-semibold tabular-nums">{fmtTime(rec.checkInAt)} – {rec.checkOutAt ? fmtTime(rec.checkOutAt) : "no check-out"}</dd></div>}
-          {day.lateMinutes > 0 && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Late</dt><dd className="font-semibold text-rose-600">{day.lateMinutes} min</dd></div>}
-          {where && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Where</dt><dd className="min-w-0 text-right"><div className="truncate font-semibold" title={rec?.checkInAddress ?? undefined}>{where}</div>{place?.away && <div className="text-[11px] text-muted-foreground">Away from the office</div>}</dd></div>}
-          {rec?.requestType && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Request</dt><dd className="font-semibold">{REQ_LABEL[rec.requestType] ?? rec.requestType}{rec.reviewedBy?.name ? ` · approved by ${rec.reviewedBy.name}` : ""}</dd></div>}
-          {rec?.notes && <div className="rounded-xl bg-muted/40 p-2.5 text-sm"><div className="mb-0.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Reason</div><p className="whitespace-pre-wrap">{rec.notes}</p></div>}
-          {!rec && !day.isFuture && <p className="text-muted-foreground">Nothing recorded — a rest day, a public holiday, before they joined, or still open today.</p>}
+          {rec?.checkInAt && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("In / out")}</dt><dd className="font-semibold tabular-nums">{fmtTime(rec.checkInAt)} – {rec.checkOutAt ? fmtTime(rec.checkOutAt) : tr("no check-out")}</dd></div>}
+          {day.lateMinutes > 0 && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("Late")}</dt><dd className="font-semibold text-rose-600">{tr("{n} min", { n: day.lateMinutes })}</dd></div>}
+          {where && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("Location")}</dt><dd className="min-w-0 text-right"><div className="truncate font-semibold" title={rec?.checkInAddress ?? undefined}>{where}</div>{place?.away && <div className="text-[11px] text-muted-foreground">{tr("Away from the office")}</div>}</dd></div>}
+          {rec?.requestType && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("Request")}</dt><dd className="font-semibold">{REQ_LABEL[rec.requestType] ? tr(REQ_LABEL[rec.requestType]) : rec.requestType}{rec.reviewedBy?.name ? ` · ${tr("approved by {name}", { name: rec.reviewedBy.name })}` : ""}</dd></div>}
+          {rec?.notes && <div className="rounded-xl bg-muted/40 p-2.5 text-sm"><div className="mb-0.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Reason")}</div><p className="whitespace-pre-wrap">{rec.notes}</p></div>}
+          {!rec && !day.isFuture && <p className="text-muted-foreground">{tr("Nothing recorded — a rest day, a public holiday, before they joined, or still open today.")}</p>}
         </dl>
         {entries.length > 0 && (
           <div className="mt-3 space-y-1.5">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">XP for this day</div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("XP for this day")}</div>
             {entries.map((e) => <XpRow key={e.id} entry={e} data={data} compact />)}
           </div>
         )}
@@ -299,7 +300,7 @@ function DayDetail({ data, day, rec, onClose }: { data: NexusMemberRecord; day: 
           <StatusOverridePanel userId={data.person.id} name={data.person.name} dateKey={day.date} onDone={onClose} />
         )}
         {rec?.id && rec.recordKind === "ATTENDANCE" && (
-          <Link to="/attendance" className="mt-3 inline-flex text-xs font-semibold text-primary hover:underline">Selfies, location and trail are on the Attendance board →</Link>
+          <Link to="/attendance" className="mt-3 inline-flex text-xs font-semibold text-primary hover:underline">{tr("Selfies, location and trail are on the Attendance board →")}</Link>
         )}
       </div>
     </div>
@@ -314,16 +315,16 @@ function XpRow({ entry: e, data, compact = false }: { entry: NexusRecordXpEntry;
       qc.invalidateQueries({ queryKey: ["member-record"] });
       qc.invalidateQueries({ queryKey: ["attendance-dayoff-summary"] });
       qc.invalidateQueries({ queryKey: ["attendance-deductions"] });
-      celebrate(`Deduction removed — +${r.refund.refunded} XP back to ${data.person.name ?? "them"}`);
+      celebrate(tr("Deduction removed — +{n} XP back to {name}", { n: r.refund.refunded, name: data.person.name ?? tr("them") }));
     },
     onError: (err) => {
       qc.invalidateQueries({ queryKey: ["member-record"] });
-      alert(errorText(err, "Couldn’t remove that deduction."));
+      alert(errorText(err, tr("Couldn’t remove that deduction.")));
     },
   });
   const ask = () => {
     const what = `${e.label}${e.dateKey ? ` (${dayLabel(e.dateKey)})` : ""}, ${e.originalAmount} XP`;
-    const note = window.prompt(`Remove this deduction for ${data.person.name ?? "this person"}?\n\n${what}\n\nThe ${-e.originalAmount} XP goes back to them, the nightly jobs won’t take it again, and it is recorded in the audit log. They get a notification.\n\nWhy? (optional)`, "");
+    const note = window.prompt(`${tr("Remove this deduction for {name}?", { name: data.person.name ?? tr("this person") })}\n\n${what}\n\n${tr("The {n} XP goes back to them, the nightly jobs won’t take it again, and it is recorded in the audit log. They get a notification.", { n: -e.originalAmount })}\n\n${tr("Why? (optional)")}`, "");
     if (note === null) return;
     remove.mutate(note);
   };
@@ -335,18 +336,18 @@ function XpRow({ entry: e, data, compact = false }: { entry: NexusRecordXpEntry;
       <div className="min-w-0 flex-1">
         <div className={cn("truncate text-sm font-semibold", removed && "text-muted-foreground line-through")}>{e.label}</div>
         <div className="truncate text-[11px] text-muted-foreground">
-          {e.dateKey ? `for ${dayLabel(e.dateKey)} · ` : ""}{fmtDate(e.createdAt)} {fmtTime(e.createdAt)}
+          {e.dateKey ? `${tr("for {date}", { date: dayLabel(e.dateKey) })} · ` : ""}{fmtDate(e.createdAt)} {fmtTime(e.createdAt)}
         </div>
         {e.removed && (
           <div className="truncate text-[11px] font-semibold text-emerald-700">
-            Removed by {e.removed.by?.name ?? "a BoD"} · {fmtDate(e.removed.at)}{e.removed.note ? ` — ${e.removed.note}` : ""}
+            {tr("Removed by {name}", { name: e.removed.by?.name ?? tr("a BoD") })} · {fmtDate(e.removed.at)}{e.removed.note ? ` — ${e.removed.note}` : ""}
           </div>
         )}
       </div>
       <div className={cn("shrink-0 text-sm font-black tabular-nums", removed ? "text-muted-foreground line-through" : pos ? "text-emerald-600" : "text-rose-600")}>{signed(e.originalAmount)} XP</div>
       {e.canRemove && (
-        <button onClick={ask} disabled={remove.isPending} title="Remove this deduction (BoD)" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-bold text-muted-foreground transition hover:border-primary hover:text-primary disabled:opacity-50">
-          {remove.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />} Remove
+        <button onClick={ask} disabled={remove.isPending} title={tr("Remove this deduction (BoD)")} className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-bold text-muted-foreground transition hover:border-primary hover:text-primary disabled:opacity-50">
+          {remove.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />} {tr("Remove")}
         </button>
       )}
     </div>
@@ -366,7 +367,7 @@ function XpLog({ data }: { data: NexusMemberRecord }) {
       const r = await nexusApi.memberRecordXp(data.person.id, last.olderPeriod);
       setOlder((o) => [...o, { period: r.period, xp: r.xp }]);
     } catch (e) {
-      setErr(errorText(e, "Couldn’t load older entries."));
+      setErr(errorText(e, tr("Couldn’t load older entries.")));
     } finally {
       setLoading(false);
     }
@@ -374,17 +375,17 @@ function XpLog({ data }: { data: NexusMemberRecord }) {
   const sections = [{ period: data.period.key, label: data.period.label, xp: data.xp }, ...older.map((o) => ({ period: o.period, label: o.period, xp: o.xp }))];
   const t = data.summary.xp;
   return (
-    <Card title="XP log" hint="Every XP change written in the period, with the reason. Attendance penalties name the day they are for."
-      right={<div className="text-xs font-semibold tabular-nums text-muted-foreground"><span className="text-emerald-600">+{t.gained}</span> · <span className="text-rose-600">{t.lost}</span>{t.removed > 0 && <> · <span className="text-emerald-700">{t.removed} removed</span></>}</div>}>
+    <Card title={tr("XP log")} hint={tr("Every XP change written in the period, with the reason. Attendance penalties name the day they are for.")}
+      right={<div className="text-xs font-semibold tabular-nums text-muted-foreground"><span className="text-emerald-600">+{t.gained}</span> · <span className="text-rose-600">{t.lost}</span>{t.removed > 0 && <> · <span className="text-emerald-700">{tr("{n} removed", { n: t.removed })}</span></>}</div>}>
       <div className="-mx-4 divide-y divide-border md:-mx-5">
         {sections.map((s, i) => (
           <div key={s.period}>
-            {i > 0 && <div className="bg-muted/40 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground md:px-5">Period ending {s.label}</div>}
+            {i > 0 && <div className="bg-muted/40 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground md:px-5">{tr("Period ending {label}", { label: s.label })}</div>}
             {s.xp.entries.length === 0 ? (
               i === 0 ? (
-                <EmptyState compact icon={ScrollText} tone="muted" className="mx-4 my-2 md:mx-5" title="No XP moved this period"
-                  message={`XP comes from quests and goes on attendance penalties (late, no check-out, TK). ${data.person.isSelf ? "Nothing has landed on you" : "Nothing has landed on them"} since ${dayLabel(data.period.from)}.${s.xp.hasOlder ? " Older periods are below." : ""}`} />
-              ) : <p className="px-4 py-3 text-sm text-muted-foreground md:px-5">No XP moved in that period.</p>
+                <EmptyState compact icon={ScrollText} tone="muted" className="mx-4 my-2 md:mx-5" title={tr("No XP moved this period")}
+                  message={`${tr("XP is earned from work and taken by attendance penalties (late, no check-out, TK).")} ${data.person.isSelf ? tr("Nothing for you since {date}.", { date: dayLabel(data.period.from) }) : tr("Nothing for them since {date}.", { date: dayLabel(data.period.from) })}${s.xp.hasOlder ? ` ${tr("Older periods are below.")}` : ""}`} />
+              ) : <p className="px-4 py-3 text-sm text-muted-foreground md:px-5">{tr("No XP moved in that period.")}</p>
             ) : (
               s.xp.entries.map((e) => <XpRow key={e.id} entry={e} data={data} />)
             )}
@@ -394,7 +395,7 @@ function XpLog({ data }: { data: NexusMemberRecord }) {
       {err && <p className="mt-2 text-xs text-rose-600">{err}</p>}
       {last.hasOlder && last.olderPeriod && (
         <button onClick={loadOlder} disabled={loading} className="mt-3 w-full rounded-xl border border-border bg-muted/40 py-2 text-xs font-semibold transition-colors hover:bg-muted disabled:opacity-60">
-          {loading ? "Loading…" : `Load older (period ending ${last.olderPeriod})`}
+          {loading ? tr("Loading…") : tr("Load older (period ending {label})", { label: last.olderPeriod })}
         </button>
       )}
     </Card>
@@ -404,11 +405,11 @@ function XpLog({ data }: { data: NexusMemberRecord }) {
 function RequestsCard({ data }: { data: NexusMemberRecord }) {
   const list = data.requests;
   return (
-    <Card title="Requests" hint="Leave, sick, permit and day-off requests touching this period.">
+    <Card title={tr("Requests")} hint={tr("Leave, sick, permit and day-off requests in this period.")}>
       {list.length === 0 ? (
-        <EmptyState compact icon={ClipboardList} tone="muted" title="No requests this period"
-          message={data.person.isSelf ? "Leave, sick notes, permits and days off you file show up here with their status." : "Nothing was filed for these dates. What they file shows up here with its status."}
-          action={data.person.isSelf ? <EmptyAction to="/attendance">File a request</EmptyAction> : undefined} />
+        <EmptyState compact icon={ClipboardList} tone="muted" title={tr("No requests this period")}
+          message={data.person.isSelf ? tr("Leave, sick notes, permits and days off you file show up here with their status.") : tr("Nothing was filed for these dates. What they file shows up here with its status.")}
+          action={data.person.isSelf ? <EmptyAction to="/attendance">{tr("File a request")}</EmptyAction> : undefined} />
       ) : (
         <div className="-mx-4 divide-y divide-border md:-mx-5">
           {list.map((r) => {
@@ -416,13 +417,13 @@ function RequestsCard({ data }: { data: NexusMemberRecord }) {
               <>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold">{r.isAuto ? "Day off cut automatically" : REQ_LABEL[r.type] ?? r.type}</span>
-                    <span className="text-xs text-muted-foreground tabular-nums">{rangeLabel(r.startDate, r.endDate)}{r.days > 1 ? ` · ${r.days} days` : ""}</span>
+                    <span className="text-sm font-semibold">{r.isAuto ? tr("Day off cut automatically") : REQ_LABEL[r.type] ? tr(REQ_LABEL[r.type]) : r.type}</span>
+                    <span className="text-xs text-muted-foreground tabular-nums">{rangeLabel(r.startDate, r.endDate)}{r.days > 1 ? ` · ${tr("{n} days", { n: r.days })}` : ""}</span>
                   </div>
                   <div className="truncate text-xs text-muted-foreground">{r.reason}</div>
-                  {r.reviewedBy?.name && <div className="truncate text-[11px] text-muted-foreground/80">{r.status === "REJECTED" ? "Rejected" : "Reviewed"} by {r.reviewedBy.name}{r.reviewNote ? ` — ${r.reviewNote}` : ""}</div>}
+                  {r.reviewedBy?.name && <div className="truncate text-[11px] text-muted-foreground/80">{r.status === "REJECTED" ? tr("Rejected by {name}", { name: r.reviewedBy.name }) : tr("Reviewed by {name}", { name: r.reviewedBy.name })}{r.reviewNote ? ` — ${r.reviewNote}` : ""}</div>}
                 </div>
-                <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", STATUS_TONE[r.status] ?? "bg-muted text-muted-foreground")}>{r.status}</span>
+                <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", STATUS_TONE[r.status] ?? "bg-muted text-muted-foreground")}>{statusLabel(r.status)}</span>
               </>
             );
             // The cron's own cut is not a request anyone can open; everything else opens on the Attendance page.

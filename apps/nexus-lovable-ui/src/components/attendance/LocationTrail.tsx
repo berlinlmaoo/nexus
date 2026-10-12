@@ -4,6 +4,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Check, Loader2, LogIn, LogOut, MapPinOff, Minus, MoreHorizontal, Route as RouteIcon, X } from "lucide-react";
 import { ApiError, fmtTime, nexusApi, type NexusAttendanceTrail, type NexusPresenceHour, type NexusTrailPoint } from "@/lib/nexus-api";
+import { t, useLang } from "@/lib/lang";
 
 /**
  * Where someone was between check-in and check-out — the web twin of the app's live location.
@@ -27,11 +28,11 @@ const OFFICE = "#6d5ce7";
 /** "2 h 35 min", "45 min", "under 1 min". */
 export function fmtSpanDuration(ms: number) {
   const min = Math.floor(ms / 60_000);
-  if (min < 1) return "under 1 min";
+  if (min < 1) return t("under 1 min");
   const h = Math.floor(min / 60);
   const m = min % 60;
-  if (h === 0) return `${m} min`;
-  return m === 0 ? `${h} h` : `${h} h ${m} min`;
+  if (h === 0) return t("{m} min", { m });
+  return m === 0 ? t("{h} h", { h }) : t("{h} h {m} min", { h, m });
 }
 
 function esc(text: string) {
@@ -57,6 +58,7 @@ function pinIcon(color: string, label: string) {
 const isInsideCheck = (p: NexusTrailPoint) => p.event === "presence" && p.inside;
 
 function TrailMap({ trail }: { trail: NexusAttendanceTrail }) {
+  const { lang } = useLang();
   const divRef = useRef<HTMLDivElement>(null);
   const { points, checks } = useMemo(() => {
     const all = trail.points
@@ -87,7 +89,7 @@ function TrailMap({ trail }: { trail: NexusAttendanceTrail }) {
     for (const p of checks) {
       bounds.extend([p.lat, p.lng]);
       L.circleMarker([p.lat, p.lng], { radius: 2.5, color: GREEN, weight: 0, fillColor: GREEN, fillOpacity: 0.45 })
-        .bindTooltip(`Presence check · ${fmtTime(p.at)} WIB${p.accuracy != null ? ` · ±${Math.round(p.accuracy)} m` : ""}`)
+        .bindTooltip(`${t("Presence check")} · ${fmtTime(p.at)} WIB${p.accuracy != null ? ` · ±${Math.round(p.accuracy)} m` : ""}`)
         .addTo(map);
     }
 
@@ -110,7 +112,7 @@ function TrailMap({ trail }: { trail: NexusAttendanceTrail }) {
     for (const p of points) {
       bounds.extend([p.lat, p.lng]);
       L.circleMarker([p.lat, p.lng], { radius: 3, color: p.inside ? GREEN : AMBER, weight: 1, fillOpacity: 0.9 })
-        .bindTooltip(`${fmtTime(p.at)} WIB${p.accuracy != null ? ` · ±${Math.round(p.accuracy)} m` : ""}${p.event ? ` · ${esc(humanEvent(p.event))}` : ""}`)
+        .bindTooltip(`${fmtTime(p.at)} WIB${p.accuracy != null ? ` · ±${Math.round(p.accuracy)} m` : ""}${p.event ? ` · ${esc(t(humanEvent(p.event)))}` : ""}`)
         .addTo(map);
     }
 
@@ -124,12 +126,12 @@ function TrailMap({ trail }: { trail: NexusAttendanceTrail }) {
       const back = p.event === "enter" || (prev !== null && !prev.inside && p.inside);
       if (!left && !back) continue;
       pinned.add(i);
-      L.marker([p.lat, p.lng], { icon: pinIcon(left ? AMBER : GREEN, `${left ? "Left" : "Back"} ${fmtTime(p.at)}`), keyboard: false, zIndexOffset: 500 }).addTo(map);
+      L.marker([p.lat, p.lng], { icon: pinIcon(left ? AMBER : GREEN, left ? t("Left {time}", { time: fmtTime(p.at) }) : t("Back {time}", { time: fmtTime(p.at) })), keyboard: false, zIndexOffset: 500 }).addTo(map);
     }
     if (points.length) {
       const first = points[0], last = points[points.length - 1];
-      if (!pinned.has(0)) L.marker([first.lat, first.lng], { icon: pinIcon("#334155", `Start ${fmtTime(first.at)}`), keyboard: false, zIndexOffset: 400 }).addTo(map);
-      if (points.length > 1 && !pinned.has(points.length - 1)) L.marker([last.lat, last.lng], { icon: pinIcon("#334155", `Last ${fmtTime(last.at)}`), keyboard: false, zIndexOffset: 400 }).addTo(map);
+      if (!pinned.has(0)) L.marker([first.lat, first.lng], { icon: pinIcon("#334155", t("Start {time}", { time: fmtTime(first.at) })), keyboard: false, zIndexOffset: 400 }).addTo(map);
+      if (points.length > 1 && !pinned.has(points.length - 1)) L.marker([last.lat, last.lng], { icon: pinIcon("#334155", t("Last {time}", { time: fmtTime(last.at) })), keyboard: false, zIndexOffset: 400 }).addTo(map);
     }
 
     const fit = () => {
@@ -138,11 +140,11 @@ function TrailMap({ trail }: { trail: NexusAttendanceTrail }) {
     };
     fit();
     // The map usually mounts inside a dialog that is still animating open — refit once it has a size.
-    const t = window.setTimeout(fit, 250);
+    const timer = window.setTimeout(fit, 250);
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => map.invalidateSize()) : null;
     ro?.observe(divRef.current);
-    return () => { window.clearTimeout(t); ro?.disconnect(); map.remove(); };
-  }, [points, checks, office]);
+    return () => { window.clearTimeout(timer); ro?.disconnect(); map.remove(); };
+  }, [points, checks, office, lang]);
 
   return <div ref={divRef} className="relative z-0 h-64 w-full overflow-hidden rounded-xl border border-border sm:h-80" />;
 }
@@ -157,15 +159,16 @@ const PRESENCE_LOOK: Record<NexusPresenceHour["status"], { title: string; classN
 
 /** One chip per office-clock hour: was the phone at the office when it checked? */
 function PresenceChecks({ hours }: { hours: NexusPresenceHour[] }) {
+  const { tn } = useLang();
   const decided = hours.filter((h) => h.status !== "pending");
   const atOffice = decided.filter((h) => h.status === "inside").length;
   return (
     <div className="rounded-xl border border-border p-3">
-      <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Presence checks</p>
+      <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("Presence checks")}</p>
       <ul className="mt-2 flex flex-wrap gap-1.5">
         {hours.map((h) => {
           const look = PRESENCE_LOOK[h.status] ?? PRESENCE_LOOK.unclear;
-          const tip = `${h.label}:00 · ${look.title}${h.at ? ` · ${fmtTime(h.at)} WIB` : ""}`;
+          const tip = `${h.label}:00 · ${t(look.title)}${h.at ? ` · ${fmtTime(h.at)} WIB` : ""}`;
           return (
             <li key={h.from} title={tip} aria-label={tip} className="flex w-7 flex-col items-center gap-0.5">
               <span className={`grid h-6 w-6 place-items-center rounded-full border ${look.className}`}>{look.icon}</span>
@@ -174,8 +177,8 @@ function PresenceChecks({ hours }: { hours: NexusPresenceHour[] }) {
           );
         })}
       </ul>
-      {decided.length > 0 && <p className="mt-1.5 text-xs font-semibold">{atOffice} of {decided.length} {decided.length === 1 ? "hour" : "hours"} at the office</p>}
-      <p className="mt-1 text-[11px] leading-snug text-muted-foreground">✓ at the office · ✗ outside · ? unclear · – no check. About one check an hour while at the office; outside, the route on the map.</p>
+      {decided.length > 0 && <p className="mt-1.5 text-xs font-semibold">{tn(decided.length, "{x} of {n} hour at the office", "{x} of {n} hours at the office", { x: atOffice })}</p>}
+      <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{t("✓ at the office · ✗ outside · ? unclear · – no check. About one check an hour while at the office; outside, the route on the map.")}</p>
     </div>
   );
 }
@@ -183,6 +186,7 @@ function PresenceChecks({ hours }: { hours: NexusPresenceHour[] }) {
 /** `compact`: always one column (map on top) — for narrow panels where a viewport breakpoint would lie. */
 /** `trackingState`: the record's locationTrackingState, when the caller has it — explains an empty trail. */
 export function LocationTrail({ recordId, compact = false, trackingState }: { recordId: string; compact?: boolean; trackingState?: "on" | "denied" | "web" | null }) {
+  useLang();
   const q = useQuery({
     queryKey: ["attendance-trail", recordId],
     queryFn: () => nexusApi.attendanceTrail(recordId),
@@ -195,9 +199,9 @@ export function LocationTrail({ recordId, compact = false, trackingState }: { re
   if (q.isLoading) return <div className="grid h-40 place-items-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>;
   if (q.isError || !q.data) {
     const e = q.error;
-    const msg = e instanceof ApiError && e.status === 403 ? "You can only see the location trail of yourself and the people who report to you."
-      : e instanceof ApiError && e.status === 404 ? "No location trail for this day."
-      : "Couldn’t load the location trail — give it another go.";
+    const msg = e instanceof ApiError && e.status === 403 ? t("You can only see the location trail of yourself and the people who report to you.")
+      : e instanceof ApiError && e.status === 404 ? t("No location trail for this day.")
+      : t("Couldn’t load the location trail. Try again.");
     return <p className="rounded-xl border border-border bg-muted/30 px-3 py-4 text-center text-sm text-muted-foreground">{msg}</p>;
   }
 
@@ -216,22 +220,22 @@ export function LocationTrail({ recordId, compact = false, trackingState }: { re
           <>
             <TrailMap trail={trail} />
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-              <span className="inline-flex items-center gap-1"><span className="inline-block h-1 w-4 rounded-full" style={{ background: GREEN }} /> Inside office</span>
-              <span className="inline-flex items-center gap-1"><span className="inline-block h-1 w-4 rounded-full" style={{ background: AMBER }} /> Outside</span>
+              <span className="inline-flex items-center gap-1"><span className="inline-block h-1 w-4 rounded-full" style={{ background: GREEN }} /> {t("Inside the office")}</span>
+              <span className="inline-flex items-center gap-1"><span className="inline-block h-1 w-4 rounded-full" style={{ background: AMBER }} /> {t("Outside")}</span>
               {record.office && <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full border-2" style={{ borderColor: OFFICE }} /> {record.office.name} ({Math.round(record.office.radiusMeters)} m)</span>}
-              <span>Times in WIB</span>
+              <span>{t("Times in WIB")}</span>
             </div>
           </>
         ) : (
           <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
             <MapPinOff className="h-6 w-6 text-muted-foreground/60" />
-            <p className="text-sm font-medium">No location recorded</p>
+            <p className="text-sm font-medium">{t("No location recorded")}</p>
             <p className="max-w-xs text-xs text-muted-foreground">
-              {trackingState === "web" ? "Checked in from the web — location isn’t tracked during the day. Tracking starts after check-in in the NEXUS app."
-                : trackingState === "denied" ? "Location access was off on the phone, so nothing was recorded. Tracking starts after check-in in the NEXUS app."
-                : !record.checkInAt ? "There’s no check-in on this day yet. Tracking starts after check-in in the NEXUS app."
-                : !record.checkOutAt ? "No points yet. The app checks about once an hour while you’re at the office, and follows the route when you leave it."
-                : "Nothing was sent: checked in without the NEXUS app, or with a version before 0.1.6 (those stayed silent inside the office)."}
+              {trackingState === "web" ? t("Checked in from the web — location isn’t tracked during the day. Tracking starts after check-in in the NEXUS app.")
+                : trackingState === "denied" ? t("Location access was off on the phone, so nothing was recorded. Tracking starts after check-in in the NEXUS app.")
+                : !record.checkInAt ? t("There’s no check-in on this day yet. Tracking starts after check-in in the NEXUS app.")
+                : !record.checkOutAt ? t("No points yet. The app checks about once an hour while you’re at the office, and follows the route when you leave it.")
+                : t("Nothing was sent: checked in without the NEXUS app, or with a version before 0.1.6 (those stayed silent inside the office).")}
             </p>
           </div>
         )}
@@ -240,38 +244,38 @@ export function LocationTrail({ recordId, compact = false, trackingState }: { re
         {trail.presence && trail.presence.length > 0 && <PresenceChecks hours={trail.presence} />}
         <div className="rounded-xl border border-border bg-muted/20 p-3">
           <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><LogIn className="h-3.5 w-3.5" /> Check-in</span>
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><LogIn className="h-3.5 w-3.5" /> {t("Check-in")}</span>
             <span className="font-semibold tabular-nums">{fmtTime(record.checkInAt)}</span>
           </div>
           {/* Where the day was (server placeLabel): the office, or the address when checked in away. */}
           {record.checkInAt && (record.placeLabel || record.office?.name) && (
             <p className="mt-0.5 truncate text-right text-xs text-muted-foreground" title={record.checkInAway ? record.checkInAddress ?? undefined : undefined}>
-              {record.checkInAway ? "Away from the office · " : ""}{record.placeLabel || record.office?.name}
+              {record.checkInAway ? `${t("Away from the office")} · ` : ""}{record.placeLabel || record.office?.name}
             </p>
           )}
           <div className="mt-1 flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><LogOut className="h-3.5 w-3.5" /> Check-out</span>
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><LogOut className="h-3.5 w-3.5" /> {t("Check-out")}</span>
             <span className="font-semibold tabular-nums">
-              {record.checkOutAt ? fmtTime(record.checkOutAt) : "Still in"}
-              {record.checkOutOffsite && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">Offsite</span>}
+              {record.checkOutAt ? fmtTime(record.checkOutAt) : t("Still in")}
+              {record.checkOutOffsite && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">{t("Offsite")}</span>}
             </span>
           </div>
         </div>
         <div className="rounded-xl border border-border p-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Outside the office</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("Outside the office")}</p>
           {spans.length === 0 ? (
-            <p className="mt-1.5 text-xs text-muted-foreground">{hasPoints ? "Stayed inside the office radius." : "Nothing recorded."}</p>
+            <p className="mt-1.5 text-xs text-muted-foreground">{hasPoints ? t("Stayed inside the office radius.") : t("Nothing recorded.")}</p>
           ) : (
             <>
               <ul className="mt-1.5 space-y-1">
                 {spans.map((s) => (
                   <li key={s.from} className="flex items-baseline justify-between gap-2 text-xs">
-                    <span className="tabular-nums">{fmtTime(s.from)} – {s.to ? fmtTime(s.to) : record.checkOutAt ? `${fmtTime(record.checkOutAt)} (out)` : "now"}</span>
+                    <span className="tabular-nums">{fmtTime(s.from)} – {s.to ? fmtTime(s.to) : record.checkOutAt ? `${fmtTime(record.checkOutAt)} (${t("out")})` : t("now")}</span>
                     <span className={s.to ? "text-muted-foreground" : "font-semibold text-amber-700"}>{fmtSpanDuration(spanEnd(s) - new Date(s.from).getTime())}</span>
                   </li>
                 ))}
               </ul>
-              <p className="mt-2 border-t border-border pt-1.5 text-xs text-muted-foreground">Total {fmtSpanDuration(totalOutside)} outside</p>
+              <p className="mt-2 border-t border-border pt-1.5 text-xs text-muted-foreground">{t("Total {time} outside", { time: fmtSpanDuration(totalOutside) })}</p>
             </>
           )}
         </div>
@@ -282,6 +286,7 @@ export function LocationTrail({ recordId, compact = false, trackingState }: { re
 
 /** The trail in its own dialog — for places that have no detail panel to put it in. */
 export function LocationTrailDialog({ recordId, title, subtitle, onClose }: { recordId: string; title: string; subtitle?: string; onClose: () => void }) {
+  useLang();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
@@ -295,7 +300,7 @@ export function LocationTrailDialog({ recordId, title, subtitle, onClose }: { re
             <h2 className="flex items-center gap-2 font-display text-lg font-bold tracking-tight"><RouteIcon className="h-4 w-4 text-primary" /> {title}</h2>
             {subtitle && <p className="mt-0.5 truncate text-xs text-muted-foreground">{subtitle}</p>}
           </div>
-          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label={t("Close")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
         <LocationTrail recordId={recordId} />
       </div>
