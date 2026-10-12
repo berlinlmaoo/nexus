@@ -5,7 +5,7 @@ import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import type { Prisma } from '@/generated/prisma/client'
 import { resolveAuditAccess } from '@/lib/audit-query'
-import { auditSummary } from '@/lib/audit-describe'
+import { auditLangOf, auditSummary } from '@/lib/audit-describe'
 import { restoreInfoFor } from '@/lib/deletion-snapshot'
 
 export async function GET(request: NextRequest) {
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
     // `summary`: one English sentence per row, from the row alone (no per-row query). Additive — the
     // rest of each row is unchanged. GET /api/audit/[id] has the full explanation.
     return NextResponse.json({
-      logs: logs.map((row) => ({ ...row, summary: auditSummary(row), restore: restore.get(row.id) ?? null })),
+      logs: logs.map((row) => ({ ...row, summary: auditSummary(row, auditLangOf(request.headers.get('accept-language'))), restore: restore.get(row.id) ?? null })),
       total,
       limit,
       offset,

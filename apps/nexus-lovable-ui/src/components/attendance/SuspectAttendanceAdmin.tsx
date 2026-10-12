@@ -7,6 +7,7 @@ import { Avatar } from "@/components/Avatar";
 import { ApiError, fmtDate, fmtTime, nexusApi, type NexusSuspectItem, type NexusSuspectLevel, type NexusSuspectSide } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 import { useLang, type LangApi } from "@/lib/lang";
+import { LoadError } from "@/components/LoadError";
 
 /**
  * Absen Monitor (was "Fake GPS"; owner, 28–29 Sep 2026). Abnormal attendance per 28→27 period:
@@ -53,17 +54,19 @@ export function SuspectAttendanceAdmin() {
     <div className="space-y-4">
       <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
         <div className="flex flex-wrap items-center gap-3">
-          <ShieldAlert className="h-5 w-5 text-rose-600 dark:text-rose-400" />
-          <div className="min-w-0 flex-1">
+          <ShieldAlert className="h-5 w-5 shrink-0 text-rose-600 dark:text-rose-400" />
+          {/* basis-64: on a phone the period switcher drops under the text instead of squeezing it into a
+              ~60px column, one word per line (QA 13 Oct 2026). */}
+          <div className="min-w-0 flex-1 basis-64">
             <div className="font-bold">{t("Attendance monitor")}</div>
             <p className="text-xs text-muted-foreground">
               {t("Unusual check-ins and check-outs: a faked location, or a selfie without a face. \"Not valid\" is only possible with proof of fake GPS (the phone itself reported a fake-GPS app, or an impossible jump) and turns the day into TK (remaining day off first, then −150 XP). \"Send warning\" only tells the person.")}
             </p>
           </div>
-          <div className="flex items-center gap-1">
-            <button aria-label={t("Previous period")} disabled={!periodKey} onClick={() => periodKey && setPeriodKey(shiftPeriod(periodKey, -1))} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button>
+          <div className="flex shrink-0 items-center gap-1 max-sm:w-full max-sm:justify-between">
+            <button aria-label={t("Previous period")} disabled={!periodKey} onClick={() => periodKey && setPeriodKey(shiftPeriod(periodKey, -1))} className="grid place-items-center rounded-lg p-1.5 text-muted-foreground hover:bg-accent disabled:opacity-40 pointer-coarse:min-h-11 pointer-coarse:min-w-11"><ChevronLeft className="h-4 w-4" /></button>
             <span className="min-w-[8.5rem] text-center text-sm font-semibold tabular-nums">{list.data?.periodLabel ?? "…"}</span>
-            <button aria-label={t("Next period")} disabled={!periodKey || isCurrent} onClick={() => periodKey && setPeriodKey(shiftPeriod(periodKey, 1))} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
+            <button aria-label={t("Next period")} disabled={!periodKey || isCurrent} onClick={() => periodKey && setPeriodKey(shiftPeriod(periodKey, 1))} className="grid place-items-center rounded-lg p-1.5 text-muted-foreground hover:bg-accent disabled:opacity-40 pointer-coarse:min-h-11 pointer-coarse:min-w-11"><ChevronRight className="h-4 w-4" /></button>
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-1">
@@ -76,7 +79,7 @@ export function SuspectAttendanceAdmin() {
       </div>
 
       {list.isLoading && <div className="flex justify-center py-12 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
-      {list.isError && <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">{list.error instanceof ApiError ? list.error.message : t("Couldn't load. Try again.")}</div>}
+      {list.isError && <LoadError compact error={list.error} what={t("the attendance monitor")} onRetry={() => void list.refetch()} />}
       {!list.isLoading && !list.isError && shown.length === 0 && (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
           <ShieldCheck className="mx-auto mb-2 h-7 w-7 text-emerald-600 dark:text-emerald-400" />

@@ -22,6 +22,7 @@ import {
   X,
   Maximize2,
   Loader2,
+  RotateCw,
   } from "lucide-react";
 
 import learner from "@/assets/philearn/learner.png";
@@ -136,16 +137,18 @@ function TopBar({ userName, unread }: { userName: string; unread: number }) {
       </div>
       {/* rail zone: search + notifications */}
       <div className="flex items-center gap-3">
-        {/* Opens the app's search (⌘K): the box used to be an input with nothing behind it (QA B12). */}
+        {/* Opens the global search (⌘K), like the sidebar's box. It was an input with no handler (QA B12). */}
         <button
           type="button"
+          data-dashboard-search=""
           onClick={openGlobalSearch}
+          aria-label={t("Search")}
           aria-haspopup="dialog"
-          className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-full border border-border bg-card px-5 text-left text-muted-foreground transition-shadow hover:border-primary/40 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+          className="flex h-12 min-w-0 flex-1 cursor-text items-center gap-2 rounded-full border border-border bg-card px-5 text-left text-sm text-muted-foreground transition-shadow hover:border-primary/40 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
         >
           <Search className="h-4 w-4 shrink-0" />
-          <span className="min-w-0 flex-1 truncate text-sm">{t("Search…")}</span>
-          <kbd className="hidden rounded bg-muted px-1.5 py-0.5 text-[10px] pointer-fine:inline">{modKey("K")}</kbd>
+          <span className="min-w-0 flex-1 truncate">{t("Search…")}</span>
+          <kbd className="hidden rounded bg-muted px-1.5 py-0.5 text-[10px] md:inline">{modKey("K")}</kbd>
         </button>
         <NotificationsBell unread={unread} />
       </div>
@@ -332,6 +335,8 @@ type StatCard = {
   to: string;
   glow: string;
   detail: React.ReactNode;
+  /** Set when the card's request failed: the card shows "—" and a retry instead of a fake 0 (QA 13 Oct 2026). */
+  retry?: () => void;
 };
 
 function StatRow(_: { data: NexusDashboardResponse }) {
@@ -365,16 +370,19 @@ function StatRow(_: { data: NexusDashboardResponse }) {
     {
       value: projectList.length, label: "Projects", Icon: FolderKanban,
       from: "#c4b5fd", to: "#7c3aed", glow: "#a78bfa",
+      retry: projectsQ.isError && !projectsQ.data ? () => void projectsQ.refetch() : undefined,
       detail: <ProjectsDetail projects={projectList} />,
     },
     {
       value: tasksDone, total: taskList.length, label: "Tasks", Icon: ListChecks,
       from: "#6ee7b7", to: "#059669", glow: "#34d399",
+      retry: myTasks.isError && !myTasks.data ? () => void myTasks.refetch() : undefined,
       detail: <TasksDetail tasks={taskList} />,
     },
     {
       value: questsDone, total: quests.length, label: "Quests", Icon: Sparkles,
       from: "#fcd34d", to: "#ea580c", glow: "#fbbf24",
+      retry: g.isError && !g.data ? () => void g.refetch() : undefined,
       detail: <QuestsDetail quests={quests} claim={claim} focusKey={search.quest?.split(":")[0]} />,
     },
   ];
@@ -394,7 +402,7 @@ function StatRow(_: { data: NexusDashboardResponse }) {
     <>
       <div className="grid grid-cols-3 items-stretch gap-3 sm:gap-5">
         {cards.map((c, i) => (
-          <StatCardButton key={c.label} card={c} index={i} onOpen={() => setActive(i)} />
+          <StatCardButton key={c.label} card={c} index={i} onOpen={() => (c.retry ? c.retry() : setActive(i))} />
         ))}
       </div>
       <StatCardModal cards={cards} active={active} onClose={close} />
@@ -412,7 +420,7 @@ function StatCardButton({ card, index, onOpen }: { card: StatCard; index: number
       type="button"
       layoutId={reduce ? undefined : `stat-card-${index}`}
       onClick={onOpen}
-      aria-label={card.total != null ? t("{label}: {n} of {total}. Open details", { label: t(card.label), n: card.value, total: card.total }) : t("{label}: {n}. Open details", { label: t(card.label), n: card.value })}
+      aria-label={card.retry ? t("{label}: couldn't load. Try again", { label: t(card.label) }) : card.total != null ? t("{label}: {n} of {total}. Open details", { label: t(card.label), n: card.value, total: card.total }) : t("{label}: {n}. Open details", { label: t(card.label), n: card.value })}
       initial={reduce ? false : { opacity: 0, y: 18, scale: 0.97 }}
       whileInView={reduce ? undefined : { opacity: 1, y: 0, scale: 1 }}
       viewport={{ once: true, margin: "-40px" }}
@@ -428,10 +436,11 @@ function StatCardButton({ card, index, onOpen }: { card: StatCard; index: number
         <Icon className="h-5 w-5" strokeWidth={2.5} />
       </span>
       <div className="font-display text-3xl font-bold tracking-tight drop-shadow-sm md:text-4xl">
-        <CountUp value={card.value} />
-        {card.total != null && <span className="text-white/70">/{card.total}</span>}
+        {card.retry ? "—" : <CountUp value={card.value} />}
+        {!card.retry && card.total != null && <span className="text-white/70">/{card.total}</span>}
       </div>
       <div className="mt-1.5 text-sm font-medium text-white/85">{t(card.label)}</div>
+      {card.retry && <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-white/90"><RotateCw className="h-3 w-3" /> {t("Couldn't load · Try again")}</div>}
     </motion.button>
   );
 }
@@ -624,6 +633,18 @@ function LevelChip() {
   const streak = g.data?.streak?.current ?? 0;
   const reduce = useReducedMotion();
   const [open, setOpen] = useState(false);
+  // A failed XP request is not "Iron Lv.1, 0 XP" (QA 13 Oct 2026): say it didn't load, tap to retry.
+  if (g.isError && !g.data) {
+    return (
+      <button type="button" onClick={() => void g.refetch()} className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 text-left text-sm shadow-soft transition hover:border-primary/30 sm:w-auto">
+        <span className="grid h-10 w-10 place-items-center rounded-full bg-muted text-muted-foreground"><RotateCw className="h-4 w-4" /></span>
+        <span className="min-w-0">
+          <span className="block font-semibold">{t("Your level didn't load")}</span>
+          <span className="block text-[11px] text-muted-foreground">{t("Tap to try again")}</span>
+        </span>
+      </button>
+    );
+  }
   return (
     <>
       <motion.button

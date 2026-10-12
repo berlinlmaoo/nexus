@@ -12,16 +12,39 @@ import {
 } from "@/lib/nexus-api";
 import { NotificationFilterTabs } from "@/components/NotificationFilterTabs";
 import { PageBody } from "@/components/PageLayout";
-import { AtSign, UserPlus, MessageCircle, AlarmClock, Activity, Check, Trash2, Loader2, Inbox, Filter, Lock } from "lucide-react";
+import { AtSign, UserPlus, MessageCircle, AlarmClock, Activity, Check, Trash2, Loader2, Inbox, Filter, Lock, CheckCircle2, CalendarCheck, Megaphone, LifeBuoy, FileText, Trophy, DoorOpen, Bell, type LucideIcon } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
 import { Reveal } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLang } from "@/lib/lang";
+import { toast } from "sonner";
 import { notificationMessage, notificationTitle } from "@/lib/server-text";
+import { toastFailure } from "@/lib/failure";
+import { LoadError } from "@/components/LoadError";
 
 export const Route = createFileRoute("/_app/inbox")({ component: InboxPage });
 
-const iconMap = [AtSign, UserPlus, MessageCircle, AlarmClock, Activity];
+/**
+ * The row's mark comes from what the notification is about (QA B13/S-27, 13 Oct 2026): it used to cycle
+ * five icons by row position and draw a generic "N" for every sender. Notifications carry no actor id,
+ * so the circle shows the kind of event, in that kind's colour.
+ */
+function notificationMark(type?: string | null): { Icon: LucideIcon; tone: string } {
+  const t = (type ?? "").toLowerCase();
+  if (t.includes("mention")) return { Icon: AtSign, tone: "bg-sky-500/12 text-sky-600 dark:text-sky-400" };
+  if (t === "task_assigned" || t === "project_invite" || t === "members_added") return { Icon: UserPlus, tone: "bg-primary/10 text-primary" };
+  if (t === "task_completed") return { Icon: CheckCircle2, tone: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" };
+  if (t.startsWith("comment") || t.startsWith("message") || t.startsWith("feed_") || t === "complaint_reply") return { Icon: MessageCircle, tone: "bg-violet-500/12 text-violet-600 dark:text-violet-400" };
+  if (t.includes("due") || t.includes("reminder") || t === "booking_soon" || t === "streak_at_risk") return { Icon: AlarmClock, tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400" };
+  if (t.startsWith("attendance") || t.startsWith("offsite") || t.includes("dayoff") || t.includes("quota")) return { Icon: CalendarCheck, tone: "bg-teal-500/12 text-teal-700 dark:text-teal-400" };
+  if (t.includes("announcement")) return { Icon: Megaphone, tone: "bg-orange-500/12 text-orange-700 dark:text-orange-400" };
+  if (t.startsWith("complaint")) return { Icon: LifeBuoy, tone: "bg-rose-500/12 text-rose-600 dark:text-rose-400" };
+  if (t === "submission_status" || t === "doc_mention") return { Icon: FileText, tone: "bg-slate-500/12 text-slate-700 dark:text-slate-300" };
+  if (t.startsWith("quest")) return { Icon: Trophy, tone: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400" };
+  if (t.startsWith("member_") || t.startsWith("group_")) return { Icon: DoorOpen, tone: "bg-slate-500/12 text-slate-700 dark:text-slate-300" };
+  if (t === "status_update") return { Icon: Activity, tone: "bg-primary/10 text-primary" };
+  return { Icon: Bell, tone: "bg-muted text-muted-foreground" };
+}
 
 function InboxPage() {
   const { t, tn } = useLang();
@@ -67,7 +90,7 @@ function InboxPage() {
                 <div className="flex-1 space-y-1.5"><Skeleton className="h-3.5 w-1/3" /><Skeleton className="h-3 w-2/3" /><Skeleton className="h-2.5 w-24" /></div>
               </div>
             ))}
-            {inbox.isError && <EmptyState icon={Lock} tone="muted" title={t("Couldn't load notifications")} message={t("Your session may have ended. Sign in again to see your notifications.")} compact />}
+            {inbox.isError && <LoadError compact error={inbox.error} what={t("your notifications")} onRetry={() => void inbox.refetch()} />}
             {!inbox.isLoading && !inbox.isError && notifications.length === 0 && (
               <EmptyState icon={Inbox} tone="success" title={t("No notifications")} compact
                 message={t("Requests to approve, replies to your tickets, mentions and announcements show up here the moment they happen. Nothing needs you right now.")} />
@@ -77,7 +100,7 @@ function InboxPage() {
                 message={t("This filter only shows one type of notification. Everything else is still in All.")}
                 action={<EmptyAction onClick={() => setGroup("all")}>{t("Show all")}</EmptyAction>} />
             )}
-            {!inbox.isLoading && shown.map((n, idx) => <NotificationRow key={n.id} notification={n} idx={idx} />)}
+            {!inbox.isLoading && shown.map((n) => <NotificationRow key={n.id} notification={n} />)}
           </div>
         </Reveal>
       </PageBody>
@@ -108,14 +131,14 @@ function notificationTarget(n: NexusNotification): { to: string; params?: Record
   return null;
 }
 
-function NotificationRow({ notification, idx }: { notification: NexusNotification; idx: number }) {
+function NotificationRow({ notification }: { notification: NexusNotification }) {
   const { t, locale } = useLang();
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const Icon = iconMap[idx % iconMap.length];
+  const { Icon, tone } = notificationMark(notification.type);
   const refresh = () => qc.invalidateQueries({ queryKey: ["nexus", "notifications"] });
-  const markRead = useMutation({ mutationFn: () => nexusApi.markNotificationRead(notification.id), onSuccess: refresh, onError: (e: unknown) => alert(e instanceof Error ? e.message : t("Couldn't mark it as read.")), });
-  const remove = useMutation({ mutationFn: () => nexusApi.deleteNotification(notification.id), onSuccess: () => { refresh(); celebrate(t("Notification deleted")); }, onError: (e: unknown) => alert(e instanceof Error ? e.message : t("Couldn't delete it.")), });
+  const markRead = useMutation({ mutationFn: () => nexusApi.markNotificationRead(notification.id), onSuccess: refresh, onError: (e: unknown) => toastFailure(t("Couldn't mark it as read."), e) });
+  const remove = useMutation({ mutationFn: () => nexusApi.deleteNotification(notification.id), onSuccess: () => { refresh(); celebrate(t("Notification deleted")); }, onError: (e: unknown) => toastFailure(t("Couldn't delete it."), e) });
   const busy = markRead.isPending || remove.isPending;
   const target = notificationTarget(notification);
 
@@ -138,21 +161,19 @@ function NotificationRow({ notification, idx }: { notification: NexusNotificatio
       onKeyDown={target ? (e) => { if (e.key === "Enter") open(); } : undefined}
       className={`flex items-start gap-3 p-4 transition ${target ? "cursor-pointer hover:bg-accent/60 active:scale-[0.995]" : "hover:bg-accent/40"} ${!notification.read ? "bg-primary/[0.03]" : ""}`}
     >
-      <div className="relative">
-        <div className="grid h-9 w-9 place-items-center rounded-full bg-primary/10 text-primary font-black">N</div>
-        <span className="absolute -bottom-1 -right-1 grid place-items-center h-4 w-4 rounded-full bg-card border border-border">
-          <Icon className="h-2.5 w-2.5 text-muted-foreground" />
-        </span>
+      <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${tone}`} data-notification-mark={notification.type ?? ""} aria-hidden>
+        <Icon className="h-4 w-4" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold">{notificationTitle(notification)}</p>
-        <p className="max-w-3xl text-sm text-muted-foreground mt-0.5">{notificationMessage(notification) || t("New notification")}</p>
+        <p className="line-clamp-2 break-words text-sm font-semibold">{notificationTitle(notification)}</p>
+        <p className="line-clamp-3 max-w-3xl break-words text-sm text-muted-foreground mt-0.5">{notificationMessage(notification) || t("New notification")}</p>
         <p className="text-xs text-muted-foreground mt-1">{fmtDay(notification.createdAt, locale)}</p>
         {(markRead.isError || remove.isError) && <p className="mt-1 text-xs font-semibold text-destructive">{t("That didn't work. Check your connection and try again.")}</p>}
       </div>
       <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-        {!notification.read && <button disabled={busy} onClick={() => markRead.mutate()} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50 pointer-coarse:min-h-9">{t("Mark as read")}</button>}
-        <button disabled={busy} onClick={() => remove.mutate()} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50 pointer-coarse:min-h-9 pointer-coarse:min-w-9" title={t("Delete notification")} aria-label={t("Delete notification")}>
+        {/* Phone: icon-only, so the title keeps the row's width (QA B21). */}
+        {!notification.read && <button disabled={busy} onClick={() => markRead.mutate()} aria-label={t("Mark as read")} title={t("Mark as read")} className="inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-md pointer-coarse:min-h-9 border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50"><Check className="h-3 w-3 sm:hidden" /><span className="max-sm:hidden">{t("Mark as read")}</span></button>}
+        <button disabled={busy} onClick={() => remove.mutate()} className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-md pointer-coarse:min-h-9 pointer-coarse:min-w-9 border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50" title={t("Delete notification")} aria-label={t("Delete notification")}>
           {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
         </button>
         {!notification.read && <span className="h-2 w-2 rounded-full bg-primary ml-1" />}

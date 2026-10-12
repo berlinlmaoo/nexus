@@ -3,13 +3,14 @@ import { SelectPicker } from "@/components/SelectPicker";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Circle, ImagePlus, Loader2, Mail, Trash2, UserPlus, X } from "lucide-react";
-import { nexusApi, ORG_HIERARCHY, statusLabel, type NexusProject, type NexusUser } from "@/lib/nexus-api";
+import { CheckCircle2, Circle, ImagePlus, Loader2, Lock, Mail, Trash2, UserPlus, X } from "lucide-react";
+import { ApiError, nexusApi, ORG_HIERARCHY, statusLabel, type NexusProject, type NexusUser } from "@/lib/nexus-api";
 import { ProjectCustomFieldsManager } from "@/components/projects/ProjectCustomFieldsManager";
 import { AddProjectMembersDialog } from "@/components/projects/AddProjectMembersDialog";
 import { ProjectMark, isProjectPhoto } from "@/components/projects/ProjectIcon";
 import { PROJECT_TAB_KEYS, PROJECT_TAB_LABELS, TASK_VIEW_TAB_KEYS, hiddenTabsOf, projectSettingsErrorText } from "@/components/projects/project-tabs";
 import { useLang } from "@/lib/lang";
+import { friendlyError } from "@/lib/task-undo";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFace } from "@/components/Avatar";
 
@@ -143,6 +144,16 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   const isBod = wsm.data?.role === "BOD" || wsm.data?.role === "ONE_ABOVE_ALL";
   // Tabs follow the rule of every other project setting on the server (LEAD = Manager and above).
   const canManageTabs = (ORG_HIERARCHY[wsm.data?.role ?? ""] ?? 0) >= (ORG_HIERARCHY.MANAGER ?? 2);
+  // Name, photo, status, auto assign and members follow the same server rule (PATCH /api/projects/:id,
+  // the icon upload and …/members need project LEAD = Manager and above, or a system admin). Staff saw all
+  // of it live and every save ended in a bare "Couldn't save." (QA 13 Oct 2026): it is read-only for them
+  // now, with one line saying who can change it. Until the role is known nothing is editable.
+  const profileQ = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1, staleTime: 60_000 });
+  const canManage = canManageTabs || profileQ.data?.user?.role === "ADMIN";
+  const roleKnown = !!wsm.data;
+  const saveErrorText = (e: unknown) => e instanceof ApiError && e.status === 403
+    ? t("Only managers and the BoD can change this project's settings.")
+    : friendlyError(e) ?? t("Couldn't save.");
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] });
 
@@ -227,6 +238,12 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
         </div>
 
         <div className="flex flex-1 flex-col gap-6 p-5">
+          {roleKnown && !canManage && (
+            <p className="flex items-start gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{t("Only managers and the BoD can change this project's name, photo, status, auto assign and members. You can still invite people by email.")}</span>
+            </p>
+          )}
           {/* identity */}
           <div className="space-y-3">
             <div className="flex items-center gap-3">
@@ -236,24 +253,32 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
                 </span>
                 {uploadIcon.isPending && <div className="absolute inset-0 grid place-items-center rounded-2xl bg-background/60"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>}
               </div>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Project name")} className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
+              <input value={name} onChange={(e) => setName(e.target.value)} readOnly={!canManage} aria-readonly={!canManage} placeholder={t("Project name")} className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary read-only:border-transparent read-only:bg-transparent read-only:px-0" />
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            {canManage && <div className="flex flex-wrap items-center gap-2">
               <button onClick={() => iconFileRef.current?.click()} disabled={uploadIcon.isPending} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition hover:bg-accent disabled:opacity-50"><ImagePlus className="h-3.5 w-3.5" />{iconIsImage ? t("Change photo") : t("Add photo")}</button>
               {iconIsImage && <button onClick={() => { setIcon("folder"); settings.mutate({ icon: "folder" }); }} disabled={uploadIcon.isPending} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" />{t("Remove photo")}</button>}
               <span className="text-[11px] text-muted-foreground">{t("PNG/JPG/SVG/WEBP, max 5MB")}</span>
               <input ref={iconFileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden onChange={onPickIcon} />
-            </div>
-            {uploadIcon.isError && <p className="text-xs font-semibold text-destructive">{(uploadIcon.error as Error)?.message ?? t("Icon upload failed.")}</p>}
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder={t("Description…")} className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            </div>}
+            {uploadIcon.isError && <p className="text-xs font-semibold text-destructive">{uploadIcon.error instanceof ApiError && uploadIcon.error.status === 403 ? saveErrorText(uploadIcon.error) : friendlyError(uploadIcon.error) ?? t("Icon upload failed.")}</p>}
+            {canManage ? (
+              <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder={t("Description…")} className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            ) : description ? (
+              <p className="whitespace-pre-wrap text-sm text-muted-foreground">{description}</p>
+            ) : null}
             <label className="block space-y-1">
               <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Status")}</span>
-              <SelectPicker variant="field" value={status} onChange={setStatus} ariaLabel={t("Status")} options={STATUSES.map((s) => ({ value: s, label: statusLabel(s) }))} className="w-full rounded-xl px-3 py-2 font-semibold" />
+              {canManage
+                ? <SelectPicker variant="field" value={status} onChange={setStatus} ariaLabel={t("Status")} options={STATUSES.map((s) => ({ value: s, label: statusLabel(s) }))} className="w-full rounded-xl px-3 py-2 font-semibold" />
+                : <span className="block text-sm font-semibold">{statusLabel(status)}</span>}
             </label>
-            <button onClick={() => save.mutate()} disabled={save.isPending || !name.trim()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">
-              {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Save changes")}
-            </button>
-            {save.isError && <p className="text-xs font-semibold text-destructive">{t("Couldn't save.")}</p>}
+            {canManage && (
+              <button onClick={() => save.mutate()} disabled={save.isPending || !name.trim()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">
+                {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Save changes")}
+              </button>
+            )}
+            {save.isError && <p className="text-xs font-semibold text-destructive">{saveErrorText(save.error)}</p>}
           </div>
 
           {/* customize project — only auto assign since 11 Oct 2026 */}
@@ -267,9 +292,10 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
                   <div className="text-sm font-semibold">{t("Auto assign")}</div>
                   <p className="mt-0.5 text-xs text-muted-foreground">{t("Automatically assign the selected members to new tasks in this project. If you pick an assignee manually while creating a task, auto assign is skipped.")}</p>
                 </div>
-                <Toggle label={t("Auto assign")} checked={autoAssignEnabled} onChange={toggleAutoAssign} disabled={settings.isPending} />
+                <Toggle label={t("Auto assign")} checked={autoAssignEnabled} onChange={toggleAutoAssign} disabled={!canManage || settings.isPending} />
               </div>
               {autoAssignError && <p className="text-xs font-semibold text-destructive">{autoAssignError}</p>}
+              {settings.isError && <p className="text-xs font-semibold text-destructive">{saveErrorText(settings.error)}</p>}
 
               <div className="rounded-2xl border border-border bg-muted/30 p-2">
                 <div className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("Default assignees · {n}", { n: autoAssignIds.length })}</div>
@@ -279,7 +305,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
                     const id = (m.userId || m.user?.id) ?? "";
                     const checked = autoAssignIds.includes(id);
                     return (
-                      <button key={id} type="button" onClick={() => id && toggleAutoAssignMember(id, !checked)} className={cn("flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left transition-colors", checked ? "bg-primary/10" : "hover:bg-accent")}>
+                      <button key={id} type="button" disabled={!canManage} onClick={() => id && toggleAutoAssignMember(id, !checked)} className={cn("flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left transition-colors disabled:cursor-default", checked ? "bg-primary/10" : "enabled:hover:bg-accent")}>
                         {checked ? <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />}
                         <MiniAvatar user={m.user} size={22} />
                         <span className="flex-1 truncate text-sm font-medium">{m.user?.name ?? m.user?.email ?? id}</span>
@@ -328,11 +354,12 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
                 <div key={m.userId || m.user?.id} className="flex items-center gap-2 rounded-xl bg-muted/50 px-2 py-1.5">
                   <MiniAvatar user={m.user} />
                   <span className="flex-1 truncate text-sm font-semibold">{m.user?.name ?? m.user?.email ?? m.userId}</span>
-                  <button onClick={() => { const id = m.userId || m.user?.id; if (id) removeMember.mutate(id); }} aria-label={t("Remove member")} className="rounded p-1 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
+                  {canManage && <button onClick={() => { const id = m.userId || m.user?.id; if (id) removeMember.mutate(id); }} aria-label={t("Remove member")} className="rounded p-1 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>}
                 </div>
               ))}
             </div>
-            <button onClick={() => setShowPicker(true)} className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary active:scale-[0.98]"><UserPlus className="h-3.5 w-3.5" /> {t("Add members")}</button>
+            {canManage && <button onClick={() => setShowPicker(true)} className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary active:scale-[0.98]"><UserPlus className="h-3.5 w-3.5" /> {t("Add members")}</button>}
+            {removeMember.isError && <p className="text-xs font-semibold text-destructive">{saveErrorText(removeMember.error)}</p>}
             {showPicker && <AddProjectMembersDialog projectId={project.id} memberIds={memberIds} onClose={() => setShowPicker(false)} onAdded={() => setShowPicker(false)} />}
           </div>
 

@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
     const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : ""
 
     let authorized = false
+    let signedIn = false
     let actor = "cron"
 
     if (cronSecret && bearer && bearer === cronSecret) {
@@ -21,6 +22,7 @@ export async function POST(req: NextRequest) {
     } else {
       const session = await auth()
       if (session?.user?.id) {
+        signedIn = true
         const ctx = await getAttendanceWorkspaceContext(session.user.id)
         if (ctx.canManageAttendance) {
           authorized = true
@@ -30,7 +32,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (!authorized) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      // Signed in without the right = 403; no session (or a wrong cron secret) = 401 (QA 13 Oct 2026).
+      return signedIn ? NextResponse.json({ error: "Forbidden" }, { status: 403 }) : NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     let from: Date | undefined

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { resolveAuditAccess, resolveAuditNames } from '@/lib/audit-query'
-import { collectAuditIds, describeAuditEntry, redactAuditMetadata } from '@/lib/audit-describe'
+import { auditLangOf, collectAuditIds, describeAuditEntry, redactAuditMetadata } from '@/lib/audit-describe'
 import { restoreDetailFor } from '@/lib/deletion-snapshot'
 
 /**
@@ -14,7 +14,7 @@ import { restoreDetailFor } from '@/lib/deletion-snapshot'
  * the caller's scope is a 404, not a 403, so ids cannot be probed.
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -46,7 +46,7 @@ export async function GET(
     // Rows written before redaction existed may still hold a secret; never send it back.
     const metadata = redactAuditMetadata(row.metadata ?? null)
     const names = await resolveAuditNames(collectAuditIds({ ...row, metadata }))
-    const { title, changes, details } = describeAuditEntry({ ...row, metadata }, names)
+    const { title, changes, details } = describeAuditEntry({ ...row, metadata }, names, auditLangOf(request.headers.get('accept-language')))
 
     return NextResponse.json({
       entry: {

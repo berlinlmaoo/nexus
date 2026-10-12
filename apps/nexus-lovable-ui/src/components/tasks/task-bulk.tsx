@@ -47,7 +47,7 @@ type CardProps = {
   onContextMenu?: (e: React.MouseEvent) => void;
   onTouchStart?: (e: React.TouchEvent) => void;
   onTouchEnd?: (e: React.TouchEvent) => void;
-  onTouchMove?: () => void;
+  onTouchMove?: (e: React.TouchEvent) => void;
 };
 type RowProps = {
   "data-bulk-task": string;
@@ -120,6 +120,7 @@ export function TaskBulkProvider({ projectId, visibleIds, children }: {
   const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
   const lpTimer = useRef<number | undefined>(undefined);
   const lpFired = useRef(false);
+  const lpStart = useRef({ x: 0, y: 0 });
   const lastTouchEnd = useRef(0);
   // The last task clicked into the selection: the other end of a Shift+click range.
   const anchor = useRef<string | null>(null);
@@ -349,6 +350,7 @@ export function TaskBulkProvider({ projectId, visibleIds, children }: {
     onContextMenu: (e) => { e.preventDefault(); e.stopPropagation(); openMenu(task, e.clientX, e.clientY); },
     onTouchStart: (e) => {
       const touch = e.touches[0];
+      lpStart.current = { x: touch.clientX, y: touch.clientY };
       lpFired.current = false;
       window.clearTimeout(lpTimer.current);
       lpTimer.current = window.setTimeout(() => { lpFired.current = true; if (navigator.vibrate) navigator.vibrate(8); openMenu(task, touch.clientX, touch.clientY, true); }, LONG_PRESS_MS);
@@ -356,7 +358,12 @@ export function TaskBulkProvider({ projectId, visibleIds, children }: {
     // The finger lifting after a long-press must not become a click on the menu's backdrop (C-BUG-20):
     // preventDefault cancels the compatibility mouse events; the backdrop also ignores a click right after.
     onTouchEnd: (e: React.TouchEvent) => { window.clearTimeout(lpTimer.current); lastTouchEnd.current = Date.now(); if (lpFired.current && e.cancelable) e.preventDefault(); },
-    onTouchMove: () => window.clearTimeout(lpTimer.current),
+    onTouchMove: (e: React.TouchEvent) => {
+      window.clearTimeout(lpTimer.current);
+      // Held, the menu opened, then the finger moves: that's a drag (views/touch-drag.ts) — close the menu.
+      const tc = e.touches[0];
+      if (lpFired.current && tc && Math.hypot(tc.clientX - lpStart.current.x, tc.clientY - lpStart.current.y) > 8) { lpFired.current = false; setMenu(null); }
+    },
   }), [selected, toggle, modifierClick, openMenu]);
 
   // Table rows are full of inline editors, so a plain click stays theirs; only modifier clicks select.

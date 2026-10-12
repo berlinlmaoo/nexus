@@ -15,6 +15,7 @@ import { PipelineBoard } from "./PipelineBoard";
 import { PipelineTable } from "./PipelineTable";
 import { PipelineHealth } from "./PipelineHealth";
 import { DealDrawer } from "./DealDrawer";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { PersonOption } from "./fields";
 import { HEALTH_DOT, HEALTH_LABEL, HEALTH_ORDER, StagePill, applyLocal, personName } from "./pipeline-ui";
 
@@ -162,9 +163,13 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
   });
   const patchDeal = useCallback((id: string, patch: PipelineDealPatch) => update.mutate({ id, patch }), [update]);
 
+  // "+" asks for the deal's name first and creates nothing until it's saved: closing the box leaves no
+  // blank "New deal" behind and burns no TZN code (QA B48, 13 Oct 2026).
+  const [newIn, setNewIn] = useState<string | null>(null);
   const create = useMutation({
-    mutationFn: (stage: string) => pipelineApi.create(projectId, { stage }),
+    mutationFn: ({ stage, name }: { stage: string; name: string }) => pipelineApi.create(projectId, { stage, name }),
     onSuccess: (deal) => {
+      setNewIn(null);
       qc.setQueryData<PipelineResponse>(key, (cur) => {
         if (!cur) return cur;
         const next = [...cur.deals, deal];
@@ -267,7 +272,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
   return (
     <div className="flex flex-col gap-4 p-4 md:p-8">
       {deals.length === 0 ? (
-        <FirstDeal adding={create.isPending} onAdd={() => create.mutate("Incoming")} />
+        <FirstDeal adding={create.isPending} onAdd={() => setNewIn("Incoming")} />
       ) : (
         <>
           <PipelineKpis s={data.summary} />
@@ -307,7 +312,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
               </button>
               <button
                 type="button"
-                onClick={() => create.mutate("Incoming")}
+                onClick={() => setNewIn("Incoming")}
                 disabled={create.isPending}
                 aria-label={t("New deal")}
                 className="order-2 inline-flex h-9 w-11 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary text-sm font-semibold text-primary-foreground shadow-soft transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:h-11 lg:order-6 lg:w-auto lg:px-3.5"
@@ -375,7 +380,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
               action={<EmptyAction onClick={resetFilters}>{t("Clear filters")}</EmptyAction>}
             />
           ) : view === "board" ? (
-            <PipelineBoard deals={shown} today={today} canEdit={canEdit} onOpen={setOpenId} onMove={(id, stage) => patchDeal(id, { stage })} onAdd={(stage) => create.mutate(stage)} />
+            <PipelineBoard deals={shown} today={today} canEdit={canEdit} onOpen={setOpenId} onMove={(id, stage) => patchDeal(id, { stage })} onAdd={(stage) => setNewIn(stage)} />
           ) : view === "table" ? (
             <PipelineTable deals={shown} canEdit={canEdit} onOpen={setOpenId} onPatch={patchDeal} />
           ) : (
@@ -384,6 +389,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
         </>
       )}
 
+      <NewDealDialog stage={newIn} saving={create.isPending} onCancel={() => { if (!create.isPending) setNewIn(null); }} onCreate={(name) => newIn && create.mutate({ stage: newIn, name })} />
       <DealDrawer
         deal={openDeal}
         projectId={projectId}
@@ -394,6 +400,37 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
         onClose={() => setOpenId(null)}
       />
     </div>
+  );
+}
+
+/** The name of a new deal, asked before anything is created (QA B48). Empty = the button stays off. */
+function NewDealDialog({ stage, saving, onCancel, onCreate }: { stage: string | null; saving: boolean; onCancel: () => void; onCreate: (name: string) => void }) {
+  const { t, lang } = useLang();
+  const [name, setName] = useState("");
+  useEffect(() => { if (stage) setName(""); }, [stage]);
+  const ok = name.trim().length > 0 && !saving;
+  return (
+    <Dialog open={!!stage} onOpenChange={(o) => { if (!o) onCancel(); }}>
+      <DialogContent lang={lang} className="max-w-[calc(100vw-2rem)] sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t("New deal")}</DialogTitle>
+          <DialogDescription className="flex flex-wrap items-center gap-1.5">{t("It goes in")} {stage && <StagePill stage={stage} className="text-xs" />}</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={(e) => { e.preventDefault(); if (ok) onCreate(name.trim()); }} className="space-y-4">
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">{t("Deal name")}</span>
+            <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={200} placeholder={t("e.g. Brand activation, Jakarta Fair")}
+              className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none transition-colors focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11" />
+          </label>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <button type="button" onClick={onCancel} className="inline-flex h-9 items-center justify-center rounded-lg border border-border px-3.5 text-sm font-medium hover:bg-muted pointer-coarse:h-11">{t("Cancel")}</button>
+            <button type="submit" disabled={!ok} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 text-sm font-semibold text-primary-foreground shadow-soft transition-opacity hover:opacity-90 disabled:opacity-50 pointer-coarse:h-11">
+              {saving && <Loader2 aria-hidden className="h-4 w-4 animate-spin" />}{saving ? t("Adding…") : t("Add deal")}
+            </button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

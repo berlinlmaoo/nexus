@@ -9,6 +9,7 @@ import { Ticket, Plus, X, Loader2, Send, CheckCircle2, MessageSquare, Camera, In
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { PageHeader } from "@/components/PageHeader";
 import { PageBody, PageTabs } from "@/components/PageLayout";
+import { LoadError, retryTransient } from "@/components/LoadError";
 import { Avatar } from "@/components/Avatar";
 import { cn } from "@/lib/utils";
 import { localeOf, useLang } from "@/lib/lang";
@@ -17,7 +18,11 @@ import { ApiError, fmtTime, nexusApi, statusLabel, type AttendanceCorrection, ty
 export const Route = createFileRoute("/_app/complaints")({
   component: ComplaintsPage,
   // `?id=<ticket>` opens that ticket's thread — the link every ticket notification now carries.
-  validateSearch: (s: Record<string, unknown>): { id?: string } => ({ id: typeof s.id === "string" ? s.id : undefined }),
+  // `?tab=` keeps the BoD's queue across a reload / Back (QA 13 Oct 2026; it was memory-only).
+  validateSearch: (s: Record<string, unknown>): { id?: string; tab?: "open" | "review" | "all" } => ({
+    id: typeof s.id === "string" && s.id ? s.id : undefined,
+    tab: s.tab === "open" || s.tab === "review" || s.tab === "all" ? s.tab : undefined,
+  }),
 });
 
 // OPEN TO EVERYONE since 2026-07-29 (was BoD-only behind "Coming Soon"). A grievance channel that
@@ -87,25 +92,28 @@ const countFor = (counts: Record<string, number>, tab: Tab) =>
       : Object.entries(counts).reduce((n, [k, v]) => (k === "INBOX" || k === "REVIEW" ? n : n + v), 0);
 
 // Desktop row grid: subject · from · category · status · replies · last activity. Header and rows share it.
-const ROW_GRID = "lg:grid lg:grid-cols-[minmax(0,1fr)_11rem_8rem_9rem_4.5rem_7.5rem] lg:items-center lg:gap-4";
-const ROW_GRID_MINE = "lg:grid lg:grid-cols-[minmax(0,1fr)_8rem_9rem_4.5rem_7.5rem] lg:items-center lg:gap-4";
+// From xl, not lg: at 1024 with the sidebar open the fixed columns took all ~700px and the Subject column
+// collapsed to 0 (QA 13 Oct 2026, iPad portrait). Below xl every ticket is the two-line row.
+const ROW_GRID = "xl:grid xl:grid-cols-[minmax(0,1fr)_11rem_8rem_9rem_4.5rem_7.5rem] xl:items-center xl:gap-4";
+const ROW_GRID_MINE = "xl:grid xl:grid-cols-[minmax(0,1fr)_8rem_9rem_4.5rem_7.5rem] xl:items-center xl:gap-4";
 
 function ComplaintsPage() {
   const { t } = useLang();
   const qc = useQueryClient();
   // null = not chosen yet: the BoD lands on the first queue that has something in it (below), instead of
   // an empty Inbox while eight tickets wait under "In review" (owner, 12 Oct 2026).
-  const [tab, setTab] = useState<Tab | null>(null);
-  const [composing, setComposing] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
-  // A ticket asked for by id: open it, on the tab that is guaranteed to contain it. "All" rather than
-  // guessing the status — a ticket GIDEON just answered is in a different queue from one still open.
   const search = Route.useSearch();
-  useEffect(() => {
-    if (!search.id) return;
-    setTab("all");
-    setOpenId(search.id);
-  }, [search.id]);
+  const navigate = Route.useNavigate();
+  // The queue lives in the URL (?tab=). Until one is chosen the BoD lands on the first non-empty queue;
+  // a ticket asked for by id (a notification link) lands on "All", the tab guaranteed to contain it.
+  const [autoTab, setAutoTab] = useState<Tab | null>(() => (search.id ? "all" : null));
+  const tab: Tab | null = search.tab ?? autoTab;
+  const setTab = (next: Tab) => { void navigate({ search: (prev) => ({ ...prev, tab: next }), replace: true }); };
+  const [composing, setComposing] = useState(false);
+  // The open thread IS ?id=, so closing it (×, Esc, the backdrop) also clears the link (QA 13 Oct 2026:
+  // Esc did nothing and ?id= stayed after closing).
+  const openId = search.id ?? null;
+  const setOpenId = (id: string | null) => { void navigate({ search: (prev) => ({ ...prev, id: id ?? undefined }), replace: true }); };
 
   // Closing the thread also drops ?id=, so Back / reload don't open it again (QA B36).
   const navigateTickets = useNavigate();
@@ -120,7 +128,7 @@ function ComplaintsPage() {
 
   // BoD filter by status; staff just see their own thread list.
   const status = !viewerIsBod ? "ALL" : shownTab === "open" ? INBOX_STATUS : shownTab === "review" ? REVIEW_STATUS : "ALL";
-  const listQ = useQuery({ queryKey: ["complaints", viewerIsBod ? status : "MINE"], queryFn: () => nexusApi.complaints(status), enabled: !roleQ.isLoading });
+  const listQ = useQuery({ queryKey: ["complaints", viewerIsBod ? status : "MINE"], queryFn: () => nexusApi.complaints(status), enabled: !roleQ.isLoading, retry: retryTransient });
   // Every response carries the counts for ALL tabs; keep the last ones so the badges stay put while the
   // next tab loads.
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -131,7 +139,7 @@ function ComplaintsPage() {
   useLayoutEffect(() => {
     if (!autoPicking || !listQ.data) return;
     const c = listQ.data.counts ?? {};
-    setTab(countFor(c, "open") > 0 ? "open" : countFor(c, "review") > 0 ? "review" : "all");
+    setAutoTab(countFor(c, "open") > 0 ? "open" : countFor(c, "review") > 0 ? "review" : "all");
   }, [autoPicking, listQ.data]);
 
   // Tickets with a decision waiting float to the top; everything else keeps the server's own
@@ -178,8 +186,7 @@ function ComplaintsPage() {
           </div>
         )}
         {!loading && listQ.isError && (
-          <EmptyState icon={AlertTriangle} tone="muted" title={t("Couldn't load tickets")} message={t("Check your connection and try again.")}
-            action={<EmptyAction onClick={() => listQ.refetch()}>{t("Try again")}</EmptyAction>} />
+          <LoadError error={listQ.error} what={t("the tickets")} onRetry={() => void listQ.refetch()} />
         )}
         {!loading && !listQ.isError && complaints.length === 0 && (
           <EmptyState icon={InboxIcon} tone={viewerIsBod && shownTab !== "all" ? "success" : "muted"} title={emptyCopy.title} message={emptyCopy.message}
@@ -250,26 +257,26 @@ function TicketRow({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: bool
         <span className="min-w-0 truncate text-sm font-medium text-foreground">{c.subject}</span>
         {/* Desktop: the same two markers as small labelled icons, so a long subject never pushes them into the next column. */}
         {(c.pendingCorrection || c.gideonReplied) && (
-          <span className="hidden shrink-0 items-center gap-1 lg:inline-flex">
+          <span className="hidden shrink-0 items-center gap-1 xl:inline-flex">
             {c.pendingCorrection && <span title={t("Decision waiting")} aria-label={t("Decision waiting")} className="grid h-5 w-5 place-items-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"><CalendarClock className="h-3 w-3" /></span>}
             {c.gideonReplied && <span title={t("GIDEON replied")} aria-label={t("GIDEON replied")} className="grid h-5 w-5 place-items-center rounded-full bg-muted text-muted-foreground"><GideonMark className="h-3 w-3" /></span>}
           </span>
         )}
-        <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground lg:hidden">{fmtWhen(c.lastMessageAt)}</span>
+        <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground xl:hidden">{fmtWhen(c.lastMessageAt)}</span>
       </div>
       {viewerIsBod && (
-        <div className="hidden min-w-0 items-center gap-2 lg:flex">
+        <div className="hidden min-w-0 items-center gap-2 xl:flex">
           {c.reporter ? <Avatar userId={c.reporter.id} name={c.reporter.name} avatar={c.reporter.avatar ?? null} size={20} /> : null}
           <span className="truncate text-sm text-muted-foreground">{who}</span>
         </div>
       )}
-      <span className="hidden truncate text-sm text-muted-foreground lg:block">{cat ? t(cat.label) : "—"}</span>
-      <span className="hidden lg:flex"><StatusChip status={c.status} /></span>
-      <span className="hidden items-center justify-end gap-1 text-sm tabular-nums text-muted-foreground lg:flex"><MessageSquare className="h-3.5 w-3.5" />{c.messageCount}</span>
-      <span className="hidden text-right text-xs tabular-nums text-muted-foreground lg:block">{fmtWhen(c.lastMessageAt)}</span>
+      <span className="hidden truncate text-sm text-muted-foreground xl:block">{cat ? t(cat.label) : "—"}</span>
+      <span className="hidden xl:flex"><StatusChip status={c.status} /></span>
+      <span className="hidden items-center justify-end gap-1 text-sm tabular-nums text-muted-foreground xl:flex"><MessageSquare className="h-3.5 w-3.5" />{c.messageCount}</span>
+      <span className="hidden text-right text-xs tabular-nums text-muted-foreground xl:block">{fmtWhen(c.lastMessageAt)}</span>
 
       {/* Phone / narrow: status · category · sender · replies on one quiet line, markers under it. */}
-      <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground lg:hidden">
+      <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground xl:hidden">
         <StatusChip status={c.status} />
         {cat && <span>{t(cat.label)}</span>}
         {viewerIsBod && <span className="truncate">{t("from {name}", { name: who })}</span>}
@@ -410,7 +417,9 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
   const [reply, setReply] = useState("");
   const [zoom, setZoom] = useState<string | null>(null);   // evidence photo shown full size
   const scrollRef = useRef<HTMLDivElement>(null);
-  const detailQ = useQuery({ queryKey: ["complaint", id], queryFn: () => nexusApi.complaint(id) });
+  // A 404/403 is the answer (a wrong or foreign id), not a blip: no retries, and an error state instead of
+  // the skeleton that used to sit there forever (QA 13 Oct 2026).
+  const detailQ = useQuery({ queryKey: ["complaint", id], queryFn: () => nexusApi.complaint(id), retry: retryTransient });
   const c = detailQ.data;
 
   // The detail payload already carries the proposals, so the card renders with no extra round trip.
@@ -447,6 +456,8 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
   const cat = c ? catOf(c.category) : null;
   const st = c ? statusOf(c.status) : null;
 
+  const pendingOnClosed = !!c && (c.status === "CLOSED" || c.status === "RESOLVED") && corrections.some((cor) => cor.status === "PENDING");
+
   return (
     <Backdrop onClose={onClose} label={c?.subject ?? t("Ticket")} wide>
       <div className="flex items-center gap-2 border-b border-border px-5 py-3.5">
@@ -455,7 +466,7 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
             {st && <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold ring-1", st.cls)}>{t(st.label)}</span>}
             <span className="truncate text-xs font-semibold text-muted-foreground">{cat ? t(cat.label) : null}</span>
           </div>
-          <div className="mt-0.5 line-clamp-1 text-sm font-black">{c?.subject ?? "…"}</div>
+          <div className="mt-0.5 line-clamp-1 text-sm font-black">{c?.subject ?? (detailQ.isError ? t("Ticket") : "…")}</div>
         </div>
         <button onClick={onClose} aria-label={t("Close")} className="grid h-8 w-8 pointer-coarse:size-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
       </div>
@@ -471,6 +482,12 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
       {/* Thread */}
       <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto bg-muted/10 p-4">
         {detailQ.isLoading && <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-12 animate-pulse rounded-2xl bg-muted" />)}</div>}
+        {detailQ.isError && (
+          <LoadError compact error={detailQ.error} what={t("this ticket")} onRetry={() => void detailQ.refetch()}
+            notFoundTitle={t("This ticket doesn't exist")} notFoundMessage={t("It may have been deleted, or the link is wrong. Your own tickets are in the list.")}
+            forbiddenTitle={t("This ticket isn't yours")} forbiddenMessage={t("Only the person who filed it and the BoD can read a ticket.")}
+            action={<EmptyAction onClick={onClose}>{t("Back to tickets")}</EmptyAction>} />
+        )}
         {!!c?.attachments?.length && (
           <div className="rounded-2xl border border-border bg-card p-3">
             <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -505,6 +522,13 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
         ))}
         {/* Proposals sit AFTER the messages on purpose: the thread auto-scrolls to the bottom, so a
             pending decision is on screen the moment the ticket opens instead of scrolled out of sight. */}
+        {pendingOnClosed && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+            {viewerIsBod
+              ? t("This ticket is closed, but the attendance fix below still waits for a decision. It stays under In review until someone approves or rejects it.")
+              : t("This ticket is closed, but your attendance fix below still waits for a BoD decision.")}
+          </div>
+        )}
         {corrections.map((cor) => (
           <AttendanceCorrectionCard key={cor.id} complaintId={id} correction={cor} canDecide={correctionQ.data?.canDecide ?? false} onDecided={refreshAfterDecision} />
         ))}

@@ -71,6 +71,8 @@ import { FieldEditor } from "@/components/projects/ProjectCustomFieldsManager";
 import { CopyToProjectDialog } from "@/components/tasks/CopyToProjectDialog";
 import { patchTaskInCaches, settleTaskWrite } from "@/lib/task-cache";
 import { friendlyError, pushUndo } from "@/lib/task-undo";
+import { LoadError, retryTransient } from "@/components/LoadError";
+import { EmptyAction } from "@/components/EmptyState";
 
 // The description's block editor (TipTap + Yjs) is the heaviest part of the popup; it loads beside the popup
 // rather than in front of it, so the title, status and fields show first (perf pass, 12 Oct 2026).
@@ -286,9 +288,11 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   }, []);
 
   useEffect(() => { void loadBody(); }, []);
-  const task = useQuery({ queryKey: ["task", taskId], queryFn: () => nexusApi.taskDetail(taskId) });
-  const comments = useQuery({ queryKey: ["task-comments", taskId], queryFn: () => nexusApi.taskComments(taskId) });
-  const attachments = useQuery({ queryKey: ["task-attachments", taskId], queryFn: () => nexusApi.taskAttachments(taskId) });
+  // A 404/403 is the answer, not a blip: no retries (it took ~7 s and 10 failing requests to show an error
+  // for a deleted task, QA 13 Oct 2026).
+  const task = useQuery({ queryKey: ["task", taskId], queryFn: () => nexusApi.taskDetail(taskId), retry: retryTransient });
+  const comments = useQuery({ queryKey: ["task-comments", taskId], queryFn: () => nexusApi.taskComments(taskId), retry: retryTransient });
+  const attachments = useQuery({ queryKey: ["task-attachments", taskId], queryFn: () => nexusApi.taskAttachments(taskId), retry: retryTransient });
   const [previewAtt, setPreviewAtt] = useState<NexusAttachment | null>(null);
   const [uploadPct, setUploadPct] = useState<number | null>(null);
   const [sizeWarn, setSizeWarn] = useState<string | null>(null);
@@ -299,7 +303,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   const MAX_ATTACH_LABEL = "1 GB";
   const favorites = useQuery({ queryKey: ["favorites"], queryFn: () => nexusApi.favorites(), staleTime: 60_000 });
   const isFavorited = (favorites.data ?? []).some((f) => f.targetId === taskId && (f.type ?? "").toLowerCase() === "task");
-  const followers = useQuery({ queryKey: ["task-followers", taskId], queryFn: () => nexusApi.taskFollowers(taskId) });
+  const followers = useQuery({ queryKey: ["task-followers", taskId], queryFn: () => nexusApi.taskFollowers(taskId), retry: retryTransient });
   // BoD-only "Jadiin quest" action: bundle this (and more) task(s) into a specific_tasks quest.
   const wsMembers = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), staleTime: 300_000, retry: false });
   const canMakeQuest = wsMembers.data?.role === "BOD" || wsMembers.data?.role === "ONE_ABOVE_ALL";
@@ -545,6 +549,9 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
             )}
           </div>
           <div className="-mr-3 flex items-center justify-end gap-0.5 sm:mr-0 sm:gap-1">
+            {/* Task actions only once there IS a task: a deleted or foreign task kept Watch/Star/Like/Move/Delete
+                live over its error (QA 13 Oct 2026). Close stays. */}
+            {t && (<>
             <button
               onClick={() => followMut.mutate()}
               className={cn("inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition-colors active:scale-[0.97] sm:h-auto sm:min-w-0", followers.data?.isFollowing ? "text-primary" : "text-muted-foreground hover:bg-accent")}
@@ -607,6 +614,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 <DropdownMenuItem onSelect={() => setConfirmDelete(true)} className="min-h-11 text-destructive focus:text-destructive"><Trash2 className="h-4 w-4" />{tr("Delete task")}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            </>)}
             <button onClick={requestClose} className="grid h-11 w-11 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent sm:h-auto sm:w-auto sm:p-1.5" title={tr("Close")} aria-label={tr("Close")}>
               <X className="h-4 w-4" />
             </button>
@@ -645,8 +653,11 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
         {task.isLoading && (
           <div className="flex flex-1 items-center justify-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
         )}
-        {task.isError && (
-          <div className="p-6 text-sm font-semibold text-destructive">{tr("Couldn't load this task. Check your connection.")}</div>
+        {task.isError && !t && (
+          <LoadError error={task.error} what={tr("this task")} onRetry={() => void task.refetch()}
+            notFoundTitle={tr("This task doesn't exist any more")} notFoundMessage={tr("It was deleted, or the link is wrong. A BoD or manager can restore a deleted task from Control Room → Audit for 90 days.")}
+            forbiddenTitle={tr("You can't open this task")} forbiddenMessage={tr("It's in a project you're not a member of. Ask the project lead to add you.")}
+            action={<EmptyAction onClick={requestClose}>{tr("Close")}</EmptyAction>} />
         )}
 
         {t && (

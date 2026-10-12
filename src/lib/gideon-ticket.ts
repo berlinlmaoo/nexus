@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma"
 import { formatAttendanceDateKey } from "@/lib/attendance"
 import { getGideonUserId, GIDEON_EMAIL } from "@/lib/gideon-identity"
 import { notifyComplaintReply } from "@/lib/notification-service"
+import { scrubGideonReply } from "@/lib/gideon-reply-scrub"
 
 /**
  * GIDEON's first pass over a support ticket it is allowed to touch.
@@ -510,7 +511,7 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
           complaintId,
           authorId: gideonId,
           fromReviewer: true,
-          body: reply.slice(0, BODY_MAX),
+          body: scrubGideonReply(reply).slice(0, BODY_MAX),
         },
       })
       await tx.complaint.update({ where: { id: complaintId }, data: { lastMessageAt: new Date() } })

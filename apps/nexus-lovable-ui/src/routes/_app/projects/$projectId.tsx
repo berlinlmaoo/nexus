@@ -12,7 +12,7 @@ import { EmptyAction, EmptyState } from "@/components/EmptyState";
 import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { Avatar, AvatarStack } from "@/components/Avatar";
 import { celebrate } from "@/components/Celebration";
-import { fmtDate, nexusApi, statusLabel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusProjectView, type NexusTask, type NexusTaskStatus } from "@/lib/nexus-api";
+import { fmtDate, isTransientError, nexusApi, retryTransient, statusLabel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusProjectView, type NexusTask, type NexusTaskStatus } from "@/lib/nexus-api";
 import { TaskBulkProvider, useTaskBulk } from "@/components/tasks/task-bulk";
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { openGideon } from "@/lib/gideon";
@@ -31,6 +31,7 @@ import { plainPreview } from "@/lib/plain-preview";
 import { AddTaskSplit, ToolbarSearch, ViewTabsBar, type ToolbarTab } from "@/components/projects/views/view-toolbar";
 import { cardTint, GalleryView, GroupHeader, PropLine } from "@/components/projects/views/view-layouts";
 import { InlineTaskDraft } from "@/components/projects/views/inline-draft";
+import { useTouchDrag } from "@/components/projects/views/touch-drag";
 import { canDragTask, DragHandle, droppable, moveToGroup, setStackDragImage, useGroupMove } from "@/components/projects/views/group-move";
 import { optionColorKey, StatusOptionMenu, StatusPicker } from "@/components/tasks/StatusPicker";
 import { defaultOption, orderedOptions, statusForNewOption, statusGroupOf, STATUS_GROUPS, usesStatusOptions, type StatusGroupKey } from "@/lib/status-options";
@@ -102,6 +103,7 @@ import {
   Settings2,
   SlidersHorizontal,
   Trash2,
+  WifiOff,
   X,
   Zap,
   Sparkles,
@@ -303,10 +305,15 @@ function ProjectDetail() {
   // Phone: the view tools (filter/sort/group/search/view settings/automations/autofill) sit behind ⋯ so the
   // header is one title row + one tabs row (audit 12 Oct 2026). Desktop always shows them.
   const [toolsOpen, setToolsOpen] = useState(false);
-  const project = useQuery({ queryKey: ["nexus", "project", projectId], queryFn: () => nexusApi.project(projectId), retry: false });
+  // A network blip is not "no access" (QA S-05): transient errors retry, the page refetches when the
+  // connection is back, and a failed REFETCH keeps showing the project it already has.
+  const project = useQuery({ queryKey: ["nexus", "project", projectId], queryFn: () => nexusApi.project(projectId), retry: retryTransient, retryDelay: (n) => Math.min(1000 * 2 ** n, 8000), refetchOnReconnect: true });
   const data = project.data;
-  // 404 = deleted or a wrong link; anything else (403) = not a member (bughunt N-BUG-5).
+  // Only a failure with nothing to show replaces the page.
+  const projectFailed = project.isError && !data;
+  // 404 = deleted or a wrong link; 401/403 = not a member (bughunt N-BUG-5); anything else = connection.
   const projectMissing = (project.error as { status?: number } | null)?.status === 404;
+  const projectOffline = projectFailed && isTransientError(project.error);
   // GIDEON opened here carries this project as context (Notion AI's page chip).
   useEffect(() => (data ? pushGideonPage({ kind: "project", id: data.id, title: data.name, projectId: data.id, projectName: data.name }) : undefined), [data?.id, data?.name]); // eslint-disable-line react-hooks/exhaustive-deps
   const search = Route.useSearch();
@@ -705,7 +712,7 @@ function ProjectDetail() {
         className="bg-card/95"
         icon={<span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted/60 text-2xl leading-none"><ProjectMark icon={data?.icon} color={data?.color} className="max-h-9 max-w-9 rounded-lg object-cover" /></span>}
         title={data?.name || tr("Project")}
-        subtitle={data?.description || (project.isLoading ? tr("Loading…") : project.isError ? (projectMissing ? tr("This project was deleted, or the link is wrong.") : tr("Couldn't open this project. You may not be a member.")) : undefined)}
+        subtitle={data?.description || (project.isLoading ? tr("Loading…") : projectFailed ? (projectOffline ? tr("No connection. Check your internet and try again.") : projectMissing ? tr("This project was deleted, or the link is wrong.") : tr("Couldn't open this project. You may not be a member.")) : undefined)}
         actions={
           <>
             {data && <ProjectMembersAvatars project={data} />}
@@ -721,14 +728,16 @@ function ProjectDetail() {
       />
 
       {project.isLoading && <div className="space-y-2 px-4 py-6 md:px-8" aria-busy>{[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>}
-      {project.isError && (projectMissing
+      {projectFailed && (projectOffline
+        ? <div className="px-4 py-10 md:px-8"><EmptyState icon={WifiOff} tone="muted" title={tr("Couldn't load this project")} message={tr("No connection. NEXUS tries again by itself when you're back online.")} action={<Button size="sm" variant="outline" isDisabled={project.isFetching} onClick={() => void project.refetch()}>{project.isFetching ? tr("Trying again…") : tr("Try again")}</Button>} /></div>
+        : projectMissing
         ? <div className="px-4 py-10 md:px-8"><EmptyState icon={Search} tone="muted" title={tr("Project not found")} message={tr("It was deleted, or the link is wrong. A deleted project can be restored from Control Room → Audit.")} action={<EmptyAction to="/projects">{tr("Go to Projects")}</EmptyAction>} /></div>
         : <div className="px-4 py-10 md:px-8"><EmptyState icon={Lock} tone="muted" title={tr("You can't open this project")} message={tr("You need to be signed in and be a member of this project. Ask its project lead to add you.")} /></div>)}
-      {!project.isLoading && !project.isError && data && isPipeline && (
+      {!project.isLoading && data && isPipeline && (
         <Pending>{specialView === "chat" ? <ProjectChat projectId={data.id} />
           : <PipelineView projectId={data.id} workspaceId={data.workspaceId ?? ""} />}</Pending>
       )}
-      {!project.isLoading && !project.isError && data && isOutlet && (
+      {!project.isLoading && data && isOutlet && (
         <Pending>{specialView === "chat" ? <ProjectChat projectId={data.id} />
           : (
             <OutletSalesView
@@ -740,7 +749,7 @@ function ProjectDetail() {
             />
           )}</Pending>
       )}
-      {!project.isLoading && !project.isError && data && !isSpecial && (
+      {!project.isLoading && data && !isSpecial && (
         // Multi-select + duplicate is on in every project (owner, 11 Oct 2026 — it used to be a per-project switch).
         <TaskBulkProvider projectId={data.id} visibleIds={activeModule ? undefined : visibleIds}>
           <FilterHintProvider ids={filteredOut}>
@@ -869,11 +878,14 @@ function filterPrefill(filter: ViewFilter, defs: PropDef[], meId: string | null)
  * group's (and sub-group's) value is written as a drop would. The server gives it its section's status.
  * `placement` "top" for the drafts at the top of a column / group, "bottom" for the Table's row under it.
  */
-async function createInline({ project, defs, ctx, cfg, qc, groupBy, groupKey, sub, subKey, title, dueDate, placement, withDraft }: {
+async function createInline(args: {
   project: NexusProject; defs: PropDef[]; ctx: ViewCtx; cfg: ViewConfig; qc: ReturnType<typeof useQueryClient>;
   groupBy: string | null; groupKey: string | null; sub: string | null; subKey: string | null; title: string; dueDate: string | null;
   placement: "top" | "bottom"; withDraft?: boolean;
+  /** From InlineTaskDraft: true when the draft field takes the title back after a failure. */
+  kept?: () => boolean;
 }): Promise<NexusTask | null> {
+  const { project, defs, ctx, cfg, qc, groupBy, groupKey, sub, subKey, title, dueDate, placement, withDraft } = args;
   const sections = project.taskLists ?? [];
   const pre = filterPrefill(cfg.filter, defs, ctx.meId ?? null);
   const statusOpts = usesStatusOptions(sections);
@@ -904,7 +916,15 @@ async function createInline({ project, defs, ctx, cfg, qc, groupBy, groupKey, su
     return task;
   } catch (e) {
     undo?.();
-    toast.error(tt("Couldn't add the task"), { description: friendlyError(e) });
+    // Offline / a blip: the typed task is kept in the toast so it isn't lost even when the draft row has
+    // closed (QA S-05). "Try again" re-sends it as typed. A rejection (4xx) is not retried.
+    // When the draft row is still open the title goes back into it (InlineTaskDraft) and that is the copy;
+    // else the toast keeps it.
+    const transient = isTransientError(e) && !args.kept?.();
+    toast.error(tt("Couldn't add the task"), {
+      description: transient ? `“${title}” · ${friendlyError(e) ?? ""}` : friendlyError(e),
+      ...(transient ? { duration: 30_000, action: { label: tt("Try again"), onClick: () => { void createInline({ ...args, withDraft: false, kept: undefined }); } } } : {}),
+    });
     return null;
   } finally {
     settleTaskWrite(qc, project.id);
@@ -933,6 +953,8 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   // A drop lands at once (perf pass, 12 Oct 2026) and moves the whole selection when the dragged card is
   // part of it (multi-drag, 12 Oct 2026): components/projects/views/group-move.tsx.
   const mover = useGroupMove({ project, defs, groupBy, sub, viewTasks: tasks });
+  // Phone/iPad: hold a card, then drag (touch-drag.ts) — the same drop code as the mouse.
+  useTouchDrag();
   const drag = mover.drag;
   const { startDrag, endDrag } = mover;
   const onCardDrag = useCallback<CardDrag>((task, from, fromRow, e) => startDrag(e ?? null, task, from, fromRow), [startDrag]);
@@ -1190,7 +1212,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
 
   if (!sub) {
     return (
-      <div className="overflow-x-auto px-4 pb-6 pt-3 md:px-8">
+      <div data-touch-drag-root="" className="overflow-x-auto overscroll-x-contain px-4 pb-6 pt-3 md:px-8">
         <div className="flex min-w-max items-start gap-2.5">
           {linkedLaneEls}
           {lanes.map((g) => renderLane(g, null, g.tasks, true))}
@@ -1203,7 +1225,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   // Sub-groups: one row (swimlane) per sub-group value, the same lanes in each row.
   const rows = buildGroups(tasks, sub, { keepHidden: true });
   return (
-    <div className="overflow-x-auto px-4 pb-6 pt-3 md:px-8">
+    <div data-touch-drag-root="" className="overflow-x-auto overscroll-x-contain px-4 pb-6 pt-3 md:px-8">
       <div className="min-w-max space-y-3">
         <div className="flex gap-2.5 pl-0.5">
           {lanes.map((g) => (
@@ -1327,7 +1349,7 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
   const filteredOut = useFilteredOut(task.id);
   const tint = cardTint(task, cfg, defs, ctx);
   return (
-    <div data-morph-id={morph && !draft ? `board-taskcard-${task.id}` : undefined} data-bulk-task={draft ? undefined : cardProps["data-bulk-task"]} style={{ borderRadius: 8 }} onContextMenu={draft ? undefined : cardProps.onContextMenu} onTouchStart={cardProps.onTouchStart} onTouchEnd={cardProps.onTouchEnd} onTouchMove={cardProps.onTouchMove} className={cn("w-full", done && "opacity-60", draft && "pointer-events-none opacity-70", selected && "ring-2 ring-[color:var(--accent-foreground)] ring-offset-1 ring-offset-background")}>
+    <div data-morph-id={morph && !draft ? `board-taskcard-${task.id}` : undefined} data-bulk-task={draft ? undefined : cardProps["data-bulk-task"]} style={{ borderRadius: 8 }} onContextMenu={draft ? undefined : cardProps.onContextMenu} onTouchStart={cardProps.onTouchStart} onTouchEnd={cardProps.onTouchEnd} onTouchMove={cardProps.onTouchMove} className={cn("w-full pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] [&>[data-touch-lifted]]:scale-[1.02] [&>[data-touch-lifted]]:shadow-[0_6px_18px_rgba(15,15,15,0.18)]", done && "opacity-60", draft && "pointer-events-none opacity-70", selected && "ring-2 ring-[color:var(--accent-foreground)] ring-offset-1 ring-offset-background")}>
       <div
         role="button"
         tabIndex={0}
@@ -1425,7 +1447,10 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
 
   const wsm = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
   const myRole = wsm.data?.role ?? "";
-  const canAdd = myRole === "BOD" || myRole === "ONE_ABOVE_ALL"; // BoD ke atas
+  // The server's rule for adding members (POST …/members: project LEAD = Manager and above, lib/rbac.ts),
+  // the same one Project settings uses. It said BoD-only here, so a Manager leading the project could add
+  // people from the settings drawer but not from this header (QA 13 Oct 2026).
+  const canAdd = myRole === "MANAGER" || myRole === "BOD" || myRole === "ONE_ABOVE_ALL";
 
   const ids = members.map((m) => m.userId || m.user?.id).filter(Boolean) as string[];
   const memberIds = new Set(ids);
@@ -1556,6 +1581,7 @@ function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs
   const sub = groupBy && subGroupBy && subGroupBy !== groupBy ? subGroupBy : null;
   const viewTasks = useMemo(() => groups.flatMap((g) => g.tasks), [groups]);
   const mover = useGroupMove({ project, defs, groupBy, sub, viewTasks });
+  useTouchDrag();
   const rows = (tasks: NexusTask[], gKey: string | null = null, subKey: string | null = null) => (
     <Incremental items={tasks} first={50} step={30} keyOf={(task) => task.id} render={(task) => (
       <ListRow task={task} keys={keys} cfg={cfg} defs={defs} ctx={ctx} onOpen={onOpen} morph={morph}
@@ -1577,10 +1603,10 @@ function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs
       </button>
     ));
   if (!groupBy) {
-    return <div className="px-4 py-3 md:px-8">{newRow("all", null, null)}{rows(groups[0]?.tasks ?? [])}</div>;
+    return <div data-touch-drag-root="" className="px-4 py-3 md:px-8">{newRow("all", null, null)}{rows(groups[0]?.tasks ?? [])}</div>;
   }
   return (
-    <div className="space-y-5 px-4 py-3 md:px-8">
+    <div data-touch-drag-root="" className="space-y-5 px-4 py-3 md:px-8">
       {groups.map((g) => {
         const isCollapsed = collapsed.has(g.key);
         const subs = subGroupBy && subGroupBy !== groupBy ? buildGroups(g.tasks, subGroupBy, { keepHidden: true }).filter((x) => x.tasks.length > 0) : null;

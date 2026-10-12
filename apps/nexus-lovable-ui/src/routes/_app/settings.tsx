@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { failureText, toastFailure } from "@/lib/failure";
+import { LoadError } from "@/components/LoadError";
 import { EscClose } from "@/hooks/use-escape";
 import { SelectPicker } from "@/components/SelectPicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,7 +18,16 @@ import { useLang, type Lang } from "@/lib/lang";
 import { thumbUrl } from "@/lib/thumb";
 import { ActiveSessions } from "@/components/settings/ActiveSessions";
 
-export const Route = createFileRoute("/_app/settings")({ component: Settings });
+// The section is in the URL (?section=security), so a reload, Back or a shared link opens the same one
+// (QA 13 Oct 2026: it always fell back to Profile).
+const SECTION_IDS = ["profile", "members", "notifications", "security", "appearance", "mcp"] as const;
+type SectionId = (typeof SECTION_IDS)[number];
+export const Route = createFileRoute("/_app/settings")({
+  validateSearch: (s: Record<string, unknown>): { section?: SectionId } => ({
+    section: typeof s.section === "string" && (SECTION_IDS as readonly string[]).includes(s.section) && s.section !== "profile" ? (s.section as SectionId) : undefined,
+  }),
+  component: Settings,
+});
 
 /** "12 Oct" in the interface language (lib/nexus-api fmtDate is English-only and says "No due date" for empty). */
 function fmtDay(value: string | null | undefined, locale: string) {
@@ -38,7 +49,10 @@ const sections = [
 
 function Settings() {
   const { t } = useLang();
-  const [active, setActive] = useState("profile");
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const active: string = search.section ?? "profile";
+  const setActive = (id: string) => { void navigate({ search: { section: id === "profile" ? undefined : (id as SectionId) }, replace: true }); };
   const strip = useRef<HTMLElement>(null);
   const stripFade = useEdgeFade(strip);
   return (
@@ -92,17 +106,15 @@ function WorkspaceMembersSection() {
   const [inviteRole, setInviteRole] = useState<OrgRole>("STAFF");
   const [search, setSearch] = useState("");
 
-  const invite = useMutation({ mutationFn: () => nexusApi.inviteWorkspaceMember({ email: email.trim(), role: inviteRole, workspaceId: wsId }), onSuccess: () => { setEmail(""); refresh(); } });
-  const changeRole = useMutation({ mutationFn: (p: { memberId: string; role: OrgRole }) => nexusApi.updateWorkspaceMember({ memberId: p.memberId, role: p.role, workspaceId: wsId }), onSuccess: refresh });
-  const remove = useMutation({ mutationFn: (memberId: string) => nexusApi.removeWorkspaceMember(memberId, wsId), onSuccess: refresh });
+  const invite = useMutation({ mutationFn: () => nexusApi.inviteWorkspaceMember({ email: email.trim(), role: inviteRole, workspaceId: wsId }), onSuccess: () => { setEmail(""); refresh(); }, onError: (e) => toastFailure(t("Couldn't invite them"), e) });
+  const changeRole = useMutation({ mutationFn: (p: { memberId: string; role: OrgRole }) => nexusApi.updateWorkspaceMember({ memberId: p.memberId, role: p.role, workspaceId: wsId }), onSuccess: refresh, onError: (e) => toastFailure(t("Couldn't change the role"), e) });
+  const remove = useMutation({ mutationFn: (memberId: string) => nexusApi.removeWorkspaceMember(memberId, wsId), onSuccess: refresh, onError: (e) => toastFailure(t("Couldn't remove them"), e) });
   // BoD ke atas bisa reset password member lain (tier rule sama kayak ganti role).
   const isBodPlus = myRole === "BOD" || myRole === "ONE_ABOVE_ALL";
   const [pwTarget, setPwTarget] = useState<{ memberId: string; name: string } | null>(null);
 
   if (q.isError) {
-    return (
-      <EmptyState icon={ShieldCheck} tone="muted" title={t("Workspace not found")} message={t("You need to be signed in to manage members.")} />
-    );
+    return <LoadError error={q.error} what={t("the members")} onRetry={() => void q.refetch()} />;
   }
 
   const s = search.trim().toLowerCase();
@@ -347,12 +359,12 @@ function ProfileSection() {
   const [phone, setPhone] = useState("");
   const [loaded, setLoaded] = useState(false);
   if (u && !loaded) { setName(u.name ?? ""); setPhone(u.phoneNumber ?? ""); setLoaded(true); }
-  const save = useMutation({ mutationFn: () => nexusApi.updateProfile({ name: name.trim(), phoneNumber: phone.trim() || null }), onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "profile"] }) });
+  const save = useMutation({ mutationFn: () => nexusApi.updateProfile({ name: name.trim(), phoneNumber: phone.trim() || null }), onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "profile"] }), onError: (e) => toastFailure(t("Couldn't save your profile"), e) });
 
   const fileRef = useRef<HTMLInputElement>(null);
   const refreshProfile = () => qc.invalidateQueries({ predicate: (q) => q.queryKey.map(String).includes("profile") });
-  const uploadAvatar = useMutation({ mutationFn: (file: File) => nexusApi.uploadAvatar(file), onSuccess: refreshProfile });
-  const removeAvatar = useMutation({ mutationFn: () => nexusApi.deleteAvatar(), onSuccess: refreshProfile });
+  const uploadAvatar = useMutation({ mutationFn: (file: File) => nexusApi.uploadAvatar(file), onSuccess: refreshProfile, onError: (e) => toastFailure(t("Couldn't upload the photo"), e) });
+  const removeAvatar = useMutation({ mutationFn: () => nexusApi.deleteAvatar(), onSuccess: refreshProfile, onError: (e) => toastFailure(t("Couldn't remove the photo"), e) });
   const onPick = (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) uploadAvatar.mutate(f); e.target.value = ""; };
   const ini = (u?.name ?? u?.email ?? "?").trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
   const busy = uploadAvatar.isPending || removeAvatar.isPending;
@@ -379,7 +391,6 @@ function ProfileSection() {
               {u?.avatar && <button onClick={() => removeAvatar.mutate()} disabled={busy} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"><Trash2 className="h-4 w-4" />{t("Remove")}</button>}
             </div>
             <p className="text-xs text-muted-foreground">{t("PNG, JPG or WEBP. Max 5 MB.")}</p>
-            {uploadAvatar.isError && <p className="text-xs font-semibold text-destructive">{(uploadAvatar.error as Error)?.message ?? t("Upload failed.")}</p>}
             <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={onPick} />
           </div>
         </div>
@@ -505,7 +516,7 @@ function PasskeysSection() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ["nexus", "passkeys"] });
   // Resolves to false when the system prompt was dismissed: nothing was added, nothing went wrong.
   const add = useMutation({ mutationFn: () => registerPasskey(label), onSuccess: (created) => { if (created) { setLabel(""); invalidate(); } } });
-  const revoke = useMutation({ mutationFn: (id: string) => nexusApi.deletePasskey(id), onSuccess: invalidate });
+  const revoke = useMutation({ mutationFn: (id: string) => nexusApi.deletePasskey(id), onSuccess: invalidate, onError: (e) => toastFailure(t("Couldn't remove the passkey"), e) });
   const rows = list.data?.passkeys ?? [];
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
@@ -524,7 +535,7 @@ function PasskeysSection() {
             </button>
           </div>
           {add.isSuccess && add.data && <p className="text-xs font-semibold text-success">{t("Passkey added. Use it to sign in next time.")}</p>}
-          {add.isError && <p className="text-xs font-semibold text-destructive">{(add.error as Error)?.message ?? t("Couldn't add that passkey.")}</p>}
+          {add.isError && <p className="text-xs font-semibold text-destructive">{t("Couldn't add that passkey.")} {failureText(add.error)}</p>}
         </>
       )}
 
@@ -559,7 +570,7 @@ function NotificationsSection() {
   const qc = useQueryClient();
   const prefs = useQuery({ queryKey: ["nexus", "notif-prefs"], queryFn: nexusApi.notificationPreferences, retry: false });
   const p = prefs.data?.preferences;
-  const update = useMutation({ mutationFn: (patch: Record<string, boolean>) => nexusApi.updateNotificationPreferences(patch), onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "notif-prefs"] }) });
+  const update = useMutation({ mutationFn: (patch: Record<string, boolean>) => nexusApi.updateNotificationPreferences(patch), onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "notif-prefs"] }), onError: (e) => { toastFailure(t("Couldn't save that setting"), e); void qc.invalidateQueries({ queryKey: ["nexus", "notif-prefs"] }); } });
   const { t } = useLang();
   const toggles: Array<{ key: "emailEnabled" | "slackEnabled" | "desktopEnabled" | "desktopSoundEnabled" | "automation"; label: string; desc: string; defaultOn?: boolean }> = [
     { key: "emailEnabled", label: t("Email notifications"), desc: t("Mentions, assignments and updates by email") },
@@ -715,7 +726,7 @@ function McpTokensSection() {
     mutationFn: () => nexusApi.createMcpToken({ name: name.trim() || undefined, expiresInDays }),
     onSuccess: (r) => { setFresh(r.token); setName(""); invalidate(); },
   });
-  const revoke = useMutation({ mutationFn: (id: string) => nexusApi.revokeMcpToken(id), onSuccess: invalidate });
+  const revoke = useMutation({ mutationFn: (id: string) => nexusApi.revokeMcpToken(id), onSuccess: invalidate, onError: (e) => toastFailure(t("Couldn't revoke the token"), e) });
   const rows = list.data?.tokens ?? [];
   const connectCmd = fresh ? `claude mcp add --transport http nexus ${MCP_URL} --header "Authorization: Bearer ${fresh}"` : "";
 
@@ -754,7 +765,7 @@ function McpTokensSection() {
         <button disabled={create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">
           {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plug className="h-4 w-4" />} {t("Generate token")}
         </button>
-        {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? t("Couldn't create the token.")}</span>}
+        {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">{t("Couldn't create the token.")} {failureText(create.error)}</span>}
       </div>
 
       <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-3">

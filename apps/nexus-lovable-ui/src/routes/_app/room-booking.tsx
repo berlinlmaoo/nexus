@@ -8,7 +8,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Clock, Loader2, MapPin, Pencil, Plus, Trash2, X } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { SelectPicker } from "@/components/SelectPicker";
-import { fmtTime, nexusApi, ROOM_BOOKING_ROOMS, roomLabel, type NexusRoomBooking } from "@/lib/nexus-api";
+import { ApiError, fmtTime, nexusApi, ROOM_BOOKING_ROOMS, roomLabel, type NexusRoomBooking } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 
@@ -211,6 +211,32 @@ function toLocalInputs(iso?: string) {
   return { date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, time: `${pad(d.getHours())}:${pad(d.getMinutes())}` };
 }
 
+/** 24-hour times every 15 minutes, like the rest of NEXUS (the native time input showed 03:00 PM — QA S-13/B43). */
+const TIMES = Array.from({ length: 96 }, (_, i) => `${String(Math.floor(i / 4)).padStart(2, "0")}:${String((i % 4) * 15).padStart(2, "0")}`);
+function TimeSelect({ value, onChange, label, className }: { value: string; onChange: (v: string) => void; label: string; className?: string }) {
+  const options = (TIMES.includes(value) ? TIMES : [...TIMES, value].sort()).map((v) => ({ value: v, label: v }));
+  return <SelectPicker variant="field" value={value} onChange={onChange} ariaLabel={label} options={options} searchable className={className} />;
+}
+
+/**
+ * The server's refusal in the interface language (its text is Indonesian — QA S-13): a taken slot names
+ * the room the way the UI does and the booking in the way; the rest by status.
+ */
+function bookingError(e: unknown, room: string, t: ReturnType<typeof useLang>["t"], fallback: string): string {
+  if (e instanceof ApiError) {
+    const p = (e.payload ?? {}) as { code?: string; conflict?: { title?: string } };
+    if (e.status === 409) return p.conflict?.title
+      ? t("{room} is already booked at that time ({title}).", { room: t(roomLabel(room)), title: p.conflict.title })
+      : t("{room} is already booked at that time.", { room: t(roomLabel(room)) });
+    if (p.code === "BOOKING_IN_PAST") return t("That time has already passed. Pick a time later today or another day.");
+    if (e.status === 403) return t("Only the person who booked it or a manager can change this booking.");
+    if (e.status === 400) return t("Check the date and times, then try again.");
+    if (e.status === 0 || e.status >= 500) return fallback;
+  }
+  if (e instanceof TypeError) return t("No connection. Check your internet and try again.");
+  return fallback;
+}
+
 function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoomBooking; initialDate?: string; onClose: () => void }) {
   const { t } = useLang();
   const qc = useQueryClient();
@@ -220,8 +246,17 @@ function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoo
   const [room, setRoom] = useState<string>(booking?.room ?? ROOM_BOOKING_ROOMS[0]);
   const [title, setTitle] = useState(booking?.title ?? "");
   const [date, setDate] = useState(startInit.date || initialDate || dayKey(new Date()));
-  const [startTime, setStartTime] = useState(startInit.time || "09:00");
-  const [endTime, setEndTime] = useState(endInit.time || "10:00");
+  // A new booking for today starts at the next quarter hour once 09:00 has gone (it defaulted to 09:00–10:00
+  // at any hour, a time already over — QA S-13).
+  const slot = (() => {
+    if (booking || (initialDate && initialDate !== dayKey(new Date()))) return ["09:00", "10:00"];
+    const n = new Date();
+    const q = Math.ceil((n.getHours() * 60 + n.getMinutes()) / 15);
+    if (q <= 36 || q >= 95) return ["09:00", "10:00"];
+    return [TIMES[q], TIMES[Math.min(q + 4, 95)]];
+  })();
+  const [startTime, setStartTime] = useState(startInit.time || slot[0]);
+  const [endTime, setEndTime] = useState(endInit.time || slot[1]);
   const [description, setDescription] = useState(booking?.description ?? "");
   const [err, setErr] = useState<string | null>(null);
 
@@ -245,16 +280,21 @@ function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoo
   const save = useMutation({
     mutationFn: () => editing ? nexusApi.updateRoomBooking(booking!.id, buildPayload()) : nexusApi.createRoomBooking(buildPayload()),
     onSuccess: () => { invalidate(); onClose(); },
-    onError: (e: unknown) => setErr(e instanceof Error ? e.message : t("Couldn't save the booking.")),
+    onError: (e: unknown) => setErr(bookingError(e, room, t, t("Couldn't save the booking."))),
   });
   const del = useMutation({
     mutationFn: () => nexusApi.deleteRoomBooking(booking!.id),
     onSuccess: () => { invalidate(); onClose(); },
     // Only the creator or a manager may delete; anyone else got a silent 403 and a dialog that stayed open.
-    onError: (e: unknown) => setErr(e instanceof Error ? e.message : t("Couldn't delete the booking.")),
+    onError: (e: unknown) => setErr(bookingError(e, room, t, t("Couldn't delete the booking."))),
   });
 
-  const canSave = title.trim() && date && startTime && endTime && endTime > startTime && !save.isPending;
+  // A booking that has already ended can't be made (QA S-13); one that started a moment ago can (a
+  // meeting already under way). Editing an old booking keeps working.
+  const endsAtMs = date && endTime ? new Date(`${date}T${endTime}`).getTime() : NaN;
+  const timesChanged = !editing || date !== startInit.date || startTime !== startInit.time || endTime !== endInit.time;
+  const inPast = timesChanged && Number.isFinite(endsAtMs) && endsAtMs <= Date.now();
+  const canSave = title.trim() && date && startTime && endTime && endTime > startTime && !inPast && !save.isPending;
   const field = "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary";
 
   return createPortal(
@@ -289,11 +329,11 @@ function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoo
           <div className="grid grid-cols-2 gap-3">
             <label className="block space-y-1">
               <span className="text-xs font-medium text-muted-foreground">{t("Start")}</span>
-              <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className={field} />
+              <TimeSelect value={startTime} label={t("Start")} onChange={(v) => { setStartTime(v); if (endTime <= v) { const i = TIMES.indexOf(v); setEndTime(TIMES[Math.min(i + 4, TIMES.length - 1)] ?? v); } }} className={cn(field, "hover:border-primary/40")} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium text-muted-foreground">{t("End")}</span>
-              <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className={field} />
+              <TimeSelect value={endTime} label={t("End")} onChange={setEndTime} className={cn(field, "hover:border-primary/40")} />
             </label>
           </div>
           <label className="block space-y-1">
@@ -302,6 +342,8 @@ function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoo
           </label>
 
           {endTime <= startTime && <p className="text-xs font-semibold text-destructive">{t("End time has to be after the start time.")}</p>}
+          {endTime > startTime && inPast && <p data-booking-past="" className="text-xs font-semibold text-destructive">{t("That time has already passed. Pick a time later today or another day.")}</p>}
+          {!title.trim() && endTime > startTime && !inPast && <p className="text-xs text-muted-foreground">{t("Add a title to book the room.")}</p>}
           {err && <p className="text-xs font-semibold text-destructive">{err}</p>}
 
           <div className="flex items-center gap-2 pt-1">
