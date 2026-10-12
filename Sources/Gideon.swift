@@ -109,11 +109,15 @@ struct GideonContext: Equatable, Sendable {
     var projectName: String?
     var taskId: String?
     var taskTitle: String?
-    var isEmpty: Bool { projectId == nil && taskId == nil }
+    /// Pages, tasks and projects added with @ in the composer (web chips; at most 8). The server checks
+    /// each one and drops what this account cannot open.
+    var refs: [GideonRef] = []
+    var isEmpty: Bool { projectId == nil && taskId == nil && refs.isEmpty }
     var json: [String: Any] {
         var o: [String: Any] = [:]
         if let projectId { o["projectId"] = projectId }
         if let taskId { o["taskId"] = taskId }
+        if !refs.isEmpty { o["refs"] = refs.map { ["kind": $0.kind, "id": $0.id] } }
         return o
     }
 }
@@ -820,5 +824,58 @@ final class GideonChat {
         chatTitle = nil
         startNew = false
         context = GideonContext()
+    }
+}
+
+
+// MARK: - Personalize and Save as doc (web, 12 Oct 2026)
+
+/// What the person told GIDEON about themselves: its name for them, and standing instructions.
+struct GideonPrefs: Codable, Sendable, Equatable {
+    var assistantName: String?
+    var instructions: String?
+}
+
+extension GideonClient {
+    private static func jsonRequest(_ path: String, method: String, body: [String: Any]?) throws -> URLRequest {
+        var request = URLRequest(url: Config.baseURL.appendingPathComponent(path))
+        if let session = Keychain.load() { request.setValue(session.cookieHeader, forHTTPHeaderField: "Cookie") }
+        request.setValue(APIClient.clientTag, forHTTPHeaderField: "X-Nexus-Client")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpMethod = method
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        return request
+    }
+
+    private static func send(_ request: URLRequest) async throws -> Data {
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw APIError.offline }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else {
+            let msg = ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["error"] as? String
+            throw APIError.http(http.statusCode, msg)
+        }
+        return data
+    }
+
+    static func prefs() async throws -> GideonPrefs {
+        try JSONDecoder().decode(GideonPrefs.self, from: try await send(try jsonRequest("/api/gideon/prefs", method: "GET", body: nil)))
+    }
+
+    /// Empty values are stored as nothing (the server trims and caps: name 40, instructions 2000).
+    static func savePrefs(_ p: GideonPrefs) async throws -> GideonPrefs {
+        let body: [String: Any] = ["assistantName": p.assistantName ?? NSNull(), "instructions": p.instructions ?? NSNull()]
+        return try JSONDecoder().decode(GideonPrefs.self, from: try await send(try jsonRequest("/api/gideon/prefs", method: "PUT", body: body)))
+    }
+
+    /// An answer saved as a page in a project (MEMBER). Returns the new page's id.
+    static func saveAsDoc(projectId: String, title: String, markdown: String) async throws -> String {
+        let data = try await send(try jsonRequest("/api/gideon/save-doc", method: "POST",
+                                                  body: ["projectId": projectId, "title": title, "markdown": String(markdown.prefix(60_000))]))
+        guard let id = (((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["doc"] as? [String: Any])?["id"] as? String else { throw APIError.decoding }
+        return id
     }
 }

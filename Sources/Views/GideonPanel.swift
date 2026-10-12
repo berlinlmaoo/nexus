@@ -101,8 +101,38 @@ struct GideonPanel: View {
     @State private var showChats = false
     /// Apply / Discard asks first, in a centred alert (house rule).
     @State private var decision: GideonDecision?
+    @State private var showPersonalize = false
+    @State private var saveRequest: GideonSaveRequest?
+    @State private var savedDocId: String?
+    /// The name the person gave GIDEON (Personalize); empty = "GIDEON".
+    @State private var assistantName = ""
 
     private var tier: GideonTier { GideonTier(rawValue: tierRaw) ?? .fallback }
+    private var displayName: String {
+        let n = assistantName.trimmingCharacters(in: .whitespaces)
+        return n.isEmpty ? "GIDEON" : n
+    }
+
+    @ViewBuilder private func refDestination(_ ref: GideonRef) -> some View {
+        switch ref.kind {
+        case "project": ProjectDetailView(projectId: ref.id, projectName: ref.title ?? "")
+        case "doc": DocReaderView(docId: ref.id, title: ref.title ?? "")
+        default: TaskDetailView(taskId: ref.id)
+        }
+    }
+
+    /// The @ picker over the composer while the draft ends in "@…".
+    @ViewBuilder private var mentionPicker: some View {
+        if let q = GideonMention.query(in: chat.draft) {
+            GideonMentionPicker(query: q) { ref in addRef(ref) }
+        }
+    }
+
+    private func addRef(_ ref: GideonRef) {
+        chat.draft = GideonMention.strip(chat.draft)
+        guard !chat.context.refs.contains(where: { $0.kind == ref.kind && $0.id == ref.id }), chat.context.refs.count < 8 else { return }
+        chat.context.refs.append(ref)
+    }
 
     var body: some View {
         NavigationStack {
@@ -111,6 +141,7 @@ struct GideonPanel: View {
                 VStack(spacing: 0) {
                     transcript
                     contextStrip
+                    mentionPicker
                     attachmentStrip
                     composer
                 }
@@ -126,6 +157,7 @@ struct GideonPanel: View {
                         Button { chat.startChat(context: chat.context) } label: { Label(T("New chat"), systemImage: "square.and.pencil") }
                             .disabled(chat.sending)
                         Button { showChats = true } label: { Label(T("Chats"), systemImage: "clock.arrow.circlepath") }
+                        Button { showPersonalize = true } label: { Label(T("Personalize"), systemImage: "person.crop.circle.badge.checkmark") }
                         Divider()
                         Button(T("Clear chat"), role: .destructive) {
                             Task { await chat.clear() }
@@ -137,12 +169,17 @@ struct GideonPanel: View {
                     .accessibilityLabel(T("Chat options"))
                 }
             }
-            .navigationDestination(item: $openRef) { ref in
-                if ref.kind == "project" {
-                    ProjectDetailView(projectId: ref.id, projectName: ref.title ?? "")
-                } else {
-                    TaskDetailView(taskId: ref.id)
-                }
+            .navigationDestination(item: $openRef) { ref in refDestination(ref) }
+            .sheet(isPresented: $showPersonalize) {
+                GideonPersonalizeSheet { p in assistantName = p.assistantName ?? "" }
+            }
+            .sheet(item: $saveRequest) { r in
+                GideonSaveDocSheet(title: r.title, markdown: r.markdown, contextProjectId: chat.context.projectId,
+                                   contextProjectName: chat.context.projectName) { id in savedDocId = id }
+            }
+            .alert(T("Saved as a doc"), isPresented: Binding(get: { savedDocId != nil }, set: { if !$0 { savedDocId = nil } })) {
+                Button(T("Open page")) { if let id = savedDocId { openRef = GideonRef(kind: "doc", id: id, title: nil, projectId: nil) } }
+                Button("OK", role: .cancel) {}
             }
             .sheet(isPresented: $showChats) {
                 GideonChatsSheet { id in Task { await chat.openChat(id) } }
@@ -154,6 +191,7 @@ struct GideonPanel: View {
                 Button(T("Cancel"), role: .cancel) {}
             } message: { d in Text(d.proposal.summary ?? "") }
         }
+        .task { if let p = try? await GideonClient.prefs() { assistantName = p.assistantName ?? "" } }
         .onAppear {
             // "Ask GIDEON" from a project/task: a new chat about it, unless that is already the one open.
             if let openContext, openContext != chat.context {
@@ -226,7 +264,7 @@ struct GideonPanel: View {
             HStack(spacing: 4) {
                 ZStack {
                     ForEach(GideonTier.allCases) { option in
-                        Text("GIDEON \(option.label)")
+                        Text("\(displayName) \(option.label)")
                             .font(NXFont.display(15, .bold))
                             .lineLimit(1)
                             .minimumScaleFactor(0.75)
@@ -380,7 +418,24 @@ struct GideonPanel: View {
 
     /// Under an answer: one quiet line of what GIDEON did, the sources it cites (tap to open), what it
     /// made, and the changes waiting for Apply.
+    /// The question an answer replies to (its first line), for the page title.
+    private func question(before turn: GideonTurn) -> String {
+        guard let i = chat.turns.firstIndex(where: { $0.id == turn.id }) else { return "" }
+        let prev = chat.turns[..<i].last { $0.role == .user }?.content ?? ""
+        return String((prev.components(separatedBy: "\n").first ?? "").prefix(120))
+    }
+
     @ViewBuilder private func answerExtras(_ turn: GideonTurn) -> some View {
+        if !turn.content.isEmpty && !chat.sending {
+            Button {
+                let q = question(before: turn)
+                saveRequest = GideonSaveRequest(title: q.isEmpty ? T("GIDEON answer") : q, markdown: turn.content)
+            } label: {
+                Label(T("Save as doc"), systemImage: "doc.badge.plus").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                    .frame(minHeight: 28).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
         let shownSteps = turn.steps.filter { $0.status != "error" }
         if let last = shownSteps.last, let label = last.label, !label.isEmpty {
             HStack(spacing: 5) {
@@ -494,11 +549,32 @@ struct GideonPanel: View {
     /// The project / task this chat is about, removable (then GIDEON looks across everything you can see).
     @ViewBuilder private var contextStrip: some View {
         let ctx = chat.context
-        if !ctx.isEmpty {
+        if !ctx.refs.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(ctx.refs, id: \.self) { r in
+                        HStack(spacing: 4) {
+                            Image(systemName: r.kind == "project" ? "folder" : (r.kind == "task" ? "checklist" : "doc.text")).font(.system(size: 10, weight: .semibold))
+                            Text(r.title ?? "").lineLimit(1)
+                            Button { chat.context.refs.removeAll { $0 == r } } label: {
+                                Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).frame(width: 24, height: 24).contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(T("Remove context"))
+                        }
+                        .font(NXFont.text(11, .semibold)).foregroundStyle(NX.violetText)
+                        .padding(.leading, 8)
+                        .background(NX.violet.opacity(0.10), in: Capsule())
+                    }
+                }
+                .padding(.horizontal, 16).padding(.top, 4)
+            }
+        }
+        if ctx.projectId != nil || ctx.taskId != nil {
             HStack(spacing: 6) {
                 Image(systemName: ctx.taskId != nil ? "checklist" : "folder").font(.system(size: 11, weight: .semibold))
                 Text(ctx.taskTitle ?? ctx.projectName ?? T("This project")).lineLimit(1)
-                Button { chat.context = GideonContext() } label: {
+                Button { chat.context = GideonContext(refs: chat.context.refs) } label: {
                     Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
                         .frame(width: 28, height: 28).contentShape(Rectangle())
                 }
