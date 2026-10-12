@@ -47,6 +47,23 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
     const el = scroller.current?.querySelector<HTMLElement>("[data-active-tab='true']");
     el?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [activeKey]);
+  // Tabs that don't fit scroll sideways; a soft fade on the cut edge(s) says there is more (was a hard
+  // clip that looked like a broken icon, audit 12 Oct 2026).
+  const [edges, setEdges] = useState({ left: false, right: false });
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const read = () => setEdges((e) => {
+      const left = el.scrollLeft > 2, right = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+      return e.left === left && e.right === right ? e : { left, right };
+    });
+    read();
+    el.addEventListener("scroll", read, { passive: true });
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => { el.removeEventListener("scroll", read); ro.disconnect(); };
+  }, [tabs.length]);
+  const fade = edges.left && edges.right ? "[mask-image:linear-gradient(to_right,transparent,black_28px,black_calc(100%-28px),transparent)]" : edges.right ? "[mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)]" : edges.left ? "[mask-image:linear-gradient(to_right,transparent,black_28px)]" : "";
   const viewIds = tabs.filter((x) => x.view).map((x) => x.view!.id);
   const drop = (targetId: string) => {
     if (!dragId || dragId === targetId) return;
@@ -55,7 +72,7 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
     onReorder(order);
   };
   return (
-    <div ref={scroller} role="tablist" aria-label={t("Views")} className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div ref={scroller} role="tablist" aria-label={t("Views")} className={cn("flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", fade)}>
       {tabs.map((tab) => {
         const active = tab.key === activeKey;
         const v = tab.view;

@@ -199,17 +199,17 @@ function Card({ onClick, wash, icon, iconClass, title, body, preview }: { onClic
     <button
       type="button"
       onClick={onClick}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-background text-left transition hover:border-primary hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 active:scale-[0.99]"
+      className="group flex h-full w-full flex-col items-stretch overflow-hidden rounded-2xl border border-border bg-background text-left transition hover:border-primary hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 active:scale-[0.99]"
     >
-      <div className={cn("flex items-start gap-2.5 px-3.5 pb-2.5 pt-3", wash)}>
+      <div className={cn("flex w-full items-start gap-2.5 px-3.5 pb-2.5 pt-3", wash)}>
         <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-xl", iconClass)}>{icon}</span>
-        <span className="min-w-0">
+        <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-bold text-foreground">{title}</span>
           <span className="line-clamp-2 text-xs leading-snug text-muted-foreground">{body}</span>
         </span>
       </div>
-      <div className={cn("px-3.5 pb-3", wash)} aria-hidden>
-        <div className="h-[6.5rem] overflow-hidden rounded-xl bg-background p-2 ring-1 ring-foreground/10 transition group-hover:ring-primary/30">
+      <div className={cn("w-full flex-1 px-3.5 pb-3", wash)} aria-hidden>
+        <div className="h-[6.5rem] w-full overflow-hidden rounded-xl bg-background p-2 ring-1 ring-foreground/10 transition group-hover:ring-primary/30">
           {preview}
         </div>
       </div>

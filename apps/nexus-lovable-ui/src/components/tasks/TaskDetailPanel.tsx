@@ -164,9 +164,11 @@ function isDoneStatus(s?: string | null) {
 /** White card with an uppercase icon label — the old-NEXUS task-detail section. */
 function SecCard({ icon: Icon, label, action, children, className }: { icon: typeof Plus; label: string; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={cn("rounded-3xl bg-card p-5 shadow-soft", className)}>
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground"><Icon className="h-4 w-4" />{label}</span>
+    // Flat sections divided by a hairline (Notion's page), not a stack of floating shadow cards; the
+    // heading reads in sentence case (audit, 12 Oct 2026).
+    <section className={cn("border-t border-border/70 pt-4", className)}>
+      <div className="mb-2.5 flex min-h-7 items-center justify-between gap-2">
+        <span className="flex items-center gap-2 text-sm font-semibold text-muted-foreground"><Icon className="h-4 w-4" />{label}</span>
         {action}
       </div>
       {children}
@@ -469,7 +471,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
         role="dialog"
         aria-modal="true"
         style={{ x: mx, y: my, scaleX: msx, scaleY: msy, opacity: asideO, transformOrigin: "top left", pointerEvents: closing ? "none" : undefined, ...(morph ? { borderRadius: 24 } : null) }}
-        className="relative z-10 flex h-[100dvh] max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden border-border bg-muted shadow-pop sm:h-auto sm:max-h-[92dvh] sm:rounded-3xl sm:border"
+        className="relative z-10 flex h-[100dvh] max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden border-border bg-card shadow-pop sm:h-auto sm:max-h-[92dvh] sm:rounded-3xl sm:border"
       >
             {/* inner scroll region — separate from the animated shell so the transform never breaks scrolling on iOS.
                 During the morph the content fades in just after the box starts so it doesn't look stretched. */}
@@ -480,7 +482,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
             >
             {/* header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-muted/70 px-5 py-4 backdrop-blur sm:px-8">
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-card/85 px-5 py-4 backdrop-blur sm:px-8">
           <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-muted-foreground">
             {t?.taskList?.project && (
               <>
@@ -517,7 +519,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               <Heart className={cn("h-4 w-4", t?.liked && "fill-destructive")} /> {t?.likeCount ?? 0}
             </button>
             {canMakeQuest && t && (
-              <button onClick={() => setQuestOpen(true)} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary" title={tr("Make a quest")}>
+              <button onClick={() => setQuestOpen(true)} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary" title={tr("Make it a goal")}>
                 <Trophy className="h-4 w-4" />
               </button>
             )}
@@ -543,14 +545,14 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
         )}
 
         {t && (
-          <div className="flex flex-1 flex-col gap-4 p-4 sm:p-6">
+          <div className="flex flex-1 flex-col gap-5 px-5 py-5 sm:px-8 sm:py-6">
             {/* Quest nudge: this task is part of one or more task-bundle quests → motivate finishing it. */}
             {(t.quests ?? []).map((q) => (
               <div key={q.id} className="flex items-center gap-2.5 rounded-2xl border border-primary/30 bg-primary/5 px-3.5 py-2.5">
                 <Trophy className="h-5 w-5 shrink-0 text-primary" />
                 <div className="min-w-0 flex-1 text-sm">
                   <div className="font-bold text-primary">
-                    {(q.total ?? 1) <= 1 ? <>{tr("Finish this task →")} <span className="tabular-nums">+{q.xpReward} XP</span></> : <>{tr("Part of the quest “{title}” →", { title: q.title })} <span className="tabular-nums">+{q.xpReward} XP</span></>}
+                    {(q.total ?? 1) <= 1 ? <>{tr("Finish this task →")} <span className="tabular-nums">+{q.xpReward} XP</span></> : <>{tr("Part of the goal “{title}” →", { title: q.title })} <span className="tabular-nums">+{q.xpReward} XP</span></>}
                   </div>
                   {(q.total ?? 1) > 1 && <div className="text-xs text-muted-foreground">{tr("Finish all {total} tasks ({done}/{total} done) to get the XP.", { total: q.total ?? 0, done: q.done ?? 0 })}</div>}
                 </div>
@@ -619,7 +621,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               onChange={(e) => setTitle(e.target.value)}
               onBlur={() => { if (title.trim() && title !== t.title) update.mutate({ title: title.trim() }); }}
               rows={2}
-              className="w-full resize-none rounded-xl bg-transparent font-display text-3xl font-bold leading-tight tracking-tight text-foreground outline-none focus:bg-card/60 focus:px-3 focus:py-2 sm:text-4xl"
+              className="w-full resize-none rounded-lg bg-transparent font-display text-2xl font-bold leading-tight tracking-tight text-foreground outline-none transition-colors focus:bg-muted/50 sm:text-[1.75rem]"
             />
 
             {/* assigned personnel + due date (2-col) */}
@@ -1087,16 +1089,16 @@ function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; ti
   });
   const results = (taskSearch.data ?? []).filter((r) => !tasks.some((t) => t.id === r.id)).slice(0, 8);
   const create = useMutation({
-    mutationFn: () => nexusApi.createAdminQuest({ title: title.trim() || tr("Quest"), xpReward: xp, requirementType: "specific_tasks", taskIds: tasks.map((t) => t.id) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["gamification", "me"] }); toast.success(tr("Quest created")); onClose(); },
-    onError: (e) => toast.error(e instanceof Error ? e.message : tr("Couldn't create quest")),
+    mutationFn: () => nexusApi.createAdminQuest({ title: title.trim() || tr("Goal"), xpReward: xp, requirementType: "specific_tasks", taskIds: tasks.map((t) => t.id) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["gamification", "me"] }); toast.success(tr("Goal created")); onClose(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : tr("Couldn't create the goal")),
   });
   return createPortal(
     <div className="fixed inset-0 z-[90] grid place-items-center bg-black/50 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">{tr("Make a quest")}</h3></div>
-        <label className="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Quest title")}</label>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} className="mb-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder={tr("Quest name")} />
+        <div className="mb-3 flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">{tr("Make it a goal")}</h3></div>
+        <label className="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Goal title")}</label>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} className="mb-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder={tr("Goal name")} />
         <label className="mb-1 block text-xs font-semibold text-muted-foreground">{tr("XP reward (max 50)")}</label>
         <input type="number" min={0} max={50} value={xp} onChange={(e) => setXp(Math.max(0, Math.min(50, Number(e.target.value) || 0)))} className="mb-3 block w-28 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
         <label className="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Tasks")} ({tasks.length})</label>
@@ -1121,10 +1123,10 @@ function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; ti
         <div className="mt-4 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-xl border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent">{tr("Cancel")}</button>
           <button onClick={() => create.mutate()} disabled={create.isPending || tasks.length === 0 || !title.trim()} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
-            {create.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {tr("Create quest")}
+            {create.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {tr("Create goal")}
           </button>
         </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">{tr("The quest completes once every task is done. XP goes to whoever did them; visible to the tasks' project members.")}</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">{tr("The goal completes once every task is done. XP goes to whoever did them; visible to the tasks' project members.")}</p>
       </div>
     </div>,
     document.body,

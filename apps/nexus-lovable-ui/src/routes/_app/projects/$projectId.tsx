@@ -1008,7 +1008,7 @@ function QuestChip({ task, className }: { task: NexusTask; className?: string })
   const xp = quests.reduce((s, q) => s + (q.xpReward ?? 0), 0);
   return (
     <span
-      title={t("Quest: {titles} (+{xp} XP)", { titles: quests.map((q) => q.title).join(", "), xp })}
+      title={t("Goal: {titles} (+{xp} XP)", { titles: quests.map((q) => q.title).join(", "), xp })}
       className={cn("inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-[color:var(--accent-foreground)] bg-accent", className)}
     >
       +{xp} XP
@@ -1447,7 +1447,7 @@ function tlProgress(status?: string | null) {
     case "IN_REVIEW": return 75;
     case "IN_PROGRESS": return 50;
     case "CANCELLED": return 0;
-    default: return 8;
+    default: return 0; // not started: an empty bar, not a red 8% sliver
   }
 }
 function pctTone(pct: number) {
@@ -1530,7 +1530,8 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
 
   return (
     <div className="px-4 py-3 md:px-8">
-      <div className="relative overflow-x-auto rounded-lg border border-border bg-card">
+      {/* Opens on today (Notion does), not on the oldest task's month: a callback ref scrolls once. */}
+      <div ref={(el) => { if (el && !el.dataset.scrolled) { el.dataset.scrolled = "1"; el.scrollLeft = Math.max(0, xOf(today) - GANTT_DAY_W * 3); } }} className="relative overflow-x-auto rounded-lg border border-border bg-card">
         <div style={{ width: GANTT_LEFT_W + timelineW }}>
           {/* HEADER */}
           <div className="sticky top-0 z-20 flex border-b border-border bg-card">
@@ -1669,7 +1670,7 @@ function PagesView({ project, onOpen }: { project: NexusProject; onOpen: (doc: N
   });
   const onCreate = () => create.mutate();
   return (
-    <div className="p-4 md:p-8 space-y-5 bg-[radial-gradient(circle_at_top_left,rgba(78,179,1,0.08),transparent_30%)]">
+    <div className="p-4 md:p-8 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-black tracking-tight">{tr("Pages")}</h2>

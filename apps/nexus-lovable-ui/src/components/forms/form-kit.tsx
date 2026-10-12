@@ -291,7 +291,7 @@ export function FormCard({ form, projectName, onEdit }: { form: NexusForm; proje
   return (
     <div className="flex flex-col rounded-2xl border border-border bg-card p-5 shadow-soft transition-all hover:border-primary/30 hover:shadow-pop">
       <button onClick={onEdit} className="flex-1 text-left">
-        <div className="flex items-start gap-2"><FileText className="mt-0.5 h-5 w-5 text-primary" /><div className="min-w-0"><h3 className="truncate font-semibold tracking-tight">{form.name}</h3>{projectName && <p className="mt-0.5 truncate text-[11px] font-medium text-primary/80">{projectName}</p>}<p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{form.description || tn(form.fields?.length ?? 0, "{n} field", "{n} fields")}</p></div></div>
+        <div className="flex items-start gap-2"><FileText className="mt-0.5 h-5 w-5 shrink-0 text-primary" /><div className="min-w-0"><h3 className="truncate font-semibold tracking-tight">{form.name}</h3>{projectName && <p className="mt-0.5 truncate text-[11px] font-medium text-primary/80">{projectName}</p>}{form.description && <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{form.description}</p>}</div></div>
       </button>
       <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
         <span>{tn(form._count?.submissions ?? 0, "{n} submission", "{n} submissions")} · {tn(form.fields?.length ?? 0, "{n} field", "{n} fields")}</span>
