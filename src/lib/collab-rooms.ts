@@ -5,9 +5,10 @@ import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { eventBus, BUS_EVENTS } from "@/lib/event-bus"
 import { createLogger } from "@/lib/logger"
-import { canonicalDoc, sanitizeDoc, type BlockDoc } from "@/lib/blockdoc"
+import { canonicalDoc, sanitizeDoc, type BlockDoc, type BlockNode } from "@/lib/blockdoc"
 import { bodyAccess, loadBody, parseRoomKey, saveBody, type BodyKind } from "@/lib/block-bodies"
-import { ydocFromJson, ydocToJson } from "@/lib/collab-ydoc"
+import { FRAGMENT, fragmentBlocks, nodesToY, ydocFromJson, ydocToJson } from "@/lib/collab-ydoc"
+import { planBlockMerge } from "@/lib/block-merge"
 
 /**
  * Live editing rooms for the block editor (Yjs over the existing Socket.IO server).
@@ -61,7 +62,15 @@ type Room = {
   dead: boolean
 }
 
-type CollabGlobal = { rooms: Map<string, Room>; loading: Map<string, Promise<Room | null>>; io: IOServer | null; busBound: boolean }
+type CollabGlobal = {
+  rooms: Map<string, Room>; loading: Map<string, Promise<Room | null>>; io: IOServer | null; busBound: boolean
+  /**
+   * applyBlockEdit as the SOCKET server's module instance has it. The API routes are a separate bundle with
+   * their own copy of yjs; touching a room's Y.Doc with another copy breaks (instanceof checks fail, inserted
+   * items are refused). So a route hands the edit to the instance that owns the rooms.
+   */
+  applyEdit?: (opts: BlockEditOptions) => Promise<BlockEditResult>
+}
 const g = globalThis as unknown as { __nexusCollab?: CollabGlobal }
 const state: CollabGlobal = g.__nexusCollab ?? (g.__nexusCollab = { rooms: new Map(), loading: new Map(), io: null, busBound: false })
 
@@ -225,6 +234,7 @@ function removeMember(socket: Socket, key: string) {
 /** Wire the collab events on one connected socket (pages/api/socket.ts). */
 export function attachCollabSocket(io: IOServer, socket: Socket) {
   state.io = io
+  state.applyEdit = applyBlockEdit
   bindBus()
   socket.data.collabRooms = new Set<string>()
 
@@ -310,4 +320,68 @@ function bindBus() {
 /** For a REST save: is someone editing this body live right now? */
 export function liveEditors(key: string): number {
   return state.rooms.get(key)?.members.size ?? 0
+}
+
+// ---------------------------------------------------------------- edits that do not come from a live editor
+
+export type BlockEditResult =
+  | { status: 200; doc: BlockDoc; changed: boolean; epoch: string }
+  | { status: 409; doc: BlockDoc; conflicts: number[]; epoch: string }
+  | { status: 404 }
+
+const blockCanon = (b: unknown) => canonicalDoc({ type: "doc", content: [b] })
+
+/**
+ * Applies an edit made outside the live editor (the iOS app, 12 Oct 2026) to the LIVE document: the room's
+ * Y.Doc, opened for it when nobody has the page open. `base` is the document the app started from, `mine`
+ * what it ended with. The app's changes are planned block by block against what the room holds now
+ * (lib/block-merge.ts), applied in one Yjs transaction, relayed to every open editor as a normal Yjs
+ * update (they see it at once, nothing is reloaded or overwritten), and saved through the room's own
+ * persistence. A block the app changed that someone else also changed is a conflict (409 with the live
+ * document) unless `keepBoth`, which keeps their version and adds the app's beside it.
+ */
+export type BlockEditOptions = { kind: BodyKind; id: string; userId: string; base: BlockDoc; mine: BlockDoc; keepBoth: boolean }
+
+/** What API routes call: the socket server's instance when it is running in this process (see applyEdit). */
+export function requestBlockEdit(opts: BlockEditOptions): Promise<BlockEditResult> {
+  return state.applyEdit ? state.applyEdit(opts) : applyBlockEdit(opts)
+}
+
+export async function applyBlockEdit(opts: BlockEditOptions): Promise<BlockEditResult> {
+  const key = `${opts.kind}:${opts.id}`
+  const room = await getRoom(key)
+  if (!room || room.dead) return { status: 404 }
+  const fragment = room.ydoc.getXmlFragment(FRAGMENT)
+  const live = fragmentBlocks(fragment)
+  const plan = planBlockMerge(opts.base.content, opts.mine.content, live, blockCanon, opts.keepBoth)
+  const liveDoc = (): BlockDoc => sanitizeDoc(ydocToJson(room.ydoc)) ?? { type: "doc", content: [{ type: "paragraph" }] }
+  if (plan.conflicts.length) {
+    if (room.members.size === 0) void closeIfEmpty(room)
+    return { status: 409, doc: liveDoc(), conflicts: plan.conflicts, epoch: room.epoch }
+  }
+  if (plan.changed) {
+    const before = Y.encodeStateVector(room.ydoc)
+    room.ydoc.transact(() => {
+      for (const op of plan.ops) {
+        if (op.type === "delete") {
+          if (op.liveIndex < fragment.length) fragment.delete(op.liveIndex, 1)
+        } else {
+          const items = nodesToY(op.nodes as BlockNode[])
+          if (items.length) fragment.insert(Math.min(op.liveIndex, fragment.length), items)
+        }
+      }
+    }, "app-edit")
+    const update = Y.encodeStateAsUpdate(room.ydoc, before)
+    // Every open editor applies it like a collaborator's keystrokes.
+    state.io?.to(ioRoom(key)).emit("ydoc:update", { room: key, update: Buffer.from(update) })
+    if (!room.dirty) room.firstDirtyAt = Date.now()
+    room.dirty = true
+    room.lastEditorId = opts.userId
+    room.editors.add(opts.userId)
+    await persist(room)
+  }
+  const doc = liveDoc()
+  const epoch = room.epoch
+  if (room.members.size === 0) await closeIfEmpty(room)
+  return { status: 200, doc, changed: plan.changed, epoch }
 }

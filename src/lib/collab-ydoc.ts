@@ -58,6 +58,16 @@ function toYContent(nodes: BlockNode[] | undefined): Array<Y.XmlElement | Y.XmlT
   return out
 }
 
+/** Blocks as Yjs items, ready to insert into a fragment (the iOS block edits, collab-rooms.applyBlockEdit). */
+export function nodesToY(nodes: BlockNode[]): Array<Y.XmlElement | Y.XmlText> {
+  return toYContent(nodes)
+}
+
+/** The top-level blocks a fragment holds (an empty fragment = no blocks, not one empty paragraph). */
+export function fragmentBlocks(fragment: Y.XmlFragment): BlockNode[] {
+  return fromYContent(fragment.toArray() as Array<Y.XmlElement | Y.XmlText>)
+}
+
 /** Fill an EMPTY fragment with a document. */
 export function writeDocToFragment(doc: BlockDoc, fragment: Y.XmlFragment) {
   const kids = toYContent(doc.content)
