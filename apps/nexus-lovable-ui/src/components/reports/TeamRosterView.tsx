@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LeftTag, leftAtOf } from "@/components/LeftTag";
 import { cn } from "@/lib/utils";
-import { t as tr } from "@/lib/lang";
+import { t as tr, useLang } from "@/lib/lang";
 import type { ReportRosterResponse, ReportRosterRow } from "@/lib/nexus-api";
 import { fmtNum, fmtPct, ratioPct, ROLE_LABEL } from "./report-format";
 
@@ -43,6 +43,7 @@ export function TeamRosterView({ data, onOpen, teamId, onTeamChange, teamOptions
   onTeamChange: (teamId: string | null) => void;
   teamOptions: { id: string; name: string }[];
 }) {
+  const { tn } = useLang();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "flags", dir: "desc" });
 
@@ -73,19 +74,19 @@ export function TeamRosterView({ data, onOpen, teamId, onTeamChange, teamOptions
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-bold">{data.team?.name ?? (data.scope === "ALL" ? "Everyone" : "Your direct reports")}</span>
-          <span className="text-xs font-bold text-muted-foreground">{data.rows.length} {data.rows.length === 1 ? "person" : "people"}</span>
-          {flagged > 0 && <span className="chip chip--sm chip--warning"><Flag className="h-3 w-3" /> {flagged} need attention</span>}
+          <span className="font-bold">{data.team?.name ?? (data.scope === "ALL" ? tr("Everyone") : tr("Your direct reports"))}</span>
+          <span className="text-xs font-bold text-muted-foreground">{tn(data.rows.length, "{n} person", "{n} people")}</span>
+          {flagged > 0 && <span className="chip chip--sm chip--warning"><Flag className="h-3 w-3" /> {tr("{n} need attention", { n: flagged })}</span>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {teamOptions.length > 0 && (
             <select
               value={teamId ?? ""}
               onChange={(e) => onTeamChange(e.target.value || null)}
-              aria-label="Filter by team"
+              aria-label={tr("Filter by team")}
               className="h-9 min-w-0 max-w-[12rem] flex-1 rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-primary sm:flex-none"
             >
-              <option value="">All teams</option>
+              <option value="">{tr("All teams")}</option>
               {teamOptions.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           )}
@@ -103,18 +104,18 @@ export function TeamRosterView({ data, onOpen, teamId, onTeamChange, teamOptions
       </div>
 
       {data.rows.length === 0 ? (
-        <EmptyState icon={Users} tone="muted" title={teamId ? "No one in this team" : "No one to show yet"} message={teamId ? "Pick another team, or show all teams." : data.scope === "ALL" ? "People join this list once they are members of the workspace." : "People appear here once the approval chart lists you as their manager."} />
+        <EmptyState icon={Users} tone="muted" title={teamId ? tr("No one in this team") : tr("No one to show yet")} message={teamId ? tr("Pick another team, or show all teams.") : data.scope === "ALL" ? tr("People join this list once they are members of the workspace.") : tr("People appear here once the approval chart lists you as their manager.")} />
       ) : rows.length === 0 ? (
-        <EmptyState compact icon={Search} tone="muted" title={`No one matches “${query.trim()}”`} message="Search by name, email or team." />
+        <EmptyState compact icon={Search} tone="muted" title={tr("No one matches “{q}”", { q: query.trim() })} message={tr("Search by name, email or team.")} />
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] border-separate border-spacing-0 text-sm">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-                  <SortTh sticky label="Name" active={sort.key === "name"} dir={sort.dir} onClick={() => toggle("name")} />
-                  {COLUMNS.map((c) => <SortTh key={c.key} label={c.label} title={c.title} align="right" active={sort.key === c.key} dir={sort.dir} onClick={() => toggle(c.key)} />)}
-                  <SortTh label="Flags" active={sort.key === "flags"} dir={sort.dir} onClick={() => toggle("flags")} />
+                  <SortTh sticky label={tr("Name")} active={sort.key === "name"} dir={sort.dir} onClick={() => toggle("name")} />
+                  {COLUMNS.map((c) => <SortTh key={c.key} label={tr(c.label)} title={tr(c.title)} align="right" active={sort.key === c.key} dir={sort.dir} onClick={() => toggle(c.key)} />)}
+                  <SortTh label={tr("Flags")} active={sort.key === "flags"} dir={sort.dir} onClick={() => toggle("flags")} />
                   <th className="w-6 border-b border-border" aria-hidden />
                 </tr>
               </thead>
@@ -145,7 +146,7 @@ export function TeamRosterView({ data, onOpen, teamId, onTeamChange, teamOptions
                       ) : (
                         <div className="flex flex-nowrap gap-1">
                           {(Object.keys(FLAG_LABEL) as (keyof ReportRosterRow["flags"])[]).filter((k) => r.flags[k]).map((k) => (
-                            <span key={k} className={cn("chip chip--sm whitespace-nowrap", FLAG_CHIP[k])}>{FLAG_LABEL[k]}</span>
+                            <span key={k} className={cn("chip chip--sm whitespace-nowrap", FLAG_CHIP[k])}>{tr(FLAG_LABEL[k])}</span>
                           ))}
                         </div>
                       )}
@@ -158,7 +159,7 @@ export function TeamRosterView({ data, onOpen, teamId, onTeamChange, teamOptions
           </div>
         </div>
       )}
-      <p className="text-center text-[11px] text-muted-foreground">Tasks shared by several people are split between them, so counts can be fractional.</p>
+      <p className="text-center text-[11px] text-muted-foreground">{tr("Tasks shared by several people are split between them, so counts can be fractional.")}</p>
     </div>
   );
 }
@@ -181,7 +182,7 @@ function SortTh({ label, title, active, dir, onClick, align, sticky }: { label: 
 
 export function TeamRosterSkeleton() {
   return (
-    <div className="space-y-4" aria-busy="true" aria-label="Loading team">
+    <div className="space-y-4" aria-busy="true" aria-label={tr("Loading team")}>
       <div className="flex justify-between"><Skeleton className="h-5 w-32" /><Skeleton className="h-9 w-56" /></div>
       <div className="rounded-2xl border border-border bg-card p-3 shadow-soft">
         {Array.from({ length: 6 }).map((_, i) => (

@@ -2,6 +2,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import { createPortal } from "react-dom";
 import { Camera, Loader2, RefreshCw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/lib/lang";
 import { LivenessCapture } from "@/components/attendance/LivenessCapture";
 
 export interface SelfieCaptureHandle {
@@ -28,6 +29,7 @@ export const SelfieCapture = forwardRef<SelfieCaptureHandle, SelfieCaptureProps>
   { file, onChange, onCapture, disabled, size = 112, renderTile = true },
   ref,
 ) {
+  const { t } = useLang();
   const fileRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -105,14 +107,14 @@ export const SelfieCapture = forwardRef<SelfieCaptureHandle, SelfieCaptureProps>
             style={{ width: size, height: size }}
           >
             {preview ? (
-              <img src={preview} alt="Selfie" className="h-full w-full object-cover" />
+              <img src={preview} alt={t("Selfie")} className="h-full w-full object-cover" />
             ) : opening ? (
               <Loader2 className="h-6 w-6 animate-spin text-primary/70" />
             ) : (
-              <div className="flex flex-col items-center gap-1 text-primary/70"><Camera className="h-7 w-7" /><span className="text-[11px] font-semibold">Selfie</span></div>
+              <div className="flex flex-col items-center gap-1 text-primary/70"><Camera className="h-7 w-7" /><span className="text-[11px] font-semibold">{t("Selfie")}</span></div>
             )}
           </button>
-          {preview && <button type="button" onClick={openCamera} className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-primary"><RefreshCw className="h-3 w-3" /> Retake</button>}
+          {preview && <button type="button" onClick={openCamera} className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-primary"><RefreshCw className="h-3 w-3" /> {t("Retake")}</button>}
         </>
       )}
 
@@ -133,16 +135,16 @@ export const SelfieCapture = forwardRef<SelfieCaptureHandle, SelfieCaptureProps>
             <div className="flex w-full max-w-md flex-col items-center gap-4">
               <div className="relative w-full overflow-hidden rounded-3xl bg-black shadow-pop">
                 <video ref={videoRef} playsInline muted className="h-auto w-full -scale-x-100" />
-                <button onClick={stop} aria-label="Close camera" className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"><X className="h-4 w-4" /></button>
+                <button onClick={stop} aria-label={t("Close camera")} className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"><X className="h-4 w-4" /></button>
               </div>
               <div className="flex items-center gap-4">
-                <button onClick={stop} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white/80 transition-colors hover:text-white">Cancel</button>
-                <button onClick={capture} className={cn("grid h-16 w-16 place-items-center rounded-full bg-white text-black shadow-pop ring-4 ring-white/30 transition-transform active:scale-90")} aria-label="Take photo">
+                <button onClick={stop} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white/80 transition-colors hover:text-white">{t("Cancel")}</button>
+                <button onClick={capture} className={cn("grid h-16 w-16 place-items-center rounded-full bg-white text-black shadow-pop ring-4 ring-white/30 transition-transform active:scale-90")} aria-label={t("Take photo")}>
                   <Camera className="h-7 w-7" />
                 </button>
-                <button onClick={openPlainCamera} className="inline-flex items-center gap-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-white/80 transition-colors hover:text-white" aria-label="Switch camera"><RefreshCw className="h-4 w-4" /></button>
+                <button onClick={openPlainCamera} className="inline-flex items-center gap-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-white/80 transition-colors hover:text-white" aria-label={t("Switch camera")}><RefreshCw className="h-4 w-4" /></button>
               </div>
-              <p className="text-xs text-white/60">Line up your face, then hit the shutter.</p>
+              <p className="text-xs text-white/60">{t("Line up your face, then press the shutter.")}</p>
             </div>
           </div>,
           document.body,

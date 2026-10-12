@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Loader2, LocateFixed, Search } from "lucide-react";
+import { useLang } from "@/lib/lang";
 
 /**
  * Pick the office point on a map instead of typing coordinates — the web twin of the iOS picker.
@@ -14,6 +15,7 @@ import { Loader2, LocateFixed, Search } from "lucide-react";
 export function OfficeMapPicker({ lat, lng, radiusMeters, onChange }: {
   lat: number | null; lng: number | null; radiusMeters: number; onChange: (lat: number, lng: number) => void;
 }) {
+  const { t } = useLang();
   const divRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
@@ -69,8 +71,8 @@ export function OfficeMapPicker({ lat, lng, radiusMeters, onChange }: {
     <div className="space-y-2">
       <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2">
         <Search className="h-4 w-4 text-muted-foreground" />
-        <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void search(); } }} placeholder="Search an address or place" className="flex-1 bg-transparent text-sm outline-none" />
-        {searching ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : <button type="button" onClick={() => void search()} className="text-xs font-semibold text-primary">Find</button>}
+        <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void search(); } }} placeholder={t("Search an address or place")} className="flex-1 bg-transparent text-sm outline-none" />
+        {searching ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : <button type="button" onClick={() => void search()} className="text-xs font-semibold text-primary">{t("Find")}</button>}
       </div>
       {results.length > 0 && (
         <div className="divide-y divide-border rounded-xl border border-border bg-card">
@@ -81,9 +83,9 @@ export function OfficeMapPicker({ lat, lng, radiusMeters, onChange }: {
       )}
       <div className="relative">
         <div ref={divRef} className="h-64 w-full overflow-hidden rounded-xl border border-border" />
-        <button type="button" onClick={locate} title="Use my location" className="absolute right-2 top-2 z-[400] grid h-9 w-9 place-items-center rounded-full bg-white text-primary shadow-md hover:bg-accent"><LocateFixed className="h-4 w-4" /></button>
+        <button type="button" onClick={locate} title={t("Use my location")} aria-label={t("Use my location")} className="absolute right-2 top-2 z-[400] grid h-9 w-9 place-items-center rounded-full bg-white text-primary shadow-md hover:bg-accent"><LocateFixed className="h-4 w-4" /></button>
       </div>
-      <p className="text-[11px] text-muted-foreground">Drag the pin (or tap the map) onto the office entrance. The circle is where people can check in.</p>
+      <p className="text-[11px] text-muted-foreground">{t("Drag the pin (or tap the map) onto the office entrance. The circle is where people can check in.")}</p>
     </div>
   );
 }

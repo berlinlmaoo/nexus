@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Camera, Check, Eye, EyeOff, Loader2, ScanFace, Sun, X } from "lucide-react";
+import { useLang } from "@/lib/lang";
 
 /**
  * The attendance selfie, taken here with a liveness check in front of it.
@@ -24,7 +25,7 @@ const MODEL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/f
 
 type Step = 0 | 1 | 2 | 3 | 4; // straight, right, left, blink, hold still
 type Presence = "none" | "small" | "off" | "ok";
-const CHIPS = ["Straight", "Right", "Left", "Blink"];
+const CHIPS = ["Straight", "Turn right", "Turn left", "Blink"];
 const TITLES = ["Look straight at the camera", "Turn your head to the right", "Now turn to the left", "Blink once", "Hold still"];
 const SUBS = ["Keep your face inside the window.", "Slowly, like the arrow, until the bar fills up.", "Same again, the other way.", "Look straight, close your eyes, then open them.", "Look straight, eyes open."];
 const STALLED = ["Keep your face inside the window, in good light.", "Turn a bit further, until the bar fills up.", "Turn a bit further, until the bar fills up.", "Close your eyes for a moment, then open them. Glasses can make this harder.", "Keep your face inside the window, in good light."];
@@ -44,6 +45,7 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
   /** No camera, or the face model could not be fetched: the caller falls back to a plain selfie. */
   onUnavailable: (reason: "camera" | "model") => void;
 }) {
+  const { t: tr } = useLang();
   const reduce = useReducedMotion();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [ready, setReady] = useState(false);
@@ -234,13 +236,13 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
   const ink = lightOn ? "text-black" : "text-white";
   const inkSoft = lightOn ? "text-black/70" : "text-white/80";
   const chipIdle = lightOn ? "bg-black/10 text-black/50" : "bg-white/15 text-white/50";
-  const title = done ? "Verified" : TITLES[step];
-  const subtitle = done ? "Taking your selfie…"
-    : notice ?? (presence === "none" && dark ? "It's dark here, so the screen is your light. Hold the camera a little closer."
-      : presence === "none" ? "No face yet. Hold the camera at eye level, in good light."
-      : presence === "small" ? "Come a little closer."
-      : presence === "off" ? "Move your face into the window."
-      : stalled ? STALLED[step] : SUBS[step]);
+  const title = done ? tr("Verified") : tr(TITLES[step]);
+  const subtitle = done ? tr("Taking your selfie…")
+    : notice ? tr(notice) : (presence === "none" && dark ? tr("It's dark here, so the screen is your light. Hold the camera a little closer.")
+      : presence === "none" ? tr("No face yet. Hold the camera at eye level, in good light.")
+      : presence === "small" ? tr("Come a little closer.")
+      : presence === "off" ? tr("Move your face into the window.")
+      : stalled ? tr(STALLED[step]) : tr(SUBS[step]));
 
   // Home window (no face yet) and the tracked window that hugs the face. The video is object-cover
   // and mirrored, so x is flipped and the cover scale/offset undone.
@@ -336,7 +338,7 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
             <motion.div animate={reduce ? {} : { opacity: [1, 0.25, 1] }} transition={{ duration: 1.1, repeat: Infinity }} className={closed ? "text-emerald-400" : ""}>
               {closed ? <EyeOff className="h-9 w-9" /> : <Eye className="h-9 w-9" />}
             </motion.div>
-            <div className={`text-[11px] font-semibold ${inkSoft}`}>close · open</div>
+            <div className={`text-[11px] font-semibold ${inkSoft}`}>{tr("close · open")}</div>
           </div>
         )}
         {step === 4 && !done && <Camera className="h-7 w-7" />}
@@ -346,9 +348,9 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
       {/* Header */}
       <div className="absolute inset-x-0 top-0 px-4 pt-[max(12px,env(safe-area-inset-top))]">
         <div className="flex items-center">
-          <button type="button" onClick={onCancel} aria-label="Cancel" className={`grid h-9 w-9 place-items-center rounded-full ${lightOn ? "bg-black/10" : "bg-white/20"}`}><X className="h-4 w-4" strokeWidth={3} /></button>
-          <div className={`flex-1 text-center text-[13px] font-semibold ${inkSoft}`}>Face check</div>
-          <button type="button" onClick={() => setManualLight(!lightOn)} aria-label="Screen light" aria-pressed={lightOn}
+          <button type="button" onClick={onCancel} aria-label={tr("Cancel")} className={`grid h-9 w-9 place-items-center rounded-full ${lightOn ? "bg-black/10" : "bg-white/20"}`}><X className="h-4 w-4" strokeWidth={3} /></button>
+          <div className={`flex-1 text-center text-[13px] font-semibold ${inkSoft}`}>{tr("Face check")}</div>
+          <button type="button" onClick={() => setManualLight(!lightOn)} aria-label={tr("Screen light")} aria-pressed={lightOn}
             className={`grid h-9 w-9 place-items-center rounded-full ${lightOn ? "bg-black/10 text-amber-500" : "bg-white/20"}`}><Sun className="h-4 w-4" strokeWidth={2.5} /></button>
         </div>
         <div className="mx-auto mt-3 max-w-sm text-center">
@@ -360,7 +362,7 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
       </div>
 
       {!ready && (
-        <div className={`absolute inset-x-0 bottom-24 flex items-center justify-center gap-2 text-sm ${inkSoft}`}><Loader2 className="h-4 w-4 animate-spin" /> Preparing the face check…</div>
+        <div className={`absolute inset-x-0 bottom-24 flex items-center justify-center gap-2 text-sm ${inkSoft}`}><Loader2 className="h-4 w-4 animate-spin" /> {tr("Preparing the face check…")}</div>
       )}
 
       {/* Step chips */}
@@ -370,7 +372,7 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
           return (
             <motion.div key={c} layout className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold ${s === "done" ? "bg-emerald-500 text-white" : s === "current" ? "bg-primary text-white" : chipIdle}`}>
               <AnimatePresence>{s === "done" && <motion.span initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}><Check className="h-3 w-3" strokeWidth={3} /></motion.span>}</AnimatePresence>
-              {c}
+              {tr(c)}
             </motion.div>
           );
         })}

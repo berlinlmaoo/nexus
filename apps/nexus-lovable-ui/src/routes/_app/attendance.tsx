@@ -25,27 +25,27 @@ import { recTone, sCls, toneLabel } from "@/lib/attendance-tone";
 import { recordPlace } from "@/lib/attendance-place";
 import { StatusOverridePanel } from "@/components/attendance/StatusOverridePanel";
 import { LeftTag, leftAtOf } from "@/components/LeftTag";
-import { t as tr } from "@/lib/lang";
+import { localeOf, t as tr, useLang } from "@/lib/lang";
 
 type HistRow = NonNullable<NexusAttendanceHistory["rows"]>[number];
 
 /** The line under "Today's status": what today actually looks like, not where the number came from. */
 function todayStatusHelper(d: { today?: { checkInAt?: string | null; checkOutAt?: string | null; lateMinutes?: number | null; workedMinutes?: number | null; checkOutOffsite?: boolean | null; checkOutApproval?: string | null } | null; todayRequest?: { status?: string | null } | null; myShift?: { endTime: string; flexi?: boolean } | null } | undefined, isError: boolean) {
-  if (isError) return "Couldn’t load today — refresh the page or sign in again.";
+  if (isError) return tr("Couldn’t load today — refresh the page or sign in again.");
   const t = d?.today;
   if (t?.checkOutAt) {
     const w = t.workedMinutes ?? 0;
-    const worked = w > 0 ? `Worked ${Math.floor(w / 60)}h ${w % 60}m` : `Out at ${fmtTime(t.checkOutAt)}`;
-    const offsite = t.checkOutOffsite ? ` · offsite${t.checkOutApproval === "PENDING" ? ", waiting for approval" : t.checkOutApproval === "REJECTED" ? ", rejected" : ""}` : "";
+    const worked = w > 0 ? tr("Worked {h}h {m}m", { h: Math.floor(w / 60), m: w % 60 }) : tr("Out at {time}", { time: fmtTime(t.checkOutAt) });
+    const offsite = t.checkOutOffsite ? ` · ${t.checkOutApproval === "PENDING" ? tr("offsite, waiting for approval") : t.checkOutApproval === "REJECTED" ? tr("offsite, rejected") : tr("offsite")}` : "";
     return worked + offsite;
   }
   if (t?.checkInAt) {
-    const late = (t.lateMinutes ?? 0) > 0 ? ` · ${t.lateMinutes} min late` : " · on time";
-    return `In since ${fmtTime(t.checkInAt)}${late}`;
+    const late = (t.lateMinutes ?? 0) > 0 ? ` · ${tr("{n} min late", { n: t.lateMinutes ?? 0 })}` : ` · ${tr("on time")}`;
+    return tr("In since {time}", { time: fmtTime(t.checkInAt) }) + late;
   }
-  if (d?.todayRequest?.status === "APPROVED") return "Your request covers today — no check-in needed.";
-  if (d?.todayRequest?.status === "PENDING") return "Your request for today is waiting for approval.";
-  return "Check in with a selfie inside the office area.";
+  if (d?.todayRequest?.status === "APPROVED") return tr("Your request covers today — no check-in needed.");
+  if (d?.todayRequest?.status === "PENDING") return tr("Your request for today is waiting for approval.");
+  return tr("Check in with a selfie inside the office area.");
 }
 
 export const Route = createFileRoute("/_app/attendance")({
@@ -74,13 +74,13 @@ function TrackingBadges({ rec, isToday, className }: { rec?: HistRow | null; isT
   if (!web && !off && !outside) return null;
   return (
     <span className={cn("inline-flex flex-wrap items-center gap-1", className)}>
-      {web && <span title="Checked in from a browser — the location isn’t tracked during the day" className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700"><Globe className="h-3 w-3" /> Web check-in · location not tracked</span>}
-      {off && <span title="Location access is off on this person’s phone — no trail is recorded" className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600"><MapPinOff className="h-3 w-3" /> Location off</span>}
-      {outside && <span title="Outside the office radius right now" className="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-amber-700">Outside since {fmtTime(rec.outsideSince)}</span>}
+      {web && <span title={tr("Checked in from a browser — the location isn’t tracked during the day")} className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700"><Globe className="h-3 w-3" /> {tr("Web check-in · location not tracked")}</span>}
+      {off && <span title={tr("Location access is off on this person’s phone — no trail is recorded")} className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600"><MapPinOff className="h-3 w-3" /> {tr("Location off")}</span>}
+      {outside && <span title={tr("Outside the office radius right now")} className="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-amber-700">{tr("Outside since {time}", { time: fmtTime(rec.outsideSince) })}</span>}
     </span>
   );
 }
-const REQ_LABEL: Record<string, string> = { LEAVE: "Leave", SICK: "Sick", PERMIT: "Permit", DAY_OFF: "Day Off", RED_DATE: "Public Holiday" };
+const REQ_LABEL: Record<string, string> = { LEAVE: "Leave", SICK: "Sick", PERMIT: "Permit", DAY_OFF: "Day off", RED_DATE: "Public holiday" };
 
 // A request's supporting document. A PHOTO is never labelled with its file name: the old apps named
 // every photo "sick-note.jpg" whatever the request was, so a permit arrived calling its own evidence a
@@ -96,7 +96,7 @@ function isPhotoDocument(url?: string | null, name?: string | null) {
 }
 function photoLabel(type?: string | null) {
   const t = (type || "").toUpperCase();
-  return t === "PERMIT" ? "Permit photo" : t === "SICK" ? "Sick note" : "Photo";
+  return t === "PERMIT" ? tr("Permit photo") : t === "SICK" ? tr("Sick note") : tr("Photo");
 }
 function SupportingDocument({ url, name, type, large = false }: { url: string; name?: string | null; type?: string | null; large?: boolean }) {
   const [broken, setBroken] = useState(false);
@@ -104,7 +104,7 @@ function SupportingDocument({ url, name, type, large = false }: { url: string; n
   if (isPhotoDocument(url, name)) {
     const label = photoLabel(type);
     return (
-      <a href={url} target="_blank" rel="noreferrer" title={`Open ${label.toLowerCase()}`}
+      <a href={url} target="_blank" rel="noreferrer" title={tr("Open {label}", { label: label.toLowerCase() })}
         className="inline-flex max-w-full items-center gap-2 rounded-xl border border-border bg-background p-1 pr-3 text-xs font-semibold transition hover:bg-accent">
         {broken
           ? <span className={cn("grid shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground", box)}><ImageIcon className="h-4 w-4" /></span>
@@ -116,14 +116,14 @@ function SupportingDocument({ url, name, type, large = false }: { url: string; n
   return (
     <a href={url} target="_blank" rel="noreferrer"
       className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition hover:bg-accent">
-      <FileText className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{name || "View document"}</span>
+      <FileText className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{name || tr("View document")}</span>
     </a>
   );
 }
 
 // Detail popup for an approved leave/sick/permit/day-off/red-date cell on the streak board.
 function LeaveDetailDrawer({ record, onClose, canOverride }: { record: HistRow; onClose: () => void; canOverride?: boolean }) {
-  const typeLabel = REQ_LABEL[(record.requestType || "").toUpperCase()] || "Leave/Permit";
+  const typeLabel = tr(REQ_LABEL[(record.requestType || "").toUpperCase()] || "Leave/Permit");
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -135,17 +135,17 @@ function LeaveDetailDrawer({ record, onClose, canOverride }: { record: HistRow; 
               <div className="text-xs text-muted-foreground">{record.user?.name || tr("Unnamed")}</div>
             </div>
           </div>
-          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label={tr("Close")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
         <dl className="space-y-2 text-sm">
-          <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Date</dt><dd className="font-semibold">{fmtDate(record.attendanceDate)}</dd></div>
-          <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Status</dt><dd className="font-semibold text-emerald-600">Approved ✓</dd></div>
-          {record.reviewedBy?.name && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Approved by</dt><dd className="font-semibold">{record.reviewedBy.name}</dd></div>}
-          {record.reviewedAt && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Approved on</dt><dd className="font-semibold">{fmtDate(record.reviewedAt)}</dd></div>}
+          <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("Date")}</dt><dd className="font-semibold">{fmtDate(record.attendanceDate)}</dd></div>
+          <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("Status")}</dt><dd className="font-semibold text-emerald-600">{tr("Approved")} ✓</dd></div>
+          {record.reviewedBy?.name && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("Approved by")}</dt><dd className="font-semibold">{record.reviewedBy.name}</dd></div>}
+          {record.reviewedAt && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tr("Approved on")}</dt><dd className="font-semibold">{fmtDate(record.reviewedAt)}</dd></div>}
         </dl>
         {record.notes && (
           <div className="mt-3 rounded-xl bg-muted/40 p-3">
-            <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Reason</div>
+            <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Reason")}</div>
             <p className="whitespace-pre-wrap text-sm">{record.notes}</p>
           </div>
         )}
@@ -172,27 +172,28 @@ function DeleteRecordPanel({ recordId, hasCheckOut, name, dateKey, onDone }: { r
       celebrate(vars.part === "checkout" ? tr("Check-out for {date} deleted — attendance reopened", { date: dateKey }) : tr("Attendance for {date} deleted", { date: dateKey }));
       onDone();
     },
-    onError: (e) => alert(e instanceof Error ? e.message : "Couldn’t delete."),
+    onError: (e) => alert(e instanceof Error ? e.message : tr("Couldn’t delete.")),
   });
   return (
     <div className="mt-3 rounded-2xl border border-dashed border-rose-300/70 bg-rose-50/60 p-3">
-      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-600"><Trash2 className="h-3.5 w-3.5" /> Delete attendance data</div>
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-600"><Trash2 className="h-3.5 w-3.5" /> {tr("Delete attendance data")}</div>
       <div className="flex flex-wrap gap-1.5">
         {hasCheckOut && (
-          <button disabled={del.isPending} onClick={() => { if (window.confirm(`Delete the CHECK-OUT for ${dateKey} (${name ?? "this staff member"})?\n\nThe check-in stays — the record reopens to "still clocked in".`)) del.mutate({ part: "checkout" }); }} className="rounded-full border border-rose-300 bg-card px-3 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-100 disabled:opacity-50">
-            Delete check-out
+          <button disabled={del.isPending} onClick={() => { if (window.confirm(tr("Delete the check-out for {date} ({name})?", { date: dateKey, name: name ?? tr("this person") }) + "\n\n" + tr("The check-in stays, and the record goes back to “still checked in”."))) del.mutate({ part: "checkout" }); }} className="rounded-full border border-rose-300 bg-card px-3 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-100 disabled:opacity-50">
+            {tr("Delete check-out")}
           </button>
         )}
-        <button disabled={del.isPending} onClick={() => { if (window.confirm(`Delete the ENTIRE attendance for ${dateKey} (${name ?? "this staff member"})?\n\nThat day’s check-in & check-out data is permanently removed. That day’s XP/day-off deductions are restored & the day is kept safe from attendance penalties. Recorded in the audit log.`)) del.mutate({}); }} className="inline-flex items-center gap-1.5 rounded-full bg-rose-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-rose-700 disabled:opacity-50">
-          {del.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Delete this attendance
+        <button disabled={del.isPending} onClick={() => { if (window.confirm(tr("Delete the whole attendance for {date} ({name})?", { date: dateKey, name: name ?? tr("this person") }) + "\n\n" + tr("That day’s check-in and check-out are removed. That day’s XP and day-off deductions are restored, and the day is protected from attendance penalties. It’s recorded in the audit log."))) del.mutate({}); }} className="inline-flex items-center gap-1.5 rounded-full bg-rose-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-rose-700 disabled:opacity-50">
+          {del.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} {tr("Delete this attendance")}
         </button>
       </div>
-      <p className="mt-1.5 text-[10px] text-muted-foreground">For cleaning up an accidental check-in. "Delete this attendance" = the record is gone + the day is kept safe from deductions.</p>
+      <p className="mt-1.5 text-[10px] text-muted-foreground">{tr("For cleaning up an accidental check-in. “Delete this attendance” removes the record and protects the day from deductions.")}</p>
     </div>
   );
 }
 
 function Attendance() {
+  const { locale } = useLang();
   const today = useQuery({ queryKey: ["attendance-today"], queryFn: nexusApi.attendanceToday, retry: 1 });
   const reduceMotion = useReducedMotion();
   const [logKind, setLogKind] = useState<{ kind: "DAY_OFF" | "RED_DATE"; origin?: MorphOrigin } | null>(null);
@@ -227,7 +228,7 @@ function Attendance() {
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["attendance-today"] });
       qc.invalidateQueries({ predicate: (q) => q.queryKey.map(String).includes("attendance-history") });
-      celebrate(`No-show sweep done — ${r.created} day-off deducted (${r.from} … ${r.to}) ⚖️`);
+      celebrate(tr("No-show check done — {n} day off deducted ({from} … {to})", { n: r.created, from: r.from, to: r.to }));
     },
   });
   const outageRefund = useMutation({
@@ -235,32 +236,31 @@ function Attendance() {
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["attendance-today"] });
       qc.invalidateQueries({ predicate: (q) => q.queryKey.map(String).includes("attendance-history") });
-      const failNote = r.failed > 0 ? ` ⚠️ ${r.failed} failed — click again to retry (safe).` : "";
-      celebrate(`System-down on ${r.date} refunded — XP returned to ${r.refundedMembers} staff (+${r.totalXpRefunded} XP), ${r.totalDayOffsRestored} day-off restored 🛡️${failNote}`);
+      const failNote = r.failed > 0 ? " " + tr("{n} failed — click again to retry (safe).", { n: r.failed }) : "";
+      celebrate(tr("System-down day {date} refunded — XP returned to {n} people (+{xp} XP), {days} day off restored.", { date: r.date, n: r.refundedMembers, xp: r.totalXpRefunded, days: r.totalDayOffsRestored }) + failNote);
     },
-    onError: (e) => { alert(e instanceof Error ? e.message : "Couldn’t refund the system-down day."); },
+    onError: (e) => { alert(e instanceof Error ? e.message : tr("Couldn’t refund the system-down day.")); },
   });
   const [outageBusy, setOutageBusy] = useState(false);
   const runOutageRefund = async () => {
     const now = new Date();
     const def = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const date = window.prompt("Refund penalties for a SYSTEM-DOWN DAY (power outage / NEXUS down).\n\nEvery staff member who lost XP/day-off on this date gets it back. Anyone who already requested a day-off that day is skipped. Present/absent status is NOT changed.\n\nDate (YYYY-MM-DD):", def);
+    const date = window.prompt(tr("Refund penalties for a system-down day (power outage or NEXUS down).") + "\n\n" + tr("Everyone who lost XP or day off on this date gets it back. Anyone who already requested a day off that day is skipped. Present/absent status doesn’t change.") + "\n\n" + tr("Date (YYYY-MM-DD):"), def);
     if (!date || !date.trim()) return;
     setOutageBusy(true);
     try {
       const p = await nexusApi.attendanceOutageRefund({ date: date.trim(), dryRun: true });
       const list = p.entries.filter((e) => !e.excludedReason).slice(0, 40)
-        .map((e) => `• ${e.name ?? e.userId}: +${e.xpRefund} XP${e.autoDayOffs ? `, ${e.autoDayOffs} day-off back` : ""}`).join("\n");
-      const msg = `AUDIT ${p.date} (NOTHING changed yet):\n\n`
-        + `${p.refundedMembers} staff will be refunded — total +${p.totalXpRefunded} XP, ${p.totalDayOffsRestored} day-off back.\n`
-        + `${p.excludedMembers} staff skipped (already requested a day-off that day).\n\n`
-        + `${list || "(no penalties were deducted on this date)"}\n\n`
-        + `Go ahead with the actual refund?`;
-      if (p.refundedMembers === 0) { alert(msg.replace("Go ahead with the actual refund?", "Nothing to refund.")); return; }
-      if (!window.confirm(msg)) return;
+        .map((e) => `• ${e.name ?? e.userId}: +${e.xpRefund} XP${e.autoDayOffs ? `, ${tr("{n} day off back", { n: e.autoDayOffs })}` : ""}`).join("\n");
+      const msg = tr("Check {date} (nothing has changed yet):", { date: p.date }) + "\n\n"
+        + tr("{n} people will be refunded — total +{xp} XP, {days} day off back.", { n: p.refundedMembers, xp: p.totalXpRefunded, days: p.totalDayOffsRestored }) + "\n"
+        + tr("{n} people skipped (already requested a day off that day).", { n: p.excludedMembers }) + "\n\n"
+        + (list || tr("(no penalties were deducted on this date)")) + "\n\n";
+      if (p.refundedMembers === 0) { alert(msg + tr("Nothing to refund.")); return; }
+      if (!window.confirm(msg + tr("Go ahead with the refund?"))) return;
       outageRefund.mutate({ date: date.trim() });
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Couldn’t load the audit.");
+      alert(e instanceof Error ? e.message : tr("Couldn’t load the check."));
     } finally {
       setOutageBusy(false);
     }
@@ -330,8 +330,8 @@ function Attendance() {
   // "current period" (and the Next-button guard) must roll over on the 28th, not on the 1st.
   const nowKey = (() => { const d = new Date(); const a = new Date(d.getFullYear(), d.getMonth() + (d.getDate() > CUTOFF_DAY ? 1 : 0), 1); return `${a.getFullYear()}-${String(a.getMonth() + 1).padStart(2, "0")}`; })();
   const isCurrentMonth = monthKey === nowKey;
-  const monthLabel = new Date(year, month, 1).toLocaleDateString("id-ID", { month: "long", year: "numeric" });
-  const periodLabel = `${periodStart.toLocaleDateString("id-ID", { day: "numeric", month: "short" })} – ${periodEnd.toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`;
+  const monthLabel = new Date(year, month, 1).toLocaleDateString(locale, { month: "long", year: "numeric" });
+  const periodLabel = `${periodStart.toLocaleDateString(locale, { day: "numeric", month: "short" })} – ${periodEnd.toLocaleDateString(locale, { day: "numeric", month: "short" })}`;
   const shiftMonth = (delta: number) => { const d = new Date(year, month + delta, 1); setMonthKey(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
   // Key by full date (YYYY-MM-DD) since the period spans two calendar months — day-of-month alone collides.
   const recMap = new Map<string, HistRow>();
@@ -381,8 +381,8 @@ function Attendance() {
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <FunMetric
             icon={<Coffee className="h-5 w-5" />}
-            label="Today’s status"
-            value={today.data?.today?.status ? statusLabel(today.data.today.status) : today.data?.todayRequest?.status ? `${statusLabel(today.data.todayRequest.type)} ${statusLabel(today.data.todayRequest.status)}` : "Ready to check in"}
+            label={tr("Today’s status")}
+            value={today.data?.today?.status ? statusLabel(today.data.today.status) : today.data?.todayRequest?.status ? `${statusLabel(today.data.todayRequest.type)} ${statusLabel(today.data.todayRequest.status)}` : tr("Ready to check in")}
             helper={todayStatusHelper(today.data, today.isError)}
             tone="green"
           />
@@ -390,29 +390,29 @@ function Attendance() {
             icon={<MapPin className="h-5 w-5" />}
             // Per record (owner, 28 Sep 2026): a check-in made away from the office shows the address it
             // was made at, not the office the record is filed under; inside the radius it stays the office.
-            label={todayPlace.away ? "Where you checked in" : today.data?.noGeofence && !today.data?.today?.checkInAt ? "Location-free" : "Office checkpoint"}
+            label={todayPlace.away ? tr("Where you checked in") : today.data?.noGeofence && !today.data?.today?.checkInAt ? tr("Any location") : tr("Offices")}
             value={today.data?.today?.checkInAt
-              ? (todayPlace.label || `${today.data?.activeOfficeCount ?? 0} active offices`)
-              : today.data?.noGeofence ? "Clock in from anywhere" : (today.data?.today?.officeLocation?.name || `${today.data?.activeOfficeCount ?? 0} active offices`)}
-            helper={`${todayPlace.away ? "Away from the office · " : ""}In ${fmtTime(today.data?.today?.checkInAt)} · Out ${fmtTime(today.data?.today?.checkOutAt)}${today.data?.today?.id && today.data.today.checkInAt ? " · tap for your location trail" : ""}`}
+              ? (todayPlace.label || tr("{n} active offices", { n: today.data?.activeOfficeCount ?? 0 }))
+              : today.data?.noGeofence ? tr("Check in from anywhere") : (today.data?.today?.officeLocation?.name || tr("{n} active offices", { n: today.data?.activeOfficeCount ?? 0 }))}
+            helper={`${todayPlace.away ? `${tr("Away from the office")} · ` : ""}${today.data?.today?.checkInAt ? `${tr("In {time}", { time: fmtTime(today.data.today.checkInAt) })} · ${tr("Out {time}", { time: fmtTime(today.data.today.checkOutAt) })}` : tr("Not checked in yet")}${today.data?.today?.id && today.data.today.checkInAt ? ` · ${tr("see your location trail")}` : ""}`}
             tone="purple"
-            onClick={today.data?.today?.id && today.data.today.checkInAt ? () => setTrailFor({ id: today.data!.today!.id, title: "Your location trail", subtitle: `Today${todayPlace.label ? ` · ${todayPlace.label}${todayPlace.away ? " (away from the office)" : ""}` : ""}` }) : undefined}
+            onClick={today.data?.today?.id && today.data.today.checkInAt ? () => setTrailFor({ id: today.data!.today!.id, title: tr("Your location trail"), subtitle: `${tr("Today")}${todayPlace.label ? ` · ${todayPlace.label}${todayPlace.away ? ` (${tr("away from the office")})` : ""}` : ""}` }) : undefined}
           />
           <FunMetric
             icon={<Sparkles className="h-5 w-5" />}
-            label="Day-off tokens"
-            value={`${today.data?.dayOffUsedThisMonth ?? 0}/${today.data?.dayOffQuota ?? 4} used`}
+            label={tr("Days off")}
+            value={tr("{used}/{quota} used", { used: today.data?.dayOffUsedThisMonth ?? 0, quota: today.data?.dayOffQuota ?? 4 })}
             helper={(today.data?.dayOffAllowance?.bonus ?? 0) > 0
-              ? `Includes ${today.data!.dayOffAllowance!.bonus} extra (${today.data!.dayOffAllowance!.grants.map((g) => g.reason).join(", ")}) — expires on the 27th`
-              : "Tap to see your day-off usage log"}
+              ? tr("Includes {n} extra ({reasons}) — expires on the 27th", { n: today.data!.dayOffAllowance!.bonus, reasons: today.data!.dayOffAllowance!.grants.map((g) => g.reason).join(", ") })
+              : tr("See how your days off were used")}
             tone="amber"
             onClick={(origin) => setLogKind({ kind: "DAY_OFF", origin })}
           />
           <FunMetric
             icon={<Calendar className="h-5 w-5" />}
-            label="Public holidays"
-            value={`${today.data?.redDateUsedThisMonth ?? 0}/${today.data?.redDateQuota ?? 0} used`}
-            helper="Tap to see your public-holiday log"
+            label={tr("Public holidays")}
+            value={tr("{used}/{quota} used", { used: today.data?.redDateUsedThisMonth ?? 0, quota: today.data?.redDateQuota ?? 0 })}
+            helper={tr("See public holidays used")}
             tone="rose"
             onClick={(origin) => setLogKind({ kind: "RED_DATE", origin })}
           />
@@ -422,34 +422,34 @@ function Attendance() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
             <div>
               <h2 className="text-lg font-semibold tracking-tight">{viewMode === "grid" ? (canSeeBoard ? tr("Attendance board") : tr("Your attendance history")) : (canSeeBoard ? tr("Attendance log") : tr("Your attendance history"))}</h2>
-              <p className="text-sm text-muted-foreground">{viewMode === "grid" ? "Green = present or permit, red = absent, orange = sick, purple = day off / public holiday, yellow = leave. Tap a cell for details." : (canSeeBoard ? "Everyone’s attendance history — check-in/out selfie & location. Tap a row for details." : "Your check-in/out history — selfie & location. Tap a row for details.")}</p>
+              <p className="text-sm text-muted-foreground">{viewMode === "grid" ? tr("Green = present or permit, red = absent, orange = sick, purple = day off / public holiday, yellow = leave. Tap a cell for details.") : (canSeeBoard ? tr("Everyone’s attendance history, with check-in/out selfie and location. Tap a row for details.") : tr("Your check-in/out history, with selfie and location. Tap a row for details."))}</p>
             </div>
             <div className="flex items-center gap-3">
               {viewMode === "grid" && (
                 <div className="hidden gap-2 text-xs text-muted-foreground sm:flex">
-                  <Legend cls="bg-emerald-400/70" label="Present / Permit" />
-                  <Legend cls="bg-amber-300/80" label="Leave" />
-                  <Legend cls="bg-orange-400/80" label="Sick" />
-                  <Legend cls="bg-violet-400/70" label="Day off" />
-                  <Legend cls="bg-rose-500/75" label="Absent" />
+                  <Legend cls="bg-emerald-400/70" label={tr("Present / Permit")} />
+                  <Legend cls="bg-amber-300/80" label={tr("Leave")} />
+                  <Legend cls="bg-orange-400/80" label={tr("Sick")} />
+                  <Legend cls="bg-violet-400/70" label={tr("Day off")} />
+                  <Legend cls="bg-rose-500/75" label={tr("Absent")} />
                 </div>
               )}
               <div className="inline-flex rounded-lg border border-border p-0.5">
-                <button onClick={() => setViewMode("grid")} className={cn("rounded-md px-2.5 py-1 text-xs font-semibold transition-colors", viewMode === "grid" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>Board</button>
-                <button onClick={() => setViewMode("log")} className={cn("rounded-md px-2.5 py-1 text-xs font-semibold transition-colors", viewMode === "log" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>Log</button>
+                <button onClick={() => setViewMode("grid")} className={cn("rounded-md px-2.5 py-1 text-xs font-semibold transition-colors", viewMode === "grid" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{tr("Board")}</button>
+                <button onClick={() => setViewMode("log")} className={cn("rounded-md px-2.5 py-1 text-xs font-semibold transition-colors", viewMode === "log" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{tr("Log")}</button>
               </div>
             </div>
           </div>
           {/* Audit controls: month navigation + per-staff search. */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
             <div className="flex items-center gap-1.5">
-              <button onClick={() => shiftMonth(-1)} aria-label="Previous month" className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><ChevronLeft className="h-4 w-4" /></button>
+              <button onClick={() => shiftMonth(-1)} aria-label={tr("Previous month")} className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><ChevronLeft className="h-4 w-4" /></button>
               <span className="flex min-w-[8.5rem] flex-col items-center leading-tight">
                 <span className="text-sm font-semibold capitalize tabular-nums">{monthLabel}</span>
-                <span className="text-[10px] text-muted-foreground" title="Cut-off period (28th → 27th)">{periodLabel}</span>
+                <span className="text-[10px] text-muted-foreground" title={tr("Cut-off period (28th → 27th)")}>{periodLabel}</span>
               </span>
-              <button onClick={() => shiftMonth(1)} disabled={isCurrentMonth} aria-label="Next month" className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
-              {!isCurrentMonth && <button onClick={() => setMonthKey(nowKey)} className="ml-1 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">This month</button>}
+              <button onClick={() => shiftMonth(1)} disabled={isCurrentMonth} aria-label={tr("Next month")} className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
+              {!isCurrentMonth && <button onClick={() => setMonthKey(nowKey)} className="ml-1 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">{tr("This month")}</button>}
             </div>
             <div className="flex w-full items-center gap-2 sm:w-auto">
               {/* Per-staff audit search — for anyone who sees the crew board (BoD: all; team-lead: their team). */}
@@ -459,22 +459,22 @@ function Attendance() {
                   <input
                     value={memberQuery}
                     onChange={(e) => setMemberQuery(e.target.value)}
-                    aria-label="Search staff for attendance audit"
-                    placeholder="Search staff to audit…"
+                    aria-label={tr("Search people")}
+                    placeholder={tr("Search people…")}
                     className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-8 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20"
                   />
-                  {memberQuery && <button onClick={() => setMemberQuery("")} aria-label="Clear search" className="absolute right-2 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-3 w-3" /></button>}
+                  {memberQuery && <button onClick={() => setMemberQuery("")} aria-label={tr("Clear search")} className="absolute right-2 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-3 w-3" /></button>}
                 </div>
               )}
               {canSeeBoard && <ExportMenu monthKey={monthKey} monthLabel={monthLabel} />}
-              <Link to="/people/$userId" params={{ userId: "me" }} search={{ period: monthKey }} className="shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">My record</Link>
+              <Link to="/people/$userId" params={{ userId: "me" }} search={{ period: monthKey }} className="shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">{tr("My record")}</Link>
             </div>
           </div>
           {viewMode === "log" ? (
             <div className="divide-y divide-border">
               {history.isLoading && <div className="px-5 py-10 text-center text-sm text-muted-foreground"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>}
               {!history.isLoading && logRows.length === 0 && (
-                <div className="px-5 py-10 text-center text-sm text-muted-foreground">{q ? `No attendance from “${memberQuery.trim()}” this month.` : "No attendance recorded this month yet."}</div>
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">{q ? tr("No attendance from “{q}” this month.", { q: memberQuery.trim() }) : tr("No attendance recorded this month yet.")}</div>
               )}
               {logRows.map((r) => {
                 const tone = recTone(r);
@@ -487,24 +487,24 @@ function Attendance() {
                         <span className="truncate font-medium">{r.user?.name || tr("Unnamed")}</span>
                         <LeftTag leftAt={leftAtOf(r.user)} />
                         <span className="text-xs text-muted-foreground">{fmtDate(r.attendanceDate)}</span>
-                        {r.checkInAway === true && <span title="Checked in away from the office" className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">Away</span>}
-                        {r.checkOutOffsite && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">Offsite</span>}
+                        {r.checkInAway === true && <span title={tr("Checked in away from the office")} className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">{tr("Away")}</span>}
+                        {r.checkOutOffsite && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">{tr("Offsite")}</span>}
                         <TrackingBadges rec={r} isToday={(r.attendanceDate || "").slice(0, 10) === todayKey} />
                       </div>
                       <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                        In {fmtTime(r.checkInAt)}{r.checkInAddress ? ` · ${r.checkInAddress}` : r.checkInDistanceMeters != null ? ` · ±${Math.round(r.checkInDistanceMeters)}m` : ""}
-                        {(r.checkOutAt || r.checkOutAddress) ? ` — Out ${fmtTime(r.checkOutAt)}${r.checkOutAddress ? ` · ${r.checkOutAddress}` : ""}` : ""}
+                        {tr("In {time}", { time: fmtTime(r.checkInAt) })}{r.checkInAddress ? ` · ${r.checkInAddress}` : r.checkInDistanceMeters != null ? ` · ±${Math.round(r.checkInDistanceMeters)}m` : ""}
+                        {(r.checkOutAt || r.checkOutAddress) ? ` — ${tr("Out {time}", { time: fmtTime(r.checkOutAt) })}${r.checkOutAddress ? ` · ${r.checkOutAddress}` : ""}` : ""}
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
-                      {r.checkInPhotoUrl ? <img src={r.checkInPhotoUrl} alt="selfie in" loading="lazy" className="h-10 w-10 rounded-lg object-cover ring-1 ring-border" /> : <div className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-muted-foreground/40"><Camera className="h-4 w-4" /></div>}
-                      {r.checkOutPhotoUrl && <img src={r.checkOutPhotoUrl} alt="selfie out" loading="lazy" className="h-10 w-10 rounded-lg object-cover ring-1 ring-border" />}
+                      {r.checkInPhotoUrl ? <img src={r.checkInPhotoUrl} alt={tr("Check-in selfie")} loading="lazy" className="h-10 w-10 rounded-lg object-cover ring-1 ring-border" /> : <div className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-muted-foreground/40"><Camera className="h-4 w-4" /></div>}
+                      {r.checkOutPhotoUrl && <img src={r.checkOutPhotoUrl} alt={tr("Check-out selfie")} loading="lazy" className="h-10 w-10 rounded-lg object-cover ring-1 ring-border" />}
                     </div>
                   </button>
                 );
               })}
               {!history.isLoading && logRows.length >= 300 && (
-                <div className="px-5 py-3 text-center text-xs text-muted-foreground">Showing the 300 most recent records — use the month navigation / name search to see the rest.</div>
+                <div className="px-5 py-3 text-center text-xs text-muted-foreground">{tr("Showing the 300 most recent records. Change the month or search a name to see the rest.")}</div>
               )}
             </div>
           ) : (
@@ -519,16 +519,16 @@ function Attendance() {
             <table className="w-full min-w-max text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr>
-                  <th data-member-col className="sticky left-0 top-0 z-30 w-[15rem] min-w-[15rem] bg-muted px-3 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_hsl(var(--border))] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">Member</th>
+                  <th data-member-col className="sticky left-0 top-0 z-30 w-[15rem] min-w-[15rem] bg-muted px-3 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_hsl(var(--border))] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">{tr("Member")}</th>
                   {periodDays.map((pd) => (
                     <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} className={cn("sticky top-0 z-20 bg-muted px-1 py-1.5 font-medium text-[10px] leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
-                      <span className={cn("block text-[9px] uppercase", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" })}</span>
+                      <span className={cn("block text-[9px] uppercase", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" })}</span>
                       {pd.key === todayKey
                         ? <span className="inline-grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 font-bold text-primary-foreground">{pd.day}</span>
                         : pd.day}
                     </th>
                   ))}
-                  <th className="sticky top-0 z-20 bg-muted text-right px-4 py-2 font-medium text-xs text-muted-foreground uppercase">Score</th>
+                  <th className="sticky top-0 z-20 bg-muted text-right px-4 py-2 font-medium text-xs text-muted-foreground uppercase">{tr("Score")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -536,7 +536,7 @@ function Attendance() {
                   <tr><td colSpan={periodDays.length + 2} className="px-4 py-10 text-center text-sm text-muted-foreground"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></td></tr>
                 )}
                 {!history.isLoading && memberRows.length === 0 && (
-                  <tr><td colSpan={periodDays.length + 2} className="px-4 py-10 text-center text-sm text-muted-foreground">{q ? `No staff match “${memberQuery.trim()}”.` : "No attendance data for this month yet."}</td></tr>
+                  <tr><td colSpan={periodDays.length + 2} className="px-4 py-10 text-center text-sm text-muted-foreground">{q ? tr("No one matches “{q}”.", { q: memberQuery.trim() }) : tr("No attendance data for this month yet.")}</td></tr>
                 )}
                 {memberRows.map((u) => (
                   <tr key={u.id} className="border-b border-border last:border-0 hover:bg-muted/20">
@@ -568,8 +568,8 @@ function Attendance() {
                         <div className="flex min-w-0 flex-wrap items-center gap-1 pl-1">
                         <TrackingBadges rec={recMap.get(`${u.id}:${todayKey}`)} isToday />
                         {/* The person's whole record for this period: counts, XP log with reasons, requests. */}
-                        <Link to="/people/$userId" params={{ userId: u.id }} search={{ period: monthKey }} title={`${u.name ?? tr("Unnamed")} — record for this period`}
-                          className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground ring-1 ring-border transition hover:bg-accent hover:text-foreground">Record</Link>
+                        <Link to="/people/$userId" params={{ userId: u.id }} search={{ period: monthKey }} title={tr("{name} — record for this period", { name: u.name ?? tr("Unnamed") })}
+                          className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground ring-1 ring-border transition hover:bg-accent hover:text-foreground">{tr("Record")}</Link>
                         {canManage && (() => {
                           const d = dayOffOf(u.id);
                           if (!d) return null;
@@ -586,15 +586,15 @@ function Attendance() {
                           const pill = "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ring-1";
                           return (
                             <>
-                              <span title={`Day off left this period: ${d.remaining} of ${d.quota} (used ${d.used})${d.bonus && d.bonus.days > 0 ? `\nQuota ${d.baseQuota ?? d.quota - d.bonus.days} + ${d.bonus.days} extra (${d.bonus.grants.map((g) => `${g.days}: ${g.reason}`).join("; ")}) — expires on the 27th` : ""}`}
+                              <span title={tr("Day off left this period: {left} of {quota} (used {used})", { left: d.remaining, quota: d.quota, used: d.used }) + (d.bonus && d.bonus.days > 0 ? "\n" + tr("Quota {base} + {n} extra ({reasons}) — expires on the 27th", { base: d.baseQuota ?? d.quota - d.bonus.days, n: d.bonus.days, reasons: d.bonus.grants.map((g) => `${g.days}: ${g.reason}`).join("; ") }) : "")}
                                 className={cn(pill, quotaTone(d.remaining), d.bonus && d.bonus.days > 0 && "ring-emerald-300")}>
                                 {d.remaining}/{d.quota} DO{d.bonus && d.bonus.days > 0 && <span className="ml-0.5 text-emerald-600">+</span>}
                               </span>
                               <span title={d.redDate.quota === 0
-                                  ? "The BoD hasn't set this month's public-holiday allowance yet"
-                                  : `Sisa tanggal merah bulan kalender ini: ${d.redDate.remaining} dari ${d.redDate.quota} (kepakai ${d.redDate.used})`}
+                                  ? tr("The BoD hasn't set this month's public-holiday allowance yet")
+                                  : tr("Public holidays left this calendar month: {left} of {quota} (used {used})", { left: d.redDate.remaining, quota: d.redDate.quota, used: d.redDate.used })}
                                 className={cn(pill, d.redDate.quota === 0 ? "bg-muted/50 text-muted-foreground/70 ring-border" : quotaTone(d.redDate.remaining))}>
-                                {d.redDate.remaining}/{d.redDate.quota} TM
+                                {d.redDate.remaining}/{d.redDate.quota} {tr("PH")}
                               </span>
                               <span title={`${d.xp.score} XP · ${d.xp.levelName} (Lv.${d.xp.level}) — ${tr("the XP period is the calendar month, not the 28→27 attendance period")}`}
                                 className={cn(pill, xpTone)}>
@@ -602,12 +602,12 @@ function Attendance() {
                               </span>
                               <button
                                 type="button"
-                                title="Export absensi orang ini (xlsx): satu baris per hari, jam masuk/pulang, telat, keterangan"
+                                title={tr("Export this person's attendance (xlsx): one row per day, check-in/out times, lateness, notes")}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   const slug = (u.name || "staff").toLowerCase().replace(/[^a-z0-9]+/g, "-");
                                   void downloadFile(`/api/attendance/history?scope=workspace&month=${monthKey}&userId=${u.id}&format=xlsx`, `absensi-${slug}-${monthKey}.xlsx`)
-                                    .catch((err) => alert(err instanceof ApiError ? err.message : "Export failed — give it another go."));
+                                    .catch((err) => alert(err instanceof ApiError ? err.message : tr("Export failed. Try again.")));
                                 }}
                                 className={cn(pill, "bg-muted text-muted-foreground ring-border transition hover:bg-accent hover:text-foreground")}
                               >
@@ -628,18 +628,18 @@ function Attendance() {
                             tone === "absent" && canManage ? (
                               <button
                                 onClick={() => setOverrideTarget({ userId: u.id, name: u.name ?? null, dateKey: pd.key })}
-                                title={`${fmtDate(rec.attendanceDate)} · Absent — no check-in. Tap to set a status (Present/Leave/Sick/Day off).`}
+                                title={`${fmtDate(rec.attendanceDate)} · ${tr("Absent — no check-in. Tap to set a status (Present/Leave/Sick/Day off).")}`}
                                 className={cn("inline-block h-5 w-5 rounded-lg transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls.absent)}
                               />
                             ) : tone === "absent" ? (
-                              <span title={`${fmtDate(rec.attendanceDate)} · Absent`} className={cn("inline-block h-5 w-5 rounded-lg", sCls.absent)} />
+                              <span title={`${fmtDate(rec.attendanceDate)} · ${tr("Absent")}`} className={cn("inline-block h-5 w-5 rounded-lg", sCls.absent)} />
                             ) : tone === "leave" || tone === "permit" || tone === "sick" || tone === "dayoff" ? (
                               <motion.button
                                 whileHover={reduceMotion ? undefined : { scale: 1.3 }}
                                 whileTap={reduceMotion ? undefined : { scale: 0.85 }}
                                 transition={{ type: "spring", stiffness: 500, damping: 18 }}
                                 onClick={(e) => { setCorrectOrigin(rectCenter(e.currentTarget)); setLeaveDetail(rec); }}
-                                title={`${fmtDate(rec.attendanceDate)} · ${toneLabel[tone]}${rec.notes ? " — " + rec.notes : ""} — tap for details`}
+                                title={`${fmtDate(rec.attendanceDate)} · ${tr(toneLabel[tone])}${rec.notes ? " — " + rec.notes : ""} — ${tr("tap for details")}`}
                                 className={cn("inline-block h-5 w-5 rounded-lg transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls[tone])}
                               />
                             ) : (
@@ -648,32 +648,32 @@ function Attendance() {
                                 whileTap={reduceMotion ? undefined : { scale: 0.85 }}
                                 transition={{ type: "spring", stiffness: 500, damping: 18 }}
                                 onClick={(e) => { setCorrectOrigin(rectCenter(e.currentTarget)); setCorrectRecord(rec); }}
-                                title={`${fmtDate(rec.attendanceDate)} · ${statusLabel(rec.status || "")} · in ${fmtTime(rec.checkInAt)} / out ${fmtTime(rec.checkOutAt)}${rec.locationTrackingState === "denied" ? " · Location off" : rec.locationTrackingState === "web" ? " · Web check-in · location not tracked" : ""} — tap to see location & selfie`}
+                                title={`${fmtDate(rec.attendanceDate)} · ${statusLabel(rec.status || "")} · ${tr("In {time}", { time: fmtTime(rec.checkInAt) })} / ${tr("Out {time}", { time: fmtTime(rec.checkOutAt) })}${rec.locationTrackingState === "denied" ? ` · ${tr("Location off")}` : rec.locationTrackingState === "web" ? ` · ${tr("Web check-in · location not tracked")}` : ""} — ${tr("tap to see location and selfie")}`}
                                 className={cn("inline-block h-5 w-5 rounded-lg transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls[tone])}
                               />
                             )
                           ) : canManage ? (
                             <button
                               onClick={() => setOverrideTarget({ userId: u.id, name: u.name ?? null, dateKey: pd.key })}
-                              title={`${pd.key} — empty. Tap to set a status (Present/Leave/Sick/Day off).`}
+                              title={`${pd.key} — ${tr("empty. Tap to set a status (Present/Leave/Sick/Day off).")}`}
                               className="inline-block h-5 w-5 rounded-lg bg-muted/30 transition-[box-shadow] hover:ring-2 hover:ring-primary/50"
                             />
                           ) : (
                             <span className="inline-block h-5 w-5 rounded-lg bg-muted/30" />
                           )}
                           {rec?.locationTrackingState === "denied" && (
-                            <span title="Location off" aria-label="Location off" className="pointer-events-none absolute right-0 top-1 grid h-3 w-3 place-items-center rounded-full bg-card text-slate-500 ring-1 ring-border"><MapPinOff className="h-2 w-2" /></span>
+                            <span title={tr("Location off")} aria-label={tr("Location off")} className="pointer-events-none absolute right-0 top-1 grid h-3 w-3 place-items-center rounded-full bg-card text-slate-500 ring-1 ring-border"><MapPinOff className="h-2 w-2" /></span>
                           )}
                           {rec?.locationTrackingState === "web" && (
-                            <span title="Web check-in · location not tracked" aria-label="Web check-in · location not tracked" className="pointer-events-none absolute right-0 top-1 grid h-3 w-3 place-items-center rounded-full bg-card text-sky-600 ring-1 ring-border"><Globe className="h-2 w-2" /></span>
+                            <span title={tr("Web check-in · location not tracked")} aria-label={tr("Web check-in · location not tracked")} className="pointer-events-none absolute right-0 top-1 grid h-3 w-3 place-items-center rounded-full bg-card text-sky-600 ring-1 ring-border"><Globe className="h-2 w-2" /></span>
                           )}
                           {pd.key === todayKey && rec?.outsideSince && !rec.checkOutAt && (
-                            <span title={`Outside since ${fmtTime(rec.outsideSince)}`} className="pointer-events-none absolute bottom-0.5 left-1/2 h-1 w-3 -translate-x-1/2 rounded-full bg-amber-500" />
+                            <span title={tr("Outside since {time}", { time: fmtTime(rec.outsideSince) })} className="pointer-events-none absolute bottom-0.5 left-1/2 h-1 w-3 -translate-x-1/2 rounded-full bg-amber-500" />
                           )}
                         </td>
                       );
                     })}
-                    <td className="px-4 py-2.5 text-right text-xs font-semibold tabular-nums text-muted-foreground" title={`Days worked (present, permit or WFH) out of this period's working days: ${periodDays.length} days − ${periodDays.length - workDaysOf(u.id)} day-off quota = ${workDaysOf(u.id)}`}>{(() => {
+                    <td className="px-4 py-2.5 text-right text-xs font-semibold tabular-nums text-muted-foreground" title={tr("Days worked (present, permit or WFH) out of this period's working days: {days} days − {quota} day-off quota = {target}", { days: periodDays.length, quota: periodDays.length - workDaysOf(u.id), target: workDaysOf(u.id) })}>{(() => {
                       // Capped at the working days, the surplus shown beside it (owner, 28 Sep 2026): a day
                       // cut from the quota for being >120 min late is still a day worked, so someone can
                       // work more days than "period − quota" — 22/22 +3 reads right, 25/22 does not.
@@ -683,7 +683,7 @@ function Attendance() {
                   </tr>
                 ))}
                 {!history.isLoading && hiddenCount > 0 && (
-                  <tr><td colSpan={periodDays.length + 2} className="px-4 py-3 text-center text-xs text-muted-foreground">+{hiddenCount} more staff — type a name in the search box to audit someone else.</td></tr>
+                  <tr><td colSpan={periodDays.length + 2} className="px-4 py-3 text-center text-xs text-muted-foreground">{tr("+{n} more people — search a name to see someone else.", { n: hiddenCount })}</td></tr>
                 )}
               </tbody>
             </table>
@@ -712,10 +712,10 @@ function Attendance() {
             <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="font-display text-lg font-bold tracking-tight">{overrideTarget.name ?? "Staff"}</h2>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{fmtDate(overrideTarget.dateKey)} — no attendance record yet.</p>
+                  <h2 className="font-display text-lg font-bold tracking-tight">{overrideTarget.name ?? tr("Unnamed")}</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{fmtDate(overrideTarget.dateKey)} — {tr("no attendance record yet.")}</p>
                 </div>
-                <button onClick={() => setOverrideTarget(null)} aria-label="Close" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+                <button onClick={() => setOverrideTarget(null)} aria-label={tr("Close")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
               </div>
               <StatusOverridePanel userId={overrideTarget.userId} name={overrideTarget.name} dateKey={overrideTarget.dateKey} onDone={() => setOverrideTarget(null)} />
             </div>
@@ -858,7 +858,7 @@ function ExportMenu({ monthKey, monthLabel }: { monthKey: string; monthLabel: st
     try {
       await downloadFile(`/api/attendance/history?scope=workspace&month=${monthKey}&format=${format}`, `absensi-${monthKey}.${format}`);
     } catch (e) {
-      alert(e instanceof ApiError ? e.message : "Export failed — give it another go.");
+      alert(e instanceof ApiError ? e.message : tr("Export failed. Try again."));
     } finally {
       setBusy(null);
     }
@@ -866,14 +866,14 @@ function ExportMenu({ monthKey, monthLabel }: { monthKey: string; monthLabel: st
   return (
     <div className="relative shrink-0">
       <button onClick={() => setOpen((v) => !v)} disabled={!!busy} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50">
-        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Export
+        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} {tr("Export")}
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute right-0 z-50 mt-1 w-60 overflow-hidden rounded-xl border border-border bg-card shadow-pop">
-            <button onClick={() => run("xlsx")} className="flex w-full flex-col items-start px-3 py-2.5 text-left transition-colors hover:bg-muted/40"><span className="text-sm font-semibold">Monthly recap (Excel)</span><span className="text-xs text-muted-foreground">Internal attendance sheet · {monthLabel}</span></button>
-            <button onClick={() => run("csv")} className="flex w-full flex-col items-start border-t border-border px-3 py-2.5 text-left transition-colors hover:bg-muted/40"><span className="text-sm font-semibold">Detail log (CSV)</span><span className="text-xs text-muted-foreground">Per record: time, status, lateness</span></button>
+            <button onClick={() => run("xlsx")} className="flex w-full flex-col items-start px-3 py-2.5 text-left transition-colors hover:bg-muted/40"><span className="text-sm font-semibold">{tr("Monthly recap (Excel)")}</span><span className="text-xs text-muted-foreground">{tr("Internal attendance sheet")} · {monthLabel}</span></button>
+            <button onClick={() => run("csv")} className="flex w-full flex-col items-start border-t border-border px-3 py-2.5 text-left transition-colors hover:bg-muted/40"><span className="text-sm font-semibold">{tr("Detail log (CSV)")}</span><span className="text-xs text-muted-foreground">{tr("Per record: time, status, lateness")}</span></button>
           </div>
         </>
       )}
@@ -903,28 +903,28 @@ function AttendanceEvidence({ kind, photoUrl, address, lat, lng, distanceMeters,
   return (
     <div className="rounded-2xl border border-border bg-muted/20 p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{kind === "in" ? "Check-in" : "Check-out"}</span>
+        <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{kind === "in" ? tr("Check-in") : tr("Check-out")}</span>
         {atIso && <span className="text-[11px] tabular-nums text-muted-foreground">{fmtTime(atIso)}</span>}
       </div>
       {!hasAny ? (
-        <p className="mt-2 text-xs text-muted-foreground/70">No {kind === "in" ? "check-in" : "check-out"} evidence yet.</p>
+        <p className="mt-2 text-xs text-muted-foreground/70">{kind === "in" ? tr("No check-in evidence yet.") : tr("No check-out evidence yet.")}</p>
       ) : (
         <div className="mt-2 flex gap-3">
           {photoUrl ? (
             <a href={photoUrl} target="_blank" rel="noreferrer" className="shrink-0">
-              <img src={photoUrl} alt={`Selfie ${kind}`} className="h-20 w-20 rounded-xl object-cover ring-1 ring-border transition-transform hover:scale-105" />
+              <img src={photoUrl} alt={kind === "in" ? tr("Check-in selfie") : tr("Check-out selfie")} className="h-20 w-20 rounded-xl object-cover ring-1 ring-border transition-transform hover:scale-105" />
             </a>
           ) : (
             <div className="grid h-20 w-20 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground/40"><Camera className="h-5 w-5" /></div>
           )}
           <div className="min-w-0 flex-1 space-y-1 text-xs">
-            {offsite && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">Offsite</span>}
-            {away && <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700">Away from the office</span>}
+            {offsite && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">{tr("Offsite")}</span>}
+            {away && <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700">{tr("Away from the office")}</span>}
             {!away && officeName && <p className="font-semibold text-foreground">{officeName}</p>}
-            <p className="leading-snug text-foreground/80">{address || (lat != null ? `${lat.toFixed(5)}, ${lng?.toFixed(5)}` : "Location not recorded")}</p>
+            <p className="leading-snug text-foreground/80">{address || (lat != null ? `${lat.toFixed(5)}, ${lng?.toFixed(5)}` : tr("Location not recorded"))}</p>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-muted-foreground">
-              {distanceMeters != null && <span>±{Math.round(distanceMeters)}m from office</span>}
-              {mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-primary underline-offset-2 hover:underline"><MapPin className="h-3 w-3" /> map</a>}
+              {distanceMeters != null && <span>{tr("±{m}m from the office", { m: Math.round(distanceMeters) })}</span>}
+              {mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-primary underline-offset-2 hover:underline"><MapPin className="h-3 w-3" /> {tr("map")}</a>}
             </div>
             {reason && <p className="italic text-muted-foreground">“{reason}”</p>}
           </div>
@@ -940,9 +940,9 @@ function TrailSection({ record, recordId }: { record: HistRow; recordId: string 
   return (
     <div className="mt-4 rounded-2xl border border-border p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground"><RouteIcon className="h-3.5 w-3.5" /> Location trail</p>
+        <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground"><RouteIcon className="h-3.5 w-3.5" /> {tr("Location trail")}</p>
         <TrackingBadges rec={record} isToday={(record.attendanceDate || "").slice(0, 10) === jakartaDateKey()} />
-        <button type="button" onClick={() => setOpen((v) => !v)} className="ml-auto rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-accent">{open ? "Hide" : "Show"}</button>
+        <button type="button" onClick={() => setOpen((v) => !v)} className="ml-auto rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-accent">{open ? tr("Hide") : tr("Show")}</button>
       </div>
       {open && <div className="mt-3"><LocationTrail recordId={recordId} compact trackingState={record.locationTrackingState} /></div>}
     </div>
@@ -979,7 +979,7 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
         }
       }
       const uid = record.user?.id;
-      if (!uid) throw new Error("Unknown user.");
+      if (!uid) throw new Error(tr("Unknown user."));
       return nexusApi.attendanceOverride({ userId: uid, date: (record.attendanceDate || "").slice(0, 10), action: "PRESENT", checkInAt: checkInISO, checkOutAt: checkOutISO, note: reason.trim() });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["attendance-history"] }); celebrate(tr("Attendance saved")); onClose(); },
@@ -992,35 +992,35 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
       <div className="overflow-y-auto p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="font-display text-xl font-bold tracking-tight">Attendance detail</h2>
+            <h2 className="font-display text-xl font-bold tracking-tight">{tr("Attendance detail")}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{record.user?.name ?? tr("Unnamed")} · {fmtDate(record.attendanceDate)} · {statusLabel(record.status || "")}</p>
           </div>
-          <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label={tr("Close")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><X className="h-4 w-4" /></button>
         </div>
         <div className="mt-4 space-y-2">
-          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Attendance evidence · location & selfie</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{tr("Attendance evidence · location and selfie")}</p>
           <AttendanceEvidence kind="in" photoUrl={record.checkInPhotoUrl} address={record.checkInAddress} lat={record.checkInLat} lng={record.checkInLng} distanceMeters={record.checkInDistanceMeters} atIso={record.checkInAt} away={recordPlace(record).away} officeName={record.checkInAt ? record.officeLocation?.name : null} />
           <AttendanceEvidence kind="out" photoUrl={record.checkOutPhotoUrl} address={record.checkOutAddress} lat={record.checkOutLat} lng={record.checkOutLng} distanceMeters={record.checkOutDistanceMeters} atIso={record.checkOutAt} offsite={record.checkOutOffsite} reason={record.checkOutReason} />
         </div>
         {record.id && record.checkInAt && <TrailSection record={record} recordId={record.id} />}
         {record.checkOutReflection && (
           <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-3">
-            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground"><PenLine className="h-3.5 w-3.5" /> Daily reflection</p>
+            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground"><PenLine className="h-3.5 w-3.5" /> {tr("Daily reflection")}</p>
             <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{record.checkOutReflection}</p>
           </div>
         )}
         <div className="mt-4 border-t border-border pt-4">
-          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Manual correction</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{tr("Manual correction")}</p>
         </div>
         <div className="mt-3 space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">Check-in<input type="datetime-local" value={checkInAt} onChange={(e) => setCheckInAt(e.target.value)} className={cn(field, "mt-1")} /></label>
-            <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">Check-out<input type="datetime-local" value={checkOutAt} onChange={(e) => setCheckOutAt(e.target.value)} className={cn(field, "mt-1")} /></label>
+            <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">{tr("Check-in")}<input type="datetime-local" value={checkInAt} onChange={(e) => setCheckInAt(e.target.value)} className={cn(field, "mt-1")} /></label>
+            <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">{tr("Check-out")}<input type="datetime-local" value={checkOutAt} onChange={(e) => setCheckOutAt(e.target.value)} className={cn(field, "mt-1")} /></label>
           </div>
-          <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">Notes<textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional note…" className={cn(field, "mt-1 min-h-16")} /></label>
-          <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">Correction reason<input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is this being corrected?" className={cn(field, "mt-1")} /></label>
-          {save.isError && <p className="text-sm text-destructive">Failed: {save.error instanceof Error && save.error.message ? save.error.message : "correction failed — check permissions / time order."}</p>}
-          <button disabled={!checkInAt || !reason.trim() || save.isPending} onClick={() => save.mutate()} className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-default disabled:opacity-50">{save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Save correction</button>
+          <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">{tr("Notes")}<textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={tr("Optional note…")} className={cn(field, "mt-1 min-h-16")} /></label>
+          <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">{tr("Correction reason")}<input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={tr("Why is this being corrected?")} className={cn(field, "mt-1")} /></label>
+          {save.isError && <p className="text-sm text-destructive">{save.error instanceof Error && save.error.message ? save.error.message : tr("Couldn’t save the correction. Check your access and that check-out comes after check-in.")}</p>}
+          <button disabled={!checkInAt || !reason.trim() || save.isPending} onClick={() => save.mutate()} className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-default disabled:opacity-50">{save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {tr("Save correction")}</button>
         </div>
         {canOverride && record.user?.id && (
           <StatusOverridePanel userId={record.user.id} name={record.user?.name ?? null} dateKey={(record.attendanceDate || "").slice(0, 10)} onDone={onClose} />
@@ -1034,6 +1034,7 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
 }
 
 function OfficesSection() {
+  useLang();
   const qc = useQueryClient();
   const [composerOpen, setComposerOpen] = useState(false);
   const [editOffice, setEditOffice] = useState<NexusOffice | null>(null);
@@ -1041,24 +1042,24 @@ function OfficesSection() {
   const rows = offices.data?.offices ?? [];
   const invalidate = () => qc.invalidateQueries({ queryKey: ["attendance-offices"] });
   const toggle = useMutation({ mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => nexusApi.updateOffice(id, { isActive }), onSuccess: invalidate,
-    onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't update the office.") });
+    onError: (e: unknown) => alert(e instanceof Error ? e.message : tr("Couldn't update the office.")) });
   // Deleting is refused by the server for an office that has attendance history (the rows point at
   // it); the message it sends back says so and suggests switching it off instead.
   const del = useMutation({ mutationFn: (id: string) => nexusApi.deleteOffice(id), onSuccess: invalidate,
-    onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't delete the office.") });
+    onError: (e: unknown) => alert(e instanceof Error ? e.message : tr("Couldn't delete the office.")) });
 
   return (
     <section className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">Offices & geofence</h2>
-          <p className="text-sm text-muted-foreground">Set office locations, radius, and shift times for check-in.</p>
+          <h2 className="text-lg font-semibold tracking-tight">{tr("Offices and check-in area")}</h2>
+          <p className="text-sm text-muted-foreground">{tr("Set office locations and the radius for check-in.")}</p>
         </div>
-        <button onClick={() => setComposerOpen(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><MapPin className="h-3.5 w-3.5" /> New office</button>
+        <button onClick={() => setComposerOpen(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><MapPin className="h-3.5 w-3.5" /> {tr("New office")}</button>
       </div>
       <div className="divide-y divide-border">
-        {offices.isLoading && <div className="px-5 py-4 text-sm text-muted-foreground">Loading offices…</div>}
-        {!offices.isLoading && rows.length === 0 && <div className="px-5 py-6 text-center text-sm text-muted-foreground">No offices configured.</div>}
+        {offices.isLoading && <div className="px-5 py-4 text-sm text-muted-foreground">{tr("Loading offices…")}</div>}
+        {!offices.isLoading && rows.length === 0 && <div className="px-5 py-6 text-center text-sm text-muted-foreground">{tr("No offices yet.")}</div>}
         {rows.map((o) => (
           <div key={o.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
             <MapPin className={`h-4 w-4 shrink-0 ${o.isActive ? "text-primary" : "text-muted-foreground/40"}`} />
@@ -1066,9 +1067,9 @@ function OfficesSection() {
               <div className="text-sm font-semibold">{o.name}</div>
               <div className="text-xs text-muted-foreground">{o.address || `${o.latitude?.toFixed(4)}, ${o.longitude?.toFixed(4)}`} · {o.radiusMeters}m</div>
             </div>
-            <button title="Delete office" disabled={del.isPending} onClick={() => { if (window.confirm(`Delete "${o.name}"? It disappears from the list and nobody can check in there anymore. Days already recorded there keep the office's name.`)) del.mutate(o.id); }} className="rounded-lg border border-border p-1.5 text-muted-foreground transition-colors hover:border-rose-300 hover:text-rose-600 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /></button>
-            <button onClick={() => setEditOffice(o)} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><Pencil className="h-3.5 w-3.5" /> Edit</button>
-            <button onClick={() => toggle.mutate({ id: o.id, isActive: !o.isActive })} className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold transition-colors ${o.isActive ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>{o.isActive ? "Active" : "Inactive"}</button>
+            <button title={tr("Delete office")} aria-label={tr("Delete office")} disabled={del.isPending} onClick={() => { if (window.confirm(tr("Delete “{name}”? It disappears from the list and nobody can check in there anymore. Days already recorded there keep the office's name.", { name: o.name }))) del.mutate(o.id); }} className="rounded-lg border border-border p-1.5 text-muted-foreground transition-colors hover:border-rose-300 hover:text-rose-600 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /></button>
+            <button onClick={() => setEditOffice(o)} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><Pencil className="h-3.5 w-3.5" /> {tr("Edit")}</button>
+            <button onClick={() => toggle.mutate({ id: o.id, isActive: !o.isActive })} className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold transition-colors ${o.isActive ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>{o.isActive ? tr("Active") : tr("Inactive")}</button>
           </div>
         ))}
       </div>
@@ -1098,22 +1099,22 @@ function OfficeComposer({ office, onClose, onCreated }: { office?: NexusOffice; 
     },
     onSuccess: () => { onCreated(); onClose(); },
     // A refused save used to leave the dialog open and silent — "the edit doesn't work".
-    onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't save the office."),
+    onError: (e: unknown) => alert(e instanceof Error ? e.message : tr("Couldn't save the office.")),
   });
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
-        <h2 className="font-display text-lg font-bold tracking-tight">{editing ? "Edit office" : "New office"}</h2>
+        <h2 className="font-display text-lg font-bold tracking-tight">{editing ? tr("Edit office") : tr("New office")}</h2>
         <div className="mt-4 space-y-3">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Office name" className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
-          <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Address (optional)" className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={tr("Office name")} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
+          <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder={tr("Address (optional)")} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
           <OfficeMapPicker lat={Number.isFinite(Number(lat)) && lat !== "" ? Number(lat) : null} lng={Number.isFinite(Number(lng)) && lng !== "" ? Number(lng) : null}
             radiusMeters={Number(radius) || 100} onChange={(la, lo) => { setLat(la.toFixed(6)); setLng(lo.toFixed(6)); }} />
           <details className="text-[11px] text-muted-foreground">
-            <summary className="cursor-pointer font-semibold">Fine-tune coordinates</summary>
+            <summary className="cursor-pointer font-semibold">{tr("Fine-tune coordinates")}</summary>
             <div className="mt-2 grid grid-cols-2 gap-2">
-              <input value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Latitude" className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary" />
-              <input value={lng} onChange={(e) => setLng(e.target.value)} placeholder="Longitude" className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary" />
+              <input value={lat} onChange={(e) => setLat(e.target.value)} placeholder={tr("Latitude")} className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary" />
+              <input value={lng} onChange={(e) => setLng(e.target.value)} placeholder={tr("Longitude")} className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary" />
             </div>
           </details>
           {/* Shift start/end dihilangkan — jam shift sekarang diatur per orang (Control Room → Members),
@@ -1122,13 +1123,13 @@ function OfficeComposer({ office, onClose, onCreated }: { office?: NexusOffice; 
             <label className="block text-[11px] font-bold text-muted-foreground">Radius · {Number(radius) || 100} m
               <input type="range" min={25} max={500} step={5} value={Number(radius) || 100} onChange={(e) => setRadius(e.target.value)} className="mt-1 block w-full accent-primary" />
             </label>
-            <label className="block text-[11px] font-bold text-muted-foreground">Late grace (minutes)<input value={grace} onChange={(e) => setGrace(e.target.value.replace(/[^0-9]/g, ""))} className="mt-1 w-32 rounded-xl border border-border bg-background px-2 py-2 text-sm" /><span className="mt-1 block font-normal text-muted-foreground/70">0 = strict, late from the very first minute</span></label>
+            <label className="block text-[11px] font-bold text-muted-foreground">{tr("Late grace (minutes)")}<input value={grace} onChange={(e) => setGrace(e.target.value.replace(/[^0-9]/g, ""))} className="mt-1 w-32 rounded-xl border border-border bg-background px-2 py-2 text-sm" /><span className="mt-1 block font-normal text-muted-foreground/70">{tr("0 = strict, late from the very first minute")}</span></label>
           </div>
         </div>
         <div className="mt-5 flex items-center gap-2">
-          <button disabled={!name.trim() || !lat || !lng || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {editing ? "Save changes" : "Create office"}</button>
-          <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">Cancel</button>
-          {create.isError && <span className="text-xs font-semibold text-destructive">Failed — supervisor role required.</span>}
+          <button disabled={!name.trim() || !lat || !lng || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {editing ? tr("Save changes") : tr("Create office")}</button>
+          <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">{tr("Cancel")}</button>
+          {create.isError && <span className="text-xs font-semibold text-destructive">{tr("Couldn't save the office.")}</span>}
         </div>
       </div>
     </div>
@@ -1140,6 +1141,7 @@ function OfficeComposer({ office, onClose, onCreated }: { office?: NexusOffice; 
 // Everyone sees their own; a manager picks one of their reports, BoD anyone on the board.
 // ---------------------------------------------------------------------------------------------
 function ReflectionsSection({ canPickPeople, members }: { canPickPeople: boolean; members: Array<{ id: string; name?: string | null; email?: string | null }> }) {
+  const { locale, tn } = useLang();
   const [month, setMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
   const [userId, setUserId] = useState<string | undefined>(undefined);
   const [open, setOpen] = useState<string | null>(null);
@@ -1151,64 +1153,64 @@ function ReflectionsSection({ canPickPeople, members }: { canPickPeople: boolean
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
   });
   const [y, m] = month.split("-").map(Number);
-  const label = new Date(y, m - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  const label = new Date(y, m - 1, 1).toLocaleDateString(locale, { month: "long", year: "numeric" });
   const shift = (d: number) => { const n = new Date(y, m - 1 + d, 1); setMonth(`${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`); setOpen(null); };
   const isCurrent = (() => { const d = new Date(); return y === d.getFullYear() && m === d.getMonth() + 1; })();
   const days = q.data?.days ?? [];
   const monthly = q.data?.monthly ?? null;
   const upToDate = Boolean(monthly && monthly.sourceDays === days.length);
-  const dayLabel = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
-  const summarizeError = summarize.error instanceof ApiError ? ((summarize.error.payload as { error?: string } | null)?.error ?? summarize.error.message) : summarize.error ? "GIDEON didn't answer. Try again in a minute." : null;
+  const dayLabel = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short" });
+  const summarizeError = summarize.error instanceof ApiError ? ((summarize.error.payload as { error?: string } | null)?.error ?? summarize.error.message) : summarize.error ? tr("GIDEON didn't answer. Try again in a minute.") : null;
 
   return (
     <div className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
         <div>
-          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><PenLine className="h-4 w-4 text-primary" /> Reflections</h2>
-          <p className="text-sm text-muted-foreground">What was written at check-out, with GIDEON's summary of each day and of the month so far.</p>
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><PenLine className="h-4 w-4 text-primary" /> {tr("Reflections")}</h2>
+          <p className="text-sm text-muted-foreground">{tr("What was written at check-out, with GIDEON's summary of each day and of the month so far.")}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {canPickPeople && (
             <select value={userId ?? ""} onChange={(e) => { setUserId(e.target.value || undefined); setOpen(null); }} className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-semibold outline-none focus:border-primary">
-              <option value="">Me</option>
+              <option value="">{tr("Me")}</option>
               {members.map((u) => <option key={u.id} value={u.id}>{u.name || u.email || u.id}</option>)}
             </select>
           )}
           <div className="inline-flex items-center rounded-lg border border-border">
-            <button type="button" onClick={() => shift(-1)} className="px-2 py-1.5 text-muted-foreground hover:text-foreground" aria-label="Previous month"><ChevronLeft className="h-4 w-4" /></button>
+            <button type="button" onClick={() => shift(-1)} className="px-2 py-1.5 text-muted-foreground hover:text-foreground" aria-label={tr("Previous month")}><ChevronLeft className="h-4 w-4" /></button>
             <span className="min-w-[120px] text-center text-xs font-semibold">{label}</span>
-            <button type="button" onClick={() => shift(1)} disabled={isCurrent} className="px-2 py-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30" aria-label="Next month"><ChevronRight className="h-4 w-4" /></button>
+            <button type="button" onClick={() => shift(1)} disabled={isCurrent} className="px-2 py-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30" aria-label={tr("Next month")}><ChevronRight className="h-4 w-4" /></button>
           </div>
         </div>
       </div>
 
       <div className="space-y-4 p-5">
         {q.isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading reflections…</div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {tr("Loading reflections…")}</div>
         ) : q.isError ? (
-          <div className="text-sm font-semibold text-destructive">{q.error instanceof ApiError ? ((q.error.payload as { error?: string } | null)?.error ?? "Couldn't load reflections.") : "Couldn't load reflections."}</div>
+          <div className="text-sm font-semibold text-destructive">{q.error instanceof ApiError ? ((q.error.payload as { error?: string } | null)?.error ?? tr("Couldn't load reflections.")) : tr("Couldn't load reflections.")}</div>
         ) : days.length === 0 ? (
-          <EmptyState icon={PenLine} compact title={`No reflections in ${label}`}
-            message="A reflection is written at check-out. Once one is checked out with, it shows up here with GIDEON's summary of the day." />
+          <EmptyState icon={PenLine} compact title={tr("No reflections in {month}", { month: label })}
+            message={tr("A reflection is written at check-out. After a check-out with one, it shows up here with GIDEON's summary of the day.")} />
         ) : (
           <>
             {/* Month so far */}
             <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-sm font-bold"><Sparkles className="h-4 w-4 text-primary" /> GIDEON's month summary</div>
+                <div className="flex items-center gap-2 text-sm font-bold"><Sparkles className="h-4 w-4 text-primary" /> {tr("GIDEON's month summary")}</div>
                 <button type="button" onClick={() => summarize.mutate()} disabled={summarize.isPending}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-soft transition hover:bg-primary/90 disabled:opacity-60">
                   {summarize.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                  {summarize.isPending ? "GIDEON is reading…" : monthly ? (upToDate ? "Summary is current" : "Update the summary") : `Summarize ${days.length} day${days.length === 1 ? "" : "s"} so far`}
+                  {summarize.isPending ? tr("GIDEON is reading…") : monthly ? (upToDate ? tr("Summary is up to date") : tr("Update the summary")) : tn(days.length, "Summarize {n} day so far", "Summarize {n} days so far")}
                 </button>
               </div>
               {monthly ? (
                 <>
                   <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-foreground">{monthly.summary}</p>
-                  <p className="mt-2 text-[11px] font-medium text-muted-foreground">Built from {monthly.sourceDays} day{monthly.sourceDays === 1 ? "" : "s"} · {fmtDate(monthly.updatedAt)}{!upToDate ? ` · ${days.length - monthly.sourceDays} newer day${days.length - monthly.sourceDays === 1 ? "" : "s"} not included yet` : ""}</p>
+                  <p className="mt-2 text-[11px] font-medium text-muted-foreground">{tn(monthly.sourceDays, "Built from {n} day", "Built from {n} days")} · {fmtDate(monthly.updatedAt)}{!upToDate ? ` · ${tn(days.length - monthly.sourceDays, "{n} newer day not included yet", "{n} newer days not included yet")}` : ""}</p>
                 </>
               ) : (
-                <p className="mt-2 text-sm text-muted-foreground">Not written yet. GIDEON summarizes whatever has been collected so far — {days.length} day{days.length === 1 ? "" : "s"} in {label}.</p>
+                <p className="mt-2 text-sm text-muted-foreground">{tn(days.length, "Not written yet. GIDEON summarizes what has been collected so far — {n} day in {month}.", "Not written yet. GIDEON summarizes what has been collected so far — {n} days in {month}.", { month: label })}</p>
               )}
               {summarizeError && <p className="mt-2 text-xs font-semibold text-destructive">{summarizeError}</p>}
             </div>
@@ -1222,13 +1224,13 @@ function ReflectionsSection({ canPickPeople, members }: { canPickPeople: boolean
                     <button type="button" onClick={() => setOpen(isOpen ? null : d.date)} className="flex w-full items-start gap-3 text-left">
                       <span className="mt-0.5 w-[92px] shrink-0 text-xs font-bold text-muted-foreground">{dayLabel(d.date)}</span>
                       <span className="flex-1 text-sm leading-relaxed">
-                        {d.summary ? d.summary : <span className="italic text-muted-foreground">GIDEON hasn't summarized this day yet — the note is below.</span>}
+                        {d.summary ? d.summary : <span className="italic text-muted-foreground">{tr("GIDEON hasn't summarized this day yet. The note is below.")}</span>}
                       </span>
                       <ChevronRight className={cn("mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-90")} />
                     </button>
                     {isOpen && (
                       <div className="mt-2 ml-[104px] rounded-xl bg-muted/40 px-3 py-2 text-sm leading-relaxed text-foreground whitespace-pre-line">
-                        <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Written at check-out</div>
+                        <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{tr("Written at check-out")}</div>
                         {d.reflection}
                       </div>
                     )}
@@ -1259,7 +1261,7 @@ function attendancePeriodBounds(nowMs: number) {
   const y = j.getUTCFullYear();
   const start = Date.UTC(y, m, 28) - JAKARTA_OFFSET_MS;
   const end = Date.UTC(y, m + 1, 28) - JAKARTA_OFFSET_MS - 1; // the last millisecond of the 27th
-  const fmt = (ms: number) => new Date(ms).toLocaleDateString("en-GB", { timeZone: "Asia/Jakarta", day: "numeric", month: "short" });
+  const fmt = (ms: number) => new Date(ms).toLocaleDateString(localeOf(), { timeZone: "Asia/Jakarta", day: "numeric", month: "short" });
   return { start, end, label: `${fmt(start)} – ${fmt(end)}` };
 }
 
@@ -1316,7 +1318,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
   const offsiteItems = offsiteQ.data?.items ?? [];
   const offsiteReview = useMutation({ mutationFn: ({ id, action }: { id: string; action: "approve" | "reject" }) => nexusApi.reviewOffsiteCheckout(id, action), onSuccess: () => { qc.invalidateQueries({ queryKey: ["offsite-checkouts"] }); invalidate(); } });
   const pendingTotal = pending.length + offsiteItems.filter((i) => i.approval === "PENDING").length;
-  const offsiteStatusLabel = (a?: string | null) => (a === "APPROVED" ? "Approved" : a === "REJECTED" ? "Rejected" : "Pending");
+  const offsiteStatusLabel = (a?: string | null) => (a === "APPROVED" ? tr("Approved") : a === "REJECTED" ? tr("Rejected") : tr("Pending"));
 
   // ── One queue, two kinds ────────────────────────────────────────────────────────────────────
   // An offsite check-out is a genuinely different shape — an AttendanceRecord carrying a
@@ -1405,22 +1407,22 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
               shoulder with leave/permit requests, and a reviewer has to see at a glance that this one
               is a check-out from outside the geofence, judged on distance and not on a date range. */}
           <div className="text-sm font-semibold">
-            <span className="mr-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 align-middle">Offsite check-out</span>
+            <span className="mr-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 align-middle">{tr("Offsite check-out")}</span>
             {it.user?.name ? <span className="font-normal text-muted-foreground">· {it.user.name}</span> : null}
           </div>
-          <div className="text-xs text-muted-foreground">{fmtDateShort(it.attendanceDate)} · out {fmtTime(it.checkOutAt)}{it.reason ? ` · ${it.reason}` : ""}</div>
+          <div className="text-xs text-muted-foreground">{fmtDateShort(it.attendanceDate)} · {tr("out {time}", { time: fmtTime(it.checkOutAt) })}{it.reason ? ` · ${it.reason}` : ""}</div>
           <div className="text-xs text-muted-foreground">
-            {it.distanceMeters != null ? `±${Math.round(it.distanceMeters)}m from ${it.officeName ?? "office"}` : ""}
+            {it.distanceMeters != null ? tr("±{m}m from {office}", { m: Math.round(it.distanceMeters), office: it.officeName ?? tr("the office") }) : ""}
             {it.address ? `${it.distanceMeters != null ? " · " : ""}${it.address}` : ""}
-            {mapUrl && <> · <a href={mapUrl} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">view map</a></>}
-            {it.photoUrl && <> · <a href={it.photoUrl} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">photo</a></>}
-            {!isPending && it.approverName ? ` · by ${it.approverName}` : ""}
+            {mapUrl && <> · <a href={mapUrl} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">{tr("view map")}</a></>}
+            {it.photoUrl && <> · <a href={it.photoUrl} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">{tr("photo")}</a></>}
+            {!isPending && it.approverName ? ` · ${tr("by {name}", { name: it.approverName })}` : ""}
           </div>
         </div>
         {canManage && isPending && !isMine && (
           <div className="flex items-center gap-1.5">
-            <button disabled={offsiteReview.isPending} onClick={() => offsiteReview.mutate({ id: it.id, action: "approve" })} className="rounded-lg bg-success/10 px-2.5 py-1 text-xs font-semibold text-success transition-colors hover:bg-success/20 active:scale-[0.97] disabled:opacity-50">Approve</button>
-            <button disabled={offsiteReview.isPending} onClick={() => offsiteReview.mutate({ id: it.id, action: "reject" })} className="rounded-lg bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.97] disabled:opacity-50">Reject</button>
+            <button disabled={offsiteReview.isPending} onClick={() => offsiteReview.mutate({ id: it.id, action: "approve" })} className="rounded-lg bg-success/10 px-2.5 py-1 text-xs font-semibold text-success transition-colors hover:bg-success/20 active:scale-[0.97] disabled:opacity-50">{tr("Approve")}</button>
+            <button disabled={offsiteReview.isPending} onClick={() => offsiteReview.mutate({ id: it.id, action: "reject" })} className="rounded-lg bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.97] disabled:opacity-50">{tr("Reject")}</button>
           </div>
         )}
       </div>
@@ -1439,7 +1441,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
       <div key={r.id} id={`focus-req-${r.id}`} className={"flex flex-wrap items-center gap-3 px-5 py-3" + focusClass(`req-${r.id}`)}>
         <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusTone(r.status)}`}>{statusLabel(r.status)}</span>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold">{REQ_LABEL[typeKey] ?? statusLabel(r.type)} {r.user?.name ? <span className="font-normal text-muted-foreground">· {r.user.name}</span> : null}</div>
+          <div className="text-sm font-semibold">{REQ_LABEL[typeKey] ? tr(REQ_LABEL[typeKey]) : statusLabel(r.type)} {r.user?.name ? <span className="font-normal text-muted-foreground">· {r.user.name}</span> : null}</div>
           <div className="text-xs text-muted-foreground">{fmtDateShort(r.startDate)}{sameDay ? "" : ` → ${fmtDateShort(r.endDate)}`}{r.reason ? ` · ${r.reason}` : ""}</div>
           {/* Permit evidence, right under the reason — this is what separates a real errand from a
               forgotten check-in, and it's useless if the approver has to click to find it. */}
@@ -1447,16 +1449,18 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
               {r.reportDelayMinutes != null && r.reportDelayMinutes > 0 && (
                 <span className="rounded-full bg-destructive/10 px-2 py-0.5 font-bold text-destructive">
-                  Filed {Math.floor(r.reportDelayMinutes / 60) > 0 ? `${Math.floor(r.reportDelayMinutes / 60)}h ` : ""}{r.reportDelayMinutes % 60}m after shift start
+                  {Math.floor(r.reportDelayMinutes / 60) > 0
+                    ? tr("Filed {h}h {m}m after shift start", { h: Math.floor(r.reportDelayMinutes / 60), m: r.reportDelayMinutes % 60 })
+                    : tr("Filed {m}m after shift start", { m: r.reportDelayMinutes % 60 })}
                 </span>
               )}
               {r.reportDelayMinutes === 0 && (
-                <span className="rounded-full bg-success/10 px-2 py-0.5 font-bold text-success">Filed before shift start</span>
+                <span className="rounded-full bg-success/10 px-2 py-0.5 font-bold text-success">{tr("Filed before shift start")}</span>
               )}
               {r.submittedAddress && <span className="text-muted-foreground">{r.submittedAddress}</span>}
               {r.submittedLat != null && r.submittedLng != null && (
                 <a href={`https://www.google.com/maps?q=${r.submittedLat},${r.submittedLng}`} target="_blank" rel="noreferrer"
-                   className="font-semibold text-primary underline-offset-2 hover:underline">view map</a>
+                   className="font-semibold text-primary underline-offset-2 hover:underline">{tr("view map")}</a>
               )}
             </div>
           )}
@@ -1466,26 +1470,26 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
         </div>
         {canReview && isPending && rejectingId !== r.id && (
           <div className="flex items-center gap-1.5">
-            <button disabled={review.isPending} onClick={() => review.mutate({ id: r.id, action: "approve" })} className="rounded-lg bg-success/10 px-2.5 py-1 text-xs font-semibold text-success transition-colors hover:bg-success/20 active:scale-[0.97] disabled:opacity-50">Approve</button>
-            <button disabled={review.isPending} onClick={() => { setRejectingId(r.id); setRejectNote(""); }} className="rounded-lg bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.97] disabled:opacity-50">Reject</button>
+            <button disabled={review.isPending} onClick={() => review.mutate({ id: r.id, action: "approve" })} className="rounded-lg bg-success/10 px-2.5 py-1 text-xs font-semibold text-success transition-colors hover:bg-success/20 active:scale-[0.97] disabled:opacity-50">{tr("Approve")}</button>
+            <button disabled={review.isPending} onClick={() => { setRejectingId(r.id); setRejectNote(""); }} className="rounded-lg bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.97] disabled:opacity-50">{tr("Reject")}</button>
           </div>
         )}
         {(!canReview || isMine) && isPending && rejectingId !== r.id && (
-          <button disabled={review.isPending} onClick={() => review.mutate({ id: r.id, action: "cancel" })} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-accent active:scale-[0.97] disabled:opacity-50">Cancel</button>
+          <button disabled={review.isPending} onClick={() => review.mutate({ id: r.id, action: "cancel" })} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-accent active:scale-[0.97] disabled:opacity-50">{tr("Cancel")}</button>
         )}
 
         {/* The reason box. Rejecting used to be one click and the requester learned nothing; now the
             reviewer types WHY, and that text is what lands in their notification and on this row. */}
         {canReview && isPending && rejectingId === r.id && (
           <div className="w-full space-y-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-destructive">Reason for rejection — {r.user?.name ?? "the requester"} will see this</div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-destructive">{tr("Reason for rejection — {name} will see this", { name: r.user?.name ?? tr("the requester") })}</div>
             <textarea
               autoFocus
               value={rejectNote}
               onChange={(e) => setRejectNote(e.target.value)}
               rows={2}
               maxLength={1000}
-              placeholder="e.g. The photo is unreadable — please file again with a clearer one."
+              placeholder={tr("e.g. The photo is unreadable. Please file again with a clearer one.")}
               className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-destructive"
             />
             <div className="flex flex-wrap items-center gap-2">
@@ -1494,11 +1498,11 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
                 onClick={() => review.mutate({ id: r.id, action: "reject", reviewNote: rejectNote })}
                 className="rounded-lg bg-destructive px-3 py-1.5 text-xs font-bold text-destructive-foreground transition-colors hover:bg-destructive/90 active:scale-[0.97] disabled:opacity-40"
               >
-                {review.isPending ? "Rejecting…" : "Confirm reject"}
+                {review.isPending ? tr("Rejecting…") : tr("Confirm reject")}
               </button>
-              <button disabled={review.isPending} onClick={closeReject} className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-accent active:scale-[0.97] disabled:opacity-50">Cancel</button>
-              <span className="text-[11px] text-muted-foreground">{rejectNote.trim().length < 3 ? "A reason is required." : `${rejectNote.trim().length}/1000`}</span>
-              {review.isError && <span className="text-[11px] font-semibold text-destructive">{review.error instanceof ApiError ? review.error.message : "Couldn't save the rejection."}</span>}
+              <button disabled={review.isPending} onClick={closeReject} className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-accent active:scale-[0.97] disabled:opacity-50">{tr("Cancel")}</button>
+              <span className="text-[11px] text-muted-foreground">{rejectNote.trim().length < 3 ? tr("A reason is required.") : `${rejectNote.trim().length}/1000`}</span>
+              {review.isError && <span className="text-[11px] font-semibold text-destructive">{review.error instanceof ApiError ? review.error.message : tr("Couldn't save the rejection.")}</span>}
             </div>
           </div>
         )}
@@ -1511,15 +1515,15 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
             <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
               {(() => {
                 const st = (r.status || "").toUpperCase();
-                const verb = st === "APPROVED" ? "Approved" : st === "REJECTED" ? "Rejected" : "Canceled";
-                const who = r.reviewedBy?.name ? `by ${r.reviewedBy.name}` : "automatically";
+                const verb = st === "APPROVED" ? tr("Approved") : st === "REJECTED" ? tr("Rejected") : tr("Canceled");
+                const who = r.reviewedBy?.name ? tr("by {name}", { name: r.reviewedBy.name }) : tr("automatically");
                 const when = r.reviewedAt ? fmtDateTime(r.reviewedAt) : null;
                 return [verb, who, when].filter(Boolean).join(" · ");
               })()}
             </div>
             {r.reviewNote && (
               <p className="mt-1 whitespace-pre-wrap text-xs">
-                <span className="font-semibold">{(r.status || "").toUpperCase() === "REJECTED" ? "Reason for rejection: " : "Note: "}</span>
+                <span className="font-semibold">{(r.status || "").toUpperCase() === "REJECTED" ? tr("Reason for rejection:") : tr("Note:")}{" "}</span>
                 “{r.reviewNote}”
               </p>
             )}
@@ -1530,39 +1534,41 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
   };
 
   const renderEntry = (e: QueueEntry) => (e.kind === "offsite" ? renderOffsite(e.item) : renderRequest(e.row));
-  const rangeLabel = range === "recent" ? "the last 3 days" : `this period (${period.label})`;
+  const rangeLabel = range === "recent" ? tr("the last 3 days") : tr("this period ({range})", { range: period.label });
 
   // Why this chip is empty, and the one tap that most likely finds what the person is after.
   const emptyFiltered = (() => {
     if (needle) {
       return {
-        title: "No matches",
+        title: tr("No matches"),
         message: windowed
-          ? `Nobody's name or reason matches “${query.trim()}” in ${rangeLabel}.`
-          : `No pending request matches “${query.trim()}”.`,
+          ? tr("No name or reason matches “{q}” in {range}.", { q: query.trim(), range: rangeLabel })
+          : tr("No pending request matches “{q}”.", { q: query.trim() }),
         action: windowed && range === "recent"
-          ? <EmptyAction onClick={() => setRange("period")}>Show this period</EmptyAction>
-          : <EmptyAction onClick={() => setQuery("")}>Clear search</EmptyAction>,
+          ? <EmptyAction onClick={() => setRange("period")}>{tr("Show this period")}</EmptyAction>
+          : <EmptyAction onClick={() => setQuery("")}>{tr("Clear search")}</EmptyAction>,
       };
     }
     if (!windowed) {
       return {
-        title: "Nothing waiting on a decision",
-        message: "Every request has been decided. Settled ones are under the other chips.",
-        action: <EmptyAction onClick={() => setStatusFilter("ALL")}>Show all</EmptyAction>,
+        title: tr("Nothing waiting on a decision"),
+        message: tr("Every request has been decided. Decided ones are under the other filters."),
+        action: <EmptyAction onClick={() => setStatusFilter("ALL")}>{tr("Show all")}</EmptyAction>,
       };
     }
     if (range === "recent") {
       return {
-        title: "Nothing in the last 3 days",
-        message: "Settled requests are shown for the last 3 days, by when they were decided. Older ones are in this period's view.",
-        action: <EmptyAction onClick={() => setRange("period")}>Show this period</EmptyAction>,
+        title: tr("Nothing in the last 3 days"),
+        message: tr("Decided requests are shown for the last 3 days, by when they were decided. Older ones are in this period's view."),
+        action: <EmptyAction onClick={() => setRange("period")}>{tr("Show this period")}</EmptyAction>,
       };
     }
     return {
-      title: "Nothing this period",
-      message: `No ${activeFilter === "ALL" ? "" : `${REQUEST_FILTER_LABEL[activeFilter].toLowerCase()} `}requests between ${period.label}.`,
-      action: activeFilter === "ALL" ? undefined : <EmptyAction onClick={() => setStatusFilter("ALL")}>Show all</EmptyAction>,
+      title: tr("Nothing this period"),
+      message: activeFilter === "ALL"
+        ? tr("No requests between {range}.", { range: period.label })
+        : tr("No {status} requests between {range}.", { status: tr(REQUEST_FILTER_LABEL[activeFilter]).toLowerCase(), range: period.label }),
+      action: activeFilter === "ALL" ? undefined : <EmptyAction onClick={() => setStatusFilter("ALL")}>{tr("Show all")}</EmptyAction>,
     };
   })();
 
@@ -1570,16 +1576,16 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
     <section className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">Submissions & approvals</h2>
+          <h2 className="text-lg font-semibold tracking-tight">{tr("Requests and approvals")}</h2>
           <p className="text-sm text-muted-foreground">
             {canManage
-              ? "One queue: leave, sick and permit requests plus offsite check-outs waiting on a decision."
+              ? tr("One queue: leave, sick and permit requests plus offsite check-outs waiting on a decision.")
               : canReview
-                ? "Review pending requests (leave, sick, permit, day-off) & submit your own."
-                : "Submit leave, sick, or permit requests."}
+                ? tr("Review pending requests (leave, sick, permit, day off) and submit your own.")
+                : tr("Submit leave, sick or permit requests.")}
           </p>
         </div>
-        <button onClick={() => setComposerOpen(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><ClipboardCheck className="h-3.5 w-3.5" /> New request</button>
+        <button onClick={() => setComposerOpen(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><ClipboardCheck className="h-3.5 w-3.5" /> {tr("New request")}</button>
       </div>
       {entries.length > 0 && (
         <div className="space-y-2 border-b border-border px-5 py-3">
@@ -1590,7 +1596,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
                 <button key={f} type="button" onClick={() => setStatusFilter(f)}
                   className={cn("rounded-full px-3 py-1 text-xs font-semibold ring-1 transition-all active:scale-[0.97]",
                     on ? "bg-primary text-primary-foreground ring-primary" : "bg-background text-muted-foreground ring-border hover:text-foreground")}>
-                  {REQUEST_FILTER_LABEL[f]}{f === "PENDING" && pendingTotal > 0 ? ` (${pendingTotal})` : ""}
+                  {tr(REQUEST_FILTER_LABEL[f])}{f === "PENDING" && pendingTotal > 0 ? ` (${pendingTotal})` : ""}
                 </button>
               );
             })}
@@ -1598,35 +1604,37 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-0 flex-1 basis-48">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name or reason" aria-label="Search requests by name or reason"
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={tr("Search name or reason")} aria-label={tr("Search requests by name or reason")}
                 className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-8 text-sm outline-none focus:border-primary" />
               {query && (
-                <button type="button" onClick={() => setQuery("")} aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+                <button type="button" onClick={() => setQuery("")} aria-label={tr("Clear search")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
               )}
             </div>
             {windowed && (
-              <div className="inline-flex shrink-0 rounded-lg border border-border bg-background p-0.5 text-xs font-semibold" role="group" aria-label="Date range">
-                <button type="button" onClick={() => setRange("recent")} className={cn("rounded-md px-2.5 py-1 transition-colors", range === "recent" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>Last 3 days</button>
-                <button type="button" onClick={() => setRange("period")} title={period.label} className={cn("rounded-md px-2.5 py-1 transition-colors", range === "period" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>This period</button>
+              <div className="inline-flex shrink-0 rounded-lg border border-border bg-background p-0.5 text-xs font-semibold" role="group" aria-label={tr("Date range")}>
+                <button type="button" onClick={() => setRange("recent")} className={cn("rounded-md px-2.5 py-1 transition-colors", range === "recent" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{tr("Last 3 days")}</button>
+                <button type="button" onClick={() => setRange("period")} title={period.label} className={cn("rounded-md px-2.5 py-1 transition-colors", range === "period" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{tr("This period")}</button>
               </div>
             )}
           </div>
           {windowed && (
             <p className="text-[11px] text-muted-foreground">
-              Settled requests from {rangeLabel}, by decision time{activeFilter === "ALL" ? "; pending ones are always listed" : ""}.
+              {activeFilter === "ALL"
+                ? tr("Decided requests from {range}, by decision time; pending ones are always listed.", { range: rangeLabel })
+                : tr("Decided requests from {range}, by decision time.", { range: rangeLabel })}
             </p>
           )}
         </div>
       )}
       <div className="divide-y divide-border">
-        {requestsQuery.isLoading && <div className="px-5 py-4 text-sm text-muted-foreground">Loading requests…</div>}
+        {requestsQuery.isLoading && <div className="px-5 py-4 text-sm text-muted-foreground">{tr("Loading requests…")}</div>}
         {!requestsQuery.isLoading && entries.length === 0 && (
           <div className="p-4">
-            <EmptyState icon={ClipboardCheck} compact title={canReview ? "Nothing to review yet" : "No requests yet"}
+            <EmptyState icon={ClipboardCheck} compact title={canReview ? tr("Nothing to review yet") : tr("No requests yet")}
               message={canReview
-                ? "Leave, sick days, permits and offsite check-outs from your people appear here the moment they're filed, with Approve and Reject right on the row."
-                : "Leave, sick days, permits and day-offs you file show up here with their status, and your approver is told the moment you send one."}
-              action={<EmptyAction onClick={() => setComposerOpen(true)}>New request</EmptyAction>} />
+                ? tr("Leave, sick days, permits and offsite check-outs from your people appear here as soon as they're filed, with Approve and Reject right on the row.")
+                : tr("Leave, sick days, permits and days off you file show up here with their status, and your approver is told as soon as you send one.")}
+              action={<EmptyAction onClick={() => setComposerOpen(true)}>{tr("New request")}</EmptyAction>} />
           </div>
         )}
         {!requestsQuery.isLoading && entries.length > 0 && shown.length === 0 && (
@@ -1637,7 +1645,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
         {/* One list: requests and offsite check-outs, pending first and then newest decision first. */}
         {shown.map(renderEntry)}
       </div>
-      {canReview && pendingTotal > 0 && <div className="border-t border-border bg-warning/10 px-5 py-2 text-xs font-semibold text-warning-foreground">{pendingTotal} pending review</div>}
+      {canReview && pendingTotal > 0 && <div className="border-t border-border bg-warning/10 px-5 py-2 text-xs font-semibold text-warning-foreground">{tr("{n} waiting for review", { n: pendingTotal })}</div>}
       {composerOpen && <RequestComposer viewerId={viewerId} onClose={() => setComposerOpen(false)} onCreated={invalidate} />}
     </section>
   );
@@ -1652,6 +1660,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
  * genuinely qualifies.
  */
 function EmploymentStartSection() {
+  const { locale } = useLang();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["employment-start"], queryFn: () => nexusApi.employmentStartDates(), retry: 1 });
   const save = useMutation({
@@ -1660,7 +1669,7 @@ function EmploymentStartSection() {
       qc.invalidateQueries({ queryKey: ["employment-start"] });
       qc.invalidateQueries({ queryKey: ["attendance-today"] });
     },
-    onError: (e) => alert(e instanceof Error ? e.message : "Gagal simpan tanggal."),
+    onError: (e) => alert(e instanceof Error ? e.message : tr("Couldn't save the date.")),
   });
 
   const rows = q.data?.members ?? [];
@@ -1671,28 +1680,27 @@ function EmploymentStartSection() {
     <section className="rounded-3xl border border-border bg-card">
       <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0 flex-1">
-          <h2 className="font-display text-base font-bold tracking-tight">Tanggal mulai kerja</h2>
+          <h2 className="font-display text-base font-bold tracking-tight">{tr("Employment start date")}</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Dasar hak <b>cuti tahunan</b> ({q.data?.quota ?? 12} hari/tahun, reset 1 Januari). Berhak setelah 12 bulan kerja.
-            Yang belum diisi = belum berhak.
+            {tr("The basis for annual leave ({n} days a year, reset on 1 January). Eligible after 12 months of work. Not filled in = not eligible yet.", { n: q.data?.quota ?? 12 })}
           </p>
         </div>
         <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-[11px] font-bold">
-          {filled}/{rows.length} terisi · {eligible} berhak
+          {tr("{filled}/{total} filled in · {eligible} eligible", { filled, total: rows.length, eligible })}
         </span>
       </div>
       <div className="divide-y divide-border">
-        {q.isLoading && <p className="px-5 py-4 text-sm text-muted-foreground">Loading…</p>}
+        {q.isLoading && <p className="px-5 py-4 text-sm text-muted-foreground">{tr("Loading…")}</p>}
         {rows.map((m) => (
           <div key={m.userId} className="flex flex-wrap items-center gap-3 px-5 py-2.5">
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold">{m.name || m.email}</div>
               <div className="text-xs text-muted-foreground">
                 {!m.employmentStartDate
-                  ? "Belum diisi — belum bisa ajukan cuti"
+                  ? tr("Not filled in — can't request leave yet")
                   : m.eligible
-                    ? "Berhak cuti tahunan"
-                    : `Berhak mulai ${m.eligibleFrom ? new Date(m.eligibleFrom).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "—"}`}
+                    ? tr("Eligible for annual leave")
+                    : tr("Eligible from {date}", { date: m.eligibleFrom ? new Date(m.eligibleFrom).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" }) : "—" })}
               </div>
             </div>
             <input
@@ -1710,7 +1718,7 @@ function EmploymentStartSection() {
             />
             <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold",
               m.eligible ? "bg-success/10 text-success" : "bg-muted text-muted-foreground")}>
-              {m.eligible ? "berhak" : "belum"}
+              {m.eligible ? tr("eligible") : tr("not yet")}
             </span>
           </div>
         ))}
@@ -1770,16 +1778,16 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
     : null;
   // Said before the submit, not after: a day asked for with none left is caught here.
   const quotaProblem = !granting && remainingDays != null && remainingDays < 1
-    ? `You have no ${(REQ_LABEL[type] ?? "days").toLowerCase()} days left.`
+    ? tr("You have no {type} days left.", { type: tr(REQ_LABEL[type] ?? "days").toLowerCase() })
     : null;
   const TYPE_ICON: Record<string, typeof Sun> = { LEAVE: Sun, SICK: HeartPulse, PERMIT: Hand, DAY_OFF: Moon, RED_DATE: Flag };
   const typeHint = granting
-    ? `Granted to the person you pick below and approved straight away; it doesn't use up their quota.`
-    : type === "LEAVE" ? (!leave ? "Uses one day of your annual leave." : !leave.eligible ? (leave.reason ?? "Annual leave needs 12 months of service.") : `Annual leave: ${leave.remaining} of ${leave.quota} days left this year.`)
-    : type === "SICK" ? "A photo of the doctor's note is required. Today or later — a past day is filed by a BoD."
-    : type === "PERMIT" ? "Today or later, with a photo and your location."
-    : type === "DAY_OFF" ? `Day off: ${remainingDays ?? 0} of ${todayQ.data?.dayOffQuota ?? 0} left this period.`
-    : `Public holiday: ${remainingDays ?? 0} of ${redQuota} left this month.`;
+    ? tr("Granted to the person you pick below and approved straight away; it doesn't use up their quota.")
+    : type === "LEAVE" ? (!leave ? tr("Uses one day of your annual leave.") : !leave.eligible ? (leave.reason ?? tr("Annual leave needs 12 months of service.")) : tr("Annual leave: {left} of {quota} days left this year.", { left: leave.remaining, quota: leave.quota }))
+    : type === "SICK" ? tr("A photo of the doctor's note is required. Today or later — a past day is filed by a BoD.")
+    : type === "PERMIT" ? tr("Today or later, with a photo and your location.")
+    : type === "DAY_OFF" ? tr("Day off: {left} of {quota} left this period.", { left: remainingDays ?? 0, quota: todayQ.data?.dayOffQuota ?? 0 })
+    : tr("Public holiday: {left} of {quota} left this month.", { left: remainingDays ?? 0, quota: redQuota });
   const pickType = (t: string) => {
     setType(t);
     if (t !== "SICK" && t !== "PERMIT") setAttachment(null);
@@ -1793,8 +1801,8 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
     : !leave.eligible
       ? leave.reason
       : leave.remaining > 0
-        ? `${leave.year} annual leave: ${leave.remaining} of ${leave.quota} days left.`
-        : `${leave.year} annual leave is used up (${leave.quota} days taken).`;
+        ? tr("{year} annual leave: {left} of {quota} days left.", { year: leave.year, left: leave.remaining, quota: leave.quota })
+        : tr("{year} annual leave is used up ({quota} days taken).", { year: leave.year, quota: leave.quota });
   // A sick day filed for yourself needs the doctor's note; a permit carries the same evidence a
   // check-in does: photo + coordinates + when it was filed. Without it, a permit was the cheapest
   // way to erase an attendance penalty — nothing to verify.
@@ -1809,7 +1817,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
     ? Math.round((Date.parse(leaveTo + "T00:00:00Z") - Date.parse(leaveFrom + "T00:00:00Z")) / 86_400_000) + 1
     : leaveFrom ? 1 : 0;
   const leaveCapNote = multiLeave && remainingDays != null && leaveDayCount > remainingDays
-    ? `That's ${leaveDayCount} days — you have ${remainingDays} left.`
+    ? tr("That's {n} days — you have {left} left.", { n: leaveDayCount, left: remainingDays })
     : null;
   const leaveDates = leaveFrom ? [leaveFrom] : [];
   const leaveBlocks: Array<[string, string]> = leaveFrom ? [[leaveFrom, leaveTo && leaveTo >= leaveFrom ? leaveTo : leaveFrom]] : [];
@@ -1831,11 +1839,11 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
   const [geoError, setGeoError] = useState<string | null>(null);
   const [geoBusy, setGeoBusy] = useState(false);
   const askLocation = () => {
-    if (!navigator.geolocation) { setGeoError("This browser can't read your location."); return; }
+    if (!navigator.geolocation) { setGeoError(tr("This browser can't read your location.")); return; }
     setGeoBusy(true); setGeoError(null);
     navigator.geolocation.getCurrentPosition(
       (pos) => { setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGeoBusy(false); },
-      () => { setGeoError("Location refused. Turn location on for this browser first."); setGeoBusy(false); },
+      () => { setGeoError(tr("Location refused. Turn location on for this browser first.")); setGeoBusy(false); },
       { enableHighAccuracy: true, timeout: 15_000 },
     );
   };
@@ -1862,25 +1870,25 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
-        <h2 className="font-display text-lg font-bold tracking-tight">{granting ? "Grant a request to a user" : "New attendance request"}</h2>
-        {!granting && <p className="mt-1 text-xs text-muted-foreground">One day per request (annual leave: a range of days). Only the types you can actually use are listed.</p>}
+        <h2 className="font-display text-lg font-bold tracking-tight">{granting ? tr("Grant a request to someone") : tr("New attendance request")}</h2>
+        {!granting && <p className="mt-1 text-xs text-muted-foreground">{tr("One day per request (annual leave: a range of days). Only the types you can use are listed.")}</p>}
         {canGrant && (
-          <div className="mt-3 inline-flex rounded-xl border border-border bg-background p-0.5 text-xs font-semibold" role="group" aria-label="Who is this for">
-            <button type="button" onClick={() => pickMode("self")} className={cn("rounded-lg px-3 py-1.5 transition-colors", !granting ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>For myself</button>
-            <button type="button" onClick={() => pickMode("grant")} className={cn("rounded-lg px-3 py-1.5 transition-colors", granting ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>Grant to a user</button>
+          <div className="mt-3 inline-flex rounded-xl border border-border bg-background p-0.5 text-xs font-semibold" role="group" aria-label={tr("Who is this for")}>
+            <button type="button" onClick={() => pickMode("self")} className={cn("rounded-lg px-3 py-1.5 transition-colors", !granting ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{tr("For myself")}</button>
+            <button type="button" onClick={() => pickMode("grant")} className={cn("rounded-lg px-3 py-1.5 transition-colors", granting ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{tr("Grant to someone")}</button>
           </div>
         )}
         <div className="mt-4 space-y-3">
           {granting && (
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Grant to
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Grant to")}
               <select value={targetUserId} onChange={(e) => setTargetUserId(e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary">
-                <option value="">— Pick a person —</option>
+                <option value="">{tr("— Pick a person —")}</option>
                 {otherMembers.map((m) => <option key={m.userId} value={m.userId}>{m.name || m.email}</option>)}
               </select>
             </label>
           )}
           <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Type</div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Type")}</div>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {TYPES.map((t) => {
                 const Icon = TYPE_ICON[t] ?? Flag;
@@ -1889,7 +1897,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
                   <button key={t} type="button" onClick={() => pickType(t)}
                     className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition-all active:scale-[0.97]",
                       on ? "bg-primary text-primary-foreground ring-primary" : "bg-background text-muted-foreground ring-border hover:text-foreground")}>
-                    <Icon className="h-3.5 w-3.5" />{REQ_LABEL[t] ?? statusLabel(t)}
+                    <Icon className="h-3.5 w-3.5" />{REQ_LABEL[t] ? tr(REQ_LABEL[t]) : statusLabel(t)}
                   </button>
                 );
               })}
@@ -1900,23 +1908,23 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
           </div>
           {needsLocation && (
             <div className="space-y-1.5 rounded-xl border border-border bg-background/60 px-3 py-2">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Permit evidence</div>
-              <p className="text-xs text-muted-foreground">A permit needs a <b>photo</b> and your <b>location</b>, and is best filed before your shift starts.</p>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Permit evidence")}</div>
+              <p className="text-xs text-muted-foreground">{tr("A permit needs a photo and your location, and is best filed before your shift starts.")}</p>
               {coords ? (
-                <p className="text-xs font-semibold text-success">Location locked ({coords.lat.toFixed(5)}, {coords.lng.toFixed(5)})</p>
+                <p className="text-xs font-semibold text-success">{tr("Location locked ({coords})", { coords: `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` })}</p>
               ) : (
                 <button type="button" onClick={askLocation} disabled={geoBusy}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold transition-colors hover:border-primary disabled:opacity-50">
-                  {geoBusy && <Loader2 className="h-3 w-3 animate-spin" />}{geoBusy ? "Getting your location…" : "Use my location"}
+                  {geoBusy && <Loader2 className="h-3 w-3 animate-spin" />}{geoBusy ? tr("Getting your location…") : tr("Use my location")}
                 </button>
               )}
               {geoError && <p className="text-xs font-semibold text-destructive">{geoError}</p>}
               {permitBackdated && (
-                <p className="text-xs font-semibold text-destructive">A permit can't be filed for a day that has passed. Ask the BoD to enter it if it's genuinely needed.</p>
+                <p className="text-xs font-semibold text-destructive">{tr("A permit can't be filed for a day that has passed. Ask the BoD to enter it if it's really needed.")}</p>
               )}
               {lateReportPreview != null && !permitBackdated && (
                 <p className="text-xs font-semibold text-warning">
-                  You're filing {Math.floor(lateReportPreview / 60) > 0 ? `${Math.floor(lateReportPreview / 60)}h ` : ""}{lateReportPreview % 60}m after your shift started ({shiftStart}). This is recorded and your approver sees it.
+                  {tr("You're filing {time} after your shift started ({start}). This is recorded and your approver sees it.", { time: `${Math.floor(lateReportPreview / 60) > 0 ? `${Math.floor(lateReportPreview / 60)}h ` : ""}${lateReportPreview % 60}m`, start: shiftStart ?? "" })}
                 </p>
               )}
             </div>
@@ -1931,20 +1939,20 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
           {multiLeave ? (
             <div>
               <div className="grid grid-cols-2 gap-2">
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">From
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("From")}
                   <input type="date" value={leaveFrom} min={today} onChange={(e) => { setLeaveFrom(e.target.value); if (leaveTo && e.target.value > leaveTo) setLeaveTo(""); }}
                     className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
                 </label>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Until
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Until")}
                   <input type="date" value={leaveTo} min={leaveFrom || today} onChange={(e) => setLeaveTo(e.target.value)}
                     className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
                 </label>
               </div>
-              {leaveFrom && <p className="mt-1 text-[11px] font-semibold text-foreground">{fmtDate(leaveFrom)}{leaveTo && leaveTo > leaveFrom ? ` – ${fmtDate(leaveTo)}` : ""} · {leaveDayCount} day{leaveDayCount === 1 ? "" : "s"}</p>}
+              {leaveFrom && <p className="mt-1 text-[11px] font-semibold text-foreground">{fmtDate(leaveFrom)}{leaveTo && leaveTo > leaveFrom ? ` – ${fmtDate(leaveTo)}` : ""} · {tr(leaveDayCount === 1 ? "{n} day" : "{n} days", { n: leaveDayCount })}</p>}
               {leaveCapNote && <p className="mt-1 text-[11px] font-semibold text-destructive">{leaveCapNote}</p>}
             </div>
           ) : (
-          <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Date
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Date")}
             <input type="date" value={date} min={!granting ? today : undefined}
               onChange={(e) => setDate(e.target.value)}
               className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
@@ -1952,8 +1960,8 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
           )}
           {!granting && remainingDays != null && (
             <div className="flex items-center gap-2">
-              <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums", quotaProblem ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary")}>{multiLeave ? `${leaveDayCount} day${leaveDayCount === 1 ? "" : "s"}` : "1 day"}</span>
-              <span className="text-xs text-muted-foreground">{remainingDays} left</span>
+              <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums", quotaProblem ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary")}>{multiLeave ? tr(leaveDayCount === 1 ? "{n} day" : "{n} days", { n: leaveDayCount }) : tr("{n} day", { n: 1 })}</span>
+              <span className="text-xs text-muted-foreground">{tr("{n} left", { n: remainingDays })}</span>
             </div>
           )}
           {quotaProblem && (
@@ -1961,26 +1969,28 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{quotaProblem}
             </p>
           )}
-          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="Reason / context…" className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder={tr("Reason or context…")} className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
           {showAttachment && (
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                {type === "SICK" ? `Doctor’s note photo${attachmentRequired ? " (required)" : " (optional)"}` : `Supporting photo${attachmentRequired ? " (required)" : " (optional)"}`}
+                {type === "SICK"
+                  ? (attachmentRequired ? tr("Doctor’s note photo (required)") : tr("Doctor’s note photo (optional)"))
+                  : (attachmentRequired ? tr("Supporting photo (required)") : tr("Supporting photo (optional)"))}
               </label>
               <label className={cn("mt-1 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed px-3 py-2.5 text-sm transition-colors hover:border-primary", attachment ? "border-primary/50 bg-primary/5" : "border-border")}>
                 <Camera className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className={cn("min-w-0 flex-1 truncate", attachment ? "font-semibold" : "text-muted-foreground")}>{attachment ? attachment.name : "Pick a photo / file (max 10MB)"}</span>
-                {attachment && <button type="button" onClick={(e) => { e.preventDefault(); setAttachment(null); }} className="shrink-0 rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>}
-                <input type="file" accept="image/*,.pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0] ?? null; if (f && f.size > 10 * 1024 * 1024) { alert("Max 10MB."); return; } setAttachment(f); e.target.value = ""; }} />
+                <span className={cn("min-w-0 flex-1 truncate", attachment ? "font-semibold" : "text-muted-foreground")}>{attachment ? attachment.name : tr("Pick a photo or file (max 10 MB)")}</span>
+                {attachment && <button type="button" aria-label={tr("Remove file")} onClick={(e) => { e.preventDefault(); setAttachment(null); }} className="shrink-0 rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>}
+                <input type="file" accept="image/*,.pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0] ?? null; if (f && f.size > 10 * 1024 * 1024) { alert(tr("Max 10 MB.")); return; } setAttachment(f); e.target.value = ""; }} />
               </label>
-              {attachmentRequired && !attachment && <p className="mt-1 text-[11px] font-semibold text-destructive">{type === "SICK" ? "A doctor’s note photo is required." : "A photo is required."}</p>}
+              {attachmentRequired && !attachment && <p className="mt-1 text-[11px] font-semibold text-destructive">{type === "SICK" ? tr("A doctor’s note photo is required.") : tr("A photo is required.")}</p>}
             </div>
           )}
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-2">
-          <button disabled={reason.trim().length < 3 || (attachmentRequired && !attachment) || (needsLocation && !coords) || permitBackdated || leaveBlocked || Boolean(quotaProblem) || missingTarget || (multiLeave && (leaveDates.length === 0 || Boolean(leaveCapNote))) || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {granting ? `Grant ${(REQ_LABEL[type] ?? "request").toLowerCase()}` : "Submit request"}</button>
-          <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">Cancel</button>
-          {create.isError && <span className="text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? "Couldn’t send the request."}</span>}
+          <button disabled={reason.trim().length < 3 || (attachmentRequired && !attachment) || (needsLocation && !coords) || permitBackdated || leaveBlocked || Boolean(quotaProblem) || missingTarget || (multiLeave && (leaveDates.length === 0 || Boolean(leaveCapNote))) || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {granting ? tr("Grant {type}", { type: tr(REQ_LABEL[type] ?? "request").toLowerCase() }) : tr("Submit request")}</button>
+          <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">{tr("Cancel")}</button>
+          {create.isError && <span className="text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? tr("Couldn’t send the request.")}</span>}
         </div>
       </div>
     </div>
@@ -1998,13 +2008,13 @@ function fmtDateTime(value?: string | null) {
   if (!value) return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString("en-GB", { timeZone: "Asia/Jakarta", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }).replace(",", " ·");
+  return `${d.toLocaleDateString(localeOf(), { timeZone: "Asia/Jakarta", day: "numeric", month: "short" })} · ${fmtTime(value)}`;
 }
 
 function fmtDateShort(value?: string | null) {
   if (!value) return "—";
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString(localeOf(), { month: "short", day: "numeric" });
 }
 
 function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, officeName, checkOutApproval, pendingCheckout, disabled, loading, workedMinutes, noGeofence, coveredBy }: { checkedIn: boolean; checkedOut: boolean; checkInAt?: string | null; checkOutAt?: string | null; officeName?: string | null; checkOutApproval?: string | null; pendingCheckout?: { attendanceDate?: string | null; checkInAt?: string | null; officeName?: string | null } | null; disabled: boolean; loading?: boolean; workedMinutes?: number | null; noGeofence?: boolean; coveredBy?: string | null }) {
@@ -2038,13 +2048,13 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
   const checkIn = useMutation({
     mutationFn: (payload: AttendanceActionPayload) => nexusApi.attendanceCheckIn(payload),
     onSuccess: (data) => { refresh(); setNotes(""); press.succeed(successTitle("in", atOf(data?.record?.checkInAt), data?.record)); },
-    onError: (e) => { if (isUseIosAppError(e)) { press.set(null); setIosOnly(true); setMessage(""); return; } press.fail(errOf(e, "Check-in failed."), "in"); },
+    onError: (e) => { if (isUseIosAppError(e)) { press.set(null); setIosOnly(true); setMessage(""); return; } press.fail(errOf(e, tr("Check-in failed.")), "in"); },
   });
   const checkOut = useMutation({
     mutationFn: (payload: AttendanceActionPayload) => nexusApi.attendanceCheckOut(payload),
     onSuccess: (data) => {
       refresh(); setNotes(""); setOffsitePrompt(null); setOffsiteReason(""); setReflection("");
-      if (data?.pendingApproval) { press.set(null); setOkMessage("Offsite checkout submitted — waiting for BoD approval ⏳"); }
+      if (data?.pendingApproval) { press.set(null); setOkMessage(tr("Offsite check-out sent — waiting for BoD approval.")); }
       else { setOkMessage(""); press.succeed(successTitle("out", atOf(data?.record?.checkOutAt), data?.record)); }
     },
     onError: (e) => {
@@ -2052,11 +2062,11 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
       const payload = e instanceof ApiError ? (e.payload as { code?: string; officeName?: string; distanceMeters?: number } | null) : null;
       if (e instanceof ApiError && e.status === 422 && payload?.code === "OUTSIDE_RADIUS") {
         press.set(null); setMessage(""); setOffsiteReason("");
-        setOffsitePrompt({ officeName: payload.officeName ?? "office", distanceMeters: payload.distanceMeters ?? 0 });
-      } else { press.fail(errOf(e, "Check-out failed."), "out"); }
+        setOffsitePrompt({ officeName: payload.officeName ?? tr("the office"), distanceMeters: payload.distanceMeters ?? 0 });
+      } else { press.fail(errOf(e, tr("Check-out failed.")), "out"); }
     },
   });
-  const submitOffsite = () => { if (!lastOut.current || !offsiteReason.trim()) return; press.set({ step: "sending", place: "Outside the office · with your reason" }); checkOut.mutate({ ...lastOut.current, offsite: true, reason: offsiteReason.trim() }); };
+  const submitOffsite = () => { if (!lastOut.current || !offsiteReason.trim()) return; press.set({ step: "sending", place: tr("Outside the office · with your reason") }); checkOut.mutate({ ...lastOut.current, offsite: true, reason: offsiteReason.trim() }); };
   const active = checkIn.isPending || checkOut.isPending;
   const busy = active || locating || press.busy;
   // A forgotten previous-day check-out blocks today's check-in — force check-out mode for it.
@@ -2071,8 +2081,8 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
     loading ? { kind: "loading" }
     : checkOutApproval === "PENDING" && !forcePending ? { kind: "waiting-approval" }
     : mode === "check-out" ? { kind: "check-out", reflectionCount, previousDay: forcePending }
-    : mode === "done" ? { kind: "done", line: `Done for today${workedLabel(workedMinutes) ? ` · worked ${workedLabel(workedMinutes)}` : ""}`, times: `In ${fmtTime(checkInAt)} · Out ${fmtTime(checkOutAt)}` }
-    : { kind: "check-in", hint: noGeofence ? "Location-free — clock in from anywhere" : "Selfie + GPS — geofence-verified" };
+    : mode === "done" ? { kind: "done", line: `${tr("Done for today")}${workedLabel(workedMinutes) ? ` · ${tr("worked {time}", { time: workedLabel(workedMinutes) ?? "" })}` : ""}`, times: `${tr("In {time}", { time: fmtTime(checkInAt) })} · ${tr("Out {time}", { time: fmtTime(checkOutAt) })}` }
+    : { kind: "check-in", hint: noGeofence ? tr("Any location — check in from anywhere") : tr("Check in with a selfie at the office.") };
 
   // The one button: face check first, then the position, then the upload — each drawn in the button.
   function start(m: "check-in" | "check-out") {
@@ -2106,7 +2116,7 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
       })
       .catch((err) => {
         setLocating(false);
-        press.fail(err instanceof GeoError ? err.message : "Couldn’t get your location. Attendance needs GPS for the geofence.", m === "check-in" ? "in" : "out");
+        press.fail(err instanceof GeoError ? err.message : tr("Couldn’t get your location. Attendance needs GPS to check the office area."), m === "check-in" ? "in" : "out");
       });
   }
 
@@ -2114,12 +2124,12 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
     <section className="overflow-hidden rounded-3xl border border-primary/10 bg-gradient-to-br from-accent via-card to-secondary p-5 shadow-soft">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-primary">Attendance</p>
-          <h2 className="mt-1 font-display text-2xl font-bold tracking-tight">{forcePending ? "Finish your previous attendance" : mode === "check-in" ? "Start your day" : mode === "check-out" ? "Wrap the day" : "All done today 🎉"}</h2>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-primary">{tr("Attendance")}</p>
+          <h2 className="mt-1 font-display text-2xl font-bold tracking-tight">{forcePending ? tr("Finish your previous attendance") : mode === "check-in" ? tr("Start your day") : mode === "check-out" ? tr("Wrap up the day") : tr("All done for today")}</h2>
           <p className="mt-1 inline-flex items-center gap-2 text-sm text-muted-foreground">
-            {effCheckInAt && <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> In {fmtTime(effCheckInAt)}{forcePending && pendingDateLabel ? ` · ${pendingDateLabel}` : ""}</span>}
-            {!forcePending && checkOutAt && <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> Out {fmtTime(checkOutAt)}</span>}
-            {!effCheckInAt && <span>Selfie + GPS — geofence-verified.</span>}
+            {effCheckInAt && <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> {tr("In {time}", { time: fmtTime(effCheckInAt) })}{forcePending && pendingDateLabel ? ` · ${pendingDateLabel}` : ""}</span>}
+            {!forcePending && checkOutAt && <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> {tr("Out {time}", { time: fmtTime(checkOutAt) })}</span>}
+            {!effCheckInAt && <span>{tr("Check in with a selfie at the office.")}</span>}
           </p>
         </div>
         {effOfficeName && <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary"><MapPin className="h-3.5 w-3.5" /> {effOfficeName}</span>}
@@ -2128,7 +2138,7 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
       {forcePending && (
         <div className="mt-4 flex items-start gap-2 rounded-2xl border border-amber-300/60 bg-amber-100 p-3 text-sm font-semibold text-amber-800">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>You forgot to check out on {pendingDateLabel || "the previous day"}. You need to check out first before you can check in today.</span>
+          <span>{tr("You forgot to check out on {date}. Check out first before you check in today.", { date: pendingDateLabel || tr("the previous day") })}</span>
         </div>
       )}
 
@@ -2147,13 +2157,13 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
             {mode === "check-out" && (
               <div className="rounded-xl border border-primary/20 bg-card/80 p-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-foreground">Daily reflection <span className="font-medium text-muted-foreground">· required, min {REFLECTION_MIN} characters</span></span>
+                  <span className="text-xs font-bold text-foreground">{tr("Daily reflection")} <span className="font-medium text-muted-foreground">· {tr("required, min {n} characters", { n: REFLECTION_MIN })}</span></span>
                   <span className={cn("text-[11px] font-semibold", reflection.trim().length >= REFLECTION_MIN ? "text-success" : "text-muted-foreground")}>{reflection.trim().length}/{REFLECTION_MIN}</span>
                 </div>
-                <textarea value={reflection} onChange={(e) => setReflection(e.target.value)} rows={4} placeholder="What you worked on today, progress, blockers, and what’s next…" className="mt-1.5 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm leading-relaxed outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" />
+                <textarea value={reflection} onChange={(e) => setReflection(e.target.value)} rows={4} placeholder={tr("What you worked on today, progress, blockers, and what’s next…")} className="mt-1.5 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm leading-relaxed outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" />
               </div>
             )}
-            <input value={notes} onChange={(e) => setNotes(e.target.value)} disabled={busy} placeholder="Optional note: traffic, WFH context, etc." className="rounded-xl border border-border bg-card/80 px-3 py-2 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20" />
+            <input value={notes} onChange={(e) => setNotes(e.target.value)} disabled={busy} placeholder={tr("Optional note: traffic, WFH context, etc.")} className="rounded-xl border border-border bg-card/80 px-3 py-2 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20" />
             <AttendanceButton phase={press.phase} day={day} shakes={press.shakes} onPress={onPress} onDismiss={() => press.set(null)} />
             <WebCheckInNote />
             <AndroidAppCheckInNote />
@@ -2162,17 +2172,17 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
       )}
       {offsitePrompt && (
         <div className="mt-3 space-y-2 rounded-2xl border border-amber-300 bg-amber-50 p-3">
-          <div className="text-sm font-bold text-amber-800">You’re outside the office area</div>
-          <p className="text-xs text-amber-700">±{Math.round(offsitePrompt.distanceMeters)}m from {offsitePrompt.officeName}. Check out from here? <span className="font-semibold">A reason is required</span> — it’ll wait for BoD approval first.</p>
-          <textarea value={offsiteReason} onChange={(e) => setOffsiteReason(e.target.value)} rows={2} placeholder="Reason (e.g. content shoot / client meeting at X)" className="w-full resize-none rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500" />
+          <div className="text-sm font-bold text-amber-800">{tr("You’re outside the office area")}</div>
+          <p className="text-xs text-amber-700">{tr("±{m}m from {office}. Check out from here? A reason is required, and it waits for BoD approval first.", { m: Math.round(offsitePrompt.distanceMeters), office: offsitePrompt.officeName })}</p>
+          <textarea value={offsiteReason} onChange={(e) => setOffsiteReason(e.target.value)} rows={2} placeholder={tr("Reason (e.g. content shoot or client meeting at X)")} className="w-full resize-none rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500" />
           <div className="flex gap-2">
-            <button onClick={() => { setOffsitePrompt(null); setOffsiteReason(""); }} disabled={busy} className="flex-1 rounded-lg border border-border bg-white py-2 text-xs font-semibold text-muted-foreground transition hover:bg-accent disabled:opacity-50">Cancel</button>
-            <button onClick={submitOffsite} disabled={!offsiteReason.trim() || busy} className="flex-[1.6] rounded-lg bg-amber-600 py-2 text-xs font-bold text-white transition hover:bg-amber-700 disabled:opacity-50">{busy ? "Sending…" : "Check out & request approval"}</button>
+            <button onClick={() => { setOffsitePrompt(null); setOffsiteReason(""); }} disabled={busy} className="flex-1 rounded-lg border border-border bg-white py-2 text-xs font-semibold text-muted-foreground transition hover:bg-accent disabled:opacity-50">{tr("Cancel")}</button>
+            <button onClick={submitOffsite} disabled={!offsiteReason.trim() || busy} className="flex-[1.6] rounded-lg bg-amber-600 py-2 text-xs font-bold text-white transition hover:bg-amber-700 disabled:opacity-50">{busy ? tr("Sending…") : tr("Check out and request approval")}</button>
           </div>
         </div>
       )}
       {okMessage && !offsitePrompt && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">{okMessage}</p>}
-      {checkOutApproval === "PENDING" && !offsitePrompt && !okMessage && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">⏳ Offsite checkout — waiting for BoD approval</p>}
+      {checkOutApproval === "PENDING" && !offsitePrompt && !okMessage && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">{tr("Offsite check-out — waiting for BoD approval")}</p>}
       {!iosOnly && message && <p className="mt-3 text-sm font-semibold text-destructive">{message}</p>}
     </section>
   );
@@ -2185,7 +2195,7 @@ function memberSubtitle(user: unknown) {
   if (user && typeof user === "object" && "email" in user && typeof (user as { email?: unknown }).email === "string") {
     return (user as { email: string }).email;
   }
-  return "Team member";
+  return tr("Team member");
 }
 
 function FunMetric({ icon, label, value, helper, tone, onClick }: { icon: React.ReactNode; label: string; value: string; helper: string; tone: "green" | "purple" | "amber" | "rose"; onClick?: (origin?: MorphOrigin) => void }) {
@@ -2226,6 +2236,7 @@ function FunMetricButton({ onClick, className, children }: { onClick: (origin?: 
 // Self log of day-off / tanggal-merah usage (incl. auto-deductions from telat >120 menit).
 // Morphs open from the FunMetric card sharing layoutId `funmetric-${kind}`.
 function DayOffLogModal({ kind, origin, onClose }: { kind: "DAY_OFF" | "RED_DATE"; origin?: MorphOrigin; onClose: () => void }) {
+  const { locale } = useLang();
   // `includeAutoDeductions=1` because this log is the one place the cron's penalties BELONG: the card
   // that opens it counts them in "N/4 used", so a log without them wouldn't add up. Everywhere else
   // the endpoint now returns only what a person actually filed.
@@ -2242,25 +2253,25 @@ function DayOffLogModal({ kind, origin, onClose }: { kind: "DAY_OFF" | "RED_DATE
   const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const periodStartKey = ymd(pStart);
   const periodEndKey = ymd(pEnd);
-  const periodLabel = `${pStart.toLocaleDateString("id-ID", { day: "numeric", month: "short" })} – ${pEnd.toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`;
+  const periodLabel = `${pStart.toLocaleDateString(locale, { day: "numeric", month: "short" })} – ${pEnd.toLocaleDateString(locale, { day: "numeric", month: "short" })}`;
   const rows = all
     .filter((r) => (r.type ?? "").toUpperCase() === kind)
     .filter((r) => { const d = (r.startDate ?? "").slice(0, 10); return d >= periodStartKey && d <= periodEndKey; })
     .sort((a, b) => (b.startDate ?? "").localeCompare(a.startDate ?? ""));
-  const title = kind === "DAY_OFF" ? "Day-off log" : "Public holiday log";
-  const subtitle = kind === "DAY_OFF" ? "Day-off / deductions (late >120 min) this period" : "Public holidays used this period";
+  const title = kind === "DAY_OFF" ? tr("Day-off log") : tr("Public holiday log");
+  const subtitle = kind === "DAY_OFF" ? tr("Days off and deductions (late >120 min) this period") : tr("Public holidays used this period");
 
   return (
     <MorphPanel origin={origin} onClose={onClose}>
       <div className="flex items-center gap-3 border-b border-border bg-muted/30 px-5 py-4">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary">{kind === "DAY_OFF" ? <Sparkles className="h-5 w-5" /> : <Calendar className="h-5 w-5" />}</span>
         <div className="min-w-0 flex-1"><div className="font-display text-lg font-bold tracking-tight">{title}</div><div className="text-xs text-muted-foreground">{subtitle}</div></div>
-        <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+        <button onClick={onClose} aria-label={tr("Close")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        <p className="mb-3 text-[11px] font-medium text-muted-foreground">Current period: <span className="font-semibold text-foreground">{periodLabel}</span></p>
+        <p className="mb-3 text-[11px] font-medium text-muted-foreground">{tr("Current period:")} <span className="font-semibold text-foreground">{periodLabel}</span></p>
         {q.isLoading && <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-muted/40" />)}</div>}
-        {!q.isLoading && rows.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No {kind === "DAY_OFF" ? "day-off" : "public holiday"} used this period ({periodLabel}).</p>}
+        {!q.isLoading && rows.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">{kind === "DAY_OFF" ? tr("No day off used this period ({range}).", { range: periodLabel }) : tr("No public holiday used this period ({range}).", { range: periodLabel })}</p>}
         {!q.isLoading && rows.length > 0 && (
           <div className="space-y-2">
             {rows.map((r) => {
@@ -2270,10 +2281,10 @@ function DayOffLogModal({ kind, origin, onClose }: { kind: "DAY_OFF" | "RED_DATE
                 <div key={r.id} className="rounded-2xl border border-border bg-muted/20 p-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-semibold">{range}</span>
-                    {kind === "DAY_OFF" && <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", auto ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700")}>{auto ? "Auto · late >120m" : "Manual"}</span>}
+                    {kind === "DAY_OFF" && <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", auto ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700")}>{auto ? tr("Auto · late >120m") : tr("Manual")}</span>}
                   </div>
                   {r.reason && <p className="mt-1 text-xs text-muted-foreground">{r.reason}</p>}
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">Status: {statusLabel(r.status || "")}</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">{tr("Status")}: {statusLabel(r.status || "")}</p>
                 </div>
               );
             })}

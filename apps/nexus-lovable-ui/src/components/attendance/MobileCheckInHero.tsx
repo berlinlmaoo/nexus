@@ -5,7 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LocateFixed, PenLine } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import { celebrate } from "@/components/Celebration";
-import { ApiError, fmtTime, nexusApi, type AttendanceActionPayload, type NexusAttendanceToday } from "@/lib/nexus-api";
+import { t, useLang } from "@/lib/lang";
+import { ApiError, fmtTime, nexusApi, statusLabel, type AttendanceActionPayload, type NexusAttendanceToday } from "@/lib/nexus-api";
 import { getAttendanceFix, GeoError } from "@/lib/geo";
 import { recordPlace } from "@/lib/attendance-place";
 import { LivenessCapture } from "@/components/attendance/LivenessCapture";
@@ -21,11 +22,12 @@ function jktTime(d: Date) {
 function atOf(iso?: string | null) {
   return iso ? fmtTime(iso) : jktTime(new Date()).slice(0, 5);
 }
-function jktDate(d: Date) {
-  return d.toLocaleDateString("en-GB", { timeZone: "Asia/Jakarta", weekday: "long", day: "numeric", month: "long", year: "numeric" });
+function jktDate(d: Date, locale: string) {
+  return d.toLocaleDateString(locale, { timeZone: "Asia/Jakarta", weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 
 export function MobileCheckInHero({ today, disabled, failed = false }: { today: TodayData; disabled: boolean; failed?: boolean }) {
+  const { locale } = useLang();
   const checkedIn = Boolean(today?.today?.checkInAt);
   const checkedOut = Boolean(today?.today?.checkOutAt);
   const pending = today?.pendingCheckout ?? null;
@@ -61,14 +63,14 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
   const checkIn = useMutation({
     mutationFn: (p: AttendanceActionPayload) => nexusApi.attendanceCheckIn(p),
     onSuccess: (data) => { setMsg(null); refresh(); press.succeed(successTitle("in", atOf(data?.record?.checkInAt), data?.record)); },
-    onError: (e) => { if (isUseIosAppError(e)) { press.set(null); setIosOnly(true); setMsg(null); return; } press.fail(errOf(e, "Couldn't check in."), "in"); },
+    onError: (e) => { if (isUseIosAppError(e)) { press.set(null); setIosOnly(true); setMsg(null); return; } press.fail(errOf(e, t("Couldn't check in.")), "in"); },
   });
   const checkOut = useMutation({
     mutationFn: (p: AttendanceActionPayload) => nexusApi.attendanceCheckOut(p),
     onSuccess: (data) => {
       setOffsitePrompt(null); setOffsiteReason(""); setReflection(""); refresh();
       // Offsite: the button itself becomes "Check-out sent · waiting for approval" once today reloads.
-      if (data?.pendingApproval) { press.set(null); setMsgOk(true); setMsg("Offsite checkout sent — waiting on BoD approval ⏳"); }
+      if (data?.pendingApproval) { press.set(null); setMsgOk(true); setMsg(t("Offsite check-out sent — waiting for BoD approval.")); }
       else { setMsg(null); press.succeed(successTitle("out", atOf(data?.record?.checkOutAt), data?.record)); }
     },
     onError: (e) => {
@@ -77,11 +79,11 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
       if (e instanceof ApiError && e.status === 422 && payload?.code === "OUTSIDE_RADIUS") {
         // Outside the geofence → offer an offsite checkout with a reason (pending BoD approval).
         press.set(null); setMsg(null); setOffsiteReason("");
-        setOffsitePrompt({ officeName: payload.officeName ?? "the office", distanceMeters: payload.distanceMeters ?? 0 });
-      } else { press.fail(errOf(e, "Couldn't check out."), "out"); }
+        setOffsitePrompt({ officeName: payload.officeName ?? t("the office"), distanceMeters: payload.distanceMeters ?? 0 });
+      } else { press.fail(errOf(e, t("Couldn't check out.")), "out"); }
     },
   });
-  const submitOffsite = () => { if (!lastOut.current || !offsiteReason.trim()) return; press.set({ step: "sending", place: "Outside the office · with your reason" }); checkOut.mutate({ ...lastOut.current, offsite: true, reason: offsiteReason.trim() }); };
+  const submitOffsite = () => { if (!lastOut.current || !offsiteReason.trim()) return; press.set({ step: "sending", place: t("Outside the office · with your reason") }); checkOut.mutate({ ...lastOut.current, offsite: true, reason: offsiteReason.trim() }); };
   const busy = checkIn.isPending || checkOut.isPending || locating || press.busy;
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -137,8 +139,8 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
       })
       .catch((err) => {
         setLocating(false);
-        if (err instanceof NoFaceError) { press.fail("No face in the photo. Take the selfie with your face clearly visible, then try again.", mode); return; }
-        press.fail(err instanceof GeoError ? err.message : "Couldn't get your location. Try again.", mode);
+        if (err instanceof NoFaceError) { press.fail(t("No face in the photo. Take the selfie with your face clearly visible, then try again."), mode); return; }
+        press.fail(err instanceof GeoError ? err.message : t("Couldn't get your location. Try again."), mode);
       });
   };
 
@@ -191,7 +193,7 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
       const ll: L.LatLngExpression = [o.latitude as number, o.longitude as number];
       pts.push(ll);
       L.circle(ll, { radius: o.radiusMeters ?? 100, color: "#4f46e5", weight: 1.5, fillColor: "#4f46e5", fillOpacity: 0.1 }).addTo(layer);
-      L.marker(ll, { icon: L.divIcon({ className: "", html: `<div style="font-size:26px;line-height:1">🏢</div>`, iconSize: [26, 26], iconAnchor: [13, 24] }) }).addTo(layer).bindTooltip(escapeHtml(o.name ?? "Office"));
+      L.marker(ll, { icon: L.divIcon({ className: "", html: `<div style="font-size:26px;line-height:1">🏢</div>`, iconSize: [26, 26], iconAnchor: [13, 24] }) }).addTo(layer).bindTooltip(escapeHtml(o.name ?? t("Office")));
     }
     if (userPos) {
       const ll: L.LatLngExpression = [userPos.lat, userPos.lng];
@@ -207,7 +209,7 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
     if (map && userPos) map.setView([userPos.lat, userPos.lng], 16);
   };
 
-  const status = forcePending ? "Finish yesterday's attendance" : checkedOut ? "Done for today 🎉" : checkedIn ? "Clocked in" : "Ready to check in";
+  const status = forcePending ? t("Finish your previous attendance") : checkedOut ? t("Done for today") : checkedIn ? t("Checked in") : t("Ready to check in");
 
   // What the one button is for today. The forgotten check-out of a previous day comes first (the
   // server will not take today's check-in until it is closed); an approved request covering today
@@ -220,7 +222,7 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
     : !today && disabled ? { kind: "loading" }
     : today?.today?.checkOutApproval === "PENDING" && !forcePending ? { kind: "waiting-approval" }
     : needsReflection ? { kind: "check-out", reflectionCount, previousDay: forcePending }
-    : checkedOut ? { kind: "done", line: `Done for today${worked ? ` · worked ${worked}` : ""}`, times: `In ${fmtTime(today?.today?.checkInAt)} · Out ${fmtTime(today?.today?.checkOutAt)}` }
+    : checkedOut ? { kind: "done", line: `${t("Done for today")}${worked ? ` · ${t("worked {time}", { time: worked })}` : ""}`, times: `${t("In {time}", { time: fmtTime(today?.today?.checkInAt) })} · ${t("Out {time}", { time: fmtTime(today?.today?.checkOutAt) })}` }
     : { kind: "check-in", hint: whereHint(userPos, officesQ.data?.offices, today?.noGeofence) };
   const onPress = () => {
     if (press.phase?.step === "failed") { trigger(press.phase.mode); return; } // retry = a fresh face check
@@ -236,25 +238,25 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
         {/* top clock card */}
         <div className="absolute inset-x-3 top-3 z-20 rounded-3xl border border-white/15 p-4 text-white shadow-lg" style={{ backgroundImage: "linear-gradient(150deg, #c4b5fd 0%, #7c3aed 100%)", boxShadow: "0 12px 28px -12px #a78bfa" }}>
           <div className="flex items-center justify-between text-xs font-semibold opacity-90">
-            <span>{jktDate(now)}</span>
+            <span>{jktDate(now, locale)}</span>
             <span>GMT+7</span>
           </div>
           <div className="mt-1 text-center font-display text-5xl font-bold tabular-nums tracking-tight">{jktTime(now)}</div>
           <div className="mt-2 flex justify-center">
             <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold">
               {shift?.flexi
-                ? `Flexi ${shift.startTime}–${shift.endTime} · +9h`
-                : `My Work Schedule ${shift ? `${shift.startTime} – ${shift.endTime}` : "—"}`}
+                ? t("Flexi {start}–{end} · +9h", { start: shift.startTime, end: shift.endTime })
+                : t("My schedule {time}", { time: shift ? `${shift.startTime} – ${shift.endTime}` : "—" })}
             </span>
           </div>
           <div className="mt-2 flex items-center justify-center gap-8 text-sm font-bold tabular-nums">
-            <span className="opacity-90">IN {today?.today?.checkInAt ? fmtTime(today.today.checkInAt) : "--:--"}</span>
-            <span className="opacity-90">OUT {today?.today?.checkOutAt ? fmtTime(today.today.checkOutAt) : "--:--"}</span>
+            <span className="opacity-90">{t("IN")} {today?.today?.checkInAt ? fmtTime(today.today.checkInAt) : "--:--"}</span>
+            <span className="opacity-90">{t("OUT")} {today?.today?.checkOutAt ? fmtTime(today.today.checkOutAt) : "--:--"}</span>
           </div>
         </div>
 
         {/* recenter */}
-        <button onClick={recenter} aria-label="Recenter" className="absolute bottom-4 right-4 z-20 grid h-11 w-11 place-items-center rounded-full bg-card text-foreground shadow-lg ring-1 ring-border active:scale-95">
+        <button onClick={recenter} aria-label={t("Recenter")} className="absolute bottom-4 right-4 z-20 grid h-11 w-11 place-items-center rounded-full bg-card text-foreground shadow-lg ring-1 ring-border active:scale-95">
           <LocateFixed className="h-5 w-5" />
         </button>
 
@@ -264,7 +266,7 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
             {status}{officeName ? ` · ${officeName}` : ""}
           </span>
           {today?.noGeofence && (
-            <span className="rounded-full bg-sky-500/90 px-3 py-1 text-xs font-bold text-white shadow ring-1 ring-sky-300 backdrop-blur">📍 Location-free — clock in from anywhere</span>
+            <span className="rounded-full bg-sky-500/90 px-3 py-1 text-xs font-bold text-white shadow ring-1 ring-sky-300 backdrop-blur">{t("Any location — check in from anywhere")}</span>
           )}
         </div>
       </section>
@@ -272,7 +274,7 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
       {/* The forgotten check-out of a previous day, said before anything else. */}
       {forcePending && !iosOnly && (
         <div className="rounded-xl border border-amber-300/60 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-800">
-          ⚠️ You still have an earlier shift that was never checked out. {reflectionCount >= REFLECTION_MIN ? "Tap Check out to close it first — then you can check in again." : "Write the daily reflection below first — Check out unlocks at 200 characters."}
+          {t("You still have an earlier shift that was never checked out.")} {reflectionCount >= REFLECTION_MIN ? t("Tap Check out to close it first, then you can check in again.") : t("Write the daily reflection below first. Check out unlocks at {n} characters.", { n: REFLECTION_MIN })}
         </div>
       )}
 
@@ -280,26 +282,26 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
       {needsReflection && !iosOnly && (
         <div className="rounded-2xl border border-border bg-card p-3 shadow-soft">
           <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1.5 text-sm font-bold text-foreground"><PenLine className="h-4 w-4 text-primary" /> Daily reflection</span>
+            <span className="inline-flex items-center gap-1.5 text-sm font-bold text-foreground"><PenLine className="h-4 w-4 text-primary" /> {t("Daily reflection")}</span>
             <span className={`text-xs font-bold tabular-nums ${reflectionCount >= REFLECTION_MIN ? "text-emerald-600" : "text-amber-600"}`}>{reflectionCount}/{REFLECTION_MIN}</span>
           </div>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">Required before check-out. What you worked on today, the progress, any blockers, what's next.</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{t("Required before check-out. What you worked on today, the progress, any blockers, what's next.")}</p>
           <textarea
             value={reflection}
             onChange={(e) => setReflection(e.target.value)}
             rows={4}
             disabled={busy}
-            placeholder="Today I worked on… the progress was… the blocker was… tomorrow I'll continue…"
+            placeholder={t("Today I worked on… the progress was… the blocker was… tomorrow I'll continue…")}
             className={`mt-2 w-full resize-none rounded-xl border bg-background px-3 py-2 text-sm leading-relaxed outline-none transition focus:ring-2 focus:ring-primary/20 ${reflectionCount >= REFLECTION_MIN ? "border-emerald-400/60" : "border-border focus:border-primary"}`}
           />
           {reflectionCount < REFLECTION_MIN && (
-            <p className="mt-1 text-[11px] font-semibold text-amber-600">{REFLECTION_MIN - reflectionCount} more characters needed before you can check out.</p>
+            <p className="mt-1 text-[11px] font-semibold text-amber-600">{t("{n} more characters needed before you can check out.", { n: REFLECTION_MIN - reflectionCount })}</p>
           )}
         </div>
       )}
 
       {/* The one attendance button — in normal flow (below the map) so it never overlaps the fixed navbar */}
-      {iosOnly && (!checkedOut || forcePending) ? <IosAppCheckInCard /> : coveredByRequest ? <CoveredByRequestCard type={today?.todayRequest?.type ? statusWords(today.todayRequest.type) : null} /> : <>
+      {iosOnly && (!checkedOut || forcePending) ? <IosAppCheckInCard /> : coveredByRequest ? <CoveredByRequestCard type={today?.todayRequest?.type ? statusLabel(today.todayRequest.type) : null} /> : <>
       <AttendanceButton phase={press.phase} day={day} shakes={press.shakes} onPress={onPress} onDismiss={() => press.set(null)} />
       {(!checkedOut || forcePending) && <WebCheckInNote />}
       </>}
@@ -307,22 +309,22 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
       {/* Offsite checkout prompt — shown when the user is outside the office geofence on check-out */}
       {offsitePrompt && (
         <div className="space-y-2 rounded-2xl border border-amber-300 bg-amber-50 p-3">
-          <div className="text-sm font-bold text-amber-800">You're outside the office area</div>
-          <p className="text-xs text-amber-700">±{Math.round(offsitePrompt.distanceMeters)}m from {offsitePrompt.officeName}. Want to check out from here? <span className="font-semibold">A reason is required</span> — your checkout waits on BoD approval first.</p>
-          <textarea value={offsiteReason} onChange={(e) => setOffsiteReason(e.target.value)} rows={2} placeholder="Reason (e.g. content shoot at X / client meeting at Y)" className="w-full resize-none rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500" />
+          <div className="text-sm font-bold text-amber-800">{t("You’re outside the office area")}</div>
+          <p className="text-xs text-amber-700">{t("±{m}m from {office}. Check out from here? A reason is required, and it waits for BoD approval first.", { m: Math.round(offsitePrompt.distanceMeters), office: offsitePrompt.officeName })}</p>
+          <textarea value={offsiteReason} onChange={(e) => setOffsiteReason(e.target.value)} rows={2} placeholder={t("Reason (e.g. content shoot or client meeting at X)")} className="w-full resize-none rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500" />
           <div className="flex gap-2">
-            <button onClick={() => { setOffsitePrompt(null); setOffsiteReason(""); }} disabled={busy} className="flex-1 rounded-lg border border-border bg-white py-2 text-xs font-semibold text-muted-foreground transition hover:bg-accent disabled:opacity-50">Cancel</button>
-            <button onClick={submitOffsite} disabled={!offsiteReason.trim() || busy} className="flex-[1.6] rounded-lg bg-amber-600 py-2 text-xs font-bold text-white transition hover:bg-amber-700 disabled:opacity-50">{busy ? "Sending…" : "Check out & request approval"}</button>
+            <button onClick={() => { setOffsitePrompt(null); setOffsiteReason(""); }} disabled={busy} className="flex-1 rounded-lg border border-border bg-white py-2 text-xs font-semibold text-muted-foreground transition hover:bg-accent disabled:opacity-50">{t("Cancel")}</button>
+            <button onClick={submitOffsite} disabled={!offsiteReason.trim() || busy} className="flex-[1.6] rounded-lg bg-amber-600 py-2 text-xs font-bold text-white transition hover:bg-amber-700 disabled:opacity-50">{busy ? t("Sending…") : t("Check out and request approval")}</button>
           </div>
         </div>
       )}
 
       {/* Pending offsite-checkout state */}
       {today?.today?.checkOutApproval === "PENDING" && !offsitePrompt && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-700">⏳ Offsite checkout — waiting on BoD approval</div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-700">{t("Offsite check-out — waiting for BoD approval")}</div>
       )}
       {today?.today?.checkOutApproval === "REJECTED" && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-center text-xs font-semibold text-rose-700">Your offsite checkout was rejected by the BoD.</div>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-center text-xs font-semibold text-rose-700">{t("Your offsite check-out was rejected by the BoD.")}</div>
       )}
 
       {msg && (
@@ -334,8 +336,8 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
       <input ref={fileRef} type="file" accept="image/*" capture="user" onChange={onSelfie} className="hidden" />
       {fallbackMode && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-800">
-          The live face check isn't available in this browser.{" "}
-          <button type="button" className="underline" onClick={() => { const m = fallbackMode; setFallbackMode(null); pendingMode.current = m; fileRef.current?.click(); }}>Take a plain selfie instead</button>
+          {t("The live face check isn't available in this browser.")}{" "}
+          <button type="button" className="underline" onClick={() => { const m = fallbackMode; setFallbackMode(null); pendingMode.current = m; fileRef.current?.click(); }}>{t("Take a plain selfie instead")}</button>
         </div>
       )}
 
@@ -355,11 +357,6 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
 
 
 class NoFaceError extends Error { constructor() { super("no face"); } }
-
-/** "DAY_OFF" → "Day Off". */
-function statusWords(raw: string) {
-  return raw.split(/[_\s]+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).join(" ");
-}
 
 /** true when a face is found, or when this browser cannot look (no FaceDetector API). */
 async function hasFace(file: File): Promise<boolean> {

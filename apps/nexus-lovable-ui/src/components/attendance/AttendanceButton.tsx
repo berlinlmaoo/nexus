@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowLeftToLine, ArrowRightToLine, CalendarCheck, Hourgl
 import type { NexusOffice } from "@/lib/nexus-api";
 import type { GeoFix } from "@/lib/geo";
 import { cn } from "@/lib/utils";
+import { t, useLang } from "@/lib/lang";
 
 /**
  * The one attendance button (owner request, 28 Sep 2026). It replaces PRESENCE IN / PRESENCE OUT side
@@ -92,36 +93,36 @@ export function nearestOffice(pos: { lat: number; lng: number }, offices: NexusO
  * with its own sentence, a check-out outside asks for a reason).
  */
 export function placeLine(fix: GeoFix, offices: NexusOffice[] | undefined, noGeofence?: boolean): { text: string; inside: boolean } {
-  if (noGeofence) return { text: "Location-free · position recorded", inside: true };
+  if (noGeofence) return { text: t("Any location · position recorded"), inside: true };
   const n = nearestOffice(fix, offices);
-  if (!n) return { text: `Location found · ±${distanceLabel(fix.accuracy)}`, inside: true };
+  if (!n) return { text: t("Location found · ±{d}", { d: distanceLabel(fix.accuracy) }), inside: true };
   return n.inside
-    ? { text: `At ${n.office.name} · ${distanceLabel(n.distance)}`, inside: true }
-    : { text: `${distanceLabel(n.distance)} from ${n.office.name} — outside the office area`, inside: false };
+    ? { text: t("At {office} · {d}", { office: n.office.name, d: distanceLabel(n.distance) }), inside: true }
+    : { text: t("{d} from {office} — outside the office area", { d: distanceLabel(n.distance), office: n.office.name }), inside: false };
 }
 
 /** Under "Check in": where the browser last put you, so "am I inside?" is answered before the tap. */
 export function whereHint(pos: { lat: number; lng: number } | null, offices: NexusOffice[] | undefined, noGeofence?: boolean) {
-  if (noGeofence) return "Location-free — clock in from anywhere";
+  if (noGeofence) return t("Any location — check in from anywhere");
   if (!pos) return null;
   const n = nearestOffice(pos, offices);
   if (!n) return null;
-  return n.inside ? `At ${n.office.name}` : `${distanceLabel(n.distance)} from ${n.office.name}`;
+  return n.inside ? t("At {office}", { office: n.office.name }) : t("{d} from {office}", { d: distanceLabel(n.distance), office: n.office.name });
 }
 
 export function workedLabel(minutes?: number | null) {
   if (!minutes || minutes <= 0) return null;
-  return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`;
+  return minutes >= 60 ? t("{h}h {m}m", { h: Math.floor(minutes / 60), m: minutes % 60 }) : t("{m}m", { m: minutes });
 }
 
 /** "Checked in 09:02 · on time" / "· 6 min late" / "Checked out 17:47 · worked 8h 45m". */
 export function successTitle(kind: "in" | "out", at: string, record?: { lateMinutes?: number | null; workedMinutes?: number | null } | null) {
   if (kind === "in") {
     const late = record?.lateMinutes ?? null;
-    return `Checked in ${at}${late == null ? "" : late > 0 ? ` · ${late} min late` : " · on time"}`;
+    return t("Checked in {time}", { time: at }) + (late == null ? "" : late > 0 ? ` · ${t("{n} min late", { n: late })}` : ` · ${t("on time")}`);
   }
   const worked = workedLabel(record?.workedMinutes);
-  return `Checked out ${at}${worked ? ` · worked ${worked}` : ""}`;
+  return t("Checked out {time}", { time: at }) + (worked ? ` · ${t("worked {time}", { time: worked })}` : "");
 }
 
 type Look = {
@@ -137,27 +138,27 @@ type Look = {
 function lookFor(phase: PressPhase | null, day: DayState): Look {
   if (phase) {
     switch (phase.step) {
-      case "face": return { key: "face", title: "Checking your selfie…", icon: "spin", tone: "violet", enabled: false };
-      case "selfie": return { key: "selfie", title: "Selfie ✓", icon: "check", tone: "violet", enabled: false };
-      case "locating": return { key: "locating", title: "Finding your location…", icon: "ring", tone: "violet", enabled: false };
+      case "face": return { key: "face", title: t("Checking your selfie…"), icon: "spin", tone: "violet", enabled: false };
+      case "selfie": return { key: "selfie", title: t("Selfie") + " ✓", icon: "check", tone: "violet", enabled: false };
+      case "locating": return { key: "locating", title: t("Finding your location…"), icon: "ring", tone: "violet", enabled: false };
       case "located": return { key: "located", title: phase.inside ? `${phase.text} ✓` : phase.text, icon: phase.inside ? "check" : "warn", tone: phase.inside ? "violet" : "amber", enabled: false };
-      case "sending": return { key: "sending", title: "Sending…", subtitle: phase.place, icon: "spin", tone: "violet", enabled: false };
+      case "sending": return { key: "sending", title: t("Sending…"), subtitle: phase.place, icon: "spin", tone: "violet", enabled: false };
       case "done": return { key: `done-${phase.title}`, title: phase.title, icon: "check", tone: "success", enabled: true };
-      case "failed": return { key: "failed", title: "Try again", subtitle: phase.mode === "in" ? "Check-in failed" : "Check-out failed", icon: "retry", tone: "danger", enabled: true };
+      case "failed": return { key: "failed", title: t("Try again"), subtitle: phase.mode === "in" ? t("Check-in failed") : t("Check-out failed"), icon: "retry", tone: "danger", enabled: true };
     }
   }
   switch (day.kind) {
-    case "loading": return { key: "loading", title: "Loading…", icon: "spin", tone: "grey", enabled: false };
+    case "loading": return { key: "loading", title: t("Loading…"), icon: "spin", tone: "grey", enabled: false };
     // Today could not be loaded: say so instead of spinning forever (the metric card below says the same).
-    case "unavailable": return { key: "unavailable", title: "Couldn’t load today", subtitle: "Refresh the page or sign in again", icon: "warn", tone: "grey", enabled: false };
-    case "check-in": return { key: "in", title: "Check in", subtitle: day.hint, icon: "in", tone: "green", enabled: true };
+    case "unavailable": return { key: "unavailable", title: t("Couldn’t load today"), subtitle: t("Refresh the page or sign in again"), icon: "warn", tone: "grey", enabled: false };
+    case "check-in": return { key: "in", title: t("Check in"), subtitle: day.hint, icon: "in", tone: "green", enabled: true };
     case "check-out": {
-      const title = day.previousDay ? "Check out the previous day" : "Check out";
+      const title = day.previousDay ? t("Check out the previous day") : t("Check out");
       return day.reflectionCount >= REFLECTION_MIN
-        ? { key: "out", title, subtitle: "Reflection ready ✓", icon: "out", tone: "red", enabled: true }
-        : { key: "out-locked", title, subtitle: `Write your reflection first · ${day.reflectionCount}/${REFLECTION_MIN}`, icon: "lock", tone: "grey", progress: day.reflectionCount / REFLECTION_MIN, enabled: false };
+        ? { key: "out", title, subtitle: t("Reflection ready") + " ✓", icon: "out", tone: "red", enabled: true }
+        : { key: "out-locked", title, subtitle: `${t("Write your reflection first")} · ${day.reflectionCount}/${REFLECTION_MIN}`, icon: "lock", tone: "grey", progress: day.reflectionCount / REFLECTION_MIN, enabled: false };
     }
-    case "waiting-approval": return { key: "waiting", title: "Check-out sent · waiting for approval", icon: "wait", tone: "amber", enabled: false };
+    case "waiting-approval": return { key: "waiting", title: t("Check-out sent · waiting for approval"), icon: "wait", tone: "amber", enabled: false };
     case "done": return { key: "done", title: day.line, subtitle: day.times, icon: "done", tone: "calm", enabled: false };
   }
 }
@@ -215,6 +216,7 @@ export function AttendanceButton({ phase, day, shakes, onPress, onDismiss, class
   onDismiss: () => void;
   className?: string;
 }) {
+  useLang();
   const reduce = Boolean(useReducedMotion());
   const look = lookFor(phase, day);
   // One shake per failure (none with reduced motion); the sentence under the button says why.
@@ -263,7 +265,7 @@ export function AttendanceButton({ phase, day, shakes, onPress, onDismiss, class
       {phase?.step === "failed" && (
         <div className="text-center">
           <p className="text-sm font-semibold text-destructive">{phase.message}</p>
-          <button type="button" onClick={onDismiss} className="mt-1 text-xs font-semibold text-muted-foreground hover:text-foreground">Cancel</button>
+          <button type="button" onClick={onDismiss} className="mt-1 text-xs font-semibold text-muted-foreground hover:text-foreground">{t("Cancel")}</button>
         </div>
       )}
     </div>
@@ -272,11 +274,12 @@ export function AttendanceButton({ phase, day, shakes, onPress, onDismiss, class
 
 /** An approved leave / sick / permit / day off covers today: the server refuses a check-in, so no button — the reason instead. */
 export function CoveredByRequestCard({ type, className }: { type?: string | null; className?: string }) {
+  useLang();
   return (
     <div className={cn("rounded-2xl border border-success/25 bg-success/5 px-4 py-4 text-center", className)}>
       <CalendarCheck className="mx-auto h-6 w-6 text-success" />
-      <p className="mt-1.5 font-display text-base font-bold">Your approved request covers today</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">{type ? `${type} · ` : ""}No check-in needed — it's already on your record.</p>
+      <p className="mt-1.5 font-display text-base font-bold">{t("Your approved request covers today")}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{type ? `${type} · ` : ""}{t("No check-in needed — it's already on your record.")}</p>
     </div>
   );
 }

@@ -14,6 +14,7 @@ import { LeftTag, leftAtOf } from "@/components/LeftTag";
 import { cn } from "@/lib/utils";
 import type { PersonReportResponse, ReportPriority, ReportRatio } from "@/lib/nexus-api";
 import { fmtDayKey, fmtHours, fmtNum, fmtPct, periodRangeLabel, ROLE_LABEL } from "./report-format";
+import { t, useLang } from "@/lib/lang";
 
 const PRIORITY_LABEL: Record<ReportPriority, string> = { URGENT: "Urgent", HIGH: "High", MEDIUM: "Medium", LOW: "Low", NONE: "No priority" };
 const PRIORITY_DOT: Record<ReportPriority, string> = { URGENT: "var(--destructive)", HIGH: "var(--destructive)", MEDIUM: "#0091ff", LOW: "var(--muted-foreground)", NONE: "var(--border)" };
@@ -28,6 +29,7 @@ const PENALTY_LABEL: Record<string, string> = {
 };
 
 export function PersonReportView({ data, showIdentity }: { data: PersonReportResponse; showIdentity?: boolean }) {
+  useLang();
   const { person, work, attendance, xp } = data;
   return (
     <div className="space-y-6">
@@ -47,7 +49,7 @@ export function PersonReportView({ data, showIdentity }: { data: PersonReportRes
       </Reveal>
 
       <p className="text-center text-[11px] text-muted-foreground">
-        Tasks shared by several people are split between them, so counts can be fractional.
+        {t("Tasks shared by several people are split between them, so counts can be fractional.")}
       </p>
     </div>
   );
@@ -63,7 +65,7 @@ function IdentityCard({ person }: { person: PersonReportResponse["person"] }) {
         {(person.role || person.teams.length > 0) && (
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {person.role && <span className="chip chip--sm chip--soft">{ROLE_LABEL[person.role] ?? person.role}</span>}
-            {person.teams.map((t) => <span key={t.id} className="chip chip--sm chip--tertiary">{t.name}</span>)}
+            {person.teams.map((tm) => <span key={tm.id} className="chip chip--sm chip--tertiary">{tm.name}</span>)}
           </div>
         )}
       </div>
@@ -85,7 +87,7 @@ function between(now: number | null | undefined, before: number | null | undefin
   const diff = n - b;
   if (Math.abs(diff) < 0.05) return { text: "0", mood: "flat", up: false };
   const amount = fmtNum(Math.abs(diff));
-  return { text: percentPoints ? `${amount} pt` : amount, mood: (diff > 0) === higherIsBetter ? "better" : "worse", up: diff > 0 };
+  return { text: percentPoints ? t("{n} pt", { n: amount }) : amount, mood: (diff > 0) === higherIsBetter ? "better" : "worse", up: diff > 0 };
 }
 
 const pctOf = (r: ReportRatio | null | undefined) => {
@@ -101,14 +103,14 @@ function Kpis({ data }: { data: PersonReportResponse }) {
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Kpi icon={CheckCircle2} label="Completed" value={fmtNum(now.completed)} delta={between(now.completed, before.completed, true)} />
-        <Kpi icon={Target} label="On time" value={fmtPct(now.onTime)} sub={`${fmtNum(now.onTime.num)}/${fmtNum(now.onTime.den)}`} delta={between(pctOf(now.onTime), pctOf(before.onTime), true, true)} />
-        <Kpi icon={AlertTriangle} label={isCurrent ? "Overdue now" : "Overdue"} value={fmtNum(now.overdue)} tone={now.overdue > 0 ? "danger" : undefined} delta={between(now.overdue, before.overdue, false)} />
-        <Kpi icon={CalendarCheck} label="Attendance" value={fmtPct(now.attendanceRate)} delta={between(pctOf(now.attendanceRate), pctOf(before.attendanceRate), true, true)} />
-        <Kpi icon={Clock} label="Late" value={fmtNum(now.late)} sub={`${fmtNum(now.lateMinutes)} min in total`} delta={between(now.late, before.late, false)} />
-        <Kpi icon={Sparkles} label="XP this period" value={fmtNum(now.xpScore)} sub={now.xpPenalty ? `${fmtNum(-Math.abs(now.xpPenalty))} XP penalties` : undefined} delta={between(now.xpScore, before.xpScore, true)} />
+        <Kpi icon={CheckCircle2} label={t("Completed")} value={fmtNum(now.completed)} delta={between(now.completed, before.completed, true)} />
+        <Kpi icon={Target} label={t("On time")} value={fmtPct(now.onTime)} sub={`${fmtNum(now.onTime.num)}/${fmtNum(now.onTime.den)}`} delta={between(pctOf(now.onTime), pctOf(before.onTime), true, true)} />
+        <Kpi icon={AlertTriangle} label={isCurrent ? t("Overdue now") : t("Overdue")} value={fmtNum(now.overdue)} tone={now.overdue > 0 ? "danger" : undefined} delta={between(now.overdue, before.overdue, false)} />
+        <Kpi icon={CalendarCheck} label={t("Attendance")} value={fmtPct(now.attendanceRate)} delta={between(pctOf(now.attendanceRate), pctOf(before.attendanceRate), true, true)} />
+        <Kpi icon={Clock} label={t("Late")} value={fmtNum(now.late)} sub={t("{n} min in total", { n: fmtNum(now.lateMinutes) })} delta={between(now.late, before.late, false)} />
+        <Kpi icon={Sparkles} label={t("XP this period")} value={fmtNum(now.xpScore)} sub={now.xpPenalty ? t("{n} XP in penalties", { n: fmtNum(-Math.abs(now.xpPenalty)) }) : undefined} delta={between(now.xpScore, before.xpScore, true)} />
       </div>
-      {prior && <p className="text-[11px] text-muted-foreground">Arrows compare with {prior}.</p>}
+      {prior && <p className="text-[11px] text-muted-foreground">{t("Arrows compare with {range}.", { range: prior })}</p>}
     </div>
   );
 }
@@ -162,9 +164,9 @@ function WeeklyCard({ weekly }: { weekly: PersonReportResponse["work"]["weekly"]
   }));
   const empty = weekly.length === 0 || weekly.every((w) => w.completed <= 0);
   return (
-    <Card title="Completed per week" icon={TrendingUp}>
+    <Card title={t("Completed per week")} icon={TrendingUp}>
       {empty ? (
-        <EmptyState compact tone="muted" icon={TrendingUp} title="Nothing completed yet" message="Tasks marked done in this period are counted here, week by week." />
+        <EmptyState compact tone="muted" icon={TrendingUp} title={t("Nothing completed yet")} message={t("Tasks marked done in this period are counted here, week by week.")} />
       ) : (
         <div className="h-56 w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -179,8 +181,8 @@ function WeeklyCard({ weekly }: { weekly: PersonReportResponse["work"]["weekly"]
                 contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)", fontSize: 12 }}
               />
               <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" iconSize={8} />
-              <Bar dataKey="On time" stackId="w" fill="var(--success)" maxBarSize={32} />
-              <Bar dataKey="Late or no due date" stackId="w" fill="#a168be" fillOpacity={0.45} radius={[5, 5, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="On time" name={t("On time")} stackId="w" fill="var(--success)" maxBarSize={32} />
+              <Bar dataKey="Late or no due date" name={t("Late or no due date")} stackId="w" fill="#a168be" fillOpacity={0.45} radius={[5, 5, 0, 0]} maxBarSize={32} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -192,23 +194,23 @@ function WeeklyCard({ weekly }: { weekly: PersonReportResponse["work"]["weekly"]
 function OverdueCard({ work }: { work: PersonReportResponse["work"] }) {
   const list = work.overdueList;
   return (
-    <Card title="Overdue tasks" icon={AlertTriangle} right={list.length > 0 ? <span className="chip chip--sm chip--danger tabular-nums">{fmtNum(work.overdueNow)}</span> : undefined}>
+    <Card title={t("Overdue tasks")} icon={AlertTriangle} right={list.length > 0 ? <span className="chip chip--sm chip--danger tabular-nums">{fmtNum(work.overdueNow)}</span> : undefined}>
       {list.length === 0 ? (
-        <EmptyState compact tone="success" icon={CheckCircle2} title="Nothing overdue" message="Every open task with a due date is still on schedule." />
+        <EmptyState compact tone="success" icon={CheckCircle2} title={t("Nothing overdue")} message={t("Every open task with a due date is still on schedule.")} />
       ) : (
         <ul className="-mx-2 max-h-[22rem] divide-y divide-border overflow-y-auto">
-          {list.map((t) => (
-            <li key={t.id}>
-              <Link to="/tasks/$taskId" params={{ taskId: t.id }} className="group flex items-start gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: PRIORITY_DOT[t.priority] ?? PRIORITY_DOT.NONE }} title={PRIORITY_LABEL[t.priority] ?? t.priority} />
+          {list.map((task) => (
+            <li key={task.id}>
+              <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="group flex items-start gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: PRIORITY_DOT[task.priority] ?? PRIORITY_DOT.NONE }} title={PRIORITY_LABEL[task.priority] ? t(PRIORITY_LABEL[task.priority]) : task.priority} />
                 <div className="min-w-0 flex-1">
-                  <div className="line-clamp-2 text-sm font-semibold">{t.title || "Untitled task"}</div>
+                  <div className="line-clamp-2 text-sm font-semibold">{task.title || t("Untitled task")}</div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                    {t.projectName && <span className="max-w-full truncate">{t.projectName}</span>}
-                    {t.assigneeCount > 1 && <span className="font-semibold">Shared by {fmtNum(t.assigneeCount)}</span>}
+                    {task.projectName && <span className="max-w-full truncate">{task.projectName}</span>}
+                    {task.assigneeCount > 1 && <span className="font-semibold">{t("Shared by {n}", { n: fmtNum(task.assigneeCount) })}</span>}
                   </div>
                 </div>
-                <span className="chip chip--sm chip--danger shrink-0 tabular-nums" title={`Due ${fmtDayKey(t.dueKey || t.dueDate, true)}`}>{fmtNum(t.daysOverdue)}d late</span>
+                <span className="chip chip--sm chip--danger shrink-0 tabular-nums" title={t("Due {date}", { date: fmtDayKey(task.dueKey || task.dueDate, true) })}>{t("{n}d late", { n: fmtNum(task.daysOverdue) })}</span>
                 <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               </Link>
             </li>
@@ -221,29 +223,29 @@ function OverdueCard({ work }: { work: PersonReportResponse["work"] }) {
 
 function ProjectsCard({ rows }: { rows: PersonReportResponse["work"]["perProject"] }) {
   return (
-    <Card title="By project" icon={FolderKanban}>
+    <Card title={t("By project")} icon={FolderKanban}>
       {rows.length === 0 ? (
-        <EmptyState compact tone="muted" icon={FolderKanban} title="No project activity" message="Tasks assigned in this period show up here, grouped by project." />
+        <EmptyState compact tone="muted" icon={FolderKanban} title={t("No project activity")} message={t("Tasks assigned in this period show up here, grouped by project.")} />
       ) : (
         <div className="-mx-4 overflow-x-auto px-4 md:-mx-5 md:px-5">
           <table className="w-full min-w-[340px] text-sm">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
-                <th className="pb-2 pr-3 font-medium">Project</th>
-                <th className="pb-2 pr-3 text-right font-medium">Done</th>
-                <th className="pb-2 pr-3 text-right font-medium">Open</th>
-                <th className="pb-2 text-right font-medium">Overdue</th>
+                <th className="pb-2 pr-3 font-medium">{t("Project")}</th>
+                <th className="pb-2 pr-3 text-right font-medium">{t("Done")}</th>
+                <th className="pb-2 pr-3 text-right font-medium">{t("Still open")}</th>
+                <th className="pb-2 text-right font-medium">{t("Overdue")}</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((p) => (
                 <tr key={p.projectId} className="border-t border-border">
                   <td className="max-w-[16rem] py-2.5 pr-3">
-                    <Link to="/projects/$projectId" params={{ projectId: p.projectId }} className="block truncate font-semibold hover:underline">{p.projectName || "Untitled project"}</Link>
+                    <Link to="/projects/$projectId" params={{ projectId: p.projectId }} className="block truncate font-semibold hover:underline">{p.projectName || t("Untitled project")}</Link>
                   </td>
                   <td className="py-2.5 pr-3 text-right tabular-nums">{fmtNum(p.completed)}</td>
                   <td className="py-2.5 pr-3 text-right tabular-nums text-muted-foreground">{fmtNum(p.open)}</td>
-                  <td className="py-2.5 text-right tabular-nums">{p.overdue > 0 ? <span className="chip chip--sm chip--danger">{fmtNum(p.overdue)} overdue</span> : <span className="text-muted-foreground">0</span>}</td>
+                  <td className="py-2.5 text-right tabular-nums">{p.overdue > 0 ? <span className="chip chip--sm chip--danger">{t("{n} overdue", { n: fmtNum(p.overdue) })}</span> : <span className="text-muted-foreground">0</span>}</td>
                 </tr>
               ))}
             </tbody>
@@ -271,11 +273,11 @@ function AttendanceCard({ a }: { a: PersonReportResponse["attendance"] }) {
     { label: "Attendance rate", value: fmtPct(a.attendanceRate) },
   ];
   return (
-    <Card title="Attendance" icon={CalendarCheck}>
+    <Card title={t("Attendance")} icon={CalendarCheck}>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
         {stats.map((s) => (
           <div key={s.label} className="min-w-0">
-            <dt className="truncate text-[11px] font-semibold text-muted-foreground">{s.label}</dt>
+            <dt className="truncate text-[11px] font-semibold text-muted-foreground">{t(s.label)}</dt>
             <dd className={cn("truncate font-display text-lg font-bold tabular-nums", s.tone === "warning" && "text-warning", s.tone === "danger" && "text-destructive")}>{s.value}</dd>
           </div>
         ))}
@@ -288,30 +290,30 @@ function XpCard({ xp }: { xp: PersonReportResponse["xp"] }) {
   // level.pct is 0–100 (the server rounds it to a whole percent).
   const pct = xp.level.isMax ? 100 : Math.max(0, Math.min(100, xp.level.pct));
   return (
-    <Card title="XP this period" icon={Sparkles}>
+    <Card title={t("XP this period")} icon={Sparkles}>
       <div className="flex items-baseline gap-1.5">
         <span className="font-display text-3xl font-black tracking-tight tabular-nums">{fmtNum(xp.periodScore)}</span>
         <span className="text-sm font-bold text-muted-foreground">XP</span>
-        <span className="ml-auto inline-flex items-center gap-1 text-xs font-bold text-orange-500"><Flame className="h-3.5 w-3.5" />{fmtNum(xp.streak.current)}-day streak</span>
+        <span className="ml-auto inline-flex items-center gap-1 text-xs font-bold text-orange-500"><Flame className="h-3.5 w-3.5" />{t("{n}-day streak", { n: fmtNum(xp.streak.current) })}</span>
       </div>
       <div className="mt-3">
         <div className="mb-1.5 flex items-center gap-2 text-sm">
-          <span className="font-bold text-primary">Level {xp.level.level}</span>
+          <span className="font-bold text-primary">{t("Level {n}", { n: xp.level.level })}</span>
           <span className="min-w-0 truncate font-semibold">{xp.level.name}</span>
-          <span className="ml-auto text-xs font-bold text-muted-foreground tabular-nums">{xp.level.isMax ? "Max level" : `${Math.round(pct)}%`}</span>
+          <span className="ml-auto text-xs font-bold text-muted-foreground tabular-nums">{xp.level.isMax ? t("Max level") : `${Math.round(pct)}%`}</span>
         </div>
         <AnimatedBar pct={pct} className="h-2 rounded-full bg-muted" barClassName="h-full rounded-full bg-[#a168be]" />
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">Longest streak: {fmtNum(xp.streak.longest)} days</p>
+      <p className="mt-2 text-xs text-muted-foreground">{t("Longest streak: {n} days", { n: fmtNum(xp.streak.longest) })}</p>
 
       <div className="mt-3 border-t border-border pt-3">
         {xp.penalties.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No penalties this period.</p>
+          <p className="text-sm text-muted-foreground">{t("No penalties this period.")}</p>
         ) : (
           <ul className="space-y-1.5">
             {xp.penalties.map((p) => (
               <li key={p.kind} className="flex items-center gap-2 text-sm">
-                <span className="min-w-0 truncate font-semibold">{PENALTY_LABEL[p.kind] ?? p.kind}</span>
+                <span className="min-w-0 truncate font-semibold">{PENALTY_LABEL[p.kind] ? t(PENALTY_LABEL[p.kind]) : p.kind}</span>
                 <span className="text-xs text-muted-foreground tabular-nums">×{fmtNum(p.count)}</span>
                 <span className="ml-auto shrink-0 font-bold tabular-nums text-destructive">{fmtNum(-Math.abs(p.xp))} XP</span>
               </li>
@@ -319,7 +321,7 @@ function XpCard({ xp }: { xp: PersonReportResponse["xp"] }) {
           </ul>
         )}
       </div>
-      <p className="mt-3 text-[11px] text-muted-foreground">Counted over the attendance period, so it can differ from the leaderboard's month.</p>
+      <p className="mt-3 text-[11px] text-muted-foreground">{t("Counted over the attendance period, so it can differ from the leaderboard's month.")}</p>
     </Card>
   );
 }
@@ -329,7 +331,7 @@ function XpCard({ xp }: { xp: PersonReportResponse["xp"] }) {
 
 export function PersonReportSkeleton() {
   return (
-    <div className="space-y-6" aria-busy="true" aria-label="Loading report">
+    <div className="space-y-6" aria-busy="true" aria-label={t("Loading report")}>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="rounded-2xl border border-border bg-card p-4 shadow-soft">
@@ -357,7 +359,7 @@ export function ReportError({ title, message, onRetry, retrying }: { title: stri
       message={message}
       action={onRetry ? (
         <button type="button" onClick={onRetry} disabled={retrying} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-60">
-          <RefreshCw className={cn("h-3.5 w-3.5", retrying && "animate-spin")} /> Try again
+          <RefreshCw className={cn("h-3.5 w-3.5", retrying && "animate-spin")} /> {t("Try again")}
         </button>
       ) : undefined}
     />
