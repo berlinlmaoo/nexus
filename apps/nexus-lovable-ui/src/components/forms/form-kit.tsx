@@ -125,9 +125,13 @@ function AccessScheduleEditor({ value, onChange }: { value: { enabled?: boolean;
         </p>
       </div>
 
-      <label className={cn("flex items-center gap-2 text-sm font-semibold", override && "opacity-50")}>
-        <input type="checkbox" checked={enabled} onChange={(e) => onChange({ ...base, enabled: e.target.checked, daysOfWeek: e.target.checked && days.length === 0 ? [1, 2, 3, 4, 5] : days })} className="h-4 w-4 accent-primary" />
-        {t("Limit form access by schedule")} {override && <span className="text-[11px] font-normal text-muted-foreground">{t("(ignored while the form is forced open or closed)")}</span>}
+      {/* Help text sits under the label, not in a squeezed side column (phone audit 12 Oct 2026). */}
+      <label className={cn("flex items-start gap-2 text-sm font-semibold", override && "opacity-50")}>
+        <input type="checkbox" checked={enabled} onChange={(e) => onChange({ ...base, enabled: e.target.checked, daysOfWeek: e.target.checked && days.length === 0 ? [1, 2, 3, 4, 5] : days })} className="mt-0.5 h-4 w-4 shrink-0 accent-primary" />
+        <span className="min-w-0">
+          <span className="block">{t("Limit form access by schedule")}</span>
+          {override && <span className="block text-[11px] font-normal text-muted-foreground">{t("(ignored while the form is forced open or closed)")}</span>}
+        </span>
       </label>
       {enabled && (
         <div className="mt-3 space-y-3">
@@ -406,8 +410,10 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
         <div className="flex flex-1 flex-col gap-4 p-5">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Form name")} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder={t("Description (optional)…")} className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
-          <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="h-4 w-4 accent-primary" /> {t("Public form (shareable link, no login)")}</label>
-          <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={requireAuth} onChange={(e) => setRequireAuth(e.target.checked)} className="h-4 w-4 accent-primary" /> {t("Require NEXUS login to submit")} <span className="font-normal text-muted-foreground">{t("(anyone signed in; their answers are listed in My Submissions)")}</span></label>
+          <label className="flex items-start gap-2 text-sm font-semibold"><input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-primary" /> <span className="min-w-0">{t("Public form (shareable link, no login)")}</span></label>
+          <label className="flex items-start gap-2 text-sm font-semibold"><input type="checkbox" checked={requireAuth} onChange={(e) => setRequireAuth(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-primary" />
+            <span className="min-w-0"><span className="block">{t("Require NEXUS login to submit")}</span><span className="block text-xs font-normal text-muted-foreground">{t("(anyone signed in; their answers are listed in My Submissions)")}</span></span>
+          </label>
           <AccessScheduleEditor value={accessSchedule as { enabled?: boolean; daysOfWeek?: number[]; startTime?: string; endTime?: string; timezone?: string } | null} onChange={setAccessSchedule} />
 
           <div className="space-y-3">
@@ -535,17 +541,18 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
             <button onClick={() => setFields((cur) => [...cur, newField()])} className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary active:scale-[0.98]"><Plus className="h-4 w-4" /> {t("Add field")}</button>
           </div>
         </div>
-        <div className="sticky bottom-0 flex items-center gap-2 border-t border-border bg-card/95 px-5 py-4 backdrop-blur">
-          <button disabled={!name.trim() || fields.length === 0 || save.isPending} onClick={() => save.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{save.isPending && <Loader2 className="h-4 w-4 animate-spin" />}{editing ? t("Save form") : t("Create form")}</button>
-          {editing && <button onClick={() => { setDupName(name); setDupOpen(true); }} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-semibold transition-colors hover:bg-accent active:scale-[0.98]"><Copy className="h-4 w-4" /> {t("Duplicate to another project")}</button>}
+        {/* Phone: one tidy row — Save fills it, Duplicate / Delete are icons (labels stay as their names). */}
+        <div className="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-border bg-card/95 px-5 py-4 backdrop-blur">
+          <button disabled={!name.trim() || fields.length === 0 || save.isPending} onClick={() => save.mutate()} className="inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50 sm:flex-none">{save.isPending && <Loader2 className="h-4 w-4 animate-spin" />}{editing ? t("Save form") : t("Create form")}</button>
+          {editing && <button onClick={() => { setDupName(name); setDupOpen(true); }} aria-label={t("Duplicate to another project")} title={t("Duplicate to another project")} className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-semibold transition-colors hover:bg-accent active:scale-[0.98]"><Copy className="h-4 w-4" /> <span className="max-sm:hidden">{t("Duplicate to another project")}</span></button>}
           {editing && <button onClick={() => {
             const n = form?._count?.submissions ?? 0;
             const msg = n > 0
               ? `${tn(n, "This form has {n} submission.", "This form has {n} submissions.")}\n\n${t("Deleting it permanently removes them and their My Submissions history. This can't be undone.")}\n\n${t("Delete this form?")}`
               : t("Delete this form?");
             if (confirm(msg)) del.mutate(n > 0);
-          }} className="inline-flex items-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.98]"><Trash2 className="h-4 w-4" /> {t("Delete")}</button>}
-          {save.isError && <span className="text-xs font-semibold text-destructive">{t("Couldn't save the form.")}</span>}
+          }} aria-label={t("Delete form")} title={t("Delete form")} className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.98]"><Trash2 className="h-4 w-4" /> <span className="max-sm:hidden">{t("Delete")}</span></button>}
+          {save.isError && <span className="text-xs font-semibold text-destructive max-sm:basis-full">{t("Couldn't save the form.")}</span>}
         </div>
       </aside>
 

@@ -10,24 +10,43 @@ import type { MentionItem } from "./extensions";
 
 const MENU_W = 320;
 
-/** Fixed position under (or above) the caret, kept inside the viewport. */
+/**
+ * Fixed position under (or above) the caret, kept inside the part of the screen that is actually visible:
+ * the visual viewport (an on-screen keyboard shrinks it) minus the phone's editor toolbar docked above the
+ * keyboard (.nx-mobilebar), so the menu never covers that toolbar (audit 12 Oct 2026).
+ */
 function usePlacement(rect: DOMRect | null, open: boolean) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; maxH: number } | null>(null);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!open || !vv) return;
+    const bump = () => setTick((n) => n + 1);
+    vv.addEventListener("resize", bump);
+    vv.addEventListener("scroll", bump);
+    return () => { vv.removeEventListener("resize", bump); vv.removeEventListener("scroll", bump); };
+  }, [open]);
   useLayoutEffect(() => {
     if (!open || !rect) { setPos(null); return; }
+    const vv = window.visualViewport;
     const vw = window.innerWidth;
-    const vh = window.visualViewport?.height ?? window.innerHeight;
+    const visTop = (vv?.offsetTop ?? 0) + 8;
+    let visBottom = (vv ? vv.offsetTop + vv.height : window.innerHeight) - 8;
+    const bar = document.querySelector<HTMLElement>(".nx-mobilebar")?.getBoundingClientRect();
+    if (bar && bar.height > 0) visBottom = Math.min(visBottom, bar.top - 6);
     const w = Math.min(MENU_W, vw - 16);
-    const below = vh - rect.bottom - 12;
-    const above = rect.top - 12;
+    const below = visBottom - rect.bottom - 6;
+    const above = rect.top - 6 - visTop;
     const wantH = Math.min(380, ref.current?.scrollHeight ?? 380);
     const placeBelow = below >= Math.min(wantH, 240) || below >= above;
-    const maxH = Math.max(160, Math.min(380, placeBelow ? below : above));
-    const top = placeBelow ? rect.bottom + 6 : Math.max(8, rect.top - 6 - Math.min(wantH, maxH));
+    const room = Math.max(0, placeBelow ? below : above);
+    // Never taller than the room it has (a short room still gets a usable list rather than none).
+    const maxH = Math.max(96, Math.min(380, room));
+    const top = placeBelow ? rect.bottom + 6 : Math.max(visTop, rect.top - 6 - Math.min(wantH, maxH));
     const left = Math.min(Math.max(8, rect.left), vw - w - 8);
     setPos({ top, left, maxH });
-  }, [rect, open]);
+  }, [rect, open, tick]);
   return { ref, pos };
 }
 
@@ -108,7 +127,8 @@ export function SlashMenu({ store }: { store: MenuStore<SlashItem> }) {
           })
         )}
       </div>
-      <div className="flex items-center justify-between border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
+      {/* Keyboard hints mean nothing on a touch screen; there a tap outside closes the menu. */}
+      <div className="flex items-center justify-between border-t border-border px-3 py-1.5 text-xs text-muted-foreground pointer-coarse:hidden">
         <span>{t("↑↓ to move, Enter to insert")}</span>
         <button type="button" onClick={() => store.set({ open: false })} className="hover:text-foreground">{t("Close")} <span className="font-mono">esc</span></button>
       </div>

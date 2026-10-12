@@ -125,7 +125,8 @@ function Kpi({ icon: Icon, label, value, sub, delta, tone }: {
 }) {
   return (
     <div className="min-w-0 rounded-2xl border border-border bg-card p-4 shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-pop">
-      <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground"><Icon className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{label}</span></div>
+      {/* Wraps to two lines rather than cutting off ("Lewat tenggat" on the narrowest phone tile, audit 12 Oct 2026). */}
+      <div className="flex items-start gap-1.5 text-[11px] font-bold uppercase leading-snug tracking-wider text-muted-foreground"><Icon className="mt-px h-3.5 w-3.5 shrink-0" /><span className="line-clamp-2 break-words">{label}</span></div>
       <div className={cn("mt-1 truncate font-display text-2xl font-bold tracking-tight tabular-nums md:text-3xl", tone === "danger" && "text-destructive")}>{value}</div>
       {/* No line at all when there is nothing to compare ("—" read as a broken value, audit 12 Oct 2026). */}
       {delta.mood !== "unknown" && (

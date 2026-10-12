@@ -583,4 +583,9 @@ export const ID_I18N_ATTENDANCE: Record<string, string> = {
   "Turn left": "Toleh kiri",
   "Still open": "Belum selesai",
   "Location": "Lokasi",
+  // phone audit batch 2 (12 Oct 2026)
+  "View tools": "Alat tampilan",
+  "Hide view tools": "Sembunyikan alat tampilan",
+  "Filters, {n} on": "Filter, {n} aktif",
+  "Delete form": "Hapus form",
 }

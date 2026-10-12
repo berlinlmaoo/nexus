@@ -10,9 +10,10 @@ const HoverCardTrigger = HoverCardPrimitive.Trigger;
 const HoverCardContent = React.forwardRef<
   React.ElementRef<typeof HoverCardPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof HoverCardPrimitive.Content>
->(({ className, align = "center", sideOffset = 4, ...props }, ref) => (
+>(({ className, collisionPadding = 16, align = "center", sideOffset = 4, ...props }, ref) => (
   <HoverCardPrimitive.Content
     ref={ref}
+    collisionPadding={collisionPadding}
     align={align}
     sideOffset={sideOffset}
     className={cn(
