@@ -76,6 +76,9 @@ extension AppLanguage {
         "Reply to the team…": "Balas ke tim…",
         "Deleting this submission also deletes its task in the project.": "Menghapus pengajuan ini juga menghapus task-nya di project.",
         "Couldn't delete the submission.": "Pengajuan gagal dihapus.",
+        "%@: enter an email address, like name@company.com.": "%@: isi alamat email, misalnya nama@perusahaan.com.",
+        "%@: enter a web address, like company.com.": "%@: isi alamat web, misalnya perusahaan.com.",
+        "A question": "Sebuah pertanyaan",
         // ── marker: entries are appended above this line by tooling; keep it last ──
         "__redesign_end__": "__redesign_end__",
     ]

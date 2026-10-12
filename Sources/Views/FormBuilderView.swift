@@ -621,10 +621,10 @@ struct FormBuilderView: View {
             Button(T("Discard"), role: .destructive) { dismiss() }
             Button(T("Keep editing"), role: .cancel) {}
         case .delete(let n):
-            Button(T("Delete"), role: .destructive) { Task { await delete(force: n > 0) } }
+            Button(T("Delete"), role: .destructive) { Task { await delete(force: n > 0, expect: n) } }
             Button(T("Cancel"), role: .cancel) {}
-        case .forceDelete:
-            Button(T("Delete anyway"), role: .destructive) { Task { await delete(force: true) } }
+        case .forceDelete(let n):
+            Button(T("Delete anyway"), role: .destructive) { Task { await delete(force: true, expect: n) } }
             Button(T("Cancel"), role: .cancel) {}
         case .failed:
             Button(T("OK"), role: .cancel) {}
@@ -734,12 +734,14 @@ struct FormBuilderView: View {
 
     /// No submissions → a plain delete, and if somebody submitted in the meantime the server's 409
     /// asks again with the count. With submissions → the person already saw the count, so force.
-    private func delete(force: Bool) async {
-        guard let id = currentId else { return }
+    /// `expect` is the count the person was shown; a response that arrived since makes the server ask
+    /// again (409 with the new count → the same centred alert, with that count).
+    private func delete(force: Bool, expect: Int) async {
+        guard let id = currentId, !deleting else { return }
         deleting = true
         defer { deleting = false }
         do {
-            try await APIClient.shared.deleteForm(id, force: force)
+            try await APIClient.shared.deleteForm(id, force: force, expect: expect)
             // Leave first, then tell the lists: a list that reloaded first would drop the row this
             // screen was pushed from while it is still on top, and the pop that follows would then
             // take the screen underneath with it.

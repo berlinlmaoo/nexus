@@ -238,6 +238,34 @@ enum FormLogic {
         visible.filter { $0.required && !isFilled(values[$0.id]) }.map(\.displayLabel)
     }
 
+    /// Email and link answers that the server would refuse (bughunt F-BUG-13; same rules as the submit
+    /// route: an email needs name@domain.tld, a link needs a host with a dot). Autofilled answers are the
+    /// server's to fill. One sentence per bad answer, in the app's language.
+    static func invalidAnswers(_ visible: [FormField], values: [String: FormValue]) -> [String] {
+        visible.compactMap { f in
+            guard f.autofill == nil, f.type == "email" || f.type == "url",
+                  case .text(let raw)? = values[f.id] else { return nil }
+            let v = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if v.isEmpty { return nil }
+            if f.type == "email" {
+                return looksLikeEmail(v) ? nil : String(format: T("%@: enter an email address, like name@company.com."), f.displayLabel)
+            }
+            return looksLikeURL(v) ? nil : String(format: T("%@: enter a web address, like company.com."), f.displayLabel)
+        }
+    }
+
+    static func looksLikeEmail(_ v: String) -> Bool {
+        v.range(of: #"^[^\s@]+@[^\s@]+\.[^\s@]+$"#, options: .regularExpression) != nil
+    }
+
+    static func looksLikeURL(_ v: String) -> Bool {
+        if v.rangeOfCharacter(from: .whitespacesAndNewlines) != nil { return false }
+        let hasScheme = v.range(of: #"^[a-zA-Z][a-zA-Z0-9+.-]*://"#, options: .regularExpression) != nil
+        guard let u = URL(string: hasScheme ? v : "https://" + v), let scheme = u.scheme?.lowercased(),
+              scheme == "http" || scheme == "https", let host = u.host else { return false }
+        return host.range(of: #"\.[a-zA-Z]{2,}$"#, options: .regularExpression) != nil
+    }
+
     // MARK: - formatting
 
     /// `new Intl.NumberFormat("id-ID")` over a digit string: dotted thousands, and zero renders as

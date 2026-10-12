@@ -53,8 +53,12 @@ extension APIClient {
 
     /// DELETE /api/forms/{id}. Without `force` the server refuses a form that has submissions
     /// (409, `{ error, submissionCount }`) — that refusal comes back as `FormBuilderError`.
-    func deleteForm(_ formId: String, force: Bool) async throws {
-        let req = makeRequest("/api/forms/\(formId)" + (force ? "?force=1" : ""), method: "DELETE")
+    /// `expect` = the response count the person confirmed: if more arrived since, the server answers 409
+    /// with the new count instead of deleting responses nobody saw (bughunt F-BUG-3).
+    func deleteForm(_ formId: String, force: Bool, expect: Int? = nil) async throws {
+        var path = "/api/forms/\(formId)" + (force ? "?force=1" : "")
+        if force, let expect { path += "&expect=\(expect)" }
+        let req = makeRequest(path, method: "DELETE")
         _ = try await formBuilderCall(req, deleting: true)
     }
 

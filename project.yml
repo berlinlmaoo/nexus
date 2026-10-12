@@ -11,10 +11,10 @@ options:
 settings:
   base:
     # Versi yang dilihat orang di TestFlight/App Store. Naikin kalau isinya berubah berarti.
-    MARKETING_VERSION: "0.1.6"
+    MARKETING_VERSION: "0.1.7"
     # WAJIB NAIK TIAP UPLOAD ke App Store Connect. Apple nolak build number yang sudah pernah
     # dipakai untuk MARKETING_VERSION yang sama, dan errornya baru muncul setelah upload selesai.
-    CURRENT_PROJECT_VERSION: "13"
+    CURRENT_PROJECT_VERSION: "14"
     SWIFT_VERSION: "5.0"            # Swift 5 language mode — smoother first build (no strict-concurrency friction)
     CODE_SIGN_STYLE: Automatic
     # Team ID Apple (10 karakter). Sengaja ditaruh di sini, BUKAN di GUI Xcode: .xcodeproj tidak

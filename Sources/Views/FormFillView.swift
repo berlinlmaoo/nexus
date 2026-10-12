@@ -25,6 +25,9 @@ struct FormFillView: View {
     @State private var uploadProgress = UploadProgress()
     @State private var actionError: String?
     @State private var done = false
+    /// The Idempotency-Key of the answers being submitted: made on the first tap, reused on a retry,
+    /// dropped once the submission went through.
+    @State private var submitKey: String?
 
     /// One importer for both buttons. Two `.fileImporter` modifiers on one view is unsupported in
     /// SwiftUI: the second cancels the first, so "Choose files" opened nothing on most devices while
@@ -419,6 +422,12 @@ struct FormFillView: View {
             .disabled(submitting || !missing.isEmpty)
             .opacity(missing.isEmpty ? 1 : 0.5)
 
+            if missing.isEmpty, let form {
+                // Email / link answers the server would refuse, said before the tap (F-BUG-13).
+                ForEach(FormLogic.invalidAnswers(FormLogic.visibleFields(form.fields, values: values), values: values), id: \.self) { line in
+                    Text(line).font(NXFont.text(12)).foregroundStyle(NX.danger).multilineTextAlignment(.center)
+                }
+            }
             if !missing.isEmpty {
                 Text("\(T("Fill in the required ones first")): \(missing.joined(separator: ", "))")
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
@@ -635,15 +644,19 @@ struct FormFillView: View {
         guard let form, !submitting else { return }
         let visible = FormLogic.visibleFields(form.fields, values: values)
         guard FormLogic.missingRequired(visible, values: values).isEmpty else { return }
+        if let bad = FormLogic.invalidAnswers(visible, values: values).first { actionError = bad; return }
 
         submitting = true
         actionError = nil
         defer { submitting = false }
 
         let payload = FormLogic.payload(visible: visible, values: values)
+        let key = submitKey ?? UUID().uuidString
+        submitKey = key
         do {
             try await APIClient.shared.submitForm(formId, data: payload.data, files: payload.files,
-                                                  progress: uploadProgress)
+                                                  progress: uploadProgress, idempotencyKey: key)
+            submitKey = nil
             done = true
         } catch {
             actionError = (error as? LocalizedError)?.errorDescription ?? T("Submission failed. Try again.")

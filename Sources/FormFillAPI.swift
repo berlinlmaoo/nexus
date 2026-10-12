@@ -79,10 +79,14 @@ extension APIClient {
     /// multipart builder: that one takes a dictionary of fields, and a dictionary cannot repeat.
     @discardableResult
     func submitForm(_ formId: String, data: [String: Any], files: [FormUpload],
-                    progress: UploadProgress? = nil) async throws -> Bool {
+                    progress: UploadProgress? = nil, idempotencyKey: String? = nil) async throws -> Bool {
         let boundary = "Boundary-\(UUID().uuidString)"
         var req = makeRequest("/api/forms/\(formId)/submit", method: "POST")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        // One key per submit attempt, reused when the same answers are sent again (a retry after a
+        // timeout): the server answers a repeat with the first submission instead of making a second
+        // task (dev server, 12 Oct 2026; older servers ignore the header).
+        if let idempotencyKey { req.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key") }
         let json = try JSONSerialization.data(withJSONObject: data)
         req.httpBody = Self.formMultipartBody(boundary: boundary, json: json, files: files)
 
@@ -98,6 +102,14 @@ extension APIClient {
         // Everything else is shown as the server worded it, which is what the web does — the
         // useful refusals here ("<field> is required", "Form lagi ditutup sementara.", the rate
         // limiter) all say something more specific than any status code could.
+        // An email or link answer the server refused (INVALID_EMAIL / INVALID_URL, "<label>: enter …"):
+        // said in the app's language with the question's own name.
+        if let code = payload?.code, code == "INVALID_EMAIL" || code == "INVALID_URL" {
+            let label = payload?.error?.components(separatedBy: ": ").first ?? T("A question")
+            throw APIError.transport(String(format: code == "INVALID_EMAIL"
+                ? T("%@: enter an email address, like name@company.com.")
+                : T("%@: enter a web address, like company.com."), label))
+        }
         throw APIError.transport(payload?.error ?? T("Couldn't submit the form."))
     }
 
@@ -165,6 +177,8 @@ extension APIClient {
 /// still arrives as nil, which is the distinction that matters.
 private struct FormServerError: Decodable {
     let error: String?
+    /// REQUIRED | INVALID_EMAIL | INVALID_URL (dev server); nil from older servers.
+    let code: String?
     let accessSchedule: ScheduleMarker?
     struct ScheduleMarker: Decodable {
         init(from decoder: Decoder) throws {}
