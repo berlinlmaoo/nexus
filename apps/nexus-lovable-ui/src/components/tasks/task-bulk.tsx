@@ -192,6 +192,22 @@ export function TaskBulkProvider({ projectId, visibleIds, children }: {
     return () => document.removeEventListener("keydown", onKey);
   }, [selecting, menu, datePopup, copyIds, confirmDelete, clear]);
 
+  // A selection goes before a tooltip: a hover tooltip on a card used to swallow the first Esc (Radix
+  // dismisses it and marks the key handled), so the selection needed a second Esc (QA B51). This runs in
+  // the capture phase, ahead of Radix. Open menus, popovers, dialogs and text fields still get Esc first.
+  useEffect(() => {
+    if (!selecting) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || menu || datePopup || confirmDelete || copyIds) return;
+      if (isEditable(e.target) || dialogOpen()) return;
+      if (document.querySelector("[data-radix-popper-content-wrapper]:not(:has([role='tooltip']))")) return;
+      e.preventDefault();
+      clear();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [selecting, menu, datePopup, confirmDelete, copyIds, clear]);
+
   // ⌘/Ctrl+A selects every task on screen; ⌘/Ctrl+Z undoes the last task action (Notion). Text fields and
   // open dialogs keep the browser's own meaning.
   useEffect(() => {

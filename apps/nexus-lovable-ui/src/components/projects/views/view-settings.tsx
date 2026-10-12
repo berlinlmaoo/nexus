@@ -373,7 +373,7 @@ export function ViewTabMenu({ view, canEdit, onRename, onSettings, onDuplicate, 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" aria-label={t("View options")} className="tap-area -mr-1 grid h-5 w-5 place-items-center rounded text-muted-foreground hover:bg-card hover:text-foreground"><ChevronDown className="h-3.5 w-3.5" /></button>
+        <button type="button" aria-label={t("View options")} className="-mr-1 grid h-5 w-5 place-items-center rounded pointer-coarse:-my-3 pointer-coarse:-mr-3 pointer-coarse:-ml-2 pointer-coarse:size-11 text-muted-foreground hover:bg-card hover:text-foreground"><ChevronDown className="h-3.5 w-3.5" /></button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-52 p-1">
         <button type="button" disabled={!canEdit} onClick={run(onRename)} className={menuItemCls}><Pencil className="h-3.5 w-3.5 text-muted-foreground" />{t("Rename")}</button>

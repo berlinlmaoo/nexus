@@ -16,12 +16,13 @@ type ResultItem = { key: string; label: string; sub?: string; to: () => void | P
 /** Roles that may open anyone's record (/people/:id); everyone else is sent to the person's chat instead. */
 const SEES_EVERY_RECORD = new Set(["ONE_ABOVE_ALL", "BOD"]);
 
-export function SearchModal({ onClose }: { onClose: () => void }) {
+/** `takeInitial`: what was typed between ⌘K and this box existing (the app shell keeps it). */
+export function SearchModal({ onClose, takeInitial }: { onClose: () => void; takeInitial?: () => string }) {
   const navigate = useNavigate();
   const { t } = useLang();
   // The full list of what it searches is cut off on a phone; there it says it more briefly.
   const phone = useIsMobile();
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(() => takeInitial?.() ?? "");
   const [debounced, setDebounced] = useState("");
   const [active, setActive] = useState(0);
   const listId = useId();
@@ -99,6 +100,8 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={onInputKey}
+            // Text carried over from before the box existed: the caret goes after it.
+            onFocus={(e) => { const n = e.currentTarget.value.length; e.currentTarget.setSelectionRange(n, n); }}
             role="combobox"
             aria-expanded={total > 0}
             aria-controls={listId}

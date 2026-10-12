@@ -24,6 +24,7 @@ export function DateField({
   className,
   emptyClassName,
   align = "start",
+  min,
 }: {
   value: string | null | undefined;
   onChange: (v: string | null) => void;
@@ -34,6 +35,8 @@ export function DateField({
   className?: string;
   emptyClassName?: string;
   align?: "start" | "center" | "end";
+  /** Earliest pickable day, "YYYY-MM-DD" (the native input's `min`). */
+  min?: string;
 }) {
   const { t, lang, locale } = useLang();
   const [open, setOpen] = useState(false);
@@ -68,6 +71,7 @@ export function DateField({
           defaultMonth={date ?? undefined}
           locale={lang === "id" ? idLocale : enGB}
           weekStartsOn={1}
+          disabled={min && parseValue(min) ? { before: parseValue(min)! } : undefined}
           onSelect={(d) => { emit(d ?? null); if (!withTime) setOpen(false); }}
         />
         {withTime && (
@@ -98,19 +102,28 @@ export function DateField({
 const pad = (n: number) => String(n).padStart(2, "0");
 const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
+/** 00:00 UTC exactly: how the API and the apps store a date picked without a time (QA S-23). */
+function isUtcMidnight(d: Date): boolean {
+  return d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0 && d.getUTCMilliseconds() === 0;
+}
+
 function parseValue(v: string | null | undefined): Date | null {
   if (!v) return null;
   const s = String(v).trim();
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
   const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(s);
-  return Number.isNaN(d.getTime()) ? null : d;
+  if (Number.isNaN(d.getTime())) return null;
+  // A date-only value stored at 00:00 UTC is that calendar day (it read "12 Oct, 07:00" in WIB).
+  if (!m && isUtcMidnight(d)) return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  return d;
 }
 
-/** An ISO value with a time other than local midnight. */
+/** An ISO value with a real time: not local midnight, and not the 00:00 UTC date-only shape. */
 function hasTime(v: string | null | undefined): boolean {
   if (!v || /^\d{4}-\d{2}-\d{2}$/.test(String(v).trim())) return false;
   const d = new Date(String(v));
-  return !Number.isNaN(d.getTime()) && (d.getHours() !== 0 || d.getMinutes() !== 0);
+  if (Number.isNaN(d.getTime()) || isUtcMidnight(d)) return false;
+  return d.getHours() !== 0 || d.getMinutes() !== 0;
 }
 
 /** "14 Oct 2026" / "14 Okt 2026" (+ time). The year is dropped in the current year. en-GB's "Sept" reads "Sep". */

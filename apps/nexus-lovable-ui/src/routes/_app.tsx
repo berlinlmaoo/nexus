@@ -1,6 +1,6 @@
 import { Outlet, createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, WifiOff } from "lucide-react";
 import { isAuthError, nexusApi } from "@/lib/nexus-api";
 import { GideonLauncher } from "@/components/gideon/GideonLauncher";
@@ -158,11 +158,34 @@ function AppLayout() {
 function GlobalSearch() {
   const [open, setOpen] = useState(false);
   const [help, setHelp] = useState(false);
+  // Keys typed right after ⌘K, before the search box exists, are kept and handed to it (QA round 2,
+  // N-05: "ZZ QA6" typed at once came out empty). null = not buffering.
+  const buffered = useRef<string | null>(null);
+  const openSearch = useCallback(() => { if (buffered.current === null) buffered.current = ""; setOpen(true); }, []);
+  const takeBuffered = useCallback(() => { const b = buffered.current ?? ""; buffered.current = null; return b; }, []);
+  // The search chunk is fetched while the browser is idle, so ⌘K opens it at once.
+  useEffect(() => {
+    const load = () => { void import("@/components/SearchModal"); };
+    const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
+    if (w.requestIdleCallback) w.requestIdleCallback(load); else window.setTimeout(load, 2000);
+  }, []);
+  useEffect(() => {
+    const onBufferKey = (e: KeyboardEvent) => {
+      if (buffered.current === null || isEditableTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey || e.isComposing) return;
+      if (e.key.length === 1) buffered.current += e.key;
+      else if (e.key === "Backspace") buffered.current = buffered.current.slice(0, -1);
+      else return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener("keydown", onBufferKey, true);
+    return () => window.removeEventListener("keydown", onBufferKey, true);
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // ⌘/Ctrl+K = search, but not inside a text field or editor: there it adds a link (Notion, Docs),
       // and the spreadsheet grid uses it for "Insert link" (QA S-07).
-      if (e.key.toLowerCase() === "k" && !e.shiftKey && globalModShortcut(e)) { e.preventDefault(); setOpen(true); return; }
+      if (e.key.toLowerCase() === "k" && !e.shiftKey && globalModShortcut(e)) { e.preventDefault(); openSearch(); return; }
       // "?" or ⌘/Ctrl+/ = the shortcut list. Decided after the event has gone everywhere: the calendar
       // and the sheet answer the same keys with their own lists and mark the event handled.
       const slash = e.key === "/" && (e.metaKey || e.ctrlKey) && !e.altKey;
@@ -172,7 +195,7 @@ function GlobalSearch() {
       if (question && modalOpen()) return;
       window.setTimeout(() => { if (!e.defaultPrevented) setHelp(true); }, 0);
     };
-    const onOpenSearch = () => setOpen(true);
+    const onOpenSearch = () => openSearch();
     const onOpenHelp = () => setHelp(true);
     window.addEventListener("keydown", onKey);
     window.addEventListener(OPEN_SEARCH_EVENT, onOpenSearch);
@@ -182,10 +205,10 @@ function GlobalSearch() {
       window.removeEventListener(OPEN_SEARCH_EVENT, onOpenSearch);
       window.removeEventListener(OPEN_SHORTCUTS_EVENT, onOpenHelp);
     };
-  }, []);
+  }, [openSearch]);
   return (
     <>
-      {open && <Suspense fallback={null}><SearchModal onClose={() => setOpen(false)} /></Suspense>}
+      {open && <Suspense fallback={null}><SearchModal takeInitial={takeBuffered} onClose={() => { buffered.current = null; setOpen(false); }} /></Suspense>}
       <ShortcutsHelp open={help} onOpenChange={setHelp} />
     </>
   );

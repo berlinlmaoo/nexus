@@ -103,18 +103,22 @@ function TaskRow({ task, now, onOpen }: { task: NexusTask; now: number; onOpen: 
 
   return (
     <motion.div layoutId={`mytasks-taskcard-${task.id}`} data-morph-id={`mytasks-taskcard-${task.id}`} style={{ borderRadius: 12 }} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/40">
+      {/* On a touch screen the button is a 44 px square around the 20 px circle (negative margin keeps
+          the row as it was; QA S-12). */}
       <button
-        className={cn("tap-area grid h-5 w-5 shrink-0 place-items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40", isDone(task.status) ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-transparent hover:border-primary hover:text-primary")}
+        className="group/done grid shrink-0 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 pointer-coarse:-m-3 pointer-coarse:size-11"
         disabled={update.isPending}
         onClick={() => update.mutate()}
         aria-label={nextStatus === "DONE" ? t("Mark done") : t("Reopen task")}
         title={nextStatus === "DONE" ? t("Mark done") : t("Reopen task")}
       >
-        {update.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+        <span className={cn("grid h-5 w-5 place-items-center rounded-full border transition-colors", isDone(task.status) ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-transparent group-hover/done:border-primary group-hover/done:text-primary")}>
+          {update.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+        </span>
       </button>
       <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }} className="min-w-0 flex-1 cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
         <div className="truncate text-sm font-semibold">{task.title}</div>
-        <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
+        <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1"><Sparkles className="h-3 w-3 text-primary" />{task.taskList?.name || t("No section")}</span>
           {typeof task._count?.comments === "number" && <span className="inline-flex items-center gap-1"><MessageCircle className="h-3 w-3" />{task._count.comments}</span>}
           {update.isError && <span className="text-red-500">{t("Couldn't update")}</span>}
@@ -128,7 +132,8 @@ function TaskRow({ task, now, onOpen }: { task: NexusTask; now: number; onOpen: 
         {fmtDue(task.dueDate)}
         {late !== null && late > 0 && <span className="block text-[10px] font-medium">{t("{n}d late", { n: late })}</span>}
       </span>
-      <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-bold text-muted-foreground">{statusLabel(task.status)}</span>
+      {/* One line, never squeezed (QA N4: "To Do" wrapped to two lines and overlapped the priority on a phone). */}
+      <span data-mytasks-status="" className="shrink-0 whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-2xs font-bold text-muted-foreground">{statusLabel(task.status)}</span>
       {assignee?.id
         ? <Avatar userId={assignee.id} name={assignee.name} avatar={assignee.avatar} size={28} className="shrink-0" />
         : <div className="grid h-7 w-7 place-items-center rounded-full bg-primary/10 text-[10px] font-black text-primary" title={t("Unassigned")}>?</div>}

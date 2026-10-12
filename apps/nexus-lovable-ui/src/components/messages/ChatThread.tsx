@@ -565,7 +565,9 @@ export function ChatThread({
   const startReply = (m: NexusMessage) => { setReplyTo(m); inputRef.current?.focus(); };
   // Long-press (touch) or right-click on a bubble: Reply / Copy text. A phone has no hover, so the Reply
   // button beside the bubble was out of reach there (QA S-10 / B17).
-  const [pressMenu, setPressMenu] = useState<{ m: NexusMessage; x: number; y: number } | null>(null);
+  const [pressMenu, setPressMenuState] = useState<{ m: NexusMessage; x: number; y: number } | null>(null);
+  const menuOpenedAt = useRef(0);
+  const setPressMenu = (v: { m: NexusMessage; x: number; y: number } | null) => { if (v) menuOpenedAt.current = Date.now(); setPressMenuState(v); };
   const pressTimer = useRef<number | undefined>(undefined);
   const pressStart = useRef<{ x: number; y: number } | null>(null);
   const bubblePress = (m: NexusMessage) => ({
@@ -588,7 +590,8 @@ export function ChatThread({
       const st = pressStart.current;
       if (st && Math.hypot(tp.clientX - st.x, tp.clientY - st.y) > 10) { window.clearTimeout(pressTimer.current); pressStart.current = null; }
     },
-    onTouchEnd: () => { window.clearTimeout(pressTimer.current); pressStart.current = null; },
+    // The finger lifting after the long-press must not become a click on the menu's backdrop.
+    onTouchEnd: (e: React.TouchEvent) => { window.clearTimeout(pressTimer.current); pressStart.current = null; if (Date.now() - menuOpenedAt.current < 1500 && e.cancelable) e.preventDefault(); },
   });
   const copyMessage = (m: NexusMessage) => {
     const text = m.content ?? "";
@@ -809,7 +812,7 @@ export function ChatThread({
         {pressMenu && (
           <>
             <EscClose onClose={() => setPressMenu(null)} />
-            <div className="fixed inset-0 z-[70]" onClick={() => setPressMenu(null)} onContextMenu={(e) => { e.preventDefault(); setPressMenu(null); }} />
+            <div className="fixed inset-0 z-[70]" onClick={() => { if (Date.now() - menuOpenedAt.current > 400) setPressMenu(null); }} onContextMenu={(e) => { e.preventDefault(); setPressMenu(null); }} />
             <div
               role="menu"
               aria-label={t("Message actions")}

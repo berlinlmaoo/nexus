@@ -2585,13 +2585,17 @@ export function SheetGrid({
       const cell = cellAt(tp.clientX, tp.clientY);
       if (!cell) return;
       start = { x: tp.clientX, y: tp.clientY };
-      timer = window.setTimeout(() => {
+      const begin = () => {
         active = true;
         dragging.current = true;
         tabRun.current = null;
         setSel({ r: cell.r, c: cell.c, r2: cell.r, c2: cell.c });
-        navigator.vibrate?.(8);
-      }, 350);
+      };
+      // A drag that starts on the cell already selected extends the selection at once (tap a cell, then
+      // drag from it: QA round 2). Anywhere else it is a scroll unless the finger holds still first.
+      const cur = selRef.current;
+      if (cur.r === cell.r && cur.c === cell.c && cur.r2 === cell.r && cur.c2 === cell.c) { begin(); return; }
+      timer = window.setTimeout(() => { begin(); navigator.vibrate?.(8); }, 350);
     };
     const onMove = (e: TouchEvent) => {
       const tp = e.touches[0];

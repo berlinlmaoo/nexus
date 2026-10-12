@@ -3332,8 +3332,13 @@ export function fmtDue(value?: string | null) {
   if (!value) return t("No due date");
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  const hasTime = date.getUTCHours() !== 0 || date.getUTCMinutes() !== 0;
-  return hasTime ? `${fmtDate(value)}, ${fmtTime(value)}` : fmtDate(value);
+  // Date-only = 00:00 UTC (API/apps) or 00:00 WIB (the web's older picks): no time, and the WIB day (QA S-23).
+  const utcMidnight = date.getUTCHours() === 0 && date.getUTCMinutes() === 0;
+  const wib = new Date(date.getTime() + 7 * 3_600_000);
+  const wibMidnight = wib.getUTCHours() === 0 && wib.getUTCMinutes() === 0;
+  if (utcMidnight) return fmtDate(`${date.toISOString().slice(0, 10)}T12:00:00Z`);
+  if (wibMidnight) return fmtDate(`${wib.toISOString().slice(0, 10)}T12:00:00Z`);
+  return `${fmtDate(value)}, ${fmtTime(value)}`;
 }
 
 /** Convert a TipTap JSON doc to plain text (paragraphs joined by blank lines). */

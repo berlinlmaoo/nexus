@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { docTitle } from "@/lib/doc-title";
+import { chatTitleText } from "@/lib/gideon-chat-title";
 import { isEditableTarget, modKey } from "@/lib/keyboard";
 import { SelectPicker } from "@/components/SelectPicker";
 import { useQueryClient } from "@tanstack/react-query";
@@ -479,7 +480,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-muted text-foreground"><GideonMark className="h-4 w-4" /></span>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-bold">{name}</div>
-        <div className="truncate text-[11px] text-muted-foreground">{chatTitle && !fresh ? chatTitle : t("Acts in NEXUS as you")}</div>
+        <div className="truncate text-[11px] text-muted-foreground">{chatTitle && !fresh ? chatTitleText(chatTitle) : t("Acts in NEXUS as you")}</div>
       </div>
       {!isPage && (
         <button type="button" onClick={() => setView((v) => (v === "history" ? "chat" : "history"))} title={t("Chat history")} aria-label={t("Chat history")} aria-pressed={view === "history"} className={cn("rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground", view === "history" && "bg-accent text-foreground")}>
@@ -916,7 +917,7 @@ export function ChatHistoryList({ activeId, onPick, onNew }: { activeId: string 
                   <input autoFocus value={renaming.title} onChange={(e) => setRenaming({ id: r.id, title: e.target.value })} onBlur={() => void saveRename()} onKeyDown={(e) => { if (e.key === "Enter") void saveRename(); if (e.key === "Escape") { e.preventDefault(); setRenaming(null); } }} className="m-1 min-w-0 flex-1 rounded-md border border-primary/50 bg-background px-2 py-1 text-sm outline-none" />
                 ) : (
                   <button type="button" onClick={() => onPick(r.id)} className="min-w-0 flex-1 px-2 py-1.5 text-left">
-                    <span className="block truncate text-sm">{r.title || t("Untitled chat")}</span>
+                    <span className="block truncate text-sm">{chatTitleText(r.title) || t("Untitled chat")}</span>
                     {r.match && <span className="block truncate text-[11px] text-muted-foreground">{r.match}</span>}
                   </button>
                 )}
