@@ -124,7 +124,7 @@ export function NamedRangesPanel({ ranges, shape, sheetName, selectionRange, can
               <div className="truncate font-mono text-[11px] text-muted-foreground">{sheetName}!{rangeToA1(r.range, shape)}</div>
             </button>
             {canEdit && (
-              <div className="flex shrink-0 gap-0.5 opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100">
+              <div className="flex shrink-0 gap-0.5 opacity-0 pointer-coarse:opacity-100! transition group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100">
                 <button type="button" title={t("Edit")} aria-label={t("Edit")} onClick={() => setDraft({ id: r.id, name: r.name, range: `${sheetName}!${rangeToA1(r.range, shape)}` })} className="rounded p-1 text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
                 <button type="button" title={t("Delete")} aria-label={t("Delete")} onClick={() => onSave(ranges.filter((x) => x.id !== r.id))} className="rounded p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
               </div>
@@ -346,7 +346,7 @@ export function ProtectedRangesPanel({ protections, shape, sheetName, selectionR
               </span>
             </button>
             {canManage && (
-              <button type="button" title={t("Delete")} aria-label={t("Delete")} onClick={() => onSave(protections.filter((x) => x.id !== p.id))} className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition hover:text-destructive group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>
+              <button type="button" title={t("Delete")} aria-label={t("Delete")} onClick={() => onSave(protections.filter((x) => x.id !== p.id))} className="shrink-0 rounded p-1 text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition hover:text-destructive group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>
             )}
           </div>
         ))}

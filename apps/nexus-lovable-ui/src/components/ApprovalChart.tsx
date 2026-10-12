@@ -262,14 +262,17 @@ export function ApprovalChart() {
             menggantung di bawahnya — termasuk pohon tanpa atasan, karena request puncaknya memang
             jatuh ke Board. BoD yang punya bawahan muncul sebagai akar pohon, bukan di kotak. */}
         <section className={cn(full ? "fixed inset-0 z-[60] flex flex-col bg-card" : "border-b border-border")}>
-          <div className={cn("flex items-center gap-2 px-5", full ? "border-b border-border py-3" : "pt-4 pb-2")}>
-            <div className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-              {full ? t("Approval chart") : t("Approval chain")} <span className="normal-case tracking-normal text-muted-foreground/70">{t("· scroll/pinch = zoom · drag empty space = move · double-click = fit to screen")}</span>
+          <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-1.5 px-5", full ? "border-b border-border py-3" : "pt-4 pb-2")}>
+            <div className="min-w-0 basis-full text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground sm:basis-auto">
+              {full ? t("Approval chart") : t("Approval chain")}{" "}
+              {/* A touch screen has no scroll wheel or double-click (QA B06). */}
+              <span className="normal-case tracking-normal text-muted-foreground/70 pointer-coarse:hidden">{t("· scroll/pinch = zoom · drag empty space = move · double-click = fit to screen")}</span>
+              <span className="hidden normal-case tracking-normal text-muted-foreground/70 pointer-coarse:inline">{t("· pinch = zoom · drag = move · tap a card to select it")}</span>
             </div>
-            <div className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <button type="button" onClick={() => zoomCenter(1 / 1.2)} className="rounded-md border border-border p-1 hover:bg-accent" aria-label={t("Zoom out")}><ZoomOut className="h-3.5 w-3.5" /></button>
+            <div className="ml-auto flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+              <button type="button" onClick={() => zoomCenter(1 / 1.2)} className="grid place-items-center rounded-md border border-border p-1 hover:bg-accent pointer-coarse:size-11" aria-label={t("Zoom out")}><ZoomOut className="h-3.5 w-3.5" /></button>
               <span className="w-10 text-center tabular-nums">{zoomLabel}%</span>
-              <button type="button" onClick={() => zoomCenter(1.2)} className="rounded-md border border-border p-1 hover:bg-accent" aria-label={t("Zoom in")}><ZoomIn className="h-3.5 w-3.5" /></button>
+              <button type="button" onClick={() => zoomCenter(1.2)} className="grid place-items-center rounded-md border border-border p-1 hover:bg-accent pointer-coarse:size-11" aria-label={t("Zoom in")}><ZoomIn className="h-3.5 w-3.5" /></button>
               <button type="button" onClick={fitView} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent"><Scan className="h-3.5 w-3.5" /> {t("Fit to screen")}</button>
               <button type="button" onClick={exportPng} disabled={exporting} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent disabled:opacity-50" title={t("Download the chart as a sharp PNG (2x), whatever the zoom on screen")}>
                 {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} PNG

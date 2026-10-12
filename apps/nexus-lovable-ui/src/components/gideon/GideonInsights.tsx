@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { EscClose } from "@/hooks/use-escape";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Check, Loader2, X } from "lucide-react";
 import { GideonMark } from "./GideonMark";
@@ -123,6 +124,7 @@ function RunDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const r = q.data?.run;
   return (
     <div className="fixed inset-0 z-[60] grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
+      <EscClose onClose={onClose} />
       <div role="dialog" aria-modal="true" lang={L.lang} className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start gap-2">
           <GideonMark className="mt-1 h-4 w-4" />

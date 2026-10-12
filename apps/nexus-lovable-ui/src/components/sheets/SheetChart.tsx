@@ -482,7 +482,7 @@ export function ChartObject({ spec, data, engine, theme, left, top, zoom, select
         onClick={(e) => { onSelect(); openMenuAtButton(e.currentTarget); }}
         className={cn(
           "absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:opacity-100",
-          selected || menu ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          selected || menu ? "opacity-100" : "opacity-0 pointer-coarse:opacity-100! group-hover:opacity-100",
         )}
       >
         <EllipsisVertical className="h-4 w-4" />

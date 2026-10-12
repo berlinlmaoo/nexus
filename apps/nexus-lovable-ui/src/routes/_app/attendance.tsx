@@ -1,4 +1,5 @@
 import type React from "react";
+import { EscClose } from "@/hooks/use-escape";
 import { SelectPicker } from "@/components/SelectPicker";
 import { OfficeMapPicker } from "@/components/attendance/OfficeMapPicker";
 import { LocationTrail, LocationTrailDialog } from "@/components/attendance/LocationTrail";
@@ -129,7 +130,8 @@ function LeaveDetailDrawer({ record, onClose, canOverride }: { record: HistRow; 
   const typeLabel = tr(REQ_LABEL[(record.requestType || "").toUpperCase()] || "Leave/Permit");
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <EscClose onClose={onClose} />
+      <div role="dialog" aria-modal="true" aria-label={typeLabel} className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-start justify-between">
           <div className="flex items-center gap-2">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-warning/20 text-warning-foreground dark:text-warning"><Coffee className="h-4 w-4" /></span>
@@ -462,7 +464,7 @@ function Attendance() {
                     placeholder={tr("Search people…")}
                     className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-8 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20"
                   />
-                  {memberQuery && <button onClick={() => setMemberQuery("")} aria-label={tr("Clear search")} className="absolute right-2 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-3 w-3" /></button>}
+                  {memberQuery && <button onClick={() => setMemberQuery("")} aria-label={tr("Clear search")} className="tap-area absolute right-2 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-3 w-3" /></button>}
                 </div>
               )}
               {canSeeBoard && <ExportMenu monthKey={monthKey} monthLabel={monthLabel} />}
@@ -568,7 +570,7 @@ function Attendance() {
                         <TrackingBadges rec={recMap.get(`${u.id}:${todayKey}`)} isToday />
                         {/* The person's whole record for this period: counts, XP log with reasons, requests. */}
                         <Link to="/people/$userId" params={{ userId: u.id }} search={{ period: monthKey }} title={tr("{name} — record for this period", { name: u.name ?? tr("Unnamed") })}
-                          className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground ring-1 ring-border transition hover:bg-accent hover:text-foreground">{tr("Record")}</Link>
+                          className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground ring-1 ring-border transition hover:bg-accent hover:text-foreground pointer-coarse:inline-flex pointer-coarse:min-h-6 pointer-coarse:items-center">{tr("Record")}</Link>
                         {canManage && (() => {
                           const d = dayOffOf(u.id);
                           if (!d) return null;
@@ -608,7 +610,7 @@ function Attendance() {
                                   void downloadFile(`/api/attendance/history?scope=workspace&month=${monthKey}&userId=${u.id}&format=xlsx`, `absensi-${slug}-${monthKey}.xlsx`)
                                     .catch((err) => alert(err instanceof ApiError ? err.message : tr("Export failed. Try again.")));
                                 }}
-                                className={cn(pill, "bg-muted text-muted-foreground ring-border transition hover:bg-accent hover:text-foreground")}
+                                className={cn(pill, "bg-muted text-muted-foreground ring-border transition hover:bg-accent hover:text-foreground pointer-coarse:min-h-6 pointer-coarse:min-w-8")}
                               >
                                 <Download className="inline h-3 w-3" />
                               </button>
@@ -628,10 +630,10 @@ function Attendance() {
                               <button
                                 onClick={() => setOverrideTarget({ userId: u.id, name: u.name ?? null, dateKey: pd.key })}
                                 title={`${fmtDate(rec.attendanceDate)} · ${tr("Absent — no check-in. Tap to set a status (Present/Leave/Sick/Day off).")}`}
-                                className={cn("inline-block h-5 w-5 rounded-lg transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls.absent)}
+                                className={cn("inline-block h-5 w-5 rounded-lg pointer-coarse:size-6 transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls.absent)}
                               />
                             ) : tone === "absent" ? (
-                              <span title={`${fmtDate(rec.attendanceDate)} · ${tr("Absent")}`} className={cn("inline-block h-5 w-5 rounded-lg", sCls.absent)} />
+                              <span title={`${fmtDate(rec.attendanceDate)} · ${tr("Absent")}`} className={cn("inline-block h-5 w-5 rounded-lg pointer-coarse:size-6", sCls.absent)} />
                             ) : tone === "leave" || tone === "permit" || tone === "sick" || tone === "dayoff" ? (
                               <motion.button
                                 whileHover={reduceMotion ? undefined : { scale: 1.3 }}
@@ -639,7 +641,7 @@ function Attendance() {
                                 transition={{ type: "spring", stiffness: 500, damping: 18 }}
                                 onClick={(e) => { setCorrectOrigin(rectCenter(e.currentTarget)); setLeaveDetail(rec); }}
                                 title={`${fmtDate(rec.attendanceDate)} · ${tr(toneLabel[tone])}${rec.notes ? " — " + rec.notes : ""} — ${tr("tap for details")}`}
-                                className={cn("inline-block h-5 w-5 rounded-lg transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls[tone])}
+                                className={cn("inline-block h-5 w-5 rounded-lg pointer-coarse:size-6 transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls[tone])}
                               />
                             ) : (
                               <motion.button
@@ -648,17 +650,17 @@ function Attendance() {
                                 transition={{ type: "spring", stiffness: 500, damping: 18 }}
                                 onClick={(e) => { setCorrectOrigin(rectCenter(e.currentTarget)); setCorrectRecord(rec); }}
                                 title={`${fmtDate(rec.attendanceDate)} · ${statusLabel(rec.status || "")} · ${tr("In {time}", { time: fmtTime(rec.checkInAt) })} / ${tr("Out {time}", { time: fmtTime(rec.checkOutAt) })}${rec.locationTrackingState === "denied" ? ` · ${tr("Location off")}` : rec.locationTrackingState === "web" ? ` · ${tr("Web check-in · location not tracked")}` : ""} — ${tr("tap to see location and selfie")}`}
-                                className={cn("inline-block h-5 w-5 rounded-lg transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls[tone])}
+                                className={cn("inline-block h-5 w-5 rounded-lg pointer-coarse:size-6 transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls[tone])}
                               />
                             )
                           ) : canManage ? (
                             <button
                               onClick={() => setOverrideTarget({ userId: u.id, name: u.name ?? null, dateKey: pd.key })}
                               title={`${pd.key} — ${tr("empty. Tap to set a status (Present/Leave/Sick/Day off).")}`}
-                              className="inline-block h-5 w-5 rounded-lg bg-muted/30 transition-[box-shadow] hover:ring-2 hover:ring-primary/50"
+                              className="inline-block h-5 w-5 rounded-lg pointer-coarse:size-6 bg-muted/30 transition-[box-shadow] hover:ring-2 hover:ring-primary/50"
                             />
                           ) : (
-                            <span className="inline-block h-5 w-5 rounded-lg bg-muted/30" />
+                            <span className="inline-block h-5 w-5 rounded-lg pointer-coarse:size-6 bg-muted/30" />
                           )}
                           {rec?.locationTrackingState === "denied" && (
                             <span title={tr("Location off")} aria-label={tr("Location off")} className="pointer-events-none absolute right-0 top-1 grid h-3 w-3 place-items-center rounded-full bg-card text-slate-500 ring-1 ring-border dark:text-slate-400"><MapPinOff className="h-2 w-2" /></span>
@@ -708,7 +710,8 @@ function Attendance() {
         )}
         {overrideTarget && (
           <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={() => setOverrideTarget(null)}>
-            <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
+      <EscClose onClose={() => setOverrideTarget(null)} />
+            <div role="dialog" aria-modal="true" aria-label={overrideTarget.name ?? tr("Unnamed")} className="w-full max-w-sm rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="font-display text-lg font-bold tracking-tight">{overrideTarget.name ?? tr("Unnamed")}</h2>
@@ -793,7 +796,8 @@ function DeductionLogModal({ userId, name, monthKey, onClose }: { userId: string
   return (
     <motion.div className="fixed inset-0 z-50 grid place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div initial={{ opacity: 0, scale: 0.96, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
+      <EscClose onClose={onClose} />
+      <motion.div role="dialog" aria-modal="true" aria-label={name ?? tr("Unnamed")} initial={{ opacity: 0, scale: 0.96, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
         transition={{ duration: 0.18, ease: "easeOut" }} onClick={(e) => e.stopPropagation()}
         className="flex max-h-[86vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-pop">
         <div className="flex items-start justify-between gap-2 border-b border-border px-5 py-4">
@@ -1102,7 +1106,8 @@ function OfficeComposer({ office, onClose, onCreated }: { office?: NexusOffice; 
   });
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
+      <EscClose onClose={onClose} />
+      <div role="dialog" aria-modal="true" aria-label={editing ? tr("Edit office") : tr("New office")} className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-display text-lg font-bold tracking-tight">{editing ? tr("Edit office") : tr("New office")}</h2>
         <div className="mt-4 space-y-3">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder={tr("Office name")} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
@@ -1865,7 +1870,8 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
+      <EscClose onClose={onClose} />
+      <div role="dialog" aria-modal="true" aria-label={granting ? tr("Grant a request to someone") : tr("New attendance request")} className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-display text-lg font-bold tracking-tight">{granting ? tr("Grant a request to someone") : tr("New attendance request")}</h2>
         {!granting && <p className="mt-1 text-xs text-muted-foreground">{tr("One day per request (annual leave: a range of days). Only the types you can use are listed.")}</p>}
         {canGrant && (

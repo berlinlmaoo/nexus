@@ -1,4 +1,4 @@
-import { useRef, type ComponentType, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, type ComponentType, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -47,8 +47,19 @@ export function PageTabs<K extends string>({ tabs, value, onChange, label, class
     onChange(tabs[n].key);
     requestAnimationFrame(() => ref.current?.querySelector<HTMLButtonElement>(`[data-tab="${tabs[n].key}"]`)?.focus());
   };
+  // The chosen tab is scrolled into view (a deep link to the last section, or arrow keys).
+  useEffect(() => {
+    const row = ref.current;
+    const tab = row?.querySelector<HTMLElement>(`[data-tab="${value}"]`);
+    if (!row || !tab || row.scrollWidth <= row.clientWidth) return;
+    const left = tab.offsetLeft - row.offsetLeft;
+    if (left < row.scrollLeft) row.scrollLeft = left - 16;
+    else if (left + tab.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = left + tab.offsetWidth - row.clientWidth + 16;
+  }, [value]);
   return (
-    <div ref={ref} role="tablist" aria-label={label} onKeyDown={onKey} className={cn("flex items-end gap-5 whitespace-nowrap", className)}>
+    // A row wider than the screen scrolls sideways (finger, trackpad) instead of clipping the last tabs
+    // (QA B05 / B38: Control Room's App and GIDEON were out of reach on a phone or iPad).
+    <div ref={ref} role="tablist" aria-label={label} onKeyDown={onKey} className={cn("flex min-w-0 max-w-full items-end gap-5 overflow-x-auto overscroll-x-contain whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", className)}>
       {tabs.map((t) => {
         const on = t.key === value;
         const Icon = t.icon;

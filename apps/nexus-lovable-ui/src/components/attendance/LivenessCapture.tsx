@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { EscClose } from "@/hooks/use-escape";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Camera, Check, Eye, EyeOff, Loader2, ScanFace, Sun, X } from "lucide-react";
 import { useLang } from "@/lib/lang";
@@ -262,7 +263,8 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
   const rightward = step === 1;
 
   return (
-    <motion.div className={`fixed inset-0 z-[80] bg-black ${ink}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+    <motion.div role="dialog" aria-modal="true" aria-label={tr("Selfie")} className={`fixed inset-0 z-[80] bg-black ${ink}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <EscClose onClose={onCancel} />
       <video ref={videoRef} muted playsInline autoPlay className="absolute inset-0 h-full w-full -scale-x-100 object-cover" />
       {/* Dim outside the window — or light it white in the dark. */}
       <svg className="absolute inset-0 h-full w-full" aria-hidden>
@@ -348,7 +350,7 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
       {/* Header */}
       <div className="absolute inset-x-0 top-0 px-4 pt-[max(12px,env(safe-area-inset-top))]">
         <div className="flex items-center">
-          <button type="button" onClick={onCancel} aria-label={tr("Cancel")} className={`grid h-9 w-9 place-items-center rounded-full ${lightOn ? "bg-black/10" : "bg-white/20"}`}><X className="h-4 w-4" strokeWidth={3} /></button>
+          <button type="button" onClick={onCancel} aria-label={tr("Cancel")} className={`grid h-11 w-11 place-items-center rounded-full ${lightOn ? "bg-black/10" : "bg-white/20"}`}><X className="h-4 w-4" strokeWidth={3} /></button>
           <div className={`flex-1 text-center text-[13px] font-semibold ${inkSoft}`}>{tr("Face check")}</div>
           <button type="button" onClick={() => setManualLight(!lightOn)} aria-label={tr("Screen light")} aria-pressed={lightOn}
             className={`grid h-9 w-9 place-items-center rounded-full ${lightOn ? "bg-black/10 text-amber-500" : "bg-white/20"}`}><Sun className="h-4 w-4" strokeWidth={2.5} /></button>

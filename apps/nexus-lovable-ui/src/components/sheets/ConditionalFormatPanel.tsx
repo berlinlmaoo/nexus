@@ -410,7 +410,7 @@ export function ConditionalFormatPanel({ rules, shape, sheetName, selectionRange
                     onDragStart={() => setDragId(r.id)}
                     onDragEnd={() => setDragId(null)}
                     title={t("Drag to reorder")}
-                    className="cursor-grab text-muted-foreground/50 opacity-0 transition group-hover:opacity-100 active:cursor-grabbing"
+                    className="cursor-grab text-muted-foreground/50 opacity-0 pointer-coarse:opacity-100! transition group-hover:opacity-100 active:cursor-grabbing"
                   ><GripVertical className="h-4 w-4" /></span>
                 )}
                 <button
@@ -427,7 +427,7 @@ export function ConditionalFormatPanel({ rules, shape, sheetName, selectionRange
                   </span>
                 </button>
                 {canEdit && (
-                  <span className="flex shrink-0 items-center opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100">
+                  <span className="flex shrink-0 items-center opacity-0 pointer-coarse:opacity-100! transition group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100">
                     <button type="button" onClick={() => move(i, i - 1)} disabled={i === 0} aria-label={t("Move up")} title={t("Move up")}
                       className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"><ChevronUp className="h-3.5 w-3.5" /></button>
                     <button type="button" onClick={() => move(i, i + 1)} disabled={i === rules.length - 1} aria-label={t("Move down")} title={t("Move down")}

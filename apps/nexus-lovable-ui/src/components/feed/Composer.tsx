@@ -72,7 +72,7 @@ export function Composer({ me, members, onPost, autoFocus }: { me?: MentionUser;
               {pics.map((p, i) => (
                 <div key={p.url} className="group relative aspect-square overflow-hidden rounded-xl border border-border">
                   <img src={p.url} alt="" className="h-full w-full object-cover" />
-                  <button onClick={() => removePic(i)} aria-label={t("Remove photo")} className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-white opacity-0 transition group-hover:opacity-100"><X className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => removePic(i)} aria-label={t("Remove photo")} className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-white opacity-0 pointer-coarse:opacity-100! transition group-hover:opacity-100"><X className="h-3.5 w-3.5" /></button>
                 </div>
               ))}
             </div>

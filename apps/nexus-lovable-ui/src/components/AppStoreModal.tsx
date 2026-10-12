@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { EscClose } from "@/hooks/use-escape";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Apple, X } from "lucide-react";
@@ -47,6 +48,7 @@ export function AppStoreModal() {
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-[85] grid place-items-center p-4">
+          <EscClose onClose={later} />
           <motion.div
             className="absolute inset-0 bg-foreground/40 dark:bg-scrim backdrop-blur-sm"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}

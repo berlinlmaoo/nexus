@@ -170,8 +170,8 @@ function NotificationRow({ notification }: { notification: NexusNotification }) 
       </div>
       <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
         {/* Phone: icon-only, so the title keeps the row's width (QA B21). */}
-        {!notification.read && <button disabled={busy} onClick={() => markRead.mutate()} aria-label={t("Mark as read")} title={t("Mark as read")} className="inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50"><Check className="h-3 w-3 sm:hidden" /><span className="max-sm:hidden">{t("Mark as read")}</span></button>}
-        <button disabled={busy} onClick={() => remove.mutate()} className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-md border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50" title={t("Delete notification")} aria-label={t("Delete notification")}>
+        {!notification.read && <button disabled={busy} onClick={() => markRead.mutate()} aria-label={t("Mark as read")} title={t("Mark as read")} className="inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-md pointer-coarse:min-h-9 border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50"><Check className="h-3 w-3 sm:hidden" /><span className="max-sm:hidden">{t("Mark as read")}</span></button>}
+        <button disabled={busy} onClick={() => remove.mutate()} className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-md pointer-coarse:min-h-9 pointer-coarse:min-w-9 border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50" title={t("Delete notification")} aria-label={t("Delete notification")}>
           {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
         </button>
         {!notification.read && <span className="h-2 w-2 rounded-full bg-primary ml-1" />}

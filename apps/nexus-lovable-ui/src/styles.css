@@ -580,3 +580,19 @@
 @media (max-width: 767.98px) {
   html { scroll-padding-bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + 5rem); }
 }
+
+/* Small icon buttons get a finger-sized hit area on touch screens without changing the layout
+   (QA 13 Oct 2026, S-12 / B41: 12–20 px targets on board cards, tables, notifications, attendance).
+   The ::after box extends the button's own click area by 12 px on every side. */
+@utility tap-area {
+  @media (pointer: coarse) {
+    &:not(.absolute, .fixed, .sticky) {
+      position: relative;
+    }
+    &::after {
+      content: "";
+      position: absolute;
+      inset: -12px;
+    }
+  }
+}

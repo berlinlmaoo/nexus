@@ -5,6 +5,7 @@ import { PanelLeft } from "lucide-react";
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { globalModShortcut } from "@/lib/keyboard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -96,7 +97,9 @@ const SidebarProvider = React.forwardRef<
     // Adds a keyboard shortcut to toggle the sidebar.
     React.useEffect(() => {
       const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.key === SIDEBAR_KEYBOARD_SHORTCUT && (event.metaKey || event.ctrlKey)) {
+        // ⌘/Ctrl+B (and Notion's ⌘\). Never while typing: in an editor ⌘B is bold, in the sheet it bolds
+        // the cell (QA S-07 / B04 / B37). A key the focused element already handled is left alone too.
+        if ((event.key === SIDEBAR_KEYBOARD_SHORTCUT || event.key === "\\") && globalModShortcut(event) && !event.shiftKey) {
           event.preventDefault();
           toggleSidebar();
         }
@@ -456,7 +459,7 @@ const SidebarGroupAction = React.forwardRef<
       className={cn(
         "absolute right-3 top-3.5 flex aspect-square w-5 items-center justify-center rounded-md p-0 text-sidebar-foreground outline-none ring-sidebar-ring cursor-pointer transition-transform hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
         // Increases the hit area of the button on mobile.
-        "after:absolute after:-inset-2 after:md:hidden",
+        "after:absolute after:-inset-2 after:md:hidden pointer-coarse:after:block",
         "group-data-[collapsible=icon]:hidden",
         className,
       )}
@@ -599,13 +602,13 @@ const SidebarMenuAction = React.forwardRef<
       className={cn(
         "absolute right-1 top-1.5 flex aspect-square w-5 items-center justify-center rounded-md p-0 text-sidebar-foreground outline-none ring-sidebar-ring cursor-pointer transition-transform hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 peer-hover/menu-button:text-sidebar-accent-foreground [&>svg]:size-4 [&>svg]:shrink-0",
         // Increases the hit area of the button on mobile.
-        "after:absolute after:-inset-2 after:md:hidden",
+        "after:absolute after:-inset-2 after:md:hidden pointer-coarse:after:block",
         "peer-data-[size=sm]/menu-button:top-1",
         "peer-data-[size=default]/menu-button:top-1.5",
         "peer-data-[size=lg]/menu-button:top-2.5",
         "group-data-[collapsible=icon]:hidden",
         showOnHover &&
-          "group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 peer-data-[active=true]/menu-button:text-sidebar-accent-foreground md:opacity-0",
+          "group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 peer-data-[active=true]/menu-button:text-sidebar-accent-foreground md:opacity-0 pointer-coarse:opacity-100!",
         className,
       )}
       {...props}

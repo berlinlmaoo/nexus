@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { modKey } from "@/lib/keyboard";
 import type { Editor } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
 import { BubbleMenu } from "@tiptap/react/menus";
@@ -46,6 +47,16 @@ export function SelectionToolbar({ editor }: { editor: Editor }) {
     }),
   });
   useEffect(() => { if (panel === "link") setHref(st.href); }, [panel, st.href]);
+  // ⌘/Ctrl+K (extensions.ts LinkShortcut) opens the link field on the selection.
+  useEffect(() => {
+    const storage = (editor.storage as unknown as { linkShortcut?: { open: (() => void) | null } }).linkShortcut;
+    if (!storage) return;
+    storage.open = () => setPanel("link");
+    return () => { storage.open = null; };
+  }, [editor]);
+  // The field closes with the selection: a later selection starts on the buttons again.
+  const hasSelection = useEditorState({ editor, selector: ({ editor: e }) => !e.state.selection.empty });
+  useEffect(() => { if (!hasSelection) setPanel("none"); }, [hasSelection]);
   const applyLink = () => {
     const v = href.trim();
     if (!v) editor.chain().focus().extendMarkRange("link").unsetLink().run();
@@ -67,7 +78,7 @@ export function SelectionToolbar({ editor }: { editor: Editor }) {
     >
       {panel === "link" ? (
         <div className="flex items-center gap-1 p-0.5">
-          <input autoFocus value={href} onChange={(e) => setHref(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyLink(); } if (e.key === "Escape") setPanel("none"); }} placeholder={t("Paste or type a link…")} className="w-56 rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus:border-primary" />
+          <input autoFocus value={href} onChange={(e) => setHref(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyLink(); } if (e.key === "Escape") { e.preventDefault(); setPanel("none"); editor.commands.focus(); } }} placeholder={t("Paste or type a link…")} className="w-56 rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus:border-primary" />
           <button type="button" onClick={applyLink} className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground">{st.href && !href.trim() ? t("Remove") : t("Apply")}</button>
         </div>
       ) : panel === "color" ? (
@@ -93,7 +104,7 @@ export function SelectionToolbar({ editor }: { editor: Editor }) {
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => openAskAi(editor, "selection")}
-            title={t("Ask AI (⌘J)")}
+            title={t("Ask AI ({keys})", { keys: modKey("J") })}
             className="flex h-8 items-center gap-1 rounded-md px-2 text-sm font-medium text-primary transition-colors hover:bg-muted"
           >
             <Sparkles className="h-4 w-4" />{t("Ask AI")}

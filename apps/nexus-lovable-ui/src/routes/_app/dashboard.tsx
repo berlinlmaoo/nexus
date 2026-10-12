@@ -1,4 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { openGlobalSearch } from "@/lib/search-event";
+import { modKey } from "@/lib/keyboard";
 import { AndroidAppBanner } from "@/components/attendance/IosAppCheckInCard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -138,14 +140,14 @@ function TopBar({ userName, unread }: { userName: string; unread: number }) {
         <button
           type="button"
           data-dashboard-search=""
-          onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, ctrlKey: true }))}
+          onClick={openGlobalSearch}
           aria-label={t("Search")}
           aria-haspopup="dialog"
           className="flex h-12 min-w-0 flex-1 cursor-text items-center gap-2 rounded-full border border-border bg-card px-5 text-left text-sm text-muted-foreground transition-shadow hover:border-primary/40 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
         >
           <Search className="h-4 w-4 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{t("Search…")}</span>
-          <kbd className="hidden rounded bg-muted px-1.5 py-0.5 text-[10px] md:inline">{typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
+          <kbd className="hidden rounded bg-muted px-1.5 py-0.5 text-[10px] md:inline">{modKey("K")}</kbd>
         </button>
         <NotificationsBell unread={unread} />
       </div>
@@ -306,7 +308,7 @@ function Section({ title, action, className, children, morphId, contentHidden, d
 
 function SeeAll({ to, label }: { to: string; label?: string }) {
   const { t } = useLang();
-  return <Link to={to} className="rounded text-xs font-medium text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">{label ?? t("See all")}</Link>;
+  return <Link to={to} className="tap-area rounded text-xs font-medium text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">{label ?? t("See all")}</Link>;
 }
 
 /** Tasks assigned to the currently logged-in user (uses /api/tasks?assigneeId=me). */

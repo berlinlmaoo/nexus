@@ -329,7 +329,7 @@ function MoveMenu({ deal, onMove }: { deal: PipelineDeal; onMove: (id: string, s
           draggable={false}
           aria-label={t("Move {name} to another stage", { name: deal.name })}
           title={t("Move to stage")}
-          className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring group-hover:opacity-100 data-[state=open]:opacity-100 pointer-coarse:hidden"
+          className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring group-hover:opacity-100 data-[state=open]:opacity-100 pointer-coarse:hidden"
         >
           <ArrowRightLeft className="h-3.5 w-3.5" />
         </button>
