@@ -51,8 +51,8 @@ export function xpEntryLabel(e: { kind?: string | null; label: string; detail?: 
     case "peer_bounty": return t("Integrity report · reward");
     case "peer_penalty": return t("Integrity report · penalty");
     case "admin_adjust": return withDetail("Adjusted by the BoD");
-    case "quest_penalty": return t("Goal penalty");
-    case "quest": return t("Goal done");
+    case "quest_penalty": return t("Quest penalty");
+    case "quest": return t("Quest done");
     case "bonus": return e.label.startsWith("No-absence bonus") ? withDetail("No-absence bonus") : withDetail("Bonus");
     case "task_done": return t("Task done");
     case "priority_bonus": return t("Priority task bonus");

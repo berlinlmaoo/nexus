@@ -564,7 +564,7 @@ export const ID_I18N_ATTENDANCE: Record<string, string> = {
   "{n} removed": "{n} dibatalkan",
   "Period ending {label}": "Periode berakhir {label}",
   "No XP moved this period": "Tidak ada perubahan XP periode ini",
-  "XP is earned from work and taken by attendance penalties (late, no check-out, TK).": "XP didapat dari pekerjaan dan dipotong oleh pelanggaran absensi (telat, tidak check-out, TK).",
+  "XP comes from quests and is taken by attendance penalties (late, no check-out, TK).": "XP didapat dari quest dan dipotong oleh pelanggaran absensi (telat, tidak check-out, TK).",
   "Nothing for you since {date}.": "Belum ada untukmu sejak {date}.",
   "Nothing for them since {date}.": "Belum ada untuknya sejak {date}.",
   "Older periods are below.": "Periode lama ada di bawah.",

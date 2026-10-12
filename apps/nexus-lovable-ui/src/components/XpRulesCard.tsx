@@ -14,7 +14,7 @@ const PENALTIES = [
 // No automatic bonus and no end-of-period tiers: both were retired on the server
 // (src/lib/period-rewards.ts — "XP is now 100% quest-only, assigned by BoD").
 const BONUSES = [
-  { xp: "+30 XP", rule: "Finish a goal from your Head", note: "Head's call", auto: false },
+  { xp: "+30 XP", rule: "Finish a quest from your Head", note: "Head's call", auto: false },
   { xp: "+50 XP", rule: "Performance beyond target", note: "Management's call", auto: false },
   { xp: "+20 XP", rule: "Feedback the company adopts", note: "HR's call", auto: false },
 ];

@@ -10,7 +10,6 @@ import {
   CheckCircle2,
   ChevronDown,
   Circle,
-  Clock,
   Download,
   Eye,
   FileSignature,
@@ -253,9 +252,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   };
   const [showAssignPicker, setShowAssignPicker] = useState(false);
   const [assignSearch, setAssignSearch] = useState("");
-  const [showDepPicker, setShowDepPicker] = useState(false);
   const [showProjPicker, setShowProjPicker] = useState(false);
-  const [timeMins, setTimeMins] = useState("");
 
   // Esc to close + lock body scroll while the modal is up. When a NESTED subtask panel is open,
   // this (parent) panel must ignore Esc — otherwise one keypress closes the whole stack at once.
@@ -274,7 +271,6 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   const attachments = useQuery({ queryKey: ["task-attachments", taskId], queryFn: () => nexusApi.taskAttachments(taskId) });
   const [previewAtt, setPreviewAtt] = useState<NexusAttachment | null>(null);
   const [uploadPct, setUploadPct] = useState<number | null>(null);
-  const [proofPct, setProofPct] = useState<number | null>(null);
   const [sizeWarn, setSizeWarn] = useState<string | null>(null);
   // Files >20MB auto-chunk client-side into 10MB pieces (see uploadAttachmentProgress) so each request stays
   // far below Cloudflare's 100MB cap and gets reassembled server-side — the real ceiling is the app/nginx limit.
@@ -298,13 +294,10 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   const [copyOpen, setCopyOpen] = useState(false);
   const projDetail = useQuery({ queryKey: ["nexus", "project", projectId], queryFn: () => nexusApi.project(projectId!), enabled: !!projectId, staleTime: 60_000 });
   const sections = (projDetail.data?.taskLists ?? []).slice().sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-  const { t: tr, tn } = useLang();
-  const deps = useQuery({ queryKey: ["task-deps", taskId], queryFn: () => nexusApi.taskDependencies(taskId) });
-  const times = useQuery({ queryKey: ["task-times", taskId], queryFn: () => nexusApi.timeEntries(taskId) });
+  const { t: tr } = useLang();
   // Only fetch the whole-workspace member list as a FALLBACK for tasks with no project. For a project
   // task we assign from the project's own team (projDetail.members) — see assignableMembers below.
   const membersQuery = useQuery({ queryKey: ["members"], queryFn: () => nexusApi.members(), enabled: showAssignPicker && !projectId, staleTime: 300_000 });
-  const candidateTasks = useQuery({ queryKey: ["nexus", "tasks"], queryFn: () => nexusApi.tasks(), enabled: showDepPicker, staleTime: 60_000 });
   const candidateProjects = useQuery({ queryKey: ["nexus", "projects"], queryFn: nexusApi.projects, enabled: showProjPicker, staleTime: 300_000 });
 
   const t = task.data;
@@ -374,14 +367,6 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
     onSettled: () => setUploadPct(null),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["task-attachments", taskId] }),
   });
-  // Separate "Bukti Pencairan" (PROOF) channel: the payout proof finance uploads, which the person who
-  // submitted the form sees on /submissions. (It also fed the "before Done" gate, retired 11 Oct 2026.)
-  const uploadProofMut = useMutation({
-    mutationFn: (file: File) => nexusApi.uploadAttachmentProgress(taskId, file, setProofPct, "PROOF"),
-    onMutate: () => setProofPct(0),
-    onSettled: () => setProofPct(null),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["task-attachments", taskId] }),
-  });
   // "Generate dokumen" only shows on a document-request task — detected by the presence of the
   // "Jenis Dokumen" field rather than a hardcoded project id, so it also works if the Legal field set
   // is copied to another project later.
@@ -434,18 +419,6 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   const unlinkProjectMut = useMutation({
     mutationFn: (projectId: string) => nexusApi.unlinkTaskProject(taskId, projectId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["task", taskId] }),
-  });
-  const addDep = useMutation({
-    mutationFn: (dependsOnTaskId: string) => nexusApi.addDependency(taskId, dependsOnTaskId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["task-deps", taskId] }),
-  });
-  const removeDep = useMutation({
-    mutationFn: (id: string) => nexusApi.removeDependency(taskId, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["task-deps", taskId] }),
-  });
-  const logTimeMut = useMutation({
-    mutationFn: ({ duration, description }: { duration: number; description?: string }) => nexusApi.logTime({ taskId, duration, description }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["task-times", taskId] }),
   });
   const delTask = useMutation({
     mutationFn: () => nexusApi.deleteTask(taskId),
@@ -536,7 +509,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               <Heart className={cn("h-4 w-4", t?.liked && "fill-destructive")} /> {t?.likeCount ?? 0}
             </button>
             {canMakeQuest && t && (
-              <button onClick={() => setQuestOpen(true)} className="hidden rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary sm:inline-flex" title={tr("Make it a goal")} aria-label={tr("Make it a goal")}>
+              <button onClick={() => setQuestOpen(true)} className="hidden rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary sm:inline-flex" title={tr("Make a quest")} aria-label={tr("Make a quest")}>
                 <Trophy className="h-4 w-4" />
               </button>
             )}
@@ -560,7 +533,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                   <Star className={cn("h-4 w-4", isFavorited && "fill-amber-500 text-amber-500")} />{tr("Favorite")}
                 </DropdownMenuItem>
                 {canMakeQuest && t && (
-                  <DropdownMenuItem onSelect={() => setQuestOpen(true)} className="min-h-11"><Trophy className="h-4 w-4" />{tr("Make it a goal")}</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setQuestOpen(true)} className="min-h-11"><Trophy className="h-4 w-4" />{tr("Make a quest")}</DropdownMenuItem>
                 )}
                 <DropdownMenuItem onSelect={() => setCopyOpen(true)} className="min-h-11"><FolderInput className="h-4 w-4" />{tr("Copy to another project")}</DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -600,7 +573,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 <Trophy className="h-5 w-5 shrink-0 text-primary" />
                 <div className="min-w-0 flex-1 text-sm">
                   <div className="font-bold text-primary">
-                    {(q.total ?? 1) <= 1 ? <>{tr("Finish this task →")} <span className="tabular-nums">+{q.xpReward} XP</span></> : <>{tr("Part of the goal “{title}” →", { title: q.title })} <span className="tabular-nums">+{q.xpReward} XP</span></>}
+                    {(q.total ?? 1) <= 1 ? <>{tr("Finish this task →")} <span className="tabular-nums">+{q.xpReward} XP</span></> : <>{tr("Part of the quest “{title}” →", { title: q.title })} <span className="tabular-nums">+{q.xpReward} XP</span></>}
                   </div>
                   {(q.total ?? 1) > 1 && <div className="text-xs text-muted-foreground">{tr("Finish all {total} tasks ({done}/{total} done) to get the XP.", { total: q.total ?? 0, done: q.done ?? 0 })}</div>}
                 </div>
@@ -917,7 +890,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     </div>
                   </div>
                 )}
-                {(attachments.data ?? []).filter((a) => a.kind !== "PROOF").map((att) => (
+                {(attachments.data ?? []).map((att) => (
                   <div key={att.id} className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2">
                     {mediaKind(att) === "image" && att.url ? (
                       <button aria-label={tr("Preview")} onClick={() => setPreviewAtt(att)} className="shrink-0"><img src={att.url} alt="" className="h-9 w-9 rounded-md object-cover" /></button>
@@ -925,66 +898,22 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                       <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
                     )}
                     <button onClick={() => setPreviewAtt(att)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-primary hover:underline">{att.name || tr("(unnamed)")}</button>
+                    {/* Payout proofs are ordinary attachments since 12 Oct 2026; files released apps still upload
+                        as kind PROOF keep a small tag so finance can tell them apart. */}
+                    {att.kind === "PROOF" && <span className="shrink-0 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">{tr("Payout proof")}</span>}
                     {att.size != null && <span className="shrink-0 text-xs text-muted-foreground">{Math.round(att.size / 1024)} KB</span>}
                     <button onClick={() => setPreviewAtt(att)} aria-label={tr("Preview")} title={tr("Preview")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
                     {att.url && <a href={`${att.url}?download=${encodeURIComponent(att.name || "file")}`} download={att.name || ""} aria-label={tr("Download")} title={tr("Download")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-3.5 w-3.5" /></a>}
                     <button aria-label={tr("Delete attachment")} onClick={() => delAttachment.mutate(att.id)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
-                {(attachments.data ?? []).filter((a) => a.kind !== "PROOF").length === 0 && <p className="text-xs text-muted-foreground">{tr("No attachments.")}</p>}
+                {(attachments.data ?? []).length === 0 && <p className="text-xs text-muted-foreground">{tr("No attachments.")}</p>}
                 {sizeWarn && (
                   <div className="flex items-start gap-2 rounded-xl border border-rose-300/60 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
                     <X className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {sizeWarn}
                   </div>
                 )}
                 {uploadMut.isError && <p className="text-xs font-semibold text-destructive">{(uploadMut.error as Error)?.message || tr("Upload failed. Max {size}.", { size: MAX_ATTACH_LABEL })}</p>}
-              </div>
-            </SecCard>
-
-            {/* Bukti Pencairan — the SEPARATE payout-proof channel (shown to the submitter on /submissions) */}
-            <SecCard
-              icon={Paperclip}
-              label={tr("Payout proof")}
-              action={
-                <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-dashed border-emerald-400/60 px-2.5 py-1 text-xs font-semibold text-emerald-600 transition-colors hover:border-emerald-500 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300">
-                  {uploadProofMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {tr("Upload proof")}
-                  <input type="file" className="hidden" disabled={uploadProofMut.isPending} onChange={(e) => {
-                    const f = e.target.files?.[0]; e.target.value = "";
-                    if (!f) return;
-                    if (f.size > MAX_ATTACH_BYTES) { setSizeWarn(tr("The file is {mb} MB, over the {max} limit. Upload rejected.", { mb: (f.size / 1024 / 1024).toFixed(1), max: MAX_ATTACH_LABEL })); return; }
-                    setSizeWarn(null); uploadProofMut.mutate(f);
-                  }} />
-                </label>
-              }
-            >
-              <div className="space-y-1.5">
-                {proofPct != null && (
-                  <div className="rounded-xl border border-border bg-background px-3 py-2">
-                    <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="font-semibold text-muted-foreground">{tr("Uploading proof…")}</span>
-                      <span className="font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{proofPct}%</span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-emerald-500 transition-all duration-150" style={{ width: `${proofPct}%` }} /></div>
-                  </div>
-                )}
-                {(attachments.data ?? []).filter((a) => a.kind === "PROOF").map((att) => (
-                  <div key={att.id} className="flex items-center gap-2 rounded-xl border border-emerald-300/40 bg-emerald-50/40 px-3 py-2 dark:border-emerald-500/30 dark:bg-emerald-500/10">
-                    {mediaKind(att) === "image" && att.url ? (
-                      <button aria-label={tr("Preview")} onClick={() => setPreviewAtt(att)} className="shrink-0"><img src={att.url} alt="" className="h-9 w-9 rounded-md object-cover" /></button>
-                    ) : (
-                      <Paperclip className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                    )}
-                    <button onClick={() => setPreviewAtt(att)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-primary hover:underline">{att.name || tr("(unnamed)")}</button>
-                    {att.size != null && <span className="shrink-0 text-xs text-muted-foreground">{Math.round(att.size / 1024)} KB</span>}
-                    <button onClick={() => setPreviewAtt(att)} aria-label={tr("Preview")} title={tr("Preview")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
-                    {att.url && <a href={`${att.url}?download=${encodeURIComponent(att.name || "file")}`} download={att.name || ""} aria-label={tr("Download")} title={tr("Download")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-3.5 w-3.5" /></a>}
-                    <button aria-label={tr("Delete attachment")} onClick={() => delAttachment.mutate(att.id)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
-                  </div>
-                ))}
-                {(attachments.data ?? []).filter((a) => a.kind === "PROOF").length === 0 && (
-                  <p className="text-xs text-muted-foreground">{tr("No payout proof yet.")}</p>
-                )}
-                {uploadProofMut.isError && <p className="text-xs font-semibold text-destructive">{(uploadProofMut.error as Error)?.message || tr("Proof upload failed.")}</p>}
               </div>
             </SecCard>
 
@@ -1039,54 +968,6 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               </div>,
               document.body,
             )}
-
-            {/* dependencies */}
-            <SecCard
-              icon={Link2}
-              label={tr("Blocked by")}
-              action={
-                <div className="relative">
-                  <button onClick={() => setShowDepPicker((v) => !v)} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary"><Plus className="h-3.5 w-3.5" /> {tr("Add")}</button>
-                  {showDepPicker && (
-                    <div className="absolute right-0 z-20 mt-1 max-h-64 w-72 overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-pop">
-                      {candidateTasks.isLoading && <div className="px-3 py-2 text-xs text-muted-foreground">{tr("Loading…")}</div>}
-                      {(candidateTasks.data ?? []).filter((ct) => ct.id !== taskId).slice(0, 40).map((ct) => (
-                        <button key={ct.id} onClick={() => { addDep.mutate(ct.id); setShowDepPicker(false); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"><span className="truncate">{ct.title}</span></button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              }
-            >
-              <div className="space-y-1.5">
-                {(deps.data?.dependencies ?? []).map((dep) => (
-                  <div key={dep.id} className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm">
-                    <CheckCircle2 className={cn("h-4 w-4 shrink-0", dep.dependsOnTask?.status === "DONE" ? "text-success" : "text-muted-foreground/40")} />
-                    <span className="flex-1 truncate">{dep.dependsOnTask?.title}</span>
-                    <button aria-label={tr("Remove dependency")} onClick={() => removeDep.mutate(dep.id)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
-                  </div>
-                ))}
-                {(deps.data?.dependencies?.length ?? 0) === 0 && <p className="text-xs text-muted-foreground">{tr("No blockers.")}</p>}
-                {(deps.data?.dependedOnBy?.length ?? 0) > 0 && (
-                  <p className="text-xs text-muted-foreground">{tn(deps.data!.dependedOnBy.length, "Blocks {n} task.", "Blocks {n} tasks.")}</p>
-                )}
-              </div>
-            </SecCard>
-
-            {/* time tracking */}
-            <SecCard icon={Clock} label={`${tr("Time tracked")}${(() => { const total = (times.data?.entries ?? []).reduce((n, e) => n + (e.duration ?? 0), 0); return total ? ` · ${total}m` : ""; })()}`}>
-              <div className="flex items-center gap-2">
-                <input value={timeMins} onChange={(e) => setTimeMins(e.target.value.replace(/[^0-9]/g, ""))} placeholder={tr("Minutes")} className="w-28 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary" />
-                <button disabled={!timeMins || logTimeMut.isPending} onClick={() => { logTimeMut.mutate({ duration: Number(timeMins) }); setTimeMins(""); }} className="inline-flex items-center gap-1 rounded-lg bg-secondary px-3 py-1.5 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-accent active:scale-[0.98] disabled:opacity-50">{logTimeMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : tr("Log time")}</button>
-              </div>
-              {(times.data?.entries ?? []).slice(0, 5).map((e) => (
-                <div key={e.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className="font-semibold text-foreground/80">{e.duration ?? 0}m</span>
-                  <span className="flex-1 truncate">{e.description || e.user?.name || ""}</span>
-                  <span>{fmtDate(e.startTime)}</span>
-                </div>
-              ))}
-            </SecCard>
 
             {/* comments */}
             <SecCard icon={MessageCircle} label={tr("Comments")}>
@@ -1144,16 +1025,16 @@ function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; ti
   });
   const results = (taskSearch.data ?? []).filter((r) => !tasks.some((t) => t.id === r.id)).slice(0, 8);
   const create = useMutation({
-    mutationFn: () => nexusApi.createAdminQuest({ title: title.trim() || tr("Goal"), xpReward: xp, requirementType: "specific_tasks", taskIds: tasks.map((t) => t.id) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["gamification", "me"] }); toast.success(tr("Goal created")); onClose(); },
-    onError: (e) => toast.error(e instanceof Error ? e.message : tr("Couldn't create the goal")),
+    mutationFn: () => nexusApi.createAdminQuest({ title: title.trim() || tr("Quest"), xpReward: xp, requirementType: "specific_tasks", taskIds: tasks.map((t) => t.id) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["gamification", "me"] }); toast.success(tr("Quest created")); onClose(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : tr("Couldn't create the quest")),
   });
   return createPortal(
     <div className="fixed inset-0 z-[90] grid place-items-center bg-black/50 dark:bg-scrim p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">{tr("Make it a goal")}</h3></div>
-        <label className="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Goal title")}</label>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} className="mb-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder={tr("Goal name")} />
+        <div className="mb-3 flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">{tr("Make a quest")}</h3></div>
+        <label className="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Quest title")}</label>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} className="mb-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder={tr("Quest name")} />
         <label className="mb-1 block text-xs font-semibold text-muted-foreground">{tr("XP reward (max 50)")}</label>
         <input type="number" min={0} max={50} value={xp} onChange={(e) => setXp(Math.max(0, Math.min(50, Number(e.target.value) || 0)))} className="mb-3 block w-28 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
         <label className="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Tasks")} ({tasks.length})</label>
@@ -1178,10 +1059,10 @@ function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; ti
         <div className="mt-4 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-xl border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent">{tr("Cancel")}</button>
           <button onClick={() => create.mutate()} disabled={create.isPending || tasks.length === 0 || !title.trim()} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
-            {create.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {tr("Create goal")}
+            {create.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {tr("Create quest")}
           </button>
         </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">{tr("The goal completes once every task is done. XP goes to whoever did them; visible to the tasks' project members.")}</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">{tr("The quest completes once every task is done. XP goes to whoever did them; visible to the tasks' project members.")}</p>
       </div>
     </div>,
     document.body,

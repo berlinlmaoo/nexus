@@ -123,3 +123,14 @@ export function legacyProcStatus(customStatus: string | null | undefined, column
   if (column && column.group !== "todo") return column.name
   return null
 }
+
+/**
+ * The files shown to the submitter as proof (the response's `proofs`). Since 12 Oct 2026 finance attaches
+ * the payout proof as an ordinary attachment (the separate "Bukti Pencairan" section is gone from the web
+ * popup), so proofs = legacy kind "PROOF" files (released apps may still upload those) PLUS any attachment
+ * uploaded by someone other than the submitter. The submitter's own form files stay out.
+ */
+export function proofAttachmentsWhere(submitterId: string) {
+  return { OR: [{ kind: "PROOF" }, { uploaderId: { not: submitterId } }] }
+}
+

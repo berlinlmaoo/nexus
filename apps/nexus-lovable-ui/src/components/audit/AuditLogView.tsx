@@ -357,7 +357,7 @@ const RESTORE_BUTTON: Record<string, string> = {
   vault_file: "Restore file", vault_folder: "Restore folder", vault_file_version: "Restore previous version", vault_trash: "Restore trash", task_list: "Restore section",
   project_folder: "Restore folder", org_unit: "Restore unit", sheet_rows: "Restore rows", form_submission: "Restore submission",
   attendance_record: "Restore attendance record", project_sheet_column: "Restore column", post: "Restore post",
-  quest: "Restore goal", calendar_event: "Restore event", dayoff_bonus: "Restore extra day off",
+  quest: "Restore quest", calendar_event: "Restore event", dayoff_bonus: "Restore extra day off",
   chat_group: "Restore group chat",
   pipeline_deal: "Restore deal",
   outlet_sales_event: "Restore event",
@@ -385,7 +385,7 @@ function restoreNote(entityType: string, soft: boolean): string | null {
     // "Replace file…" (9 Oct 2026): the copy is the file's previous bytes.
     case "vault_file_version": return "The file goes back to the version from before it was replaced. Its links keep working and show that version.";
     case "post": return "It shows in Threads again.";
-    case "quest": return "The goal becomes active again.";
+    case "quest": return "The quest becomes active again.";
     case "calendar_event": return "The event is no longer cancelled.";
     case "dayoff_bonus": return "The extra day off is granted again.";
     case "chat_group": return "It shows in its members' chat lists again. Nothing is posted in the chat about it.";

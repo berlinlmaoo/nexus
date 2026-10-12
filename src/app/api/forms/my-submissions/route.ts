@@ -4,7 +4,7 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import {
-  amountOf, boardColumns, categoryFields, columnOf, dateOf, legacyProcStatus, needsAction, submissionKind,
+  amountOf, boardColumns, categoryFields, columnOf, dateOf, legacyProcStatus, needsAction, proofAttachmentsWhere, submissionKind,
 } from "@/lib/my-submissions"
 
 // Submissions made BY the logged-in user (any form), each on the board of its target project's status
@@ -41,9 +41,9 @@ export async function GET() {
             assignees: { select: { user: { select: { id: true, name: true, avatar: true } } } },
             customFieldValues: { select: { value: true, customField: { select: { id: true, name: true, type: true, options: true } } } },
             comments: { select: { userId: true, createdAt: true } },
-            // "Bukti Pencairan" the finance team attaches on completion — surfaced to the submitter here.
+            // The payout proof finance attaches — surfaced to the submitter here (proofAttachmentsWhere).
             attachments: {
-              where: { kind: "PROOF" },
+              where: proofAttachmentsWhere(me),
               orderBy: { createdAt: "desc" },
               select: { id: true, filename: true, url: true, mimeType: true, size: true },
             },

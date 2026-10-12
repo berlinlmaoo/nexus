@@ -385,7 +385,7 @@ function XpLog({ data }: { data: NexusMemberRecord }) {
             {s.xp.entries.length === 0 ? (
               i === 0 ? (
                 <EmptyState compact icon={ScrollText} tone="muted" className="mx-4 my-2 md:mx-5" title={tr("No XP moved this period")}
-                  message={`${tr("XP is earned from work and taken by attendance penalties (late, no check-out, TK).")} ${data.person.isSelf ? tr("Nothing for you since {date}.", { date: dayLabel(data.period.from) }) : tr("Nothing for them since {date}.", { date: dayLabel(data.period.from) })}${s.xp.hasOlder ? ` ${tr("Older periods are below.")}` : ""}`} />
+                  message={`${tr("XP comes from quests and is taken by attendance penalties (late, no check-out, TK).")} ${data.person.isSelf ? tr("Nothing for you since {date}.", { date: dayLabel(data.period.from) }) : tr("Nothing for them since {date}.", { date: dayLabel(data.period.from) })}${s.xp.hasOlder ? ` ${tr("Older periods are below.")}` : ""}`} />
               ) : <p className="px-4 py-3 text-sm text-muted-foreground md:px-5">{tr("No XP moved in that period.")}</p>
             ) : (
               s.xp.entries.map((e) => <XpRow key={e.id} entry={e} data={data} />)

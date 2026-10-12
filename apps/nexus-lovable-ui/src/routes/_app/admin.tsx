@@ -216,7 +216,7 @@ function Admin() {
           {canManageShift && <button onClick={() => setView("extra-dayoff")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "extra-dayoff" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><CalendarPlus className="h-3.5 w-3.5" /> {t("Extra day off")}</button>}
           {canManageShift && <button onClick={() => setView("suspects")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "suspects" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ShieldAlert className="h-3.5 w-3.5" /> {t("Attendance monitor")}</button>}
           <button onClick={() => setView("audit")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "audit" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ScrollText className="h-3.5 w-3.5" /> {t("Audit log")}</button>
-          <button onClick={() => setView("quests")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "quests" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Trophy className="h-3.5 w-3.5" /> {t("Goals")}</button>
+          <button onClick={() => setView("quests")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "quests" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Trophy className="h-3.5 w-3.5" /> {t("Quests")}</button>
           {canAnnounce && <button onClick={() => setView("announcements")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "announcements" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Megaphone className="h-3.5 w-3.5" /> {t("Announcements")}</button>}
           {canAnnounce && <button onClick={() => setView("gideon")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "gideon" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><GideonMark className="h-3.5 w-3.5" /> GIDEON</button>}
           {canAnnounce && <button onClick={() => setView("app")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "app" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Smartphone className="h-3.5 w-3.5" /> {t("App")}</button>}
@@ -1736,7 +1736,7 @@ function DeleteUserModal({ user, onClose }: { user: { id: string; name: string; 
         {result ? (
           <div className="space-y-3">
             <p className="text-sm">{t("The account {name} ({email}) has been permanently deleted.", { name: result.deletedUser.name, email: result.deletedUser.email })}</p>
-            {reassignedTotal > 0 && <p className="text-xs text-muted-foreground">{tn(reassignedTotal, "{n} item they created (task, file, goal, portfolio) was moved to your account, so nothing is lost.", "{n} items they created (tasks, files, goals, portfolios) were moved to your account, so nothing is lost.")}</p>}
+            {reassignedTotal > 0 && <p className="text-xs text-muted-foreground">{tn(reassignedTotal, "{n} item they created (task, file, quest, portfolio) was moved to your account, so nothing is lost.", "{n} items they created (tasks, files, quests, portfolios) were moved to your account, so nothing is lost.")}</p>}
             <button onClick={onClose} className="w-full rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90">{t("Done")}</button>
           </div>
         ) : (
@@ -1745,7 +1745,7 @@ function DeleteUserModal({ user, onClose }: { user: { id: string; name: string; 
               <p>{t("You're about to permanently delete this account:")}</p>
               <p className="mt-1 font-bold">{user.name} <span className="font-normal">· {user.email}</span></p>
               <ul className="mt-2 list-disc space-y-0.5 pl-4">
-                <li>{t("Tasks, files, goals, portfolios, docs and schedules they created move to you, so they aren't lost.")}</li>
+                <li>{t("Tasks, files, quests, portfolios, goals, docs and schedules they created move to you, so they aren't lost.")}</li>
                 <li>{t("Their status updates, pending invites and audit trail are deleted. Their comments are removed too.")}</li>
                 <li><b>{t("This can't be undone.")}</b></li>
               </ul>
@@ -1836,14 +1836,14 @@ function AdminQuests() {
 
   return (
     <div className="space-y-4">
-      {list.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Trophy className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">{tq("BoD access required")}</div><p className="mt-2 text-sm text-muted-foreground">{tq("You need the BoD or Manager role to manage goals.")}</p></div>}
+      {list.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Trophy className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">{tq("BoD access required")}</div><p className="mt-2 text-sm text-muted-foreground">{tq("You need the BoD or Manager role to manage quests.")}</p></div>}
       {!list.isError && (
         <>
           <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-            <h2 className="mb-1 font-display text-base font-bold tracking-tight">{tq("Assign a new goal")}</h2>
-            <p className="mb-3 text-xs text-muted-foreground">{tq("Create a goal: finish tasks against a target and a due date, for an XP reward (max 50).")}</p>
+            <h2 className="mb-1 font-display text-base font-bold tracking-tight">{tq("Assign a new quest")}</h2>
+            <p className="mb-3 text-xs text-muted-foreground">{tq("Create a quest: finish tasks against a target and a due date, for an XP reward (max 50).")}</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={tq("Goal title (e.g. Finish 5 tasks this week)")} className={cn(inputCls, "sm:col-span-2")} />
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={tq("Quest title (e.g. Finish 5 tasks this week)")} className={cn(inputCls, "sm:col-span-2")} />
               <label className="text-xs font-semibold text-muted-foreground">{tq("Type")}
                 <SelectPicker variant="field" value={requirementType} onChange={setRequirementType} ariaLabel={tq("Type")} options={REQ_TYPES.filter((r) => r.value !== "penalty").map((r) => ({ value: r.value, label: tq(r.label) }))} className={cn(inputCls, "mt-1 flex w-full font-normal text-foreground hover:border-primary/40")} />
               </label>
@@ -1861,7 +1861,7 @@ function AdminQuests() {
             </div>
             {isTasks ? (
               <div className="mt-3">
-                <span className="text-xs font-semibold text-muted-foreground">{tq("Tasks for this goal")} <span className="font-normal">{tq("(complete when all are done · XP goes to whoever does them · visible to members of the task's project)")}</span></span>
+                <span className="text-xs font-semibold text-muted-foreground">{tq("Tasks for this quest")} <span className="font-normal">{tq("(complete when all are done · XP goes to whoever does them · visible to members of the task's project)")}</span></span>
                 <div className="mt-1.5 space-y-1">
                   {questTasks.length === 0 && <p className="text-xs text-muted-foreground">{tq("No tasks picked yet. Search below.")}</p>}
                   {questTasks.map((t) => (
@@ -1898,7 +1898,7 @@ function AdminQuests() {
                 </div>
               </div>
             )}
-            <button disabled={!title.trim() || !workspaceId || create.isPending || (isTasks && questTasks.length === 0)} onClick={() => create.mutate()} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} {isTasks ? tq("Create goal") : tq("Assign goal")}</button>
+            <button disabled={!title.trim() || !workspaceId || create.isPending || (isTasks && questTasks.length === 0)} onClick={() => create.mutate()} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} {isTasks ? tq("Create quest") : tq("Assign quest")}</button>
             {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">{tq("Couldn't save. Check your access.")}</span>}
           </div>
           <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
@@ -1918,11 +1918,11 @@ function AdminQuests() {
                         : <span>· {q.teamIds && q.teamIds.length > 0 ? q.teamIds.map(teamName).join(", ") : tq("Everyone")}</span>}
                     </div>
                   </div>
-                  <button aria-label={tq("Delete this goal")} onClick={() => { if (confirm(tq("Delete this goal?"))) del.mutate(q.id); }} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
+                  <button aria-label={tq("Delete this quest")} onClick={() => { if (confirm(tq("Delete this quest?"))) del.mutate(q.id); }} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
                 </div>
               ))}
             </div>
-            {!list.isLoading && rows.length === 0 && <div className="py-10 text-center text-sm text-muted-foreground">{tq("No goals yet. Create one above.")}</div>}
+            {!list.isLoading && rows.length === 0 && <div className="py-10 text-center text-sm text-muted-foreground">{tq("No quests yet. Create one above.")}</div>}
           </div>
         </>
       )}
