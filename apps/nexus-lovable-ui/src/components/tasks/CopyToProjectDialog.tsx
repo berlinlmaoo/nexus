@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SelectPicker } from "@/components/SelectPicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Loader2, Search, X } from "lucide-react";
@@ -26,6 +26,13 @@ export function CopyToProjectDialog({ taskIds, sourceProjectId, onClose, onDone 
   const [projectId, setProjectId] = useState<string>("");
   const [listId, setListId] = useState<string>("");
   const [result, setResult] = useState<{ ok: number; failed: number; fields: string[]; assignees: number } | null>(null);
+
+  // Esc closes this dialog only (captured first, so a task popup underneath stays open).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); onClose(); } };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
 
   const projectsQ = useQuery({ queryKey: ["nexus", "projects"], queryFn: nexusApi.projects, retry: false });
   // Sections live on the project payload, so only the CHOSEN project is fetched in full.
@@ -77,11 +84,12 @@ export function CopyToProjectDialog({ taskIds, sourceProjectId, onClose, onDone 
   const many = taskIds.length > 1;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="flex max-h-[85vh] w-full max-w-md flex-col rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[96] grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
+      {/* A real dialog (bug hunt C-BUG-24): role + aria-modal, Esc closes, and it sits above the selection bar. */}
+      <div role="dialog" aria-modal="true" aria-labelledby="copy-to-project-title" className="flex max-h-[85vh] w-full max-w-md flex-col rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="font-display text-lg font-bold tracking-tight">{t("Copy to another project")}</h2>
+            <h2 id="copy-to-project-title" className="font-display text-lg font-bold tracking-tight">{t("Copy to another project")}</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {many ? t("{n} tasks are copied as new tasks. The originals stay in this project.", { n: taskIds.length }) : t("This task is copied as a new task. The original stays in this project.")}
             </p>
