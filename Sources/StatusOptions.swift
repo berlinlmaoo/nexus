@@ -74,7 +74,8 @@ enum StatusColor {
     /// Notion's nine option colours, in the web's order.
     static let keys = ["gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"]
 
-    /// Older keys (the first views build, and what the server stores) → the palette's.
+    /// Older keys (the first views build, colours saved before 12 Oct 2026) → the palette's. The server
+    /// takes the palette names themselves since then, so the app sends those.
     private static let alias: [String: String] = [
         "sky": "blue", "emerald": "green", "amber": "yellow", "rose": "red", "violet": "purple", "slate": "gray",
     ]
@@ -88,19 +89,6 @@ enum StatusColor {
         guard let c = c?.lowercased(), !c.isEmpty else { return nil }
         if keys.contains(c) { return c }
         return alias[c]
-    }
-
-    /// The key the server keeps (its list predates the nine-colour palette: "sky", "emerald", …). Brown
-    /// has no older name and is sent as it is.
-    static func serverKey(_ key: String) -> String {
-        switch key {
-        case "blue": return "sky"
-        case "green": return "emerald"
-        case "yellow": return "amber"
-        case "red": return "rose"
-        case "purple": return "violet"
-        default: return key
-        }
     }
 
     static func label(_ key: String) -> String {

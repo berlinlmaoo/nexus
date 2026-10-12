@@ -125,6 +125,8 @@ struct MoveUndo: Identifiable, Equatable {
     let id = UUID()
     let count: Int
     let groups: [Group]
+    /// The bar's words when it is not a move ("Task deleted", "Assigned 3 tasks").
+    var label: String? = nil
     struct Group: Equatable { let taskIds: [String]; let laneId: String?; let status: String?; let priority: String? }
     static func == (a: MoveUndo, b: MoveUndo) -> Bool { a.id == b.id }
 }
@@ -137,7 +139,7 @@ struct MoveUndoBar: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "arrow.right.circle.fill").foregroundStyle(NX.violetText)
-            Text(undo.count == 1 ? T("Moved 1 task") : String(format: T("Moved %d tasks"), undo.count))
+            Text(undo.label ?? (undo.count == 1 ? T("Moved 1 task") : String(format: T("Moved %d tasks"), undo.count)))
                 .font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
             Spacer(minLength: 4)
             Button(T("Undo"), action: onUndo)
@@ -506,4 +508,49 @@ struct ViewFilterRuleRow: View {
         }
         .buttonStyle(.plain)
     }
+}
+
+
+/// An Undo that is not a move: what the bar says and how to undo it (task delete, bulk assign, bulk due).
+struct CustomUndo {
+    let bar: MoveUndo
+    let action: () async -> Void
+    init(label: String, action: @escaping () async -> Void) {
+        bar = MoveUndo(count: 0, groups: [], label: label)
+        self.action = action
+    }
+}
+
+/// The tasks a bulk "Due date…" applies to (sheet item).
+struct BulkDueRequest: Identifiable {
+    let id = UUID()
+    let taskIds: [String]
+}
+
+/// One due date for several tasks, or none (web bulk edit, C-BUG-15).
+struct BulkDueSheet: View {
+    let count: Int
+    let onApply: (Date?) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var day = Date()
+
+    var body: some View {
+        NavigationStack {
+            DatePicker(T("Due date"), selection: $day, displayedComponents: .date)
+                .datePickerStyle(.graphical).tint(NX.violetText).padding()
+                .navigationTitle(count == 1 ? T("Due date") : String(format: T("Due date for %d tasks"), count))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) { Button(T("Clear")) { onApply(nil); dismiss() } }
+                    ToolbarItem(placement: .topBarTrailing) { Button(T("Save")) { onApply(day); dismiss() }.bold() }
+                }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+extension Notification.Name {
+    /// A task was deleted from its detail screen; userInfo "auditLogId", "title". The project screen offers
+    /// Undo for 10 s (POST /api/tasks/undo-delete, own deletes within 30 min).
+    static let nexusTaskDeletedUndoable = Notification.Name("nexus.task.deleted.undoable")
 }

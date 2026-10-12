@@ -271,21 +271,24 @@ struct TimelineTab: View {
     }
 
     struct Group: Identifiable { let id: String; let name: String; let rows: [Row] }
-    struct Row: Identifiable { let id: String; let task: BoardTask; let win: Win }
+    struct Row: Identifiable { let id: String; let task: BoardTask; let win: Win; let dated: Bool }
 
     private var groups: [Group] {
         lanes.map { lane in
-            // A task with neither a start nor a due date is not on the timeline (bughunt C-BUG-17: it was
-            // drawn as a 4-day bar from today and looked scheduled).
-            let rows = (lane.tasks ?? []).filter { $0.startDate != nil || $0.dueDate != nil }.map { Row(id: $0.id, task: $0, win: window($0)) }
-                .sorted { $0.win.start < $1.win.start }
-            return Group(id: lane.id, name: lane.name, rows: rows)
+            // A task with neither a start nor a due date gets a row that says "No date" instead of a bar
+            // (bughunt C-BUG-17: it was drawn as a 4-day bar from today and looked scheduled). Dated rows
+            // first, by start.
+            let all = (lane.tasks ?? []).map { t in
+                Row(id: t.id, task: t, win: window(t), dated: t.startDate != nil || t.dueDate != nil)
+            }
+            let dated = all.filter(\.dated).sorted { $0.win.start < $1.win.start }
+            return Group(id: lane.id, name: lane.name, rows: dated + all.filter { !$0.dated })
         }.filter { !$0.rows.isEmpty }
     }
-    private var allWins: [Win] { groups.flatMap { $0.rows.map(\.win) } }
+    private var allWins: [Win] { groups.flatMap { $0.rows.filter(\.dated).map(\.win) } }
 
     var body: some View {
-        if allWins.isEmpty {
+        if groups.isEmpty {
             TabEmpty(icon: "chart.bar.xaxis", text: T("No tasks to put on the timeline yet."))
         } else {
             gantt
@@ -293,8 +296,9 @@ struct TimelineTab: View {
     }
 
     private var gantt: some View {
-        let minD = sod(allWins.map(\.start).min()!.addingTimeInterval(-2 * Self.DAY))
-        let maxD = sod(allWins.map(\.end).max()!.addingTimeInterval(3 * Self.DAY))
+        // Only undated tasks: two weeks from today, so the rows still have somewhere to say "No date".
+        let minD = sod((allWins.map(\.start).min() ?? Date()).addingTimeInterval(-2 * Self.DAY))
+        let maxD = sod((allWins.map(\.end).max() ?? Date().addingTimeInterval(11 * Self.DAY)).addingTimeInterval(3 * Self.DAY))
         let dayCount = days(minD, maxD) + 1
         let timelineW = CGFloat(dayCount) * dayW
         let dayList = (0..<dayCount).map { minD.addingTimeInterval(Double($0) * Self.DAY) }
@@ -362,21 +366,27 @@ struct TimelineTab: View {
                         }
                         // body rows
                         ForEach(groups) { g in
-                            let gStart = g.rows.map(\.win.start).min()!
-                            let gEnd = g.rows.map(\.win.end).max()!
+                            let datedRows = g.rows.filter(\.dated)
                             ZStack(alignment: .leading) {
                                 Rectangle().fill(NX.muted.opacity(0.4))
-                                Capsule().fill(NX.mutedFg.opacity(0.3))
-                                    .frame(width: max(barW(Win(start: gStart, end: gEnd)) - 6, 4), height: 6)
-                                    .offset(x: xOf(gStart) + 3)
+                                if let gStart = datedRows.map(\.win.start).min(), let gEnd = datedRows.map(\.win.end).max() {
+                                    Capsule().fill(NX.mutedFg.opacity(0.3))
+                                        .frame(width: max(barW(Win(start: gStart, end: gEnd)) - 6, 4), height: 6)
+                                        .offset(x: xOf(gStart) + 3)
+                                }
                             }
                             .frame(width: timelineW, height: groupH)
                             ForEach(g.rows) { r in
                                 ZStack(alignment: .leading) {
                                     Color.clear
-                                    Button { onOpen(r.task.id) } label: {
-                                        ganttBar(r).frame(width: max(barW(r.win) - 6, 16), height: 22).offset(x: xOf(r.win.start) + 3)
-                                    }.buttonStyle(.plain)
+                                    if r.dated {
+                                        Button { onOpen(r.task.id) } label: {
+                                            ganttBar(r).frame(width: max(barW(r.win) - 6, 16), height: 22).offset(x: xOf(r.win.start) + 3)
+                                        }.buttonStyle(.plain)
+                                    } else {
+                                        Text(T("No date")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                                            .offset(x: (todayX ?? 0) + 6)
+                                    }
                                 }
                                 .frame(width: timelineW, height: rowH)
                             }

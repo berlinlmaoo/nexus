@@ -211,6 +211,9 @@ struct TaskSelectionBar: View {
     var statusTargets: [ProjectDetail.Lane] = []
     var onMove: (([String], String) -> Void)? = nil
     var onPriority: (([String], String) -> Void)? = nil
+    var members: [ProjectDetail.ProjectMember] = []
+    var onAssign: (([String], String) -> Void)? = nil
+    var onDue: (([String]) -> Void)? = nil
 
     /// Only what is on screen: a task hidden by search or a filter is never acted on (bughunt C-BUG-4).
     private var targetIds: [String] { visibleIds.filter { selection.contains($0) } }
@@ -242,6 +245,14 @@ struct TaskSelectionBar: View {
                         Menu(T("Priority")) {
                             ForEach(TaskPriorityName.all, id: \.self) { p in Button(TaskPriorityName.label(p)) { onPriority(targetIds, p) } }
                         }
+                    }
+                    if let onAssign, !members.isEmpty {
+                        Menu(T("Assign to")) {
+                            ForEach(members) { m in Button(m.displayName) { onAssign(targetIds, m.uid) } }
+                        }
+                    }
+                    if let onDue {
+                        Button { onDue(targetIds) } label: { Label(T("Due date…"), systemImage: "calendar") }
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle").font(.system(size: 20)).foregroundStyle(NX.violetText)

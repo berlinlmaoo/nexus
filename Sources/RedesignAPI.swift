@@ -61,7 +61,7 @@ extension APIClient {
     /// A new status option = a new board column. `taskStatus` is the enum it stands for (its group).
     func createStatusOption(projectId: String, name: String, taskStatus: String, color: String? = nil) async throws -> SectionInfo {
         var body: [String: Any] = ["name": name, "taskStatus": taskStatus]
-        if let color { body["color"] = StatusColor.serverKey(color) }
+        if let color { body["color"] = color }
         let req = try redesignJSON("/api/projects/\(Self.redesignEnc(projectId))/sections", method: "POST", body: body)
         return try await redesignRun(req, as: SectionInfo.self)
     }
@@ -73,7 +73,7 @@ extension APIClient {
         if let name { body["name"] = name }
         if let position { body["position"] = position }
         if let taskStatus { body["taskStatus"] = taskStatus }
-        if let color { body["color"] = StatusColor.serverKey(color) }
+        if let color { body["color"] = color }
         let req = try redesignJSON("/api/projects/\(Self.redesignEnc(projectId))/sections", method: "PATCH", body: body)
         _ = try await redesignRun(req, as: Whatever.self)
     }
@@ -108,6 +108,40 @@ extension APIClient {
         if let movedId { body["movedId"] = movedId }
         let req = try redesignJSON("/api/tasks/reorder", method: "POST", body: body)
         _ = try await redesignRun(req, as: Whatever.self)
+    }
+
+    // MARK: delete with undo, assignees
+
+    /// DELETE /api/tasks/:id, answering the audit row that can put it back (dev server; nil from older
+    /// servers, which then simply offer no Undo).
+    func deleteTaskUndoable(_ taskId: String) async throws -> String? {
+        let data = try await redesignRaw(makeRequest("/api/tasks/\(Self.redesignEnc(taskId))", method: "DELETE"))
+        return ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["auditLogId"] as? String
+    }
+
+    /// Puts back tasks this person deleted in the last 30 minutes.
+    func undoDeleteTasks(_ auditLogIds: [String]) async throws {
+        let req = try redesignJSON("/api/tasks/undo-delete", method: "POST", body: ["auditLogIds": auditLogIds])
+        _ = try await redesignRaw(req)
+    }
+
+    func addTaskAssignee(_ taskId: String, userId: String) async throws {
+        let req = try redesignJSON("/api/tasks/\(Self.redesignEnc(taskId))/assignees", method: "POST", body: ["userId": userId])
+        _ = try await redesignRaw(req)
+    }
+
+    func removeTaskAssignee(_ taskId: String, userId: String) async throws {
+        let req = try redesignJSON("/api/tasks/\(Self.redesignEnc(taskId))/assignees", method: "DELETE", body: ["userId": userId])
+        _ = try await redesignRaw(req)
+    }
+
+    private func redesignRaw(_ req: URLRequest) async throws -> Data {
+        let (data, response): (Data, URLResponse)
+        do { (data, response) = try await perform(req) } catch { throw APIError.nothingAnswered(error) }
+        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else { throw APIError.http(http.statusCode, Self.serverMessage(data)) }
+        return data
     }
 
     // MARK: My Submissions

@@ -549,7 +549,14 @@ struct TaskDetailView: View {
     // Dismiss only once the server has agreed. Behind `try?` the sheet closed on a 403 too, the
     // task looked deleted, and it was back on the board at the next refresh.
     private func deleteTask() async {
-        do { _ = try await APIClient.shared.deleteTask(taskId); dismiss() }
+        do {
+            let auditId = try await APIClient.shared.deleteTaskUndoable(taskId)
+            if let auditId {
+                NotificationCenter.default.post(name: .nexusTaskDeletedUndoable, object: nil,
+                                                userInfo: ["auditLogId": auditId, "title": task?.title ?? ""])
+            }
+            dismiss()
+        }
         catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't delete the task.") }
     }
     // The draft is cleared AFTER the post succeeds; on failure it is still in the box.

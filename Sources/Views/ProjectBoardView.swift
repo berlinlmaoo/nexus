@@ -55,6 +55,9 @@ struct ProjectDetailView: View {
     @State private var undo: MoveUndo?
     /// The column order before a manual reorder, for its Undo.
     @State private var reorderUndo: ReorderUndo?
+    /// Undo for a delete, a bulk assign or a bulk due date.
+    @State private var customUndo: CustomUndo?
+    @State private var bulkDue: BulkDueRequest?
     @State private var boardAlert: BoardAlert?
     @State private var alertText = ""
     @State private var filterView: ProjectViewFull?
@@ -327,6 +330,16 @@ struct ProjectDetailView: View {
                 }
             }
             .sheet(item: $filterView) { v in filterSheet(v) }
+            .sheet(item: $bulkDue) { r in BulkDueSheet(count: r.taskIds.count) { day in bulkSetDue(r.taskIds, day) } }
+            // A task deleted from its screen: Undo here for 10 s (own deletes, 30 min on the server).
+            .onReceive(NotificationCenter.default.publisher(for: .nexusTaskDeletedUndoable)) { note in
+                guard let id = note.userInfo?["auditLogId"] as? String else { return }
+                let title = (note.userInfo?["title"] as? String) ?? ""
+                customUndo = CustomUndo(label: title.isEmpty ? T("Task deleted") : String(format: T("Deleted “%@”"), title)) {
+                    try? await APIClient.shared.undoDeleteTasks([id])
+                }
+                Task { await reloadQuietly() }
+            }
             .alert(boardAlert?.title ?? "", isPresented: Binding(get: { boardAlert != nil }, set: { if !$0 { boardAlert = nil } }), presenting: boardAlert) { a in
                 boardAlertActions(a)
             } message: { a in Text(a.message) }
@@ -364,9 +377,15 @@ struct ProjectDetailView: View {
                         TaskSelectionBar(selection: selection, visibleIds: visibleTaskIds,
                                          statusTargets: lanes,
                                          onMove: { ids, laneId in moveLater(ids, to: laneId) },
-                                         onPriority: { ids, p in bulkPriority(ids, p) })
+                                         onPriority: { ids, p in bulkPriority(ids, p) },
+                                         members: detail?.members ?? [],
+                                         onAssign: { ids, uid in bulkAssign(ids, uid) },
+                                         onDue: { ids in bulkDue = BulkDueRequest(taskIds: ids) })
                     } else if let undo {
                         MoveUndoBar(undo: undo, onUndo: { Task { await performUndo(undo) } }, onDismiss: { if self.undo == undo { self.undo = nil } })
+                    } else if let c = customUndo {
+                        MoveUndoBar(undo: c.bar, onUndo: { let a = c.action; customUndo = nil; Task { await a(); await reloadQuietly() } },
+                                    onDismiss: { if customUndo?.bar.id == c.bar.id { customUndo = nil } })
                     } else if let r = reorderUndo {
                         MoveUndoBar(undo: MoveUndo(count: r.count, groups: []), onUndo: { Task { await undoReorder(r) } }, onDismiss: { if reorderUndo?.id == r.id { reorderUndo = nil } })
                     }
@@ -743,6 +762,50 @@ struct ProjectDetailView: View {
             onSetStatus: sectionStatus,
             canAdd: addable
         )
+    }
+
+    /// Bulk assign: adds the person to every selected task that does not have them (web); Undo removes
+    /// them again from exactly those.
+    private func bulkAssign(_ ids: [String], _ userId: String) {
+        let tasks = lanes.flatMap { $0.tasks ?? [] }.filter { ids.contains($0.id) }
+        Task {
+            var added: [String] = []
+            for t in tasks where !(t.assignees ?? []).contains(where: { $0.user?.id == userId }) {
+                if (try? await APIClient.shared.addTaskAssignee(t.id, userId: userId)) != nil { added.append(t.id) }
+            }
+            selection.clear()
+            customUndo = CustomUndo(label: added.count == 1 ? T("Assigned 1 task") : String(format: T("Assigned %d tasks"), added.count)) {
+                for id in added { try? await APIClient.shared.removeTaskAssignee(id, userId: userId) }
+            }
+            await reloadQuietly()
+        }
+    }
+
+    /// Bulk due date (or none); Undo puts each task's own date back.
+    private func bulkSetDue(_ ids: [String], _ day: Date?) {
+        let tasks = lanes.flatMap { $0.tasks ?? [] }.filter { ids.contains($0.id) }
+        let value: Any
+        if let day { value = Self.isoDay(day) } else { value = NSNull() }
+        Task {
+            var before: [(String, String?)] = []
+            for t in tasks {
+                if (try? await APIClient.shared.updateTask(t.id, ["dueDate": value])) != nil { before.append((t.id, t.dueDate)) }
+            }
+            selection.clear()
+            customUndo = CustomUndo(label: before.count == 1 ? T("Changed the due date of 1 task") : String(format: T("Changed the due date of %d tasks"), before.count)) {
+                for (id, old) in before {
+                    let v: Any
+                    if let old { v = String(old.prefix(10)) } else { v = NSNull() }
+                    try? await APIClient.shared.updateTask(id, ["dueDate": v])
+                }
+            }
+            await reloadQuietly()
+        }
+    }
+
+    private static func isoDay(_ d: Date) -> String {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone; f.locale = Locale(identifier: "en_US_POSIX")
+        return f.string(from: d)
     }
 
     /// Bulk priority from the selection bar: one batch call, Undo puts each task's old priority back.

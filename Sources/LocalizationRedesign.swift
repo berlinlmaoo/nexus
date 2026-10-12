@@ -290,6 +290,15 @@ extension AppLanguage {
         "Open on the web": "Buka di web",
         "Full name": "Nama lengkap",
         "Google Workspace": "Google Workspace",
+        "No date": "Tanpa tanggal",
+        "Due date for %d tasks": "Tenggat untuk %d task",
+        "Due date…": "Tenggat…",
+        "Task deleted": "Task dihapus",
+        "Deleted “%@”": "“%@” dihapus",
+        "Assigned 1 task": "1 task ditugaskan",
+        "Assigned %d tasks": "%d task ditugaskan",
+        "Changed the due date of 1 task": "Tenggat 1 task diubah",
+        "Changed the due date of %d tasks": "Tenggat %d task diubah",
         // ── marker: entries are appended above this line by tooling; keep it last ──
         "__redesign_end__": "__redesign_end__",
     ]
