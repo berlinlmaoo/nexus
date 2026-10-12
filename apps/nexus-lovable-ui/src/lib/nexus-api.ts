@@ -1397,11 +1397,26 @@ export type NexusMySubmission = {
   stage?: string | null;
   procStatus?: string | null; // "Status" custom field value (null = belum diproses)
   proofs?: Array<{ id: string; name?: string | null; url?: string | null; mimeType?: string | null; size?: number | null }>; // Bukti Pencairan from the finance team
+  /** Board fields (12 Oct 2026): where it stands, what it is, who has it. */
+  column?: NexusSubmissionColumn | null;
+  kind?: "finance" | "multimedia" | "other";
+  amount?: number | null;
+  category?: string | null;
+  date?: string | null;
+  handlers?: Array<{ id: string; name?: string | null; avatar?: string | null }>;
+  needsAction?: boolean;
+  commentCount?: number;
 };
 
 export type NexusSubmissionDetail = NexusMySubmission & {
   answers?: Array<{ id: string; label: string; type: string; value: unknown }>;
+  /** Status changes of the request's task (12 Oct 2026). from/to = TODO, IN_PROGRESS… */
+  history?: Array<{ id: string; at: string; by?: string | null; from?: string | null; to?: string | null }>;
+  comments?: NexusSubmissionComment[];
 };
+export type NexusSubmissionComment = { id: string; content: string; createdAt: string; parentId?: string | null; mine?: boolean; user: { id: string; name?: string | null; avatar?: string | null } };
+/** A column of the My Submissions board: a status option of the target project(s). */
+export type NexusSubmissionColumn = { key: string; name: string; color?: string | null; group: "todo" | "in_progress" | "complete"; taskStatus?: string | null; projectIds?: string[] };
 
 // kind: "announcement" (Control Room) | "warning" (personal, from Absen Monitor) | "sp" (surat
 // peringatan with a PDF attached). targeted = addressed to the viewer personally, not to everyone.
@@ -2984,7 +2999,8 @@ export const nexusApi = {
   updateForm: (formId: string, payload: { name?: string; description?: string | null; fields?: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; accessSchedule?: unknown }) => apiFetch<NexusForm>(`/api/forms/${formId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteForm: (formId: string, force?: boolean) => apiFetch<{ success?: boolean }>(`/api/forms/${formId}${force ? "?force=1" : ""}`, { method: "DELETE" }),
   publicForm: (formId: string) => apiFetch<NexusForm>(`/api/forms/${formId}/public`),
-  mySubmissions: () => apiFetch<{ submissions: NexusMySubmission[]; statusColumns?: string[] }>(`/api/forms/my-submissions`),
+  mySubmissions: () => apiFetch<{ submissions: NexusMySubmission[]; statusColumns?: string[]; columns?: NexusSubmissionColumn[] }>(`/api/forms/my-submissions`),
+  replyToSubmission: (id: string, content: string) => apiFetch<{ comment: NexusSubmissionComment }>(`/api/forms/my-submissions/${id}/comments`, { method: "POST", body: JSON.stringify({ content }) }),
   submissionDetail: (id: string) => apiFetch<NexusSubmissionDetail>(`/api/forms/my-submissions/${id}`),
   deleteSubmission: (id: string) => apiFetch<{ deleted?: boolean }>(`/api/forms/my-submissions/${id}`, { method: "DELETE" }),
 

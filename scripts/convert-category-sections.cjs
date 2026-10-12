@@ -46,7 +46,8 @@
 //   docker exec -i <app> node - --apply --backup /tmp/cat-backup.json < scripts/convert-category-sections.cjs
 //   docker cp <app>:/tmp/cat-backup.json ~/backups/                                              # keep it
 //   docker exec -i <app> node - --rollback /tmp/cat-backup.json < scripts/convert-category-sections.cjs
-// Options: --only "<project name>" (repeatable) limits the run; --json prints the plan as JSON.
+// Options: --only "<project name>" (repeatable) limits the run (and --rollback); --json prints the plan as
+// JSON; --unify-status (opt-in) also merges custom STATUS fields into the task status (see below).
 // DEV was converted on 12 Oct 2026 (docs: scratchpad category-conversion-dev.md). PROD: not run yet.
 "use strict"
 
@@ -69,7 +70,7 @@ const ROLLBACK = argVal("--rollback")
 const norm = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}&]+/gu, " ").replace(/\s+/g, " ").trim()
 
 const STATUS_WORDS = {
-  TODO: ["to do", "todo", "not started", "backlog", "belum mulai", "belum dikerjakan", "belum"],
+  TODO: ["to do", "todo", "not started", "backlog", "belum mulai", "belum dikerjakan", "belum", "on hold", "hold", "paused", "ditunda"],
   IN_PROGRESS: ["in progress", "on progress", "progress", "doing", "ongoing", "wip", "sedang jalan", "sedang dikerjakan", "proses", "dalam proses", "upload"],
   IN_REVIEW: ["review", "in review", "revisi", "revision", "waiting for approval", "ready for acc", "approval", "menunggu persetujuan"],
   DONE: ["done", "selesai", "complete", "completed", "finished", "acc", "approved"],
@@ -533,7 +534,8 @@ async function applyPlan(db, p, d, backupEntry) {
 // ── follow-ups on a converted project (owner, 12 Oct 2026) ─────────────────────────────────────────
 // Run after the conversion in the same transaction, and on projects converted before these rules:
 //  (No option merging and no status change: the owner reverted that on 12 Oct 2026 — finance keeps
-//   "AI & Tech On Prog" / "Management OP" as their own options. This script never writes Task.status.)
+//   "AI & Tech On Prog" / "Management OP" as their own options. Only the opt-in --unify-status step
+//   below writes Task.status.)
 //  - form answers mapped to the category field that are not options yet become options (with colours);
 //  - a "Category"/"Kategori" field left with ONE option is dropped with its "By category" view (values kept
 //    in the backup).
@@ -630,12 +632,228 @@ function printFollowups(list) {
   }
 }
 
+// ── opt-in: --unify-status (owner, 12 Oct 2026, "option a") ─────────────────────────────────────────
+// A custom field of type STATUS ("Status": On Progress / Done in every Finance project) duplicates the
+// task's own status, and the two disagree (custom On Progress, built-in To-do → the board shows nothing
+// In progress). Notion has one status, so:
+//  - every option becomes a status column of the project, in the group its name says (On Progress /
+//    Progress → In progress, Revision → In progress (review), Done → Complete, On Hold → To-do; unknown →
+//    In progress). A column with that name is reused; else an EMPTY default column of that group
+//    ("In Progress") is renamed to the option, with the option's colour; else a column is added;
+//  - every task with a value moves to its column and takes its status (THIS step changes Task.status,
+//    approved by the owner); a task with no value keeps its status; tasks shown here from another project
+//    only move their link;
+//  - the field is removed (row and values kept in the backup) and what referenced it is remapped: form
+//    answers → the section (status column), routing "set field" → move to the column, automations →
+//    status, saved views → Status, Project.tableColumns drops it.
+// Only fields of TYPE STATUS. SELECT fields named Status (PRIMARIA, Rosi, PATS Archive) are listed in
+// the plan, not touched. Not run on prod unless --unify-status is passed.
+
+const UNIFY = argv.includes("--unify-status")
+const TONE = (name) => {
+  const n = norm(name)
+  if (["done", "complete", "completed", "selesai"].includes(n)) return "green"
+  if (["on progress", "in progress", "progress", "ongoing", "sedang berjalan"].includes(n)) return "yellow"
+  if (["blocked", "stuck", "terhambat"].includes(n)) return "red"
+  if (["not started", "todo", "to do"].includes(n)) return "gray"
+  return "blue"
+}
+const UNIFY_STATUS = (name) => {
+  const n = norm(name)
+  if (/^(on hold|hold|paused|pending|not started|to do|todo|belum.*)$/.test(n)) return "TODO"
+  const w = statusWord(name)
+  if (w) return w
+  if (/(progress|proses|ongoing|jalan)/.test(n)) return "IN_PROGRESS"
+  if (/(revis|review|approval)/.test(n)) return "IN_REVIEW"
+  if (/(done|selesai|complete|finish|paid|lunas|cair)/.test(n)) return "DONE"
+  if (/(cancel|batal|reject|tolak)/.test(n)) return "CANCELLED"
+  return "IN_PROGRESS"
+}
+const DEFAULT_COLUMN = /^(to do|in progress|done|belum mulai|sedang jalan|selesai)$/
+
+async function planUnify(db) {
+  const fields = (await db.query(`SELECT cf.*, p.name AS "projectName", p."tableColumns" FROM "CustomField" cf JOIN "Project" p ON p.id = cf."projectId" WHERE cf.type = 'STATUS' AND coalesce(p.type, 'TASK') NOT IN ('PIPELINE', 'OUTLET_SALES') ORDER BY p.name`)).rows
+  const out = []
+  for (const f of fields) {
+    if (ONLY.length && !ONLY.includes(f.projectName)) continue
+    const u = { projectId: f.projectId, name: f.projectName, fieldId: f.id, fieldName: f.name, columns: [], renames: [], creates: [], moves: [], linkMoves: [], forms: [], autos: [], views: [], tableColumns: null, before: {} }
+    const secs = (await db.query(`SELECT id, name, position, "taskStatus"::text AS "taskStatus", color FROM "TaskList" WHERE "projectId" = $1 ORDER BY position, "createdAt"`, [f.projectId])).rows
+    const counts = new Map((await db.query(`SELECT "taskListId" AS id, count(*)::int AS n FROM "Task" WHERE "taskListId" = ANY($1) GROUP BY 1`, [secs.map((s) => s.id)])).rows.map((r) => [r.id, r.n]))
+    const linkCounts = new Map((await db.query(`SELECT "taskListId" AS id, count(*)::int AS n FROM "TaskProject" WHERE "taskListId" = ANY($1) GROUP BY 1`, [secs.map((s) => s.id)])).rows.map((r) => [r.id, r.n]))
+    const options = choiceList(f.options)
+    const working = secs.map((s) => ({ ...s }))
+    const optionCol = new Map()
+    for (const o of options) {
+      const st = UNIFY_STATUS(o)
+      let col = working.find((s) => s.name.toLowerCase() === o.toLowerCase())
+      if (col) {
+        if (!col.taskStatus) { col.taskStatus = st; u.renames.push({ id: col.id, from: col.name, name: col.name, taskStatus: st, color: col.color }) }
+      } else {
+        const grp = GROUP[st]
+        const spare = working.find((s) => GROUP[s.taskStatus] === grp && DEFAULT_COLUMN.test(norm(s.name)) && !(counts.get(s.id) || 0) && !(linkCounts.get(s.id) || 0) && !options.some((x) => x.toLowerCase() === s.name.toLowerCase()) && ![...optionCol.values()].includes(s))
+        if (spare) {
+          u.renames.push({ id: spare.id, from: spare.name, name: o, taskStatus: st, color: TONE(o) })
+          spare.name = o; spare.taskStatus = st; spare.color = TONE(o)
+          col = spare
+        } else {
+          col = { id: newId(), name: o, taskStatus: st, color: TONE(o), position: 0, created: true }
+          u.creates.push(col)
+          working.push(col)
+        }
+      }
+      optionCol.set(o.toLowerCase(), col)
+      u.columns.push({ option: o, column: col.name, taskStatus: col.taskStatus })
+    }
+    // final order: To-do group, In progress, Complete; created columns at the end of their group
+    const order = ["todo", "in_progress", "complete"]
+    const sorted = [...working].sort((a, b) => order.indexOf(GROUP[a.taskStatus] || "todo") - order.indexOf(GROUP[b.taskStatus] || "todo") || (a.created ? 1 : 0) - (b.created ? 1 : 0) || a.position - b.position)
+    u.order = sorted.map((s, i) => ({ id: s.id, name: s.name, position: i, created: !!s.created }))
+    // tasks
+    const vals = (await db.query(`SELECT x."taskId", x.value, t."taskListId", t.position, t.status::text AS status, t."parentId", tl."projectId" = $2 AS home, tl.position AS "secPos"
+      FROM "CustomFieldValue" x JOIN "Task" t ON t.id = x."taskId" JOIN "TaskList" tl ON tl.id = t."taskListId" WHERE x."customFieldId" = $1 ORDER BY tl.position, t.position`, [f.id, f.projectId])).rows
+    const nextPos = new Map()
+    const posFor = async (colId, table) => {
+      const key = `${table}:${colId}`
+      if (!nextPos.has(key)) nextPos.set(key, working.find((s) => s.id === colId)?.created ? 0 : (await db.query(`SELECT coalesce(max(position), -1) + 1 AS n FROM "${table}" WHERE "taskListId" = $1`, [colId])).rows[0].n)
+      const n = nextPos.get(key); nextPos.set(key, n + 1); return n
+    }
+    for (const v of vals) {
+      const val = String(v.value || "").trim()
+      if (!val) continue
+      const col = optionCol.get(val.toLowerCase())
+      if (!col) { u.unmatched = (u.unmatched || 0) + 1; continue }
+      if (v.home) {
+        if (v.taskListId === col.id && v.status === col.taskStatus) continue
+        u.moves.push({ taskId: v.taskId, from: v.taskListId, to: col.id, toName: col.name, position: v.taskListId === col.id ? v.position : await posFor(col.id, "Task"), fromStatus: v.status, toStatus: col.taskStatus, value: val })
+      }
+    }
+    const links = (await db.query(`SELECT tp.id, tp."taskListId", x.value FROM "TaskProject" tp JOIN "CustomFieldValue" x ON x."taskId" = tp."taskId" AND x."customFieldId" = $1 WHERE tp."projectId" = $2`, [f.id, f.projectId])).rows
+    for (const l of links) {
+      const col = optionCol.get(String(l.value || "").trim().toLowerCase())
+      if (col && l.taskListId !== col.id) u.linkMoves.push({ linkId: l.id, to: col.id, position: await posFor(col.id, "TaskProject") })
+    }
+    // references
+    const ref = `cf:${f.id}`
+    const colFor = (val) => optionCol.get(String(val || "").trim().toLowerCase())
+    for (const fm of (await db.query(`SELECT id, name, fields FROM "Form" WHERE "projectId" = $1`, [f.projectId])).rows) {
+      const list = Array.isArray(fm.fields) ? fm.fields : []
+      if (!JSON.stringify(list).includes(f.id)) continue
+      const after = list.map((x) => {
+        if (!x || typeof x !== "object") return x
+        let y = x
+        if (y.mapping && y.mapping.customFieldId === f.id) y = { ...y, mapping: { target: "task_list" } }
+        if (Array.isArray(y.routingRules)) y = { ...y, routingRules: y.routingRules.map((r) => (r && r.action === "set_field" && r.targetCustomFieldId === f.id && colFor(r.targetValue) ? (() => { const { targetCustomFieldId, targetValue, ...rest } = r; return { ...rest, action: "set_task_list", targetTaskListId: colFor(r.targetValue).id } })() : r)) }
+        return y
+      })
+      u.forms.push({ id: fm.id, name: fm.name, before: fm.fields, after })
+    }
+    for (const a of (await db.query(`SELECT id, name, trigger, action, actions, conditions FROM "Automation" WHERE "projectId" = $1`, [f.projectId])).rows) {
+      if (!JSON.stringify([a.trigger, a.action, a.actions, a.conditions]).includes(f.id)) continue
+      const fixAct = (r) => (r && r.field === ref && String(r.type).toUpperCase() === "SET_FIELD" && colFor(r.value) ? { type: "SET_STATUS", value: colFor(r.value).taskStatus, config: { sectionId: colFor(r.value).id } } : r)
+      const trig = a.trigger && a.trigger.field === ref ? (colFor(a.trigger.value) ? { type: "STATUS_CHANGED", value: colFor(a.trigger.value).taskStatus, config: { toSection: colFor(a.trigger.value).id, bySection: true } } : { type: "STATUS_CHANGED", config: { bySection: true } }) : a.trigger
+      const conds = a.conditions && Array.isArray(a.conditions.rules) ? { ...a.conditions, rules: a.conditions.rules.map((r) => (r && r.field === ref ? (colFor(r.value) ? { ...r, field: "section", value: colFor(r.value).id } : { ...r, field: "section" }) : r)) } : a.conditions
+      u.autos.push({ id: a.id, name: a.name, before: { trigger: a.trigger, action: a.action, actions: a.actions, conditions: a.conditions }, after: { trigger: trig, action: fixAct(a.action), actions: Array.isArray(a.actions) ? a.actions.map(fixAct) : a.actions, conditions: conds } })
+    }
+    for (const v of (await db.query(`SELECT id, config FROM "ProjectView" WHERE "projectId" = $1`, [f.projectId])).rows) {
+      const cfg = v.config || {}
+      if (!JSON.stringify(cfg).includes(f.id)) continue
+      const fixRules = (rules) => (Array.isArray(rules) ? rules.map((r) => (r && Array.isArray(r.rules) ? { ...r, rules: fixRules(r.rules) } : r && r.prop === ref ? { ...r, prop: "section", value: Array.isArray(r.value) ? r.value.map((x) => colFor(x)?.id ?? x) : colFor(r.value)?.id ?? r.value } : r)) : rules)
+      const next = { ...cfg }
+      for (const k of ["groupBy", "subGroupBy", "colorBy", "dateProp", "startProp", "endProp"]) if (next[k] === ref) next[k] = "section"
+      if (Array.isArray(next.visibleProps)) next.visibleProps = [...new Set(next.visibleProps.map((x) => (x === ref ? "section" : x)))]
+      if (Array.isArray(next.sort)) next.sort = next.sort.map((s) => (s && s.prop === ref ? { ...s, prop: "section" } : s))
+      if (Array.isArray(next.colorRules)) next.colorRules = next.colorRules.filter((r) => r && r.prop !== ref)
+      if (next.filter) next.filter = { ...next.filter, simple: fixRules(next.filter.simple), advanced: next.filter.advanced ? { ...next.filter.advanced, rules: fixRules(next.filter.advanced.rules) } : next.filter.advanced }
+      u.views.push({ id: v.id, before: cfg, after: next })
+    }
+    if (Array.isArray(f.tableColumns) && f.tableColumns.includes(ref)) u.tableColumns = { before: f.tableColumns, after: f.tableColumns.filter((x) => x !== ref) }
+    out.push(u)
+  }
+  return out
+}
+
+async function listSelectStatusFields(db) {
+  return (await db.query(`SELECT p.name AS project, cf.name, cf.type::text AS type, (SELECT count(*) FROM "CustomFieldValue" x WHERE x."customFieldId" = cf.id AND x.value NOT IN ('', '[]'))::int AS used FROM "CustomField" cf JOIN "Project" p ON p.id = cf."projectId" WHERE cf.type IN ('SELECT', 'MULTI_SELECT') AND cf.name ~* '^(status|progress)' ORDER BY 1`)).rows
+}
+
+function printUnify(list, selects) {
+  console.log(`\n# Status unify (--unify-status): ${list.length} project(s) with a custom STATUS field`)
+  for (const u of list) {
+    console.log(`\n## ${u.name}  [unify "${u.fieldName}"]`)
+    for (const c of u.columns) console.log(`  option  ${c.option} → column "${c.column}" (${c.taskStatus})`)
+    for (const r of u.renames) if (r.from !== r.name) console.log(`  rename  empty "${r.from}" → "${r.name}" (${r.color})`)
+    for (const c of u.creates) console.log(`  create  column "${c.name}" (${c.taskStatus}, ${c.color})`)
+    const by = {}
+    for (const m of u.moves) { const k = `${m.fromStatus} → ${m.toName}`; by[k] = (by[k] || 0) + 1 }
+    if (u.moves.length) console.log(`  tasks   ${u.moves.length}: ` + Object.entries(by).map(([k, v]) => `${k} ×${v}`).join("; "))
+    const reopened = u.moves.filter((m) => (m.fromStatus === "DONE" || m.fromStatus === "CANCELLED") && GROUP[m.toStatus] !== "complete").length
+    if (reopened) console.log(`  note    ${reopened} task(s) were done but the field said otherwise: they reopen`)
+    if (u.linkMoves.length) console.log(`  links   ${u.linkMoves.length} task(s) from other projects re-placed (their own status untouched)`)
+    if (u.unmatched) console.log(`  note    ${u.unmatched} value(s) match no option: left`)
+    for (const x of u.forms) console.log(`  form    ${x.name}: answer → status column`)
+    for (const x of u.autos) console.log(`  auto    ${x.name}: field → status`)
+    if (u.views.length) console.log(`  views   ${u.views.length} saved view(s): field → Status`)
+    if (u.tableColumns) console.log(`  table   column dropped from Project.tableColumns`)
+    console.log(`  remove  custom field "${u.fieldName}" (row + values in the backup)`)
+  }
+  if (selects.length) console.log(`\n  (not touched — SELECT fields named Status: ${selects.map((s) => `${s.project} "${s.name}" ${s.type} ${s.used} value(s)`).join("; ")})`)
+}
+
+async function snapshotUnify(db, u) {
+  const field = (await db.query(`SELECT * FROM "CustomField" WHERE id = $1`, [u.fieldId])).rows[0]
+  const values = (await db.query(`SELECT * FROM "CustomFieldValue" WHERE "customFieldId" = $1`, [u.fieldId])).rows
+  const sections = (await db.query(`SELECT id, name, position, "taskStatus"::text AS "taskStatus", color FROM "TaskList" WHERE "projectId" = $1`, [u.projectId])).rows
+  const tasks = u.moves.length ? (await db.query(`SELECT id, "taskListId", position, status::text AS status FROM "Task" WHERE id = ANY($1)`, [u.moves.map((m) => m.taskId)])).rows : []
+  const links = u.linkMoves.length ? (await db.query(`SELECT id, "taskListId", position FROM "TaskProject" WHERE id = ANY($1)`, [u.linkMoves.map((m) => m.linkId)])).rows : []
+  return { kind: "unify", projectId: u.projectId, name: u.name, field, values, sections, tasks, links, createdSectionIds: u.creates.map((c) => c.id),
+    forms: u.forms.map((x) => ({ id: x.id, fields: x.before })), automations: u.autos.map((a) => ({ id: a.id, ...a.before })), views: u.views.map((v) => ({ id: v.id, config: v.before })), tableColumns: u.tableColumns ? u.tableColumns.before : undefined }
+}
+
+async function applyUnify(db, u) {
+  const now = new Date()
+  for (const r of u.renames) await db.query(`UPDATE "TaskList" SET name = $2, "taskStatus" = $3::"TaskStatus", color = $4, "updatedAt" = $5 WHERE id = $1`, [r.id, r.name, r.taskStatus, r.color, now])
+  for (const c of u.creates) await db.query(`INSERT INTO "TaskList" (id, name, position, "projectId", "taskStatus", color, "createdAt", "updatedAt") VALUES ($1, $2, 0, $3, $4::"TaskStatus", $5, $6, $6)`, [c.id, c.name, u.projectId, c.taskStatus, c.color, now])
+  for (const o of u.order) await db.query(`UPDATE "TaskList" SET position = $2 WHERE id = $1`, [o.id, o.position])
+  for (const m of u.moves) await db.query(`UPDATE "Task" SET "taskListId" = $2, position = $3, status = $4::"TaskStatus" WHERE id = $1`, [m.taskId, m.to, m.position, m.toStatus])
+  for (const l of u.linkMoves) await db.query(`UPDATE "TaskProject" SET "taskListId" = $2, position = $3 WHERE id = $1`, [l.linkId, l.to, l.position])
+  for (const x of u.forms) await db.query(`UPDATE "Form" SET fields = $2::jsonb, "updatedAt" = $3 WHERE id = $1`, [x.id, JSON.stringify(x.after), now])
+  for (const a of u.autos) await db.query(`UPDATE "Automation" SET trigger = $2::jsonb, action = $3::jsonb, actions = $4::jsonb, conditions = $5::jsonb, "updatedAt" = $6 WHERE id = $1`,
+    [a.id, JSON.stringify(a.after.trigger), JSON.stringify(a.after.action), a.after.actions == null ? null : JSON.stringify(a.after.actions), a.after.conditions == null ? null : JSON.stringify(a.after.conditions), now])
+  for (const v of u.views) await db.query(`UPDATE "ProjectView" SET config = $2::jsonb, "updatedAt" = $3 WHERE id = $1`, [v.id, JSON.stringify(v.after), now])
+  if (u.tableColumns) await db.query(`UPDATE "Project" SET "tableColumns" = $2::jsonb WHERE id = $1`, [u.projectId, JSON.stringify(u.tableColumns.after)])
+  await db.query(`DELETE FROM "CustomField" WHERE id = $1`, [u.fieldId])
+}
+
+async function rollbackUnify(db, p) {
+  console.log(`rollback unify ${p.name}`)
+  const fl = p.field
+  if (!(await db.query(`SELECT 1 FROM "CustomField" WHERE id = $1`, [fl.id])).rows.length) {
+    await db.query(`INSERT INTO "CustomField" (id, name, type, options, position, "projectId", "libraryId") VALUES ($1, $2, $3::"CustomFieldType", $4::jsonb, $5, $6, $7)`, [fl.id, fl.name, fl.type, JSON.stringify(fl.options), fl.position, fl.projectId, fl.libraryId ?? null])
+  }
+  for (const v of p.values) await db.query(`INSERT INTO "CustomFieldValue" (id, value, "customFieldId", "taskId") VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`, [v.id, v.value, v.customFieldId, v.taskId])
+  for (const s of p.sections) await db.query(`UPDATE "TaskList" SET name = $2, position = $3, "taskStatus" = $4::"TaskStatus", color = $5 WHERE id = $1`, [s.id, s.name, s.position, s.taskStatus, s.color])
+  for (const t of p.tasks) await db.query(`UPDATE "Task" SET "taskListId" = $2, position = $3, status = $4::"TaskStatus" WHERE id = $1`, [t.id, t.taskListId, t.position, t.status])
+  for (const l of p.links) await db.query(`UPDATE "TaskProject" SET "taskListId" = $2, position = $3 WHERE id = $1`, [l.id, l.taskListId, l.position])
+  for (const x of p.forms) await db.query(`UPDATE "Form" SET fields = $2::jsonb WHERE id = $1`, [x.id, JSON.stringify(x.fields)])
+  for (const a of p.automations) await db.query(`UPDATE "Automation" SET trigger = $2::jsonb, action = $3::jsonb, actions = $4::jsonb, conditions = $5::jsonb WHERE id = $1`,
+    [a.id, JSON.stringify(a.trigger), JSON.stringify(a.action), a.actions == null ? null : JSON.stringify(a.actions), a.conditions == null ? null : JSON.stringify(a.conditions)])
+  for (const v of p.views) await db.query(`UPDATE "ProjectView" SET config = $2::jsonb WHERE id = $1`, [v.id, JSON.stringify(v.config)])
+  if (p.tableColumns !== undefined) await db.query(`UPDATE "Project" SET "tableColumns" = $2::jsonb WHERE id = $1`, [p.projectId, JSON.stringify(p.tableColumns)])
+  if (p.createdSectionIds.length) {
+    const first = [...p.sections].sort((a, b) => a.position - b.position)[0]
+    await db.query(`UPDATE "Task" SET "taskListId" = $2 WHERE "taskListId" = ANY($1)`, [p.createdSectionIds, first.id])
+    await db.query(`UPDATE "TaskProject" SET "taskListId" = $2 WHERE "taskListId" = ANY($1)`, [p.createdSectionIds, first.id])
+    await db.query(`DELETE FROM "TaskList" WHERE id = ANY($1)`, [p.createdSectionIds])
+  }
+}
+
 // ── rollback ───────────────────────────────────────────────────────────────────────────────────────
 
 async function rollback(db, backup) {
   // Newest first: the follow-ups were written after the conversion of the same run.
   for (const p of [...backup.projects].reverse().filter((x) => !ONLY.length || ONLY.includes(x.name))) {
     if (p.kind === "followup") { await rollbackFollowup(db, p); continue }
+    if (p.kind === "unify") { await rollbackUnify(db, p); continue }
     console.log(`rollback ${p.name} [${p.cls}]`)
     const cols = (row) => Object.keys(row)
     // sections back (re-created with their old ids when removed)
@@ -711,6 +929,14 @@ async function main() {
     for (const f of follow) {
       backup.projects.push(await snapshotFollowup(db, f))
       await applyFollowup(db, f)
+    }
+    if (UNIFY) {
+      const unify = await planUnify(db)
+      printUnify(unify, await listSelectStatusFields(db))
+      for (const u of unify) {
+        backup.projects.push(await snapshotUnify(db, u))
+        await applyUnify(db, u)
+      }
     }
     if (!APPLY) { await db.query("ROLLBACK"); console.log("\nDRY RUN — executed in a transaction and rolled back; nothing written. Add --apply (and --backup <file>) to write."); return }
     fs.writeFileSync(BACKUP, JSON.stringify(backup))

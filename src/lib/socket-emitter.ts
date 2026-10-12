@@ -8,6 +8,13 @@ export function emitTaskCreated(projectId: string, task: Record<string, unknown>
 /** Emit a task-updated event to all clients watching a project */
 export function emitTaskUpdated(projectId: string, task: Record<string, unknown>) {
   eventBus.emit(BUS_EVENTS.TASK_UPDATED, { projectId, task })
+  pingSubmitterLater(typeof task?.id === "string" ? task.id : null)
+}
+
+/** A task a form submission made changed: its submitter's "My Submissions" refetches (lib/submission-ping.ts). */
+function pingSubmitterLater(taskId: string | null) {
+  if (!taskId) return
+  void import("./submission-ping").then((m) => m.pingSubmitter(taskId)).catch(() => {})
 }
 
 /** Emit a task-deleted event to all clients watching a project */
@@ -18,6 +25,7 @@ export function emitTaskDeleted(projectId: string, taskId: string) {
 /** Emit a comment-added event to all clients watching a project */
 export function emitCommentAdded(projectId: string, taskId: string, comment: Record<string, unknown>) {
   eventBus.emit(BUS_EVENTS.COMMENT_ADDED, { projectId, taskId, comment })
+  pingSubmitterLater(taskId)
 }
 
 /** Emit a notification to a specific user's room */
@@ -86,7 +94,7 @@ export function emitSheetStructure(sheetId: string, actorId: string) {
   eventBus.emit(BUS_EVENTS.SHEET_STRUCTURE, { sheetId, actorId })
 }
 
-export type WorkspaceChangedKind = "projects" | "folders" | "audit" | "vault"
+export type WorkspaceChangedKind = "projects" | "folders" | "audit" | "vault" | "submissions"
 
 /**
  * `workspace-changed` (owner, 8 Oct 2026): WHICH collection of a workspace moved, never what it now

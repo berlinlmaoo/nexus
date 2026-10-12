@@ -1,6 +1,6 @@
 /**
- * Indonesian for the category → status conversion (owner, 12 Oct 2026): form routing "Set field" and the
- * automation builder's status options. Source text is English; see lib/lang.ts.
+ * Indonesian for the category → status conversion (owner, 12 Oct 2026): form routing "Set field", the
+ * automation builder's status options and the My Submissions board. Source text is English; see lib/lang.ts.
  */
 export const ID_CATEGORIES: Record<string, string> = {
   "Set field": "Isi kolom",
@@ -8,4 +8,39 @@ export const ID_CATEGORIES: Record<string, string> = {
   "choose value": "pilih nilai",
   "Other sections": "Bagian lain",
   "Any “{status}” column": "Kolom “{status}” mana pun",
+  "Category": "Kategori",
+  "Couldn't delete the submission.": "Pengajuan gagal dihapus.",
+  "Couldn't load the details.": "Detail gagal dimuat.",
+  "Couldn't load your submissions.": "Pengajuanmu gagal dimuat.",
+  "Couldn't send the reply.": "Balasan gagal dikirim.",
+  "Delete this submission? Its task in the project is deleted too.": "Hapus pengajuan ini? Task-nya di project ikut terhapus.",
+  "Deleting this submission also deletes its task in the project.": "Menghapus pengajuan ini juga menghapus task-nya di project.",
+  "Everything you send through a form (a payment request, a design request, a report) shows up here with where it stands, so you never have to ask.": "Semua yang kamu kirim lewat form (pengajuan dana, request desain, laporan) muncul di sini beserta posisinya, jadi kamu nggak perlu nanya-nanya.",
+  "Finance": "Finance",
+  "Handled by": "Ditangani",
+  "Moved to {status}": "Pindah ke {status}",
+  "Multimedia": "Multimedia",
+  "Needs my action": "Perlu tindakanku",
+  "Needs your reply": "Perlu balasanmu",
+  "No": "Tidak",
+  "No answers were recorded.": "Tidak ada jawaban yang tercatat.",
+  "No comments yet. Ask the team here if something is unclear.": "Belum ada komentar. Tanya timnya di sini kalau ada yang kurang jelas.",
+  "No submissions here": "Tidak ada pengajuan di sini",
+  "No submissions yet": "Belum ada pengajuan",
+  "Not assigned yet": "Belum ada yang pegang",
+  "Nothing here": "Kosong",
+  "Nothing needs your action": "Tidak ada yang perlu kamu tindak",
+  "Open forms": "Buka form",
+  "Proof": "Bukti",
+  "Proof of payment (Bukti Pencairan)": "Bukti Pencairan",
+  "Read-only. The team moves the cards.": "Hanya baca. Tim yang memindahkan kartunya.",
+  "Reply to the team…": "Balas ke tim…",
+  "Requests you sent through a form. The team that handles them moves them along; this board follows.": "Pengajuan yang kamu kirim lewat form. Tim yang menangani memindahkannya; papan ini ikut berubah.",
+  "Status history": "Riwayat status",
+  "Submission": "Pengajuan",
+  "Submitted {when}": "Dikirim {when}",
+  "Try another filter.": "Coba filter lain.",
+  "When the team asks for a revision or replies to you, the request shows up here.": "Kalau tim minta revisi atau membalas kamu, pengajuannya muncul di sini.",
+  "Yes": "Ya",
+  "Your answers": "Jawabanmu",
 };
