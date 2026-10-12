@@ -291,11 +291,13 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
     abortRef.current = controller;
     let acc = "";
     let wroteSomething = false;
+    let liveChatId: string | null = fresh ? null : chatId;
     const startFresh = fresh || !chatId;
 
     await streamGideon(history, (ev) => {
       switch (ev.type) {
         case "chat":
+          liveChatId = ev.id;
           setChatId(ev.id);
           setChatTitle((cur) => cur ?? ev.title ?? null);
           setFresh(false);
@@ -351,7 +353,24 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
       signal: controller.signal, model: tier, image, file: doc, approvalMode: mode, context: pageContext, refs,
       chatId: startFresh ? null : chatId, newChat: startFresh,
     }).catch(() => {
-      patchLast((x) => ({ ...x, failed: true, content: x.content || t("GIDEON can't be reached right now. Try again in a moment.") }));
+      if (controller.signal.aborted) return;
+      // The connection dropped mid-answer (a network change, a laptop waking up). The server keeps
+      // working and saves the answer to the chat, so fetch it from there instead of leaving an error
+      // on screen (audit, 12 Oct 2026).
+      patchLast((x) => ({ ...x, failed: true, content: x.content || t("The connection dropped. Getting the answer…") }));
+      const id = liveChatId;
+      if (!id) return;
+      let tries = 0;
+      const poll = () => {
+        if (controller.signal.aborted || abortRef.current !== controller) return;
+        void loadGideonHistory(id).then((rows) => {
+          const last = rows[rows.length - 1];
+          if (last && last.role === "assistant" && last.content?.trim()) setTurns(rows.map(fromHistory));
+          else if (++tries < 12) window.setTimeout(poll, 5000);
+          else patchLast((x) => ({ ...x, failed: true, content: t("GIDEON can't be reached right now. Try again in a moment.") }));
+        });
+      };
+      window.setTimeout(poll, 3000);
     });
     setImage(null);
     setDoc(null);

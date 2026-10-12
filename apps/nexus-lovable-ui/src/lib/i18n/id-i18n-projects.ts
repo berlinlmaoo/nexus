@@ -138,4 +138,5 @@ export const ID_I18N_PROJECTS_EXTRA: Record<string, string> = {
   "{shown} of {n} projects": "{shown} dari {n} project",
   // Audit pass (parent): empty property placeholder
   "Not set": "Belum diisi",
+  "The connection dropped. Getting the answer…": "Koneksi terputus. Mengambil jawabannya…",
 }
