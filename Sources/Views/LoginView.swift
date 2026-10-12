@@ -107,7 +107,7 @@ struct LoginView: View {
                     .shadow(color: NX.violet.opacity(0.3), radius: 16, y: 10)
                     .padding(.bottom, 22)
 
-                Text("NEXUS PHAËTHON")
+                Text("NEXUS")
                     .font(NXFont.display(22, .bold))
                     .tracking(4)
                     .foregroundStyle(NX.onyx)
@@ -116,8 +116,8 @@ struct LoginView: View {
                     .padding(.bottom, 30)
 
                 // Access ID
-                fieldBlock(label: T("ACCESS ID (EMAIL)")) {
-                    inputField("commander@nexus.app", text: $email, field: .email, secure: false)
+                fieldBlock(label: T("Email")) {
+                    inputField(T("name@company.com"), text: $email, field: .email, secure: false)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -126,7 +126,7 @@ struct LoginView: View {
                 }
 
                 // Encryption Key
-                fieldBlock(label: T("ENCRYPTION KEY")) {
+                fieldBlock(label: T("Password")) {
                     inputField("••••••••", text: $password, field: .password, secure: true)
                         .submitLabel(.go)
                         .onSubmit(attemptLogin)
@@ -149,9 +149,9 @@ struct LoginView: View {
                     HStack(spacing: 8) {
                         if auth.isLoggingIn {
                             ProgressView().tint(.white)
-                            Text(T("Opening uplink…"))
+                            Text(T("Signing in…"))
                         } else {
-                            Text(T("Enter Mission Control"))
+                            Text(T("Sign in"))
                             Image(systemName: "arrow.right").font(.system(size: 14, weight: .bold))
                         }
                     }
@@ -246,7 +246,7 @@ struct LoginView: View {
             .shadow(color: .black.opacity(0.10), radius: 40, y: 26)
         }
         .overlay(alignment: .bottom) {
-            Text("SECURE UPLINK READY")
+            Text(T("Secure sign-in").uppercased())
                 .font(NXFont.text(10, .bold))
                 .tracking(2)
                 .foregroundStyle(.white)
@@ -293,7 +293,7 @@ struct LoginView: View {
         focus = nil
         let e = email.trimmingCharacters(in: .whitespaces)
         guard !e.isEmpty, !password.isEmpty else {
-            auth.loginError = T("Fill in your Access ID and Encryption Key first.")
+            auth.loginError = T("Enter your email and password first.")
             return
         }
         Task { await auth.login(email: e, password: password) }

@@ -423,7 +423,7 @@ struct AttendanceRequestsCard: View {
 
     private var subtitle: String {
         if canReviewOffsite { return T("Review requests and offsite check-outs, and file your own.") }
-        return canReview ? T("Review the crew's requests and file your own.") : T("File leave, permit, sick or day-off.")
+        return canReview ? T("Review your team's requests and file your own.") : T("File leave, permit, sick or day-off.")
     }
 
     /// `.task(id:)` takes one value, and this card now waits on two permissions that land at

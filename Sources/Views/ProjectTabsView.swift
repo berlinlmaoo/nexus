@@ -819,7 +819,7 @@ struct ProjectChatTab: View {
                 ChatThreadView(conversationId: room.id, title: room.name ?? projectName,
                                members: room.members ?? [], projectId: projectId)
             }
-            else { TabEmpty(icon: "bubble.left.and.bubble.right", text: T("Project chat room isn't active yet (needs the Messages backend).")) }
+            else { TabEmpty(icon: "bubble.left.and.bubble.right", text: T("Project chat isn't available yet.")) }
         }
         .task {
             do {

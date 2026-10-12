@@ -134,7 +134,7 @@ struct ReportRosterPane: View {
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
-            TextField(T("Search crew"), text: $search)
+            TextField(T("Search people"), text: $search)
                 .font(NXFont.text(14)).foregroundStyle(NX.foreground)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
             if !search.isEmpty {

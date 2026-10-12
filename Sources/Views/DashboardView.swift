@@ -73,7 +73,7 @@ struct DashboardView: View {
     private static let bellMaxWidth: CGFloat = 640
     @State private var morphShowModal = true   // open: modal solid (FLIP scale). close: fades out as the card fades in.
 
-    private var name: String { profile?.name ?? auth.session?.userName ?? T("Commander") }
+    private var name: String { profile?.name ?? auth.session?.userName ?? "" }
 
     private struct StatDatum {
         let value: Int; let total: Int?; let label: String; let icon: String
@@ -311,7 +311,8 @@ struct DashboardView: View {
     private var greeting: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(greetingText).font(NXFont.text(20, .medium)).foregroundStyle(NX.foreground.opacity(0.8))
-            Text("\(name)!").font(NXFont.display(32, .bold)).foregroundStyle(NX.foreground)
+            // No made-up name when the profile has none (copy sweep: "Commander" is gone).
+            if !name.isEmpty { Text("\(name)!").font(NXFont.display(32, .bold)).foregroundStyle(NX.foreground) }
         }
         .padding(.top, 8)
     }
@@ -590,7 +591,7 @@ struct DashboardView: View {
                     .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             if quests.isEmpty {
-                Text(T("No quests yet.")).font(NXFont.text(13)).foregroundStyle(.white.opacity(0.85))
+                Text(T("No quests right now.")).font(NXFont.text(13)).foregroundStyle(.white.opacity(0.85))
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
             } else {
                 ForEach(quests.prefix(40)) { q in

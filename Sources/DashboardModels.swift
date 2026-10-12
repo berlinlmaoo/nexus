@@ -202,8 +202,8 @@ struct NexusNotification: Decodable, Identifiable, Sendable {
     }
 
     var typeLabel: String {
-        let t = (type ?? "signal").replacingOccurrences(of: "_", with: " ")
-        return t.prefix(1).uppercased() + t.dropFirst()
+        // Never the raw type ("submission status"): a notification without a title is a "Notification".
+        T("Notification")
     }
 
     /// Which filter bucket this signal belongs to.

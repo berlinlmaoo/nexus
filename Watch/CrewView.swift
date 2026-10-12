@@ -84,7 +84,7 @@ struct CrewView: View {
                     }
                 }
             }
-            .navigationTitle("Crew")
+            .navigationTitle("Team")
         }
         .task { await load() }
         .refreshable { await load() }

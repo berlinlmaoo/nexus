@@ -62,7 +62,7 @@ enum WhatsNew {
         WhatsNewEntry(
             icon: "wifi.slash",
             title: T("NEXUS opens with no signal"),
-            body: T("Your projects, their tasks and files, today's attendance, the crew board, your requests and your selfies are kept on this phone and refreshed in the background. On a site with no bars it all still opens, with a line saying when it was saved. Files download on Wi-Fi only unless you switch it on in Tuning Room.")
+            body: T("Your projects, their tasks and files, today's attendance, the attendance board, your requests and your selfies are kept on this phone and refreshed in the background. On a site with no bars it all still opens, with a line saying when it was saved. Files download on Wi-Fi only unless you switch it on in Settings.")
         ),
         WhatsNewEntry(
             icon: "chart.bar.xaxis",
@@ -72,7 +72,7 @@ enum WhatsNew {
         WhatsNewEntry(
             icon: "person.crop.circle.badge.plus",
             title: T("Sign up, reset and change email in the app"),
-            body: T("Create an account right here with your company's workspace code. Forgot your password? Reset it from the sign-in screen. Changed email? Update it in Tuning Room with a code sent to the new address.")
+            body: T("Create an account right here with your company's workspace code. Forgot your password? Reset it from the sign-in screen. Changed email? Update it in Settings with a code sent to the new address.")
         ),
         WhatsNewEntry(
             icon: "location.circle.fill",
@@ -139,7 +139,7 @@ enum WhatsNew {
         WhatsNewEntry(
             icon: "square.and.arrow.up",
             title: T("Export one person's attendance"),
-            body: T("From a crew member's attendance sheet: one row per day, check-in and check-out, minutes late, notes, and totals — the same spreadsheet the web hands out."),
+            body: T("From a team member's attendance sheet: one row per day, check-in and check-out, minutes late, notes, and totals — the same spreadsheet the web hands out."),
             bodOnly: true
         ),
         WhatsNewEntry(
@@ -149,13 +149,13 @@ enum WhatsNew {
         ),
         WhatsNewEntry(
             icon: "envelope.badge.person.crop",
-            title: T("Your Google Workspace account, in Tuning Room"),
+            title: T("Your Google Workspace account, in Settings"),
             body: T("If the company gave you a Google Workspace mailbox, its address now shows on your profile.")
         ),
         WhatsNewEntry(
             icon: "person.crop.rectangle.stack",
             title: T("One screen per person in Control Room"),
-            body: T("Tap a crew member and everything about them is in one place: role, team, shift, approver, day-off quota, Google account."),
+            body: T("Tap a team member and everything about them is in one place: role, team, shift, approver, day-off quota, Google account."),
             bodOnly: true
         ),
     ] }
@@ -217,7 +217,7 @@ enum WhatsNew {
 
         // ── fixed ──────────────────────────────────────────────────────────────────────────
         WhatsNewEntry(kind: .fix, icon: "checkmark", title: T("Changing somebody's shift no longer re-charges past days — penalties are measured against the shift that applied when they checked in")),
-        WhatsNewEntry(kind: .fix, icon: "checkmark", title: T("Day-off tokens and XP taken on 15 September during the office outage have been given back")),
+        WhatsNewEntry(kind: .fix, icon: "checkmark", title: T("Days off and XP taken on 15 September during the office outage have been given back")),
         WhatsNewEntry(kind: .fix, icon: "checkmark", title: T("Approving a ticket proposal now resolves the ticket")),
         WhatsNewEntry(kind: .fix, icon: "checkmark", title: T("Team lead is gone — approvals follow the Approval Chart only")),
     ] }

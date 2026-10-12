@@ -65,8 +65,8 @@ struct ProjectSettingsView: View {
                 .padding(16)
             }
             .background(NX.background.ignoresSafeArea())
-            .navigationTitle("Setting Project").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Tutup") { dismiss() } } }
+            .navigationTitle(T("Project settings")).navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(T("Close")) { dismiss() } } }
             .overlay(alignment: .bottom) { if let toast { toastView(toast) } }
             .onAppear(perform: hydrate)
             .task { await load() }

@@ -81,7 +81,7 @@ final class AppLanguage {
         "Home": "Beranda",
         "Tasks": "Tugas",
         "Inbox": "Kotak Masuk",
-        "Projects": "Proyek",
+        "Projects": "Project",
         "More": "Lainnya",
         "Search..": "Cari..",
         "Search": "Cari",
@@ -2978,7 +2978,7 @@ final class AppLanguage {
         "%d of %d tasks weren't duplicated. Try again.": "%d dari %d task gagal diduplikat. Coba lagi.",
 
         // Projects: tabs and members at create, "Add N people" (11 Oct)
-        "Turn off the tabs this project doesn't need. You can change them later in Project settings → Tabs.": "Matikan tab yang tidak dibutuhkan project ini. Bisa diubah nanti di Setting Project → Tab.",
+        "Turn off the tabs this project doesn't need. You can change them later in Project settings → Tabs.": "Matikan tab yang tidak dibutuhkan project ini. Bisa diubah nanti di Pengaturan project → Tab.",
         "No one else is in this workspace yet.": "Belum ada orang lain di workspace ini.",
         "%d more — search to find them.": "%d lagi — cari untuk menemukannya.",
         "Add 1 person": "Tambah 1 orang",
@@ -3034,7 +3034,7 @@ final class AppLanguage {
         "Open tasks by priority": "Task terbuka menurut prioritas",
         "No priority": "Tanpa prioritas",
         "Every task is done or cancelled.": "Semua task sudah selesai atau dibatalkan.",
-        "Sections": "Section",
+        "Sections": "Bagian",
         "%d open · %d done": "%d terbuka · %d selesai",
         "Brief": "Brief",
         "Read more": "Baca selengkapnya",

@@ -458,7 +458,7 @@ struct MemberProfileView: View {
     private func streakCard(_ r: MemberRecord) -> some View {
         let days = r.days ?? []
         return VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(T("Streak board"))
+            SectionLabel(T("Attendance board"))
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 4) {

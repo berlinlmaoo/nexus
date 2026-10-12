@@ -18,7 +18,7 @@ struct DocsView: View {
             NX.background.ignoresSafeArea()
             content
         }
-        .navigationTitle("Knowledge Library")
+        .navigationTitle(T("Pages"))
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: T("Search docs…"))
         .task { await load() }

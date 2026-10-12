@@ -55,7 +55,7 @@ struct InboxView: View {
             }
         }
         .sheet(item: $openSubmission) { SubmissionDetailSheet(submissionId: $0.id, preview: $0.preview) }
-        .navigationTitle(T("Signal Inbox"))
+        .navigationTitle(T("Notifications"))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { Task { await markAll() } } label: { Label(T("Mark all"), systemImage: "checkmark.circle") }
@@ -77,7 +77,7 @@ struct InboxView: View {
             ScrollView {
                 VStack(spacing: 12) {
                     HStack {
-                        Text("\(unread) unread signal(s) waiting for you.")
+                        Text(unread == 1 ? T("1 unread notification") : String(format: T("%d unread notifications"), unread))
                             .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
                         Spacer()
                     }
@@ -93,7 +93,7 @@ struct InboxView: View {
                         NotificationFilterBar(tabs: tabs, group: $group)
                         if shown.isEmpty {
                             EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("Nothing of this kind"),
-                                       subtitle: T("This filter only shows one type of signal. Everything else is still in All."),
+                                       subtitle: T("This filter only shows one type of notification. Everything else is still in All."),
                                        actionTitle: T("Show all"), actionIcon: nil, action: { group = .all }, compact: true)
                         } else {
                             VStack(spacing: 0) {
@@ -207,7 +207,7 @@ struct NotificationRow: View {
             .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(notification.title ?? notification.typeLabel).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
-                Text(notification.message ?? T("New NEXUS signal arrived.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                Text(notification.message ?? T("New notification")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(2)
                 Text(metaText).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
             Spacer(minLength: 4)
@@ -227,8 +227,8 @@ struct NotificationRow: View {
     /// The web's own meta line, hint included: a row that opens something says so, and a row that
     /// opens nothing must not claim otherwise.
     private var metaText: String {
-        let base = "\(dateText) · \(notification.kindLabel ?? notification.type ?? "signal")"
-        return notification.tapTarget == nil ? base : base + " · " + T("tap to open")
+        // The date only, as on the web (the raw type under every row was noise).
+        dateText
     }
 
     private var dateText: String {

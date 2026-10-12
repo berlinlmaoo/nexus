@@ -343,7 +343,7 @@ struct AttendanceView: View {
                         // Without this the exemption is invisible: the member only discovers it
                         // by not being rejected. The web hero shows the same pill.
                         if today?.noGeofence == true {
-                            Text(T("📍 Location-free — clock in from anywhere"))
+                            Text(T("Check in from anywhere"))
                                 .font(NXFont.text(12, .bold)).foregroundStyle(.white)
                                 .padding(.horizontal, 12).padding(.vertical, 7)
                                 .background(Self.locationFree, in: Capsule())
@@ -404,7 +404,7 @@ struct AttendanceView: View {
                           tint: NX.success)
             FunMetricCard(icon: nearby?.inside == true && dispRec?.officeLocation?.name == nil ? "checkmark.circle.fill" : "mappin.circle.fill",
                           label: officeLabel, value: officeValue, helper: officeHelper, tint: officeTint)
-            FunMetricCard(icon: "sparkles", label: T("Day-off tokens"), value: Self.quotaValue(today?.dayOffUsedThisMonth, today?.dayOffQuota),
+            FunMetricCard(icon: "sparkles", label: T("Days off left"), value: Self.quotaValue(today?.dayOffUsedThisMonth, today?.dayOffQuota),
                           helper: dayOffHelper, tint: NX.warning)
             FunMetricCard(icon: "calendar", label: T("Public holidays"), value: Self.quotaValue(today?.redDateUsedThisMonth, today?.redDateQuota),
                           helper: T("This month's public-holiday allowance"), tint: Color(hex: "#fb7185"))
@@ -457,9 +457,9 @@ struct AttendanceView: View {
     }
     private var officeLabel: String {
         if recordAway == true { return T("Where you checked in") }
-        if recordAway == false { return dispRec?.officeLocation?.name != nil ? T("Office checkpoint") : T("Where you are") }
+        if recordAway == false { return dispRec?.officeLocation?.name != nil ? T("Office") : T("Where you are") }
         if locationFree { return dispRec?.checkInAt != nil ? T("Where you checked in") : T("Where you are") }
-        return dispRec?.officeLocation?.name != nil ? T("Office checkpoint") : T("Where you are")
+        return dispRec?.officeLocation?.name != nil ? T("Office") : T("Where you are")
     }
     private var officeHelper: String {
         if dispRec?.checkInAt != nil || dispRec?.checkOutAt != nil {
@@ -782,7 +782,7 @@ struct AttendanceView: View {
     /// Under "Check in": where the phone last put you, so the answer to "am I inside?" comes before
     /// the tap rather than after it.
     private var whereHint: String? {
-        if today?.noGeofence == true { return T("Location-free — clock in from anywhere") }
+        if today?.noGeofence == true { return T("Check in from anywhere") }
         guard let n = nearby else { return nil }
         return n.inside
             ? String(format: T("At %@"), n.office.name)
@@ -868,8 +868,8 @@ struct AttendanceView: View {
     /// reflection gate — an instruction the UI actively contradicted. Say the real next step instead.
     private var forcePendingMessage: String {
         reflectionOK
-            ? T("⚠️ You still have an earlier shift that was never checked out. Tap Check out to close it first — then you can check in again.")
-            : T("⚠️ You still have an earlier shift that was never checked out. Write the daily reflection above first — Check out unlocks at 200 characters.")
+            ? T("You still have an earlier shift that was never checked out. Tap Check out to close it first — then you can check in again.")
+            : T("You still have an earlier shift that was never checked out. Write the daily reflection above first — Check out unlocks at 200 characters.")
     }
 
     /// The daily reflection the server demands before it will accept a check-out. Without this the
@@ -1016,7 +1016,7 @@ struct AttendanceView: View {
 
     private var statusText: String {
         if forcePending { return T("Finish yesterday's attendance") }
-        if checkedOut { return T("Done for today 🎉") }
+        if checkedOut { return T("Done for today") }
         if checkedIn { return T("Currently clocked-in") }
         return T("Ready to check in")
     }
@@ -1664,7 +1664,7 @@ struct StreakBoardCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(wide ? T("Crew streak board") : T("Your attendance history")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                    Text(wide ? T("Attendance board") : T("Your attendance history")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
                     Text(todayDay.map { "\(monthLabel.capitalized) · \(T("today")) \($0)" } ?? monthLabel.capitalized)
                         .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     // The window this board actually covers — payroll counts 28→27, and the board
@@ -2382,7 +2382,7 @@ struct RecordActionsSheet: View {
                     Text(timeText(iso)).font(NXFont.text(15, .bold)).foregroundStyle(iso == nil ? NX.mutedFg : NX.foreground)
                 }
                 if let status, !status.isEmpty {
-                    Text(status.replacingOccurrences(of: "_", with: " ").capitalized).font(NXFont.text(11, .semibold)).foregroundStyle(status.uppercased().contains("LATE") || status.uppercased().contains("EARLY") ? NX.danger : NX.mutedFg)
+                    Text(attendanceStatusLabel(status)).font(NXFont.text(11, .semibold)).foregroundStyle(status.uppercased().contains("LATE") || status.uppercased().contains("EARLY") ? NX.danger : NX.mutedFg)
                 }
                 if let address, !address.isEmpty {
                     Text(address).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
@@ -2423,5 +2423,23 @@ struct RecordActionsSheet: View {
             err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't delete.")
             busy = false
         }
+    }
+}
+
+/// A check-in / check-out status in the app's language (copy sweep, 12 Oct 2026: it showed the raw value,
+/// "Early leave", in English in both languages). Anything unknown is humanised as before.
+func attendanceStatusLabel(_ raw: String) -> String {
+    switch raw.uppercased() {
+    case "ON_TIME", "PRESENT": return T("On time")
+    case "LATE": return T("Late")
+    case "EARLY_LEAVE", "EARLY", "LEFT_EARLY": return T("Left early")
+    case "INCOMPLETE": return T("Incomplete")
+    case "CHECKED_IN": return T("Checked in")
+    case "WFH": return "WFH"
+    case "LEAVE": return T("Leave")
+    case "SICK": return T("Sick")
+    case "PERMIT": return T("Permit")
+    case "DAY_OFF": return T("Day off")
+    default: return raw.replacingOccurrences(of: "_", with: " ").capitalized
     }
 }

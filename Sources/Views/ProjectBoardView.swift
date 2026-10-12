@@ -569,8 +569,8 @@ struct ProjectDetailView: View {
         } else {
             VStack(spacing: 8) {
                 Image(systemName: "square.stack.3d.up.slash").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
-                Text("No lanes yet").font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                Text(T("This project has no lanes yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                Text(T("No sections yet")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                Text(T("This project has no sections yet. Add one from Project settings.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }

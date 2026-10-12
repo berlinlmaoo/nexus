@@ -188,7 +188,7 @@ struct SettingsView: View {
             Button("OK") { saveError = nil }
         } message: { Text(saveError ?? "") }
         .sheet(isPresented: $showDeleteAccount) { DeleteAccountSheet() }
-        .navigationTitle(T("Tuning Room"))
+        .navigationTitle(T("Settings"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
     }

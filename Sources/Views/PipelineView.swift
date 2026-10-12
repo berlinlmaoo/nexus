@@ -781,7 +781,7 @@ struct PipelineKpiStrip: View {
         let s = summary
         return [
             Tile(id: "open", label: T("Open pipeline"), value: PipelineFormat.idr(s.openValue),
-                 sub: String(format: T("%d deals in play"), s.openCount), zero: s.openValue == 0),
+                 sub: String(format: T("%d open deals"), s.openCount), zero: s.openValue == 0),
             Tile(id: "weighted", label: T("Weighted forecast"), value: PipelineFormat.idr(s.weightedValue),
                  sub: T("Value × probability"), zero: s.weightedValue == 0),
             Tile(id: "won", label: T("Won"), value: PipelineFormat.idr(s.wonValue),

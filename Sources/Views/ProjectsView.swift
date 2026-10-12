@@ -83,7 +83,7 @@ struct ProjectsView: View {
                     FolderAggregateView(folder: f, allFolders: folders, allProjects: projects.filter { $0.folderId != nil })
                 }
             }
-            .navigationTitle(T("Mission Control"))
+            .navigationTitle(T("Projects"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -1152,7 +1152,7 @@ struct ProjectCard: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(project.name).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    Text(project.description?.isEmpty == false ? project.description! : "No brief yet — add one and make the mission clearer.")
+                    Text(project.description?.isEmpty == false ? project.description! : T("No description yet."))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2)
                 }
                 Spacer(minLength: 4)
@@ -1163,14 +1163,14 @@ struct ProjectCard: View {
             HStack(spacing: 8) {
                 metric(T("Cards"), "\(total)")
                 metric(T("Done"), done.map { "\($0)" } ?? "—")
-                metric(T("Lanes"), "\(project.laneCount)")
+                metric(T("Sections"), "\(project.laneCount)")
             }
             .padding(.top, 16)
 
             // progress
             VStack(spacing: 6) {
                 HStack {
-                    Text(done == nil ? T("Calculating…") : "\(Int(progress * 100))% mission energy")
+                    Text(done == nil ? T("Calculating…") : String(format: T("%d%% done"), Int(progress * 100)))
                         .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     Spacer()
                     Text(done.map { "\(max(0, total - $0)) left" } ?? "")
@@ -1201,7 +1201,7 @@ struct ProjectCard: View {
                         }
                     }
                 } else {
-                    Text(T("Solo quest")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    Text(T("Just you")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer()
                 HStack(spacing: 4) {

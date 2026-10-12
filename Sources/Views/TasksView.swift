@@ -34,7 +34,7 @@ struct TasksView: View {
             .alert(T("Couldn't update the task"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK") { actionError = nil }
         } message: { Text(actionError ?? "") }
-            .navigationTitle(T("My Quest Log"))
+            .navigationTitle(T("My Tasks"))
             .task {
                 if tasks.isEmpty, let myId = auth.session?.userId,
                    let hit = ResponseCache.decoded("tasks-\(myId)", as: [MyTask].self) {
@@ -51,7 +51,7 @@ struct TasksView: View {
         let hot = open.filter { isDueSoon($0.dueDate) }
         let motion = open.filter { !isDueSoon($0.dueDate) }
         let done = tasks.filter { $0.isDone }
-        return [(T("Hot today"), Array(hot.prefix(8))), (T("In motion"), Array(motion.prefix(12))), (T("Recently slayed"), Array(done.prefix(8)))]
+        return [(T("Due soon"), Array(hot.prefix(8))), (T("Later"), Array(motion.prefix(12))), (T("Done recently"), Array(done.prefix(8)))]
             .filter { !$0.1.isEmpty }
     }
 
@@ -61,9 +61,9 @@ struct TasksView: View {
         } else if let error {
             errorState(error)
         } else if tasks.isEmpty {
-            EmptyState(icon: "checklist", title: T("No quests yet"),
-                       subtitle: T("Tasks assigned to you land here, from a mission board or a form. Nothing is waiting on you right now — pick something up from a mission."),
-                       actionTitle: T("Browse missions"), actionIcon: "rectangle.stack") { router.go(.projects) }
+            EmptyState(icon: "checklist", title: T("No tasks yet"),
+                       subtitle: T("Tasks assigned to you land here, from a project or a form. Nothing is waiting on you right now — pick something up from a project."),
+                       actionTitle: T("Browse projects"), actionIcon: "rectangle.stack") { router.go(.projects) }
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
