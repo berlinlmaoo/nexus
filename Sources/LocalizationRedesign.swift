@@ -194,6 +194,7 @@ extension AppLanguage {
         "Ask GIDEON": "Tanya GIDEON",
         "Image": "Gambar",
         "Not done": "Belum selesai",
+        "Change the selected tasks": "Ubah task yang dipilih",
         // ── marker: entries are appended above this line by tooling; keep it last ──
         "__redesign_end__": "__redesign_end__",
     ]

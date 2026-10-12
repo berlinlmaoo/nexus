@@ -207,6 +207,13 @@ struct TaskSelectionBar: View {
     let selection: TaskSelection
     /// Every task the tab is showing right now (after the search filter), for Select all.
     let visibleIds: [String]
+    /// Bulk edits on the selection (web, 12 Oct 2026: bulk status / priority). Empty = Duplicate only.
+    var statusTargets: [ProjectDetail.Lane] = []
+    var onMove: (([String], String) -> Void)? = nil
+    var onPriority: (([String], String) -> Void)? = nil
+
+    /// Only what is on screen: a task hidden by search or a filter is never acted on (bughunt C-BUG-4).
+    private var targetIds: [String] { visibleIds.filter { selection.contains($0) } }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -224,6 +231,25 @@ struct TaskSelectionBar: View {
                     .disabled(visibleIds.isEmpty)
             }
             Spacer(minLength: 4)
+            if onMove != nil || onPriority != nil {
+                Menu {
+                    if let onMove, !statusTargets.isEmpty {
+                        Menu(T("Move to")) {
+                            ForEach(statusTargets) { l in Button(l.name) { onMove(targetIds, l.id) } }
+                        }
+                    }
+                    if let onPriority {
+                        Menu(T("Priority")) {
+                            ForEach(TaskPriorityName.all, id: \.self) { p in Button(TaskPriorityName.label(p)) { onPriority(targetIds, p) } }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle").font(.system(size: 20)).foregroundStyle(NX.violetText)
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                }
+                .disabled(targetIds.isEmpty)
+                .accessibilityLabel(T("Change the selected tasks"))
+            }
             Button { selection.requestDuplicateSelection() } label: {
                 Label(T("Duplicate"), systemImage: "plus.square.on.square")
                     .font(NXFont.text(14, .bold)).foregroundStyle(.white)

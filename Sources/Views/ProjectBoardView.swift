@@ -359,7 +359,10 @@ struct ProjectDetailView: View {
             content
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if selection.active && selectionApplies {
-                        TaskSelectionBar(selection: selection, visibleIds: visibleTaskIds)
+                        TaskSelectionBar(selection: selection, visibleIds: visibleTaskIds,
+                                         statusTargets: lanes,
+                                         onMove: { ids, laneId in moveLater(ids, to: laneId) },
+                                         onPriority: { ids, p in bulkPriority(ids, p) })
                     } else if let undo {
                         MoveUndoBar(undo: undo, onUndo: { Task { await performUndo(undo) } }, onDismiss: { if self.undo == undo { self.undo = nil } })
                     }
@@ -736,6 +739,12 @@ struct ProjectDetailView: View {
             onSetStatus: sectionStatus,
             canAdd: addable
         )
+    }
+
+    /// Bulk priority from the selection bar: one batch call, Undo puts each task's old priority back.
+    private func bulkPriority(_ ids: [String], _ priority: String) {
+        let before = lanes.flatMap { $0.tasks ?? [] }.filter { ids.contains($0.id) }
+        Task { await moveToGroup(before, prop: "priority", value: priority) }
     }
 
     private func moveLater(_ ids: [String], to laneId: String) {
