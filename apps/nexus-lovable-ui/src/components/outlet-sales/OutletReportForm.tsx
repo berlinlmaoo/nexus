@@ -4,6 +4,7 @@ import { Check, Link2, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { SelectPicker } from "@/components/SelectPicker";
+import { DateField } from "@/components/DateField";
 import { useLang, type Lang } from "@/lib/lang";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -71,7 +72,7 @@ export function OutletReportForm({
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
-      <header className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft">
+      <header className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-lg font-semibold">{t("Event report")}</h2>
@@ -106,11 +107,11 @@ export function OutletReportForm({
 
       {target.eventId && !event ? (
         remote.isError ? (
-          <p className="rounded-2xl border border-dashed border-border bg-card/60 px-4 py-6 text-center text-sm text-muted-foreground">
+          <p className="rounded-xl border border-dashed border-border bg-card/60 px-4 py-6 text-center text-sm text-muted-foreground">
             {t("This event no longer exists. It may have been deleted; Control Room → Audit can restore it.")}
           </p>
         ) : (
-          <div className="h-96 animate-pulse rounded-2xl bg-muted" aria-busy="true" />
+          <div className="h-96 animate-pulse rounded-xl bg-muted" aria-busy="true" />
         )
       ) : (
         <FormBody
@@ -135,7 +136,9 @@ export function OutletReportForm({
 type Draft = Record<string, string>;
 
 function nfOf(lang: Lang) {
-  return new Intl.NumberFormat(lang === "en" ? "en-GB" : "id-ID", { maximumFractionDigits: 0 });
+  // id-ID grouping in both languages (12 Oct 2026), like every Rupiah amount in NEXUS.
+  void lang;
+  return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
 }
 
 function toDraft(fields: OutletFormField[], event: OutletEvent | null, date: string, lang: Lang): Draft {
@@ -255,7 +258,7 @@ function FormBody({
 
   const control = (f: OutletFormField) => {
     const base = cn(
-      "w-full rounded-xl border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 hover:border-control-border focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30",
+      "w-full rounded-lg border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 hover:border-control-border focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30",
       invalid === f.key ? "border-destructive" : "border-border",
     );
     const id = `os-f-${f.key}`;
@@ -265,12 +268,21 @@ function FormBody({
       case "longtext":
         return <textarea {...common} rows={2} maxLength={f.max} value={draft[f.key] ?? ""} onChange={(e) => set(f, e.target.value)} className={cn(base, "min-h-[4.5rem] resize-y py-2 leading-relaxed")} />;
       case "date":
-        return <input {...common} type="date" required value={draft[f.key] ?? ""} onChange={(e) => set(f, e.target.value)} className={cn(base, "h-10 tabular-nums pointer-coarse:h-11")} />;
+        // The app's date picker, not the browser's "mm/dd/yyyy" box (12 Oct 2026).
+        return (
+          <DateField
+            value={draft[f.key] || null}
+            ariaLabel={pick(f.label, lang)}
+            placeholder={t("Pick a date")}
+            onChange={(v) => set(f, v ?? "")}
+            className={cn(base, "h-10 hover:bg-background pointer-coarse:h-11")}
+          />
+        );
       case "money":
         return (
           <span className="relative block">
-            <span aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">Rp</span>
-            <input {...common} inputMode="numeric" autoComplete="off" placeholder="0" value={draft[f.key] ?? ""} onChange={(e) => set(f, e.target.value)} className={cn(base, "h-10 pl-9 text-right tabular-nums pointer-coarse:h-11")} />
+            <span aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">Rp</span>
+            <input {...common} inputMode="numeric" autoComplete="off" placeholder="0" value={draft[f.key] ?? ""} onChange={(e) => set(f, e.target.value)} className={cn(base, "h-10 pl-9 tabular-nums pointer-coarse:h-11")} />
           </span>
         );
       case "count":
@@ -294,7 +306,7 @@ function FormBody({
           : s.total === "hostingTotal" ? sumOf(["hostingTeam", "hostingPr", "hostingEo"]) : undefined;
         const grid = s.fields.every((f) => f.type === "count") ? "grid gap-3 grid-cols-2 sm:grid-cols-4" : s.fields.every((f) => f.type === "money" || f.type === "count") ? "grid gap-3 sm:grid-cols-2" : "grid gap-3";
         return (
-          <fieldset key={s.key} className="rounded-2xl border border-border bg-card p-4 shadow-soft">
+          <fieldset key={s.key} className="rounded-xl border border-border bg-card p-4">
             <legend className="sr-only">{pick(s.title, lang)}</legend>
             <div aria-hidden className="mb-3 flex items-baseline justify-between gap-2">
               <span className="text-sm font-semibold">{pick(s.title, lang)}{total !== undefined && <>: <span className="tabular-nums">{total === null ? "—" : count(total, lang)}</span></>}</span>
@@ -316,7 +328,7 @@ function FormBody({
       })}
 
       {/* On a phone it floats just above the app's tab bar (MobileTabBar: fixed, ~5.5rem tall with its gap). */}
-      <div className="sticky bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.75rem)] z-10 flex items-center justify-between gap-3 rounded-2xl border border-border bg-background/95 px-4 py-3 shadow-soft backdrop-blur supports-[backdrop-filter]:bg-background/80 md:bottom-0">
+      <div className="sticky bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.75rem)] z-10 flex items-center justify-between gap-3 rounded-xl border border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:bottom-0">
         {event ? (
           <button
             type="button"
@@ -329,7 +341,7 @@ function FormBody({
         <button
           type="submit"
           disabled={save.isPending}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-soft transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]"
         >
           {save.isPending ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : <Check aria-hidden className="h-4 w-4" />}
           {save.isPending ? t("Saving…") : event ? t("Save report") : t("Add event")}

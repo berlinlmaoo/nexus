@@ -24,7 +24,7 @@ import { DealDocuments } from "./DealDocuments";
 import { ServicesField } from "./ServicesField";
 import { DateField, MoneyField, NumberField, PersonField, SelectField, TextField, type PersonOption } from "./fields";
 import {
-  BlockerBanner, GROUP_TONE, HealthPill, PhaseStepper, TERM_TONE, fmtDay, fmtIdrFull, fmtPct, useReasonText, useVocabLabels,
+  BlockerBanner, HealthPill, PhaseStepper, StagePill, TERM_TONE, fmtDay, fmtIdrFull, fmtPct, useReasonText, useVocabLabels,
 } from "./pipeline-ui";
 
 /** English names of the fields, for the history ("Bagas changed Stage …"). Translated with t(). */
@@ -44,6 +44,7 @@ const TERM_FIELD_LABEL: Record<string, string> = {
   paidAmount: "Amount paid", paidAt: "Paid on", note: "Term note",
 };
 const MONEY = new Set(["contractValue", "netValue", "invoiceValue", "outstandingReceivable", "netCash", "term.amount", "term.paidAmount"]);
+const STATUS_FIELDS = new Set(["contractStatus", "vregStatus", "readiness", "deliverableStatus", "paymentStatus", "closingStatus"]);
 const DATES = new Set(["paymentDueDate", "mainDate", "nextActionDate", "term.dueDate", "term.invoiceDate", "term.paidAt"]);
 
 /**
@@ -64,7 +65,6 @@ export function DealDrawer({
   onClose: () => void;
 }) {
   const { t, lang } = useLang();
-  const labels = useVocabLabels();
   const [tab, setTab] = useState<"details" | "history">("details");
   const [confirming, setConfirming] = useState(false);
   return (
@@ -81,12 +81,9 @@ export function DealDrawer({
                 {/* The deals stage up top, with its columns colour (owner, 9 Oct 2026: "stage di board per
                     dealnya jg blm ada"); change it in the Stage field below or by dragging the card. */}
                 <div className="flex min-w-0 items-center gap-2">
-                  <p className="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">{deal.code}</p>
-                  <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-xs font-medium">
-                    <span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", GROUP_TONE[deal.stageGroup] ?? "bg-muted-foreground/40")} />
-                    <span className="sr-only">{t("Stage")}: </span>
-                    <span className="truncate">{labels.stage(deal.stage)}</span>
-                  </span>
+                  <p className="shrink-0 text-xs tabular-nums text-muted-foreground">{deal.code}</p>
+                  <span className="sr-only">{t("Stage")}: </span>
+                  <StagePill stage={deal.stage} className="text-xs leading-5" />
                 </div>
                 <div className="flex items-center gap-1.5">
                   {deal.health.key !== "NONE" && <HealthPill health={deal.health.key} />}
@@ -102,12 +99,13 @@ export function DealDrawer({
                 value={deal.name}
                 required
                 maxLength={200}
+                autoGrow
                 disabled={!canEdit}
                 onCommit={(v) => onPatch(deal.id, { name: v })}
-                className="-mx-2.5 mt-1 border-transparent bg-transparent text-lg font-semibold hover:border-border"
+                className="-mx-2.5 mt-1.5 w-[calc(100%+1.25rem)] border-transparent bg-transparent text-xl font-semibold leading-snug hover:border-border"
               />
               <ExecutionProject deal={deal} projectId={projectId} canEdit={canEdit} />
-              <div role="tablist" aria-label={t("Deal")} className="mt-2 flex gap-1">
+              <div role="tablist" aria-label={t("Deal")} className="mt-3 inline-flex gap-0.5 rounded-lg bg-muted p-0.5">
                 {(["details", "history"] as const).map((k) => (
                   <button
                     key={k}
@@ -116,8 +114,8 @@ export function DealDrawer({
                     aria-selected={tab === k}
                     onClick={() => setTab(k)}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]",
-                      tab === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      "inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[40px]",
+                      tab === k ? "bg-card text-foreground shadow-[0_1px_2px_rgba(15,15,15,0.08)]" : "text-muted-foreground hover:text-foreground",
                     )}
                   >
                     {k === "history" && <History className="h-3.5 w-3.5" />}
@@ -196,11 +194,11 @@ function ExecutionProject({ deal, projectId, canEdit }: { deal: PipelineDeal; pr
   const tasks = deal.executionProject ?? null;
   if (!folder && !tasks && !calendar && !(won && canEdit)) return null;
   const primary =
-    "inline-flex min-w-0 items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]";
+    "inline-flex min-w-0 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]";
   const secondary =
     "inline-flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]";
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
       {folder ? (
         <>
           <Link to="/folders/$folderId" params={{ folderId: folder.id }} className={primary}>
@@ -233,7 +231,7 @@ function ExecutionProject({ deal, projectId, canEdit }: { deal: PipelineDeal; pr
             type="button"
             onClick={() => create.mutate()}
             disabled={create.isPending}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60 pointer-coarse:min-h-[44px]"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60 pointer-coarse:min-h-[44px]"
           >
             {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             {t("Create execution project")}
@@ -260,7 +258,7 @@ function Section({ title, owner, children }: { title: string; owner: string; chi
     <section className="border-t border-border pt-4 first:border-t-0 first:pt-0">
       <header className="mb-3 flex items-baseline justify-between gap-3">
         <h3 className="text-sm font-semibold">{title}</h3>
-        <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">{owner}</span>
+        <span className="text-xs text-muted-foreground">{owner}</span>
       </header>
       <div className="grid gap-3 sm:grid-cols-2">{children}</div>
     </section>
@@ -291,7 +289,7 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
       <div className="space-y-2">
         <BlockerBanner deal={deal} className="px-3 py-2.5 text-sm" />
         {reasons.length > 0 && (
-          <ul className={cn("space-y-1 rounded-xl px-3 py-2.5 text-sm", deal.health.key === "CRITICAL" ? "bg-destructive/10 text-red-800 dark:text-red-200" : "bg-warning/15 text-amber-900 dark:text-amber-200")}>
+          <ul className={cn("space-y-1 rounded-lg px-3 py-2.5 text-sm", deal.health.key === "CRITICAL" ? "bg-[var(--st-red-bg)] text-[var(--st-red-fg)]" : "bg-[var(--st-yellow-bg)] text-[var(--st-yellow-fg)]")}>
             {reasons.map((r, i) => <li key={i}>{reason(r)}</li>)}
           </ul>
         )}
@@ -318,8 +316,8 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
       {/* Contract → closing only start once a deal is won. On an open (or lost) deal they fold away under
           one line instead of five sections of "Not Started" (owner, 9 Oct 2026); one click opens them. */}
       {early ? (
-        <details className="group/later rounded-xl border border-border">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+        <details className="group/later rounded-lg border border-border">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
             <span className="min-w-0">
               <span className="block text-sm font-semibold">{t("Contract, delivery & payment")}</span>
               <span className="block text-xs text-muted-foreground">{t("Legal, PM and Finance fill these in once the deal is won.")}</span>
@@ -328,16 +326,16 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
           </summary>
           <div className="space-y-5 border-t border-border px-3 py-4">
           <Section title={t("Contract")} owner="Legal">
-            <Field label={L("Contract status")} wide><SelectField label={L("Contract status")} value={deal.contractStatus} options={CONTRACT_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ contractStatus: v })} /></Field>
+            <Field label={L("Contract status")} wide><SelectField label={L("Contract status")} value={deal.contractStatus} options={CONTRACT_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ contractStatus: v })} /></Field>
           </Section>
 
           <Section title={t("Vendor registration")} owner={t("PM / admin")}>
-            <Field label={L("Vendor registration")} wide><SelectField label={L("Vendor registration")} value={deal.vregStatus} options={VREG_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ vregStatus: v })} /></Field>
+            <Field label={L("Vendor registration")} wide><SelectField label={L("Vendor registration")} value={deal.vregStatus} options={VREG_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ vregStatus: v })} /></Field>
           </Section>
 
           <Section title={t("Readiness & deliverable")} owner="PM">
-            <Field label={L("Execution readiness")} wide><SelectField label={L("Execution readiness")} value={deal.readiness} options={READINESS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ readiness: v })} /></Field>
-            <Field label={L("Deliverable status")}><SelectField label={L("Deliverable status")} value={deal.deliverableStatus} options={DELIVERABLE_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ deliverableStatus: v })} /></Field>
+            <Field label={L("Execution readiness")} wide><SelectField label={L("Execution readiness")} value={deal.readiness} options={READINESS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ readiness: v })} /></Field>
+            <Field label={L("Deliverable status")}><SelectField label={L("Deliverable status")} value={deal.deliverableStatus} options={DELIVERABLE_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ deliverableStatus: v })} /></Field>
             <Field label={L("Deliverable risk")}><SelectField label={L("Deliverable risk")} value={deal.deliverableRisk} options={DELIVERABLE_RISK_OPTIONS} labelOf={labels.risk} disabled={off} onCommit={(v) => onPatch({ deliverableRisk: v })} /></Field>
           </Section>
 
@@ -347,7 +345,7 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
                 terms below; the manual fields stay for deals without terms (the GM's imported rows). */}
             {deal.termSummary ? (
               <>
-                <Field label={L("Payment status")}><p className="px-0.5 py-1.5 text-sm">{deal.termSummary.paymentStatus}</p></Field>
+                <Field label={L("Payment status")}><p className="px-0.5 py-1.5 text-sm">{labels.status(deal.termSummary.paymentStatus)}</p></Field>
                 <Field label={L("Outstanding receivable")}><p className="px-0.5 py-1.5 text-sm tabular-nums">{fmtIdrFull(deal.termSummary.outstanding, lang)}</p></Field>
                 <Field label={L("Next payment due")}><p className="px-0.5 py-1.5 text-sm tabular-nums">{fmtDay(deal.termSummary.nextDueDate, locale)}</p></Field>
                 <Field label={L("Days overdue")}>
@@ -357,7 +355,7 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
               </>
             ) : (
               <>
-            <Field label={L("Payment status")}><SelectField label={L("Payment status")} value={deal.paymentStatus} options={PAYMENT_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ paymentStatus: v })} /></Field>
+            <Field label={L("Payment status")}><SelectField label={L("Payment status")} value={deal.paymentStatus} options={PAYMENT_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ paymentStatus: v })} /></Field>
             <Field label={L("Outstanding receivable")}><MoneyField label={L("Outstanding receivable")} value={deal.outstandingReceivable} disabled={off} onCommit={(v) => onPatch({ outstandingReceivable: v })} /></Field>
             <Field label={L("Payment due date")}><DateField label={L("Payment due date")} value={deal.paymentDueDate} disabled={off} onCommit={(v) => onPatch({ paymentDueDate: v })} /></Field>
             {deal.paymentDueDate ? (
@@ -374,7 +372,7 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
           </Section>
 
           <Section title={t("Closing")} owner="PM">
-            <Field label={L("Closing status")} wide><SelectField label={L("Closing status")} value={deal.closingStatus} options={CLOSING_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ closingStatus: v })} /></Field>
+            <Field label={L("Closing status")} wide><SelectField label={L("Closing status")} value={deal.closingStatus} options={CLOSING_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ closingStatus: v })} /></Field>
           </Section>
 
           </div>
@@ -382,16 +380,16 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
       ) : (
         <>
         <Section title={t("Contract")} owner="Legal">
-          <Field label={L("Contract status")} wide><SelectField label={L("Contract status")} value={deal.contractStatus} options={CONTRACT_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ contractStatus: v })} /></Field>
+          <Field label={L("Contract status")} wide><SelectField label={L("Contract status")} value={deal.contractStatus} options={CONTRACT_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ contractStatus: v })} /></Field>
         </Section>
 
         <Section title={t("Vendor registration")} owner={t("PM / admin")}>
-          <Field label={L("Vendor registration")} wide><SelectField label={L("Vendor registration")} value={deal.vregStatus} options={VREG_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ vregStatus: v })} /></Field>
+          <Field label={L("Vendor registration")} wide><SelectField label={L("Vendor registration")} value={deal.vregStatus} options={VREG_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ vregStatus: v })} /></Field>
         </Section>
 
         <Section title={t("Readiness & deliverable")} owner="PM">
-          <Field label={L("Execution readiness")} wide><SelectField label={L("Execution readiness")} value={deal.readiness} options={READINESS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ readiness: v })} /></Field>
-          <Field label={L("Deliverable status")}><SelectField label={L("Deliverable status")} value={deal.deliverableStatus} options={DELIVERABLE_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ deliverableStatus: v })} /></Field>
+          <Field label={L("Execution readiness")} wide><SelectField label={L("Execution readiness")} value={deal.readiness} options={READINESS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ readiness: v })} /></Field>
+          <Field label={L("Deliverable status")}><SelectField label={L("Deliverable status")} value={deal.deliverableStatus} options={DELIVERABLE_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ deliverableStatus: v })} /></Field>
           <Field label={L("Deliverable risk")}><SelectField label={L("Deliverable risk")} value={deal.deliverableRisk} options={DELIVERABLE_RISK_OPTIONS} labelOf={labels.risk} disabled={off} onCommit={(v) => onPatch({ deliverableRisk: v })} /></Field>
         </Section>
 
@@ -401,7 +399,7 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
               terms below; the manual fields stay for deals without terms (the GM's imported rows). */}
           {deal.termSummary ? (
             <>
-              <Field label={L("Payment status")}><p className="px-0.5 py-1.5 text-sm">{deal.termSummary.paymentStatus}</p></Field>
+              <Field label={L("Payment status")}><p className="px-0.5 py-1.5 text-sm">{labels.status(deal.termSummary.paymentStatus)}</p></Field>
               <Field label={L("Outstanding receivable")}><p className="px-0.5 py-1.5 text-sm tabular-nums">{fmtIdrFull(deal.termSummary.outstanding, lang)}</p></Field>
               <Field label={L("Next payment due")}><p className="px-0.5 py-1.5 text-sm tabular-nums">{fmtDay(deal.termSummary.nextDueDate, locale)}</p></Field>
               <Field label={L("Days overdue")}>
@@ -411,7 +409,7 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
             </>
           ) : (
             <>
-          <Field label={L("Payment status")}><SelectField label={L("Payment status")} value={deal.paymentStatus} options={PAYMENT_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ paymentStatus: v })} /></Field>
+          <Field label={L("Payment status")}><SelectField label={L("Payment status")} value={deal.paymentStatus} options={PAYMENT_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ paymentStatus: v })} /></Field>
           <Field label={L("Outstanding receivable")}><MoneyField label={L("Outstanding receivable")} value={deal.outstandingReceivable} disabled={off} onCommit={(v) => onPatch({ outstandingReceivable: v })} /></Field>
           <Field label={L("Payment due date")}><DateField label={L("Payment due date")} value={deal.paymentDueDate} disabled={off} onCommit={(v) => onPatch({ paymentDueDate: v })} /></Field>
           {deal.paymentDueDate ? (
@@ -428,7 +426,7 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
         </Section>
 
         <Section title={t("Closing")} owner="PM">
-          <Field label={L("Closing status")} wide><SelectField label={L("Closing status")} value={deal.closingStatus} options={CLOSING_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ closingStatus: v })} /></Field>
+          <Field label={L("Closing status")} wide><SelectField label={L("Closing status")} value={deal.closingStatus} options={CLOSING_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ closingStatus: v })} /></Field>
         </Section>
 
         </>
@@ -461,6 +459,7 @@ function HistoryList({ projectId, deal, people }: { projectId: string; deal: Pip
     if (field === "bdUserId" || field === "pmUserId") return nameOf(v) ?? t("empty");
     if (field === "stage" && typeof v === "string") return labels.stage(v);
     if (field === "deliverableRisk" && typeof v === "string") return labels.risk(v);
+    if (STATUS_FIELDS.has(field) && typeof v === "string") return labels.status(v);
     if (field === "links" && Array.isArray(v)) return t("{n} links", { n: v.length });
     if (field === "services" && Array.isArray(v)) return v.length ? v.join(", ") : t("empty");
     return String(v);
@@ -596,7 +595,7 @@ function PaymentTerms({ deal, projectId, canEdit }: { deal: PipelineDeal; projec
       )}
 
       {sum && base > 0 && Math.round(total) !== Math.round(base) && (
-        <p role="status" className="flex items-start gap-1.5 rounded-lg bg-warning/15 px-2.5 py-2 text-xs text-amber-900 dark:text-amber-200">
+        <p role="status" className="flex items-start gap-1.5 rounded-md bg-[var(--st-yellow-bg)] px-2.5 py-2 text-xs text-[var(--st-yellow-fg)]">
           <AlertTriangle aria-hidden className="mt-px h-3.5 w-3.5 shrink-0" />
           <span>
             {baseIsInvoice
@@ -644,6 +643,7 @@ function PaymentTerms({ deal, projectId, canEdit }: { deal: PipelineDeal; projec
 
 function TermRow({ term, canEdit, onPatch, onDelete }: { term: PipelineTerm; canEdit: boolean; onPatch: (p: PipelineTermPatch) => void; onDelete: () => void }) {
   const { t, lang, locale } = useLang();
+  const labels = useVocabLabels();
   const off = !canEdit;
   // "Mark paid": the total received so far (prefilled with the full amount) and the day it came in.
   const [paying, setPaying] = useState(false);
@@ -651,11 +651,11 @@ function TermRow({ term, canEdit, onPatch, onDelete }: { term: PipelineTerm; can
   const [paidOn, setPaidOn] = useState<string | null>(pipelineToday());
   const paid = term.status === "Paid";
   return (
-    <li className="rounded-xl border border-border p-3">
+    <li className="rounded-lg border border-border p-3">
       <div className="flex items-center gap-2">
         <TextField label={t("Term name")} value={term.label} required maxLength={80} disabled={off} onCommit={(v) => onPatch({ label: v })} className="min-w-0 flex-1 font-medium" />
-        <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-2xs font-semibold", TERM_TONE[term.status] ?? "bg-muted text-muted-foreground")}>
-          {term.status}{term.daysOverdue > 0 ? ` · ${t("{n}d", { n: term.daysOverdue })}` : ""}
+        <span className={cn("shrink-0 whitespace-nowrap rounded-full px-2 text-xs font-medium leading-5", TERM_TONE[term.status] ?? "bg-muted text-muted-foreground")}>
+          {labels.status(term.status)}{term.daysOverdue > 0 ? ` · ${t("{n}d", { n: term.daysOverdue })}` : ""}
         </span>
         {canEdit && (
           <button type="button" aria-label={t("Delete term")} onClick={onDelete} className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-ring dark:hover:text-red-300 pointer-coarse:size-[44px]">
@@ -686,7 +686,7 @@ function TermRow({ term, canEdit, onPatch, onDelete }: { term: PipelineTerm; can
           <button
             type="button"
             onClick={() => { setPaidDraft(term.amount); setPaidOn(term.paidAt ?? pipelineToday()); setPaying(true); }}
-            className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-2.5 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]"
+            className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]"
           >
             <CircleCheck className="h-3.5 w-3.5" /> {t("Mark paid")}
           </button>
@@ -695,7 +695,7 @@ function TermRow({ term, canEdit, onPatch, onDelete }: { term: PipelineTerm; can
       {paying && (
         <form
           onSubmit={(e) => { e.preventDefault(); setPaying(false); onPatch({ paidAmount: paidDraft, paidAt: paidOn }); }}
-          className="mt-2 grid gap-2 rounded-lg bg-muted/50 p-2.5 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+          className="mt-2 grid gap-2 rounded-md bg-muted/60 p-2.5 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
         >
           <Field label={t("Total received")}><MoneyField label={t("Total received")} value={paidDraft} onCommit={setPaidDraft} /></Field>
           <Field label={t("Paid on")}><DateField label={t("Paid on")} value={paidOn} onCommit={setPaidOn} /></Field>
