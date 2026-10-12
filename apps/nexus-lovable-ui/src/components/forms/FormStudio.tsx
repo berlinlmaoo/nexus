@@ -323,18 +323,20 @@ function QuestionCard({ field, index, total, selected, others, customFields, tas
       </div>
 
       <div className="relative pr-24 @md:pr-40">
-        {/* The title sizes to its text (the hidden copy sets the width), so the required star sits right after it. */}
-        <div className="min-w-0">
-          <span className="inline-grid max-w-full align-top [&>*]:[grid-area:1/1]">
-            <span aria-hidden className="invisible min-w-[2ch] whitespace-pre-wrap break-words text-[15px] font-semibold leading-6">{(title || t("Question, or type / for a type")) + " "}</span>
-          <textarea
-            rows={1}
-            cols={1}
+        {/* The required star follows the last word: a hidden copy of the title (same width, font and wrapping)
+            sits under the textarea and carries the star. */}
+        <div className="relative min-w-0">
+          {field.required && (
+            <div aria-hidden className="pointer-events-none absolute inset-0 whitespace-pre-wrap break-words p-0 text-[15px] font-semibold leading-6">
+              <span className="invisible">{title || t("Question, or type / for a type")}</span><span className="ml-0.5 text-destructive">*</span>
+            </div>
+          )}
+          <AutoTextarea
             value={title}
-            aria-label={t("Question {n} title", { n: index + 1 })}
+            ariaLabel={t("Question {n} title", { n: index + 1 })}
             placeholder={t("Question, or type / for a type")}
-            onChange={(e) => {
-              const v = e.target.value.replace(/\n/g, " ");
+            onChange={(raw) => {
+              const v = raw.replace(/\n/g, " ");
               if (v.startsWith("/") && !title.startsWith("/")) setSlashFor({ id: field.id, before: title });
               if (!v.startsWith("/") && slashFor?.id === field.id) setSlashFor(null);
               onChange({ name: v, label: v });
@@ -346,10 +348,8 @@ function QuestionCard({ field, index, total, selected, others, customFields, tas
               else if (e.key === "Enter") { e.preventDefault(); if (slashList[active]) pickSlash(slashList[active].kind); }
               else if (e.key === "Escape") { e.preventDefault(); const before = slashFor?.before ?? ""; onChange({ name: before, label: before }); setSlashFor(null); }
             }}
-            className="block w-full resize-none overflow-hidden bg-transparent text-[15px] font-semibold leading-6 outline-none placeholder:text-muted-foreground/50"
+            className="relative p-0 text-[15px] font-semibold leading-6"
           />
-          </span>
-          {field.required && <span className="ml-0.5 align-top text-[15px] font-semibold leading-6 text-destructive" aria-label={t("Required")}>*</span>}
         </div>
         {slash && (
           <div className="absolute left-0 top-full z-20 mt-1 w-72 rounded-lg border border-border bg-popover shadow-pop" onClick={(e) => e.stopPropagation()}>
