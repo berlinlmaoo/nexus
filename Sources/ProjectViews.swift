@@ -12,16 +12,16 @@ import Foundation
 
 /// A rule's value: a string, a list, a number, or nothing.
 enum ViewValue: Codable, Hashable, Sendable {
-    case text(String), list([String]), number(Double), none
+    case text(String), list([String]), number(Double), empty
 
     init(from decoder: Decoder) throws {
         let c = try decoder.singleValueContainer()
-        if c.decodeNil() { self = .none }
+        if c.decodeNil() { self = .empty }
         else if let s = try? c.decode(String.self) { self = .text(s) }
         else if let a = try? c.decode([String].self) { self = .list(a) }
         else if let n = try? c.decode(Double.self) { self = .number(n) }
         else if let b = try? c.decode(Bool.self) { self = .text(b ? "true" : "false") }
-        else { self = .none }
+        else { self = .empty }
     }
 
     func encode(to encoder: Encoder) throws {
@@ -30,7 +30,7 @@ enum ViewValue: Codable, Hashable, Sendable {
         case .text(let s): try c.encode(s)
         case .list(let a): try c.encode(a)
         case .number(let n): try c.encode(n)
-        case .none: try c.encodeNil()
+        case .empty: try c.encodeNil()
         }
     }
 
@@ -39,7 +39,7 @@ enum ViewValue: Codable, Hashable, Sendable {
         case .text(let s): return s.isEmpty ? [] : [s]
         case .list(let a): return a
         case .number(let n): return [String(n)]
-        case .none: return []
+        case .empty: return []
         }
     }
     var json: Any {
@@ -47,7 +47,7 @@ enum ViewValue: Codable, Hashable, Sendable {
         case .text(let s): return s
         case .list(let a): return a
         case .number(let n): return n
-        case .none: return NSNull()
+        case .empty: return NSNull()
         }
     }
 }
@@ -66,7 +66,7 @@ struct ViewFilterRule: Codable, Hashable, Identifiable, Sendable {
         id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString.lowercased()
         prop = (try? c.decode(String.self, forKey: .prop)) ?? ""
         op = (try? c.decode(String.self, forKey: .op)) ?? ""
-        value = (try? c.decode(ViewValue.self, forKey: .value)) ?? .none
+        value = (try? c.decode(ViewValue.self, forKey: .value)) ?? .empty
     }
     var json: [String: Any] { ["id": id, "prop": prop, "op": op, "value": value.json] }
 }

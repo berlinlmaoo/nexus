@@ -273,7 +273,7 @@ struct ViewFilterSheet: View {
                         Button(T("Status")) { rules.append(ViewFilterRule(prop: "section", op: "any_of", value: .list([]))) }
                         Button(T("Priority")) { rules.append(ViewFilterRule(prop: "priority", op: "any_of", value: .list([]))) }
                         Button(T("Assignee")) { rules.append(ViewFilterRule(prop: "assignee", op: "any_of", value: .list([ViewEngine.me]))) }
-                        Button(T("Due date")) { rules.append(ViewFilterRule(prop: "due", op: "overdue", value: .none)) }
+                        Button(T("Due date")) { rules.append(ViewFilterRule(prop: "due", op: "overdue", value: .empty)) }
                         Button(T("Title")) { rules.append(ViewFilterRule(prop: "title", op: "contains", value: .text(""))) }
                         ForEach(selectFields) { f in
                             Button(f.name) { rules.append(ViewFilterRule(prop: "cf:\(f.id)", op: "any_of", value: .list([]))) }
