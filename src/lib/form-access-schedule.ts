@@ -7,6 +7,10 @@ export interface FormAccessSchedule {
   // Manual master switch that OVERRIDES the schedule: "open" = force-open (ignore schedule),
   // "closed" = force-closed. undefined = follow the schedule (or always-open if not enabled).
   override?: "open" | "closed"
+  // A one-off window on top of the weekly one (form builder, 12 Oct 2026): ISO instants. Before opensAt
+  // and after closesAt the form is closed. "Force open" still beats both; "Force closed" still wins.
+  opensAt?: string
+  closesAt?: string
 }
 
 const DEFAULT_TIMEZONE = "Asia/Jakarta"
@@ -31,6 +35,8 @@ export function normalizeFormAccessSchedule(value: unknown): FormAccessSchedule 
   const endTime = typeof input.endTime === "string" && TIME_PATTERN.test(input.endTime) ? input.endTime : "23:59"
   const timezone = typeof input.timezone === "string" && input.timezone.trim() ? input.timezone.trim() : DEFAULT_TIMEZONE
   const override = input.override === "open" || input.override === "closed" ? input.override : undefined
+  const opensAt = isoInstant(input.opensAt)
+  const closesAt = isoInstant(input.closesAt)
 
   return {
     enabled: Boolean(input.enabled),
@@ -39,6 +45,8 @@ export function normalizeFormAccessSchedule(value: unknown): FormAccessSchedule 
     endTime,
     timezone,
     ...(override ? { override } : {}),
+    ...(opensAt ? { opensAt } : {}),
+    ...(closesAt ? { closesAt } : {}),
   }
 }
 
@@ -49,6 +57,13 @@ export function getFormAccessStatus(scheduleValue: unknown, now = new Date()) {
   if (schedule?.override === "open") return { allowed: true, schedule }
   if (schedule?.override === "closed") {
     return { allowed: false, schedule, message: "Form lagi ditutup sementara." }
+  }
+
+  if (schedule?.opensAt && now.getTime() < Date.parse(schedule.opensAt)) {
+    return { allowed: false, schedule, message: `This form opens on ${formatInstant(schedule.opensAt, schedule.timezone)}.` }
+  }
+  if (schedule?.closesAt && now.getTime() > Date.parse(schedule.closesAt)) {
+    return { allowed: false, schedule, message: `This form closed on ${formatInstant(schedule.closesAt, schedule.timezone)}.` }
   }
 
   if (!schedule?.enabled) return { allowed: true, schedule }
@@ -97,6 +112,16 @@ export function formatFormAccessSchedule(scheduleValue: unknown) {
   const timezone = schedule.timezone ?? DEFAULT_TIMEZONE
 
   return `${dayText}, ${startTime}-${endTime} (${timezone})`
+}
+
+function isoInstant(value: unknown): string | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined
+  const ms = Date.parse(value)
+  return Number.isNaN(ms) ? undefined : new Date(ms).toISOString()
+}
+
+function formatInstant(iso: string, timezone = DEFAULT_TIMEZONE) {
+  return `${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: timezone }).format(new Date(iso))} (${timezone})`
 }
 
 function timeToMinutes(value: string) {

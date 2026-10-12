@@ -16,6 +16,8 @@ import { executeAutomations, runAutomations } from "@/lib/automation-engine"
 import { resolveAutoAssignAssigneeIds } from "@/lib/project-auto-assign"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitTaskCreated } from "@/lib/socket-emitter"
+import { formResponseLimit, normalizeFormSettings, RESPONSE_LIMIT_MESSAGE } from "@/lib/form-settings"
+import { createInAppNotification } from "@/lib/notification-service"
 import { mkdir, writeFile } from "fs/promises"
 import path from "path"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
@@ -365,6 +367,11 @@ export async function POST(
       )
     }
 
+    const responseLimit = formResponseLimit(form.settings)
+    if (responseLimit !== null && (await prisma.formSubmission.count({ where: { formId: form.id } })) >= responseLimit) {
+      return NextResponse.json({ error: RESPONSE_LIMIT_MESSAGE, code: "RESPONSE_LIMIT" }, { status: 403 })
+    }
+
     const fallbackCreatorId =
       userId ??
       form.project.members.find((member) => member.role === "LEAD")?.userId ??
@@ -377,12 +384,12 @@ export async function POST(
     }
 
     const fields = Array.isArray(form.fields) ? (form.fields as unknown as IntakeFormField[]) : []
+    const submitter = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } })
 
     // Autofill fields (e.g. "Request by") are set AUTHORITATIVELY from the logged-in submitter — never
     // trust the client value (anti-spoof). All forms require login, so userId is present here.
     const autofillFields = fields.filter((f) => f.autofill)
     if (autofillFields.length && userId) {
-      const submitter = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } })
       for (const f of autofillFields) {
         data[f.id] = f.autofill === "email" ? (submitter?.email ?? "") : (submitter?.name ?? submitter?.email ?? "")
       }
@@ -449,10 +456,10 @@ export async function POST(
       return NextResponse.json({ error: "Project has no task list to create task in" }, { status: 400 })
     }
 
-    const title = normalizeText(mappedTitleField ? getFieldValue(data, mappedTitleField) : "")
-    if (!title) {
-      return NextResponse.json({ error: "Task title is required" }, { status: 400 })
-    }
+    // No question fills the task title (a form built from scratch), or an optional one was left empty:
+    // name the task after the form and the sender instead of refusing the response (it used to 400).
+    const submitterName = submitter?.name || submitter?.email || "Someone"
+    const title = normalizeText(mappedTitleField ? getFieldValue(data, mappedTitleField) : "") || `${form.name} · ${submitterName}`.slice(0, 250)
 
     const descriptionFromField = buildTaskDescriptionFromFields(visibleFields, data)
     const summary = buildSubmissionSummary(visibleFields, data)
@@ -591,6 +598,22 @@ export async function POST(
     }, form.projectId).catch(() => {})
 
     emitTaskCreated(form.projectId, JSON.parse(JSON.stringify(result.task)))
+
+    // "Notify people" (form settings, 12 Oct 2026): in-app + push to each chosen project member, never
+    // to the sender. Fire-and-forget: a failed notification must not fail the response.
+    const notifyIds = (normalizeFormSettings(form.settings)?.notifyUserIds ?? []).filter((id) => id !== userId && validProjectMemberIds.has(id))
+    for (const recipient of notifyIds) {
+      createInAppNotification({
+        userId: recipient,
+        type: "form_submission",
+        title: `New response: ${form.name}`,
+        message: `${submitterName} sent "${result.task.title}"`,
+        taskId: result.task.id,
+        projectId: form.projectId,
+        link: `/projects/${form.projectId}/tasks/${result.task.id}`,
+        push: true,
+      }).catch(() => {})
+    }
 
     return NextResponse.json(result, { status: 201 })
   } catch (error) {
