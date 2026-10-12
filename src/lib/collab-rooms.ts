@@ -193,7 +193,8 @@ async function persistOnce(room: Room) {
 function persist(room: Room): Promise<void> {
   if (room.saving) return room.saving
   if (!room.dirty || room.dead) return Promise.resolve()
-  const run: Promise<void> = (async () => {
+  const holder: { run?: Promise<void> } = {}
+  holder.run = (async () => {
     await Promise.resolve() // `saving` is assigned before anything below runs
     try {
       while (room.dirty && !room.dead) await persistOnce(room)
@@ -202,11 +203,11 @@ function persist(room: Room): Promise<void> {
       room.dirty = true
       if (!room.dead) schedule(room)
     } finally {
-      if (room.saving === run) room.saving = null
+      if (room.saving === holder.run) room.saving = null
     }
   })()
-  room.saving = run
-  return run
+  room.saving = holder.run
+  return holder.run
 }
 
 async function closeIfEmpty(room: Room) {
