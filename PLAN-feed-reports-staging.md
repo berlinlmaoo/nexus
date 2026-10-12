@@ -2,6 +2,8 @@ The plan is large and self-contained from the four inputs; no further file inspe
 
 # NEXUS — Implementation Plan: The Wire (Feed) + Integrity (Peer Reports) + Staging
 
+> **12 Oct 2026: Integrity (peer reports) was removed from NEXUS completely (owner decision).** The Integrity parts of this plan are history only; the PeerReport tables are kept unused until the owner decides on prisma/sql/2026-10-12-retire-social-integrity-DROP.sql.
+
 > **Status: PLAN FOR REVIEW. Belum ada code yang ditulis.** Bro, ini gabungan dari tiga design + UX critique + research jadi satu rencana. Semua keputusan teknis udah ada, tapi ada 8 keputusan produk/etika yang harus lo putusin dulu sebelum build (§8). Semua path absolut, semua nyambung ke primitives + convention yang udah ada di codebase.
 
 ---

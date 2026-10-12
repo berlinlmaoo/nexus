@@ -1,6 +1,6 @@
 # NEXUS — Project Management & Team Operations Platform
 
-NEXUS is the internal platform built for **PATS Group**. It started as an Asana-style project/task workspace and has grown into a full team-operations suite: project management, attendance & HR, gamification, a company feed, peer-accountability, room booking, and an AI assistant (**GIDEON**) reachable both in-app and over WhatsApp.
+NEXUS is the internal platform built for **PATS Group**. It started as an Asana-style project/task workspace and has grown into a full team-operations suite: project management, attendance & HR, gamification, a company feed, a complaints channel, room booking, and an AI assistant (**GIDEON**) reachable both in-app and over WhatsApp.
 
 The repository is a monorepo with **two frontends sharing one Next.js API + PostgreSQL database**:
 
@@ -53,8 +53,7 @@ The repository is a monorepo with **two frontends sharing one Next.js API + Post
 ### Company Feed — "The Wire"
 - Company-wide timeline: posts, comments, mentions
 
-### Integrity & Complaints
-- **Integrity** ("Cepu") peer-reporting with anonymous reporting, due-process rebuttal, and a public hall-of-shame
+### Complaints
 - Private, categorized **Complaint & Escalation** channel (anonymous / confidential options) routed to the BoD
 
 ### Room Booking

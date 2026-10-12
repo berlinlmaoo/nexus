@@ -14,7 +14,7 @@ import { describeXpReason, xpRefundDecision } from "@/lib/xp-reason"
  *         repaired in the period the deduction was in (a +N row would land in today's period instead);
  *       · awardXpOnce (nocheckout, alpha, the cron's late backstop, peer reports) is idempotent on the
  *         row EXISTING, so the nightly cron cannot re-cut it — the row is still there;
- *       · a later whole-day clear (BoD "Clear penalty", an approved leave, reversePeerReportXp) sums
+ *       · a later whole-day clear (BoD "Clear penalty", an approved leave) sums
  *         and deletes the rows of that reason → it hands back 0 for this one, never a second time
  *         (a +N row would have been refunded twice: once here, once by that sum);
  *       · the "XP berkurang" popup and the deduction log list amount < 0 only → it disappears there.

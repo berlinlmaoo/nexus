@@ -88,13 +88,17 @@ function notificationTarget(n: NexusNotification): { to: string; params?: Record
   // The link first, the type keywords only as a fallback. The server now puts the record's id in
   // the link (`/attendance?request=…`, `/complaints?id=…`, `/messages?c=…`); matching on the type
   // before reading it threw that id away and landed every attendance signal on the top of the page.
+  // Integrity and Social Approvals were removed (12 Oct 2026); their old signals stay as plain,
+  // read-only rows. The server already drops the link; this covers a cached response.
+  const type = (n.type ?? "").toLowerCase();
+  if (type.startsWith("peer_report") || type === "violation_announcement" || /^\/(peer-reports|social)(?:[/?#]|$)/.test(n.link ?? "")) return null;
   if (n.link && n.link.startsWith("/")) {
     // The router matches on the path alone — a link like `/submissions?id=abc` has to be split, or
     // the query string ends up part of the path and nothing matches.
     const [path, qs] = n.link.split("?");
     return { to: path, search: qs ? Object.fromEntries(new URLSearchParams(qs)) : undefined };
   }
-  const t = (n.type ?? "").toLowerCase();
+  const t = type;
   if (t.includes("checkout") || t.includes("offsite") || t.includes("attendance") || t.includes("late") || t.includes("absen")) return { to: "/attendance" };
   if (t.includes("message")) return { to: "/messages" };
   return null;
