@@ -14,14 +14,31 @@ export async function GET(request: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+    // `?projectIds=a,b,c` (web Forms page, perf pass 12 Oct 2026): the forms of several projects in one
+    // request instead of one request per project (the page fanned out ~85 calls). Projects the caller
+    // may not open are skipped silently, as the per-project fan-out's `.catch(() => [])` did. The answer
+    // is the same flat array of forms; each carries its projectId. `?projectId=` is unchanged.
+    const idsParam = request.nextUrl.searchParams.get("projectIds")
     const projectId = request.nextUrl.searchParams.get("projectId")
-    if (!projectId) return NextResponse.json({ error: "projectId is required" }, { status: 400 })
-
-    const { allowed } = await checkProjectAccess(session.user.id, projectId, ["MEMBER"])
-    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    let projectIds: string[]
+    if (idsParam !== null) {
+      const ids = Array.from(new Set(idsParam.split(",").map((x) => x.trim()).filter(Boolean))).slice(0, 300)
+      projectIds = []
+      for (let i = 0; i < ids.length; i += 10) {
+        const chunk = ids.slice(i, i + 10)
+        const checks = await Promise.all(chunk.map((id) => checkProjectAccess(session.user!.id!, id, ["MEMBER"]).catch(() => ({ allowed: false }))))
+        chunk.forEach((id, k) => { if (checks[k].allowed) projectIds.push(id) })
+      }
+      if (projectIds.length === 0) return NextResponse.json([])
+    } else {
+      if (!projectId) return NextResponse.json({ error: "projectId is required" }, { status: 400 })
+      const { allowed } = await checkProjectAccess(session.user.id, projectId, ["MEMBER"])
+      if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      projectIds = [projectId]
+    }
 
     const forms = await prisma.form.findMany({
-      where: { projectId },
+      where: projectIds.length === 1 ? { projectId: projectIds[0] } : { projectId: { in: projectIds } },
       include: { _count: { select: { submissions: true } } },
       orderBy: { createdAt: "desc" },
     })

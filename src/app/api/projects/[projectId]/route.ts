@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { USER_CARD_SELECT } from "@/lib/user-card-select"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { deleteKeepingSnapshot } from "@/lib/deletion-snapshot"
@@ -59,12 +60,20 @@ async function canManageProject(userId: string, projectId: string) {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // `?lite=1` (web, perf pass 12 Oct 2026): each task's customFieldValues come WITHOUT the nested
+    // `customField {name,type,options}` — the same three fields repeated on every value, about a third of
+    // a big project's payload. The project's own `customFields` (below) carries them once. Without the
+    // param the payload is exactly as before (released iOS/Android apps read the nested object).
+    const lite = request.nextUrl.searchParams.get("lite") === "1"
+    const cfvSelect = lite
+      ? { customFieldId: true, value: true }
+      : { customFieldId: true, value: true, customField: { select: { name: true, type: true, options: true } } }
 
     await syncProjectLinkedTeamAccess((await params).projectId)
 
@@ -79,15 +88,9 @@ export async function GET(
               // parent card's "☑ done/total" progress chip.
               where: { parentId: null },
               include: {
-                assignees: { include: { user: true } },
+                assignees: { include: { user: { select: USER_CARD_SELECT } } },
                 subtasks: { select: { id: true, status: true } },
-                customFieldValues: {
-                  select: {
-                    customFieldId: true,
-                    value: true,
-                    customField: { select: { name: true, type: true, options: true } },
-                  },
-                },
+                customFieldValues: { select: cfvSelect },
               },
               orderBy: { position: "asc" },
             },
@@ -97,7 +100,7 @@ export async function GET(
               include: {
                 task: {
                   include: {
-                    assignees: { include: { user: true } },
+                    assignees: { include: { user: { select: USER_CARD_SELECT } } },
                     customFieldValues: {
                       select: {
                         customFieldId: true,
@@ -114,7 +117,7 @@ export async function GET(
           orderBy: { position: "asc" },
         },
         members: {
-          include: { user: true },
+          include: { user: { select: USER_CARD_SELECT } },
         },
         pages: {
           orderBy: { createdAt: "asc" },
