@@ -74,11 +74,14 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   const projectId = project.id;
   const [draft, setDraft] = useState<string | null>(null);
   const newRow = (id: string, gKey: string | null, subKey: string | null) => !onCreateInGroup ? null : draft === id
-    ? <div className="sticky left-0 max-w-[min(100%,640px)]"><InlineTaskDraft variant="row" onCreate={(p) => onCreateInGroup(gKey, subKey, p)} onExpand={onOpen} onClose={() => setDraft(null)} /></div>
+    // The row's divider runs the table's full width (QA S-26: it stopped at ~930 px with the sticky part).
+    ? <div data-table-new-row="" className="border-b border-border/70"><div className="sticky left-0 max-w-[min(100%,640px)] [&>*]:border-b-0"><InlineTaskDraft variant="row" onCreate={(p) => onCreateInGroup(gKey, subKey, p)} onExpand={onOpen} onClose={() => setDraft(null)} /></div></div>
     : (
-      <button type="button" onClick={() => setDraft(id)} className="sticky left-0 flex h-9 w-full max-w-[min(100%,640px)] items-center gap-2 border-b border-border/70 px-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground">
+      <div data-table-new-row="" className="border-b border-border/70">
+      <button type="button" onClick={() => setDraft(id)} className="sticky left-0 flex h-9 w-full max-w-[min(100%,640px)] items-center gap-2 px-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground">
         <Plus className="h-4 w-4" />{t("New task")}
       </button>
+      </div>
     );
   const qc = useQueryClient();
   const { t } = useLang();

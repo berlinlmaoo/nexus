@@ -102,6 +102,12 @@ function Dashboard() {
         <div className="space-y-6">
           <StatRow data={data} />
           <Reveal delay={0.1}><XpRulesCard /></Reveal>
+          {/* Wide screens: the calendar and schedule fill the main column under XP rules (QA S-26: ~1,000 px
+              of dead space while the rail ran past the fold). Narrower: they stay in the rail's order. */}
+          <div data-dashboard-main-cal="" className="hidden gap-6 xl:grid xl:grid-cols-2">
+            <Reveal delay={0.15}><CalendarCard /></Reveal>
+            <Reveal delay={0.2}><ScheduleCard /></Reveal>
+          </div>
         </div>
 
         {/* right rail */}
@@ -109,8 +115,10 @@ function Dashboard() {
           <Reveal delay={0.05}><ProfileCard userName={userName} avatarUrl={profile.data?.user?.avatar} /></Reveal>
           <Reveal delay={0.1}><MessagesCard /></Reveal>
           <Reveal delay={0.15}><LeaderboardCard /></Reveal>
-          <Reveal delay={0.2}><CalendarCard /></Reveal>
-          <Reveal delay={0.25}><ScheduleCard /></Reveal>
+          <div className="space-y-6 xl:hidden">
+            <Reveal delay={0.2}><CalendarCard /></Reveal>
+            <Reveal delay={0.25}><ScheduleCard /></Reveal>
+          </div>
         </aside>
       </div>
     </div>
