@@ -383,6 +383,7 @@ extension AppLanguage {
         "Password changed.": "Sandi diganti.",
         "Profile photo changed.": "Foto profil diganti.",
         "Already in every project.": "Sudah masuk semua project.",
+        "You can't edit this page.": "Kamu tidak bisa mengedit halaman ini.",
         // ── marker: entries are appended above this line by tooling; keep it last ──
         "__redesign_end__": "__redesign_end__",
     ]

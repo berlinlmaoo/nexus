@@ -48,6 +48,7 @@ Server work done for the app (dev only, branch feat/ios-edit merged into dev, de
 | **Manual order inside a column** (drop on a card = before it; POST /api/tasks/reorder; Undo) | LaneColumn, ListTab |
 | Saved views (chips, filter/sort/group sheet, Per kategori), bulk Move to / Priority | ProjectViews.swift |
 | Task as centred sheet on iPad/Mac | ProjectBoardView.open |
+| Undo a task delete (auditLogId → undo-delete), bulk Assign to / Due date with Undo, timeline "No date" | ProjectBoardView, TaskBatchDuplicate |
 
 ## Phase 3 — editor, GIDEON, templates, iPad/Mac (done)
 
@@ -104,6 +105,14 @@ full-width pages on iPad/Mac.
    line becomes plain text); untouched blocks keep everything.
 3. In-column reorder needs a drop exactly on a card; between cards there is no indicator (no custom geometry).
 4. The block-merge endpoint and the room save fix are on dev only; production needs them before the app ships.
+5. Needs Xcode 16 or later (iOS 18+ SDK, where `View` is main-actor): the editor model is created in view
+   initialisers. On Xcode 15 that would not compile.
+6. Known edge cases not fixed: GIDEON's queue can start a second sender if the session is reset mid-answer and
+   a new question is asked at once; saving a large GIDEON attachment to disk runs on the main thread.
+7. Release checklist for prod: deploy `/api/collab/edit` + the room save fix, `/api/tasks/reorder`,
+   `/api/tasks/undo-delete`, batch-move, palette section colours, GIDEON prefs/save-doc/write, idempotent
+   form submit — all exist on dev only.
+8. Admin (Control Room) user screens now have English source text; What's New entries stay English by design.
 
 ## Verify on device first
 
