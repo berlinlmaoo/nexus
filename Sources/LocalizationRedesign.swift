@@ -362,7 +362,7 @@ extension AppLanguage {
         "Workspace account": "Akun di Workspace",
         "in use": "dipakai",
         "choose": "pilih",
-        "A new account uses one Workspace licence seat. Its temporary password can be seen only once.": "Akun baru mengisi satu seat lisensi Workspace. Sandi sementaranya cuma bisa dilihat sekali.",
+        "A new account uses one Workspace licence seat. Its temporary password can be seen only once.": "Akun baru memakai satu seat lisensi Workspace. Sandi sementaranya hanya bisa dilihat sekali.",
         "created": "dibuat",
         "Temporary password — copy it now, it can't be shown again:": "Sandi sementara — salin sekarang, tidak bisa dilihat lagi:",
         "They must change it at their first sign-in.": "Dia wajib menggantinya saat login pertama.",
