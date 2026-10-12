@@ -1,3 +1,4 @@
+import { useRealtimeRoom } from "@/lib/realtime";
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, CardContent as CardBody, Chip } from "@heroui/react";
@@ -277,6 +278,10 @@ function legacyCalendarRules(projectId: string) {
 
 function ProjectDetail() {
   const { projectId } = useParams({ from: "/_app/projects/$projectId" });
+  // Task realtime for every view of this project (owner QA, 12 Oct 2026): the server sends task-created /
+  // task-updated / task-deleted to `project:<id>`, but the project page never joined that room, so a move
+  // made by someone else only showed after a refetch.
+  useRealtimeRoom(`project:${projectId}`);
   const navigate = useNavigate();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [autofillOpen, setAutofillOpen] = useState(false);

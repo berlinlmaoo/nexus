@@ -1,3 +1,4 @@
+import { useRealtimeRoom } from "@/lib/realtime";
 import { activityText } from "@/lib/server-text";
 import { DateField } from "@/components/DateField";
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -295,6 +296,8 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   const [questOpen, setQuestOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const projectId = task.data?.taskList?.project?.id || task.data?.taskList?.projectId;
+  // Live changes by others (status, fields, comments) while the popup is open — also when opened from My Tasks.
+  useRealtimeRoom(projectId ? `project:${projectId}` : null);
   const ai = useAutofillMarks(projectId);
   // While the task is open, GIDEON's context chip is this task (Notion AI's page chip).
   useEffect(() => (task.data ? pushGideonPage({ kind: "task", id: taskId, title: task.data.title, projectId: projectId ?? null, projectName: task.data.taskList?.project?.name ?? null }) : undefined), [taskId, task.data?.title, projectId, task.data?.taskList?.project?.name]); // eslint-disable-line react-hooks/exhaustive-deps

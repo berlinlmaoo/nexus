@@ -299,7 +299,7 @@ export function useGroupMove({ project, defs, groupBy, sub, viewTasks }: {
         const why = [...failed.values()].find(Boolean);
         toast.error(tn(failed.size, "Couldn't move the task", "Couldn't move {n} tasks"), { description: why || undefined });
       }
-      if (ok.length) toast(tn(ok.length, "Task moved", "Moved {n} tasks"), { action: { label: t("Undo"), onClick: () => void undoMove(ok, to, toRow) } });
+      if (ok.length) toast(tn(ok.length, "Task moved", "Moved {n} tasks"), { duration: 10000, action: { label: t("Undo"), onClick: () => void undoMove(ok, to, toRow) } });
     })();
   }, [qc, t, tn]);
 
