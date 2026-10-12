@@ -62,7 +62,7 @@ export const ID_PIPELINE: Record<string, string> = {
   // KPI strip
   "Pipeline at a glance": "Ringkasan pipeline",
   "Open pipeline": "Pipeline terbuka",
-  "{n} deals in play": "{n} deal berjalan",
+  "{n} open deals": "{n} deal berjalan",
   "Weighted forecast": "Weighted pipeline",
   "Value × probability": "Nilai × probabilitas",
   "Won": "Won",

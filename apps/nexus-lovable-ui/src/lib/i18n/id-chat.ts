@@ -2,7 +2,7 @@
 export const ID_CHAT: Record<string, string> = {
   // Page and conversation list
   "Messages": "Pesan",
-  "Chat with your crew + per-project rooms.": "Ngobrol dengan crew + ruang per proyek.",
+  "Chat with your team and in project rooms.": "Ngobrol dengan tim dan di ruang proyek.",
   "New chat": "Chat baru",
   "No chats yet": "Belum ada chat",
   "Direct messages and group chats with colleagues live here, and every project has a room of its own.": "Pesan pribadi dan grup dengan rekan kerja ada di sini, dan setiap proyek punya ruangnya sendiri.",

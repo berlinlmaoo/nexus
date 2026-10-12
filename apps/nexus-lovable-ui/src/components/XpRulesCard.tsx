@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronDown, TrendingDown, TrendingUp, Gift } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { t as tr } from "@/lib/lang";
 
 const PENALTIES = [
   { xp: "-1 XP/min", rule: "Late check-in", note: "Max 120 min. >120 → docks a day off", auto: true },
@@ -13,7 +14,7 @@ const PENALTIES = [
 // No automatic bonus and no end-of-period tiers: both were retired on the server
 // (src/lib/period-rewards.ts — "XP is now 100% quest-only, assigned by BoD").
 const BONUSES = [
-  { xp: "+30 XP", rule: "Finish a side quest from your Head", note: "Head's call", auto: false },
+  { xp: "+30 XP", rule: "Finish a quest from your Head", note: "Head's call", auto: false },
   { xp: "+50 XP", rule: "Performance beyond target", note: "Management's call", auto: false },
   { xp: "+20 XP", rule: "Feedback the company adopts", note: "HR's call", auto: false },
 ];
@@ -24,10 +25,10 @@ function Row({ xp, rule, note, auto, tone }: { xp: string; rule: string; note: s
     <div className="flex items-start gap-3 py-1.5">
       <span className={cn("w-24 shrink-0 text-sm font-black tabular-nums", tone === "red" ? "text-rose-600" : "text-emerald-600")}>{xp}</span>
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-semibold text-foreground">{rule}</div>
-        <div className="text-[11px] text-muted-foreground">{note}</div>
+        <div className="text-sm font-semibold text-foreground">{tr(rule)}</div>
+        <div className="text-[11px] text-muted-foreground">{tr(note)}</div>
       </div>
-      <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", auto ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>{auto ? "Automatic" : "Manual"}</span>
+      <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", auto ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>{auto ? tr("Automatic") : tr("Manual")}</span>
     </div>
   );
 }
@@ -40,8 +41,8 @@ export function XpRulesCard() {
       <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 px-5 py-4 text-left">
         <motion.span whileTap={reduce ? undefined : { scale: 0.9 }} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Gift className="h-5 w-5" /></motion.span>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-black tracking-tight">XP / Points Rules</div>
-          <div className="text-xs text-muted-foreground">Penalties, bonuses, & monthly tier rewards</div>
+          <div className="text-sm font-black tracking-tight">{tr("XP rules")}</div>
+          <div className="text-xs text-muted-foreground">{tr("What takes XP away and what adds it")}</div>
         </div>
         <motion.span animate={reduce ? undefined : { rotate: open ? 180 : 0 }} transition={{ type: "spring", stiffness: 300, damping: 22 }} className="shrink-0 text-muted-foreground">
           <ChevronDown className="h-5 w-5" />
@@ -59,11 +60,11 @@ export function XpRulesCard() {
           >
         <div className="space-y-5 border-t border-border px-5 py-4">
           <div>
-            <div className="mb-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-600"><TrendingDown className="h-3.5 w-3.5" /> XP Penalties</div>
+            <div className="mb-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-600"><TrendingDown className="h-3.5 w-3.5" /> {tr("XP penalties")}</div>
             <div className="divide-y divide-border/60">{PENALTIES.map((p) => <Row key={p.rule} {...p} tone="red" />)}</div>
           </div>
           <div>
-            <div className="mb-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-600"><TrendingUp className="h-3.5 w-3.5" /> XP Bonuses</div>
+            <div className="mb-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-600"><TrendingUp className="h-3.5 w-3.5" /> {tr("XP bonuses")}</div>
             <div className="divide-y divide-border/60">{BONUSES.map((b) => <Row key={b.rule} {...b} tone="green" />)}</div>
           </div>
           <div>
@@ -80,7 +81,7 @@ export function XpRulesCard() {
               ))}
             </div>
           </div>
-          <p className="text-[11px] text-muted-foreground">"Automatic" is calculated by the system from attendance & end of period. "Manual" is awarded by Head/HR/management based on their judgment.</p>
+          <p className="text-[11px] text-muted-foreground">{tr("“Automatic” is worked out by the system from attendance. “Manual” is given by your Head, HR or management.")}</p>
         </div>
           </motion.div>
         )}

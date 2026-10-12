@@ -28,7 +28,7 @@ export const ID_TEMPLATES: Record<string, string> = {
   "Plot by": "Tampilkan menurut",
   "No {field}": "Tanpa {field}",
   // Section status (board lane menu)
-  "Section status": "Status section",
-  "Tasks moved into this section get this status.": "Task yang dipindah ke section ini otomatis dapat status ini.",
-  "None (plain section)": "Tidak ada (section biasa)",
+  "Section status": "Status bagian",
+  "Tasks moved into this section get this status.": "Task yang dipindah ke bagian ini otomatis dapat status ini.",
+  "None (plain section)": "Tidak ada (bagian biasa)",
 };

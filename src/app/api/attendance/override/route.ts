@@ -208,7 +208,7 @@ export async function POST(req: NextRequest) {
     if (conflicting.length > 0) {
       await prisma.attendanceRequest.updateMany({
         where: { id: { in: conflicting.map((r) => r.id) } },
-        data: { status: "REJECTED", reviewNote: `Diganti jadi ${action} oleh BoD dari crew board.`, reviewedAt: new Date(), reviewedById: session.user.id, approvalSource: "ADMIN" },
+        data: { status: "REJECTED", reviewNote: `Diganti jadi ${action} oleh BoD dari papan absensi.`, reviewedAt: new Date(), reviewedById: session.user.id, approvalSource: "ADMIN" },
       })
     }
 
@@ -224,8 +224,8 @@ export async function POST(req: NextRequest) {
         status: "APPROVED",
         startDate: date,
         endDate: date,
-        reason: (body.note ?? "").trim() || `Status ${dateKey} diubah jadi ${action} oleh BoD dari crew board.`,
-        reviewNote: "Diubah oleh BoD dari crew board.",
+        reason: (body.note ?? "").trim() || `Status ${dateKey} diubah jadi ${action} oleh BoD dari papan absensi.`,
+        reviewNote: "Diubah oleh BoD dari papan absensi.",
         approvalSource: "ADMIN",
         reviewedAt: new Date(),
         reviewedById: session.user.id,

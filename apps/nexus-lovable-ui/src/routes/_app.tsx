@@ -2,7 +2,7 @@ import { Outlet, createFileRoute, useLocation, useNavigate } from "@tanstack/rea
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { SearchModal } from "@/components/SearchModal";
-import { Loader2 } from "lucide-react";
+import { Loader2, WifiOff } from "lucide-react";
 import { isAuthError, nexusApi } from "@/lib/nexus-api";
 import { GideonLauncher } from "@/components/gideon/GideonLauncher";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -16,6 +16,7 @@ import { PhoneNumberPrompt } from "@/components/PhoneNumberPrompt";
 import { RealtimeProvider } from "@/lib/realtime";
 import { ChatUnreadTitle } from "@/lib/chat-unread";
 import { VaultUploadPanel } from "@/components/vault/VaultUploadPanel";
+import { t } from "@/lib/lang";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -73,8 +74,8 @@ function AppLayout() {
       <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
         <div className="rounded-3xl border border-border bg-card px-8 py-6 text-center shadow-sm">
           <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin text-primary" />
-          <div className="text-sm font-semibold uppercase tracking-[0.18em] text-foreground">Syncing mission pass</div>
-          <p className="mt-2 text-xs font-medium text-muted-foreground">Checking your NEXUS session...</p>
+          <div className="text-sm font-semibold text-foreground">{t("Signing you in…")}</div>
+          <p className="mt-2 text-xs font-medium text-muted-foreground">{t("Checking your session")}</p>
         </div>
       </div>
     );
@@ -84,16 +85,16 @@ function AppLayout() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
         <div className="max-w-md rounded-3xl border border-border bg-card p-8 text-center shadow-sm">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-warning/15 text-2xl">🛰️</div>
-          <h1 className="text-xl font-semibold text-foreground">Can't reach NEXUS core right now</h1>
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-warning/15 text-warning-foreground"><WifiOff className="h-6 w-6" /></div>
+          <h1 className="text-xl font-semibold text-foreground">{t("Can't reach NEXUS right now")}</h1>
           <p className="mt-3 text-sm font-medium text-muted-foreground">
-            The new UI is up, but we can't connect to the live API. Make sure the core app on port 3000 is running, then refresh.
+            {t("Check your internet connection and try again. If it keeps happening, NEXUS may be down for a moment.")}
           </p>
           <button
             className="mt-6 rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
             onClick={() => window.location.reload()}
           >
-            Retry Uplink
+            {t("Try again")}
           </button>
         </div>
       </div>

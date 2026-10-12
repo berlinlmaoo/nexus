@@ -19,9 +19,9 @@ export function StatusOverridePanel({ userId, name, dateKey, onDone }: { userId:
       qc.invalidateQueries({ queryKey: ["attendance-today"] });
       qc.invalidateQueries({ queryKey: ["member-record"] });
       if (r.action === "CLEAR_PENALTY") {
-        celebrate(r.refunded ? `Penalty for ${r.date} cleared — XP & day-off restored 🛡️` : `No penalty on ${r.date} — this day stays safe from deductions.`);
+        celebrate(r.refunded ? `Penalty for ${r.date} cleared — XP & day-off restored` : `No penalty on ${r.date} — this day stays safe from deductions.`);
       } else {
-        celebrate(`${name ?? "Staff"} · ${r.date} → ${OVERRIDE_LABEL[r.action] ?? r.action}${r.refunded ? " (penalty restored)" : ""} ✅`);
+        celebrate(`${name ?? "Staff"} · ${r.date} → ${OVERRIDE_LABEL[r.action] ?? r.action}${r.refunded ? " (penalty restored)" : ""}`);
       }
       if ((r.multiDayRequestsLeft ?? 0) > 0) {
         alert(`Heads up: this date is still covered by ${r.multiDayRequestsLeft} multi-day request(s) (multi-day leave/permit). If you want today to actually show as Present, adjust that request in the Requests section.`);

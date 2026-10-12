@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, TrendingDown, X } from "lucide-react";
 import { fmtDate, fmtTime, nexusApi, type NexusXpPenalty } from "@/lib/nexus-api";
+import { t as tr, tn } from "@/lib/lang";
 
 /**
  * Global "your XP got cut" alert. On app open (and after check-in, via ["my-penalties"] invalidation),
@@ -81,12 +82,12 @@ export function XpPenaltyModal() {
               <div className="flex items-start gap-3">
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-rose-500/15 text-rose-600"><TrendingDown className="h-5 w-5" /></div>
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.2em] text-rose-600">XP lost</p>
-                  <h2 className="mt-0.5 font-display text-xl font-bold tracking-tight">Ouch, your XP took a hit</h2>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{fresh.length} thing{fresh.length === 1 ? "" : "s"} knocked your XP down.</p>
+                  <p className="text-[11px] font-black uppercase tracking-[0.2em] text-rose-600">{tr("XP deducted")}</p>
+                  <h2 className="mt-0.5 font-display text-xl font-bold tracking-tight">{tr("Your XP went down")}</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{tn(fresh.length, "{n} deduction since you last looked.", "{n} deductions since you last looked.", { n: fresh.length })}</p>
                 </div>
               </div>
-              <button onClick={dismiss} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+              <button onClick={dismiss} aria-label={tr("Close")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
             </div>
 
             <div className="space-y-2 p-5">
@@ -102,11 +103,11 @@ export function XpPenaltyModal() {
               ))}
               {fresh.length > 1 && (
                 <div className="flex items-center justify-between rounded-2xl bg-rose-500/10 px-3 py-2 text-sm font-bold text-rose-700">
-                  <span>Total</span><span className="tabular-nums">{total} XP</span>
+                  <span>{tr("Total")}</span><span className="tabular-nums">{total} XP</span>
                 </div>
               )}
-              <button onClick={dismiss} className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.99]">Got it</button>
-              <p className="text-center text-[11px] text-muted-foreground">Late = −1 XP/min (max −120). Check in on time to stay safe ✨</p>
+              <button onClick={dismiss} className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.99]">{tr("Got it")}</button>
+              <p className="text-center text-[11px] text-muted-foreground">{tr("Late = −1 XP per minute (max −120). Check in on time to avoid it.")}</p>
             </div>
           </motion.div>
         </div>

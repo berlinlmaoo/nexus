@@ -581,8 +581,8 @@ export function ProjectFormsView({ projectId }: { projectId: string }) {
     <div className="p-4 md:p-8">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="font-display text-lg font-bold tracking-tight">Intake forms</h2>
-          <p className="text-sm text-muted-foreground">Forms that spin up real tasks in this project on submit.</p>
+          <h2 className="font-display text-lg font-bold tracking-tight">{t("Forms")}</h2>
+          <p className="text-sm text-muted-foreground">{t("Each time someone submits a form, it creates a task in this project.")}</p>
         </div>
         <button onClick={() => setBuilder({})} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> New form</button>
       </div>

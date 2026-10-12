@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { celebrate } from "@/components/Celebration";
 import { ApiError, fmtDate, fmtTime, nexusApi } from "@/lib/nexus-api";
 import { xpReasonInfo } from "@/lib/xp-reason";
+import { t as tr } from "@/lib/lang";
 
 type Sign = "all" | "pos" | "neg";
 type Scope = "period" | "all";
@@ -62,10 +63,10 @@ export function XpAuditLog() {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-sm font-black">
-            XP Audit Log
+            {tr("XP log")}
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">Admin</span>
           </div>
-          <div className="text-xs text-muted-foreground">Every XP change (added & deducted) across the whole crew</div>
+          <div className="text-xs text-muted-foreground">{tr("Every XP change, added or deducted, for everyone")}</div>
         </div>
         <ChevronDown className={cn("h-5 w-5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
       </button>
@@ -184,7 +185,7 @@ function XpAdjustModal({ onClose }: { onClose: () => void }) {
         const k = q.queryKey.map(String);
         return k.includes("xp-audit") || k.includes("leaderboard") || k.includes("gamification") || k.includes("my-penalties");
       } });
-      celebrate(sign > 0 ? "XP added ✨" : "XP deducted ⚖️");
+      celebrate(sign > 0 ? tr("XP added") : tr("XP deducted"));
       onClose();
     },
   });
@@ -197,8 +198,8 @@ function XpAdjustModal({ onClose }: { onClose: () => void }) {
       <div className="w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
           <div>
-            <h2 className="font-display text-lg font-bold tracking-tight">Adjust crew XP</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">Add or deduct XP manually. Logged in the audit log.</p>
+            <h2 className="font-display text-lg font-bold tracking-tight">{tr("Adjust XP")}</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">{tr("Add or deduct XP by hand. It's recorded in the audit log.")}</p>
           </div>
           <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
@@ -206,7 +207,7 @@ function XpAdjustModal({ onClose }: { onClose: () => void }) {
         <div className="space-y-3 p-5">
           {/* user picker */}
           <div>
-            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-muted-foreground">Crew member</label>
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-muted-foreground">{tr("Person")}</label>
             {selected ? (
               <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/20 px-3 py-2">
                 <Avatar userId={selected.userId} name={selected.name} avatar={selected.avatar} size={28} />
@@ -217,7 +218,7 @@ function XpAdjustModal({ onClose }: { onClose: () => void }) {
               <div className="rounded-xl border border-border">
                 <div className="relative border-b border-border">
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/50" />
-                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search crew name…" className="w-full bg-transparent py-2 pl-8 pr-3 text-sm outline-none" autoFocus />
+                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tr("Search by name…")} className="w-full bg-transparent py-2 pl-8 pr-3 text-sm outline-none" autoFocus />
                 </div>
                 <div className="max-h-44 overflow-y-auto">
                   {lb.isLoading && <div className="px-3 py-3 text-center text-xs text-muted-foreground">Loading…</div>}

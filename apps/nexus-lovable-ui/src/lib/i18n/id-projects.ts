@@ -71,10 +71,10 @@ export const ID_PROJECTS: Record<string, string> = {
   "Board or List has to stay on — at least one way to see the tasks.": "Board atau Daftar harus tetap nyala — minimal satu cara untuk melihat task.",
   "That tab can't be changed here. Refresh the page and try again.": "Tab itu tidak bisa diubah di sini. Muat ulang halaman lalu coba lagi.",
   "That project type is coming soon. For now you can create a Task Project, a Pipeline Dashboard or an Outlet Sales Dashboard.": "Tipe project itu segera hadir. Untuk sekarang kamu bisa membuat Task Project, Pipeline Dashboard, atau Outlet Sales Dashboard.",
-  // Mission Control: projects are called projects (owner, 9 Oct 2026 — "kok masih new mission?").
-  // The page names "Mission Control" and "My Mission" stay.
+  // The Projects page: projects are called projects (owner, 9 Oct 2026 — "kok masih new mission?").
+  // Since 12 Oct 2026 the pages are plainly "Projects" and "My Tasks".
   "New project": "Proyek baru",
-  "Search projects, owners, lanes…": "Cari proyek, PIC, lane…",
+  "Search projects, owners, sections…": "Cari proyek, PIC, bagian…",
   "{shown}/{n} projects visible": "{shown}/{n} proyek terlihat",
   "All projects": "Semua proyek",
   "Create a new project": "Buat proyek baru",
@@ -82,9 +82,9 @@ export const ID_PROJECTS: Record<string, string> = {
   "What's the project, who owns it, and what should move first?": "Proyek apa, siapa PIC-nya, dan apa yang harus jalan duluan?",
   "Creating project…": "Membuat proyek…",
   "Create project + open board": "Buat proyek + buka board",
-  "Click any project card to enter its live board.": "Klik kartu proyek mana pun untuk masuk ke board-nya.",
+  "Select a project to open it.": "Pilih proyek untuk membukanya.",
   "No project matches that": "Tidak ada proyek yang cocok",
-  "Try another project name, owner or lane — or clear the search to see every project you're part of.": "Coba nama proyek, PIC, atau lane lain — atau hapus pencarian untuk melihat semua proyek yang kamu ikuti.",
+  "Try another project name, owner or section — or clear the search to see every project you're part of.": "Coba nama proyek, PIC, atau bagian lain — atau hapus pencarian untuk melihat semua proyek yang kamu ikuti.",
   // Project settings → Members → Add members: a searchable multi-select (owner, 9 Oct 2026)
   "Members · {n}": "Member · {n}",
   "Add members": "Tambah member",

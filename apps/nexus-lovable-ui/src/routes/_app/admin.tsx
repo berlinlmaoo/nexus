@@ -1765,6 +1765,7 @@ const REQ_TYPES = [
 ];
 
 function AdminQuests() {
+  const { t: tq } = useLang();
   const qc = useQueryClient();
   const projects = useQuery({ queryKey: ["nexus", "projects"], queryFn: nexusApi.projects, retry: false });
   const workspaceId = (projects.data ?? []).find((p) => p.workspaceId)?.workspaceId ?? "";
@@ -1812,7 +1813,7 @@ function AdminQuests() {
         <>
           <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
             <h2 className="mb-1 font-display text-base font-bold tracking-tight">Assign a new quest</h2>
-            <p className="mb-3 text-xs text-muted-foreground">Create a quest for the crew: finish tasks against a target & deadline, reward XP (max 50).</p>
+            <p className="mb-3 text-xs text-muted-foreground">{tq("Create a quest: finish tasks against a target and a deadline, for an XP reward (max 50).")}</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Quest title (e.g. Finish 5 tasks this week)" className={cn(inputCls, "sm:col-span-2")} />
               <label className="text-xs font-semibold text-muted-foreground">Type
@@ -1834,7 +1835,7 @@ function AdminQuests() {
             </div>
             {isTasks ? (
               <div className="mt-3">
-                <span className="text-xs font-semibold text-muted-foreground">Tasks for this quest <span className="font-normal">(complete when all are DONE · XP goes to whoever does them · visible to members of the task's project)</span></span>
+                <span className="text-xs font-semibold text-muted-foreground">Tasks for this quest <span className="font-normal">{tq("(complete when all are done · XP goes to whoever does them · visible to members of the task's project)")}</span></span>
                 <div className="mt-1.5 space-y-1">
                   {questTasks.length === 0 && <p className="text-xs text-muted-foreground">No tasks picked yet. Search below.</p>}
                   {questTasks.map((t) => (
@@ -1861,7 +1862,7 @@ function AdminQuests() {
               </div>
             ) : (
               <div className="mt-3">
-                <span className="text-xs font-semibold text-muted-foreground">Assign to team <span className="font-normal">(pick one or more · empty = whole crew)</span></span>
+                <span className="text-xs font-semibold text-muted-foreground">Assign to team <span className="font-normal">{tq("(pick one or more · empty = everyone)")}</span></span>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {teams.length === 0 && <span className="text-xs text-muted-foreground">No teams yet.</span>}
                   {teams.map((t) => {
@@ -1888,7 +1889,7 @@ function AdminQuests() {
                       {q.deadline && <span>· ⏰ until {fmtDate(q.deadline)}</span>}
                       {q.requirementType === "specific_tasks"
                         ? <span>· members of the task's project</span>
-                        : <span>· {q.teamIds && q.teamIds.length > 0 ? q.teamIds.map(teamName).join(", ") : "Whole crew"}</span>}
+                        : <span>· {q.teamIds && q.teamIds.length > 0 ? q.teamIds.map(teamName).join(", ") : tq("Everyone")}</span>}
                     </div>
                   </div>
                   <button onClick={() => { if (confirm("Delete this quest?")) del.mutate(q.id); }} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>

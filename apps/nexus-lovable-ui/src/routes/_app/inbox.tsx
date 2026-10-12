@@ -16,18 +16,20 @@ import { AtSign, UserPlus, MessageCircle, AlarmClock, Activity, Check, Trash2, L
 import { celebrate } from "@/components/Celebration";
 import { Reveal } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useLang } from "@/lib/lang";
 
 export const Route = createFileRoute("/_app/inbox")({ component: InboxPage });
 
 const iconMap = [AtSign, UserPlus, MessageCircle, AlarmClock, Activity];
 
 function InboxPage() {
+  const { t, tn } = useLang();
   const qc = useQueryClient();
   const inbox = useQuery({ queryKey: ["nexus", "notifications"], queryFn: () => nexusApi.notifications(false), retry: false });
   const markAll = useMutation({
     mutationFn: nexusApi.markAllNotificationsRead,
     onSuccess: () => {
-      celebrate("Inbox Zero! 📭✨");
+      celebrate(t("All caught up"));
       qc.invalidateQueries({ queryKey: ["nexus", "notifications"] });
     },
   });
@@ -41,14 +43,14 @@ function InboxPage() {
 
   return (
     <div>
-      <PageHeader title="Notification" subtitle="Live mentions, assignments, pings, and the stuff that needs your magic." actions={
+      <PageHeader title={t("Notifications")} subtitle={t("Mentions, assignments, approvals and replies that need you.")} actions={
         <button onClick={() => markAll.mutate()} disabled={markAll.isPending} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm transition-colors duration-150 hover:bg-accent active:scale-[0.98] active:scale-95 transition disabled:opacity-60">
-          {markAll.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Mark all read
+          {markAll.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} {t("Mark all as read")}
         </button>
       } />
       <div className="p-4 md:p-8 max-w-3xl mx-auto">
         <div className="mb-3 rounded-2xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm font-semibold text-primary">
-          {inbox.data?.unreadCount ?? 0} unread signal(s) waiting for you.
+          {tn(inbox.data?.unreadCount ?? 0, "{n} unread notification", "{n} unread notifications", { n: inbox.data?.unreadCount ?? 0 })}
         </div>
         {!inbox.isLoading && !inbox.isError && notifications.length > 0 && (
           <div className="mb-3">
@@ -63,15 +65,15 @@ function InboxPage() {
                 <div className="flex-1 space-y-1.5"><Skeleton className="h-3.5 w-1/3" /><Skeleton className="h-3 w-2/3" /><Skeleton className="h-2.5 w-24" /></div>
               </div>
             ))}
-            {inbox.isError && <EmptyState icon={Lock} tone="muted" title="Signal locked" message="You need to log in to open your live inbox." compact />}
+            {inbox.isError && <EmptyState icon={Lock} tone="muted" title={t("Couldn't load notifications")} message={t("Your session may have ended. Sign in again to see your notifications.")} compact />}
             {!inbox.isLoading && !inbox.isError && notifications.length === 0 && (
-              <EmptyState icon={Inbox} tone="success" title="Inbox clean" compact
-                message="Requests to approve, replies to your tickets, mentions and announcements land here the moment they happen. Nothing needs you right now." />
+              <EmptyState icon={Inbox} tone="success" title={t("No notifications")} compact
+                message={t("Requests to approve, replies to your tickets, mentions and announcements show up here the moment they happen. Nothing needs you right now.")} />
             )}
             {!inbox.isLoading && !inbox.isError && notifications.length > 0 && shown.length === 0 && (
-              <EmptyState icon={Filter} tone="muted" title="Nothing of this kind" compact
-                message="This filter only shows one type of signal. Everything else is still in All."
-                action={<EmptyAction onClick={() => setGroup("all")}>Show all</EmptyAction>} />
+              <EmptyState icon={Filter} tone="muted" title={t("Nothing of this kind")} compact
+                message={t("This filter only shows one type of notification. Everything else is still in All.")}
+                action={<EmptyAction onClick={() => setGroup("all")}>{t("Show all")}</EmptyAction>} />
             )}
             {!inbox.isLoading && shown.map((n, idx) => <NotificationRow key={n.id} notification={n} idx={idx} />)}
           </div>
@@ -105,12 +107,13 @@ function notificationTarget(n: NexusNotification): { to: string; params?: Record
 }
 
 function NotificationRow({ notification, idx }: { notification: NexusNotification; idx: number }) {
+  const { t } = useLang();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const Icon = iconMap[idx % iconMap.length];
   const refresh = () => qc.invalidateQueries({ queryKey: ["nexus", "notifications"] });
-  const markRead = useMutation({ mutationFn: () => nexusApi.markNotificationRead(notification.id), onSuccess: refresh, onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't mark it read."), });
-  const remove = useMutation({ mutationFn: () => nexusApi.deleteNotification(notification.id), onSuccess: () => { refresh(); celebrate("Signal archived 🧹"); }, onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't archive it."), });
+  const markRead = useMutation({ mutationFn: () => nexusApi.markNotificationRead(notification.id), onSuccess: refresh, onError: (e: unknown) => alert(e instanceof Error ? e.message : t("Couldn't mark it as read.")), });
+  const remove = useMutation({ mutationFn: () => nexusApi.deleteNotification(notification.id), onSuccess: () => { refresh(); celebrate(t("Notification deleted")); }, onError: (e: unknown) => alert(e instanceof Error ? e.message : t("Couldn't delete it.")), });
   const busy = markRead.isPending || remove.isPending;
   const target = notificationTarget(notification);
 
@@ -140,14 +143,14 @@ function NotificationRow({ notification, idx }: { notification: NexusNotificatio
         </span>
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold">{notification.title || signalTitle(notification)}</p>
-        <p className="text-sm text-muted-foreground mt-0.5">{notification.message || "New NEXUS signal arrived."}</p>
-        <p className="text-xs text-muted-foreground mt-1">{fmtDate(notification.createdAt)} · {notification.type || "signal"}{target ? " · tap to open" : ""}</p>
-        {(markRead.isError || remove.isError) && <p className="mt-1 text-xs font-semibold text-destructive">Action failed. Check permission/session.</p>}
+        <p className="text-sm font-semibold">{notification.title || typeTitle(notification)}</p>
+        <p className="text-sm text-muted-foreground mt-0.5">{notification.message || t("New notification")}</p>
+        <p className="text-xs text-muted-foreground mt-1">{fmtDate(notification.createdAt)}</p>
+        {(markRead.isError || remove.isError) && <p className="mt-1 text-xs font-semibold text-destructive">{t("That didn't work. Check your connection and try again.")}</p>}
       </div>
       <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-        {!notification.read && <button disabled={busy} onClick={() => markRead.mutate()} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50">Read</button>}
-        <button disabled={busy} onClick={() => remove.mutate()} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50" title="Delete notification">
+        {!notification.read && <button disabled={busy} onClick={() => markRead.mutate()} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50">{t("Mark as read")}</button>}
+        <button disabled={busy} onClick={() => remove.mutate()} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50" title={t("Delete notification")} aria-label={t("Delete notification")}>
           {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
         </button>
         {!notification.read && <span className="h-2 w-2 rounded-full bg-primary ml-1" />}
@@ -156,7 +159,8 @@ function NotificationRow({ notification, idx }: { notification: NexusNotificatio
   );
 }
 
-function signalTitle(notification: NexusNotification) {
-  const type = (notification.type || "signal").toLowerCase().replace(/_/g, " ");
+/** A notification with no title: its type in plain words ("task_assigned" → "Task assigned"). */
+function typeTitle(notification: NexusNotification) {
+  const type = (notification.type || "notification").toLowerCase().replace(/_/g, " ");
   return type.charAt(0).toUpperCase() + type.slice(1);
 }

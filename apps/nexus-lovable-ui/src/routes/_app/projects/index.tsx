@@ -59,24 +59,25 @@ export const Route = createFileRoute("/_app/projects/")({
 
 const EXPANDED_KEY = "nexus:projects:expanded-folders";
 
+// Labels are English keys, shown through t() (owner, 12 Oct 2026: plain words, no "In play" / "Shipped").
 const statusBadge: Record<string, { label: string; cls: string }> = {
-  ACTIVE: { label: "In play", cls: "bg-success/15 text-success" },
-  PLANNING: { label: "Warming up", cls: "bg-info/15 text-info" },
-  ON_HOLD: { label: "Paused", cls: "bg-warning/20 text-warning-foreground" },
-  COMPLETED: { label: "Shipped", cls: "bg-muted text-muted-foreground" },
+  ACTIVE: { label: "Active", cls: "bg-success/15 text-success" },
+  PLANNING: { label: "Planning", cls: "bg-info/15 text-info" },
+  ON_HOLD: { label: "On hold", cls: "bg-warning/20 text-warning-foreground" },
+  COMPLETED: { label: "Completed", cls: "bg-muted text-muted-foreground" },
   ARCHIVED: { label: "Archived", cls: "bg-muted text-muted-foreground" },
   on_track: { label: "On track", cls: "bg-success/15 text-success" },
   at_risk: { label: "At risk", cls: "bg-warning/20 text-warning-foreground" },
-  off_track: { label: "Needs rescue", cls: "bg-destructive/15 text-destructive" },
-  completed: { label: "Shipped", cls: "bg-muted text-muted-foreground" },
+  off_track: { label: "Off track", cls: "bg-destructive/15 text-destructive" },
+  completed: { label: "Completed", cls: "bg-muted text-muted-foreground" },
 };
 
 const statusOptions = [
   { value: "all", label: "All projects" },
-  { value: "ACTIVE", label: "In play" },
-  { value: "PLANNING", label: "Warming up" },
-  { value: "ON_HOLD", label: "Paused" },
-  { value: "COMPLETED", label: "Shipped" },
+  { value: "ACTIVE", label: "Active" },
+  { value: "PLANNING", label: "Planning" },
+  { value: "ON_HOLD", label: "On hold" },
+  { value: "COMPLETED", label: "Completed" },
   { value: "ARCHIVED", label: "Archived" },
 ];
 
@@ -258,7 +259,7 @@ function ProjectsPage() {
     ? tr(createErrorKnown)
     : createProject.error instanceof Error
       ? createProject.error.message
-      : "Create failed. Check session and workspace permission.";
+      : tr("Couldn't create the project. Check your connection and try again.");
 
   const openCreate = (folderId: string | null = null) => {
     if (!newProjectWorkspaceId && workspaceOptions[0]) setNewProjectWorkspaceId(workspaceOptions[0].id);
@@ -391,12 +392,8 @@ function ProjectsPage() {
   return (
     <div>
       <PageHeader
-        title="Projects"
-        subtitle={
-          projectsQuery.data
-            ? "Live projects from NEXUS Phaëthon — pick a workstream and make it move."
-            : "Preview mode with fun NEXUS project cards."
-        }
+        title={tr("Projects")}
+        subtitle={tr("Every project you're part of.")}
         actions={
           <>
             <div className="relative w-64">
@@ -404,7 +401,7 @@ function ProjectsPage() {
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder={tr("Search projects, owners, lanes…")}
+                placeholder={tr("Search projects, owners, sections…")}
                 variant="secondary"
                 className="w-full pl-7 text-sm"
               />
@@ -414,7 +411,7 @@ function ProjectsPage() {
               size="sm"
               variant={viewMode === "grid" ? "primary" : "outline"}
               onPress={() => setViewMode("grid")}
-              aria-label="Grid view"
+              aria-label={tr("Grid view")}
             >
               <LayoutGrid className="h-4 w-4" />
             </Button>
@@ -423,7 +420,7 @@ function ProjectsPage() {
               size="sm"
               variant={viewMode === "list" ? "primary" : "outline"}
               onPress={() => setViewMode("list")}
-              aria-label="List view"
+              aria-label={tr("List view")}
             >
               <List className="h-4 w-4" />
             </Button>
@@ -457,18 +454,15 @@ function ProjectsPage() {
           <div className={cn("max-h-[calc(100dvh-2rem)] w-full overflow-y-auto overscroll-contain rounded-[32px] border border-border bg-card p-5 shadow-pop", newProjectType === null ? "max-w-4xl" : "max-w-lg")}>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
-                  <Sparkles className="h-3.5 w-3.5" /> Real NEXUS project
-                </div>
-                <h2 className="mt-3 text-2xl font-black tracking-tight">{tr("Create a new project")}</h2>
+                <h2 className="text-2xl font-black tracking-tight">{tr("Create a new project")}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Creates a real project, adds default lanes, then drops you into the board.
+                  {tr("The project starts with default sections and opens when it's ready.")}
                 </p>
               </div>
               <button
                 onClick={() => setIsCreateOpen(false)}
                 className="rounded-full p-2 hover:bg-muted"
-                aria-label="Close create project"
+                aria-label={tr("Close")}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -500,14 +494,14 @@ function ProjectsPage() {
                   <input
                     value={newProjectName}
                     onChange={(e) => setNewProjectName(e.target.value)}
-                    placeholder="e.g. Jagain Launch Ops"
+                    placeholder={tr("e.g. Q4 product launch")}
                     className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
                   />
                 </label>
               </div>
 
               <label className="block text-xs font-semibold text-muted-foreground">
-                Brief
+                {tr("Description")}
                 <textarea
                   value={newProjectDescription}
                   onChange={(e) => setNewProjectDescription(e.target.value)}
@@ -520,13 +514,13 @@ function ProjectsPage() {
                   (the normal case) it's auto-selected and hidden — a project always lives in your one space. */}
               {workspaceOptions.length > 1 && (
                   <label className="block text-xs font-semibold text-muted-foreground">
-                    Workspace
+                    {tr("Workspace")}
                     <select
                       value={newProjectWorkspaceId}
                       onChange={(e) => { setNewProjectWorkspaceId(e.target.value); setNewProjectMemberIds([]); }}
                       className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
                     >
-                      <option value="">Select workspace…</option>
+                      <option value="">{tr("Select a workspace…")}</option>
                       {workspaceOptions.map((workspace) => (
                         <option key={workspace.id} value={workspace.id}>
                           {workspace.label}
@@ -566,8 +560,7 @@ function ProjectsPage() {
 
               {!workspaceOptions.length && (
                 <p className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
-                  No workspace visible yet. Login/session must load projects with workspaceId before
-                  creating a project.
+                  {tr("You're not in a workspace yet, so you can't create a project. Ask a BoD or Manager to add you.")}
                 </p>
               )}
               {createProject.isError && (
@@ -600,28 +593,24 @@ function ProjectsPage() {
               <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                 <Sparkles className="h-3.5 w-3.5" /> {tr("{shown}/{n} projects visible", { shown: visibleProjects.length, n: computedProjects.length })}
               </div>
-              <h2 className="mt-3 text-xl font-semibold tracking-tight">
-                Choose the board, then move the cards.
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Project cards now act as clear launchpads into Kanban, pages, calendar, and
-                timeline.
+              <p className="mt-2 text-sm text-muted-foreground">
+                {tr("Open a project to see its board, pages, calendar and timeline.")}
               </p>
             </div>
             <div className="grid grid-cols-3 gap-2 min-w-[280px]">
               <MiniStat
                 icon={<Target className="h-4 w-4" />}
-                label="Mission energy"
+                label={tr("Average progress")}
                 value={`${liveProgress}%`}
               />
               <MiniStat
                 icon={<CheckCircle2 className="h-4 w-4" />}
-                label="Slayed cards"
+                label={tr("Tasks done")}
                 value={`${totalCompleted}`}
               />
               <MiniStat
                 icon={<Users className="h-4 w-4" />}
-                label="Crew seats"
+                label={tr("Members")}
                 value={`${computedProjects.reduce((sum, p) => sum + p.memberIds.length, 0)}`}
               />
             </div>
@@ -630,7 +619,7 @@ function ProjectsPage() {
           <div className="relative mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between border-t border-border pt-4">
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                <SlidersHorizontal className="h-3.5 w-3.5" /> Filters
+                <SlidersHorizontal className="h-3.5 w-3.5" /> {tr("Filters")}
               </span>
               <select
                 value={statusFilter}
@@ -639,7 +628,7 @@ function ProjectsPage() {
               >
                 {statusOptions.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.value === "all" ? tr(option.label) : option.label}
+                    {tr(option.label)}
                   </option>
                 ))}
               </select>
@@ -648,9 +637,9 @@ function ProjectsPage() {
                 onChange={(event) => setSortMode(event.target.value as SortMode)}
                 className="rounded-full border border-border bg-background px-3 py-1.5"
               >
-                <option value="energy">Sort by energy</option>
-                <option value="tasks">Sort by task load</option>
-                <option value="name">Sort A-Z</option>
+                <option value="energy">{tr("Sort by progress")}</option>
+                <option value="tasks">{tr("Sort by number of tasks")}</option>
+                <option value="name">{tr("Sort by name")}</option>
               </select>
               {activeFilters > 0 && (
                 <button
@@ -660,12 +649,12 @@ function ProjectsPage() {
                   }}
                   className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1.5 hover:bg-accent"
                 >
-                  <X className="h-3.5 w-3.5" /> reset {activeFilters}
+                  <X className="h-3.5 w-3.5" /> {tr("Clear filters ({n})", { n: activeFilters })}
                 </button>
               )}
             </div>
             <div className="text-xs text-muted-foreground">
-              {tr("Click any project card to enter its live board.")}
+              {tr("Select a project to open it.")}
             </div>
           </div>
         </section>
@@ -697,7 +686,7 @@ function ProjectsPage() {
           if (visibleProjects.length === 0) {
             return (
               <EmptyState icon={Search} tone="muted" title={tr("No project matches that")}
-                message={tr("Try another project name, owner or lane — or clear the search to see every project you're part of.")} />
+                message={tr("Try another project name, owner or section — or clear the search to see every project you're part of.")} />
             );
           }
 
@@ -765,10 +754,11 @@ type DragProps = { draggable?: boolean; onDragStart?: (e: React.DragEvent) => vo
 type DropProps = { onDragOver?: (e: React.DragEvent) => void; onDragLeave?: (e: React.DragEvent) => void; onDrop?: (e: React.DragEvent) => void };
 
 function ProjectCard({ project: p, folders, canMove, onMove, dragProps, dragging }: { project: ProjectWithComputed; folders: NexusProjectFolder[]; canMove: boolean; onMove: (folderId: string | null) => void; dragProps?: DragProps; dragging?: boolean }) {
+  const { t, locale } = useLang();
   const s = statusBadge[p.status || "ACTIVE"] || statusBadge.ACTIVE;
   const dueLabel = p.dueDate
-    ? new Date(p.dueDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
-    : "No deadline";
+    ? new Date(p.dueDate).toLocaleDateString(locale, { day: "2-digit", month: "short" })
+    : t("No due date");
   return (
     <Link
       key={p.id}
@@ -795,12 +785,12 @@ function ProjectCard({ project: p, folders, canMove, onMove, dragProps, dragging
                 {p.name}
               </h3>
               <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                {p.description || "No brief yet — add one and make the mission clearer."}
+                {p.description || t("No description yet.")}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               <Chip size="sm" variant="soft" className={s.cls}>
-                {s.label}
+                {t(s.label)}
               </Chip>
               {canMove && folders.length > 0 && (
                 <MoveToFolderMenu currentFolderId={p.folderId ?? null} folders={folders} onMove={onMove} />
@@ -809,15 +799,15 @@ function ProjectCard({ project: p, folders, canMove, onMove, dragProps, dragging
           </div>
 
           <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
-            <BadgeMetric label="Cards" value={`${p.totalTasksComputed}`} />
-            <BadgeMetric label="Done" value={`${p.completedTasksComputed}`} />
-            <BadgeMetric label="Lanes" value={`${p.taskListCount}`} />
+            <BadgeMetric label={t("Tasks")} value={`${p.totalTasksComputed}`} />
+            <BadgeMetric label={t("Done")} value={`${p.completedTasksComputed}`} />
+            <BadgeMetric label={t("Sections")} value={`${p.taskListCount}`} />
           </div>
 
           <div className="mt-4">
             <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-              <span>{p.progressComputed}% mission energy</span>
-              <span>{p.totalTasksComputed - p.completedTasksComputed} left</span>
+              <span>{t("{n}% done", { n: p.progressComputed })}</span>
+              <span>{t("{n} left", { n: p.totalTasksComputed - p.completedTasksComputed })}</span>
             </div>
             <ProgressBar
               value={p.progressComputed}
@@ -835,7 +825,7 @@ function ProjectCard({ project: p, folders, canMove, onMove, dragProps, dragging
             {p.memberIds.length ? (
               <AvatarStack ids={p.memberIds} size={22} max={4} />
             ) : (
-              <span className="text-[11px]">Solo quest</span>
+              <span className="text-[11px]">{t("No members yet")}</span>
             )}
             <span className="inline-flex items-center gap-1">
               <Clock3 className="h-3.5 w-3.5" /> {dueLabel}
@@ -848,6 +838,7 @@ function ProjectCard({ project: p, folders, canMove, onMove, dragProps, dragging
 }
 
 function ProjectRow({ project: p, folders, canMove, onMove, dragProps, dragging }: { project: ProjectWithComputed; folders: NexusProjectFolder[]; canMove: boolean; onMove: (folderId: string | null) => void; dragProps?: DragProps; dragging?: boolean }) {
+  const { t, tn } = useLang();
   const s = statusBadge[p.status || "ACTIVE"] || statusBadge.ACTIVE;
   return (
     <Link
@@ -863,19 +854,19 @@ function ProjectRow({ project: p, folders, canMove, onMove, dragProps, dragging 
         <div className="min-w-0">
           <div className="font-semibold truncate group-hover:text-primary">{p.name}</div>
           <div className="text-xs text-muted-foreground truncate">
-            {p.description || "No project brief yet."}
+            {p.description || t("No description yet.")}
           </div>
         </div>
       </div>
       <Chip size="sm" variant="soft" className={s.cls}>
-        {s.label}
+        {t(s.label)}
       </Chip>
       <div>
         <ProgressBar value={p.progressComputed} color="bg-success" />
-        <div className="mt-1 text-[11px] text-muted-foreground">{p.progressComputed}% energy</div>
+        <div className="mt-1 text-[11px] text-muted-foreground">{t("{n}% done", { n: p.progressComputed })}</div>
       </div>
       <div className="text-xs text-muted-foreground">
-        {p.completedTasksComputed}/{p.totalTasksComputed} slayed · {p.taskListCount} lanes
+        {t("{done}/{total} done", { done: p.completedTasksComputed, total: p.totalTasksComputed })} · {tn(p.taskListCount, "{n} section", "{n} sections", { n: p.taskListCount })}
       </div>
       <div className="flex items-center justify-end gap-1">
         {canMove && folders.length > 0 && (

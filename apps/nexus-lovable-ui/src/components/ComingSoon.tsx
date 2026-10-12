@@ -21,7 +21,7 @@ export function ComingSoon({ feature, note }: { feature: string; note?: string }
         <h1 className="text-2xl font-black text-foreground md:text-3xl">{feature} is in the works</h1>
         <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
           {note ??
-            `${feature} isn't unlocked for your role yet. It's still in the works and we'll open it up for everyone soon — stay tuned! 🚀`}
+            `${feature} isn't available for your role yet. It opens to everyone once it's ready.`}
         </p>
       </Reveal>
     </div>

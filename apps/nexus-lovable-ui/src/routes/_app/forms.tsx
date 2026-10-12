@@ -53,7 +53,7 @@ function Forms() {
     <div>
       <PageHeader
         title="Forms"
-        subtitle="Intake forms that spin up real tasks on submit."
+        subtitle="Forms that create a task each time someone submits them."
         actions={
           <>
             <select value={filter} onChange={(e) => setFilter(e.target.value)} className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold outline-none focus:border-primary">

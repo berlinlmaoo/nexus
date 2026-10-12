@@ -1,4 +1,4 @@
-import { getLang } from "@/lib/lang";
+import { getLang, t } from "@/lib/lang";
 import type { CalItem, CalItemsResponse, CalRules, CalStructure } from "@/lib/calendar/core";
 
 export type NexusUser = {
@@ -3254,7 +3254,7 @@ export function fmtTime(value?: string | null) {
 /** Due date for display: "Jun 3" for date-only tasks, "Jun 3, 02:30 PM" when a real time was set.
  *  Date-only tasks land on UTC midnight, so we only append a time when the UTC time isn't 00:00. */
 export function fmtDue(value?: string | null) {
-  if (!value) return "No due date";
+  if (!value) return t("No due date");
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   const hasTime = date.getUTCHours() !== 0 || date.getUTCMinutes() !== 0;
@@ -3351,12 +3351,27 @@ export function textToBlocks(value: string): string {
   );
 }
 
+/** Plain, sentence-case words for the enum values the API sends (owner, 12 Oct 2026: no raw TODO /
+ * IN_PROGRESS on screen). One word per concept, the same as the Calendar and the board. */
+const ENUM_LABEL: Record<string, string> = {
+  // Task status
+  TODO: "To do", IN_PROGRESS: "In progress", IN_REVIEW: "In review", DONE: "Done", CANCELLED: "Cancelled",
+  // Task priority
+  URGENT: "Urgent", HIGH: "High", MEDIUM: "Medium", LOW: "Low", NONE: "No priority",
+  // Project status
+  ACTIVE: "Active", ARCHIVED: "Archived", COMPLETED: "Completed",
+  // Attendance day and check-in
+  CHECKED_IN: "Checked in", INCOMPLETE: "Incomplete", ON_TIME: "On time", LATE: "Late", WFH: "WFH",
+  // Requests
+  LEAVE: "Leave", SICK: "Sick", PERMIT: "Permit", DAY_OFF: "Day off", RED_DATE: "Public holiday",
+  PENDING: "Pending", APPROVED: "Approved", REJECTED: "Rejected", CANCELED: "Cancelled",
+};
+
 export function statusLabel(value?: string | null) {
-  if (!value) return "Queued";
-  if (value === "RED_DATE") return "Tanggal Merah";
-  return value
-    .toLowerCase()
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+  if (!value) return "—";
+  const known = ENUM_LABEL[value.toUpperCase()];
+  if (known) return t(known);
+  // Anything else: sentence case ("STATUS_CHANGED" → "Status changed"), never the raw enum.
+  const words = value.toLowerCase().split("_").filter(Boolean).join(" ");
+  return t(words.charAt(0).toUpperCase() + words.slice(1));
 }

@@ -231,8 +231,9 @@ function StreakRow({ data, rows, historyLoading }: { data: NexusMemberRecord; ro
   const byDate = new Map<string, HistRow>();
   for (const r of rows) if (r.attendanceDate && (!r.user?.id || r.user.id === data.person.id)) byDate.set(r.attendanceDate.slice(0, 10), r);
   const day = open ? data.days.find((d) => d.date === open) ?? null : null;
+  const { t } = useLang();
   return (
-    <Card title="Streak board" hint="Green = present or permit, red = absent, orange = sick, purple = day off, yellow = leave. Tap a day for its detail."
+    <Card title={t("Attendance board")} hint={t("Green = present or permit, red = absent, orange = sick, purple = day off, yellow = leave. Tap a day for its detail.")}
       right={historyLoading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : undefined}>
       <div className="overflow-x-auto overscroll-contain pb-1">
         <div className="flex min-w-max gap-1">
