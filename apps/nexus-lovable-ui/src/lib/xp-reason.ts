@@ -2,28 +2,31 @@
 // Shared by the BoD audit log and the public per-user XP log so labels stay consistent.
 // Late penalty is -min(lateMinutes,120) at 1 XP/min, so |amount| ≈ minutes (capped 120) when the
 // exact `lateMinutes` isn't provided.
+// Called at render time by components that use useLang(), so `t` follows the current language.
+import { t } from "@/lib/lang";
+
 export function xpReasonInfo(reason: string, amount?: number, lateMinutes?: number | null): { label: string; sub?: string } {
   if (reason.startsWith("attendance:late:")) {
     let minLabel = "";
     if (typeof lateMinutes === "number" && lateMinutes > 0) {
-      minLabel = ` ${lateMinutes} min`;
+      minLabel = " " + t("{n} min", { n: lateMinutes });
     } else if (amount != null && Math.abs(amount) > 0) {
       const m = Math.abs(amount);
-      minLabel = ` ${m >= 120 ? "120+" : m} min`;
+      minLabel = " " + t("{n} min", { n: m >= 120 ? "120+" : m });
     }
-    return { label: `Late check-in${minLabel}`, sub: reason.slice("attendance:late:".length) };
+    return { label: `${t("Late check-in")}${minLabel}`, sub: reason.slice("attendance:late:".length) };
   }
-  if (reason.startsWith("attendance:nocheckout:")) return { label: "Missed check-out", sub: reason.slice("attendance:nocheckout:".length) };
-  if (reason.startsWith("attendance:alpha:")) return { label: "Absent / no notice", sub: reason.slice("attendance:alpha:".length) };
-  if (reason.startsWith("bonus:zero-alpha:")) return { label: "No-absence bonus", sub: reason.slice("bonus:zero-alpha:".length) };
-  if (reason.startsWith("admin:adjust:")) return { label: "Admin adjustment", sub: reason.slice("admin:adjust:".length) };
-  if (reason === "admin:adjust") return { label: "Admin adjustment" };
+  if (reason.startsWith("attendance:nocheckout:")) return { label: t("Missed check-out"), sub: reason.slice("attendance:nocheckout:".length) };
+  if (reason.startsWith("attendance:alpha:")) return { label: t("Absent without notice"), sub: reason.slice("attendance:alpha:".length) };
+  if (reason.startsWith("bonus:zero-alpha:")) return { label: t("No-absence bonus"), sub: reason.slice("bonus:zero-alpha:".length) };
+  if (reason.startsWith("admin:adjust:")) return { label: t("Admin adjustment"), sub: reason.slice("admin:adjust:".length) };
+  if (reason === "admin:adjust") return { label: t("Admin adjustment") };
   const map: Record<string, string> = {
     task_done: "Task done",
-    quest: "Quest done",
+    quest: "Goal done",
     streak: "Daily streak",
-    penalty: "Quest penalty",
+    penalty: "Goal penalty",
     goal_milestone: "Goal milestone",
   };
-  return { label: map[reason] ?? reason };
+  return { label: map[reason] ? t(map[reason]) : reason };
 }
