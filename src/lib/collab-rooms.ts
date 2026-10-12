@@ -182,10 +182,19 @@ async function persistOnce(room: Room) {
   state.io?.to(ioRoom(room.key)).emit("ydoc:saved", { room: room.key, at: new Date().toISOString() })
 }
 
-/** Save now (one at a time per room); re-runs while edits keep arriving during a save. */
+/**
+ * Save now (one at a time per room); re-runs while edits keep arriving during a save.
+ *
+ * Nothing to save = no promise kept. Before 12 Oct 2026 a call with a clean room ran the async body to its
+ * `finally` synchronously (no await was reached), cleared `saving` and only THEN stored the already-settled
+ * promise in it — so `saving` stayed set forever and every later edit in that room was never saved (found
+ * by the app-edit test: a debounce timer firing just after another save had cleaned the room).
+ */
 function persist(room: Room): Promise<void> {
   if (room.saving) return room.saving
-  room.saving = (async () => {
+  if (!room.dirty || room.dead) return Promise.resolve()
+  const run: Promise<void> = (async () => {
+    await Promise.resolve() // `saving` is assigned before anything below runs
     try {
       while (room.dirty && !room.dead) await persistOnce(room)
     } catch (error) {
@@ -193,10 +202,11 @@ function persist(room: Room): Promise<void> {
       room.dirty = true
       if (!room.dead) schedule(room)
     } finally {
-      room.saving = null
+      if (room.saving === run) room.saving = null
     }
   })()
-  return room.saving
+  room.saving = run
+  return run
 }
 
 async function closeIfEmpty(room: Room) {
