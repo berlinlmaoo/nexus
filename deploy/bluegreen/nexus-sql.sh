@@ -35,7 +35,7 @@ green() { printf '\033[32m%s\033[0m\n' "$*"; }
 psqlc() { docker exec -i "$PG" psql -U "$PGU" -d "$PGD" -v ON_ERROR_STOP=1 -q "$@"; }
 
 ensure_ledger() {
-  psqlc -c "create table if not exists public.nexus_sql_ledger (
+  psqlc -c "set client_min_messages to warning; create table if not exists public.nexus_sql_ledger (
     name text primary key, sha256 text not null, applied_at timestamptz not null default now(),
     applied_by text, kind text not null default 'applied', note text)" >/dev/null
 }

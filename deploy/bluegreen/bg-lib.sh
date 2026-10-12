@@ -125,8 +125,10 @@ bg_schedule_finish() {  # epoch slot
 
 bg_finish() {  # epoch slot   (caller holds $BG_LOCK)
   local epoch="$1" slot="$2"
-  if [ "$(bg_epoch)" != "$epoch" ]; then echo "$(date '+%F %T') finish $slot skipped: epoch changed"; return 0; fi
+  # Skip only when the slot is live again (rollback) or a newer deploy has claimed it as its target.
+  # $epoch is informational: a stale timer for a slot nobody uses still stops it (e.g. the legacy container).
   if [ "$(bg_live)" = "$slot" ]; then echo "$(date '+%F %T') finish $slot skipped: it is live"; return 0; fi
+  case "$(bg_epoch)" in *"-claim-$slot") echo "$(date '+%F %T') finish $slot skipped: a deploy is using it"; return 0;; esac
   if bg_running "$slot"; then
     docker stop -t 30 "$(bg_c "$slot")" >/dev/null 2>&1
     bg_write_upstreams "$(bg_live)" "$(bg_live)" && bg_reload
