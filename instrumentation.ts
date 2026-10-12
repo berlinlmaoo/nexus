@@ -5,6 +5,10 @@
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return
+  // First: IPv4-only connects. Node 20 happy eyeballs + no IPv6 in the container + ~230 ms to Google made
+  // outbound calls fail whenever the loop stalled (attendance sheet cron, Sep-Oct 2026). lib/network-family.ts.
+  const { preferSingleIpv4Connect } = await import("@/lib/network-family")
+  preferSingleIpv4Connect()
   // Blue-green (lib/bluegreen.ts): both slots boot this file; only the singleton leader runs the clocks below.
   const { startSingletonLeader } = await import("@/lib/bluegreen")
   startSingletonLeader()
