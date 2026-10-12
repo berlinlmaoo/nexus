@@ -187,7 +187,7 @@ export async function createInAppNotification(data: {
     return null
   }
   if (data.texts) {
-    const t = data.texts[await recipientLang(data.userId)]
+    const t = data.texts[(await recipientLang(data.userId)) ?? "en"]
     data = { ...data, title: t.title, message: t.message }
   }
 
@@ -272,12 +272,12 @@ export async function notifyAttendanceReminder(data: {
   const texts = data.kind === "checkin"
     ? bi(
         off > 0 ? [`Check-in in ${off} min`, `Your shift starts at ${t}. Don't forget to check in on NEXUS.`] : ["Time to check in", `It's ${t} — check in now so you're not marked late.`],
-        off > 0 ? [`Absen masuk ${soon}`, `Jam masuk ${t}. Jangan lupa check-in di NEXUS.`] : ["Waktunya absen masuk", `Sudah jam ${t} — check-in sekarang supaya tidak tercatat telat.`],
-      )
+        off > 0 ? [`Absen masuk ${soon}`, `Jam masuk ${t}. Jangan lupa check-in di NEXUS.`] : ["Waktunya absen masuk", `Sudah jam ${t} — check-in sekarang supaya tidak tercatat telat.`]
+)
     : bi(
         off > 0 ? [`Check-out in ${off} min`, `Your shift ends at ${t}. Don't forget to check out.`] : ["Time to check out", `It's ${t} — don't forget to check out before you leave.`],
-        off > 0 ? [`Absen pulang ${soon}`, `Jam pulang ${t}. Jangan lupa check-out.`] : ["Waktunya absen pulang", `Sudah jam ${t} — jangan lupa check-out sebelum pulang.`],
-      )
+        off > 0 ? [`Absen pulang ${soon}`, `Jam pulang ${t}. Jangan lupa check-out.`] : ["Waktunya absen pulang", `Sudah jam ${t} — jangan lupa check-out sebelum pulang.`]
+)
   await createInAppNotification({
     userId: data.userId,
     type,
@@ -320,9 +320,9 @@ export async function notifyAttendanceAbsentRecorded(data: {
   const remaining = Math.max(0, data.quota - data.used)
   const texts = bi(
     ["Recorded as absent", `You didn't check in on ${dayOf("en")} — 1 day off was used. ${remaining > 0 ? `This period: ${remaining} of ${data.quota} left.` : `This period's allowance is used up (${data.quota}/${data.quota}).`}`],
-    ["Tercatat tanpa keterangan", `Kamu gak absen tanggal ${dayOf("id")} — dipotong 1 day off. ${remaining > 0 ? `Jatah periode ini: sisa ${remaining} dari ${data.quota}.` : `Jatah periode ini sudah habis (${data.quota}/${data.quota}).`}`],
-  )
-  const { title, message } = texts.texts[await recipientLang(data.userId)]
+    ["Tercatat tanpa keterangan", `Kamu gak absen tanggal ${dayOf("id")} — dipotong 1 day off. ${remaining > 0 ? `Jatah periode ini: sisa ${remaining} dari ${data.quota}.` : `Jatah periode ini sudah habis (${data.quota}/${data.quota}).`}`]
+)
+  const { title, message } = texts.texts[(await recipientLang(data.userId)) ?? "en"]
   const push = !(await isUserDnd(data.userId))
 
   if (data.dryRun) {
@@ -437,8 +437,8 @@ export async function notifyAttendanceRequestPending(requestId: string) {
         type: "attendance_request_pending",
         ...bi(
           [`${whoName ?? "Someone"} requested ${typeLabelEn.toLowerCase()}`, `${whenOf("en")}${reasonSuffix}.${dayOffNoteEn} Approve or reject it in Attendance.`],
-          [`${whoName ?? "Seseorang"} mengajukan ${typeLabel.toLowerCase()}`, `${whenOf("id")}${reasonSuffix}.${dayOffNote} Approve atau tolak di Attendance.`],
-        ),
+          [`${whoName ?? "Seseorang"} mengajukan ${typeLabel.toLowerCase()}`, `${whenOf("id")}${reasonSuffix}.${dayOffNote} Approve atau tolak di Attendance.`]
+),
         link: `/attendance?request=${requestId}`,
         push: true,
       }).catch(() => null),
@@ -465,8 +465,8 @@ export async function notifyOffsiteCheckoutPending(data: {
         type: "offsite_checkout_pending",
         ...bi(
           [`${data.staffName} checked out away from the office`, `Needs approval${reasonSuffix}. Approve or reject it in Attendance.`],
-          [`${data.staffName} check-out di luar kantor`, `Perlu approval${reasonSuffix}. Approve atau tolak di Attendance.`],
-        ),
+          [`${data.staffName} check-out di luar kantor`, `Perlu approval${reasonSuffix}. Approve atau tolak di Attendance.`]
+),
         link: data.recordId ? `/attendance?offsite=${data.recordId}` : "/attendance",
         push: true,
       }).catch(() => null),
@@ -1421,8 +1421,8 @@ export async function notifyComplaintFiled(data: { workspaceId: string; complain
         type: "complaint_filed",
         ...bi(
           [head ? `New ticket from ${head.reporterEn}` : "A new ticket came in", head ? `${head.subject} · ${data.categoryLabelEn ?? data.categoryLabel}` : `Category: ${data.categoryLabelEn ?? data.categoryLabel}. Open it to respond.`],
-          [head ? `Tiket baru dari ${head.reporter}` : "Keluhan baru masuk", head ? `${head.subject} · ${data.categoryLabel}` : `Kategori: ${data.categoryLabel}. Buka untuk menanggapi.`],
-        ),
+          [head ? `Tiket baru dari ${head.reporter}` : "Keluhan baru masuk", head ? `${head.subject} · ${data.categoryLabel}` : `Kategori: ${data.categoryLabel}. Buka untuk menanggapi.`]
+),
         link: `/complaints?id=${data.complaintId}`,
         push: true,
       }),
@@ -1453,8 +1453,8 @@ export async function notifyComplaintReply(data: { complaintId: string; workspac
           : `${subjectEn}${snippet || " — open it to read the reply."}`],
         [`${replier} membalas tiket kamu`, data.byGideon
           ? `${subject}: GIDEON sudah mengecek datanya dan menjawab. Kalau ada usulan, tinggal menunggu keputusan BoD.`
-          : `${subject}${snippet || " — buka untuk membaca balasannya."}`],
-      ),
+          : `${subject}${snippet || " — buka untuk membaca balasannya."}`]
+),
       link,
       push: true,
     }).catch(() => null)
@@ -1472,8 +1472,8 @@ export async function notifyComplaintReply(data: { complaintId: string; workspac
           type: "complaint_reply",
           ...bi(
             [`${head?.reporterEn ?? "The reporter"} replied on a ticket`, `${head ? subject : "A ticket"}${snippet || " — open it to respond."}`],
-            [`${head?.reporter ?? "Pelapor"} membalas tiket`, `${subject}${snippet || " — buka untuk menanggapi."}`],
-          ),
+            [`${head?.reporter ?? "Pelapor"} membalas tiket`, `${subject}${snippet || " — buka untuk menanggapi."}`]
+),
           link,
           push: true,
         }),
@@ -1500,8 +1500,8 @@ export async function notifyComplaintStatus(data: { reporterId: string; complain
     type: "complaint_status",
     ...bi(
       [data.status === "RESOLVED" ? `Ticket ${subjectEn} resolved ✓`.replace("  ", " ") : `Ticket update ${subjectEn}`.trim(), data.detailEn ?? `Your ticket ${subjectEn} ${labelEn[data.status] ?? data.status.toLowerCase()}.`.replace("  ", " ")],
-      [data.status === "RESOLVED" ? `Tiket ${subject} selesai ✓` : `Update tiket ${subject}`, data.detail ? `${data.detail}` : `Tiket ${subject} ${label[data.status] ?? data.status}.`],
-    ),
+      [data.status === "RESOLVED" ? `Tiket ${subject} selesai ✓` : `Update tiket ${subject}`, data.detail ? `${data.detail}` : `Tiket ${subject} ${label[data.status] ?? data.status}.`]
+),
     link: `/complaints?id=${data.complaintId}`,
     push: true,
   }).catch(() => null)

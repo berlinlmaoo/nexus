@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { rememberUiLanguage } from "@/lib/notification-text"
 import { NextRequest, NextResponse } from "next/server"
 import ExcelJS from "exceljs"
 import { auth } from "@/lib/auth"
@@ -68,6 +69,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const { projectId } = await params
+    // Released iOS/Android send their in-app language here (?lang=): the one request that reveals it.
+    void rememberUiLanguage(session.user.id, request.headers, request.nextUrl)
     const gate = await pipelineGate(session.user.id, projectId, "read")
     if (!gate.ok) return gate.response
     const en = request.nextUrl.searchParams.get("lang") === "en"

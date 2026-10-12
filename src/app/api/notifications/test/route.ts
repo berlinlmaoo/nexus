@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     const timestamp = new Date()
     const hm = timestamp.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Jakarta" })
     const { texts } = bi(["Test notification", `Desktop notification test at ${hm}`], ["Notifikasi tes", `Tes notifikasi desktop jam ${hm}`])
-    const lang = await recipientLang(session.user.id)
+    const lang = (await recipientLang(session.user.id)) ?? "en"
     const notification = await prisma.notification.create({
       data: {
         userId: session.user.id,

@@ -103,8 +103,8 @@ export async function POST(req: NextRequest) {
           type: "attendance_request_escalated",
           ...bi(
             [`${labelEn} from ${nameEn} not answered yet`, `Filed ${dayText(since, "en")}, still waiting for ${mgrEn} after ${days} working day${days === 1 ? "" : "s"}. You can approve it yourself in Attendance.`],
-            [`${label} ${name} belum ditanggapi`, `Diajukan ${fmt(since)}, masih menunggu ${mgr} lewat ${days} hari kerja. Kamu bisa menyetujuinya langsung di Attendance.`],
-          ),
+            [`${label} ${name} belum ditanggapi`, `Diajukan ${fmt(since)}, masih menunggu ${mgr} lewat ${days} hari kerja. Kamu bisa menyetujuinya langsung di Attendance.`]
+),
           link: kind === "request" ? `/attendance?request=${id}` : `/attendance?offsite=${id}`,
           push: true,
         }).catch(() => null)),
@@ -113,8 +113,8 @@ export async function POST(req: NextRequest) {
           type: "attendance_request_escalated",
           ...bi(
             [`${labelEn} from ${nameEn} is still waiting for you`, `Filed ${dayText(since, "en")}. The BoD was told because it's past ${days} working day${days === 1 ? "" : "s"} — but the decision is still yours.`],
-            [`${label} ${name} masih menunggu kamu`, `Diajukan ${fmt(since)}. BoD sudah diberi tahu karena lewat ${days} hari kerja — tapi keputusannya tetap punyamu.`],
-          ),
+            [`${label} ${name} masih menunggu kamu`, `Diajukan ${fmt(since)}. BoD sudah diberi tahu karena lewat ${days} hari kerja — tapi keputusannya tetap punyamu.`]
+),
           link: kind === "request" ? `/attendance?request=${id}` : `/attendance?offsite=${id}`,
           push: true,
         }).catch(() => null),

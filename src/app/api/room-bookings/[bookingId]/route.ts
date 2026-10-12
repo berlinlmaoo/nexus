@@ -100,8 +100,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bo
             : `${booking.title} is now ${formatBookingSlot(booking.startsAt, booking.endsAt, "en")} in ${roomName(booking.room, "en")}.`],
           [cancelled ? `Booking ${existing.room} dibatalkan` : `Booking ${booking.room} diubah`, cancelled
             ? `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)} dibatalkan oleh manager.`
-            : `${booking.title} sekarang ${formatBookingSlot(booking.startsAt, booking.endsAt)} di ${booking.room}.`],
-        ),
+            : `${booking.title} sekarang ${formatBookingSlot(booking.startsAt, booking.endsAt)} di ${booking.room}.`]
+),
         link: "/room-booking",
         push: true,
       }).catch(() => null)
@@ -139,8 +139,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
         type: "booking_changed",
         ...bi(
           [`${roomName(existing.room, "en")} booking deleted`, `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt, "en")} was deleted by a manager.`],
-          [`Booking ${existing.room} dihapus`, `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)} dihapus oleh manager.`],
-        ),
+          [`Booking ${existing.room} dihapus`, `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)} dihapus oleh manager.`]
+),
         link: "/room-booking",
         push: true,
       }).catch(() => null)

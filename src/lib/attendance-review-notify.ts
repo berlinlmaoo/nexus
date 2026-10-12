@@ -59,8 +59,8 @@ export async function notifyAttendanceRequestReviewed(input: {
     ...bi(
       [input.approved ? "Attendance request approved" : "Attendance request rejected",
         `${who} ${input.approved ? "approved" : "rejected"} your ${(REQ_TYPE_LABEL_EN[req.type] ?? req.type).toLowerCase()} (${fmtDateRangeEn(req.startDate, req.endDate)}).${note ? ` Reason: "${note}"` : ""}${refunded > 0 ? ` That day's attendance penalty is cancelled — +${refunded} XP back.` : ""}`],
-      [input.approved ? "Permintaan absen di-approve" : "Permintaan absen ditolak", `${label} kamu (${range}) di-${verb} sama ${who}.${noteSuffix}${refundSuffix}`],
-    ),
+      [input.approved ? "Permintaan absen di-approve" : "Permintaan absen ditolak", `${label} kamu (${range}) di-${verb} sama ${who}.${noteSuffix}${refundSuffix}`]
+),
     link: `/attendance?request=${input.requestId}`,
     // A decision is exactly the kind of thing you shouldn't have to open the app to learn.
     push: true,
@@ -126,8 +126,8 @@ export async function notifyOffsiteCheckoutReviewed(input: {
     ...bi(
       [input.approved ? "Off-site check-out approved" : "Off-site check-out rejected",
         `${who} ${input.approved ? "approved" : "rejected"} your off-site check-out (${fmtDateRangeEn(rec.attendanceDate, rec.attendanceDate)}).${input.approved ? "" : " It counts as no check-out (−25 XP)."}`],
-      [input.approved ? "Checkout di luar di-approve" : "Checkout di luar ditolak", `Check-out di luar (${dateStr}) di-${verb} sama ${who}.${input.approved ? "" : " Dihitung seperti tidak check-out (−25 XP)."}`],
-    ),
+      [input.approved ? "Checkout di luar di-approve" : "Checkout di luar ditolak", `Check-out di luar (${dateStr}) di-${verb} sama ${who}.${input.approved ? "" : " Dihitung seperti tidak check-out (−25 XP)."}`]
+),
     link: `/attendance?offsite=${input.recordId}`,
     // A rejection costs 25 XP; it pushes like the request-review notice.
     push: true,
