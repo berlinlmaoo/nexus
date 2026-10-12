@@ -98,7 +98,7 @@ struct AdminOrgChartSection: View {
             tree = OrgTree(data)
             problem = nil
         } catch {
-            problem = (error as? LocalizedError)?.errorDescription ?? T("Try again.")
+            problem = FailureText.text(error)
         }
         loading = false
     }

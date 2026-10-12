@@ -159,6 +159,8 @@ struct TaskRow: View {
                     if task.isDone { Circle().fill(NX.violet).frame(width: 22, height: 22); Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.white) }
                     if working { ProgressView().scaleEffect(0.6) }
                 }
+                // 44 pt hit area, the 22 pt circle unchanged (web My Tasks done, QA round 2).
+                .touchTarget44(drawn: 22)
             }
             .buttonStyle(.plain)
 

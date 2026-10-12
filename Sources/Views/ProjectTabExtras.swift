@@ -8,6 +8,29 @@ import SwiftUI
 // it reuses the tasks already loaded for the board plus /api/custom-fields.
 // ============================================================================
 
+/// A Table row can be picked up and dropped on only when the board passes `onDrop`, which it does for
+/// Can edit and up (ProjectBoardView.tableDrop). Below that the row is a plain button: a drag that lifts
+/// and then lands nowhere reads as a broken move (QA 13 Oct 2026).
+private struct SheetRowDrag: ViewModifier {
+    let taskId: String
+    let laneId: String
+    let onDrop: (([String], String, String?) -> Void)?
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if let onDrop {
+            content
+                .draggable(taskId)
+                .dropDestination(for: String.self) { (ids: [String], _: CGPoint) -> Bool in
+                    guard !ids.isEmpty, !ids.contains(taskId) else { return false }
+                    onDrop(ids, laneId, taskId)
+                    return true
+                }
+        } else {
+            content
+        }
+    }
+}
+
 struct SpreadsheetTab: View {
     let projectId: String
     let lanes: [ProjectDetail.Lane]
@@ -49,12 +72,7 @@ struct SpreadsheetTab: View {
                                 ForEach(rows) { r in
                                     Button { onOpen(r.task.id) } label: { bodyRow(r) }
                                         .buttonStyle(.plain)
-                                        .draggable(r.task.id)
-                                        .dropDestination(for: String.self) { ids, _ in
-                                            guard let onDrop, !ids.isEmpty, !ids.contains(r.task.id) else { return false }
-                                            onDrop(ids, r.laneId, r.task.id)
-                                            return true
-                                        }
+                                        .modifier(SheetRowDrag(taskId: r.task.id, laneId: r.laneId, onDrop: onDrop))
                                     Divider().overlay(NX.border.opacity(0.6))
                                 }
                             }

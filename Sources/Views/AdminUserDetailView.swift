@@ -32,6 +32,8 @@ struct AdminUserDetailView: View {
     @State private var projectPickFor: ProjectPickTarget?
     @State private var addTeamFor: TeamPickTarget?
     @State private var exitTarget: TeamExitTarget?
+    /// A project Remove waiting for a yes (QA BoD R2 N01): id + name of the project.
+    @State private var projectLeave: ProjectLeaveTarget?
     @State private var confirmDelete = false
     /// Why the last delete was refused, shown in the danger card where the button is.
     @State private var deleteProblem: String?
@@ -155,6 +157,19 @@ struct AdminUserDetailView: View {
                     ? T("This team links no projects, so no access is lost.")
                     : "\(T("Also lost: access to")) \(t.losing.count) project — \(t.losing.joined(separator: ", "))"
             } ?? "")
+        }
+        .alert(
+            projectLeave.map { String(format: T("Remove %@ from “%@”? They lose access right away."), member.displayName, $0.projectName) } ?? "",
+            isPresented: Binding(get: { projectLeave != nil }, set: { if !$0 { projectLeave = nil } })
+        ) {
+            Button(T("Remove"), role: .destructive) {
+                if let t = projectLeave {
+                    projectLeave = nil
+                    // A 409 LAST_OWNER comes back as the server's sentence (errorDescription) in `problem`.
+                    Task { await run { _ = try await APIClient.shared.removeProjectMember(projectId: t.id, userId: t.userId) } }
+                }
+            }
+            Button(T("Cancel"), role: .cancel) { projectLeave = nil }
         }
         .alert("\(T("Delete account")) \"\(member.displayName)\"?", isPresented: $confirmDelete) {
             Button(T("Delete permanently"), role: .destructive) {
@@ -450,7 +465,7 @@ struct AdminUserDetailView: View {
                 if editable, p.viaTeam == nil, let uid = member.userId {
                     Menu {
                         Button(role: .destructive) {
-                            Task { await run { _ = try await APIClient.shared.removeProjectMember(projectId: p.id, userId: uid) } }
+                            projectLeave = ProjectLeaveTarget(id: p.id, userId: uid, projectName: p.name)
                         } label: { Label(T("Remove from project"), systemImage: "minus.circle") }
                     } label: { chip }
                     .disabled(busy)
@@ -765,4 +780,11 @@ struct OffboardUserSheet: View {
         out.dateFormat = "d MMMM yyyy"
         return out.string(from: d)
     }
+}
+
+/// A person's Remove from one project, waiting for the confirmation alert.
+struct ProjectLeaveTarget: Identifiable, Equatable {
+    let id: String
+    let userId: String
+    let projectName: String
 }

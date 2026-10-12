@@ -156,7 +156,7 @@ struct PipelineDocumentsEditor: View {
             Spacer(minLength: 4)
             Button { askRemove(l) } label: {
                 Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.mutedFg)
-                    .frame(width: 32, height: 32).contentShape(Rectangle())
+                    .frame(width: 32, height: 32).touchTarget44(drawn: 32)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(l.isFile ? T("Remove document") : T("Remove link"))

@@ -105,6 +105,7 @@ private struct AttachmentViewerBar: View {
                 Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(Color.white)
                     .frame(width: 34, height: 34)
                     .background(Color.white.opacity(0.15), in: Circle())
+                    .touchTarget44(drawn: 34)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(T("Close"))

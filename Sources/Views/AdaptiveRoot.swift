@@ -384,7 +384,12 @@ struct SidebarRoot: View {
     @State private var selection: NXSelection? = .screen(.dashboard)
     @State private var columns: NavigationSplitViewVisibility = .all
     @State private var shortcuts = ProjectShortcuts.shared
-    @State private var showSearch = false
+    /// The root's one sheet: search (⌘K) or the keyboard shortcuts (⌘/). One `.sheet(item:)` rather than
+    /// two `.sheet`s, because two on one view leaves one of them dead.
+    @State private var rootSheet: SidebarRootSheet?
+    /// The window's shortcuts stay quiet while a sheet / alert is up over it (QA BoD R2: focus stays in
+    /// the top-most sheet). SheetCover.swift.
+    @State private var cover = SheetCover()
 
     /// Company-only screens (Z Vault, Threads) left out for anyone outside the company workspace,
     /// and the Calendar while the server's `flags.calendar` holds it back.
@@ -492,6 +497,8 @@ struct SidebarRoot: View {
                     VStack {
                         Spacer(minLength: 0)
                         Button {
+                            // ⌘S reaches here from under a sheet too: nothing moves behind it.
+                            guard !cover.isCovered else { return }
                             // A spring rather than .snappy, and named here rather than left to the
                             // system: .snappy is short by design, and NavigationSplitView reveals a
                             // column more generously than it takes one away — closing looked
@@ -547,13 +554,17 @@ struct SidebarRoot: View {
         .background {
             Group {
                 ForEach(Array(Self.shortcutScreens.enumerated()), id: \.offset) { i, screen in
-                    Button(screen.title) { selection = .screen(screen) }
+                    Button(screen.title) { if !cover.isCovered { selection = .screen(screen) } }
                         .keyboardShortcut(KeyEquivalent(Character(String(i + 1))), modifiers: .command)
                 }
                 // ⌘K: search everything (web). Not while an editor has the keyboard: there ⌘K adds a link.
-                Button(T("Search")) { showSearch = true }
+                Button(T("Search")) { if !cover.isCovered { rootSheet = .search } }
                     .keyboardShortcut("k", modifiers: .command)
                     .disabled(EditorKeys.shared.editorHasKeyboard)
+                // ⌘/: every keyboard shortcut of the app (web "?" / ⌘/ dialog, QA 13 Oct 2026).
+                Button(T("Keyboard shortcuts")) { if !cover.isCovered { rootSheet = .shortcuts } }
+                    .keyboardShortcut("/", modifiers: .command)
+                SheetCover.Anchor(cover: cover).frame(width: 0, height: 0)
             }
             .opacity(0).accessibilityHidden(true)
         }
@@ -561,7 +572,12 @@ struct SidebarRoot: View {
         // is answered. Held as state it would keep dragging the sidebar back to attendance every
         // time this view redrew, and no amount of tapping elsewhere would stick.
         // Environment passed explicitly: a sheet on Mac Catalyst does not always inherit it (GideonPanel).
-        .sheet(isPresented: $showSearch) { NavigationStack { SearchView() }.environment(auth).environment(router) }
+        .sheet(item: $rootSheet) { which in
+            switch which {
+            case .search: NavigationStack { SearchView() }.environment(auth).environment(router)
+            case .shortcuts: KeyboardShortcutsHelp().environment(auth).environment(router)
+            }
+        }
         .task { await viewer.loadIfNeeded() }
         // A request made before this shape existed: the screen the tab bar was showing when the window
         // grew past compact (AppRouter.carryAcrossShapes), or a link that arrived on a cold start.
@@ -591,7 +607,8 @@ struct SidebarRoot: View {
         }
     }
 
-    private static let shortcutScreens: [NXScreen] = [.dashboard, .projects, .tasks, .inbox, .messages, .teamCalendar, .attendance]
+    /// ⌘1…⌘7, in this order. Also read by the keyboard shortcuts sheet (KeyboardShortcutsHelp.swift).
+    static let shortcutScreens: [NXScreen] = [.dashboard, .projects, .tasks, .inbox, .messages, .teamCalendar, .attendance]
 
     /// A project shortcut is selected by its whole ref (id, name, icon). When a refresh brings the same
     /// project back renamed or with a new icon, its row's tag changes and the List would show nothing
@@ -705,4 +722,10 @@ struct ProjectRefIcon: View {
     var body: some View {
         ProjectMark(icon: ref.icon, color: ref.color, size: size)
     }
+}
+
+/// What SidebarRoot's single sheet shows.
+enum SidebarRootSheet: String, Identifiable {
+    case search, shortcuts
+    var id: String { rawValue }
 }

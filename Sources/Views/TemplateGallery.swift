@@ -140,6 +140,7 @@ struct TemplateGallery: View {
             if !query.isEmpty {
                 Button { query = "" } label: {
                     Image(systemName: "xmark.circle.fill").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
+                        .touchTarget44(drawn: 18)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(T("Clear search"))

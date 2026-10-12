@@ -310,7 +310,7 @@ struct NewProjectMembersPicker: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 if !search.isEmpty {
-                    Button { search = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg) }
+                    Button { search = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg).touchTarget44(drawn: 20) }
                         .buttonStyle(.plain)
                         .accessibilityLabel(T("Clear search"))
                 }
@@ -357,6 +357,7 @@ struct NewProjectMembersPicker: View {
                         }
                         .padding(.leading, 4).padding(.trailing, 10).padding(.vertical, 4)
                         .background(NX.violet.opacity(0.12), in: Capsule())
+                        .frame(minHeight: 44).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(String(format: T("Remove %@"), m.displayName))

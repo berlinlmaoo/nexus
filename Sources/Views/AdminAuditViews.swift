@@ -107,7 +107,7 @@ struct AdminAuditSection: View {
                     .submitLabel(.search)
                 if !query.isEmpty {
                     Button { query = "" } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg)
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg).touchTarget44(drawn: 20)
                     }.buttonStyle(.plain).accessibilityLabel(T("Clear search"))
                 }
             }
@@ -239,7 +239,7 @@ struct AdminAuditSection: View {
                 reachedEnd = true
             } else {
                 logs = []
-                self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load the audit log.")
+                self.error = FailureText.text(error)
             }
         }
         loading = false
@@ -501,7 +501,7 @@ private struct AuditEntrySheet: View {
     private func load() async {
         error = nil
         do { detail = try await APIClient.shared.auditEntry(id: log.id) }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load this entry.") }
+        catch { self.error = FailureText.text(error) }
     }
 
     /// `load` without a sound: a failure leaves the entry as it is on screen. Skipped while a restore

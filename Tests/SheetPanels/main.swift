@@ -2,10 +2,13 @@
 //   SheetPanelChartData.swift    ← lib/sheet-chart.test.mjs
 //   SheetPanelPivotData.swift    ← lib/sheet-pivot.test.mjs
 //   SheetPanelVersionsData.swift ← lib/sheet-versions.test.mjs + the find & replace part of sheet-datatools.test.mjs
+//   SheetStats.swift             ← lib/sheet-stats.test.mjs
+//   SheetRanges.swift            ← named-range / protection rules of SheetRangesPanel.tsx + SheetGrid protectedHere
 // Run from the repo root:
 //   docker run --rm -v "$PWD":/w -w /w swift:5.10-jammy bash -c "swiftc -O -o /tmp/t \
 //     Sources/Sheets/SheetFormula*.swift Sources/Sheets/SheetNumFmt.swift Sources/Sheets/SheetValidation.swift \
 //     Sources/Sheets/SheetCF.swift Sources/Sheets/SheetTypes.swift Sources/Sheets/SheetPanel*Data.swift \
+//     Sources/Sheets/SheetFilter.swift Sources/Sheets/SheetStats.swift Sources/Sheets/SheetRanges.swift \
 //     Tests/SheetPanels/main.swift && /tmp/t"
 // Prints "checks N, fails 0" when everything matches.
 import Foundation
@@ -426,8 +429,124 @@ func findTests() {
     eq(rep("abc", O(find: "x", replace: "y")), "abc|0", "no match")
 }
 
+// MARK: - sheet-stats.test.mjs (every check, same order)
+
+func statsTests() {
+    let S = SheetStats.self
+    func num(_ v: Double) -> SheetStats.Input { SheetStats.Input(value: .number(v), text: SheetJS.numberToString(v)) }
+    func txt(_ t: String) -> SheetStats.Input { SheetStats.Input(value: .text(t), text: t) }
+    let blank = SheetStats.Input(value: .empty, text: "")
+    // The Sheets sample: header "Jumlah", then 12 5 30 2 18 12 7, then empties.
+    let col = [txt("Jumlah"), num(12), num(5), num(30), num(2), num(18), num(12), num(7), blank, blank]
+    do {
+        let s = S.columnStats(col, ignoreRows: 0)
+        eq(s.total, 10, "total rows")
+        eq(s.empty, 2, "empty cells")
+        eq(s.unique, 7, "unique incl. the header text")
+        eq(s.numeric, 7, "numeric count")
+        eq(s.sum, 86, "sum")
+        eq(((s.avg ?? 0) * 1e8).rounded() / 1e8, 12.28571429, "average")
+        eq(s.median, 12, "median (odd)")
+        eq(s.min, 2, "min")
+        eq(s.max, 30, "max")
+        eq(s.frequency[0], SheetStats.FrequencyRow(text: "12", count: 2), "most frequent first")
+        eq(s.counts.map(\.text), ["2", "5", "7", "12", "18", "30", "Jumlah"], "counts: numbers by value, then text")
+    }
+    do {
+        let s = S.columnStats(col, ignoreRows: 1)
+        eq(s.total, 9, "ignore 1 header row")
+        eq(s.unique, 6, "header no longer counted")
+        eq(S.columnStats(col, ignoreRows: 100).total, 0, "ignore more rows than exist")
+        eq(S.columnStats(col, ignoreRows: 100).sum, nil, "no numbers → sum null")
+    }
+    do {
+        let s = S.columnStats([num(1), num(2), num(3), num(4)])
+        eq(s.median, 2.5, "median (even)")
+        let t = S.columnStats([txt("b"), txt("a"), txt("b"), txt("c"), SheetStats.Input(value: .text(""), text: "")])
+        eq(t.frequency.map(\.text), ["b", "a", "c"], "ties in natural order")
+        eq(t.empty, 1, "empty string counts as empty")
+        eq(t.distribution, [], "no histogram for text")
+    }
+    do {
+        eq(S.histogram([]), [], "empty histogram")
+        eq(S.histogram([5, 5, 5]), [SheetStats.Bin(from: 5, to: 5, count: 3)], "one bin when all equal")
+        let h = S.histogram([2, 5, 30, 2, 18, 12, 7, 12])
+        eq(h.reduce(0) { $0 + $1.count }, 8, "every value lands in a bin")
+        eq(h[0].from, 2, "first bin starts at min")
+        eq(h[h.count - 1].to, 30, "last bin ends at max")
+        eq(h.count, 4, "Sturges: ceil(log2 8 + 1) = 4 bins")
+    }
+    // Beyond the web file: natural order of text with numbers, any case.
+    eq(S.columnStats([txt("item 10"), txt("Item 9"), txt("item 1")]).counts.map(\.text), ["item 1", "Item 9", "item 10"], "numeric-aware, case-blind")
+}
+
+// MARK: - named / protected ranges (SheetRangesPanel.tsx rules, SheetGrid.tsx protectedHere)
+
+func rangesTests() {
+    let R = SheetRanges.self
+    let list = [SheetRanges.Named(id: "nr1", name: "Harga", range: "{a!r1}:{a!r3}")]
+    eq(R.validateRangeName("", existing: list), "Enter a name", "empty name")
+    eq(R.validateRangeName("  ", existing: list), "Enter a name", "blank name")
+    eq(R.validateRangeName("Total_2026.q1", existing: list), nil, "letters, digits, _ and .")
+    eq(R.validateRangeName("_x", existing: list), nil, "underscore first")
+    eq(R.validateRangeName("Pendapatan", existing: list), nil, "fine")
+    eq(R.validateRangeName("1abc", existing: list) != nil, true, "digit first")
+    eq(R.validateRangeName("a b", existing: list) != nil, true, "space")
+    eq(R.validateRangeName("true", existing: list), "TRUE and FALSE can't be used as names", "TRUE")
+    eq(R.validateRangeName("A1", existing: list), "Names can't look like a cell reference, e.g. A1 or R1C1", "A1")
+    eq(R.validateRangeName("abc123", existing: list), "Names can't look like a cell reference, e.g. A1 or R1C1", "ABC123")
+    eq(R.validateRangeName("r1c1", existing: list), "Names can't look like a cell reference, e.g. A1 or R1C1", "R1C1")
+    eq(R.validateRangeName("abcd1", existing: list), nil, "four letters + digits is a name")
+    eq(R.validateRangeName("harga", existing: list), "That name is already used by another range", "duplicate, any case")
+    eq(R.validateRangeName("harga", existing: list, selfId: "nr1"), nil, "renaming itself")
+    eq(R.validateRangeName(String(repeating: "a", count: 251), existing: list), "Names can be at most 250 characters", "too long")
+    eq(R.validateRangeName("Pénjualan", existing: list), nil, "unicode letters")
+    eq(R.nextName(list, base: "NamedRange"), "NamedRange1", "first free name")
+    eq(R.nextName([SheetRanges.Named(id: "x", name: "namedrange1", range: "")], base: "NamedRange"), "NamedRange2", "next free, any case")
+
+    // protections: a 5×5 sheet, ranges by model rect
+    let rects: [String: SheetValidation.Rect] = [
+        "B2:C3": SheetValidation.Rect(top: 1, bottom: 2, left: 1, right: 2),
+        "A1:A1": SheetValidation.Rect(top: 0, bottom: 0, left: 0, right: 0),
+        "E1:E5": SheetValidation.Rect(top: 0, bottom: 4, left: 4, right: 4),
+    ]
+    let rect: (String) -> SheetValidation.Rect? = { rects[$0] }
+    let warn = SheetRanges.Protection(id: "p1", range: "B2:C3", sheet: false, mode: "warn", by: "u1")
+    let restrict = SheetRanges.Protection(id: "p2", range: "A1:A1", sheet: false, mode: "restrict", editors: ["u1", "u2"], by: "u1")
+    let wholeSheet = SheetRanges.Protection(id: "p3", range: nil, sheet: true, except: ["E1:E5"], mode: "restrict", editors: ["u1"], by: "u1")
+    func hit(_ l: [SheetRanges.Protection], _ r: Int, _ c: Int, _ me: String, manage: Bool = false) -> SheetRanges.Hit? {
+        R.protectedHere(l, row: r, col: c, me: me, canManage: manage, rect: rect)
+    }
+    eq(hit([warn], 1, 1, "u9"), .warn, "warn inside")
+    eq(hit([warn], 3, 3, "u9"), nil, "outside")
+    eq(hit([warn], 1, 1, "u1"), .warn, "the owner is warned too")
+    eq(hit([restrict], 0, 0, "u9"), .deny, "restricted, not an editor")
+    eq(hit([restrict], 0, 0, "u2"), nil, "listed editor")
+    eq(hit([restrict], 0, 0, "u9", manage: true), nil, "a lead may edit")
+    eq(hit([warn, restrict], 0, 0, "u9"), .deny, "deny wins")
+    eq(hit([wholeSheet], 3, 3, "u9"), .deny, "whole sheet")
+    eq(hit([wholeSheet], 2, 4, "u9"), nil, "except cells stay open")
+    eq(hit([SheetRanges.Protection(id: "p4", range: "gone", sheet: false, mode: "restrict")], 0, 0, "u9"), nil, "a range that no longer resolves protects nothing")
+    // stored shape (web finish())
+    eq(SheetRanges.Protection.editorsFor(mode: "warn", owner: "u1", custom: true, picked: ["u2"]), nil, "warn has no editors")
+    eq(SheetRanges.Protection.editorsFor(mode: "restrict", owner: "u1", custom: false, picked: ["u2"]), ["u1"], "only you")
+    eq(SheetRanges.Protection.editorsFor(mode: "restrict", owner: "u1", custom: true, picked: ["u2", "u1", "u3"]), ["u1", "u2", "u3"], "custom, owner first, no repeats")
+    let j = wholeSheet.json
+    eq(j["sheet"] as? Bool, true, "sheet flag")
+    eq(j["range"] == nil, true, "no range on a sheet protection")
+    eq(j["except"] as? [String], ["E1:E5"], "except kept")
+    eq(SheetRanges.Protection(json: j), wholeSheet, "round trip")
+    eq(SheetRanges.Protection(json: ["id": "x", "mode": "restrict"]) == nil, true, "neither a range nor the sheet")
+    eq(SheetRanges.Protection(json: ["id": "x", "range": "A1:A1", "mode": "odd"])?.mode, "warn", "unknown mode = warn (server)")
+    var described = warn
+    described.desc = "  Harga  "
+    eq(described.json["desc"] as? String, "Harga", "description trimmed")
+}
+
 chartTests()
 pivotTests()
 versionTests()
 findTests()
+statsTests()
+rangesTests()
 print("checks \(checks), fails \(fails)")

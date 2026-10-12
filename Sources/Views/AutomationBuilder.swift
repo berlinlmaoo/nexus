@@ -490,7 +490,7 @@ private struct PeoplePicker: View {
                 HStack {
                     Text(ctx.personName(id)).font(NXFont.text(14))
                     Spacer()
-                    Button { ids.removeAll { $0 == id } } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg) }
+                    Button { ids.removeAll { $0 == id } } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg).touchTarget44(drawn: 20) }
                         .buttonStyle(.borderless)
                         .accessibilityLabel(String(format: T("Remove %@"), ctx.personName(id)))
                 }

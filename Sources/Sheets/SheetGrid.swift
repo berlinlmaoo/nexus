@@ -22,6 +22,10 @@ import UIKit
 // - Column / row resize: drag a header edge with the pointer (resize pointer on iPad / Mac), or with a
 //   finger the round handle on the edge of selected whole columns / rows.
 // - Filter: a funnel on the filter's header row opens its menu.
+// - Alternating colours / tables (settings.bandings / tables) under the cell fills (SheetBridge), font families
+//   (`ff`) and text rotation (`rt`, degrees or stacked), rows growing for rotated / large text.
+// - Charts float over the cells at their anchor (SheetGridObjects.swift); the corner's grey handles drag
+//   to freeze rows / columns.
 
 // MARK: - layout
 
@@ -261,16 +265,19 @@ final class SheetGridCell: UICollectionViewCell {
         backgroundColor = frozen ? UIColor(NX.card) : nil
         contentView.backgroundColor = d.fill
         let size = d.fontSize ?? 13
-        var font = UIFont.systemFont(ofSize: size, weight: d.bold ? .semibold : .regular)
-        if d.italic, let desc = font.fontDescriptor.withSymbolicTraits(.traitItalic) { font = UIFont(descriptor: desc, size: size) }
+        let font = SheetGridFonts.font(size: size, bold: d.bold, italic: d.italic, family: d.fontFamily)
         var attrs: [NSAttributedString.Key: Any] = [.font: font]
         let color: UIColor = d.isError ? .systemRed : (d.isLink ? .link : (d.textColor ?? .label))
         attrs[.foregroundColor] = color
         if d.strike { attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
         if d.underline || d.isLink { attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue }
-        label.attributedText = NSAttributedString(string: d.text, attributes: attrs)
-        label.textAlignment = d.alignment
-        label.numberOfLines = d.wrap ? 0 : 1
+        rotation = d.rotation
+        horizontalAlign = d.alignment
+        // Stacked text: one character per line (web writing-mode vertical, upright letters).
+        let shown = d.rotation.vertical ? d.text.filter { $0 != "\n" }.map { String($0) }.joined(separator: "\n") : d.text
+        label.attributedText = NSAttributedString(string: shown, attributes: attrs)
+        label.textAlignment = d.rotation.vertical ? .center : d.alignment
+        label.numberOfLines = d.wrap || d.rotation.vertical ? 0 : 1
         label.lineBreakMode = d.wrap ? .byWordWrapping : .byClipping
         label.isHidden = d.checkbox != nil || !d.chips.isEmpty
 
@@ -308,6 +315,8 @@ final class SheetGridCell: UICollectionViewCell {
     }
 
     private var verticalAlign = 2
+    private var horizontalAlign: NSTextAlignment = .left
+    private var rotation = SheetGridText.Rotation()
 
     override func prepareForReuse() {
         super.prepareForReuse()
@@ -322,7 +331,10 @@ final class SheetGridCell: UICollectionViewCell {
         // Overflowing text: the label runs over the empty neighbours (their lines are hidden by the host).
         let lx = b.minX - CGFloat(extent.left)
         let lw = b.width + CGFloat(extent.left + extent.right)
-        if label.numberOfLines == 1 {
+        label.transform = .identity
+        if !rotation.isNone {
+            layoutRotatedLabel(in: b)
+        } else if label.numberOfLines == 1 {
             let h = min(b.height, label.font.lineHeight + 2)
             let y: CGFloat
             switch verticalAlign {
@@ -357,6 +369,31 @@ final class SheetGridCell: UICollectionViewCell {
         flag.path = t.cgPath
         note.path = t.cgPath
         layoutBorders()
+    }
+
+    /// Rotated (or stacked) text: the label at its natural size, turned counter-clockwise like Sheets, its
+    /// turned box placed by the cell's horizontal and vertical alignment (clipped by the cell).
+    private func layoutRotatedLabel(in b: CGRect) {
+        let big = CGSize(width: rotation.vertical ? b.width : CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        let natural = label.sizeThatFits(big)
+        let a = CGFloat(rotation.degrees) * .pi / 180
+        let bw = abs(natural.width * cos(a)) + abs(natural.height * sin(a))
+        let bh = abs(natural.width * sin(a)) + abs(natural.height * cos(a))
+        let cx: CGFloat
+        switch rotation.vertical ? NSTextAlignment.center : horizontalAlign {
+        case .right: cx = b.maxX - bw / 2
+        case .center: cx = b.midX
+        default: cx = b.minX + bw / 2
+        }
+        let cy: CGFloat
+        switch verticalAlign {
+        case 0: cy = b.minY + bh / 2
+        case 1: cy = b.midY
+        default: cy = b.maxY - bh / 2
+        }
+        label.bounds = CGRect(origin: .zero, size: natural)
+        label.center = CGPoint(x: cx, y: cy)
+        label.transform = a == 0 ? .identity : CGAffineTransform(rotationAngle: -a)
     }
 
     /// The cell's own borders, drawn inside its edges (Sheets: thin 1, medium 2, thick 3, dotted, dashed,
@@ -689,6 +726,7 @@ struct SheetGridInput {
     var canEdit = false
     var rowMarkers: Set<Int> = []
     var colMarkers: Set<Int> = []
+    var charts: [SheetGridChart] = []
 }
 
 /// What the grid asks of its owner. The store answers through the SwiftUI wrapper's coordinator.
@@ -711,6 +749,15 @@ protocol SheetGridDelegate: AnyObject {
     func gridUnhideColumns(before c: Int)
     /// The formula bar has the keyboard: taps on the grid must not take it away.
     var gridIsEditing: Bool { get }
+    /// Freeze up to `count` visible rows / columns (the corner's handles were dropped there).
+    func gridFreeze(rows: Bool, count: Int)
+    /// A chart's view (the Swift Charts drawing), nil when it can't be drawn.
+    func gridChartContent(_ id: String) -> AnyView?
+    func gridOpenChart(_ id: String)
+    func gridChartMenu(_ id: String) -> UIMenu?
+    /// A chart dropped / resized: its anchor (visible row / column), offset and size.
+    func gridPlaceChart(_ id: String, row: Int, col: Int, dx: CGFloat, dy: CGFloat, size: CGSize, resized: Bool)
+    func gridDeleteChart(_ id: String)
 }
 
 enum SheetGridKey {
@@ -719,14 +766,22 @@ enum SheetGridKey {
     case tab(back: Bool), enter(back: Bool), delete, escape, copy, cut, paste, undo, redo, selectAll, bold, italic, editCell
 }
 
-final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewDelegate, UIEditMenuInteractionDelegate {
+final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewDelegate, UIEditMenuInteractionDelegate,
+    UIGestureRecognizerDelegate {
     weak var delegate: SheetGridDelegate?
 
     let layout = SheetGridLayout()
     private(set) var collection: UICollectionView!
     private let columnStrip = SheetHeaderStrip(axis: .columns)
     private let rowStrip = SheetHeaderStrip(axis: .rows)
-    private let corner = UIView()
+    private let corner = SheetCornerView(frame: .zero)
+    /// The freeze line while a corner handle is dragged.
+    private let freezePreview = UIView()
+    /// Charts on the grid by id, the selected one, and the frame of one being dragged (kept until the
+    /// store's change comes back as a reload).
+    private var chartViews: [String: SheetChartObjectView] = [:]
+    private var selectedChart: String?
+    private var chartDrag: (id: String, frame: CGRect)?
     private var panes: [SelectionPane] = []
     private let freezeBarH = UIView()
     private let freezeBarV = UIView()
@@ -750,7 +805,8 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = UIColor(NX.card)
-        collection = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        let cv = SheetCollectionView(frame: .zero, collectionViewLayout: layout)
+        collection = cv
         collection.backgroundColor = UIColor(NX.card)
         collection.dataSource = self
         collection.delegate = self
@@ -770,10 +826,16 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         collection.panGestureRecognizer.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
         #endif
         addSubview(collection)
-        corner.backgroundColor = UIColor(NX.muted)
         addSubview(columnStrip)
         addSubview(rowStrip)
         addSubview(corner)
+        freezePreview.backgroundColor = UIColor(NX.violet)
+        freezePreview.isUserInteractionEnabled = false
+        freezePreview.isHidden = true
+        addSubview(freezePreview)
+        corner.onSelectAll = { [weak self] in self?.delegate?.gridKey(.selectAll) }
+        corner.onFreezeDrag = { [weak self] axis, p, state in self?.freezeDragged(axis, p, state) }
+        cv.objectHit = { [weak self] p, event in self?.chartHit(p, event) }
 
         for _ in 0..<4 {
             let p = SelectionPane(frame: .zero)
@@ -781,6 +843,8 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
             collection.addSubview(p)
             panes.append(p)
         }
+        // The main pane only covers scrolled cells: it stays under the charts floating there (z 15).
+        panes[3].layer.zPosition = 12
         for bar in [freezeBarH, freezeBarV] {
             bar.backgroundColor = .systemGray3
             bar.isUserInteractionEnabled = false
@@ -809,11 +873,14 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         rowStrip.onResizeCancel = cancel
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
+        tap.delegate = self
         collection.addGestureRecognizer(tap)
         let double = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
         double.numberOfTapsRequired = 2
+        double.delegate = self
         collection.addGestureRecognizer(double)
         let hold = UILongPressGestureRecognizer(target: self, action: #selector(held(_:)))
+        hold.delegate = self
         hold.minimumPressDuration = 0.4
         hold.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
         collection.addGestureRecognizer(hold)
@@ -825,8 +892,10 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         #else
         pointerDrag.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.indirectPointer.rawValue)]
         #endif
+        pointerDrag.delegate = self
         collection.addGestureRecognizer(pointerDrag)
         let secondary = UITapGestureRecognizer(target: self, action: #selector(secondaryClicked(_:)))
+        secondary.delegate = self
         secondary.buttonMaskRequired = .secondary
         collection.addGestureRecognizer(secondary)
 
@@ -850,7 +919,10 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         rowStrip.resizable = next.canEdit
         columnStrip.markers = next.colMarkers
         rowStrip.markers = next.rowMarkers
+        corner.editable = next.canEdit
         collection.reloadData()
+        chartDrag = nil
+        syncCharts()
         setSelection(selection)
         updatePanes()
         columnStrip.setNeedsDisplay()
@@ -870,6 +942,7 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         rowStrip.frozen = layout.frozenRows
         columnStrip.setNeedsDisplay()
         rowStrip.setNeedsDisplay()
+        layoutCharts()
     }
 
     func setSelection(_ s: SheetSelection) {
@@ -995,7 +1068,7 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
             var tw = 0.0
             if can {
                 let size = d.fontSize ?? 13
-                let font = UIFont.systemFont(ofSize: size, weight: d.bold ? .semibold : .regular)
+                let font = SheetGridFonts.font(size: size, bold: d.bold, italic: d.italic, family: d.fontFamily)
                 tw = Double(ceil((d.text as NSString).size(withAttributes: [.font: font]).width)) + 1
             }
             let align = d.alignment == .right ? "r" : (d.alignment == .center ? "c" : "l")
@@ -1078,6 +1151,173 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         }
     }
 
+    // MARK: charts on the grid
+
+    /// Taps, holds and drags on a chart belong to the chart, not to the cells under it.
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        var v: UIView? = touch.view
+        while let cur = v, cur !== collection {
+            if cur is SheetChartObjectView { return false }
+            v = cur.superview
+        }
+        return true
+    }
+
+    /// Charts added / removed / redrawn from the input (their drawing follows every change of the sheet).
+    private func syncCharts() {
+        let ids = Set(input.charts.map(\.id))
+        for (id, v) in chartViews where !ids.contains(id) {
+            v.removeFromSuperview()
+            chartViews[id] = nil
+        }
+        if let s = selectedChart, !ids.contains(s) { selectedChart = nil }
+        for ch in input.charts {
+            let content = delegate?.gridChartContent(ch.id) ?? AnyView(Color.clear)
+            let v: SheetChartObjectView
+            if let have = chartViews[ch.id] {
+                v = have
+                v.setContent(content)
+            } else {
+                v = makeChartView(ch.id, content)
+            }
+            v.canEdit = input.canEdit
+            v.selected = ch.id == selectedChart
+        }
+        layoutCharts()
+    }
+
+    private func makeChartView(_ id: String, _ content: AnyView) -> SheetChartObjectView {
+        let v = SheetChartObjectView(id: id, content: content)
+        v.onSelect = { [weak self] id in self?.selectChart(id) }
+        v.onOpen = { [weak self] id in self?.delegate?.gridOpenChart(id) }
+        v.onDrag = { [weak self] id, frame, done, resized in self?.chartDragged(id, frame, done: done, resized: resized) }
+        v.menu = { [weak self] id in self?.delegate?.gridChartMenu(id) }
+        collection.addSubview(v)
+        chartViews[id] = v
+        return v
+    }
+
+    private func selectChart(_ id: String?) {
+        guard id != selectedChart else { return }
+        selectedChart = id
+        for (cid, v) in chartViews { v.selected = cid == id }
+        layoutCharts()
+        if id != nil { takeKeyboard() }
+    }
+
+    /// Where a chart sits in the sheet: its anchor cell's top-left plus the offset (content coordinates).
+    private func chartFrame(_ ch: SheetGridChart) -> CGRect? {
+        guard ch.row >= 0, ch.row < layout.rows, layout.cols > 0 else { return nil }
+        let x = ch.col < layout.cols ? layout.colX[max(0, ch.col)] : (layout.colX.last ?? 0)
+        let y = layout.rowY[ch.row]
+        let w = max(CGFloat(SheetChartPlace.minWidth), ch.w), h = max(CGFloat(SheetChartPlace.minHeight), ch.h)
+        return CGRect(x: x + ch.dx, y: y + ch.dy, width: w, height: h)
+    }
+
+    /// Charts scroll with the cells (like the web). One anchored in a frozen row / column is drawn above the
+    /// frozen panes; the others pass under them.
+    /// A move / resize that could not be saved: drop the preview frame.
+    func cancelChartDrag() {
+        chartDrag = nil
+        layoutCharts()
+    }
+
+    private func layoutCharts() {
+        for ch in input.charts {
+            guard let v = chartViews[ch.id] else { continue }
+            let frozen = ch.row < layout.frozenRows || ch.col < layout.frozenCols
+            v.frozenAnchor = frozen
+            let lift: CGFloat = ch.id == selectedChart ? 1 : 0
+            v.layer.zPosition = (frozen ? 35 : 15) + lift
+            if let d = chartDrag, d.id == ch.id { v.isHidden = false; v.frame = d.frame; continue }
+            guard let f = chartFrame(ch) else { v.isHidden = true; continue }
+            v.isHidden = false
+            v.frame = f
+        }
+    }
+
+    /// The chart under a point of the collection view (the selected / frozen ones first). A chart that
+    /// scrolled under a frozen pane leaves the touch to the frozen cells there.
+    private func chartHit(_ p: CGPoint, _ event: UIEvent?) -> UIView? {
+        guard !chartViews.isEmpty else { return nil }
+        let pin = layout.pin
+        let overFrozen = (layout.frozenCols > 0 && p.x < pin.x + layout.frozenWidth)
+            || (layout.frozenRows > 0 && p.y < pin.y + layout.frozenHeight)
+        let list = chartViews.values.filter { !$0.isHidden }.sorted { $0.layer.zPosition > $1.layer.zPosition }
+        for v in list {
+            if overFrozen && !v.frozenAnchor { continue }
+            guard v.frame.contains(p) else { continue }
+            return v.hitTest(collection.convert(p, to: v), with: event) ?? v
+        }
+        return nil
+    }
+
+    /// Live preview while dragging; on release the new anchor goes to the store.
+    private func chartDragged(_ id: String, _ frame: CGRect, done: Bool, resized: Bool) {
+        guard let v = chartViews[id] else { return }
+        v.frame = frame
+        chartDrag = (id, frame)
+        guard done else { return }
+        let old = input.charts.first(where: { $0.id == id }).flatMap { chartFrame($0) }
+        guard let old, Self.differs(old, frame) else {
+            chartDrag = nil
+            layoutCharts()
+            return
+        }
+        let a = SheetChartPlace.anchor(x: Double(frame.minX), y: Double(frame.minY),
+                                       colStarts: layout.colX.map { Double($0) }, rowStarts: layout.rowY.map { Double($0) })
+        delegate?.gridPlaceChart(id, row: a.r, col: a.c, dx: CGFloat(a.dx), dy: CGFloat(a.dy), size: frame.size, resized: resized)
+    }
+
+    /// Moved or resized by a point or more.
+    private static func differs(_ a: CGRect, _ b: CGRect) -> Bool {
+        let dx: CGFloat = abs(a.minX - b.minX), dy: CGFloat = abs(a.minY - b.minY)
+        let dw: CGFloat = abs(a.width - b.width), dh: CGFloat = abs(a.height - b.height)
+        return max(max(dx, dy), max(dw, dh)) >= 1
+    }
+
+    // MARK: freeze handles
+
+    /// The corner's handle dragged: the boundary under the finger / pointer (nearest edge), previewed as a
+    /// violet line, saved on release (web startFreezeDrag; at most 20 rows / 10 columns).
+    private func freezeDragged(_ axis: SheetCornerView.Axis, _ p: CGPoint, _ state: UIGestureRecognizer.State) {
+        let rows = axis == .rows
+        let k = freezeBoundary(rows: rows, at: p)
+        switch state {
+        case .began, .changed:
+            freezePreview.isHidden = false
+            let f = collection.frame
+            if rows {
+                let y = f.minY + (k <= layout.frozenRows ? layout.rowY[k] : layout.rowY[k] - collection.contentOffset.y)
+                freezePreview.frame = CGRect(x: 0, y: y - 1.5, width: bounds.width, height: 3)
+            } else {
+                let x = f.minX + (k <= layout.frozenCols ? layout.colX[k] : layout.colX[k] - collection.contentOffset.x)
+                freezePreview.frame = CGRect(x: x - 1.5, y: 0, width: 3, height: bounds.height)
+            }
+        case .ended:
+            freezePreview.isHidden = true
+            delegate?.gridFreeze(rows: rows, count: k)
+        default:
+            freezePreview.isHidden = true
+        }
+    }
+
+    /// How many visible rows / columns lie before the boundary nearest to a point of this view.
+    private func freezeBoundary(rows: Bool, at p: CGPoint) -> Int {
+        let cp = convert(p, to: collection)
+        let off = collection.contentOffset
+        let along = rows ? cp.y - off.y : cp.x - off.x
+        let count = rows ? layout.rows : layout.cols
+        guard along > 0, count > 0 else { return 0 }
+        let q = layout.contentPoint(cp)
+        guard let pos = layout.positionInContent(CGPoint(x: max(0, q.x), y: max(0, q.y)), clamp: true) else { return 0 }
+        let i = rows ? pos.r : pos.c
+        let starts = rows ? layout.rowY : layout.colX
+        let v = rows ? q.y : q.x
+        let k = v > (starts[i] + starts[i + 1]) / 2 ? i + 1 : i
+        return max(0, min(k, min(count, rows ? 20 : 10)))
+    }
+
     // MARK: data source
 
     func numberOfSections(in collectionView: UICollectionView) -> Int { input.rows }
@@ -1096,11 +1336,12 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
     }
 
     private func takeKeyboard() {
-        if !(delegate?.gridIsEditing ?? false) { becomeFirstResponder() }
+        if !(delegate?.gridIsEditing ?? false) && !SheetCover.isCovered(self) { becomeFirstResponder() }
     }
 
     @objc private func tapped(_ g: UITapGestureRecognizer) {
         takeKeyboard()
+        selectChart(nil)
         let cp = layout.contentPoint(g.location(in: collection))
         guard let p = layout.positionInContent(cp) else { return }
         // The funnel on the filter's header row opens the column's filter menu.
@@ -1196,6 +1437,8 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
     override var canBecomeFirstResponder: Bool { true }
 
     override var keyCommands: [UIKeyCommand]? {
+        // A sheet / alert over the grid owns the keyboard (focus stays in the top-most sheet).
+        if SheetCover.isCovered(self) { return [] }
         var list: [UIKeyCommand] = []
         func add(_ input: String, _ flags: UIKeyModifierFlags, _ sel: Selector) {
             let k = UIKeyCommand(input: input, modifierFlags: flags, action: sel)
@@ -1245,8 +1488,14 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
     }
     @objc private func keyTab(_ k: UIKeyCommand) { delegate?.gridKey(.tab(back: k.modifierFlags.contains(.shift))) }
     @objc private func keyEnter(_ k: UIKeyCommand) { delegate?.gridKey(.enter(back: k.modifierFlags.contains(.shift))) }
-    @objc private func keyDelete() { delegate?.gridKey(.delete) }
-    @objc private func keyEscape() { delegate?.gridKey(.escape) }
+    @objc private func keyDelete() {
+        if let id = selectedChart { selectChart(nil); delegate?.gridDeleteChart(id); return }
+        delegate?.gridKey(.delete)
+    }
+    @objc private func keyEscape() {
+        if selectedChart != nil { selectChart(nil); return }
+        delegate?.gridKey(.escape)
+    }
     @objc private func keyEditCell() { delegate?.gridKey(.editCell) }
     @objc private func keyCopy() { delegate?.gridKey(.copy) }
     @objc private func keyCut() { delegate?.gridKey(.cut) }
@@ -1259,6 +1508,7 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
 
     /// A printable key with no ⌘ / ⌃ starts editing the cell with that character (Sheets).
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        if SheetCover.isCovered(self) { super.pressesBegan(presses, with: event); return }
         var handled = false
         for press in presses {
             guard let key = press.key else { continue }
@@ -1343,7 +1593,31 @@ struct SheetGridView: UIViewRepresentable {
         i.canEdit = store.canEdit
         i.rowMarkers = Set(store.rowGaps.keys)
         i.colMarkers = Set(store.colGaps.keys)
+        i.charts = charts(store)
         return i
+    }
+
+    /// settings.charts placed by their anchors: rows hidden (or filtered out) hide the chart, a hidden
+    /// column moves it to the next visible one (web anchorXY).
+    @MainActor
+    private static func charts(_ store: SheetStore) -> [SheetGridChart] {
+        let specs = store.chartSpecs
+        guard !specs.isEmpty else { return [] }
+        var rowAt: [String: Int] = [:]
+        for (v, m) in store.visRows.enumerated() { rowAt[store.rows[m].id] = v }
+        var colAt: [String: Int] = [:]
+        for (i, c) in store.columns.enumerated() { if let id = c["id"] as? String { colAt[id] = i } }
+        var out: [SheetGridChart] = []
+        for spec in specs {
+            guard let r = spec.at["r"] as? String, let c = spec.at["c"] as? String,
+                  let vr = rowAt[r], let mc = colAt[c] else { continue }
+            let vc = SheetChartPlace.visibleColumn(model: mc, visCols: store.visCols)
+            let dx = (spec.at["dx"] as? NSNumber)?.doubleValue ?? 0
+            let dy = (spec.at["dy"] as? NSNumber)?.doubleValue ?? 0
+            out.append(SheetGridChart(id: spec.id, row: vr, col: vc, dx: CGFloat(dx), dy: CGFloat(dy),
+                                      w: CGFloat(spec.w), h: CGFloat(spec.h)))
+        }
+        return out
     }
 
     @MainActor
@@ -1402,6 +1676,59 @@ struct SheetGridView: UIViewRepresentable {
 
         func gridFilterMenu(_ c: Int) { actions.filterMenu(c) }
 
+        func gridFreeze(rows: Bool, count k: Int) {
+            let s = store
+            if rows {
+                let n = k == 0 ? 0 : (s.modelRow(k - 1) ?? (k - 1)) + 1
+                guard n != s.frozenRowsSetting else { return }
+                Task { await s.freezeRows(n) }
+            } else {
+                let n = k == 0 ? 0 : (s.modelCol(k - 1) ?? (k - 1)) + 1
+                guard n != s.frozenColsSetting else { return }
+                Task { await s.freezeCols(n) }
+            }
+        }
+
+        func gridChartContent(_ id: String) -> AnyView? {
+            guard let snap = store.snapshot, let spec = store.chartSpecs.first(where: { $0.id == id }) else { return nil }
+            return AnyView(SPChartView(spec: spec, data: snap.engine.data, engine: snap.engine))
+        }
+
+        func gridOpenChart(_ id: String) { actions.openChart(id) }
+
+        func gridChartMenu(_ id: String) -> UIMenu? {
+            let s = store
+            var items: [UIMenuElement] = [
+                UIAction(title: T("Edit chart"), image: UIImage(systemName: "pencil")) { [weak self] _ in self?.actions.openChart(id) },
+            ]
+            if s.canEdit {
+                items.append(UIAction(title: T("Duplicate"), image: UIImage(systemName: "plus.square.on.square")) { _ in
+                    Task { await s.duplicateChart(id) }
+                })
+                items.append(UIAction(title: T("Delete chart"), image: UIImage(systemName: "trash"), attributes: .destructive) { _ in
+                    Task { await s.deleteChart(id) }
+                })
+            }
+            return UIMenu(children: items)
+        }
+
+        func gridPlaceChart(_ id: String, row: Int, col: Int, dx: CGFloat, dy: CGFloat, size: CGSize, resized: Bool) {
+            let s = store
+            guard let rid = s.rowId(row), let cid = s.columnId(min(col, max(0, s.colCount - 1))) else {
+                // Nowhere to anchor it: the chart goes back to where it was.
+                host?.cancelChartDrag()
+                return
+            }
+            let label = resized ? T("resize chart") : T("move chart")
+            Task { await s.placeChart(id, rowId: rid, colId: cid, dx: Double(dx), dy: Double(dy), w: Double(size.width), h: Double(size.height), label: label) }
+        }
+
+        func gridDeleteChart(_ id: String) {
+            let s = store
+            guard s.canEdit else { return }
+            Task { await s.deleteChart(id) }
+        }
+
         func gridUnhideRows(before r: Int) {
             let s = store
             Task { await s.unhideRows(before: r) }
@@ -1445,6 +1772,8 @@ struct SheetGridActions {
     var filterMenu: (Int) -> Void = { _ in }
     /// Unresolved comments on a cell (the amber corner marker).
     var commentCount: (SheetPos) -> Int = { _ in 0 }
+    /// A chart on the grid tapped again / its Edit: the chart editor.
+    var openChart: (String) -> Void = { _ in }
 }
 
 #if !targetEnvironment(macCatalyst)

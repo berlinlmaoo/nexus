@@ -58,5 +58,6 @@ check(cleared.order == ["z"] && cleared.pendingValue(row: "z", col: "a") != nil,
 
 runFilterTests()
 runGridModelTests()
+runGridTextTests()
 print("checks \(checks), fails \(fails)")
 exit(fails == 0 ? 0 : 1)

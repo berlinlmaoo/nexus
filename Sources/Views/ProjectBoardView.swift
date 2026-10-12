@@ -19,6 +19,9 @@ struct ProjectDetailView: View {
     /// "+" on the Forms tab (owner, 9 Oct 2026): a pushed form builder, not a third sheet here.
     @State private var newFormOpen = false
     @State private var showSettings = false
+    /// ⌘N / ⌘, / ⌘[ / ⌘] / ⌘F do nothing while a sheet (the task popup, settings…) is up over the
+    /// project: focus stays in the top-most sheet (QA BoD R2). SheetCover.swift.
+    @State private var cover = SheetCover()
     @State private var prefillDue: Date?
     @State private var query = ""
     /// A filter opened from a count on the Overview (owner, 11 Oct 2026): open top-level tasks only,
@@ -367,7 +370,7 @@ struct ProjectDetailView: View {
             } message: { a in Text(a.message) }
             .background {
                 // Keyboard: ⌘N = new task (iPad keyboard, Mac).
-                Button("") { if !isPipeline && !isOutlet && canCreate && tab != .forms { prefillDue = nil; showCreate = true } }
+                Button("") { if !isPipeline && !isOutlet && canCreate && tab != .forms && !cover.isCovered { prefillDue = nil; showCreate = true } }
                     .keyboardShortcut("n", modifiers: .command)
                     .opacity(0).accessibilityHidden(true)
             }
@@ -525,7 +528,7 @@ struct ProjectDetailView: View {
             if detail != nil {
                 // Ask GIDEON about this project: a new chat scoped to it (web header, 12 Oct 2026).
                 AskGideonButton(context: GideonContext(projectId: projectId, projectName: displayName), labelled: wide)
-                ProjectHeaderButton(title: T("Project settings"), icon: "slider.horizontal.3", labelled: wide) { showSettings = true }
+                ProjectHeaderButton(title: T("Project settings"), icon: "slider.horizontal.3", labelled: wide) { if !cover.isCovered { showSettings = true } }
                     .keyboardShortcut(",", modifiers: .command)
             }
             addButton
@@ -621,9 +624,10 @@ struct ProjectDetailView: View {
         // Keyboard (iPad keyboard, Mac): ⌘[ / ⌘] previous / next tab, ⌘F search the project.
         .background {
             Group {
-                Button("") { stepTab(-1) }.keyboardShortcut("[", modifiers: .command)
-                Button("") { stepTab(1) }.keyboardShortcut("]", modifiers: .command)
-                Button("") { if searchApplies { searchFocused = true } }.keyboardShortcut("f", modifiers: .command)
+                Button("") { if !cover.isCovered { stepTab(-1) } }.keyboardShortcut("[", modifiers: .command)
+                Button("") { if !cover.isCovered { stepTab(1) } }.keyboardShortcut("]", modifiers: .command)
+                Button("") { if searchApplies && !cover.isCovered { searchFocused = true } }.keyboardShortcut("f", modifiers: .command)
+                SheetCover.Anchor(cover: cover).frame(width: 0, height: 0)
             }
             .opacity(0).accessibilityHidden(true)
         }
@@ -686,6 +690,7 @@ struct ProjectDetailView: View {
                         .monospacedDigit()
                     Button { query = "" } label: {
                         Image(systemName: "xmark.circle.fill").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
+                            .touchTarget44(drawn: 18)
                     }
                     .buttonStyle(.plain)
                 }

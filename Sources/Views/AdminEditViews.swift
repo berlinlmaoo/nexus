@@ -270,6 +270,9 @@ struct AdminUsersSection: View {
     @State private var reinstating = false
     /// What the last reinstatement said: "{name} is back.", or why it was refused.
     @State private var notice: String?
+    /// Why the roster didn't load. Shown instead of "Total 0" and an empty list, which read as a
+    /// workspace with nobody in it (web LoadError, QA 13 Oct 2026).
+    @State private var loadFailure: Error?
 
     // A–Z, peka lokal — urutan server adalah urutan bergabung, yang tidak membantu siapa pun
     // mencari nama di daftar 49 orang.
@@ -319,6 +322,9 @@ struct AdminUsersSection: View {
     var body: some View {
         Group {
             if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
+            else if roster == nil, let loadFailure {
+                LoadErrorView(error: loadFailure, what: T("the people list"), retry: { Task { loading = true; await load() } })
+            }
             else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
@@ -352,7 +358,7 @@ struct AdminUsersSection: View {
                             TextField(T("Search name or email…"), text: $query)
                                 .font(NXFont.text(14)).textInputAutocapitalization(.never).autocorrectionDisabled()
                             if !query.isEmpty {
-                                Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg) }.buttonStyle(.plain)
+                                Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg).touchTarget44(drawn: 20) }.buttonStyle(.plain)
                             }
                         }
                         .padding(.horizontal, 12).padding(.vertical, 9)
@@ -426,6 +432,12 @@ struct AdminUsersSection: View {
                     memberships: memberships[uid], allTeams: allTeams, allProjects: allProjects,
                     members: members, canOffboard: mayOffboard(m)
                 ) { await load() }
+            } else {
+                // Removed or offboarded since the list was drawn (here or on another device): say so
+                // instead of a blank screen.
+                EmptyState(icon: "person.crop.circle.badge.questionmark", title: T("This person isn't in the workspace any more"),
+                           subtitle: T("They were removed or offboarded. Go back to the list to see who is in it now."))
+                    .background(NX.background.ignoresSafeArea())
             }
         }
         // Layar penuh, bukan sheet: bagan butuh setiap piksel yang ada, dan sheet yang bisa ditarik
@@ -570,7 +582,10 @@ struct AdminUsersSection: View {
         await load()
     }
     private func load() async {
-        do { roster = try await APIClient.shared.roster(includeRegistered: true) } catch APIError.unauthorized { auth.logout() } catch {}
+        do {
+            roster = try await APIClient.shared.roster(includeRegistered: true)
+            loadFailure = nil
+        } catch APIError.unauthorized { auth.logout() } catch { loadFailure = error }
         // Gagal diam-diam DI SINI memang yang diinginkan: keanggotaan adalah keterangan tambahan,
         // dan Control Room yang menolak terbuka karena satu panggilan tambahan gagal jauh lebih
         // buruk daripada baris tanpa dropdown.
@@ -595,12 +610,19 @@ struct AdminQuestsSection: View {
     @State private var quests: [AdminQuest] = []
     @State private var loading = true
     @State private var showCreate = false
+    /// Why the quests didn't load: never drawn as "No quests yet" (web LoadError, QA 13 Oct 2026).
+    @State private var loadFailure: Error?
+    /// A failed delete, as a toast (web lib/failure.ts).
+    @State private var toast: FailureToastPayload?
     /// unit id → "IP › Division", to say who each quest is for.
     @State private var unitPaths: [String: String] = [:]
 
     var body: some View {
         Group {
             if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
+            else if quests.isEmpty, let loadFailure {
+                LoadErrorView(error: loadFailure, what: T("the quests"), retry: { Task { loading = true; await load() } })
+            }
             else {
                 ScrollView {
                     VStack(spacing: 12) {
@@ -616,6 +638,12 @@ struct AdminQuestsSection: View {
         }
         .task(id: workspaceId) { await load() }
         .sheet(isPresented: $showCreate) { if let w = workspaceId { CreateQuestSheet(workspaceId: w) { await load() } } }
+        .failureToast($toast)
+    }
+    private func deleteQuest(_ q: AdminQuest) async {
+        do { _ = try await APIClient.shared.deleteAdminQuest(q.id) }
+        catch { toast = FailureToastPayload(title: T("Couldn't delete the quest"), error: error) }
+        await load()
     }
     private func questRow(_ q: AdminQuest) -> some View {
         HStack(spacing: 10) {
@@ -630,14 +658,22 @@ struct AdminQuestsSection: View {
                 Text("· " + QuestUnits.audience(q, paths: unitPaths)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2)
             }
             Spacer()
-            Button { Task { try? await APIClient.shared.deleteAdminQuest(q.id); await load() } } label: {
+            Button { Task { await deleteQuest(q) } } label: {
                 Image(systemName: "trash").font(.system(size: 14)).foregroundStyle(NX.danger)
             }.buttonStyle(.plain)
         }.nexusCard(padding: 12)
     }
     private func load() async {
         guard let w = workspaceId else { loading = false; return }
-        quests = (try? await APIClient.shared.adminQuests(workspaceId: w)) ?? []; loading = false
+        do {
+            quests = try await APIClient.shared.adminQuests(workspaceId: w)
+            loadFailure = nil
+        } catch {
+            loadFailure = error
+            // A failed refresh over a list already on screen keeps the list and says so.
+            if !quests.isEmpty { toast = FailureToastPayload(title: T("Couldn't refresh the quests"), error: error) }
+        }
+        loading = false
         if let chart = try? await APIClient.shared.orgChart() { unitPaths = QuestUnits.paths(chart.units) }
     }
 }
@@ -655,7 +691,8 @@ struct CreateQuestSheet: View {
     @State private var busy = false
     @State private var err: String?
     /// Who it is for: IP & Division Chart units (owner, 13 Oct 2026; the Crew Hub teams are gone). Empty = everyone.
-    @State private var units: [QuestUnitOption] = []
+    @State private var units: [OrgUnitDTO] = []
+    @State private var unitsLoading = true
     @State private var unitsFailed = false
     @State private var pickedUnits: Set<String> = []
 
@@ -683,16 +720,11 @@ struct CreateQuestSheet: View {
                         f(T("For")) {
                             Text(T("(pick divisions from the IP & Division Chart · none = everyone · people in a sub-division count too)"))
                                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
-                            FlowLayout(spacing: 6) {
-                                unitChip(T("Everyone"), on: pickedUnits.isEmpty) { pickedUnits.removeAll() }
-                                ForEach(units) { u in
-                                    unitChip(u.label, on: pickedUnits.contains(u.id)) {
-                                        if pickedUnits.contains(u.id) { pickedUnits.remove(u.id) } else { pickedUnits.insert(u.id) }
-                                    }
-                                }
-                            }
+                            // A searchable division tree + removable chips (web UnitTreePicker, QA BoD R2 N04).
                             if unitsFailed {
                                 Text(T("Couldn't load the divisions. The quest goes to everyone.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                            } else {
+                                UnitTreePicker(units: units, selection: $pickedUnits, disabled: unitsLoading)
                             }
                         }
                         f("DEADLINE") {
@@ -710,31 +742,17 @@ struct CreateQuestSheet: View {
             .task { await loadUnits() }
         }
     }
-    private func unitChip(_ label: String, on: Bool, _ tap: @escaping () -> Void) -> some View {
-        Button(action: tap) {
-            Text(label).font(NXFont.text(12, .semibold)).lineLimit(1)
-                .foregroundStyle(on ? NX.violetText : NX.mutedFg)
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(on ? NX.violet.opacity(0.12) : Color.clear, in: Capsule())
-                .overlay(Capsule().strokeBorder(on ? NX.violetText : NX.border))
-                .frame(minHeight: 36).contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(on ? .isSelected : [])
-    }
-    /// Divisions and IPs, never the GROUP boxes (they only arrange cards), A→Z by path.
+    /// The whole chart: the picker draws GROUP boxes as headings (they only arrange cards, never picked).
     private func loadUnits() async {
-        guard units.isEmpty else { return }
+        guard units.isEmpty else { unitsLoading = false; return }
         do {
             let chart = try await APIClient.shared.orgChart()
-            let paths = QuestUnits.paths(chart.units)
-            units = chart.units.filter { !$0.isGroup }
-                .map { QuestUnitOption(id: $0.id, label: paths[$0.id] ?? $0.name) }
-                .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
+            units = chart.units
             unitsFailed = false
         } catch {
             unitsFailed = true
         }
+        unitsLoading = false
     }
     private func f<C: View>(_ l: String, @ViewBuilder _ c: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 7) { SectionLabel(l); c() }.frame(maxWidth: .infinity, alignment: .leading)
@@ -756,10 +774,17 @@ struct AdminAnnouncementsSection: View {
     @State private var rows: [AdminAnnouncement] = []
     @State private var loading = true
     @State private var showCreate = false
+    /// Why the list didn't load: never drawn as "No announcements yet" (web LoadError, QA 13 Oct 2026).
+    @State private var loadFailure: Error?
+    /// A failed delete / (de)activate, as a toast (web lib/failure.ts). These used to fail silently.
+    @State private var toast: FailureToastPayload?
 
     var body: some View {
         Group {
             if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
+            else if rows.isEmpty, let loadFailure {
+                LoadErrorView(error: loadFailure, what: T("the announcements"), retry: { Task { loading = true; await load() } })
+            }
             else {
                 ScrollView {
                     VStack(spacing: 12) {
@@ -775,6 +800,7 @@ struct AdminAnnouncementsSection: View {
         }
         .task { await load() }
         .sheet(isPresented: $showCreate) { CreateAnnouncementSheet { await load() } }
+        .failureToast($toast)
     }
     private func announcementRow(_ a: AdminAnnouncement) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -782,7 +808,7 @@ struct AdminAnnouncementsSection: View {
                 Text(a.title).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
                 NexusChip(text: (a.active ?? false) ? T("Active") : T("Inactive"), tone: (a.active ?? false) ? .success : .neutral)
                 Spacer()
-                Button { Task { try? await APIClient.shared.deleteAnnouncement(a.id); await load() } } label: { Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(NX.danger) }.buttonStyle(.plain)
+                Button { Task { await deleteAnnouncement(a) } } label: { Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(NX.danger) }.buttonStyle(.plain)
             }
             if let b = a.body, !b.isEmpty { Text(b).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(3) }
             if let ts = a.targets, !ts.isEmpty {
@@ -796,13 +822,33 @@ struct AdminAnnouncementsSection: View {
             HStack {
                 Text("\(T("read by")) \(a.seenCount ?? 0) \(T("people"))").font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
                 Spacer()
-                Button { Task { try? await APIClient.shared.updateAnnouncementActive(id: a.id, active: !(a.active ?? false)); await load() } } label: {
+                Button { Task { await toggleActive(a) } } label: {
                     Text((a.active ?? false) ? T("Deactivate") : T("Activate")).font(NXFont.text(12, .bold)).foregroundStyle(NX.violetText)
                 }.buttonStyle(.plain)
             }
         }.nexusCard(padding: 12)
     }
-    private func load() async { rows = (try? await APIClient.shared.announcements()) ?? []; loading = false }
+    private func load() async {
+        do {
+            rows = try await APIClient.shared.announcements()
+            loadFailure = nil
+        } catch {
+            loadFailure = error
+            if !rows.isEmpty { toast = FailureToastPayload(title: T("Couldn't refresh the announcements"), error: error) }
+        }
+        loading = false
+    }
+    private func deleteAnnouncement(_ a: AdminAnnouncement) async {
+        do { _ = try await APIClient.shared.deleteAnnouncement(a.id) }
+        catch { toast = FailureToastPayload(title: T("Couldn't delete the announcement"), error: error) }
+        await load()
+    }
+    private func toggleActive(_ a: AdminAnnouncement) async {
+        let active = !(a.active ?? false)
+        do { _ = try await APIClient.shared.updateAnnouncementActive(id: a.id, active: active) }
+        catch { toast = FailureToastPayload(title: active ? T("Couldn't activate the announcement") : T("Couldn't deactivate the announcement"), error: error) }
+        await load()
+    }
 }
 
 struct CreateAnnouncementSheet: View {
@@ -968,7 +1014,7 @@ struct CreateAnnouncementSheet: View {
                 Label(pdf.name ?? "SP.pdf", systemImage: "doc.richtext.fill").font(NXFont.text(13, .semibold))
                     .foregroundStyle(NX.danger).lineLimit(1)
                 Spacer()
-                Button { self.pdf = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg) }.buttonStyle(.plain)
+                Button { self.pdf = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg).touchTarget44(drawn: 20) }.buttonStyle(.plain)
             } else {
                 Button { pickingPDF = true } label: {
                     HStack(spacing: 6) {
@@ -1023,7 +1069,8 @@ struct CreateAnnouncementSheet: View {
 struct AdminGideonUsageSection: View {
     @State private var data: GideonUsage?
     @State private var loading = true
-    @State private var error: String?
+    /// Why it didn't load (LoadErrorView: offline / no access / server, with Try again).
+    @State private var failure: Error?
 
     private var rows: [GideonUsage.Row] { data?.users ?? [] }
 
@@ -1032,8 +1079,9 @@ struct AdminGideonUsageSection: View {
             VStack(alignment: .leading, spacing: 12) {
                 if loading && data == nil {
                     ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.top, 40)
-                } else if let error {
-                    Text(error).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                } else if data == nil, let failure {
+                    LoadErrorView(error: failure, what: T("GIDEON usage"), retry: { Task { await load() } }, compact: true)
+                        .padding(.top, 24)
                 } else {
                     if let t = data?.totals {
                         HStack(spacing: 10) {
@@ -1097,9 +1145,8 @@ struct AdminGideonUsageSection: View {
     }
 
     private func load() async {
-        error = nil
-        do { data = try await APIClient.shared.gideonUsage() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.") }
+        do { data = try await APIClient.shared.gideonUsage(); failure = nil }
+        catch { failure = error }
         loading = false
     }
 }
@@ -1114,7 +1161,8 @@ struct AdminGideonUsageSection: View {
 struct AdminAppInstallsSection: View {
     @State private var data: AppInstalls?
     @State private var loading = true
-    @State private var error: String?
+    /// Why it didn't load (LoadErrorView: offline / no access / server, with Try again).
+    @State private var failure: Error?
 
     private var rows: [AppInstalls.Row] { data?.installs ?? [] }
     private var missing: [AppInstalls.Missing] { data?.notInstalled ?? [] }
@@ -1124,8 +1172,9 @@ struct AdminAppInstallsSection: View {
             VStack(alignment: .leading, spacing: 12) {
                 if loading && data == nil {
                     ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.top, 40)
-                } else if let error {
-                    Text(error).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                } else if data == nil, let failure {
+                    LoadErrorView(error: failure, what: T("who has the app"), retry: { Task { await load() } }, compact: true)
+                        .padding(.top, 24)
                 } else {
                     if let t = data?.totals {
                         HStack(spacing: 10) {
@@ -1238,9 +1287,8 @@ struct AdminAppInstallsSection: View {
     }()
 
     private func load() async {
-        error = nil
-        do { data = try await APIClient.shared.appInstalls() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.") }
+        do { data = try await APIClient.shared.appInstalls(); failure = nil }
+        catch { failure = error }
         loading = false
     }
 }

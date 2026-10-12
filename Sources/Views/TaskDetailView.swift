@@ -408,6 +408,7 @@ struct TaskDetailView: View {
                         Button { Task { await toggleSub(st) } } label: {
                             Image(systemName: st.isDone ? "checkmark.circle.fill" : "circle")
                                 .font(.system(size: 18)).foregroundStyle(st.isDone ? NX.success : NX.mutedFg.opacity(0.5))
+                                .touchTarget44(drawn: 21)
                         }.buttonStyle(.plain)
                         .disabled(!canEditTask)
                         // A subtask is a task: its title opens it, while the circle stays a

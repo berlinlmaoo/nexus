@@ -274,7 +274,7 @@ struct AdminExtraDayOffSection: View {
                     .font(NXFont.text(14)).textInputAutocapitalization(.never).autocorrectionDisabled()
                     .focused($searchFocused)
                 if !search.isEmpty {
-                    Button { search = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg) }.buttonStyle(.plain)
+                    Button { search = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg).touchTarget44(drawn: 20) }.buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 12).padding(.vertical, 9)
@@ -294,6 +294,7 @@ struct AdminExtraDayOffSection: View {
                                 .font(NXFont.text(11, .semibold)).foregroundStyle(NX.violetText)
                                 .padding(.horizontal, 9).padding(.vertical, 5)
                                 .background(NX.violet.opacity(0.12), in: Capsule())
+                                .touchTarget44(drawn: 44, drawnHeight: 24)
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(String(format: T("Remove %@"), m.displayName))
@@ -486,7 +487,7 @@ struct AdminExtraDayOffSection: View {
         } catch APIError.unauthorized {
             auth.logout()
         } catch {
-            loadError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.")
+            loadError = FailureText.text(error)
             // With a list already on screen the full-page error never shows, so say it inline —
             // otherwise a failed period switch would leave the old period's grants looking current.
             if list != nil { problem = loadError }

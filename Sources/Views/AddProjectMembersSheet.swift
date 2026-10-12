@@ -93,7 +93,7 @@ struct AddProjectMembersSheet: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     if !search.isEmpty {
-                        Button { search = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg) }
+                        Button { search = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg).touchTarget44(drawn: 20) }
                             .buttonStyle(.plain)
                             .accessibilityLabel(T("Clear search"))
                     }

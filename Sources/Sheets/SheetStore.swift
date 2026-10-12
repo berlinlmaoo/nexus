@@ -60,6 +60,13 @@ final class SheetStore {
     }
     /// Hidden rows / columns (settings.hiddenRows / hiddenCols) just before a visible index (unhide arrows).
     private(set) var rowGaps: [Int: [Int]] = [:]
+    /// Automatic heights (model row → points) of rows without a height of their own: rotated text and
+    /// large fonts grow the row, like the web's autoHeights.
+    private(set) var autoHeights: [Int: CGFloat] = [:]
+    /// A "Show a warning" protected range is about to be edited: the screen asks first (centred alert).
+    var protectPrompt: SheetProtectPrompt?
+    /// "Don't show this again for 5 minutes" (web protectMuteUntil).
+    @ObservationIgnored var protectMuteUntil = Date.distantPast
     private(set) var colGaps: [Int: [Int]] = [:]
     @ObservationIgnored var settingsInFlight = 0
     /// Merging needs the rows in sheet order (the filter's sort reorders them on screen only).
@@ -86,7 +93,7 @@ final class SheetStore {
     private var collecting: [SheetUndoEntry]?
 
     @ObservationIgnored private let outbox = SheetOutbox.shared
-    @ObservationIgnored private var meId: String?
+    @ObservationIgnored private(set) var meId: String?
 
     init(projectId: String, meId: String?) {
         self.projectId = projectId
@@ -113,8 +120,27 @@ final class SheetStore {
     }
 
     func rowHeight(_ r: Int) -> CGFloat {
-        guard let m = modelRow(r), let h = rows[m].height, h > 0 else { return 32 }
+        guard let m = modelRow(r) else { return 32 }
+        guard let h = rows[m].height, h > 0 else { return autoHeights[m] ?? 32 }
         return CGFloat(min(max(h, 20), 400))
+    }
+
+    /// Rows that grow on their own (no height set): rotated text and large fonts.
+    private static func autoHeights(_ rows: [SheetRowModel], _ columns: [SheetJSON], _ snap: SheetBridge.Snapshot) -> [Int: CGFloat] {
+        var colIndex: [String: Int] = [:]
+        for (i, c) in columns.enumerated() { if let id = c["id"] as? String { colIndex[id] = i } }
+        var out: [Int: CGFloat] = [:]
+        for (r, row) in rows.enumerated() where row.height == nil && !row.styles.isEmpty {
+            var cells: [(style: [String: Any], text: String)] = []
+            for (cid, st) in row.styles {
+                let big = (SheetGridStyle.fontPx(st) ?? 13) > 14
+                guard big || st["rt"] != nil, let c = colIndex[cid] else { continue }
+                cells.append((style: st, text: snap.display(row: r, col: c).text))
+            }
+            if cells.isEmpty { continue }
+            if let h = SheetGridText.autoRowHeight(cells, defaultHeight: 32) { out[r] = CGFloat(h) }
+        }
+        return out
     }
 
     var canUndo: Bool { !(past[sheetId ?? ""] ?? []).isEmpty }
@@ -136,6 +162,7 @@ final class SheetStore {
         let groupCols = Self.collapsedGroups(settings["colGroups"], ids: colIds)
         let snap = SheetBridge.snapshot(columns: columns, rows: rows, settings: settings, previous: snapshot)
         snapshot = snap
+        autoHeights = Self.autoHeights(rows, columns, snap)
 
         // The filter (and slicers) hide body rows; the header row of the range always stays.
         var filtered = Set<String>()
@@ -467,6 +494,11 @@ final class SheetStore {
 
     func beginEdit(with text: String? = nil) {
         guard canEdit, rowCount > 0, colCount > 0 else { return }
+        guardProtected([selection.active]) { [weak self] in self?.openEditor(with: text) }
+    }
+
+    private func openEditor(with text: String?) {
+        guard canEdit, rowCount > 0, colCount > 0 else { return }
         lastInsertedRef = nil
         refAnchor = nil
         draftOrigin = activeEditText
@@ -549,6 +581,7 @@ final class SheetStore {
     /// Formatting (bold, alignment, wrap, number format…) for every selected cell: `edit` changes a copy of
     /// each cell's style. One undo step.
     func setStyles(label: String, record: Bool = true, _ edit: ([String: Any]) -> [String: Any]) {
+        if record && refusedByProtection(selection.ranges.flatMap { $0.positions }) { return }
         var changes: [(String, String, [String: Any]?)] = []
         for range in selection.ranges {
             for p in range.positions {
@@ -582,6 +615,11 @@ final class SheetStore {
     /// Delete / Backspace: empties every selected cell.
     func clearSelection() {
         guard canEdit else { return }
+        guardProtected(selection.ranges.flatMap { $0.positions }) { [weak self] in self?.clearSelectionNow() }
+    }
+
+    private func clearSelectionNow() {
+        guard canEdit else { return }
         var changes: [(String, String, Any?)] = []
         for range in selection.ranges {
             for p in range.positions {
@@ -596,7 +634,8 @@ final class SheetStore {
     func toggleCheckbox(_ p: SheetPos) {
         guard canEdit, let snapshot, let r = modelRow(p.r), let c = modelCol(p.c), let cid = columnId(p.c),
               let next = snapshot.toggledCheckbox(row: r, col: c) else { return }
-        setCells([(rows[r].id, cid, next)], label: T("edit cell"))
+        let rid = rows[r].id
+        guardProtected([p]) { [weak self] in self?.setCells([(rid, cid, next)], label: T("edit cell")) }
     }
 
     /// A dropdown's choice(s) for the active cell.
@@ -604,6 +643,8 @@ final class SheetStore {
         guard canEdit, let r = modelRow(selection.active.r), let cid = columnId(selection.active.c) else { return }
         let next: Any? = values.isEmpty ? nil : values.joined(separator: ", ")
         if let snapshot, snapshot.same(rows[r].cells[cid], next) { return }
+        // The "Heads up!" was asked before the picker opened; a restricted range still refuses here.
+        if refusedByProtection([selection.active]) { return }
         setCells([(rows[r].id, cid, next)], label: T("edit cell"))
     }
 
@@ -624,9 +665,27 @@ final class SheetStore {
     /// Pastes at the active cell. A block wider / taller than what is left of the sheet adds columns / rows
     /// first (one undo step with the paste, web: paste auto-expands).
     func paste(json: String?, html: String?, text: String?) async {
-        guard canEdit, let sid = sheetId else { return }
-        guard let r0 = modelRow(selection.active.r), let c0 = modelCol(selection.active.c),
-              let block = SheetBridge.Snapshot.readPaste(json: json, html: html, text: text), !block.cells.isEmpty else { return }
+        guard canEdit else { return }
+        guard let block = SheetBridge.Snapshot.readPaste(json: json, html: html, text: text), !block.cells.isEmpty else { return }
+        let height = block.cells.count, width = block.cells.map(\.count).max() ?? 0
+        let a = selection.active
+        var target: [SheetPos] = []
+        for r in a.r..<min(rowCount, a.r + height) { for c in a.c..<min(colCount, a.c + width) { target.append(SheetPos(r: r, c: c)) } }
+        switch protection(at: target) {
+        case .deny?:
+            notice = T("This cell is protected. Ask its owner if you need to change it.")
+        case .warn? where Date() >= protectMuteUntil:
+            protectPrompt = SheetProtectPrompt { [weak self] in
+                guard let self else { return }
+                Task { await self.pasteBlock(block) }
+            }
+        default:
+            await pasteBlock(block)
+        }
+    }
+
+    private func pasteBlock(_ block: SheetClipboard.PasteBlock) async {
+        guard canEdit, let sid = sheetId, let r0 = modelRow(selection.active.r), let c0 = modelCol(selection.active.c) else { return }
         let height = block.cells.count, width = block.cells.map(\.count).max() ?? 0
         await group(T("paste")) {
             let needCols = c0 + width - self.columns.count
@@ -1010,6 +1069,71 @@ final class SheetStore {
 
     /// Called by the outbox after each send so this screen can follow (only for the open sheet).
     func outboxSent(sheet: String, rows list: [SheetJSON]) { savedRows(list, sheet: sheet) }
+
+    // MARK: protected ranges (settings.protections; the server enforces "restrict" anyway)
+
+    var protections: [SheetRanges.Protection] {
+        ((settings["protections"] as? [Any]) ?? []).compactMap { SheetRanges.Protection(json: $0) }
+    }
+
+    /// The strongest protection over some visible cells for this person: nil, a warning or a refusal.
+    func protection(at positions: [SheetPos]) -> SheetRanges.Hit? {
+        let list = protections
+        guard !list.isEmpty, let snapshot, !positions.isEmpty else { return nil }
+        var rects: [String: SheetValidation.Rect] = [:]
+        for p in list {
+            var stored = p.except
+            if let r = p.range { stored.append(r) }
+            for s in stored { if let rc = SheetValidation.rangeRect(s, snapshot.shape) { rects[s] = rc } }
+        }
+        let known = rects
+        let me = meId ?? ""
+        var out: SheetRanges.Hit? = nil
+        for pos in positions {
+            guard let r = modelRow(pos.r), let c = modelCol(pos.c) else { continue }
+            let hit = SheetRanges.protectedHere(list, row: r, col: c, me: me, canManage: canManage) { known[$0] }
+            if hit == .deny { return .deny }
+            if hit == .warn { out = .warn }
+        }
+        return out
+    }
+
+    /// Runs an edit of these cells, unless a restricted range refuses it; a warning range asks first
+    /// (web guardProtected: "Heads up!", and "Don't show this again for 5 minutes").
+    func guardProtected(_ positions: [SheetPos], _ go: @escaping @MainActor () -> Void) {
+        switch protection(at: positions) {
+        case .deny?:
+            notice = T("This cell is protected. Ask its owner if you need to change it.")
+        case .warn? where Date() < protectMuteUntil:
+            go()
+        case .warn?:
+            protectPrompt = SheetProtectPrompt(go: go)
+        case nil:
+            go()
+        }
+    }
+
+    /// Formatting can't wait for an answer: a restricted range refuses it here (the server would too).
+    func refusedByProtection(_ positions: [SheetPos]) -> Bool {
+        guard protection(at: positions) == .deny else { return false }
+        notice = T("This cell is protected. Ask its owner if you need to change it.")
+        return true
+    }
+
+    /// The "Heads up!" answer: go ahead (optionally quiet for five minutes) or drop the edit.
+    func answerProtectPrompt(_ ok: Bool, mute: Bool = false) {
+        let prompt = protectPrompt
+        protectPrompt = nil
+        guard ok, let prompt else { return }
+        if mute { protectMuteUntil = Date().addingTimeInterval(5 * 60) }
+        prompt.go()
+    }
+}
+
+/// An edit waiting for the "Heads up!" answer on a "Show a warning" protected range.
+struct SheetProtectPrompt: Identifiable {
+    let id = UUID()
+    let go: @MainActor () -> Void
 }
 
 extension APIClient {

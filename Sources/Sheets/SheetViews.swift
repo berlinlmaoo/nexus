@@ -46,6 +46,9 @@ private struct SheetScreen: View {
     /// enum-driven sheet, presented from a background so this view doesn't stack another .sheet.
     @State private var panel: SheetPanelKind?
     @State private var comments = SheetCommentsModel()
+    /// Format › Rotation › Custom angle (centred alert with a number field).
+    @State private var askingAngle = false
+    @State private var angleText = ""
 
     private var wide: Bool { hSize == .regular }
 
@@ -81,22 +84,39 @@ private struct SheetScreen: View {
         .task(id: store.sheetId) { await comments.load(store.sheetId) }
         // New / resolved comments redraw the corner markers.
         .onChange(of: comments.version) { _, _ in store.version += 1 }
-        .alert(T("Rename column"), isPresented: Binding(get: { renameColumn != nil }, set: { if !$0 { renameColumn = nil } })) {
+        // Alerts each on their own background: one presentation per view (two on one view leave one dead).
+        .background { Color.clear.alert(T("Rename column"), isPresented: Binding(get: { renameColumn != nil }, set: { if !$0 { renameColumn = nil } })) {
             TextField(T("Column name"), text: $nameText)
             Button(T("Save")) { if let c = renameColumn { let n = nameText; Task { await store.renameColumn(c, to: n) } } }
             Button(T("Cancel"), role: .cancel) {}
-        } message: { Text(T("Leave it blank to show the column's letter.")) }
-        .alert(T("Rename sheet"), isPresented: Binding(get: { renameSheet != nil }, set: { if !$0 { renameSheet = nil } }), presenting: renameSheet) { tab in
+        } message: { Text(T("Leave it blank to show the column's letter.")) } }
+        .background { Color.clear.alert(T("Rename sheet"), isPresented: Binding(get: { renameSheet != nil }, set: { if !$0 { renameSheet = nil } }), presenting: renameSheet) { tab in
             TextField(T("Sheet name"), text: $nameText)
             Button(T("Save")) { let n = nameText; Task { await store.renameSheet(tab.id, to: n) } }
             Button(T("Cancel"), role: .cancel) {}
-        }
-        .alert(T("Delete this sheet?"), isPresented: Binding(get: { deleteSheet != nil }, set: { if !$0 { deleteSheet = nil } }), presenting: deleteSheet) { tab in
+        } }
+        .background { Color.clear.alert(T("Delete this sheet?"), isPresented: Binding(get: { deleteSheet != nil }, set: { if !$0 { deleteSheet = nil } }), presenting: deleteSheet) { tab in
             Button(T("Delete"), role: .destructive) { Task { await store.deleteSheet(tab.id) } }
             Button(T("Cancel"), role: .cancel) {}
         } message: { tab in
             Text(T("“%@” and everything in it is deleted. A BoD can restore it from Audit.").replacingOccurrences(of: "%@", with: tab.name))
-        }
+        } }
+        // A "Show a warning" protected range (web "Heads up!").
+        .background { Color.clear.alert(T("Heads up!"), isPresented: Binding(get: { store.protectPrompt != nil }, set: { if !$0 { store.protectPrompt = nil } })) {
+            Button(T("OK")) { store.answerProtectPrompt(true) }
+            Button(T("OK, don't show this again for 5 minutes")) { store.answerProtectPrompt(true, mute: true) }
+            Button(T("Cancel"), role: .cancel) { store.answerProtectPrompt(false) }
+        } message: {
+            Text(T("You are trying to edit a protected part of this sheet. Do this only if you are sure the change is needed."))
+        } }
+        .background { Color.clear.alert(T("Custom angle"), isPresented: $askingAngle) {
+            TextField(T("Degrees (−90 to 90)"), text: $angleText).keyboardType(.numbersAndPunctuation)
+            Button(T("Apply")) {
+                let raw = angleText.replacingOccurrences(of: ",", with: ".").replacingOccurrences(of: "−", with: "-")
+                if let v = Double(SheetJS.trim(raw)), v.isFinite { store.setRotation(Int(v.rounded())) }
+            }
+            Button(T("Cancel"), role: .cancel) {}
+        } message: { Text(T("Tilt the text counter-clockwise by this many degrees.")) } }
     }
 
     private static func payload(_ note: Notification) -> SheetJSON? {
@@ -129,7 +149,7 @@ private struct SheetScreen: View {
                 guard store.canEdit else { return }
                 if store.snapshot?.dropdown(row: store.modelRow(store.selection.active.r) ?? 0,
                                             col: store.modelCol(store.selection.active.c) ?? 0) != nil, text == nil {
-                    picking = true
+                    store.guardProtected([store.selection.active]) { picking = true }
                 } else {
                     store.beginEdit(with: text)
                 }
@@ -142,7 +162,8 @@ private struct SheetScreen: View {
             commentCount: { p in
                 guard let r = store.rowId(p.r), let c = store.columnId(p.c) else { return 0 }
                 return comments.count(rowId: r, columnId: c)
-            }
+            },
+            openChart: { id in openPanel(.chart(id)) }
         )
     }
 
@@ -189,7 +210,7 @@ private struct SheetScreen: View {
         let dropdown = store.snapshot?.dropdown(row: store.modelRow(store.selection.active.r) ?? -1,
                                                 col: store.modelCol(store.selection.active.c) ?? -1)
         if dropdown != nil && !store.editing {
-            Button { if store.canEdit { picking = true } } label: {
+            Button { if store.canEdit { store.guardProtected([store.selection.active]) { picking = true } } } label: {
                 HStack {
                     Text(store.activeEditText.isEmpty ? T("Choose…") : store.activeEditText)
                         .font(NXFont.text(14)).foregroundStyle(store.activeEditText.isEmpty ? NX.mutedFg : NX.foreground).lineLimit(1)
@@ -266,6 +287,7 @@ private struct SheetScreen: View {
             numberFormatMenu
             SheetToolButton(icon: "arrow.left.to.line.compact", label: T("Decrease decimal places")) { store.changeDecimals(-1) }
             SheetToolButton(icon: "arrow.right.to.line.compact", label: T("Increase decimal places")) { store.changeDecimals(1) }
+            fontFamilyMenu
             fontSizeMenu
         }
     }
@@ -301,6 +323,7 @@ private struct SheetScreen: View {
             alignButton("r", icon: "text.alignright", label: T("Align right"))
             verticalMenu
             wrapMenu
+            rotationMenu
         }
     }
 
@@ -354,6 +377,12 @@ private struct SheetScreen: View {
                 let f = SheetNumberFormatPicker.formats[i]
                 Button { setNumberFormat(f.0) } label: { checkLabel(T(f.1), (store.activeStyle["nf"] as? String) == f.0) }
             }
+            Divider()
+            Button { openPanel(.customCurrency) } label: { Text(T("Custom currency…")) }
+            Button { openPanel(.customDate) } label: { Text(T("Custom date and time…")) }
+            Button { openPanel(.customNumber) } label: {
+                checkLabel(T("Custom number format…"), (store.activeStyle["nf"] as? String) == "custom")
+            }
         } label: {
             Label(T("Format"), systemImage: "number").font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground)
                 .padding(.horizontal, 8).frame(height: 32)
@@ -379,6 +408,50 @@ private struct SheetScreen: View {
             .padding(.horizontal, 8).frame(height: 32)
         }
         .accessibilityLabel(T("Font size"))
+    }
+
+    private var fontFamilyMenu: some View {
+        let current = SheetGridText.family(store.activeStyle)
+        return Menu {
+            Button { store.setFontFamily(nil) } label: { checkLabel(T("Default (Sans Serif)"), current == nil) }
+            Divider()
+            ForEach(SheetGridText.fontFamilies.indices, id: \.self) { i in
+                let name = SheetGridText.fontFamilies[i].name
+                Button { store.setFontFamily(name) } label: { checkLabel(name, current?.lowercased() == name.lowercased()) }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Text(current ?? T("Default")).font(SheetGridFonts.preview(current)).lineLimit(1)
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
+            }
+            .foregroundStyle(NX.foreground)
+            .frame(maxWidth: 120)
+            .padding(.horizontal, 8).frame(height: 32)
+        }
+        .accessibilityLabel(T("Font"))
+    }
+
+    private var rotationMenu: some View {
+        let rot = SheetGridText.rotation(store.activeStyle)
+        return Menu {
+            ForEach(SheetGridText.rotationPresets.indices, id: \.self) { i in
+                let preset = SheetGridText.rotationPresets[i]
+                let on = SheetGridText.rotation(preset.value.map { ["rt": $0] }) == rot
+                Button { store.setRotation(preset.value) } label: { checkLabel(T(preset.label), on) }
+            }
+            Divider()
+            Button {
+                angleText = rot.vertical ? "0" : "\(Int(rot.degrees))"
+                askingAngle = true
+            } label: { Text(T("Custom angle…")) }
+        } label: {
+            Image(systemName: rot.isNone ? "textformat.abc" : "textformat.abc.dottedunderline")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(rot.isNone ? NX.foreground : NX.violetText)
+                .rotationEffect(.degrees(rot.vertical ? 90 : -rot.degrees))
+                .frame(width: 34, height: 32)
+        }
+        .accessibilityLabel(T("Text rotation"))
     }
 
     private static func ptText(_ pt: Double) -> String { pt == pt.rounded() ? "\(Int(pt))" : String(format: "%.1f", pt) }

@@ -14,7 +14,17 @@ enum SheetPanelKind: Identifiable, Equatable {
     case conditionalFormat
     case alternatingColors
     case charts
+    /// One chart's editor (tapping a chart on the grid).
+    case chart(String)
     case pivot
+    /// Data ▸ Column stats for a model column.
+    case columnStats(Int)
+    case namedRanges
+    case protectedRanges
+    /// Format ▸ Number ▸ Custom number format / date and time / currency.
+    case customNumber
+    case customDate
+    case customCurrency
 
     var id: String {
         switch self {
@@ -26,7 +36,14 @@ enum SheetPanelKind: Identifiable, Equatable {
         case .conditionalFormat: return "cf"
         case .alternatingColors: return "alt"
         case .charts: return "charts"
+        case .chart(let id): return "chart:\(id)"
         case .pivot: return "pivot"
+        case .columnStats: return "stats"
+        case .namedRanges: return "named"
+        case .protectedRanges: return "protect"
+        case .customNumber: return "customNumber"
+        case .customDate: return "customDate"
+        case .customCurrency: return "customCurrency"
         }
     }
 }
@@ -45,7 +62,14 @@ struct SheetPanelHost: View {
         case .conditionalFormat: SheetCondFormatPanel(ctx: ctx)
         case .alternatingColors: SheetAlternatingColorsPanel(ctx: ctx)
         case .charts: SheetChartsPanel(ctx: ctx)
+        case .chart(let id): SheetChartEditorHost(ctx: ctx, chartId: id)
         case .pivot: SheetPivotPanel(ctx: ctx)
+        case .columnStats(let c): SheetStatsPanel(ctx: ctx, column: c)
+        case .namedRanges: SheetNamedRangesPanel(ctx: ctx)
+        case .protectedRanges: SheetProtectedRangesPanel(ctx: ctx)
+        case .customNumber: SheetNumFmtPanel(ctx: ctx, kind: .number)
+        case .customDate: SheetNumFmtPanel(ctx: ctx, kind: .date)
+        case .customCurrency: SheetNumFmtPanel(ctx: ctx, kind: .currency)
         }
     }
 }
@@ -65,7 +89,12 @@ struct SheetPanelMenuItems: View {
         Divider()
         Button { open(.charts) } label: { Label(T("Charts"), systemImage: "chart.bar.xaxis") }
         Button { open(.pivot) } label: { Label(T("Pivot table"), systemImage: "tablecells.badge.ellipsis") }
+        Button { open(.columnStats(store.modelCol(store.selection.active.c) ?? 0)) } label: {
+            Label(T("Column stats"), systemImage: "chart.bar.doc.horizontal")
+        }
         Divider()
+        Button { open(.namedRanges) } label: { Label(T("Named ranges"), systemImage: "character.cursor.ibeam") }
+        Button { open(.protectedRanges) } label: { Label(T("Protected sheets and ranges"), systemImage: "lock") }
         Button { open(.validation) } label: { Label(T("Data validation"), systemImage: "checklist") }
         Button { open(.conditionalFormat) } label: { Label(T("Conditional formatting"), systemImage: "paintpalette") }
         Button { open(.alternatingColors) } label: { Label(T("Alternating colours"), systemImage: "rectangle.grid.1x2") }

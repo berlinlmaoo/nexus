@@ -102,7 +102,10 @@ extension ProjectDetail.ProjectMember {
 enum ProjectAccessText {
     /// The sentence for a failed level change / removal. 409 LAST_OWNER gets its own line, as on the web.
     static func changeFailed(_ error: Error) -> String {
-        if case APIError.http(409, _) = error {
+        // 409 LAST_OWNER, on a level change AND on Remove (server from 13 Oct 2026, QA BoD R2 N01): the
+        // server's own sentence wins (T() translates the known one); the fixed line covers an empty body.
+        if case APIError.http(409, let message) = error {
+            if let message, !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return T(message) }
             return T("A project keeps at least one Project Owner. Give someone else Full access first.")
         }
         if case APIError.http(403, _) = error {

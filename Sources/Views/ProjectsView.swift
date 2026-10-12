@@ -269,7 +269,7 @@ struct ProjectsView: View {
             if searching { ProgressView().scaleEffect(0.7) }
             if !query.isEmpty {
                 Button { query = ""; hits = nil } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg)
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg).touchTarget44(drawn: 20)
                 }.buttonStyle(.plain)
             }
         }

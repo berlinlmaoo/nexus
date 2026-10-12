@@ -58,6 +58,8 @@ struct ProjectSettingsView: View {
     private var isBoD: Bool { ["BOD", "ONE_ABOVE_ALL"].contains(viewerWsRole ?? "") }
     @State private var levelBusy: String?
     @State private var addLevel: ProjectAccessLevel = .edit
+    /// The member whose Remove waits for a yes (QA BoD R2 N01: it takes their access away at once).
+    @State private var confirmRemove: ProjectDetail.ProjectMember?
     private var hasPhoto: Bool { ProjectMark.isPhoto(icon) }
 
     var body: some View {
@@ -81,9 +83,25 @@ struct ProjectSettingsView: View {
             .navigationTitle(T("Project settings")).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(T("Close")) { dismiss() } } }
             .overlay(alignment: .bottom) { if let toast { toastView(toast) } }
+            .alert(removePrompt, isPresented: removeAlertShown) {
+                Button(T("Remove"), role: .destructive) {
+                    if let m = confirmRemove { Task { await removeMember(m) } }
+                    confirmRemove = nil
+                }
+                Button(T("Cancel"), role: .cancel) { confirmRemove = nil }
+            }
             .onAppear(perform: hydrate)
             .task { await load() }
         }
+    }
+
+    private var removeAlertShown: Binding<Bool> {
+        Binding(get: { confirmRemove != nil }, set: { if !$0 { confirmRemove = nil } })
+    }
+    private var removePrompt: String {
+        let name = (confirmRemove?.user?.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty { return T("Remove them from this project? They lose access right away.") }
+        return String(format: T("Remove %@ from this project? They lose access right away."), name)
     }
 
     // MARK: access
@@ -296,7 +314,7 @@ struct ProjectSettingsView: View {
             if canManage && !m.uid.isEmpty {
                 AccessLevelMenu(value: m.level, disabled: busy || levelBusy != nil, accessibilityName: m.displayName,
                                 onChange: { level in Task { await setLevel(m, level) } },
-                                onRemove: { Task { await removeMember(m) } })
+                                onRemove: { confirmRemove = m })
             } else {
                 Text(m.level.label).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }

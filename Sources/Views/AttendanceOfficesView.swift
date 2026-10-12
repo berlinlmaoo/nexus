@@ -256,7 +256,7 @@ struct OfficeMapPicker: View {
                     .font(NXFont.text(14)).autocorrectionDisabled().submitLabel(.search)
                     .onSubmit { Task { await search() } }
                 if searching { ProgressView().scaleEffect(0.8) }
-                else if !query.isEmpty { Button { query = ""; results = [] } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg) }.buttonStyle(.plain) }
+                else if !query.isEmpty { Button { query = ""; results = [] } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg).touchTarget44(drawn: 20) }.buttonStyle(.plain) }
             }
             .padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))

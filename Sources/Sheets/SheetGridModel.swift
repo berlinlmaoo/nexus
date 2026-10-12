@@ -421,3 +421,123 @@ enum SheetHiddenGaps {
         return out
     }
 }
+
+// MARK: - font families, text rotation, auto row height (web lib/sheet-palette.ts, sheet-style.ts)
+
+enum SheetGridText {
+    /// "Default" (stored as nothing) = the app's own font.
+    static let defaultFont = "Default"
+
+    /// The web's FONT_FAMILIES (what a cell stores in `ff`), each with the iOS / Mac fonts tried in order;
+    /// a name ending in ":serif" / ":mono" / ":rounded" is a system design used as the last resort.
+    static let fontFamilies: [(name: String, ios: [String])] = [
+        ("Arial", ["Arial", "Helvetica"]),
+        ("Calibri", ["Calibri", "Carlito"]),
+        ("Cambria", ["Cambria", "Caladea", "Georgia", ":serif"]),
+        ("Comic Sans MS", ["Comic Sans MS", "Chalkboard SE", ":rounded"]),
+        ("Consolas", ["Consolas", "Menlo", ":mono"]),
+        ("Courier New", ["Courier New", "Courier", ":mono"]),
+        ("Georgia", ["Georgia", ":serif"]),
+        ("Helvetica", ["Helvetica", "Helvetica Neue"]),
+        ("Impact", ["Impact", "Futura", "Avenir Next Condensed"]),
+        ("Lucida Console", ["Lucida Console", "Monaco", "Menlo", ":mono"]),
+        ("Segoe UI", ["Segoe UI"]),
+        ("Tahoma", ["Tahoma", "Verdana"]),
+        ("Times New Roman", ["Times New Roman", "Times", ":serif"]),
+        ("Trebuchet MS", ["Trebuchet MS"]),
+        ("Verdana", ["Verdana"]),
+        ("Serif", [":serif"]),
+        ("Sans Serif", []),
+        ("Monospace", [":mono"]),
+    ]
+
+    /// The stored family of a style (nil = the default font).
+    static func family(_ st: [String: Any]?) -> String? {
+        guard let ff = st?["ff"] as? String, !SheetJS.trim(ff).isEmpty, ff.lowercased() != defaultFont.lowercased() else { return nil }
+        return ff
+    }
+
+    /// The fonts to try for a stored family: the known list's, else the name itself (web fontStack).
+    static func candidates(_ family: String) -> [String] {
+        if let f = fontFamilies.first(where: { $0.name.lowercased() == family.lowercased() }) { return f.ios }
+        return [family]
+    }
+
+    /// Text rotation `rt`: degrees counter-clockwise (−90…90), or "v" = stacked vertically.
+    struct Rotation: Equatable {
+        var degrees: Double = 0
+        var vertical = false
+        var isNone: Bool { !vertical && degrees == 0 }
+    }
+
+    static func rotation(_ st: [String: Any]?) -> Rotation {
+        guard let rt = st?["rt"] else { return Rotation() }
+        if let s = rt as? String { return s == "v" ? Rotation(degrees: 0, vertical: true) : Rotation() }
+        if case .number(let n) = SheetFormula.kind(rt), n.isFinite { return Rotation(degrees: min(max(n, -90), 90), vertical: false) }
+        return Rotation()
+    }
+
+    /// The rotation menu's presets (web RotationMenu), English labels.
+    static let rotationPresets: [(value: Any?, label: String)] = [
+        (nil, "None"), (45, "Tilt up"), (-45, "Tilt down"), ("v", "Stack vertically"), (90, "Rotate up"), (-90, "Rotate down"),
+    ]
+
+    /// Rough box a rotated text needs (web rotatedBox, for the automatic row height): ≈ 0.55em per character.
+    static func rotatedBox(_ text: String, _ rot: Rotation, px: Double) -> (w: Double, h: Double) {
+        let lines = text.components(separatedBy: "\n")
+        let longest = Double(lines.map { $0.utf16.count }.max() ?? 0)
+        let w = longest * px * 0.55
+        let h = Double(lines.count) * px * 1.25
+        if rot.vertical {
+            let chars = Double(lines.map { $0.count }.max() ?? 0)
+            return (Double(lines.count) * px * 1.2, chars * px * 1.1)
+        }
+        if rot.degrees == 0 { return (w, h) }
+        let a = abs(rot.degrees) * Double.pi / 180
+        return (w * cos(a) + h * sin(a), w * sin(a) + h * cos(a))
+    }
+
+    /// Automatic row height of a row without a height of its own (web autoHeights, without measuring
+    /// wrapped text): rotated text and large fonts grow the row. `cells` = (style, shown text) of the row's
+    /// styled cells. nil = the default height.
+    static func autoRowHeight(_ cells: [(style: [String: Any], text: String)], defaultHeight: Double, maxHeight: Double = 400) -> Double? {
+        var h = 0.0
+        for (st, text) in cells {
+            let px = SheetGridStyle.fontPx(st) ?? 13
+            let big = px > 14
+            let rot = rotation(st)
+            if !big && rot.isNone { continue }
+            if text.isEmpty { if big { h = max(h, (px * 1.3 + 8).rounded()) }; continue }
+            if !rot.isNone { h = max(h, (rotatedBox(text, rot, px: px).h + 8).rounded()); continue }
+            // Wrapped text is not measured here: one line is the floor (web measures the lines).
+            h = max(h, (px * 1.3 + 8).rounded())
+        }
+        return h > defaultHeight ? min(maxHeight, h) : nil
+    }
+}
+
+// MARK: - charts floating on the grid (web SheetGrid anchorXY / anchorFromXY)
+
+enum SheetChartPlace {
+    /// The visible column a chart anchored at model column `model` starts in: that column, or the next
+    /// visible one when it is hidden (a hidden column has no width); `visCols.count` = past the last one.
+    static func visibleColumn(model: Int, visCols: [Int]) -> Int {
+        visCols.firstIndex { $0 >= model } ?? visCols.count
+    }
+
+    /// A point in the sheet (content coordinates) as an anchor: the cell it falls in and the offset from
+    /// that cell's top-left (`starts` = the running edges, first 0). Points above / left of the sheet
+    /// anchor to the first row / column with a negative offset, like the web.
+    static func anchor(x: Double, y: Double, colStarts: [Double], rowStarts: [Double]) -> (r: Int, c: Int, dx: Double, dy: Double) {
+        var c = 0
+        while c < colStarts.count - 2 && colStarts[c + 1] <= x { c += 1 }
+        var r = 0
+        while r < rowStarts.count - 2 && rowStarts[r + 1] <= y { r += 1 }
+        let left = colStarts.isEmpty ? 0 : colStarts[min(c, colStarts.count - 1)]
+        let top = rowStarts.isEmpty ? 0 : rowStarts[min(r, rowStarts.count - 1)]
+        return (r, c, (x - left).rounded(), (y - top).rounded())
+    }
+
+    static let minWidth = 120.0
+    static let minHeight = 80.0
+}

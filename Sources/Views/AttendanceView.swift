@@ -1684,6 +1684,7 @@ struct StreakBoardCard: View {
                 HStack(spacing: 2) {
                     Button { showFull = true } label: {
                         Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.foreground).frame(width: 30, height: 30)
+                            .touchTarget44(drawn: 30)
                     }
                     .accessibilityLabel(T("Open the full board"))
                     .fullScreenCover(isPresented: $showFull) {
@@ -1693,8 +1694,8 @@ struct StreakBoardCard: View {
                     }
                     if wide {
                         Button { Task { await exportMonth() } } label: {
-                            if exporting { ProgressView().scaleEffect(0.7).frame(width: 30, height: 30) }
-                            else { Image(systemName: "square.and.arrow.up").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.foreground).frame(width: 30, height: 30) }
+                            if exporting { ProgressView().scaleEffect(0.7).frame(width: 30, height: 30).touchTarget44(drawn: 30) }
+                            else { Image(systemName: "square.and.arrow.up").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.foreground).frame(width: 30, height: 30).touchTarget44(drawn: 30) }
                         }
                         .disabled(exporting)
                         .accessibilityLabel(T("Export this month as a spreadsheet"))
@@ -1703,8 +1704,8 @@ struct StreakBoardCard: View {
                             Button("OK") { exportError = nil }
                         } message: { Text(exportError ?? "") }
                     }
-                    Button { monthOffset -= 1 } label: { Image(systemName: "chevron.left").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.foreground).frame(width: 30, height: 30) }
-                    Button { if monthOffset < 0 { monthOffset += 1 } } label: { Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundStyle(monthOffset < 0 ? NX.foreground : NX.mutedFg.opacity(0.4)).frame(width: 30, height: 30) }.disabled(monthOffset >= 0)
+                    Button { monthOffset -= 1 } label: { Image(systemName: "chevron.left").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.foreground).frame(width: 30, height: 30).touchTarget44(drawn: 30) }
+                    Button { if monthOffset < 0 { monthOffset += 1 } } label: { Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundStyle(monthOffset < 0 ? NX.foreground : NX.mutedFg.opacity(0.4)).frame(width: 30, height: 30).touchTarget44(drawn: 30) }.disabled(monthOffset >= 0)
                 }
             }
             legend

@@ -109,7 +109,7 @@ struct SearchView: View {
                 .onKeyPress(.downArrow) { move(1); return .handled }
                 .onKeyPress(.upArrow) { move(-1); return .handled }
             if !query.isEmpty {
-                Button { query = ""; results = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg) }
+                Button { query = ""; results = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg).touchTarget44(drawn: 20) }
                     .buttonStyle(.plain)
                     .accessibilityLabel(T("Clear"))
             }

@@ -109,7 +109,7 @@ private struct FailureToastModifier: ViewModifier {
                         }
                     }
                     Spacer(minLength: 0)
-                    Button { payload = nil } label: { Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.mutedFg) }
+                    Button { payload = nil } label: { Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.mutedFg).touchTarget44(drawn: 12) }
                         .buttonStyle(.plain).accessibilityLabel(T("Close"))
                 }
                 .padding(12)

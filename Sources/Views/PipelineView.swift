@@ -456,7 +456,7 @@ struct PipelineTab: View {
             if !search.isEmpty {
                 Button { search = "" } label: {
                     Image(systemName: "xmark.circle.fill").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
-                        .frame(width: 28, height: 28).contentShape(Rectangle())
+                        .frame(width: 28, height: 28).touchTarget44(drawn: 28)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(T("Clear filters"))

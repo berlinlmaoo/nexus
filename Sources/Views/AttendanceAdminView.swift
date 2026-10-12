@@ -73,6 +73,9 @@ struct AttendanceAdminSection: View {
     @State private var viewerRole: String?
     @State private var wsId: String?
     @State private var loading = true
+    /// Why the roster didn't load. Without it a failed load fell through to "BoD and above only" — a
+    /// BoD on a bad connection was told they lacked the role (web LoadError, QA 13 Oct 2026).
+    @State private var loadFailure: Error?
 
     private var allowed: Bool { viewerRole == "BOD" || viewerRole == "ONE_ABOVE_ALL" }
     private var effectiveWsId: String? { workspaceId ?? wsId }
@@ -81,6 +84,8 @@ struct AttendanceAdminSection: View {
         Group {
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if viewerRole == nil, let loadFailure {
+                LoadErrorView(error: loadFailure, what: T("the people list"), retry: { Task { loading = true; await load() } })
             } else if !allowed {
                 EmptyState(icon: "lock.fill", title: "Khusus BoD ke atas",
                            subtitle: T("Shift, day-off and public-holiday settings can only be managed by BoD / One Above All."))
@@ -156,7 +161,8 @@ struct AttendanceAdminSection: View {
             members = r.members ?? []
             viewerRole = r.role
             wsId = r.workspaceId
-        } catch APIError.unauthorized { auth.logout() } catch {}
+            loadFailure = nil
+        } catch APIError.unauthorized { auth.logout() } catch { loadFailure = error }
         loading = false
     }
 }

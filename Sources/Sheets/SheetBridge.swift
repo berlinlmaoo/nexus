@@ -59,6 +59,10 @@ struct SheetCellDisplay {
     var hasRule = false
     /// Rotated text (never overflows).
     var rotated = false
+    /// Text rotation: degrees counter-clockwise (`rt`), or stacked vertically ("v").
+    var rotation = SheetGridText.Rotation()
+    /// Font family (`ff`; nil = the app font).
+    var fontFamily: String?
     /// Drawn borders (bx, legacy bd).
     var borders = SheetGridStyle.Borders()
     /// The header row of the filter: nil = not a filter header, false / true = the column filters nothing / something.
@@ -85,6 +89,20 @@ enum SheetBridge {
         private let ruleAt: (Int, Int) -> SheetValidation.ValidationRule?
         private let condAt: (Int, Int) -> SheetCF.CondStyle?
         private let locale: SheetFormula.SheetLocale
+        /// Alternating colours and tables (settings.bandings / tables) in model indices: a fill (and the
+        /// table header's look) laid UNDER each cell's own format, like the web's decorAt "base".
+        private let bands: [Band]
+
+        struct Band {
+            let rect: SheetValidation.Rect
+            let c1: String
+            let c2: String
+            let header: String?
+            let footer: String?
+            /// A table (Format › Convert to table): header row white bold text; `c1`/`c2` = the bands.
+            let table: Bool
+            let banded: Bool
+        }
 
         init(columns: [SheetColumn], rows: [SheetRowModel], settings: SheetJSON, previous: Snapshot?) {
             self.columns = columns
@@ -104,6 +122,61 @@ enum SheetBridge {
             ruleAt = SheetValidation.buildRuleIndex(rules, data.shape)
             let conds = ((settings["condFormats"] as? [SheetJSON]) ?? []).compactMap { SheetCF.CondRule(json: $0) }
             condAt = conds.isEmpty ? { _, _ in nil } : SheetCF.buildCondFormatter(conds, data.shape, engine)
+            bands = Self.readBands(settings, data.shape)
+        }
+
+        /// Sheets' default table look (web TABLE_HEADER / TABLE_BAND).
+        static let tableHeader = "#1e6b45"
+        static let tableBand = "#eef7f1"
+
+        private static func readBands(_ settings: SheetJSON, _ shape: SheetShape) -> [Band] {
+            var out: [Band] = []
+            for b in (settings["bandings"] as? [SheetJSON]) ?? [] {
+                guard let range = b["range"] as? String, let rc = SheetValidation.rangeRect(range, shape),
+                      let c1 = b["c1"] as? String, let c2 = b["c2"] as? String else { continue }
+                out.append(Band(rect: rc, c1: c1, c2: c2, header: b["header"] as? String, footer: b["footer"] as? String,
+                                table: false, banded: true))
+            }
+            for t in (settings["tables"] as? [SheetJSON]) ?? [] {
+                guard let range = t["range"] as? String, let rc = SheetValidation.rangeRect(range, shape) else { continue }
+                let banded = (t["banded"] as? Bool) != false
+                out.append(Band(rect: rc, c1: tableBand, c2: "#ffffff", header: t["header"] as? String ?? tableHeader, footer: nil,
+                                table: true, banded: banded))
+            }
+            return out
+        }
+
+        /// The base format of a cell from the bandings / tables over it (later ones win, as on the web).
+        func bandBase(row: Int, col: Int) -> [String: Any]? {
+            guard !bands.isEmpty else { return nil }
+            var out: [String: Any]? = nil
+            for b in bands {
+                let rc = b.rect
+                guard row >= rc.top, row <= rc.bottom, col >= rc.left, col <= rc.right else { continue }
+                var base = out ?? [:]
+                if b.table {
+                    if row == rc.top {
+                        base["bg"] = b.header ?? Self.tableHeader
+                        base["fc"] = "#ffffff"
+                        base["b"] = 1
+                    } else if b.banded {
+                        base["bg"] = (row - rc.top) % 2 == 0 ? b.c1 : b.c2
+                    } else {
+                        continue
+                    }
+                } else {
+                    let first = b.header != nil ? rc.top + 1 : rc.top
+                    if let h = b.header, row == rc.top {
+                        base["bg"] = h
+                    } else if let f = b.footer, row == rc.bottom {
+                        base["bg"] = f
+                    } else {
+                        base["bg"] = (row - first) % 2 == 0 ? b.c1 : b.c2
+                    }
+                }
+                out = base
+            }
+            return out
         }
 
         // MARK: rules
@@ -129,7 +202,13 @@ enum SheetBridge {
             guard rows.indices.contains(row), columns.indices.contains(col) else { return SheetCellDisplay() }
             let r = rows[row], c = columns[col]
             let raw = r.cells[c.id]
-            let st = r.styles[c.id] ?? [:]
+            var st = r.styles[c.id] ?? [:]
+            // Alternating colours / tables lie under the cell's own format.
+            if let base = bandBase(row: row, col: col) {
+                var merged = base
+                for (k, v) in st { merged[k] = v }
+                st = merged
+            }
             let computed = engine.value(r.id, c.id)
             var d = SheetCellDisplay()
 
@@ -168,8 +247,20 @@ enum SheetBridge {
                 if let fc = cf.fc, let color = hexColor(fc) { d.textColor = color }
                 if let bg = cf.bg, let color = hexColor(bg) { d.fill = color }
             }
+            // A custom pattern's [Red] / [Blue]… section colours the value, over everything else (web patColor).
+            if let color = Self.patternColor(st, computed) { d.textColor = color }
             if d.checkbox != nil { d.alignment = .center }
             return d
+        }
+
+        private static func patternColor(_ st: [String: Any], _ v: SheetCellValue) -> UIColor? {
+            guard (st["nf"] as? String) == "custom", let pt = st["pt"] as? String, !pt.isEmpty else { return nil }
+            switch v {
+            case .number, .text: break
+            default: return nil
+            }
+            guard let hex = SheetFormula.formatNumberPattern(v, pt).color else { return nil }
+            return SheetBridge.hexColor(hex)
         }
 
         private func text(raw: Any?, computed: SheetCellValue, column c: SheetColumn, rowId: String, style st: [String: Any]) -> String {
@@ -208,7 +299,9 @@ enum SheetBridge {
             d.wrapMode = SheetGridStyle.wrapMode(st)
             d.wrap = d.wrapMode == "w"
             if let px = SheetGridStyle.fontPx(st) { d.fontSize = CGFloat(min(max(px, 8), 96)) }
-            d.rotated = st["rt"] != nil
+            d.rotation = SheetGridText.rotation(st)
+            d.rotated = !d.rotation.isNone
+            d.fontFamily = SheetGridText.family(st)
             // A hex fill without a text colour gets black or white text, so a light fill stays readable in
             // dark mode (web styleInline).
             if st["fc"] == nil, let bg = st["bg"] as? String, SheetGridStyle.isHex(bg),

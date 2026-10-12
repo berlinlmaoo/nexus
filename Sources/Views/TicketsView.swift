@@ -231,7 +231,8 @@ struct TicketsView: View {
     @Environment(AuthStore.self) private var auth
     @State private var items: [Complaint] = []
     @State private var loading = true
-    @State private var error: String?
+    /// Why the list didn't load (LoadErrorView: offline / no access / server; web LoadError, QA 13 Oct 2026).
+    @State private var failure: Error?
     @State private var filter = "ALL"
     @State private var selected: Complaint?
     @State private var showCreate = false
@@ -256,7 +257,8 @@ struct TicketsView: View {
 
     /// "All" first, so the ticket is also in the list under the sheet whatever its status now is.
     private func claimFocus() {
-        guard case .complaint(let id) = router.focus else { return }
+        // A list that failed to load can't say a ticket is missing from it: the link is kept for the retry.
+        guard failure == nil, case .complaint(let id) = router.focus else { return }
         router.focus = nil
         if let hit = items.first(where: { $0.id == id }) { filter = "ALL"; selected = hit } else { focusMissing = true }
     }
@@ -297,7 +299,9 @@ struct TicketsView: View {
         }
         .task { await load(); claimFocus() }
         .onChange(of: router.focus) { _, _ in if !loading { claimFocus() } }
-        .alert(T("That ticket isn't in your list"), isPresented: $focusMissing) { Button("OK") {} }
+        .alert(T("That ticket isn't in your list"), isPresented: $focusMissing) { Button("OK") {} } message: {
+            Text(T("It may have been deleted, or the link is wrong. Your own tickets are in the list."))
+        }
         .sheet(item: $selected) { t in TicketDetailSheet(ticket: t) { await load() } }
         // Reloads rather than splicing the new ticket in: the server decides the status, the
         // reporter shown (anonymous tickets hide it) and the ordering, so a locally-invented row
@@ -308,8 +312,8 @@ struct TicketsView: View {
     @ViewBuilder private var content: some View {
         if loading {
             SkeletonList()
-        } else if let error {
-            ErrorState(message: error) { Task { await load() } }
+        } else if let failure {
+            LoadErrorView(error: failure, what: T("the tickets"), retry: { Task { loading = true; await load(); claimFocus() } })
         } else {
             VStack(spacing: 0) {
                 filterBar
@@ -427,9 +431,9 @@ struct TicketsView: View {
     }
 
     private func load() async {
-        error = nil
         do {
             let fetched = try await APIClient.shared.complaints()
+            failure = nil
             items = Self.decisionsFirst(fetched)
             await viewer.loadIfNeeded()
             if isBod && !landed && router.focus == nil {
@@ -438,7 +442,10 @@ struct TicketsView: View {
             }
         }
         catch APIError.unauthorized { auth.logout() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load tickets.") }
+        catch {
+            // A failed refresh keeps the tickets already on screen (pull to refresh, a reply landing).
+            if items.isEmpty { failure = error }
+        }
         loading = false
     }
 }
@@ -462,7 +469,9 @@ struct TicketDetailSheet: View {
 
     @State private var detail: ComplaintDetail?
     @State private var loadingThread = true
-    @State private var threadError: String?
+    /// Why the thread didn't load: a deleted ticket (404) or someone else's (403) is said so, with a
+    /// way back; offline / server get Try again (web complaints.tsx LoadError, QA 13 Oct 2026).
+    @State private var threadFailure: Error?
     @State private var draft = ""
     @State private var sending = false
     @State private var sendError: String?
@@ -654,7 +663,8 @@ struct TicketDetailSheet: View {
             .background(NX.background.ignoresSafeArea())
             .navigationTitle(T("Ticket"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Close")) { dismiss() } } }
+            // Esc closes the thread, like every other dialog (web, QA 13 Oct 2026).
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Close")) { dismiss() }.keyboardShortcut(.cancelAction) } }
         }
         .task { await loadThread() }
         .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
@@ -667,9 +677,15 @@ struct TicketDetailSheet: View {
             SectionLabel(T("Conversation"))
             if loadingThread {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
-            } else if let threadError {
-                Text(threadError).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
-                    .fixedSize(horizontal: false, vertical: true)
+            } else if let threadFailure {
+                LoadErrorView(error: threadFailure, what: T("this ticket"),
+                              notFoundTitle: T("This ticket doesn't exist"),
+                              notFoundMessage: T("It may have been deleted, or the link is wrong. Your own tickets are in the list."),
+                              forbiddenTitle: T("This ticket isn't yours"),
+                              forbiddenMessage: T("Only the person who filed it and the BoD can read a ticket."),
+                              retry: { Task { await loadThread() } },
+                              actionTitle: T("Back to tickets"), action: { dismiss() },
+                              compact: true)
             } else if replies.isEmpty {
                 Text(T("No replies yet. Answers land right here."))
                     .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
@@ -829,7 +845,7 @@ struct TicketDetailSheet: View {
             // A failed REFRESH must not paint an error over a thread that is already on screen: the
             // messages sitting there are still exactly what was said.
             if detail == nil {
-                threadError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load the conversation.")
+                threadFailure = error
             }
         }
         loadingThread = false
@@ -837,7 +853,7 @@ struct TicketDetailSheet: View {
 
     private func apply(_ fresh: ComplaintDetail) {
         detail = fresh
-        threadError = nil
+        threadFailure = nil
     }
 }
 

@@ -158,6 +158,8 @@ struct MoveUndoBar: View {
     let undo: MoveUndo
     let onUndo: () -> Void
     let onDismiss: () -> Void
+    /// ⌘Z under the task popup belongs to the popup's text, not to this bar (QA BoD R2). SheetCover.swift.
+    @State private var cover = SheetCover()
 
     var body: some View {
         HStack(spacing: 12) {
@@ -165,7 +167,7 @@ struct MoveUndoBar: View {
             Text(undo.label ?? (undo.count == 1 ? T("Moved 1 task") : String(format: T("Moved %d tasks"), undo.count)))
                 .font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
             Spacer(minLength: 4)
-            Button(T("Undo"), action: onUndo)
+            Button(T("Undo")) { if !cover.isCovered { onUndo() } }
                 .font(NXFont.text(14, .bold)).foregroundStyle(NX.violetText)
                 .frame(minHeight: 44)
                 .keyboardShortcut("z", modifiers: .command)
@@ -178,6 +180,7 @@ struct MoveUndoBar: View {
         }
         .padding(.horizontal, 16)
         .background(NX.card)
+        .background(SheetCover.Anchor(cover: cover))
         .overlay(alignment: .top) { Divider().overlay(NX.border) }
         // Ten seconds, as on the web, then it goes by itself.
         .task(id: undo.id) {

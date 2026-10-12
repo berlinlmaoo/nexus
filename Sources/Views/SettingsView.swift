@@ -108,6 +108,8 @@ struct SettingsView: View {
         case .appearance:
             AppearanceCard()
             LanguageCard()
+            // iPad keyboard / Mac: the list ⌘/ opens (KeyboardShortcutsHelp.swift). A phone has no keyboard to speak of.
+            if UIDevice.current.userInterfaceIdiom != .phone { KeyboardShortcutsCard() }
             OfflineCard()
         case .mcp:
             ClaudeMCPCard()
@@ -328,6 +330,11 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 /// once; the app says what it is and opens the page.
 struct ClaudeMCPCard: View {
     @Environment(\.openURL) private var openURL
+    @State private var copied = false
+
+    /// The server this app talks to (production, or DEV on a dev build), never a hard-coded prod
+    /// address (web settings MCP_URL from the origin, QA BoD R2 B19).
+    private var mcpURL: String { Config.baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/api/mcp" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -335,6 +342,29 @@ struct ClaudeMCPCard: View {
             Text(T("Connect Claude (the app, Claude Code or Claude Desktop) to NEXUS so it can read and update your tasks and pages with your access. The connection token is created on the web, in Settings › Claude (MCP), and shown once."))
                 .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(T("Server URL for Claude")).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                HStack(spacing: 8) {
+                    Text(mcpURL)
+                        .font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.foreground)
+                        .lineLimit(1).truncationMode(.middle)
+                        .textSelection(.enabled)
+                    Spacer(minLength: 4)
+                    Button {
+                        UIPasteboard.general.string = mcpURL
+                        copied = true
+                    } label: {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                            .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(copied ? T("Copied") : T("Copy"))
+                }
+                .padding(.leading, 12)
+                .background(NX.background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
+            }
             Button {
                 if let url = URL(string: Config.baseURL.absoluteString + "/settings") { openURL(url) }
             } label: {

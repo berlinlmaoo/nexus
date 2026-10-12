@@ -1471,12 +1471,15 @@ struct CalendarView: View {
             Button(mode == .people ? T("Next week") : T("Next month")) { step(1) }.keyboardShortcut(.rightArrow, modifiers: .command)
             Button(T("Previous day")) { select(CalDays.addDays(selected, -1)) }.keyboardShortcut(.leftArrow, modifiers: .option)
             Button(T("Next day")) { select(CalDays.addDays(selected, 1)) }.keyboardShortcut(.rightArrow, modifiers: .option)
-            Button(T("By division")) { lensRaw = "division" }.keyboardShortcut("1", modifiers: .command)
-            Button(T("By person")) { lensRaw = "person" }.keyboardShortcut("2", modifiers: .command)
+            Button(T("By division")) { lensRaw = "division" }.keyboardShortcut("1", modifiers: [.command, .option])
+            Button(T("By person")) { lensRaw = "person" }.keyboardShortcut("2", modifiers: [.command, .option])
             Button(T("Reload")) { reloadNow() }.keyboardShortcut("r", modifiers: .command)
         }
         .opacity(0)
         .accessibilityHidden(true)
+        // Off while a task or a sheet covers the Calendar, like the menu (focus stays in the top-most
+        // sheet, QA BoD R2): ⌘← must move the caret in a field up there, not the month behind it.
+        .disabled(pushedTask != nil || sheet != nil)
     }
 
     /// The Calendar menu's handle on this Calendar (iPad, Mac). Off while a task or a sheet covers it,

@@ -129,12 +129,18 @@ web; the old grid of tasks is the tab **Table** (key `table`), matching the web'
 | **Hide / unhide rows and columns** (cell menu, Rows & columns menu; ◂▸ arrows on the header where something is hidden — tap to show it; View › Show hidden rows / columns), collapsed row / column groups made on the web stay hidden | SheetGridStore.swift, SheetGrid.swift |
 | **Formats**: text and fill colour (Sheets' 80 swatches, hex like the web; a hex fill without a text colour gets black / white text), font size in points (`fp`, 6–36), vertical align, wrapping (overflow / wrap / clip, `wr`), number formats (automatic, plain text, number, percent, scientific, accounting, Rupiah, date, time, date time, duration) with decimal places − / +, clear formatting. iPad / Mac: in the format bar (popovers); iPhone: More › Format… sheet | SheetViews.swift, SheetGridFormat.swift |
 | Tests on Linux (Tests/SheetModel, command in main.swift): every case of the web's sheet-filter.test.mjs, plus borders, merges, overflow, colours, fonts, decimals, hidden gaps — **103 checks, 0 fails**; SheetStore / SheetBridge / SheetGridStore type-checked on Linux with a UIKit shim | Tests/SheetModel |
+| **Alternating colours / tables** (settings.bandings, settings.tables): header / footer / two band colours painted UNDER each cell's own format (the cell's fill, conditional formats and column rules still win; light fills get black or white text like the web's styleInline) | SheetBridge.swift (bandBase) |
+| **Charts on the grid**: every chart of settings.charts floats at its `at` anchor (row id / column id + dx / dy, w × h) and scrolls with the cells (a hidden anchor row hides it, a hidden column moves it to the next one); drawn by the Charts panel's Swift Charts view in a UIHostingController. Tap selects (violet border, ⋯ menu: Edit / Duplicate / Delete), tap again opens the chart editor; move: pointer drag (iPad trackpad, Mac) or press-and-hold then drag (touch); resize: the corner handle; Delete / Backspace removes a selected chart, Esc deselects. Saved as the web does (new anchor cell + offset, one undo step). Charts anchored in frozen rows / columns draw above the frozen panes; the others pass under them | SheetGridObjects.swift, SheetGrid.swift, SheetGridStore.swift (placeChart / deleteChart / duplicateChart) |
+| **Column stats** (Tools › Column stats): ‹ › between columns, Ignore rows, Count by value / Distribution bars, Most / Least frequent, totals (sum, average, median, min, max); hidden and filtered rows included like Sheets. lib/sheet-stats.ts ported 1:1 | SheetStats.swift, SheetPanelStats.swift |
+| **Named ranges** (list, jump, add / edit / delete with Sheets' name rules) and **Protected sheets and ranges** (description, range or whole sheet with "except", warn vs restrict, Only you / Custom editors from the project's members; managers only, like the web). Editing a warn range asks first (centred "Heads up!" alert, "don't show again for 5 minutes"); a restricted range refuses typing, clear, paste, checkbox, dropdown and formatting for anyone but its owner, editors and leads before anything is sent (the server enforces it anyway) | SheetRanges.swift, SheetPanelRanges.swift, SheetStore.swift (guardProtected) |
+| **Font family** (`ff`): the web's 18 families, mapped to the fonts iOS / the Mac have (Arial, Georgia, Courier New, Times New Roman, Verdana, Trebuchet…; the ones iOS lacks — Calibri, Cambria, Consolas, Comic Sans, Impact, Segoe UI, Tahoma — use the font installed on a Mac when there is one, else the nearest: Georgia / New York serif, Menlo, Chalkboard, Futura, Verdana, the system font); menu on iPad / Mac, picker on iPhone | SheetGridModel.swift (SheetGridText), SheetGridObjects.swift (SheetGridFonts) |
+| **Custom number formats**: Custom number format (pattern + live example + Sheets' presets + recently used), Custom date and time (chips per field with code menus, separators typed between, presets), Custom currency (search, six variants, 42 currencies) → style nf "custom" + pt; the pattern's colour section ([Red]…) colours the cell | SheetPanelNumFmt.swift, SheetBridge.swift |
+| **Freeze handles**: the grey bars on the select-all corner drag to freeze rows (≤ 20) / columns (≤ 10) up to where they are dropped (violet preview line), like the web; refused across a merged block | SheetGridObjects.swift (SheetCornerView), SheetGrid.swift |
+| **Text rotation** (`rt`): tilt up / down, rotate up / down, stacked, custom angle (−90…90); drawn turned counter-clockwise inside the cell and placed by its alignment; rows without a height of their own grow for rotated and large text (web autoHeights) | SheetGrid.swift (cell), SheetGridModel.swift, SheetStore.swift |
+| Tests on Linux: Tests/SheetModel **132 checks, 0 fails** (adds fonts, rotation, auto row height, chart anchors); Tests/SheetPanels **239 checks, 0 fails** (adds every case of sheet-stats.test.mjs + named-range / protection rules) | Tests/SheetModel, Tests/SheetPanels |
 
-Not on the phone/tablet yet (web only): charts, pivot tables, slicer panels (their filtering applies),
-renaming / deleting filter views, sort by colour, text rotation, font family, custom number formats,
-the freeze-bar drag, comments and version history panels, find & replace, conditional-format and
-validation EDITORS (the rules made on the web apply here), protected-range editing UI (the server still
-enforces it).
+Still web only: slicer panels (their filtering applies), renaming / deleting filter views, sort by colour,
+wrapped-text auto row height (rows grow for rotated / large text only), the chart's PNG / SVG download.
 
 ## Notification language (13 Oct 2026)
 
@@ -272,6 +278,55 @@ server that sends no level gates nothing.
   older "MEMBER role" / "LEAD role" lines) in `APIClient.serverMessage`, so every APIError.http message reads
   as a sentence; raw 5xx lines become "Something went wrong on our side". ID strings:
   `indonesianAccessR2` (LocalizationAccessR2.swift).
+
+## Shortcuts help, error states, Table gate (13 Oct)
+
+- Keyboard shortcuts sheet (web ShortcutsHelp / lib/keyboard.ts): ⌘/ in the iPad/Mac root (AdaptiveRoot
+  hidden shortcut group; search and shortcuts now share ONE `.sheet(item:)` via `SidebarRootSheet`, env passed
+  explicitly), ⌘/ or Esc closes it. Also a "Keyboard shortcuts" card in Settings › Appearance (not on iPhone).
+  Lists only what the app binds, grouped: Anywhere (⌘K, ⌘S, ⌘1–⌘7, ⌘O, ⌘/, Esc), Search, Project (⌘N, ⌘[ ⌘],
+  ⌘F, ⌘,), Tasks (⌘Z undo move, quick add ⌘↩/Esc, duplicate mode ⌘A/⌘D), Text editor (⌘K link, ⌘E, ⌘↩),
+  Calendar, Chat, Z Vault viewer, Spreadsheet (SheetGrid keyCommands). Views/KeyboardShortcutsHelp.swift —
+  keep it in step with the handlers.
+- Error / not-found states (web 6720b8c + 45cf033): Control Room Users, Quests, Announcements, GIDEON usage,
+  App installs and Attendance admin show LoadErrorView with Try again instead of an empty list / "Total 0" /
+  "BoD and above only"; Extra day off, Absen Monitor, Audit and the IP & Division chart word failures through
+  FailureText. A user removed while their detail is open gets a not-found state. Quest delete and
+  announcement delete / (de)activate failures are toasts (were silent). Tickets: list = LoadErrorView (a
+  failed refresh keeps the list); thread = LoadErrorView with "This ticket doesn't exist" / "isn't yours" +
+  Back to tickets; Esc closes the thread; a notification link is not called "missing" when the list failed.
+  A tapped announcement push that 404s / fails now says so (alert) instead of doing nothing.
+- Table tab: rows are draggable / drop targets only when ProjectBoardView passes `onDrop` (Can edit and up,
+  `tableDrop`), via the `SheetRowDrag` modifier in ProjectTabExtras.swift.
+
+## BoD round 2 (13 Oct)
+
+Web bb2d8f9 (BoD R2) + 33f3080 / 0275d91 (keyboard/touch R2).
+
+- Project members: Remove asks first (centred `.alert`, "Remove %@ from this project? They lose access right
+  away.") in Project settings and in Control Room › user › project chips. 409 LAST_OWNER on Remove (server
+  DELETE now guards it too) and on a level change shows the server's sentence (`ProjectAccessText.changeFailed`
+  prefers the 409 body; fixed line only for an empty body).
+- Leaderboard podium: a tied rank shares its step (colour + height follow the shared rank, the place only
+  decides left / middle / right).
+- Quest "For": `Views/UnitTreePicker.swift` — trigger ("Everyone" / names / "%d divisions") opening a
+  searchable, indented IP & Division tree with checkboxes (groups are headings, IPs bold), picked units as
+  removable chips. CreateQuestSheet now keeps the raw `OrgUnitDTO`s (`QuestUnitOption` is unused).
+- Server address: Settings › Claude (MCP) shows the MCP URL built from `Config.baseURL` (+ copy). No other
+  user-facing hard-coded host in the app (no room-display screen on iOS).
+- 44 pt touch targets: `touchTarget44(drawn:)` (Views/TouchTarget.swift) grows the hit area and hands the
+  room back with negative padding, so nothing moves. Applied to My Tasks done circle, subtask circles, the
+  clear / close "x" buttons (search fields, toasts, error lines, reply / attachment chips, GIDEON context
+  chips, dashboard cards, pipeline, forms, attachment viewer) and the attendance board's full-board / export /
+  month arrows; removable member chips.
+- Focus stays in the top-most sheet: `SheetCover` (Sources/SheetCover.swift) answers "is something presented
+  over me?" (UIKit: a presented controller's next responder is its presenter, so un-claimed keys fell through).
+  Guarded: root ⌘1–⌘7 / ⌘K / ⌘/ / ⌘S, project ⌘N / ⌘, / ⌘[ / ⌘] / ⌘F, board ⌘Z undo bar, selection bar
+  Esc / ⌘A / ⌘D, Messages ⌘N, GIDEON ⌘O; Calendar's iPhone shortcuts are disabled while a task / sheet is up.
+  NOT done (Sheets/ is owned elsewhere): SheetGridHost should ignore keys while covered — return `[]` from
+  `keyCommands`, pass `pressesBegan` to super and skip `becomeFirstResponder` when
+  `SheetCover.isCovered(self)`.
+- ID strings in `indonesianAccessR2`.
 
 ## Server pieces that must ship to production WITH the app
 

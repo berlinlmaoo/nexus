@@ -266,6 +266,7 @@ extension SheetStore {
     func applyBorders(_ preset: String, line: String, color: String?) {
         guard canEdit else { return }
         let rect = selection.current
+        if refusedByProtection(rect.positions) { return }
         let rowIdx = (rect.top...rect.bottom).compactMap { modelRow($0) }
         let colIdx = (rect.left...rect.right).compactMap { modelCol($0) }
         let above = rect.top > 0 ? modelRow(rect.top - 1) : nil
@@ -477,4 +478,76 @@ extension SheetStore {
         guard let a = body.first, let b = body.last else { return }
         await sortRange(byColumn: c, ascending: ascending, within: SheetRange(SheetPos(r: a, c: lv), SheetPos(r: b, c: rv)))
     }
+
+    // MARK: charts on the grid (settings.charts `at` / `w` / `h`, web SheetGrid saveChart)
+
+    var chartSpecs: [SPChartSpec] { ((settings["charts"] as? [SheetJSON]) ?? []).compactMap { SPChartSpec(json: $0) } }
+
+    /// A chart dragged or resized on the grid: its new anchor cell (row / column id), offset and size.
+    func placeChart(_ id: String, rowId: String, colId: String, dx: Double, dy: Double, w: Double, h: Double, label: String) async {
+        var list = (settings["charts"] as? [SheetJSON]) ?? []
+        guard canEdit, let i = list.firstIndex(where: { ($0["id"] as? String) == id }) else { return }
+        var o = list[i]
+        let at: [String: Any] = ["r": rowId, "c": colId, "dx": dx.rounded(), "dy": dy.rounded()]
+        o["at"] = at
+        o["w"] = max(SheetChartPlace.minWidth, w.rounded())
+        o["h"] = max(SheetChartPlace.minHeight, h.rounded())
+        list[i] = o
+        await setSettings(["charts": list], label: label)
+    }
+
+    /// Delete on a selected chart, or its menu (one undo step).
+    func deleteChart(_ id: String) async {
+        let list = ((settings["charts"] as? [SheetJSON]) ?? []).filter { ($0["id"] as? String) != id }
+        let value: Any? = list.isEmpty ? nil : list
+        await setSettings(["charts": value], label: T("delete chart"))
+    }
+
+    /// A copy of a chart, 24 points down and right (web onCopy).
+    func duplicateChart(_ id: String) async {
+        var list = (settings["charts"] as? [SheetJSON]) ?? []
+        guard let src = list.first(where: { ($0["id"] as? String) == id }) else { return }
+        var copy = src
+        copy["id"] = SPChart.newId("ch")
+        var at = (src["at"] as? [String: Any]) ?? [:]
+        at["dx"] = ((at["dx"] as? NSNumber)?.doubleValue ?? 0) + 24
+        at["dy"] = ((at["dy"] as? NSNumber)?.doubleValue ?? 0) + 24
+        copy["at"] = at
+        list.append(copy)
+        await setSettings(["charts": list], label: T("copy chart"))
+    }
+
+    // MARK: fonts, rotation, custom number formats
+
+    func setFontFamily(_ name: String?) {
+        let v: String? = (name == nil || name == SheetGridText.defaultFont) ? nil : name
+        patchSelection(["ff": v], label: T("font"))
+    }
+
+    /// Text rotation: degrees (−90…90; 0 = none) or "v" (stacked).
+    func setRotation(_ value: Any?) {
+        var v: Any? = value
+        if let n = value as? Int { v = n == 0 ? nil : min(max(n, -90), 90) }
+        patchSelection(["rt": v], label: T("text rotation"))
+    }
+
+    /// Format › Number › Custom…: the pattern on every selected cell (nf "custom", decimals dropped).
+    func setCustomFormat(_ pattern: String) {
+        let p = SheetJS.trim(pattern)
+        guard !p.isEmpty else { return }
+        patchSelection(["nf": "custom", "pt": p, "dp": nil], label: T("number format"))
+    }
+
+    /// The active cell's number for a format preview (a date for the date dialog), when it holds one.
+    var activeNumber: Double? {
+        guard let snapshot, let r = modelRow(selection.active.r), let c = modelCol(selection.active.c) else { return nil }
+        return snapshot.number(row: r, col: c)
+    }
+
+    /// The custom pattern on the active cell, if any.
+    var activeCustomPattern: String? {
+        (activeStyle["nf"] as? String) == "custom" ? activeStyle["pt"] as? String : nil
+    }
+
+    var sheetLocale: String { (settings["locale"] as? String) == "en-US" ? "en-US" : "id-ID" }
 }

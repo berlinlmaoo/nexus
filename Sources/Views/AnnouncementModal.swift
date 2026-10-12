@@ -20,6 +20,9 @@ struct AnnouncementModal: View {
     @State private var pdfPreview: AttachmentPreview?
     @State private var openingPDF = false
     @State private var pdfFailed = false
+    /// A tapped announcement that couldn't be fetched: deleted (404) or the request failed. Said out loud,
+    /// because a tap that shows nothing reads as broken (web LoadError, QA 13 Oct 2026).
+    @State private var focusFailure: Error?
 
     private var current: AdminAnnouncement? { queue.first }
 
@@ -37,6 +40,9 @@ struct AnnouncementModal: View {
         }
         .animation(.spring(response: 0.34, dampingFraction: 0.86), value: current?.id)
         .fullScreenCover(item: $pdfPreview) { AttachmentViewerView(preview: $0) }
+        .alert(focusFailureTitle, isPresented: Binding(get: { focusFailure != nil }, set: { if !$0 { focusFailure = nil } })) {
+            Button("OK") { focusFailure = nil }
+        } message: { Text(focusFailureMessage) }
         .task { await load() }
         .onChange(of: router.focus) { _, _ in Task { await load() } }
         .onChange(of: scenePhase) { _, phase in
@@ -45,6 +51,18 @@ struct AnnouncementModal: View {
             guard phase == .active else { return }
             Task { await load() }
         }
+    }
+
+    private var focusFailureIsNotFound: Bool {
+        guard let focusFailure else { return false }
+        return FailureText.loadKind(focusFailure) == .notFound
+    }
+    private var focusFailureTitle: String {
+        focusFailureIsNotFound ? T("This announcement doesn't exist any more") : T("Couldn't open the announcement")
+    }
+    private var focusFailureMessage: String {
+        guard let focusFailure else { return "" }
+        return focusFailureIsNotFound ? T("It was deleted, or the link is wrong.") : FailureText.text(focusFailure)
     }
 
     private func card(_ announcement: AdminAnnouncement) -> some View {
@@ -139,9 +157,14 @@ struct AnnouncementModal: View {
         guard auth.isAuthenticated else { return }
         if case .announcement(let id) = router.focus {
             router.focus = nil
-            if let one = try? await APIClient.shared.announcement(id) {
+            do {
+                let one = try await APIClient.shared.announcement(id)
                 queue.removeAll { $0.id == one.id }
                 queue.insert(one, at: 0)
+            } catch APIError.unauthorized {
+                // Signing out is handled elsewhere; nothing to tell here.
+            } catch {
+                focusFailure = error
             }
         }
         guard let rows = try? await APIClient.shared.activeAnnouncements() else { return }

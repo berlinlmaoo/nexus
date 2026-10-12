@@ -963,7 +963,7 @@ struct PipelineDateInput: View {
                 Spacer(minLength: 4)
                 Button { onCommit(nil) } label: {
                     Image(systemName: "xmark.circle.fill").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
-                        .frame(width: 32, height: 32).contentShape(Rectangle())
+                        .frame(width: 32, height: 32).touchTarget44(drawn: 32)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(format: T("Clear %@"), label))

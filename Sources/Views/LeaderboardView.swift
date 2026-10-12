@@ -147,8 +147,11 @@ struct Podium: View {
         .padding(.vertical, 8)
     }
     private func podium(_ rank: Int, _ row: LeaderboardRow?) -> some View {
+        // Tied people share a rank, so they share its step too: 1 / 1 / 1 are three gold steps of one
+        // height (web leaderboard-podium, QA BoD R2 N05). The place only decides left / middle / right.
+        let step: Int = min(3, max(1, label(rank)))
         let (barColor, ring, crown, avatar, height): (Color, Color, Color, CGFloat, CGFloat) = {
-            switch rank {
+            switch step {
             case 1: return (Color(hex: "#fcd34d"), Color(hex: "#f59e0b"), Color(hex: "#f59e0b"), 70, 96)
             case 2: return (Color(hex: "#e2e8f0"), Color(hex: "#94a3b8"), Color(hex: "#94a3b8"), 56, 72)
             default: return (Color(hex: "#fdba74"), Color(hex: "#f97316"), Color(hex: "#f97316"), 56, 60)

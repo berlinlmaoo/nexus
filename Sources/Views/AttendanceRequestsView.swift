@@ -568,7 +568,7 @@ struct AttendanceRequestsCard: View {
                     .font(NXFont.text(13)).autocorrectionDisabled().submitLabel(.search)
                 if !query.isEmpty {
                     Button { query = "" } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg)
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg).touchTarget44(drawn: 20)
                     }.buttonStyle(.plain).accessibilityLabel(T("Clear search"))
                 }
             }

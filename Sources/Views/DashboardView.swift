@@ -545,6 +545,7 @@ struct DashboardView: View {
                 Button { toggleStat(nil) } label: {
                     Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
                         .frame(width: 32, height: 32).background(.white.opacity(0.22), in: Circle())
+                        .touchTarget44(drawn: 32)
                 }.buttonStyle(.plain)
             }
             // Header is part of the morphing card (scales with it via the FLIP) like the web's layoutId.
@@ -714,6 +715,7 @@ struct DashboardView: View {
                 Button { toggleLevel(false) } label: {
                     Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(NX.mutedFg)
                         .frame(width: 32, height: 32).background(NX.muted, in: Circle())
+                        .touchTarget44(drawn: 32)
                 }.buttonStyle(.plain)
             }
             VStack(alignment: .leading, spacing: 6) {
@@ -804,6 +806,7 @@ struct DashboardView: View {
                 Button { toggleBell(false) } label: {
                     Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(NX.mutedFg)
                         .frame(width: 32, height: 32).background(NX.muted, in: Circle())
+                        .touchTarget44(drawn: 32)
                 }.buttonStyle(.plain)
             }
             Group {
@@ -977,6 +980,7 @@ if !XpRules.tiers.isEmpty {
                 Spacer(minLength: 0)
                 Button { dismissPasskeyNudge() } label: {
                     Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(NX.mutedFg)
+                        .touchTarget44(drawn: 13)
                 }.buttonStyle(.plain)
             }
             Text(T("Add a passkey and you can skip typing your password. It stays on this device, and your password keeps working."))

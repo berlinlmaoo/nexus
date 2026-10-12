@@ -22,6 +22,8 @@ struct GideonLauncher: View {
     @Environment(AppRouter.self) private var router
     @Environment(\.horizontalSizeClass) private var hSize
     @State private var open = false
+    /// ⌘O does nothing while a sheet is up over the screen (focus stays in the top-most sheet, QA BoD R2).
+    @State private var cover = SheetCover()
 
     var body: some View {
         // Home in both shapes: the phone's first tab, and the sidebar's Dashboard row. Read here in
@@ -48,10 +50,12 @@ struct GideonLauncher: View {
         .background {
             if !onGideonPage {
                 Button("") {
+                    guard !cover.isCovered else { return }
                     GideonChat.shared.startChat()
                     open = true
                 }
                 .keyboardShortcut("o", modifiers: .command)
+                .background(SheetCover.Anchor(cover: cover))
                 .opacity(0).accessibilityHidden(true)
             }
         }
@@ -624,7 +628,7 @@ struct GideonPanel: View {
                             Image(systemName: r.kind == "project" ? "folder" : (r.kind == "task" ? "checklist" : "doc.text")).font(.system(size: 10, weight: .semibold))
                             Text(r.title ?? "").lineLimit(1)
                             Button { chat.context.refs.removeAll { $0 == r } } label: {
-                                Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).frame(width: 24, height: 24).contentShape(Rectangle())
+                                Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).frame(width: 24, height: 24).touchTarget44(drawn: 24)
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(T("Remove context"))
@@ -643,7 +647,7 @@ struct GideonPanel: View {
                 Text(ctx.taskTitle ?? ctx.projectName ?? T("This project")).lineLimit(1)
                 Button { chat.context = GideonContext(refs: chat.context.refs) } label: {
                     Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
-                        .frame(width: 28, height: 28).contentShape(Rectangle())
+                        .frame(width: 28, height: 28).touchTarget44(drawn: 28)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(T("Remove context"))
@@ -759,7 +763,7 @@ struct GideonPanel: View {
             if let remove {
                 Spacer(minLength: 8)
                 Button(action: remove) {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(tone)
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(tone).touchTarget44(drawn: 20)
                 }
                 .buttonStyle(.plain)
             }

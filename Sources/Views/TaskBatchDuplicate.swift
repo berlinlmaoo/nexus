@@ -217,10 +217,13 @@ struct TaskSelectionBar: View {
 
     /// Only what is on screen: a task hidden by search or a filter is never acted on (bughunt C-BUG-4).
     private var targetIds: [String] { visibleIds.filter { selection.contains($0) } }
+    /// Esc / ⌘A / ⌘D under a sheet (the task popup's text, the due-date popup) are the sheet's, not
+    /// this bar's: focus stays in the top-most sheet (QA BoD R2). SheetCover.swift.
+    @State private var cover = SheetCover()
 
     var body: some View {
         HStack(spacing: 12) {
-            Button(T("Cancel")) { selection.clear() }
+            Button(T("Cancel")) { if !cover.isCovered { selection.clear() } }
                 .font(NXFont.text(14, .semibold)).foregroundStyle(NX.mutedFg)
                 .keyboardShortcut(.cancelAction)
             Spacer(minLength: 4)
@@ -228,7 +231,7 @@ struct TaskSelectionBar: View {
                 Text(selection.ids.isEmpty ? T("Pick tasks to duplicate") : String(format: T("%d selected"), selection.ids.count))
                     .font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
                     .lineLimit(1)
-                Button(T("Select all")) { selection.selectAll(visibleIds) }
+                Button(T("Select all")) { if !cover.isCovered { selection.selectAll(visibleIds) } }
                     .font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
                     .keyboardShortcut("a", modifiers: .command)
                     .disabled(visibleIds.isEmpty)
@@ -262,6 +265,7 @@ struct TaskSelectionBar: View {
                 .accessibilityLabel(T("Change the selected tasks"))
             }
             Button {
+                guard !cover.isCovered else { return }
                 // Visible tasks only (C-BUG-4); everything selected when the caller gave no list.
                 let ids = visibleIds.isEmpty ? Array(selection.ids) : targetIds
                 if !ids.isEmpty { selection.pendingDuplicate = TaskDuplicateRequest(taskIds: ids) }
@@ -277,6 +281,7 @@ struct TaskSelectionBar: View {
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
         .background(NX.card)
+        .background(SheetCover.Anchor(cover: cover))
         .overlay(alignment: .top) { Divider().overlay(NX.border) }
     }
 }

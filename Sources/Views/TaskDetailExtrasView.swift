@@ -300,6 +300,7 @@ struct TaskAttachmentsCard: View {
             Spacer(minLength: 0)
             Button { problem = nil } label: {
                 Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(NX.mutedFg)
+                    .touchTarget44(drawn: 11)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(T("Close"))

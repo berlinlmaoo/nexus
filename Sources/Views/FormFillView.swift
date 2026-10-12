@@ -401,6 +401,7 @@ struct FormFillView: View {
             Spacer(minLength: 0)
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill").font(.system(size: 14)).foregroundStyle(NX.mutedFg)
+                    .touchTarget44(drawn: 17)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(T("Remove file"))

@@ -419,7 +419,7 @@ struct AdminSuspectSection: View {
             if periodKey == nil { periodKey = r.periodKey }
             loadError = nil
         } catch {
-            loadError = error.localizedDescription
+            loadError = FailureText.text(error)
         }
     }
 

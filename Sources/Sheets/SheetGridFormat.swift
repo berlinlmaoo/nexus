@@ -180,11 +180,13 @@ struct SheetPopoverButton<Content: View>: View {
 struct SheetGridFormatSheet: View {
     @Bindable var store: SheetStore
     @Environment(\.dismiss) private var dismiss
+    /// The custom number format pages pushed from the Number section.
+    @State private var path: [SheetNumFmtPanel.Kind] = []
 
     private var st: [String: Any] { store.activeStyle }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Form {
                 Section(T("Text")) {
                     toggleRow(T("Bold"), "b", T("bold"))
@@ -194,6 +196,8 @@ struct SheetGridFormatSheet: View {
                     Picker(T("Font size"), selection: Binding(get: { Int(store.activeFontPt) }, set: { store.setFontSize($0) })) {
                         ForEach(SheetGridStyle.fontSizesPt, id: \.self) { Text("\($0)").tag($0) }
                     }
+                    SheetFontFamilyPicker(store: store)
+                    SheetRotationPicker(store: store)
                     NavigationLink(T("Text colour")) {
                         ScrollView { SheetGridPalette(selected: st["fc"] as? String, resetTitle: T("Reset")) { store.setTextColor($0) } }
                             .navigationTitle(T("Text colour"))
@@ -235,6 +239,9 @@ struct SheetGridFormatSheet: View {
                 }
                 Section(T("Number")) {
                     SheetNumberFormatPicker(store: store)
+                    NavigationLink(T("Custom currency…"), value: SheetNumFmtPanel.Kind.currency)
+                    NavigationLink(T("Custom date and time…"), value: SheetNumFmtPanel.Kind.date)
+                    NavigationLink(T("Custom number format…"), value: SheetNumFmtPanel.Kind.number)
                     HStack {
                         Text(T("Decimal places"))
                         Spacer()
@@ -254,6 +261,12 @@ struct SheetGridFormatSheet: View {
             }
             .navigationTitle(T("Format"))
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: SheetNumFmtPanel.Kind.self) { kind in
+                SheetNumFmtContent(store: store, kind: kind) { pattern in
+                    store.setCustomFormat(pattern)
+                    path.removeAll()
+                }
+            }
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(T("Done")) { dismiss() } } }
         }
         .presentationDetents([.medium, .large])
@@ -279,6 +292,63 @@ struct SheetNumberFormatPicker: View {
         })) {
             ForEach(Self.formats.indices, id: \.self) { i in
                 Text(T(Self.formats[i].1)).tag(Self.formats[i].0 ?? "")
+            }
+        }
+    }
+}
+
+/// Font family (`ff`): the web's list, each name in its own look; Default = the app font.
+struct SheetFontFamilyPicker: View {
+    let store: SheetStore
+
+    var body: some View {
+        Picker(T("Font"), selection: Binding(get: { SheetGridText.family(store.activeStyle) ?? "" }, set: { v in
+            store.setFontFamily(v.isEmpty ? nil : v)
+        })) {
+            Text(T("Default (Sans Serif)")).tag("")
+            ForEach(SheetGridText.fontFamilies.indices, id: \.self) { i in
+                let name = SheetGridText.fontFamilies[i].name
+                Text(name).font(SheetGridFonts.preview(name)).tag(name)
+            }
+            if let ff = SheetGridText.family(store.activeStyle), !SheetGridText.fontFamilies.contains(where: { $0.name.lowercased() == ff.lowercased() }) {
+                Text(ff).tag(ff)
+            }
+        }
+    }
+}
+
+/// Text rotation (`rt`): Sheets' presets, and a custom angle in 15° steps.
+struct SheetRotationPicker: View {
+    let store: SheetStore
+
+    private static func tag(_ value: Any?) -> String {
+        if let s = value as? String { return s }
+        if let n = value as? Int { return "\(n)" }
+        return "0"
+    }
+
+    private var current: SheetGridText.Rotation { SheetGridText.rotation(store.activeStyle) }
+    private var currentTag: String { current.vertical ? "v" : "\(Int(current.degrees))" }
+
+    var body: some View {
+        Picker(T("Text rotation"), selection: Binding(get: { currentTag }, set: { tag in
+            if tag == "v" { store.setRotation("v") } else { store.setRotation(Int(tag) ?? 0) }
+        })) {
+            ForEach(SheetGridText.rotationPresets.indices, id: \.self) { i in
+                let p = SheetGridText.rotationPresets[i]
+                Text(T(p.label)).tag(Self.tag(p.value))
+            }
+            if !SheetGridText.rotationPresets.contains(where: { Self.tag($0.value) == currentTag }) {
+                Text(T("Custom angle")).tag(currentTag)
+            }
+        }
+        if !current.vertical {
+            Stepper(value: Binding(get: { Int(current.degrees) }, set: { store.setRotation($0) }), in: -90...90, step: 15) {
+                HStack {
+                    Text(T("Custom angle"))
+                    Spacer()
+                    Text("\(Int(current.degrees))°").monospacedDigit().foregroundStyle(NX.mutedFg)
+                }
             }
         }
     }

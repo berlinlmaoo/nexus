@@ -65,7 +65,7 @@ struct CustomFieldEditor: View {
                     HStack {
                         Text(opt).font(NXFont.text(13)).foregroundStyle(NX.foreground)
                         Spacer()
-                        Button { options.remove(at: idx) } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg) }
+                        Button { options.remove(at: idx) } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg).touchTarget44(drawn: 20) }
                     }
                     .padding(.horizontal, 10).padding(.vertical, 7)
                     .background(NX.muted, in: RoundedRectangle(cornerRadius: 9, style: .continuous))

@@ -11,6 +11,8 @@ struct MessagesView: View {
     @State private var loading = true
     @State private var error: String?
     @State private var showNewChat = false
+    /// ⌘N under a sheet (chat info, a photo…) is not this list's (focus stays in the top-most sheet, QA BoD R2).
+    @State private var cover = SheetCover()
     /// projectId -> project icon. A PROJECT room has no picture of its own on the server, so it
     /// borrows the project's; without this every project chat falls back to the same grey glyph.
     @State private var projectIcons: [String: String] = [:]
@@ -143,9 +145,10 @@ struct MessagesView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { showNewChat = true } label: {
+                Button { if !cover.isCovered { showNewChat = true } } label: {
                     Image(systemName: "square.and.pencil").font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(NX.violetText)
+                        .background(SheetCover.Anchor(cover: cover))
                 }
                 // The split layout draws its own compose button; these two never coexist, so the
                 // shortcut is never registered twice.
@@ -190,10 +193,11 @@ struct MessagesView: View {
                 .font(NXFont.display(17, .bold))
                 .foregroundStyle(NX.foreground)
             Spacer()
-            Button { showNewChat = true } label: {
+            Button { if !cover.isCovered { showNewChat = true } } label: {
                 Image(systemName: "square.and.pencil")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(NX.violetText)
+                    .background(SheetCover.Anchor(cover: cover))
             }
             .buttonStyle(.plain)
             .hoverEffect(.lift)
@@ -1184,6 +1188,7 @@ struct ChatThreadView: View {
                     Spacer()
                     Button { replyingTo = nil } label: {
                         Image(systemName: "xmark.circle.fill").font(.system(size: 18)).foregroundStyle(NX.mutedFg)
+                            .touchTarget44(drawn: 21)
                     }
                 }
                 .padding(.horizontal, 12).padding(.top, 8)
@@ -1197,6 +1202,7 @@ struct ChatThreadView: View {
                     }
                     Button { pendingAttachment = nil } label: {
                         Image(systemName: "xmark.circle.fill").font(.system(size: 18)).foregroundStyle(NX.mutedFg)
+                            .touchTarget44(drawn: 21)
                     }
                     Spacer()
                 }
