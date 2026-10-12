@@ -200,6 +200,12 @@
   * {
     border-color: var(--color-border);
   }
+  /* Chromium's UA sheet gives <button> align-items: flex-start, so a `flex flex-col` button card did not
+     stretch its children (template gallery / tab previews collapsed to their content width; audit
+     12 Oct 2026). Back to the normal flex default; items-* utilities still win. */
+  button {
+    align-items: normal;
+  }
   html,
   body {
     font-family: var(--font-sans);
