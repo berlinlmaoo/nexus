@@ -114,6 +114,9 @@ slots + the advisory-lock holder in `pg_locks`, every second.
 | forced unhealthy slot (`NEXUS_BG_TEST_BREAK=health`) | 25 489 | 0 | 33/33 | not switched ✔ |
 | deploy #4 green→blue | 36 271 | 1 (*) | 49/49, reconnect 965 ms | 315 ms |
 | cold rollback (old slot stopped) | 22 177 | 0 | see (**) | 346 ms switch, 5.3 s incl. start |
+| deploy #5 green→blue (final tooling) | 37 723 | 0 | 48/49 (1 during the reconnect), 821 ms | 330 ms |
+| cold rollback after the fix | 18 289 | 0 | reconnected in 717 ms | 508 ms switch, 5.6 s incl. start |
+| warm roll-forward | — | — | — | 255 ms switch, 599 ms total |
 
 (*) one `UND_ERR_SOCKET` on a direct keep-alive connection: nginx closed an idle keep-alive connection
 during the reload just as the client reused it. Browsers and Go's HTTP client (cloudflared) retry an idempotent
