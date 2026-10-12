@@ -87,8 +87,12 @@ export type GideonPanelVariant = "float" | "side" | "page";
 function contextOf(ref: GideonPageRef | null, explicit: GideonContext | null | undefined): GideonContext | null {
   // The page on screen wins: after moving from project A to project B with the panel open, the chip (and
   // what the next question is about) follows B, not the project "Ask GIDEON" was pressed on (bughunt G-BUG-1).
-  const fromPage = ref ? contextOf(ref, null) : null;
+  const fromPage = pageContextOf(ref);
   if (explicit) return fromPage && (fromPage.projectId !== explicit.projectId || fromPage.taskId || fromPage.docId) ? fromPage : explicit;
+  return fromPage;
+}
+
+function pageContextOf(ref: GideonPageRef | null): GideonContext | null {
   if (!ref) return null;
   if (ref.kind === "project") return { projectId: ref.id, projectName: ref.title };
   if (ref.kind === "task" && ref.projectId) return { projectId: ref.projectId, projectName: ref.projectName ?? "", taskId: ref.id, taskTitle: ref.title };

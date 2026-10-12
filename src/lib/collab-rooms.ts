@@ -96,7 +96,17 @@ async function createRoom(key: string): Promise<Room | null> {
       log.warn("kept state unreadable; reseeding", { key, error: String(error) })
     }
   }
-  if (!ydoc) ydoc = ydocFromJson(body.json)
+  if (!ydoc) {
+    ydoc = ydocFromJson(body.json)
+    // Keep this lineage from the first join, not only from the first save: a room that unloads before anyone
+    // typed online (everyone went offline, a blue-green switch) then comes back in the SAME epoch, so a
+    // client reconnecting with edits kept offline can still merge them (bughunt E-BUG-2).
+    await prisma.collabState.upsert({
+      where: { key },
+      create: { key, state: Buffer.from(Y.encodeStateAsUpdate(ydoc)), epoch },
+      update: { state: Buffer.from(Y.encodeStateAsUpdate(ydoc)), epoch },
+    }).catch((error) => log.warn("could not keep the seeded lineage", { key, error: String(error) }))
+  }
   return {
     key, kind: parsed.kind, id: parsed.id, ydoc, epoch,
     members: new Map(), persisted: body.json, persistedCanon: canon,
