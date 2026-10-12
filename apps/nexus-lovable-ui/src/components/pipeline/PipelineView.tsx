@@ -276,7 +276,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
               narrow window (owner, 9 Oct 2026: "di hape jg sempit bgt"): search with the add button, the two
               filters with Excel, the view switch on its own row, then the health chips as a row that scrolls
               sideways. */}
-          <div className="flex flex-col gap-3">
+          {/* No wrapper here: the health row below must be a direct child of the page column to stay sticky. */}
             <div className="flex flex-wrap items-center gap-2">
               <label className="relative order-1 min-w-0 basis-[calc(100%-3.25rem)] lg:max-w-md lg:flex-1 lg:basis-48">
                 <span className="sr-only">{t("Search deals")}</span>
@@ -321,7 +321,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
             {/* The health chips and the view switch stay in view under the page header while the page scrolls
                 (owner, 12 Oct 2026: the row slid half under the tab bar). Its top is the header's height where
                 that header is sticky (md+), else the top of the screen. */}
-            <div className="sticky z-30 -mx-4 flex items-center gap-3 bg-card px-4 py-1.5 md:-mx-8 md:px-8" style={{ top: stickyTop }}>
+            <div className="sticky z-30 -mx-4 -my-2.5 flex items-center gap-3 bg-card px-4 py-1.5 md:-mx-8 md:px-8" style={{ top: stickyTop }}>
               <div role="group" aria-label={t("Health")} className="-mx-4 flex min-w-0 flex-1 gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0 xl:flex-wrap xl:overflow-visible">
                 {(["", ...HEALTH_ORDER] as const).map((k) => {
                   const on = health === k;
@@ -356,14 +356,14 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
               <div className="hidden shrink-0 lg:block">{viewSwitch}</div>
             </div>
             {filtering && (
-              <p className="-mt-1 flex items-center gap-2 text-xs text-muted-foreground lg:hidden" aria-live="polite">
+              <p className="-mt-2 flex items-center gap-2 text-xs text-muted-foreground lg:hidden" aria-live="polite">
                 {t("{shown} of {total} deals", { shown: shown.length, total: deals.length })}
                 <button type="button" onClick={resetFilters} className="inline-flex min-h-[36px] items-center gap-1 rounded font-semibold text-foreground">
                   <X className="h-3 w-3" /> {t("Clear filters")}
                 </button>
               </p>
             )}
-          </div>
+
 
           {filtering && shown.length === 0 ? (
             <EmptyState
