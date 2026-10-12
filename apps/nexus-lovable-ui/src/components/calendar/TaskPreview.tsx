@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useQuery } from "@tanstack/react-query";
-import { CornerDownRight, Eye, Loader2, X } from "lucide-react";
+import { CornerDownRight, Eye, Loader2, Paperclip, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { nexusApi } from "@/lib/nexus-api";
@@ -22,7 +22,9 @@ import { CAPS, Face, FOCUS_PILL, fmtTime, PriorityChip, TOUCH_ICON, TOUCH_ROW } 
 export function TaskPreview({ taskId, projectName, notMember, masked = false, onClose }: { taskId: string; projectName: string | null; notMember: boolean; masked?: boolean; onClose: () => void }) {
   const { t, lang, locale } = useLang();
   // A task of a private project the viewer is not in is never fetched (owner, decision 1).
-  const q = useQuery({ queryKey: ["task", taskId], queryFn: () => nexusApi.taskDetail(taskId), retry: false, staleTime: 30_000, enabled: !masked });
+  // Through the calendar's own endpoint (owner 13 Oct 2026): the task routes are members-only, the calendar
+  // shows every project's tasks to everyone and opens a non-member's task read-only from here.
+  const q = useQuery({ queryKey: ["calendar-task-detail", taskId], queryFn: async () => (await nexusApi.calendarTaskDetail(taskId)).task ?? null, retry: false, staleTime: 30_000, enabled: !masked });
   const closeRef = useRef<HTMLButtonElement>(null);
   // The preview is opened through the URL, not by a dialog trigger: hand focus back to what had it
   // (the task row) when it closes.
@@ -35,7 +37,7 @@ export function TaskPreview({ taskId, projectName, notMember, masked = false, on
   const project = task?.taskList?.project?.name ?? projectName;
   const linked = (task?.taskProjects ?? []).map((l) => l.project?.name).filter((n): n is string => !!n && n !== project);
   const loading = !masked && q.isLoading;
-  const failed = !masked && q.isError;
+  const failed = !masked && (q.isError || (q.isSuccess && !q.data));
   // Read the title out only when the task arrived after the dialog opened; a cached task is already
   // the dialog's name.
   const [waited] = useState(() => loading);
@@ -55,7 +57,7 @@ export function TaskPreview({ taskId, projectName, notMember, masked = false, on
           {!showTask && <DialogTitle className="sr-only">{t("Task")}</DialogTitle>}
           <div className="flex items-center gap-2 border-b border-border bg-cal-readonly px-4 py-2.5 text-xs text-cal-readonly-foreground">
             <Eye aria-hidden className="h-4 w-4 shrink-0" />
-            <span className="min-w-0 flex-1">{project && notMember ? t("Read only · you are not a member of {project}", { project }) : t("Read only")}</span>
+            <span className="min-w-0 flex-1">{notMember ? t("You're not in this project — view only") : t("Read only")}</span>
             <button ref={closeRef} type="button" onClick={onClose} aria-label={t("Close")} className={cn("grid size-8 place-items-center rounded-lg hover:bg-cal-readonly-foreground/10", TOUCH_ICON, FOCUS_PILL)}><X className="h-4 w-4" /></button>
           </div>
           <div aria-busy={loading || undefined} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -117,6 +119,16 @@ export function TaskPreview({ taskId, projectName, notMember, masked = false, on
                         <li key={s.id} className={cn("flex items-center gap-2 text-sm", s.status === "DONE" && "text-muted-foreground line-through")}>
                           <span aria-hidden className={cn("h-3.5 w-3.5 shrink-0 rounded-full border-2", s.status === "DONE" ? STATUS.doneDot : SLATE.border)} />{s.title}
                         </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+                {(task.attachments ?? []).length > 0 && (
+                  <section>
+                    <h3 className={cn("mb-1.5 text-muted-foreground", CAPS)}>{t("Attachments")}</h3>
+                    <ul className="space-y-1 text-sm">
+                      {(task.attachments ?? []).map((a) => (
+                        <li key={a.id} className="flex items-center gap-2"><Paperclip aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{a.filename}</span><span className="shrink-0 text-xs tabular-nums text-muted-foreground">{a.size >= 1048576 ? `${(a.size / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(a.size / 1024))} KB`}</span></li>
                       ))}
                     </ul>
                   </section>

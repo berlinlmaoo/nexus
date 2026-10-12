@@ -146,4 +146,5 @@ export const ID_QAFIX_PERM: Record<string, string> = {
   "Search divisions": "Cari divisi",
   "{n} divisions": "{n} divisi",
   "No division matches “{q}”.": "Tidak ada divisi yang cocok dengan “{q}”.",
+  "You're not in this project — view only": "Kamu bukan anggota project ini — hanya lihat",
 };

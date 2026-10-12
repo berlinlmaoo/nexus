@@ -372,6 +372,18 @@ export function memberLevelOf(m: { role?: string | null; accessLevel?: string | 
   return m.accessLevel === "EDIT" || m.accessLevel === "COMMENT" || m.accessLevel === "VIEW" ? m.accessLevel : "EDIT";
 }
 
+/** GET /api/calendar/task?detail=1 — what a non-member may read of a task they see on the calendar. */
+export type CalendarTaskDetail = {
+  id: string; title: string; status: string; priority: string; dueDate: string | null; startDate: string | null; description: string | null;
+  parent: { id: string; title: string } | null;
+  taskList: { name: string; project: { id: string; name: string; color: string | null } | null } | null;
+  taskProjects: Array<{ project: { id: string; name: string } | null }>;
+  assignees: Array<{ user: { id: string; name: string | null; email: string | null; avatar: string | null } | null }>;
+  subtasks: Array<{ id: string; title: string; status: string }>;
+  comments: Array<{ id: string; content: string; createdAt: string; user: { id: string; name: string | null; avatar: string | null } | null }>;
+  attachments: Array<{ id: string; filename: string; size: number; createdAt: string }>;
+};
+
 export type NexusProject = {
   /** GET /api/projects/:id only: may the viewer manage this project (settings, members, deleting tasks)? */
   viewerCanManage?: boolean;
@@ -3256,6 +3268,8 @@ export const nexusApi = {
   calendarOverdue: () => apiFetch<CalOverdueResponse>("/api/calendar/overdue"),
   /** How the Calendar may open one task it has not loaded (shared link, another month). */
   calendarTask: (id: string) => apiFetch<{ v: number; access: string; found: boolean; masked: boolean; canEdit: boolean; editProjectId: string | null; projectId: string | null }>(`/api/calendar/task?id=${encodeURIComponent(id)}`),
+  /** The task read-only, for a calendar viewer outside its project (owner 13 Oct 2026). No file URLs. */
+  calendarTaskDetail: (id: string) => apiFetch<{ found: boolean; masked: boolean; task?: CalendarTaskDetail }>(`/api/calendar/task?id=${encodeURIComponent(id)}&detail=1`),
   calendarSettings: () => apiFetch<CalendarSettingsPayload>("/api/admin/calendar-settings"),
   updateCalendarSettings: (body: Partial<CalendarSettings> | { projectId: string; private: boolean }) => apiFetch<CalendarSettingsPayload>("/api/admin/calendar-settings", { method: "PATCH", body: JSON.stringify(body) }),
   // --- Room bookings ---
