@@ -457,13 +457,16 @@ struct PipelineSummary: Decodable, Sendable {
     var attentionCount = 0
     var deliverablesOnTrack = 0
     var deliverablesDone = 0
-    /// Real cost & margin (Control Tower v6, 14 Oct 2026): over the deals that are not Lost and have cost
-    /// lines — Σ real cost, Σ (net value − real cost) ("Real profit") and how many. 0 from an older server.
+    /// Real cost & margin (Control Tower v6, 14 Oct 2026): over the deals that are not Lost, have cost lines
+    /// and a net value — Σ real cost and Σ (net value − real cost) ("Real profit"). costDealCount = deals not
+    /// Lost with cost lines (net value or not). 0 from an older server.
     var realCost: Double = 0
     var realProfit: Double = 0
     var costDealCount = 0
     /// Every deal that is not Lost / Cancelled: the M of "N of M deals have costs" (Control Tower v6).
     var costEligibleCount = 0
+    /// Of the N deals with costs, those without a net value: left out of Real profit, shown as a warning.
+    var costNoNetCount = 0
 
     init() {}
 
@@ -471,6 +474,7 @@ struct PipelineSummary: Decodable, Sendable {
         case total, openCount, openValue, weightedValue, wonCount, wonValue, activeCount, lostCount, lostValue
         case readyCount, blockedCount, receivable, receivableOverdue, criticalCount, attentionCount
         case deliverablesOnTrack, deliverablesDone, realCost, realProfit, costDealCount, costEligibleCount
+        case costNoNetCount
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -482,6 +486,7 @@ struct PipelineSummary: Decodable, Sendable {
         receivable = n(.receivable); receivableOverdue = n(.receivableOverdue); criticalCount = i(.criticalCount)
         attentionCount = i(.attentionCount); deliverablesOnTrack = i(.deliverablesOnTrack); deliverablesDone = i(.deliverablesDone)
         realCost = n(.realCost); realProfit = n(.realProfit); costDealCount = i(.costDealCount); costEligibleCount = i(.costEligibleCount)
+        costNoNetCount = i(.costNoNetCount)
     }
 }
 

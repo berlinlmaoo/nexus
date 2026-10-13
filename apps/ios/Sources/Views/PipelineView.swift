@@ -776,6 +776,8 @@ struct PipelineKpiStrip: View {
         let sub: String
         var zero = false
         var tone: Color? = nil
+        /// A small amber line under `sub`; nil = none.
+        var warn: String? = nil
     }
 
     private var tiles: [Tile] {
@@ -790,10 +792,12 @@ struct PipelineKpiStrip: View {
             Tile(id: "receivable", label: T("Receivable"), value: PipelineFormat.idr(s.receivable),
                  sub: s.receivableOverdue > 0 ? String(format: T("%@ overdue"), PipelineFormat.idr(s.receivableOverdue)) : T("Nothing overdue"),
                  zero: s.receivable == 0, tone: s.receivableOverdue > 0 ? ChipTone.danger.fg : nil),
-            // Control Tower v6 (14 Oct 2026): Σ (net value − real cost) of the deals not Lost that have costs; red below zero.
+            // Control Tower v6 (14 Oct 2026): Σ (net value − real cost) of the deals not Lost that have costs and a
+            // net value; red below zero. Deals with costs but no net value are left out and named in the warning.
             Tile(id: "realProfit", label: T("Real profit"), value: PipelineFormat.idr(s.realProfit),
                  sub: String(format: T("%d of %d deals have costs"), s.costDealCount, s.costEligibleCount),
-                 zero: s.realProfit == 0, tone: s.realProfit < 0 ? ChipTone.danger.fg : nil),
+                 zero: s.realProfit == 0, tone: s.realProfit < 0 ? ChipTone.danger.fg : nil,
+                 warn: s.costNoNetCount > 0 ? String(format: T("%d deals have costs but no net value"), s.costNoNetCount) : nil),
             Tile(id: "critical", label: T("Critical"), value: "\(s.criticalCount)",
                  sub: String(format: T("%d need attention"), s.attentionCount),
                  zero: s.criticalCount == 0, tone: s.criticalCount > 0 ? ChipTone.danger.fg : nil),
@@ -859,6 +863,9 @@ struct PipelineKpiStrip: View {
                 .foregroundStyle(tile.zero ? NX.mutedFg.opacity(0.75) : (tile.tone ?? NX.foreground))
                 .monospacedDigit().lineLimit(1)
             Text(tile.sub).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit().lineLimit(1)
+            if let warn = tile.warn {
+                Text(warn).font(NXFont.text(11)).foregroundStyle(ChipTone.warning.fg).monospacedDigit().lineLimit(1)
+            }
         }
         .accessibilityElement(children: .combine)
     }

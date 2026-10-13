@@ -7,9 +7,11 @@ import type { SerializedDeal } from "@/lib/pipeline-server"
  *
  * Sheet 1 "Master Project" is Gerro's export, column for column: his 33 headers in his order (Indonesian, or
  * their English equivalents with ?lang=en), header on row 1, so a NEXUS file and a Control Tower file
- * merge row for row. Values are real numbers, percentages and dates (not text) with Rupiah / % / date
+ * merge row for row; a 34th column at the very end, "Diperbarui Oleh", keeps the last editor the earlier
+ * export carried. Values are real numbers, percentages and dates (not text) with Rupiah / % / date
  * formats; negative margin and cash read red through the number format. Sheet 2 lists every payment term
- * (NEXUS has terms, the Control Tower had none, so they live beside the master sheet, not in it). Sheet 3
+ * (NEXUS has terms, the Control Tower had none, so they live beside the master sheet, not in it); a deal
+ * without terms that has the manual payment due date gets one row there too, marked as that date. Sheet 3
  * "Info" says which board, when (WIB), by whom, and how the numbers are counted.
  *
  * Stored values (stage, statuses) stay the keys everyone already uses in the sheet, in both languages.
@@ -60,7 +62,15 @@ function linksText(d: SerializedDeal): string {
     .join("\n")
 }
 
-/** Gerro's 33 columns, in his order. Payment status / receivable come from the terms when a deal has any. */
+/** The margin cells: blank without cost lines (like the board) or without a net value (lib/pipeline.ts marginOf). */
+function marginCell(d: SerializedDeal, key: "margin" | "marginPct"): number | null {
+  return d.costs.length > 0 ? d[key] : null
+}
+
+/**
+ * Gerro's 33 columns, in his order, then "Diperbarui Oleh" (34). Payment status / receivable come from the
+ * terms when a deal has any.
+ */
 export const MASTER_COLUMNS: Col[] = [
   { id: "Project ID", en: "Project ID", width: 12, kind: "text", value: (d) => d.code },
   { id: "Nama Project", en: "Project Name", width: 34, kind: "wrap", value: (d) => d.name },
@@ -84,9 +94,10 @@ export const MASTER_COLUMNS: Col[] = [
   { id: "Posisi Kas Bersih", en: "Net Cash Position", width: 18, kind: "moneySigned", value: (d) => d.netCash },
   { id: "Status Closing", en: "Closing Status", width: 22, kind: "text", value: (d) => d.closingStatus },
   { id: "Total Real Cost", en: "Total Real Cost", width: 17, kind: "money", value: (d) => d.costTotal },
-  // Blank while the deal has no net value: a margin of nothing is not 100% (lib/pipeline.ts marginOf).
-  { id: "Margin (Rp)", en: "Margin (Rp)", width: 17, kind: "moneySigned", value: (d) => d.margin },
-  { id: "Margin (%)", en: "Margin (%)", width: 11, kind: "pct1", value: (d) => d.marginPct },
+  // Blank while the deal has no cost lines or no net value: no cost data is not a 100% margin, and a
+  // margin of nothing is not one either (owner, 14 Oct 2026; the board shows a margin only with costs).
+  { id: "Margin (Rp)", en: "Margin (Rp)", width: 17, kind: "moneySigned", value: (d) => marginCell(d, "margin") },
+  { id: "Margin (%)", en: "Margin (%)", width: 11, kind: "pct1", value: (d) => marginCell(d, "marginPct") },
   { id: "Project Health", en: "Project Health", width: 13, kind: "text", value: (d, lang) => HEALTH[d.health.key][lang === "en" ? 1 : 0] },
   { id: "Tanggal Event", en: "Event Date", width: 13, kind: "date", value: (d) => day(d.mainDate) },
   { id: "Next Action", en: "Next Action", width: 32, kind: "wrap", value: (d) => d.nextAction },
@@ -96,7 +107,15 @@ export const MASTER_COLUMNS: Col[] = [
   { id: "Dokumen & Link", en: "Documents & Links", width: 36, kind: "wrap", value: (d) => linksText(d) },
   { id: "Rincian Real Cost", en: "Real Cost Breakdown", width: 34, kind: "wrap", value: (d) => costLines(d.costs) },
   { id: "Terakhir Diperbarui", en: "Last Updated", width: 17, kind: "datetime", value: (d) => wib(d.updatedAt) },
+  // 34 · not in the Control Tower: who last edited the deal, as the earlier NEXUS export said it.
+  { id: "Diperbarui Oleh", en: "Updated By", width: 18, kind: "text", value: (d) => d.updatedBy?.name ?? "" },
 ]
+
+/** The "Termin" cell of the row that carries a deal's manual payment due date (no terms). */
+export const MANUAL_DUE_LABEL: Record<ExportLang, string> = {
+  id: "Jatuh tempo manual (tanpa termin)",
+  en: "Manual due date (no terms)",
+}
 
 const FORMAT: Partial<Record<Kind, string>> = {
   money: MONEY_FMT, moneySigned: MONEY_SIGNED_FMT, pct: PCT_FMT, pct1: PCT1_FMT, int: "0", date: DATE_FMT, datetime: DATETIME_FMT,
@@ -175,12 +194,19 @@ export function buildPipelineWorkbook(deals: SerializedDeal[], meta: ExportMeta)
     { id: "Status", header: "Status", width: 14, kind: "text" },
     { id: "Catatan", header: "Note", width: 32, kind: "wrap" },
   ]
+  // A deal without terms keeps its one manual "Jatuh Tempo Pembayaran" here, so the date is not lost from
+  // the file: one row, the Termin cell saying it is that date and not a term, the rest left blank.
   const termRows = deals.flatMap((d) =>
-    d.terms.map((t) => [
-      d.code, d.name, t.label, t.amount, day(t.dueDate), t.invoiceNo, day(t.invoiceDate), t.paidAmount, day(t.paidAt),
-      t.outstanding, t.daysOverdue, t.status, t.note,
-    ]),
+    d.terms.length > 0
+      ? d.terms.map((t) => [
+          d.code, d.name, t.label, t.amount, day(t.dueDate), t.invoiceNo, day(t.invoiceDate), t.paidAmount, day(t.paidAt),
+          t.outstanding, t.daysOverdue, t.status, t.note,
+        ])
+      : d.paymentDueDate
+        ? [[d.code, d.name, MANUAL_DUE_LABEL[meta.lang], null, day(d.paymentDueDate), null, null, null, null, null, null, null, null]]
+        : [],
   )
+  const manualDueRows = deals.filter((d) => d.terms.length === 0 && !!d.paymentDueDate).length
   tableSheet(wb, en ? "Payment Terms" : "Termin Pembayaran", termCols.map((c) => ({ ...c, header: en ? c.header : c.id })), termRows, 2)
 
   // 3 · Info — what this file is.
@@ -194,10 +220,13 @@ export function buildPipelineWorkbook(deals: SerializedDeal[], meta: ExportMeta)
     [en ? "Filter" : "Filter", en ? "None: every deal on the board (on-screen filters do not apply)" : "Tidak ada: semua deal di board (filter di layar tidak ikut)"],
     [en ? "Deals" : "Jumlah deal", deals.length],
     [en ? "Deals with real cost" : "Deal dengan real cost", withCosts],
-    [en ? "Payment terms" : "Termin pembayaran", termRows.length],
+    [en ? "Payment terms" : "Termin pembayaran", termRows.length - manualDueRows],
+    [en ? "Manual due dates" : "Jatuh tempo manual", en
+      ? `${manualDueRows} deal(s) without terms: their payment due date is one row on Payment Terms, marked "${MANUAL_DUE_LABEL.en}".`
+      : `${manualDueRows} deal tanpa termin: jatuh tempo pembayarannya satu baris di Termin Pembayaran, bertanda "${MANUAL_DUE_LABEL.id}".`],
     [en ? "Margin" : "Margin", en
-      ? "Net Project Value − Total Real Cost. Blank while the deal has no net value."
-      : "Nilai Bersih Project − Total Real Cost. Kosong selama nilai bersih belum diisi."],
+      ? "Net Project Value − Total Real Cost. Blank while the deal has no cost lines or no net value."
+      : "Nilai Bersih Project − Total Real Cost. Kosong selama deal belum punya biaya atau nilai bersih belum diisi."],
     [en ? "Payment status / receivable" : "Status pembayaran / piutang", en
       ? "From the payment terms when a deal has any; otherwise the fields typed on the deal."
       : "Dari termin pembayaran bila deal punya termin; selain itu dari isian di deal."],

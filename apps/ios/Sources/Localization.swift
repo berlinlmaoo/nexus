@@ -2659,6 +2659,7 @@ final class AppLanguage {
         "Fill in the net project value to see the margin.": "Isi nilai bersih project untuk melihat margin.",
         "Margin = net project value − total real cost.": "Margin = nilai bersih project − total real cost.",
         "%d of %d deals have costs": "%d dari %d deal sudah ada biaya",
+        "%d deals have costs but no net value": "%d deal ada biaya tapi nilai bersih kosong",
         "%d cost lines · %@": "%d baris biaya · %@",
         // Pipeline Dashboard (owner, 9 Oct 2026). Same Indonesian as the web's id-pipeline.ts; the GM's own
         // terms (stage keys except three, status values, Board, Pipeline, PM, BD, SPK…) read the same in both.
