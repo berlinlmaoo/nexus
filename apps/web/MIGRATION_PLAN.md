@@ -5,7 +5,7 @@
 
 ## 0. The key realization — this is a FRONTEND rebuild, not a backend migration
 
-The new app (`apps/web`, Vite + TanStack Start, :4178) **already talks to the same backend** as the running Next.js app (`Documents/nexus`, :3020) — `vite.config.ts` proxies `/api/*` and `/auth/*` → `127.0.0.1:3020`, and `nexusApi.apiFetch` sends session cookies (`credentials: "include"`).
+The new app (`apps/web`, Vite + TanStack Router, :4178) **already talks to the same backend** as the running Next.js app (`Documents/nexus`, :3020) — `vite.config.ts` proxies `/api/*` and `/auth/*` → `127.0.0.1:3020`, and `nexusApi.apiFetch` sends session cookies (`credentials: "include"`).
 
 **Implication:** the backend stays put — 129 API routes, Prisma (~50 models), NextAuth, AI, automations, webhooks, socket.io. We do **not** re-implement any of it. "Move all features" = **build every screen/flow in the SPA and wire it to the existing API**, plus grow the `nexusApi` client (currently ~25 methods → needs the full surface).
 
