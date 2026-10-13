@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** PROJECT-ICON (Berlin, 11 Oct + UPDATE 3): the full-colour task icon for every project, a photo the only custom icon, no colour picker. */
+/** PROJECT-ICON (owner, 14 Oct, option A): the grey page outline for every project, a photo the only custom icon, no colour picker. */
 class ProjectMarkTest {
     private fun src(p: String) = File("src/main/java/id/znetworks/nexus/$p").readText()
 
@@ -16,19 +16,15 @@ class ProjectMarkTest {
         listOf(null, "", "🚀", "folder", "briefcase", "📁").forEach { assertFalse(it.toString(), ProjectMarkLogic.isPhoto(it)) }
     }
 
-    @Test fun defaultIsTheFullColourTaskIcon() {
-        val shapes = ProjectMarkLogic.SHAPES
-        assertEquals(9, shapes.size)
-        assertEquals(ProjectMarkLogic.Shape(3f, 3f, 18f, 20f, 3.5f, 0xFFF59E0B), shapes[0])
-        assertEquals(ProjectMarkLogic.Shape(8.5f, 1.5f, 7f, 4f, 1.4f, 0xFF475569), shapes[2])
-        assertEquals(listOf(0xFF22C55E, 0xFF22C55E, 0xFFE2E8F0), shapes.filter { it.w == 3.4f }.map { it.color })
-        assertEquals(3.6f, shapes.last().w)
-        assertEquals(listOf(7.9f to 9.9f, 7.9f to 14.3f), ProjectMarkLogic.TICKS)
+    @Test fun defaultIsThePageOutline() {
+        // Option A (owner, 14 Oct 2026): the grey page outline, stroke 1.6, no fill.
+        assertEquals(listOf("M6 3h8l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z", "M14 3v4h4", "M8.5 12h7M8.5 15.5h5"), ProjectMarkLogic.PATHS)
+        assertEquals(1.6f, ProjectMarkLogic.STROKE)
+        assertEquals(0xFF91918E, ProjectMarkLogic.LIGHT); assertEquals(0xFF9B9A97, ProjectMarkLogic.DARK)
         assertEquals("folder", ProjectMarkLogic.REMOVED)
-        // Everything fits the 24×24 grid.
-        shapes.forEach { assertTrue(it.toString(), it.x >= 0 && it.y >= 0 && it.x + it.w <= 24f && it.y + it.h <= 24f) }
         val mark = src("feature/projects/ProjectMark.kt")
         assertFalse(mark.contains("parseColor") || mark.contains("verticalGradient") || mark.contains("background("))
+        assertTrue(mark.contains("style = Stroke("))
     }
 
     @Test fun projectsNeverDrawAnEmoji() {

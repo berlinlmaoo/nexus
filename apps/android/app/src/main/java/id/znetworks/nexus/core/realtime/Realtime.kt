@@ -48,6 +48,12 @@ data class RealtimeEvent(
     val userId: String? = null,
     val personName: String? = null,
     val avatar: String? = null,
+    /**
+     * workspace-changed { kind: "projects", projectId, icon }: the project's new mark when a PATCH changed it (a photo
+     * URL with ?v=…, or "folder"/null after removal; owner 14 Oct 2026). [iconChanged] says the key was there at all.
+     */
+    val icon: String? = null,
+    val iconChanged: Boolean = false,
     val typing: Boolean? = null,
     /** The payload as JSON text, for screens that read more than the ids (the Spreadsheet's `sheet-cells`). */
     val raw: String? = null,
@@ -99,7 +105,8 @@ object RealtimeEvents {
         fun JsonObject.str(k: String) = (this[k] as? JsonPrimitive)?.takeIf { it.isString }?.content
         return when (name) {
             // { kind: projects|folders|audit, projectId?, folderId? }
-            WORKSPACE_CHANGED, AUDIT_CHANGED -> RealtimeEvent(name, kind = o.str("kind"), projectId = o.str("projectId"), folderId = o.str("folderId"))
+            WORKSPACE_CHANGED, AUDIT_CHANGED -> RealtimeEvent(name, kind = o.str("kind"), projectId = o.str("projectId"), folderId = o.str("folderId"),
+                icon = o.str("icon"), iconChanged = o.containsKey("icon"))
             // { conversationId, lastMessageAt, reason? } / the message itself
             CONVERSATION_UPDATED -> RealtimeEvent(name, conversationId = o.str("conversationId"), reason = o.str("reason"))
             // The message itself: its sender ends their "typing".
@@ -244,7 +251,15 @@ class Realtime(
             val text = args.firstOrNull()?.let { (it as? Throwable)?.message ?: (it as? JSONObject)?.optString("message") ?: it.toString() }
             end.complete(if (RealtimeEvents.isAuthError(text)) Outcome.Refused else Outcome.Dropped(wasUp))
         }
-        RealtimeEvents.LISTENED.forEach { ev -> sock.on(ev) { args -> _events.tryEmit(RealtimeEvents.parse(ev, args.firstOrNull()?.toString())) } }
+        RealtimeEvents.LISTENED.forEach { ev ->
+            sock.on(ev) { args ->
+                val e = RealtimeEvents.parse(ev, args.firstOrNull()?.toString())
+                // A project's photo changed: every mark of it updates at once, before any screen refetches.
+                if (e.name == RealtimeEvents.WORKSPACE_CHANGED && e.kind == "projects" && e.iconChanged && e.projectId != null)
+                    id.znetworks.nexus.feature.projects.ProjectIcons.put(e.projectId, e.icon)
+                _events.tryEmit(e)
+            }
+        }
         synchronized(this) { socket = sock }
         return try {
             sock.connect()

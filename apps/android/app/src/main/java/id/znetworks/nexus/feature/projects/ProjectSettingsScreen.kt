@@ -239,7 +239,7 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
                 val pick = id.znetworks.nexus.feature.auth.rememberAvatarPicker { jpeg -> unreadable = jpeg == null; if (jpeg != null) vm.setPhoto(jpeg) }
                 val hasPhoto = ProjectMarkLogic.isPhoto(d.icon)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ProjectMark(d.icon, 48.dp)
+                    ProjectMark(d.icon, 48.dp, projectId = d.id)
                     OutlinedButton(onClick = pick, enabled = !s.busy && !ro) { Text(stringResource(if (hasPhoto) R.string.ps_photo_change else R.string.ps_photo_add)) }
                     if (hasPhoto) TextButton(onClick = vm::removePhoto, enabled = !s.busy && !ro) { Text(stringResource(R.string.ps_photo_remove), color = c.danger) }
                 }

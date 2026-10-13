@@ -139,7 +139,7 @@ fun ProjectPageHeader(
             androidx.compose.material3.IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = c.foreground, modifier = Modifier.size(22.dp))
             }
-            detail?.let { ProjectMark(it.icon, 22.dp) }
+            detail?.let { ProjectMark(it.icon, 22.dp, projectId = it.id) }
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Text(detail?.name.orEmpty(), fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = c.foreground,

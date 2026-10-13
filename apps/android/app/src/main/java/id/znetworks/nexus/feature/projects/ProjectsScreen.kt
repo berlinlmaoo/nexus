@@ -502,7 +502,7 @@ fun ProjectCard(p: Project, tally: Tally?, talliesLoaded: Boolean, onClick: () -
         Box(Modifier.align(Alignment.TopEnd).offset(36.dp, (-36).dp).size(110.dp).background(accent.copy(alpha = 0.10f), CircleShape))
         Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.Top) {
-                ProjectMark(p.icon, 44.dp)
+                ProjectMark(p.icon, 44.dp, projectId = p.id)
                 Spacer(Modifier.size(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(p.name, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)

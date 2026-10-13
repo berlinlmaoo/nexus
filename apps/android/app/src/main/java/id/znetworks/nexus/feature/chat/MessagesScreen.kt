@@ -210,9 +210,8 @@ internal fun ConversationRow(conv: Conversation, meId: String?, typing: Boolean 
             "DM" -> Avatar(conv.title(meId, dmFallback), conv.other(meId)?.avatar, 44.dp, initials = conv.initials(meId, dmFallback))
             // A project room shows its project's mark (photo or the page icon), like iOS; a group keeps the group icon.
             "PROJECT" -> {
-                val icons by id.znetworks.nexus.feature.projects.ProjectIcons.icons.collectAsState()
                 Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(c.muted.copy(alpha = 0.6f)), contentAlignment = Alignment.Center) {
-                    id.znetworks.nexus.feature.projects.ProjectMark(conv.projectId?.let { icons[it] }, 30.dp)
+                    id.znetworks.nexus.feature.projects.ProjectMark(null, 30.dp, projectId = conv.projectId)
                 }
             }
             else -> Box(Modifier.size(44.dp).background(c.violet.copy(alpha = 0.14f), CircleShape), contentAlignment = Alignment.Center) {
