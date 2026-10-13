@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { existsSync } from "node:fs";
 // Web half of the NEXUS UI screenshot tour (../ui-tour.sh, docs/UI-TOUR.md).
 //
 // Photographs every screen in ../ui-tour-screens.json on the DEV web twice: desktop 1440x900 (the master
@@ -134,7 +135,10 @@ async function main() {
     await new Promise((r) => setTimeout(r, 60000));
   }
   const results = [];
-  const browser = await chromium.launch({ args: ["--disable-dev-shm-usage"] });
+  // On a Mac with Google Chrome installed, drive that Chrome: Playwright's own Chromium download can hang
+  // while unpacking (owner's Mac, 13 Oct 2026). Elsewhere (Linux) use Playwright's Chromium as before.
+  const useChrome = process.platform === "darwin" && existsSync("/Applications/Google Chrome.app");
+  const browser = await chromium.launch({ args: ["--disable-dev-shm-usage"], ...(useChrome ? { channel: "chrome" } : {}) });
   try {
     const state = await signIn(browser);
     for (const [name, variant] of Object.entries(VARIANTS)) {

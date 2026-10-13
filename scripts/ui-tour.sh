@@ -187,7 +187,10 @@ run_web() {
   if [ ! -d "$dir/node_modules/playwright" ]; then
     (cd "$dir" && npm install --no-audit --no-fund --silent) >>"$log" 2>&1 || { SUMMARY+=("web: npm install failed — logs/web.log"); return; }
   fi
-  (cd "$dir" && npx --no-install playwright install chromium) >>"$log" 2>&1 || { SUMMARY+=("web: playwright install chromium failed — logs/web.log"); return; }
+  # A Mac with Google Chrome uses it (tour.mjs channel "chrome"); Playwright's Chromium unpack can hang there.
+  if [ "$(uname)" != "Darwin" ] || [ ! -d "/Applications/Google Chrome.app" ]; then
+    (cd "$dir" && npx --no-install playwright install chromium) >>"$log" 2>&1 || { SUMMARY+=("web: playwright install chromium failed — logs/web.log"); return; }
+  fi
   if node "$dir/tour.mjs" --out "$OUT" --only "$ONLY" >>"$log" 2>&1; then
     local bad
     bad=$(grep -vE ": ok$" "$log" | grep -E "^web-(desktop|mobile) " | head -10 | tr '\n' ';')
