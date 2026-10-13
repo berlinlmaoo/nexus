@@ -427,7 +427,10 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable("task-preview/{id}?project={project}", arguments = listOf(androidx.navigation.navArgument("project") { nullable = true; defaultValue = null })) { e ->
                 TaskPreviewScreen(e.arguments?.getString("id").orEmpty(), e.arguments?.getString("project")?.takeIf { it.isNotEmpty() }) { nav.popBackStack() }
             }
-            composable("gideon") { GideonScreen(onBack = { nav.popBackStack() }) }
+            composable("gideon?project={project}&name={name}", arguments = listOf("project", "name").map { a -> androidx.navigation.navArgument(a) { nullable = true; defaultValue = null } }) { e ->
+                val pid = e.arguments?.getString("project")
+                GideonScreen(onBack = { nav.popBackStack() }, project = pid?.let { it to (e.arguments?.getString("name") ?: "") })
+            }
             composable("admin") {
                 ControlRoomScreen(onBack = { nav.popBackStack() }, nav = AdminNav(
                     openUser = { nav.navigate("admin-user/$it") }, openChart = { nav.navigate("admin-chart") }, openOrgChart = { nav.navigate("org-chart") },
@@ -508,7 +511,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onOpenDoc = { nav.navigate("doc/$it") },
                     onBuildForm = { form -> nav.navigate("form-builder/${entry.arguments?.getString("id")}" + (form?.let { "?form=$it" } ?: "")) },
                     onOpenProject = { nav.navigate("project/$it") }, onOpenFolder = { nav.navigate("folder/$it") },
-                    onOpenGideon = { nav.navigate("gideon") { launchSingleTop = true } }, onOpenProjects = { nav.popBackStack(); goTab(Tab.PROJECTS) })
+                    onOpenGideon = { name -> nav.navigate("gideon?project=${enc(entry.arguments?.getString("id").orEmpty())}&name=${enc(name)}") }, onOpenProjects = { nav.popBackStack(); goTab(Tab.PROJECTS) })
             }
             composable("form-builder/{projectId}?form={form}", arguments = listOf(androidx.navigation.navArgument("form") { nullable = true; defaultValue = null })) {
                 FormBuilderScreen(onBack = { nav.popBackStack() }, onOpenForm = { nav.navigate("form/${android.net.Uri.encode(it)}") },

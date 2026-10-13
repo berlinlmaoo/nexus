@@ -87,7 +87,7 @@ import kotlinx.coroutines.withContext
  * tool steps read as plain words; a failure is said in the app's language with Try again.
  */
 @Composable
-fun GideonScreen(onBack: () -> Unit) {
+fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     val context = LocalContext.current
     val chat = (context.applicationContext as NexusApplication).container.gideon
     val s by chat.state.collectAsStateWithLifecycle()
@@ -103,7 +103,7 @@ fun GideonScreen(onBack: () -> Unit) {
     var showChats by rememberSaveable { mutableStateOf(false) }
     // A fresh chat on every open (never the last one); a rotation keeps the one on screen.
     var started by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(Unit) { if (!started) { started = true; chat.startNew() } }
+    LaunchedEffect(Unit) { if (!started) { started = true; chat.startNew(project) } }
     BackHandler(enabled = showChats) { showChats = false }
 
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -130,6 +130,13 @@ fun GideonScreen(onBack: () -> Unit) {
             }
             HeaderIconButton(Icons.Outlined.History, stringResource(R.string.gx_chats), { showChats = !showChats; if (showChats) chat.loadChats() })
             HeaderIconButton(Icons.Outlined.EditNote, stringResource(R.string.gx_new_chat), { showChats = false; chat.startNew(); draft = ""; upload = null }, primary = true)
+        }
+        // The project this chat is about (from "Ask GIDEON" on a project page), removable.
+        val ctx = s.project
+        if (!showChats && ctx != null) Row(Modifier.padding(start = 16.dp, top = 8.dp).clip(RoundedCornerShape(8.dp)).background(c.muted).padding(start = 10.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text(ctx.second, fontSize = 13.sp, color = c.foreground, maxLines = 1)
+            IconButton(onClick = chat::dropProject, modifier = Modifier.size(32.dp)) { Icon(Icons.Filled.Close, stringResource(R.string.cancel), tint = c.mutedFg, modifier = Modifier.size(16.dp)) }
         }
         if (showChats) {
             ChatList(s, indonesian, onPick = { id -> showChats = false; chat.open(id) }, onNew = { showChats = false; chat.startNew() },

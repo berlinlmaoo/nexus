@@ -268,6 +268,8 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
         val chats: List<GChatRow>? = null,
         val chatsError: GideonProblem? = null,
         val query: String = "",
+        /** The project GIDEON was opened from ("Ask GIDEON" on a project page): sent as context until removed. */
+        val project: Pair<String, String>? = null,
     )
 
     private val _state = MutableStateFlow(State())
@@ -277,11 +279,14 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
     private var failed: Pair<String, GUpload?>? = null
 
     /** A fresh conversation: every time GIDEON opens, and from "New chat". */
-    fun startNew() {
+    fun startNew(project: Pair<String, String>? = null) {
         generation++
         failed = null
-        _state.update { it.copy(chatId = null, chatTitle = null, messages = emptyList(), thinking = false, opening = false, error = null, openFailed = null) }
+        _state.update { it.copy(chatId = null, chatTitle = null, messages = emptyList(), thinking = false, opening = false, error = null, openFailed = null, project = project) }
     }
+
+    /** The context chip's ×: ask without the project. */
+    fun dropProject() = _state.update { it.copy(project = null) }
 
     fun open(chatId: String) {
         val gen = ++generation
@@ -324,6 +329,8 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
                     // The interface language, so the answer comes back in it.
                     put("uiLang", AppLanguage.serverCode(AppLanguage.current))
                     if (chatId != null) put("chatId", chatId) else put("newChat", true)
+                    // Opened about a project (web openGideon({projectId})): the server reads it as context.
+                    _state.value.project?.let { (pid, _) -> put("context", buildJsonObject { put("projectId", pid) }) }
                     when (upload) {
                         is GUpload.Image -> put("image", "data:image/jpeg;base64," + java.util.Base64.getEncoder().encodeToString(upload.jpeg))
                         is GUpload.Document -> put("file", buildJsonObject { put("name", upload.name); put("type", upload.mime); put("data", java.util.Base64.getEncoder().encodeToString(upload.bytes)) })

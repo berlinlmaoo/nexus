@@ -455,7 +455,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                         /** The form builder: null = a new form (FORM-BUILDER). */ onBuildForm: (String?) -> Unit = {},
                         /** Another project (a won deal's Master Task / Master Calendar, PIPELINE §15). */ onOpenProject: (String) -> Unit = {},
                         /** A won deal's execution folder (PIPELINE §15). */ onOpenFolder: (String) -> Unit = {},
-                        /** A fresh GIDEON chat about this project. */ onOpenGideon: () -> Unit = {},
+                        /** A fresh GIDEON chat about this project (its name for the context chip). */ onOpenGideon: (String) -> Unit = {},
                         /** Projects (a project that is gone). */ onOpenProjects: () -> Unit = onBack,
                         vm: ProjectDetailViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -550,7 +550,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
 
     Box(Modifier.fillMaxSize().background(c.background)) {
         Column(Modifier.fillMaxSize()) {
-            ProjectPageHeader(s.detail, onBack, onMembers = { membersOpen = true }, onGideon = onOpenGideon, onSettings = onOpenSettings,
+            ProjectPageHeader(s.detail, onBack, onMembers = { membersOpen = true }, onGideon = { onOpenGideon(s.detail?.name.orEmpty()) }, onSettings = onOpenSettings,
                 onAdd = if (canAddTask && tab != ProjectTab.FORMS) ({ createDue = null; creating = true }) else if (tab == ProjectTab.FORMS && access.canEdit) ({ onBuildForm(null) }) else null)
             if (s.detail != null && !s.locked) {
                 ProjectTabRow(items, selectedItem, canAddView = s.taskProject && access.canEdit && s.views != null, onSelect = ::select,

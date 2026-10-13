@@ -147,7 +147,7 @@ class GideonRedesignTest {
 
     @Test fun freshChatOnEveryOpenAndStrings() {
         val screen = File("src/main/java/id/znetworks/nexus/feature/gideon/GideonScreen.kt").readText()
-        assertTrue(screen.contains("if (!started) { started = true; chat.startNew() }"))
+        assertTrue(screen.contains("if (!started) { started = true; chat.startNew(project) }")) // fresh, with the project it was opened about
         val api = File("src/main/java/id/znetworks/nexus/feature/gideon/Gideon.kt").readText()
         assertTrue(api.contains("put(\"newChat\", true)") && api.contains("put(\"stream\", true)") && api.contains("/api/gideon/chats"))
         val names = { v: String -> Regex("<string name=\"([^\"]+)\"").findAll(File("src/main/res/$v/strings_gideon.xml").readText()).map { it.groupValues[1] }.toSet() }
