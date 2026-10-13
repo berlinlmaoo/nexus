@@ -4,10 +4,10 @@ import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { AvatarFace } from "@/components/Avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { PIPELINE_STAGES, daysBetween, dealValue, stageGroupOf } from "@/lib/pipeline";
+import { PIPELINE_STAGES, daysBetween, dealValue, marginOf, stageGroupOf } from "@/lib/pipeline";
 import { servicesOf, type PipelineDeal } from "@/lib/pipeline-api";
 import { COLOR_PRESETS } from "@/lib/project-views";
-import { BlockerBanner, GROUP_COLOR, GROUP_TONE, HEALTH_TEXT, HealthPill, PhaseTrack, StagePill, fmtDayShort, fmtIdr, fmtIdrFull, personName, useReasonText, useVocabLabels } from "./pipeline-ui";
+import { BlockerBanner, GROUP_COLOR, GROUP_TONE, HEALTH_TEXT, HealthPill, PhaseTrack, StagePill, fmtDayShort, fmtIdr, fmtIdrFull, fmtMarginPct, marginTone, personName, useReasonText, useVocabLabels } from "./pipeline-ui";
 
 const DRAG_TYPE = "application/x-nexus-deal";
 
@@ -210,6 +210,7 @@ const DealCard = memo(function DealCard({
   const pm = personName(deal.pm, deal.pmName);
   const bd = personName(deal.bd, deal.bdName);
   const value = dealValue(deal);
+  const margin = marginOf(deal);
   const group = stageGroupOf(deal.stage);
   const flagged = deal.health.key === "CRITICAL" || deal.health.key === "ATTENTION";
   const hasBlocker = !!deal.blocker?.trim();
@@ -263,6 +264,16 @@ const DealCard = memo(function DealCard({
             <span title={fmtIdrFull(value, lang)} className="ml-auto shrink-0 font-semibold tabular-nums text-foreground">{fmtIdr(value, lang)}</span>
           )}
         </div>
+      )}
+      {/* Margin on the net value (Control Tower v5, 14 Oct 2026), live with the cost lines; only on a deal
+          that has a net value — none is better than a misleading 100% or 0. */}
+      {margin.margin !== null && (
+        <p className="mt-0.5 text-xs tabular-nums text-muted-foreground" title={t("Net value − real cost")}>
+          {t("Margin")}:{" "}
+          <span className={cn("font-medium", marginTone(margin.margin))}>
+            {fmtIdr(margin.margin, lang)} ({fmtMarginPct(margin.marginPct)})
+          </span>
+        </p>
       )}
       <PhaseTrack deal={deal} className="mt-2.5" />
       <BlockerBanner deal={deal} lines={2} className="mt-2" />

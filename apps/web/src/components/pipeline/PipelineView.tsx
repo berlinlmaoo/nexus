@@ -95,8 +95,10 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
   const data = q.data;
   const deals = useMemo(() => data?.deals ?? [], [data]);
   const today = data?.today ?? new Date().toISOString().slice(0, 10);
-  // Staff who are not project members never get this far (403); everyone who reads may also write.
-  const canEdit = !!data;
+  // Staff who are not project members never get this far (403). Full / Can edit may change deals (real
+  // cost lines included); Can comment / Can view only read (14 Oct 2026). An older server says nothing:
+  // everyone who reads may write, as before.
+  const canEdit = !!data && data.canEdit !== false;
 
   const personFilter = (list: PipelineDeal[], pick: (d: PipelineDeal) => string | null) =>
     Array.from(new Set(list.map(pick).filter((x): x is string => !!x))).sort((a, b) => a.localeCompare(b));
@@ -272,7 +274,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
   return (
     <div className="flex flex-col gap-4 p-4 md:p-8">
       {deals.length === 0 ? (
-        <FirstDeal adding={create.isPending} onAdd={() => setNewIn("Incoming")} />
+        <FirstDeal adding={create.isPending} onAdd={canEdit ? () => setNewIn("Incoming") : undefined} />
       ) : (
         <>
           <PipelineKpis s={data.summary} />
@@ -283,7 +285,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
               sideways. */}
           {/* No wrapper here: the health row below must be a direct child of the page column to stay sticky. */}
             <div className="flex flex-wrap items-center gap-2">
-              <label className="relative order-1 min-w-0 basis-[calc(100%-3.25rem)] lg:max-w-md lg:flex-1 lg:basis-48">
+              <label className={cn("relative order-1 min-w-0 lg:max-w-md lg:flex-1 lg:basis-48", canEdit ? "basis-[calc(100%-3.25rem)]" : "basis-full")}>
                 <span className="sr-only">{t("Search deals")}</span>
                 <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
@@ -310,7 +312,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
                 {exporting ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : <Download aria-hidden className="h-4 w-4" />}
                 <span className="hidden xl:inline">{exporting ? t("Preparing…") : "Excel"}</span>
               </button>
-              <button
+              {canEdit && <button
                 type="button"
                 onClick={() => setNewIn("Incoming")}
                 disabled={create.isPending}
@@ -319,7 +321,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
               >
                 {create.isPending ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : <Plus aria-hidden className="h-4 w-4" />}
                 <span className="hidden lg:inline">{create.isPending ? t("Adding…") : t("New deal")}</span>
-              </button>
+              </button>}
               <div className="order-7 basis-full lg:hidden">{viewSwitch}</div>
             </div>
 
@@ -438,7 +440,7 @@ function NewDealDialog({ stage, saving, onCancel, onCreate }: { stage: string | 
  * An empty board (owner, 9 Oct 2026: start fresh, no demo deals): what the board is for, the road a deal
  * takes across it, and one button. No KPI strip and no eight empty columns until there is a first deal.
  */
-function FirstDeal({ adding, onAdd }: { adding: boolean; onAdd: () => void }) {
+function FirstDeal({ adding, onAdd }: { adding: boolean; onAdd?: () => void }) {
   const { t } = useLang();
   const road = PIPELINE_STAGES.filter((s) => s !== "Lost / Cancelled");
   return (
@@ -455,7 +457,7 @@ function FirstDeal({ adding, onAdd }: { adding: boolean; onAdd: () => void }) {
           </li>
         ))}
       </ol>
-      <button
+      {onAdd && <button
         type="button"
         onClick={onAdd}
         disabled={adding}
@@ -463,7 +465,7 @@ function FirstDeal({ adding, onAdd }: { adding: boolean; onAdd: () => void }) {
       >
         {adding ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : <Plus aria-hidden className="h-4 w-4" />}
         {adding ? t("Adding…") : t("Add your first deal")}
-      </button>
+      </button>}
     </section>
   );
 }
