@@ -808,8 +808,8 @@ struct SidebarRoot: View {
     }
 }
 
-/// A shortcut row's project mark: its photo, or the default task tile (ProjectMark, owner 11 Oct
-/// 2026 — stored emoji are no longer drawn).
+/// A shortcut row's project mark: its photo, or the default grey page icon (ProjectMark; stored
+/// emoji are no longer drawn since 11 Oct 2026, page icon = option A since 14 Oct).
 ///
 /// Shared rather than private to the sidebar: the phone's Dashboard shows the same shortcuts, and
 /// two drawings of the same thing drift apart the first time one of them is touched.

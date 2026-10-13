@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// A PROJECT's mark (owner, 11 Oct 2026): one default for every project — the full-colour task icon,
-/// identical to web (an amber clipboard holding a checklist, two green ticks and one empty box, on a
-/// 24×24 grid scaled to the slot, no background tile) — unless the project has an uploaded photo.
+/// A PROJECT's mark: one default for every project, unless the project has an uploaded photo.
+/// Owner, 14 Oct 2026 (option A): a calm Notion-style page, identical to web: a thin grey outline
+/// document with a folded corner and two text lines, monochrome, no fill, no background tile, on a
+/// 24x24 grid scaled to the slot. It replaced the full-colour clipboard-checklist of 11 Oct.
 /// Emoji and named icons ("folder", "rocket", "🚀") stored by older screens are ignored on purpose,
 /// and so is the project's colour.
 ///
@@ -44,42 +45,45 @@ struct ProjectMark: View {
 
     private var defaultMark: some View {
         let side = glyph ?? size
-        return Canvas { ctx, canvas in
-            // Drawn on web's 24×24 grid, scaled to the slot.
-            let k = min(canvas.width, canvas.height) / 24
-            func rect(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat, _ r: CGFloat, _ c: Color) {
-                ctx.fill(Path(roundedRect: CGRect(x: x * k, y: y * k, width: w * k, height: h * k),
-                              cornerRadius: r * k, style: .continuous), with: .color(c))
-            }
-            func tick(_ x: CGFloat, _ y: CGFloat) {
-                var p = Path()
-                p.move(to: CGPoint(x: x * k, y: y * k))
-                p.addLine(to: CGPoint(x: (x + 0.9) * k, y: (y + 0.9) * k))
-                p.addLine(to: CGPoint(x: (x + 2.3) * k, y: (y - 0.7) * k))
-                ctx.stroke(p, with: .color(.white),
-                           style: StrokeStyle(lineWidth: 0.9 * k, lineCap: .round, lineJoin: .round))
-            }
-            rect(3, 3, 18, 20, 3.5, Self.amber)          // board
-            rect(5.5, 5.5, 13, 15.5, 1.8, .white)        // sheet
-            rect(8.5, 1.5, 7, 4, 1.4, Self.slate)        // clip
-            rect(7.2, 8.2, 3.4, 3.4, 0.8, Self.green)    // row 1, checked
-            tick(7.9, 9.9)
-            rect(11.8, 9.2, 5.2, 1.4, 0.7, Self.line)
-            rect(7.2, 12.6, 3.4, 3.4, 0.8, Self.green)   // row 2, checked
-            tick(7.9, 14.3)
-            rect(11.8, 13.6, 5.2, 1.4, 0.7, Self.line)
-            rect(7.2, 17, 3.4, 3.4, 0.8, Self.empty)     // row 3, unchecked
-            rect(11.8, 18, 3.6, 1.4, 0.7, Self.line)
-        }
-        .frame(width: side, height: side)
+        // Stroke 1.6 on the 24-grid, like web's SVG; never thinner than one point so 14-16 pt rows stay crisp.
+        return ProjectPageShape()
+            .stroke(Self.stroke, style: StrokeStyle(lineWidth: max(1, 1.6 * side / 24), lineCap: .round, lineJoin: .round))
+            .frame(width: side, height: side)
     }
 
-    private static func rgb(_ hex: UInt32) -> Color {
-        Color(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
+    /// Notion's muted grey (web --st-gray-dot): #91918e light, #9b9a97 dark.
+    static let stroke = Color(light: 0x91918e, dark: 0x9b9a97)
+}
+
+/// The default project icon's outline on web's 24x24 grid:
+/// "M6 3h8l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z", "M14 3v4h4", "M8.5 12h7M8.5 15.5h5".
+struct ProjectPageShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let k = min(rect.width, rect.height) / 24
+        let ox = rect.minX + (rect.width - 24 * k) / 2
+        let oy = rect.minY + (rect.height - 24 * k) / 2
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: ox + x * k, y: oy + y * k) }
+        var p = Path()
+        // Page: top edge to the fold, the fold's diagonal, right edge, rounded bottom corners, left edge.
+        p.move(to: pt(6, 3))
+        p.addLine(to: pt(14, 3))
+        p.addLine(to: pt(18, 7))
+        p.addLine(to: pt(18, 20))
+        p.addArc(tangent1End: pt(18, 21), tangent2End: pt(17, 21), radius: k)
+        p.addLine(to: pt(6, 21))
+        p.addArc(tangent1End: pt(5, 21), tangent2End: pt(5, 20), radius: k)
+        p.addLine(to: pt(5, 4))
+        p.addArc(tangent1End: pt(5, 3), tangent2End: pt(6, 3), radius: k)
+        p.closeSubpath()
+        // Folded corner.
+        p.move(to: pt(14, 3))
+        p.addLine(to: pt(14, 7))
+        p.addLine(to: pt(18, 7))
+        // Two text lines.
+        p.move(to: pt(8.5, 12))
+        p.addLine(to: pt(15.5, 12))
+        p.move(to: pt(8.5, 15.5))
+        p.addLine(to: pt(13.5, 15.5))
+        return p
     }
-    private static let amber = rgb(0xF59E0B)
-    private static let slate = rgb(0x475569)
-    private static let green = rgb(0x22C55E)
-    private static let line = rgb(0xCBD5E1)
-    private static let empty = rgb(0xE2E8F0)
 }
