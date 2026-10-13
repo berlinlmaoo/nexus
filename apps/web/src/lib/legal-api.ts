@@ -266,3 +266,27 @@ export const legalVersionsApi = {
     apiFetch<{ version: number }>(`${docUrl(id)}/versions/${version}/restore`, { method: "POST", body: JSON.stringify({ baseVersion }) }),
   compare: (id: string, a: number, b: number) => apiFetch<{ a: number; b: number; diff: ParagraphDiff[] }>(`${docUrl(id)}/compare?a=${a}&b=${b}`),
 };
+
+// ── GIDEON precise edit ──
+export type LegalProposal = {
+  id: string;
+  status: "PENDING" | "CLARIFY" | "APPLYING" | "APPLIED" | "DISCARDED" | "FAILED";
+  baseVersion: number;
+  instruction: string;
+  question: string | null;
+  summary: string;
+  changes: { index: number; before: string; after: string; segments: DiffSegment[] }[];
+  appliedVersion: number | null;
+  createdBy: LegalPerson | null;
+  decidedBy: LegalPerson | null;
+  decidedAt: string | null;
+  createdAt: string;
+};
+
+export const legalGideonApi = {
+  list: (id: string) => apiFetch<{ proposals: LegalProposal[] }>(`${docUrl(id)}/gideon`),
+  ask: (id: string, input: { baseVersion: number; instruction: string; targets: number[]; replyTo?: string; answer?: string }) =>
+    apiFetch<{ proposal: LegalProposal }>(`${docUrl(id)}/gideon`, { method: "POST", body: JSON.stringify(input) }),
+  decide: (id: string, proposalId: string, decision: "approve" | "discard", indexes?: number[]) =>
+    apiFetch<{ proposal: LegalProposal; version: number | null; pdfError: string | null }>(`${docUrl(id)}/proposals/${encodeURIComponent(proposalId)}`, { method: "POST", body: JSON.stringify({ decision, indexes }) }),
+};

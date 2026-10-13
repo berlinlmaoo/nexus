@@ -182,4 +182,15 @@ export const ID_LEGAL: Record<string, string> = {
   "Uploaded as version {n}": "Diunggah sebagai versi {n}",
   "A signed scan, or the file edited in Word": "Hasil scan yang sudah ditandatangani, atau file yang diedit di Word",
   "Upload new version": "Unggah versi baru",
+  // GIDEON precise edit
+  "Ask GIDEON to change it": "Minta GIDEON mengubahnya",
+  "GIDEON may change only the {n} paragraphs you ticked.": "GIDEON hanya boleh mengubah {n} paragraf yang kamu centang.",
+  "Tick the paragraphs to change, or describe the clause and GIDEON picks the fewest paragraphs.": "Centang paragraf yang mau diubah, atau jelaskan pasalnya dan GIDEON memilih paragraf sesedikit mungkin.",
+  "e.g. Change the term to 6 months and the fee to Rp 2.000.000": "mis. Ubah jangka waktu jadi 6 bulan dan fee jadi Rp 2.000.000",
+  "Propose a change": "Usulkan perubahan",
+  "Applied as version {n}": "Diterapkan sebagai versi {n}",
+  "GIDEON's proposal was refused: {reason}": "Usulan GIDEON ditolak: {reason}",
+  "Apply the change to paragraph {n}": "Terapkan perubahan di paragraf {n}",
+  "Paragraph {n}": "Paragraf {n}",
+  "Approve {n} of {total}": "Setujui {n} dari {total}",
 };

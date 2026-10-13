@@ -14,6 +14,7 @@ export const LEGAL_ROOT_EMAILS = parseRootEmails(process.env.LEGAL_ROOT_EMAILS)
 export type LegalActor = {
   userId: string
   name: string
+  email: string
   isRoot: boolean
   /** Role in the company workspace; null only for a root who is not in it. */
   orgRole: string | null
@@ -37,7 +38,7 @@ export async function legalActor(userId: string): Promise<LegalActor | null> {
   if (!isRoot && !isMember) return null
   const orgRole = await orgRoleOf(userId)
   if (!isRoot && !orgRole) return null
-  return { userId: user.id, name: user.name, isRoot, orgRole, power: invitePowerOf({ isRoot, isMember, orgRole }) }
+  return { userId: user.id, name: user.name, email: user.email, isRoot, orgRole, power: invitePowerOf({ isRoot, isMember, orgRole }) }
 }
 
 export async function hasLegalAccess(userId: string): Promise<boolean> {

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Segmented } from "@/components/PageLayout";
 import { LegalDocumentEditor } from "@/components/legal/LegalDocumentEditor";
+import { LegalGideonPanel } from "@/components/legal/LegalGideonPanel";
 import { LegalDiffView } from "@/components/legal/LegalDiffView";
 import { docTypeLabel, fmtDay, formatBytes, statusClass, statusLabel, versionKindLabel } from "@/components/legal/legal-labels";
 import { fmtDate } from "@/lib/nexus-api";
@@ -25,7 +26,10 @@ export function LegalDocumentSheet({ documentId, onClose }: { documentId: string
   const doc = q.data?.document;
   const [draft, setDraft] = useState({ title: "", counterparty: "", notes: "" });
   const [view, setView] = useState<"overview" | "edit" | "compare">("overview");
-  useEffect(() => { setView("overview"); }, [documentId]);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  useEffect(() => { setView("overview"); setSelected(new Set()); }, [documentId]);
+  useEffect(() => { setSelected(new Set()); }, [doc?.currentVersion]);
+  const toggle = (i: number) => setSelected((cur) => { const n = new Set(cur); if (n.has(i)) n.delete(i); else n.add(i); return n; });
   useEffect(() => { if (doc) setDraft({ title: doc.title, counterparty: doc.counterparty, notes: doc.notes }); }, [doc]);
 
   const refresh = (d: LegalDocument) => {
@@ -91,7 +95,12 @@ export function LegalDocumentSheet({ documentId, onClose }: { documentId: string
             />
 
             {view === "edit" && (doc.versions.find((v) => v.version === doc.currentVersion)?.hasDocx
-              ? <LegalDocumentEditor doc={doc} />
+              ? (
+                <div className="space-y-4">
+                  <LegalGideonPanel doc={doc} selected={selected} onClearSelection={() => setSelected(new Set())} />
+                  <LegalDocumentEditor doc={doc} selected={selected} onSelect={toggle} />
+                </div>
+              )
               : <p className="text-sm text-muted-foreground">{t("The current version is not a Word file, so it can't be edited here. Restore a Word version to edit it.")}</p>)}
             {view === "compare" && <CompareVersions doc={doc} />}
 
