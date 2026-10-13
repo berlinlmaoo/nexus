@@ -506,9 +506,9 @@ private fun RevealDay(d: CalDerived, dayRequests: Int, list: LazyListState, head
     // [dayRequests] comes straight from the live state: the remembered handle `d` is not keyed on it, so
     // Today or a tap on the selected day (same day, nothing else changed) would read a stale count (audit 3 #2).
     LaunchedEffect(dayRequests) { if (dayRequests > 0) reveal() }
-    LaunchedEffect(d.ready) {
-        if (d.ready && !firstOpenDone) { firstOpenDone = true; if (d.s.day == d.s.today) { list.scrollToItem(head) } }
-    }
+    // The first open starts at the top like iOS / the web (run 5, 14 Oct 2026): the month grid with its division
+    // dots and legend, then the day below. It used to jump past them to today's tasks.
+    LaunchedEffect(d.ready) { if (d.ready && !firstOpenDone) firstOpenDone = true }
 }
 
 /** Compact and medium: one list; medium caps it at 680 dp so day cells still get titles (audit 2 #20). */
