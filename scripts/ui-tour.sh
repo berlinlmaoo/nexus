@@ -34,7 +34,8 @@ while [ $# -gt 0 ]; do
     --no-upload) DO_UPLOAD=0 ;;
     --no-pull) DO_PULL=0 ;;
     --no-open) DO_OPEN=0 ;;
-    --watch) export TOUR_WATCH=1 ;;   # visible Chrome for the web half (the simulator is visible anyway)
+    --watch) export TOUR_WATCH=1 ;;   # (default) visible Chrome for the web half
+    --headless) unset TOUR_WATCH ;;   # no Chrome window
     --keep-xcresult) KEEP_XCRESULT=1 ;;
     --set-password) SET_PASSWORD=1 ;;
     -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
@@ -44,6 +45,7 @@ while [ $# -gt 0 ]; do
 done
 
 TOUR_EMAIL="${TOUR_EMAIL:-qa5@dev.invalid}"
+export TOUR_WATCH=1   # owner: watch the web half in a real Chrome window by default (--headless to hide)
 KC_SERVICE="nexus-ui-tour"
 UPLOAD_HOST="${UI_TOUR_HOST:-debian@100.66.244.85}"
 STAMP=$(date +%Y%m%d-%H%M%S)
