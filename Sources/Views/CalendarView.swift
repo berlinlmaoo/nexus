@@ -1790,7 +1790,8 @@ struct CalendarView: View {
         claimRouterTask()
         claimRouterScope()
         router.calendarState = carry
-        if first && !carried && revealDay == 0 && mode == .month && selected == today { peek(opening: true) }
+        // Opens at the top like the web: header, filters and the month with today marked (owner, 13 Oct 2026).
+        // The opening peek to today's tasks is gone; the Today button still brings them up.
     }
 
     /// The window crossed the size class with a Calendar on screen, and the app was rebuilt in its
