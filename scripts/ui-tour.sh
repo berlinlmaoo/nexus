@@ -168,7 +168,24 @@ run_app() {
   TEST_RUNNER_TOUR_MAC_WINDOW="${TOUR_MAC_WINDOW:-}" \
     xcodebuild test -project NEXUS.xcodeproj -scheme NEXUSUITour -destination "$dest" \
       -resultBundlePath "$result" "${tests[@]}" \
-      -destination-timeout 180 ${extra[@]+"${extra[@]}"} >"$log" 2>&1
+      -destination-timeout 180 ${extra[@]+"${extra[@]}"} >"$log" 2>&1 &
+  local xb=$!
+  # Xcode 27 sometimes never exits after the tests finish (result bundle stays in Staging; owner's Mac,
+  # 13 Oct 2026). Once the run's last "Test Suite 'Selected tests'" line is in the log, give it 90 s,
+  # then stop it: the attachments are already written and xcresulttool still exports them.
+  local done_at=0
+  while kill -0 "$xb" 2>/dev/null; do
+    sleep 5
+    if [ "$done_at" = 0 ] && grep -q "Test Suite 'Selected tests' \(passed\|failed\)" "$log" 2>/dev/null; then
+      done_at=$(date +%s)
+    fi
+    if [ "$done_at" != 0 ] && [ $(( $(date +%s) - done_at )) -ge 90 ]; then
+      say "$platform: tests finished but xcodebuild did not exit after 90 s — stopping it"
+      kill "$xb" 2>/dev/null; sleep 3; kill -9 "$xb" 2>/dev/null
+      break
+    fi
+  done
+  wait "$xb" 2>/dev/null
   local rc=$?
 
   if [ ! -d "$result" ]; then
