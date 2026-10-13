@@ -24,7 +24,7 @@ export const VAULT_DIR = path.join(process.cwd(), "public", "uploads", "attachme
  *  binds is the backup destination on the Proxmox host, not the VM disk, so keep this well under it. */
 export const VAULT_QUOTA_BYTES = 60 * 1024 * 1024 * 1024 // 60 GB
 
-export const VAULT_MAX_FILE_BYTES = 1024 * 1024 * 1024 // 1 GB, same ceiling as task attachments
+export const VAULT_MAX_FILE_BYTES = 5 * 1024 * 1024 * 1024 // 5 GB (13 Oct 2026); task attachments stay 1 GB
 
 // ── storage keys ─────────────────────────────────────────────────────────────
 

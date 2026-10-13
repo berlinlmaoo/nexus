@@ -42,9 +42,11 @@ import { MAX_DEAL_DOCUMENTS, addFileDocument, documentOut, newPipelineFile, stor
 // so /api/files can never serve a half-uploaded part). The final file is published atomically into the
 // mounted attachments dir and an Attachment row is created — same persisted shape as the single-shot route.
 
-const MAX_SIZE = 1024 * 1024 * 1024 // 1GB final-file cap (chunks stay <100MB so Cloudflare passes them)
+const MAX_SIZE = 1024 * 1024 * 1024 // 1GB final-file cap for task/pipeline files (chunks stay <100MB so Cloudflare passes them)
+// Z Vault holds raw iPhone footage, which is routinely 1-3 GB (owner, 13 Oct 2026: "naik ke 5gb").
+const VAULT_MAX_SIZE = 5 * 1024 * 1024 * 1024
 const MAX_CHUNK = 100 * 1024 * 1024 // per-chunk hard ceiling (CF lets <100MB through)
-const MAX_CHUNKS = 64 // bounds a session
+const MAX_CHUNKS = 400 // bounds a session; web/iOS send 16 MiB chunks, so 5 GB is 320
 const MAX_SESSIONS_PER_USER = 4 // caps concurrent in-flight uploads per user (disk-DoS guard)
 // NEXUS_CHUNK_DIR: a directory shared by both blue-green slots, so an upload that straddles a switch
 // finishes on the new slot instead of losing its parts with the old container's /tmp.
@@ -203,12 +205,17 @@ export async function POST(request: NextRequest) {
 
     // ---- validate the envelope (fail closed on anything malformed) ----
     if (!UPLOAD_ID_RE.test(uploadId)) return NextResponse.json({ error: "Bad uploadId" }, { status: 400 })
+    // Size first: an oversized file must hear "too large", not a transport detail like "Bad totalChunks".
+    const maxSize = target === "vault" ? VAULT_MAX_SIZE : MAX_SIZE
+    if (!Number.isInteger(totalSize) || totalSize <= 0 || totalSize > maxSize)
+      return NextResponse.json(
+        { error: `File terlalu besar. Maksimal ${maxSize / (1024 * 1024 * 1024)} GB per file.` },
+        { status: 413 },
+      )
     if (!Number.isInteger(totalChunks) || totalChunks < 1 || totalChunks > MAX_CHUNKS)
       return NextResponse.json({ error: "Bad totalChunks" }, { status: 400 })
     if (!Number.isInteger(chunkIndex) || chunkIndex < 0 || chunkIndex >= totalChunks)
       return NextResponse.json({ error: "Bad chunkIndex" }, { status: 400 })
-    if (!Number.isInteger(totalSize) || totalSize <= 0 || totalSize > MAX_SIZE)
-      return NextResponse.json({ error: "File too large. Maximum size is 1GB" }, { status: 400 })
     if (!filename) return NextResponse.json({ error: "filename is required" }, { status: 400 })
     if (target === "task" && !taskId)
       return NextResponse.json({ error: "taskId is required" }, { status: 400 })
@@ -303,7 +310,7 @@ export async function POST(request: NextRequest) {
 
     // Running cumulative cap: existing parts (excluding this index for idempotent retry) + this chunk
     // must not exceed the declared size. Makes the 250MB ceiling real DURING upload, not just at finalize.
-    const budgetCap = Math.min(totalSize, MAX_SIZE)
+    const budgetCap = Math.min(totalSize, maxSize)
     const remaining = budgetCap - (await partsBytes(sdir, chunkIndex))
     if (remaining <= 0 || contentLength > remaining)
       return NextResponse.json({ error: "Exceeds declared size" }, { status: 413 })
@@ -356,7 +363,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: `Missing chunk ${i}` }, { status: 400 })
         }
       }
-      if (assembled !== totalSize || assembled > MAX_SIZE)
+      if (assembled !== totalSize || assembled > maxSize)
         return NextResponse.json({ error: "Size mismatch" }, { status: 400 })
 
       // ── vault replace finalize ──────────────────────────────────────────────
