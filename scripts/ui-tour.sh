@@ -233,6 +233,16 @@ collect() {
     bad=$(node -e 'const r=require(process.argv[1]);const b=r.filter(x=>x.status!=="ok").map(x=>x.id+": "+x.status);if(b.length)console.log(b.join("; "))' "$dest/results.json" 2>/dev/null)
     [ -n "$bad" ] && line="$line — not clean: $bad"
   fi
+  # Different screens with byte-identical first pictures = a route that did not go anywhere (run 3: all
+  # seven project screens were the Projects list, and every status said "ok").
+  local same
+  same=$(node -e '
+    const fs=require("fs"),c=require("crypto"),d=process.argv[1],by={};
+    for (const f of fs.readdirSync(d)) { if (!/\.png$/.test(f) || /-\d+\.png$/.test(f)) continue;
+      const h=c.createHash("md5").update(fs.readFileSync(d+"/"+f)).digest("hex"); (by[h]=by[h]||[]).push(f.slice(0,-4)); }
+    const g=Object.values(by).filter(x=>x.length>1).map(x=>x.join("="));
+    if (g.length) console.log(g.join("; "));' "$dest" 2>/dev/null)
+  [ -n "$same" ] && line="$line — IDENTICAL screens (route did not land?): $same"
   say "$line"
   SUMMARY+=("$line")
 }

@@ -43,6 +43,14 @@ final class NEXUSUITour: XCTestCase {
     }
 
     private let env = ProcessInfo.processInfo.environment
+
+    /// An optional input, nil when unset OR empty. ui-tour.sh always passes TEST_RUNNER_TOUR_PROJECT_ID
+    /// (empty unless overridden), and `env[...] ?? default` took the empty string: every project route
+    /// became `/projects/?v=…` and all project-* screens of run 3 showed the Projects list.
+    private func setting(_ name: String) -> String? {
+        guard let value = env[name]?.trimmingCharacters(in: .whitespaces), !value.isEmpty else { return nil }
+        return value
+    }
     /// Made in testTour: XCUIApplication belongs to the main actor (as in Xcode's own UI test template).
     private var app: XCUIApplication!
 
@@ -100,8 +108,8 @@ final class NEXUSUITour: XCTestCase {
         for screen in config.screens {
             guard let route = screen.app, route.hasPrefix("nexus://"), wanted(screen.id) else { continue }
             let resolved = route
-                .replacingOccurrences(of: "{project}", with: env["TOUR_PROJECT_ID"] ?? config.projectId)
-                .replacingOccurrences(of: "{form}", with: env["TOUR_FORM_ID"] ?? config.formId)
+                .replacingOccurrences(of: "{project}", with: setting("TOUR_PROJECT_ID") ?? config.projectId)
+                .replacingOccurrences(of: "{form}", with: setting("TOUR_FORM_ID") ?? config.formId)
             XCTContext.runActivity(named: "Screen \(screen.id)") { _ in
                 let started = Date()
                 launch(step: "screen", screen: screen.id, route: resolved)
@@ -152,7 +160,7 @@ final class NEXUSUITour: XCTestCase {
             XCTFail("TOUR_EMAIL / TOUR_PASSWORD are not set. Run scripts/ui-tour.sh instead of the test directly.")
             return
         }
-        let base = (env["TOUR_WEB_BASE"] ?? "https://nexus-prod.tail765d02.ts.net:8443")
+        let base = (setting("TOUR_WEB_BASE") ?? "https://nexus-prod.tail765d02.ts.net:8443")
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
         XCUIApplication().terminate()   // the app tour's last launch; Safari gets the whole screen
@@ -160,13 +168,16 @@ final class NEXUSUITour: XCTestCase {
 
         // 1. The login page, signed out. A session left by an earlier run sends /login straight on to
         //    the dashboard, so that one is ended first through NextAuth's own sign-out page.
-        open(base + "/login")
+        // `?lang=` stores the tour language in this browser (web lib/lang.ts), like the desktop run's
+        // localStorage: without it Safari showed the web's default Indonesian beside English desktop shots.
+        let login = base + "/login?lang=" + (setting("TOUR_LANG") ?? "en")
+        open(login)
         var form = webElement { $0.secureTextFields }.waitForExistence(timeout: 25)
         if !form {
             open(base + "/api/auth/signout")
             let signOut = safari.webViews.buttons["Sign out"]
             if signOut.waitForExistence(timeout: 15) { signOut.tap(); pause(2.5) }
-            open(base + "/login")
+            open(login)
             form = webElement { $0.secureTextFields }.waitForExistence(timeout: 25)
         }
         if wanted("login") {
@@ -215,8 +226,8 @@ final class NEXUSUITour: XCTestCase {
         for screen in config.screens {
             guard let route = screen.web, screen.id != "login", wanted(screen.id) else { continue }
             let path = route
-                .replacingOccurrences(of: "{project}", with: env["TOUR_PROJECT_ID"] ?? config.projectId)
-                .replacingOccurrences(of: "{form}", with: env["TOUR_FORM_ID"] ?? config.formId)
+                .replacingOccurrences(of: "{project}", with: setting("TOUR_PROJECT_ID") ?? config.projectId)
+                .replacingOccurrences(of: "{form}", with: setting("TOUR_FORM_ID") ?? config.formId)
             XCTContext.runActivity(named: "Safari \(screen.id)") { _ in
                 let started = Date()
                 open(base + path)
@@ -224,10 +235,13 @@ final class NEXUSUITour: XCTestCase {
                 var settled = waitForWebToSettle(timeout: 25)
                 if dismissInstallPrompt() { settled = waitForWebToSettle(timeout: 10) }
                 dismissSafariPrompts()
+                scrollWebToTop()
                 pause(0.8)
+                // Checked before the extra pages: the login form's own button, not "a password field" —
+                // Settings has one (Change password) and was reported as a lost session (run 3).
+                let bounced = isLoginPage() && path.hasPrefix("/login") == false
                 let first = snapScreen("safari-\(screen.id)")
                 let more = snapMorePages(screen.id, prefix: "safari-", first: first, in: safari, web: true)
-                let bounced = webElement { $0.secureTextFields }.exists && path.hasPrefix("/login") == false
                 outcomes.append(Outcome(id: screen.id,
                                         status: bounced ? "bounced to the login page (session lost)"
                                             : (settled ? "ok" : "ok, page still changing after 25 s"),
@@ -236,6 +250,28 @@ final class NEXUSUITour: XCTestCase {
             }
         }
         attach(outcomes, name: "safari-results")
+    }
+
+    /// The web's sign-in form: a password field AND its "Sign in" / "Masuk" button.
+    @MainActor
+    private func isLoginPage() -> Bool {
+        guard webElement({ $0.secureTextFields }).exists else { return false }
+        let signIn = NSPredicate(format: "label BEGINSWITH[c] 'Sign in' OR label BEGINSWITH[c] 'Masuk'")
+        return safari.webViews.firstMatch.buttons.matching(signIn).firstMatch.exists
+    }
+
+    /// Safari sometimes opens an address already scrolled down (the dashboard, calendar, threads and
+    /// settings shots of run 3 started mid-page). A tap on the status bar is iOS's own "back to top".
+    @MainActor
+    private func scrollWebToTop() {
+        let page = safari.webViews.firstMatch
+        guard page.exists else { return }
+        for _ in 0..<2 {
+            let before = XCUIScreen.main.screenshot().pngRepresentation
+            safari.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0)).withOffset(CGVector(dx: 0, dy: 20)).tap()
+            pause(1.0)
+            if XCUIScreen.main.screenshot().pngRepresentation == before { return }
+        }
     }
 
     /// The first element of a kind inside the page (never Safari's own address bar).
@@ -333,10 +369,10 @@ final class NEXUSUITour: XCTestCase {
         if app.state != .notRunning { app.terminate() }
         var args = [
             "-nexusTour", "1",
-            "-nexusServer", env["TOUR_SERVER"] ?? "dev",
+            "-nexusServer", setting("TOUR_SERVER") ?? "dev",
             "-nexusTourStep", step,
             // UserDefaults' argument domain: read by the app for this launch, never saved.
-            "-nexus.language", env["TOUR_LANG"] ?? "en",
+            "-nexus.language", setting("TOUR_LANG") ?? "en",
             "-nexus.theme", "light",
         ]
         if let screen { args += ["-nexusTourScreen", screen] }
@@ -461,11 +497,22 @@ final class NEXUSUITour: XCTestCase {
                 last = takeShot(root).pngRepresentation
             }
         }
+        #if targetEnvironment(macCatalyst)
+        var flipped = false
+        #endif
         while page < maxPages {
             drag(target, dx: 0, dy: -0.5)
             if !web { _ = waitForSpinnersToStop(timeout: 4) }
             let shot = takeShot(root)
             let data = shot.pngRepresentation
+            #if targetEnvironment(macCatalyst)
+            // First scroll changed nothing: maybe the wheel goes the other way on this Mac. Once.
+            if data == last && page == 1 && !flipped {
+                flipped = true
+                macWheelSign = -macWheelSign
+                continue
+            }
+            #endif
             if data == last { break }
             last = data
             page += 1
@@ -494,12 +541,20 @@ final class NEXUSUITour: XCTestCase {
         return best
     }
 
+    /// Mac: which way a positive scroll-wheel delta moves the content. Unknown until one scroll did
+    /// nothing; snapMorePages flips it once (run 3, 13 Oct 2026).
+    private var macWheelSign: CGFloat = -1
+
     /// dy < 0 scrolls the content up (finger moves up), dx < 0 scrolls it left.
     @MainActor
     private func drag(_ element: XCUIElement, dx: CGFloat, dy: CGFloat) {
         #if targetEnvironment(macCatalyst)
-        if dy < 0 { element.swipeUp() } else if dy > 0 { element.swipeDown() }
-        else if dx < 0 { element.swipeLeft() } else if dx > 0 { element.swipeRight() }
+        // A scroll-wheel event at a point, not swipeUp(): a swipe needs the element's hit point, and a
+        // scroll view half covered by its neighbour (Messages: list beside the chat) has none — the
+        // failed swipe ended the whole Mac run after 7 screens (run 3, 13 Oct 2026).
+        let frame = element.frame
+        let point = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        point.scroll(byDeltaX: macWheelSign * dx * frame.width, deltaY: macWheelSign * dy * frame.height)
         #else
         let start = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5 - dx / 2, dy: 0.5 - dy / 2))
         let end = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5 + dx / 2, dy: 0.5 + dy / 2))
