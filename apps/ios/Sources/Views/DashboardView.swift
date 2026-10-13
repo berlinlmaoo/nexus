@@ -5,6 +5,7 @@ struct DashboardView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(AppRouter.self) private var router
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.horizontalSizeClass) private var hSize
     /// What a tapped notification pushed into THIS stack — a task or a project, which are single
     /// records rather than screens and so cannot travel through AppRouter the way `.attendance`
     /// and `.messages` do.
@@ -168,20 +169,24 @@ struct DashboardView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                #if targetEnvironment(macCatalyst)
-                // A full-screen Mac left most of the window as empty margins either side of one
-                // phone-width column (owner, 29 Sep 2026). Two columns once there is room; a narrow
-                // window still gets the single column. The explicit idealWidth is what ViewThatFits
-                // measures, so long text inside cannot push the wide layout out.
-                ViewThatFits(in: .horizontal) {
-                    threeColumns.frame(minWidth: 1500, idealWidth: 1500, maxWidth: .infinity)
-                    wideColumns.frame(minWidth: 980, idealWidth: 980, maxWidth: .infinity)
-                    singleColumn
+                if hSize == .regular {
+                    // A full-screen Mac left most of the window as empty margins either side of one
+                    // phone-width column (owner, 29 Sep 2026). Two columns once there is room; a narrow
+                    // window still gets the single column. The explicit idealWidth is what ViewThatFits
+                    // measures, so long text inside cannot push the wide layout out.
+                    // 860, not 980: a default-size Mac window with the sidebar open has about 950 pt
+                    // here, so the Mac never left the phone column while the web, at the same window,
+                    // shows its work column beside the profile rail (UI tour run 4). An iPad in
+                    // landscape gets the two columns too; in portrait it keeps one.
+                    ViewThatFits(in: .horizontal) {
+                        threeColumns.frame(minWidth: 1500, idealWidth: 1500, maxWidth: .infinity)
+                        wideColumns.frame(minWidth: 860, idealWidth: 860, maxWidth: .infinity)
+                        singleColumn
+                    }
+                    .padding(.horizontal, 28).padding(.vertical, 16)
+                } else {
+                    singleColumn.padding(16)
                 }
-                .padding(.horizontal, 28).padding(.vertical, 16)
-                #else
-                singleColumn.padding(16)
-                #endif
             }
             .background(NX.background.ignoresSafeArea())
             .overlay { statModal }
@@ -255,22 +260,24 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: 18) {
             greeting
             HStack(alignment: .top, spacing: 18) {
+                // The web dashboard's order: the stat tiles, XP rules right under them, then the
+                // calendar; the person (level, profile) in the rail on the right.
                 VStack(alignment: .leading, spacing: 18) {
                     attendanceBar
                     searchRow
                     statCards
+                    xpRulesCard
+                    dailyCalendarCard
                     quickActions
                     projectShortcuts
-                    dailyCalendarCard
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .leading, spacing: 18) {
                     levelCard
                     profileCard
                     if showPasskeyNudge { passkeyNudge }
-                    xpRulesCard
                 }
-                .frame(width: 360)
+                .frame(width: 340)
             }
             Color.clear.frame(height: 8)
         }

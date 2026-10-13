@@ -477,6 +477,14 @@ struct SidebarRoot: View {
                 }
             }
             .listStyle(.sidebar)
+            #if targetEnvironment(macCatalyst)
+            // The web's sidebar is 256 wide with 30 pt rows. The Mac (the iPad app at 77 %) used the iPad's
+            // touch sidebar: about 375 wide with 47 pt rows, so the nav ran off the bottom before Team and
+            // System and the page lost a quarter of the window (UI tour run 4). A pointer needs no 44 pt
+            // rows; the iPad keeps them.
+            .environment(\.defaultMinListRowHeight, 30)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 340)
+            #endif
             .scrollIndicators(.hidden)
             // Fixed header and footer, like the web's SidebarHeader / SidebarFooter: they stay put while
             // the nav scrolls between them.
@@ -770,6 +778,7 @@ struct SidebarRoot: View {
                 .foregroundStyle(selected ? Color.white : NX.mutedFg)
         }
         .tag(NXSelection.screen(screen))
+        .modifier(MacSidebarRowInsets())
     }
 
     private func badgeCount(_ screen: NXScreen) -> Int {
@@ -790,6 +799,7 @@ struct SidebarRoot: View {
                 Text(ref.name).font(NXFont.text(15)).lineLimit(1)
             }
             .tag(NXSelection.project(ref))
+            .modifier(MacSidebarRowInsets())
             .contextMenu {
                 Button {
                     shortcuts.togglePin(ref)
@@ -833,6 +843,17 @@ enum SidebarRootSheet: String, Identifiable {
 
 /// A sidebar group label in the web's style: small, medium weight, muted, not upper-cased
 /// (SidebarGroupLabel, text-xs). `textCase(nil)` because List headers upper-case by default.
+/// Mac only: the web sidebar's row padding (py-1.5 px-2) instead of the iPad's touch insets.
+struct MacSidebarRowInsets: ViewModifier {
+    func body(content: Content) -> some View {
+        #if targetEnvironment(macCatalyst)
+        content.listRowInsets(EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10))
+        #else
+        content
+        #endif
+    }
+}
+
 struct SidebarGroupLabel: View {
     let text: String
     var body: some View {

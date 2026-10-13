@@ -44,5 +44,12 @@ extension AppLanguage {
         "XP ranking for everyone": "Peringkat XP semua orang",
         // UI tour run 3
         "edited": "diubah",
+        // UI tour run 4
+        "Any location": "Lokasi bebas",
+        "Nothing booked in %@": "Belum ada booking di bulan %@",
+        "Book meeting rooms here so two teams never turn up for the same room. Pick a room, a date and a time.": "Booking ruang meeting di sini supaya dua tim tidak datang ke ruangan yang sama. Pilih ruangan, tanggal, dan jam.",
+        "Subject": "Judul",
+        "Replies": "Balasan",
+        "Last activity": "Aktivitas terakhir",
     ]
 }

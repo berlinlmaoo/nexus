@@ -225,9 +225,19 @@ struct OverviewTab: View {
         ScrollView {
             Group {
                 if sizeClass == .regular {
-                    HStack(alignment: .top, spacing: 20) {
-                        main(stats).frame(maxWidth: .infinity)
-                        side(stats).frame(width: 340)
+                    // Two columns only when both fit. An iPad in portrait with the sidebar open leaves
+                    // about 700 pt, less than the person table's columns plus the 340 pt side column:
+                    // the row grew past the screen and the right column, and the header above it, were
+                    // cut off at the edge (UI tour run 4). Narrower than that, one column.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 20) {
+                            main(stats).frame(minWidth: 400, idealWidth: 400, maxWidth: .infinity)
+                            side(stats).frame(width: 340)
+                        }
+                        VStack(spacing: 16) {
+                            main(stats)
+                            side(stats)
+                        }
                     }
                 } else {
                     VStack(spacing: 16) {

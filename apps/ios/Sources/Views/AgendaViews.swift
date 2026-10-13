@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Port of room-booking.tsx: day-grouped agenda of room bookings.
-/// Upcoming *and* past — the old version only ever queried `now … now+14d`, so there was no way to
-/// see anything that already happened.
+/// Port of room-booking.tsx: the bookings of one month, grouped by day, with ‹ Today › to move
+/// between months (web, UI tour run 4). It used to be an Upcoming (14 days) | History (30 days) switch,
+/// which the web never had: the two clients showed different bookings for the same question, and the
+/// iPhone's empty screen offered no way to book.
 struct RoomBookingView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(AppRouter.self) private var router
@@ -16,7 +17,8 @@ struct RoomBookingView: View {
     @State private var bookings: [RoomBooking] = []
     @State private var loading = true
     @State private var error: String?
-    @State private var scope: Scope = .upcoming
+    /// The first day of the month on screen (Asia/Jakarta), as the web's viewMonth.
+    @State private var month: Date = RoomBookingView.monthStart(Date())
     /// The composer: a new booking (nil booking) or one to edit (web BookingComposer, QA 13 Oct 2026).
     @State private var composing: ComposerTarget?
     @State private var viewer = Viewer.shared
@@ -31,45 +33,46 @@ struct RoomBookingView: View {
         return viewer.canAdminister
     }
 
-    enum Scope: String, CaseIterable, Identifiable {
-        case upcoming, past
-        var id: String { rawValue }
-        var label: String { self == .upcoming ? T("Upcoming") : T("History") }
-        var empty: String {
-            self == .upcoming ? T("No bookings in the next 14 days.")
-                              : T("No bookings in the last 30 days.")
-        }
+    private static func monthStart(_ d: Date) -> Date {
+        let c = ProjDate.cal.dateComponents([.year, .month], from: d)
+        return ProjDate.cal.date(from: c) ?? d
     }
+    private func shiftMonth(_ n: Int) {
+        month = Self.monthStart(ProjDate.cal.date(byAdding: .month, value: n, to: month) ?? month)
+    }
+    private var isThisMonth: Bool { month == Self.monthStart(Date()) }
 
     private var shown: [RoomBooking] {
         guard pageRoot, !roomFilter.isEmpty else { return bookings }
         return bookings.filter { $0.room == roomFilter }
     }
 
+    /// Soonest first, the whole month (past days included), as the web's agenda.
     private var byDay: [(key: String, items: [RoomBooking])] {
         let groups = Dictionary(grouping: shown, by: { AgendaRange.dayKey($0.startsAt) })
-        // History reads newest-first; upcoming reads soonest-first.
-        let keys = scope == .past ? groups.keys.sorted(by: >) : groups.keys.sorted()
-        return keys.map { ($0, groups[$0]!.sorted { $0.startsAt < $1.startsAt }) }
+        return groups.keys.sorted().map { ($0, groups[$0]!.sorted { $0.startsAt < $1.startsAt }) }
     }
 
     var body: some View {
         AgendaScaffold(title: T("Room Booking"), subtitle: T("Book a meeting room and see who has it when."),
                        loading: loading, error: error, isEmpty: shown.isEmpty,
-                       emptyIcon: "calendar.badge.clock", emptyText: scope.empty,
+                       emptyIcon: "calendar",
+                       emptyText: T("Book meeting rooms here so two teams never turn up for the same room. Pick a room, a date and a time."),
+                       emptyTitle: String(format: T("Nothing booked in %@"), ProjDate.fmt("MMMM").string(from: month)),
+                       emptyActionTitle: T("New booking"),
+                       emptyAction: { composing = ComposerTarget(booking: nil) },
                        retry: { await load() },
                        toolbar: pageRoot ? nil : AnyView(newBookingButton),
-                       header: pageRoot ? nil : AnyView(scopeSwitch),
+                       header: AnyView(monthBar),
                        pageRoot: pageRoot) {
             ForEach(byDay, id: \.key) { day in
                 AgendaDay(label: AgendaRange.dayLabel(day.key)) {
                     ForEach(day.items) { b in
-                        // Colour the chip by room, not by scope. Greying out History made the whole
-                        // screen read as one flat grey sheet, and the segmented control already
-                        // says which scope you're in. Same room = same colour, every launch.
+                        // Colour the chip by room. Same room = same colour, every launch.
                         // 24-hour times (HH:mm, WIB) and the room as the app names it (web roomLabel).
                         let row = AgendaRow(time: "\(AgendaRange.timeLabel(b.startsAt))–\(AgendaRange.timeLabel(b.endsAt))",
-                                            title: b.title, chip: b.roomLabel, sub: b.createdBy?.name,
+                                            title: b.title, chip: b.roomLabel,
+                                            sub: (b.createdBy?.name).flatMap { $0.isEmpty ? nil : String(format: T("by %@"), $0) },
                                             tone: ChipTone.forLabel(b.room))
                         if canEdit(b) {
                             Button { composing = ComposerTarget(booking: b) } label: { row.contentShape(Rectangle()) }
@@ -84,16 +87,41 @@ struct RoomBookingView: View {
         }
         .nxSidebarPageChrome(pageRoot) {
             NXPageHeader(title: T("Room Booking"), subtitle: T("Book a meeting room and see who has it when.")) {
-                NXSegmented(selection: $scope, options: Scope.allCases, label: { $0.label }).frame(width: 190)
                 roomMenu
                 Button { composing = ComposerTarget(booking: nil) } label: { Label(T("New booking"), systemImage: "plus") }
                     .buttonStyle(.nxPrimary)
             }
         }
-        .task(id: scope) { await load() }
+        .task(id: month) { await load() }
         .task { await viewer.loadIfNeeded() }
         .sheet(item: $composing) { target in
             RoomBookingComposer(booking: target.booking) { await load() }
+        }
+    }
+
+    /// The web's month row: "October 2026" on the left, ‹ Today › on the right.
+    private var monthBar: some View {
+        HStack(spacing: 4) {
+            Text(ProjDate.fmt("MMMM yyyy").string(from: month))
+                .font(NXFont.display(pageRoot ? 20 : 18, .bold)).foregroundStyle(NX.foreground)
+                .lineLimit(1).minimumScaleFactor(0.8)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 8)
+            Button { shiftMonth(-1) } label: {
+                Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold))
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).foregroundStyle(NX.mutedFg)
+            .accessibilityLabel(T("Previous month"))
+            Button(T("Today")) { month = Self.monthStart(Date()) }
+                .buttonStyle(.nxBordered)
+                .disabled(isThisMonth)
+            Button { shiftMonth(1) } label: {
+                Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold))
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).foregroundStyle(NX.mutedFg)
+            .accessibilityLabel(T("Next month"))
         }
     }
 
@@ -116,17 +144,6 @@ struct RoomBookingView: View {
         .accessibilityLabel(T("Room"))
     }
 
-    /// Upcoming | History under the title, full width. It used to sit in the navigation bar beside "+",
-    /// which squeezed the title to "Room Boo…" on the iPhone (UI tour 13 Oct 2026).
-    /// Not .pickerStyle(.segmented): since iOS 26 the system style renders as Liquid Glass,
-    /// which is translucent and reflective over a light background - the control nearly
-    /// disappears and reads as foreign next to the solid cards on this screen. Ours is a solid
-    /// capsule with one moving pill, painted from the app's own palette.
-    private var scopeSwitch: some View {
-        NXSegmented(selection: $scope, options: Scope.allCases, label: { $0.label })
-            .frame(maxWidth: .infinity)
-    }
-
     private var newBookingButton: some View {
         Button { composing = ComposerTarget(booking: nil) } label: { Image(systemName: "plus") }
             .accessibilityLabel(T("New booking"))
@@ -135,8 +152,11 @@ struct RoomBookingView: View {
     private func load() async {
         loading = true
         error = nil
-        let r = scope == .upcoming ? AgendaRange.todayToDays(14) : AgendaRange.daysAgo(30)
-        do { bookings = try await APIClient.shared.roomBookings(start: r.start, end: r.end) }
+        // The month's first instant to the last second of its last day (WIB), as the web asks.
+        let start = month
+        let next = ProjDate.cal.date(byAdding: .month, value: 1, to: start) ?? start.addingTimeInterval(31 * 86400)
+        let f = ISO8601DateFormatter()
+        do { bookings = try await APIClient.shared.roomBookings(start: f.string(from: start), end: f.string(from: next.addingTimeInterval(-1))) }
         catch APIError.unauthorized { auth.logout() }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load bookings.") }
         loading = false
@@ -153,6 +173,11 @@ struct AgendaScaffold<Content: View>: View {
     let isEmpty: Bool
     let emptyIcon: String
     let emptyText: String
+    /// With a title the empty state is the app's EmptyState (title, why, next step) near the top, as the
+    /// web draws it; without one, the old centred icon and line.
+    var emptyTitle: String? = nil
+    var emptyActionTitle: String? = nil
+    var emptyAction: (() -> Void)? = nil
     let retry: () async -> Void
     var toolbar: AnyView? = nil
     /// A control row under the navigation bar, above every state (loading, empty, list), so a choice
@@ -168,7 +193,7 @@ struct AgendaScaffold<Content: View>: View {
             if let header {
                 header
                     .padding(.horizontal, NXSidebarPage.gutter(pageRoot))
-                    .padding(.top, 8)
+                    .padding(.top, pageRoot ? 20 : 8)
             }
             states
         }
@@ -185,6 +210,14 @@ struct AgendaScaffold<Content: View>: View {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error {
                 ErrorState(message: error) { Task { await retry() } }
+            } else if isEmpty, let emptyTitle {
+                ScrollView {
+                    EmptyState(icon: emptyIcon, title: emptyTitle, subtitle: emptyText,
+                               actionTitle: emptyActionTitle, actionIcon: nil, action: emptyAction)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, NXSidebarPage.gutter(pageRoot))
+                        .padding(.top, 48)
+                }
             } else if isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: emptyIcon).font(.system(size: 42)).foregroundStyle(NX.mutedFg)

@@ -32,6 +32,8 @@ struct Complaint: Decodable, Identifiable, Sendable {
     /// and the row simply draws no marker.
     let gideonReplied: Bool?
     let pendingCorrection: Bool?
+    /// How many messages the thread holds (the web table's Replies column). nil from an older server.
+    let messageCount: Int?
 
     struct Reporter: Decodable, Sendable { let name: String?; let avatar: String? }
     struct Attachment: Decodable, Sendable { let url: String? }
@@ -376,6 +378,20 @@ struct TicketsView: View {
                                    subtitle: T("Only tickets with this status are shown here. The rest are still under All."),
                                    actionTitle: T("Show all"), actionIcon: nil) { filter = "ALL" }
                     }
+                } else if isRoot {
+                    // iPad / Mac page: the web's list (complaints.tsx) — one bordered card of rows, a
+                    // table with Subject · From · Category · Status · Replies · Last activity once the
+                    // page is wide enough, two-line rows below that. It was a grid of cards
+                    // (UI tour run 4).
+                    ScrollView {
+                        ViewThatFits(in: .horizontal) {
+                            ticketTable(wide: true).frame(minWidth: 820, idealWidth: 820, maxWidth: .infinity)
+                            ticketTable(wide: false)
+                        }
+                        .padding(.horizontal, NXSidebarPage.gutter(isRoot))
+                        .padding(.vertical, 24)
+                    }
+                    .refreshable { await load() }
                 } else {
                     ScrollView {
                         NXCardGrid(spacing: 10) {
@@ -385,12 +401,123 @@ struct TicketsView: View {
                             }
                         }
                         .padding(.horizontal, NXSidebarPage.gutter(isRoot))
-                        .padding(.vertical, isRoot ? 24 : 16)
+                        .padding(.vertical, 16)
                     }
                     .refreshable { await load() }
                 }
             }
         }
+    }
+
+    // MARK: table (iPad / Mac page)
+
+    private enum Col {
+        static let from: CGFloat = 190
+        static let category: CGFloat = 130
+        static let status: CGFloat = 150
+        static let replies: CGFloat = 64
+        static let activity: CGFloat = 120
+    }
+
+    private func ticketTable(wide: Bool) -> some View {
+        VStack(spacing: 0) {
+            if wide {
+                HStack(spacing: 12) {
+                    Text(T("Subject")).frame(maxWidth: .infinity, alignment: .leading)
+                    if isBod { Text(T("From")).frame(width: Col.from, alignment: .leading) }
+                    Text(T("Category")).frame(width: Col.category, alignment: .leading)
+                    Text(T("Status")).frame(width: Col.status, alignment: .leading)
+                    Text(T("Replies")).frame(width: Col.replies, alignment: .trailing)
+                    Text(T("Last activity")).frame(width: Col.activity, alignment: .trailing)
+                }
+                .font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg)
+                .padding(.horizontal, 16).padding(.vertical, 8)
+                .background(NX.muted.opacity(0.4))
+                .accessibilityHidden(true)
+                Divider().overlay(NX.border)
+            }
+            ForEach(Array(filtered.enumerated()), id: \.element.id) { idx, t in
+                if idx > 0 { Divider().overlay(NX.border) }
+                Button { selected = t } label: {
+                    Group { if wide { wideRow(t) } else { compactRow(t) } }
+                        .padding(.horizontal, 16).padding(.vertical, 12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+            }
+        }
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func wideRow(_ t: Complaint) -> some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 6) {
+                Text(t.title).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+                // The two markers as small icons, so a long subject never pushes them into the next column.
+                if t.awaitsDecision {
+                    Image(systemName: "calendar.badge.clock").font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(NX.violetText)
+                        .frame(width: 20, height: 20).background(NX.violetText.opacity(0.14), in: Circle())
+                        .accessibilityLabel(T("Decision waiting"))
+                }
+                if t.hasGideonReply {
+                    Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
+                        .frame(width: 11, height: 11).foregroundStyle(NX.mutedFg)
+                        .frame(width: 20, height: 20).background(NX.muted, in: Circle())
+                        .accessibilityLabel(T("GIDEON replied"))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if isBod {
+                HStack(spacing: 8) {
+                    if let r = t.reporter {
+                        AvatarView(url: r.avatar, initial: String((r.name ?? "?").prefix(1)).uppercased(), size: 20)
+                    }
+                    Text(t.reporter?.name ?? "—").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                }
+                .frame(width: Col.from, alignment: .leading)
+            }
+            Text(t.category.map(ticketCategoryName) ?? "—").font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                .lineLimit(1).frame(width: Col.category, alignment: .leading)
+            NexusChip(text: t.statusLabel, tone: t.tone).frame(width: Col.status, alignment: .leading)
+            Label("\(t.messageCount ?? 0)", systemImage: "bubble.left")
+                .font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                .frame(width: Col.replies, alignment: .trailing)
+                .opacity(t.messageCount == nil ? 0 : 1)
+            Text(activityLabel(t)).font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.mutedFg)
+                .lineLimit(1).frame(width: Col.activity, alignment: .trailing)
+        }
+    }
+
+    /// Narrower page: the subject with its date, then status · category · sender · replies on one quiet
+    /// line, the markers after them (web TicketRow below xl).
+    private func compactRow(_ t: Complaint) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(t.title).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 4)
+                Text(activityLabel(t)).font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.mutedFg)
+            }
+            HStack(spacing: 10) {
+                NexusChip(text: t.statusLabel, tone: t.tone)
+                if let c = t.category, !c.isEmpty { Text(ticketCategoryName(c)) }
+                if isBod, let n = t.reporter?.name, !n.isEmpty { Text(String(format: T("from %@"), n)).lineLimit(1) }
+                if let m = t.messageCount { Label("\(m)", systemImage: "bubble.left") }
+            }
+            .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            markers(t)
+        }
+    }
+
+    /// The date the list is SORTED by (last message), with the time, as the web's Last activity.
+    private func activityLabel(_ t: Complaint) -> String {
+        guard let d = ProjDate.parse(t.lastMessageAt ?? t.createdAt) else { return "" }
+        return ProjDate.fmt("d MMM, HH:mm").string(from: d)
     }
 
     private var filterBar: some View {
