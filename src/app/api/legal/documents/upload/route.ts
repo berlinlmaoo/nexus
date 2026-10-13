@@ -7,8 +7,8 @@ import { legalGate } from "@/lib/legal/access"
 import { dateFromDay } from "@/lib/legal/documents"
 import { pdfLater } from "@/lib/legal/generate"
 import { isLegalDocType, isLegalStatus } from "@/lib/legal/rules"
-import { deleteLegalFile } from "@/lib/legal/storage"
-import { LegalUploadError, storeUpload } from "@/lib/legal/uploads"
+import { deleteLegalFile, LEGAL_MAX_UPLOAD_BYTES } from "@/lib/legal/storage"
+import { LegalUploadError, readLegalForm, storeUpload } from "@/lib/legal/uploads"
 import { linkProblem } from "@/lib/legal/links"
 
 /**
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   try {
     const gate = await legalGate()
     if (!gate.ok) return gate.response
-    const form = await request.formData().catch(() => null)
+    const form = await readLegalForm(request, LEGAL_MAX_UPLOAD_BYTES)
     if (!form) return NextResponse.json({ error: "Expected a file upload" }, { status: 400 })
     const s = (k: string, max: number) => (typeof form.get(k) === "string" ? String(form.get(k)).trim().slice(0, max) : "")
     const companyId = s("companyId", 64)

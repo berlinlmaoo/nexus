@@ -45,3 +45,40 @@ export async function storeUpload(file: FormDataEntryValue | null): Promise<Stor
   }
   throw new LegalUploadError("Upload a PDF, a Word (.docx) file or a photo (JPG/PNG)", 415)
 }
+
+/** Room for the multipart framing and the text fields around the file. */
+const FORM_OVERHEAD_BYTES = 1024 * 1024
+
+/**
+ * A multipart body, read with a byte budget. `request.formData()` buffers the whole body before any size
+ * check can run, and the proxy in front accepts up to 1 GB (it serves chunked attachment uploads), so a
+ * large upload would sit in memory in full only to be refused afterwards. This stops reading as soon as
+ * the body is over `maxFileBytes` (plus the form's own overhead). Null = not a readable form.
+ */
+export async function readLegalForm(request: Request, maxFileBytes: number): Promise<FormData | null> {
+  const limit = maxFileBytes + FORM_OVERHEAD_BYTES
+  const tooLarge = () => new LegalUploadError(`The file is larger than ${Math.round(maxFileBytes / (1024 * 1024))} MB`, 413)
+  const declared = Number(request.headers.get("content-length"))
+  if (Number.isFinite(declared) && declared > limit) throw tooLarge()
+  if (!request.body) return null
+  const reader = request.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > limit) {
+      await reader.cancel().catch(() => {})
+      throw tooLarge()
+    }
+    chunks.push(value)
+  }
+  const contentType = request.headers.get("content-type") ?? ""
+  if (!contentType.includes("multipart/form-data")) return null
+  try {
+    return await new Response(Buffer.concat(chunks), { headers: { "content-type": contentType } }).formData()
+  } catch {
+    return null
+  }
+}

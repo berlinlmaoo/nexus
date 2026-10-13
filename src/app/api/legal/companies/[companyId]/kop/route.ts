@@ -7,6 +7,7 @@ import { serveFile } from "@/lib/file-response"
 import { legalGate, settingsForbidden } from "@/lib/legal/access"
 import { companyInclude, serializeCompany } from "@/lib/legal/companies"
 import { checkKop, KopError } from "@/lib/legal/kop"
+import { LegalUploadError, readLegalForm } from "@/lib/legal/uploads"
 import {
   deleteLegalFile, DOCX_MIME, LEGAL_MAX_TEMPLATE_BYTES, legalStoragePath, looksLikeZip, safeFileName, storeLegalFile,
 } from "@/lib/legal/storage"
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     const { companyId } = await params
     const company = await prisma.legalCompany.findUnique({ where: { id: companyId } })
     if (!company) return NextResponse.json({ error: "Company not found" }, { status: 404 })
-    const form = await request.formData().catch(() => null)
+    const form = await readLegalForm(request, LEGAL_MAX_TEMPLATE_BYTES)
     const file = form?.get("file")
     if (!file || typeof file === "string") return NextResponse.json({ error: "Choose a .docx file" }, { status: 400 })
     if (file.size > LEGAL_MAX_TEMPLATE_BYTES) return NextResponse.json({ error: "The kop is larger than 20 MB" }, { status: 413 })
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     await logAudit({ action: "upload", entityType: "legal_company", entityId: companyId, entityName: `${updated.name} kop`, userId: gate.actor.userId, request })
     return NextResponse.json({ company: serializeCompany(updated) })
   } catch (error) {
+    if (error instanceof LegalUploadError) return NextResponse.json({ error: error.message }, { status: error.status })
     console.error("Error uploading a Legal kop:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

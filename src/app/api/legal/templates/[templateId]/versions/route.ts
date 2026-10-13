@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { logAudit } from "@/lib/audit"
 import { legalGate } from "@/lib/legal/access"
 import { isUniqueViolation } from "@/lib/prisma-errors"
+import { LEGAL_MAX_TEMPLATE_BYTES } from "@/lib/legal/storage"
+import { LegalUploadError, readLegalForm } from "@/lib/legal/uploads"
 import { addTemplateVersion, LegalTemplateError, serializeTemplate } from "@/lib/legal/templates"
 
 type Ctx = { params: Promise<{ templateId: string }> }
@@ -14,7 +16,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     const gate = await legalGate()
     if (!gate.ok) return gate.response
     const { templateId } = await params
-    const form = await request.formData().catch(() => null)
+    const form = await readLegalForm(request, LEGAL_MAX_TEMPLATE_BYTES)
     if (!form) return NextResponse.json({ error: "Expected a file upload" }, { status: 400 })
     const template = await addTemplateVersion(gate.actor.userId, templateId, form)
     await logAudit({
@@ -28,6 +30,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     })
     return NextResponse.json({ template: serializeTemplate(template) }, { status: 201 })
   } catch (error) {
+    if (error instanceof LegalUploadError) return NextResponse.json({ error: error.message }, { status: error.status })
     if (error instanceof LegalTemplateError) {
       return NextResponse.json({ error: error.message, problems: error.problems }, { status: error.status })
     }

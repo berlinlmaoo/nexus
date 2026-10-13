@@ -3,7 +3,8 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { logAudit } from "@/lib/audit"
 import { legalGate } from "@/lib/legal/access"
-import { LegalUploadError } from "@/lib/legal/uploads"
+import { LEGAL_MAX_UPLOAD_BYTES } from "@/lib/legal/storage"
+import { LegalUploadError, readLegalForm } from "@/lib/legal/uploads"
 import { LegalVersionError, saveParagraphEdits, uploadVersion } from "@/lib/legal/versions"
 
 type Ctx = { params: Promise<{ documentId: string }> }
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     const multipart = (request.headers.get("content-type") ?? "").includes("multipart/form-data")
     let result: { version: number; pdfError: string | null }
     if (multipart) {
-      const form = await request.formData().catch(() => null)
+      const form = await readLegalForm(request, LEGAL_MAX_UPLOAD_BYTES)
       if (!form) return NextResponse.json({ error: "Expected a file upload" }, { status: 400 })
       result = await uploadVersion(gate.actor.userId, documentId, form)
     } else {
