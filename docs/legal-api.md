@@ -16,6 +16,11 @@ without Legal.
 
 A 409 on a version write means someone else saved first: reload the document and show the newer version.
 
+**PDFs** are made in the background after a Word version is written (generate, upload, edit, restore, GIDEON
+approve). In those answers, `pdfError: null` means the PDF is being made; a string means none will be (for
+example, PDF conversion is not set up). While a recent Word version (`createdAt` under 3 minutes ago) has
+`hasDocx && !hasPdf`, re-fetch the document every few seconds.
+
 **Dates.** `docDate` is `YYYY-MM-DD` (a calendar day). Form date values are `YYYY-MM-DD` too. Timestamps are ISO-8601.
 
 ## Access & members
@@ -84,7 +89,8 @@ series: Series[]}`. `Series`: `{id, key, docType, label, format, resetPeriod: "Y
   format reads, plus `TANGGAL_DOKUMEN`, to refresh `numberPreview`. Default `TANGGAL_DOKUMEN` to today in
   Jakarta.
 - `Summary`: `{id, number, docType, title, counterparty, docDate, status, source, company{id,code,name},
-  project{id,name}?, deal{id,code,name,projectId}?, currentVersion, createdBy, createdAt, updatedAt}`.
+  project{id,name}?, deal{id,code,name,projectId}?, linkHidden, currentVersion, createdBy, createdAt, updatedAt}`.
+  `linkHidden: true` = linked to a project or deal this viewer can't open (its name is withheld).
 - `Document`: `Summary` + `{notes, series?, template{id,name,version}?, fieldValues, finalVersion, hasNumber,
   updatedBy, versions: Version[]}`.
 - `Version`: `{version, kind: GENERATED|MANUAL|GIDEON|UPLOAD|RESTORE, fileName, mimeType, size, hasDocx,
@@ -105,14 +111,14 @@ series: Series[]}`. `Series`: `{id, key, docType, label, format, resetPeriod: "Y
 | GET | `/api/legal/documents/:id/compare` | `?a=&b=` | `{a, b, diff: ParagraphDiff[]}` |
 | GET | `/api/legal/documents/:id/gideon` | | `{proposals: Proposal[]}` (newest first) |
 | POST | `/api/legal/documents/:id/gideon` | `{baseVersion, instruction, targets: number[], replyTo?, answer?}` | 201 `{proposal}` |
-| POST | `/api/legal/documents/:id/proposals/:pid` | `{decision: "approve"\|"discard", indexes?: number[]}` | `{proposal, version, pdfError}` |
+| POST | `/api/legal/documents/:id/proposals/:pid` | `{decision: "approve"\|"discard", indexes?: number[]}` (omit = all; never empty) | `{proposal, version, pdfError}` |
 
 - `ParagraphDiff` is one of:
   - `{type:"same", a, b, text}`
   - `{type:"removed", a, text}`
   - `{type:"added", b, text}`
   - `{type:"changed", a, b, before, after, segments: [{type:"same"|"del"|"ins", text}]}`
-- `Proposal`: `{id, status: PENDING|CLARIFY|APPLIED|DISCARDED|FAILED, baseVersion, instruction, question?,
+- `Proposal`: `{id, status: PENDING|CLARIFY|APPLYING|APPLIED|DISCARDED|FAILED, baseVersion, instruction, question?,
   summary, changes: [{index, before, after, segments}], appliedVersion, createdBy, decidedBy, decidedAt,
   createdAt}`.
   - On `FAILED`, `summary` says why.

@@ -115,7 +115,11 @@ export function checkProposal(paragraphs: PromptParagraph[], targets: number[], 
     seen.add(c.index)
     if (!p.editable) return { ok: false, reason: `GIDEON tried to change a locked paragraph (${c.index + 1})` }
     if (allowed.size && !allowed.has(c.index)) return { ok: false, reason: `GIDEON tried to change paragraph ${c.index + 1}, which you didn't select` }
-    const after = c.after.replace(/\r\n?/g, "\n").replace(/\s*⏎\s*/g, "\n").trim()
+    const after = c.after
+      .replace(/\r\n?/g, "\n")
+      .replace(/\s*⏎\s*/g, "\n")
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "")
+      .trim()
     if (!after) return { ok: false, reason: "GIDEON proposed an empty paragraph" }
     if (after.length > MAX_PARAGRAPH) return { ok: false, reason: "GIDEON proposed a paragraph that is too long" }
     if (/\{\{|\}\}/.test(after)) return { ok: false, reason: "GIDEON left a {{placeholder}} in its text" }

@@ -1,5 +1,6 @@
 import path from "path"
 import PizZip from "pizzip"
+import { DOCX_MAX_UNZIPPED_BYTES, zipUnpackedSize } from "@/lib/legal/storage"
 
 // The kop (letterhead): each company's kop is a .docx whose FIRST-PAGE header (logo + address) is copied
 // into every document the company issues (owner, 14 Oct 2026). The template's own headers stay for the
@@ -36,6 +37,17 @@ function readRels(xml: string | undefined): Rel[] {
   })
 }
 
+function openKop(buf: Buffer): PizZip {
+  let kop: PizZip
+  try {
+    kop = new PizZip(buf)
+  } catch {
+    throw new KopError("The kop is not a Word (.docx) file")
+  }
+  if (zipUnpackedSize(kop) > DOCX_MAX_UNZIPPED_BYTES) throw new KopError("The kop file is too large once unpacked")
+  return kop
+}
+
 function text(zip: PizZip, name: string): string | undefined {
   return zip.file(name)?.asText()
 }
@@ -62,18 +74,14 @@ function kopHeaderPart(kop: PizZip): string {
   const rId = ref ? /r:id="([^"]+)"/.exec(ref)?.[1] : undefined
   const rel = readRels(text(kop, "word/_rels/document.xml.rels")).find((r) => r.id === rId && r.type === REL_HEADER)
   if (!rel) throw new KopError("The kop file has no header: put the logo and address in the page header")
-  return `word/${rel.target.replace(/^\/?word\//, "")}`
+  const part = `word/${rel.target.replace(/^\/?word\//, "")}`
+  if (!kop.file(part)) throw new KopError("The kop file names a header that isn't in it; save it again from Word")
+  return part
 }
 
 /** Check a kop file on upload. Returns nothing; throws KopError. */
 export function checkKop(buf: Buffer) {
-  let kop: PizZip
-  try {
-    kop = new PizZip(buf)
-  } catch {
-    throw new KopError("The kop is not a Word (.docx) file")
-  }
-  kopHeaderPart(kop)
+  kopHeaderPart(openKop(buf))
 }
 
 const SECT_AFTER_TITLEPG = ["w:textDirection", "w:bidi", "w:rtlGutter", "w:docGrid", "w:printerSettings", "w:sectPrChange"]
@@ -94,7 +102,7 @@ function ensureTitlePg(sect: string): string {
  */
 export function applyKop(docx: Buffer, kopDocx: Buffer): Buffer {
   const zip = new PizZip(docx)
-  const kop = new PizZip(kopDocx)
+  const kop = openKop(kopDocx)
   const headerPath = kopHeaderPart(kop)
   const headerXml = text(kop, headerPath)!
   const headerRelsPath = `${path.posix.dirname(headerPath)}/_rels/${path.posix.basename(headerPath)}.rels`

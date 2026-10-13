@@ -45,9 +45,10 @@ test("root may invite anyone of the company", () => {
   for (const role of ["ONE_ABOVE_ALL", "BOD", "MANAGER", "STAFF"]) assert.equal(R.mayInvite(p, role), true)
   assert.equal(R.mayInvite(p, null), false)
 })
-test("an invited BoD / One Above All member may invite staff only", () => {
+test("a BoD / One Above All member the root invited may invite staff only", () => {
   for (const orgRole of ["BOD", "ONE_ABOVE_ALL"]) {
-    const p = R.invitePowerOf({ isRoot: false, isMember: true, orgRole })
+    assert.equal(R.invitePowerOf({ isRoot: false, isMember: true, orgRole, invitedByRoot: false }), "NONE", "invited by a BoD member, then promoted")
+    const p = R.invitePowerOf({ isRoot: false, isMember: true, orgRole, invitedByRoot: true })
     assert.equal(p, "STAFF")
     assert.equal(R.mayInvite(p, "STAFF"), true)
     assert.equal(R.mayInvite(p, "MANAGER"), true)
@@ -57,7 +58,7 @@ test("an invited BoD / One Above All member may invite staff only", () => {
 })
 test("invited staff and managers may not invite", () => {
   for (const orgRole of ["STAFF", "MANAGER"]) {
-    const p = R.invitePowerOf({ isRoot: false, isMember: true, orgRole })
+    const p = R.invitePowerOf({ isRoot: false, isMember: true, orgRole, invitedByRoot: true })
     assert.equal(p, "NONE")
     assert.equal(R.mayInvite(p, "STAFF"), false)
   }

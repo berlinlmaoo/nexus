@@ -1,11 +1,12 @@
+import { after } from "next/server"
 import prisma from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma/client"
 import type { LegalActor } from "@/lib/legal/access"
 import {
   DOC_DATE_FIELD, humanizeFieldName, validateFormValues, type FieldErrors, type FormValues, type TemplateField,
 } from "@/lib/legal/filters"
-import { fillTemplate, TemplateFileError } from "@/lib/legal/template"
-import { applyKop } from "@/lib/legal/kop"
+import { assertWellFormed, fillTemplate, TemplateFileError } from "@/lib/legal/template"
+import { applyKop, KopError } from "@/lib/legal/kop"
 import { allocateLegalNumber, LegalNumberError, peekLegalNumber } from "@/lib/legal/numbering"
 import { formatFieldNames, NumberFormatError, renderNumber } from "@/lib/legal/rules"
 import { deleteLegalFile, DOCX_MIME, readLegalFile, safeFileName, storeLegalFile } from "@/lib/legal/storage"
@@ -18,7 +19,9 @@ import { linkProblem } from "@/lib/legal/links"
 //      exists, so a request that fails never spends one;
 //   2. in ONE transaction: take the number (advisory-locked), fill the template with it, add the kop, store
 //      the DOCX, write the document and its version 1. Any failure rolls the number back with it: no gaps;
-//   3. after the commit, the PDF (Gotenberg). A PDF failure leaves a good DOCX and the PDF can be retried.
+//   3. after the response, the PDF (Gotenberg). LibreOffice can take long on a cold start; waiting for it
+//      made a timed-out request look failed, and a retry then took a second number. A PDF failure leaves a
+//      good DOCX, and the PDF can be made again from the document screen.
 
 export class LegalGenerateError extends Error {
   constructor(message: string, readonly status = 422, readonly fieldErrors: FieldErrors = {}, readonly problems: string[] = []) {
@@ -125,9 +128,10 @@ export async function generateLegalDocument(actor: LegalActor, input: GenerateIn
   const kopBytes = company.kopStorageKey ? await readLegalFile(company.kopStorageKey) : null
   try {
     const dry = fillTemplate(templateBytes, fields, { ...values, ...autoValues(company, "000/DRY-RUN") })
-    if (kopBytes) applyKop(dry, kopBytes)
+    assertWellFormed(kopBytes ? applyKop(dry, kopBytes) : dry)
   } catch (error) {
     if (error instanceof TemplateFileError) throw new LegalGenerateError(error.message, 422, {}, error.problems)
+    if (error instanceof KopError) throw new LegalGenerateError(`The company's kop can't be used: ${error.message}`, 422)
     throw error
   }
 
@@ -186,9 +190,26 @@ export async function generateLegalDocument(actor: LegalActor, input: GenerateIn
     throw error
   }
 
-  // 3. PDF, best effort.
-  const pdfError = await makePdfForVersion(created.id, 1, created.docx, created.fileName)
-  return { id: created.id, number: created.number, pdfError }
+  // 3. PDF, after the response.
+  return { id: created.id, number: created.number, pdfError: pdfLater(created.id, 1, created.docx, created.fileName) }
+}
+
+/**
+ * Make a version's PDF once the response is on its way (outside a request — tests, scripts — right away).
+ * Answers what the client is told now: null = it is being made, else why there will be none.
+ */
+export function pdfLater(documentId: string, version: number, docx?: Buffer, fileName?: string): string | null {
+  if (!pdfConfigured()) return "PDF conversion is not set up on this server"
+  const run = async () => {
+    const error = await makePdfForVersion(documentId, version, docx, fileName)
+    if (error) console.warn(`Legal PDF for ${documentId} v${version} not made: ${error}`)
+  }
+  try {
+    after(run)
+  } catch {
+    void run()
+  }
+  return null
 }
 
 /** Make (or remake) the PDF of one version from its DOCX. Returns the error text, or null. */

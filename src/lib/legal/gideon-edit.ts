@@ -5,7 +5,7 @@ import type { LegalActor } from "@/lib/legal/access"
 import { diffWords } from "@/lib/legal/diff"
 import { buildEditPrompt, checkProposal, parseEditReply, type ProposedChange, type ThreadTurn } from "@/lib/legal/gideon-edit-core"
 import { readParagraphs } from "@/lib/legal/paragraphs"
-import { LegalVersionError, loadDocForVersions, lockedTextsOf, saveParagraphEdits, versionDocx } from "@/lib/legal/versions"
+import { asVersionError, LegalVersionError, loadDocForVersions, lockedTextsOf, saveParagraphEdits, versionDocx } from "@/lib/legal/versions"
 
 // GIDEON's precise edit, the I/O half (rules and checks: gideon-edit-core.ts). A request becomes a
 // LegalEditProposal: PENDING with before → after per paragraph, or CLARIFY with GIDEON's question. Approving
@@ -71,6 +71,7 @@ export async function requestProposal(
   const thread: ThreadTurn[] = []
   let targets = [...new Set(input.targets.filter((n) => Number.isInteger(n)))]
   let ask = instruction
+  let answered: string | null = null
   if (input.replyTo) {
     const prev = await prisma.legalEditProposal.findFirst({ where: { id: input.replyTo, documentId, status: "CLARIFY" } })
     if (!prev) throw new LegalGideonError("That question was already answered", 409)
@@ -78,10 +79,11 @@ export async function requestProposal(
     thread.push(...(earlier.thread ?? []), { instruction: prev.instruction, question: prev.question ?? "", answer: (input.answer ?? "").trim().slice(0, 2000) })
     if (!targets.length && earlier.targets?.length) targets = earlier.targets
     ask = instruction || prev.instruction
-    await prisma.legalEditProposal.update({ where: { id: prev.id }, data: { status: "DISCARDED", decidedById: actor.userId, decidedAt: new Date() } })
+    answered = prev.id
   }
 
-  const paragraphs = readParagraphs(await versionDocx(documentId, doc.currentVersion), lockedTextsOf(doc))
+  const current = await versionDocx(documentId, doc.currentVersion)
+  const paragraphs = asVersionError(() => readParagraphs(current, lockedTextsOf(doc)))
   if (targets.some((i) => !paragraphs[i]?.editable)) throw new LegalGideonError("One of the selected paragraphs is locked", 400)
   const reply = await askGideon({
     prompt: buildEditPrompt({ title: `${doc.number ? `${doc.number} — ` : ""}${doc.title}`, paragraphs, targets, instruction: ask, thread }),
@@ -113,14 +115,27 @@ export async function requestProposal(
       ? await prisma.legalEditProposal.create({ data: { ...base, status: "PENDING", summary: parsed.kind === "propose" ? parsed.summary : "", changes: checked.changes as unknown as Prisma.InputJsonValue }, include })
       : await prisma.legalEditProposal.create({ data: { ...base, status: "FAILED", summary: checked.reason }, include })
   }
+  // The question is closed only now that its answer produced a new row: if GIDEON failed above, the person
+  // can simply reply again.
+  if (answered) {
+    await prisma.legalEditProposal.updateMany({ where: { id: answered, status: "CLARIFY" }, data: { status: "DISCARDED", decidedById: actor.userId, decidedAt: new Date() } })
+  }
   return serializeProposal(row)
 }
+
+/** An APPLYING row older than this was left by a crash mid-apply and may be claimed again. */
+const STUCK_APPLYING_MS = 5 * 60_000
 
 /** Approve (all changes, or only `indexes`) or discard a PENDING proposal. */
 export async function decideProposal(actor: LegalActor, documentId: string, proposalId: string, decision: "approve" | "discard", indexes?: number[]) {
   // Claim it first so two clicks (or two people) can't apply it twice.
+  if (indexes && !indexes.length) throw new LegalGideonError("Pick at least one change to apply", 400)
   const claimed = await prisma.legalEditProposal.updateMany({
-    where: { id: proposalId, documentId, status: "PENDING" },
+    where: {
+      id: proposalId,
+      documentId,
+      OR: [{ status: "PENDING" }, { status: "APPLYING", decidedAt: { lt: new Date(Date.now() - STUCK_APPLYING_MS) } }],
+    },
     data: { status: decision === "approve" ? "APPLYING" : "DISCARDED", decidedById: actor.userId, decidedAt: new Date() },
   })
   if (claimed.count !== 1) throw new LegalGideonError("This proposal was already decided", 409)
@@ -136,7 +151,8 @@ export async function decideProposal(actor: LegalActor, documentId: string, prop
   const all = Array.isArray(proposal.changes) ? (proposal.changes as unknown as ProposedChange[]) : []
   const chosen = indexes?.length ? all.filter((c) => indexes.includes(c.index)) : all
   if (!chosen.length) return fail("Pick at least one change to apply", 400)
-  const now = readParagraphs(await versionDocx(documentId, doc.currentVersion), lockedTextsOf(doc))
+  const currentDocx = await versionDocx(documentId, doc.currentVersion)
+  const now = asVersionError(() => readParagraphs(currentDocx, lockedTextsOf(doc)))
   if (chosen.some((c) => now[c.index]?.text !== c.before)) return fail("The text GIDEON proposed to change is no longer the same. Ask again.")
   try {
     const saved = await saveParagraphEdits(actor.userId, documentId, {

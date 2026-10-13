@@ -56,3 +56,23 @@ export async function linkProblem(actor: LegalActor, projectId?: string | null, 
   if (dealId && !(await prisma.pipelineDeal.count({ where: { AND: [{ id: dealId }, await visibleDeals(actor)] } }))) return "Deal not found"
   return null
 }
+
+/**
+ * A document's project / deal as this viewer may see it: a link they can't open shows as hidden
+ * (`linkHidden`), never by name — a Legal member who isn't on a Pipeline board learns nothing about its deals.
+ */
+export async function redactLinks<T extends { project: { id: string } | null; deal: { id: string } | null }>(actor: LegalActor, docs: T[]): Promise<(T & { linkHidden: boolean })[]> {
+  const projectIds = [...new Set(docs.map((d) => d.project?.id).filter((x): x is string => !!x))]
+  const dealIds = [...new Set(docs.map((d) => d.deal?.id).filter((x): x is string => !!x))]
+  const [projects, deals] = await Promise.all([
+    projectIds.length ? prisma.project.findMany({ where: { AND: [{ id: { in: projectIds } }, await visibleProjects(actor)] }, select: { id: true } }) : [],
+    dealIds.length ? prisma.pipelineDeal.findMany({ where: { AND: [{ id: { in: dealIds } }, await visibleDeals(actor)] }, select: { id: true } }) : [],
+  ])
+  const okP = new Set(projects.map((p) => p.id))
+  const okD = new Set(deals.map((d) => d.id))
+  return docs.map((d) => {
+    const project = d.project && okP.has(d.project.id) ? d.project : null
+    const deal = d.deal && okD.has(d.deal.id) ? d.deal : null
+    return { ...d, project, deal, linkHidden: (!!d.project && !project) || (!!d.deal && !deal) }
+  })
+}

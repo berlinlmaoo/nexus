@@ -4,7 +4,8 @@
 // ── Access (owner, 14 Oct 2026) ─────────────────────────────────────────────────────────────────────
 //
 //   - The root (Berlin, LEGAL_ROOT_EMAILS) always has Legal and may invite anyone.
-//   - A BoD (or One Above All) member whom someone invited may invite staff: people below BoD.
+//   - A BoD (or One Above All) member whom the root invited may invite staff: people below BoD. (Staff a
+//     BoD member invited who are later promoted to BoD don't gain it: the power comes from the root.)
 //   - Staff who were invited may not invite anyone.
 //   - Nobody else has Legal — not BoD, not One Above All, not a system admin — until invited.
 // Revoking follows inviting: the root may revoke anyone; a BoD member only the people they invited.
@@ -20,10 +21,11 @@ export function isBoardRole(orgRole: string | null | undefined): boolean {
   return !!orgRole && BOARD_ROLES.has(orgRole)
 }
 
-/** `orgRole` is the person's role in the company workspace (null = not a company member). */
-export function invitePowerOf(p: { isRoot: boolean; isMember: boolean; orgRole: string | null }): InvitePower {
+/** `orgRole` is the person's role in the company workspace (null = not a company member); `invitedByRoot`:
+ *  their membership was granted by the root. */
+export function invitePowerOf(p: { isRoot: boolean; isMember: boolean; orgRole: string | null; invitedByRoot?: boolean }): InvitePower {
   if (p.isRoot) return "ANY"
-  if (p.isMember && isBoardRole(p.orgRole)) return "STAFF"
+  if (p.isMember && p.invitedByRoot && isBoardRole(p.orgRole)) return "STAFF"
   return "NONE"
 }
 

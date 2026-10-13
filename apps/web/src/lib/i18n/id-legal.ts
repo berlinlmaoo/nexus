@@ -200,4 +200,5 @@ export const ID_LEGAL: Record<string, string> = {
   "Search projects and deals…": "Cari project dan deal…",
   "Nothing found": "Tidak ditemukan",
   "Pipeline deals": "Deal Pipeline",
+  "Linked to a project you can't open": "Terkait ke project yang tidak bisa kamu buka",
 };

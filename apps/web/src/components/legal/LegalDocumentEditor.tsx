@@ -49,7 +49,7 @@ export function LegalDocumentEditor({ doc, selected, onSelect }: { doc: LegalDoc
       </p>
       <ol className="space-y-1">
         {paragraphs.map((p) => {
-          if (!p.text.trim() && p.editable) return null;
+          if (p.lockReason === "empty" || (!p.text.trim() && p.editable)) return null;
           const text = edits[p.index] ?? p.text;
           const changed = edits[p.index] !== undefined && edits[p.index] !== p.text;
           const isHeading = /^(Heading|Judul|Title)/i.test(p.style ?? "");

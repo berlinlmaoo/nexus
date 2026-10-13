@@ -30,7 +30,10 @@ export function isLegalRootEmail(email: string | null | undefined): boolean {
 export async function legalActor(userId: string): Promise<LegalActor | null> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, deactivatedAt: true, legalMembership: { select: { revokedAt: true } } },
+    select: {
+      id: true, name: true, email: true, deactivatedAt: true,
+      legalMembership: { select: { revokedAt: true, invitedBy: { select: { email: true } } } },
+    },
   })
   if (!user || user.deactivatedAt) return null
   const isRoot = isLegalRootEmail(user.email)
@@ -38,7 +41,8 @@ export async function legalActor(userId: string): Promise<LegalActor | null> {
   if (!isRoot && !isMember) return null
   const orgRole = await orgRoleOf(userId)
   if (!isRoot && !orgRole) return null
-  return { userId: user.id, name: user.name, email: user.email, isRoot, orgRole, power: invitePowerOf({ isRoot, isMember, orgRole }) }
+  const invitedByRoot = isLegalRootEmail(user.legalMembership?.invitedBy?.email)
+  return { userId: user.id, name: user.name, email: user.email, isRoot, orgRole, power: invitePowerOf({ isRoot, isMember, orgRole, invitedByRoot }) }
 }
 
 export async function hasLegalAccess(userId: string): Promise<boolean> {

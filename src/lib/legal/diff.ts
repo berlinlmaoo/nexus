@@ -14,6 +14,16 @@ function lcsOps<T>(a: T[], b: T[], eq: (x: T, y: T) => boolean): { type: "same" 
   while (tail < n - head && tail < m - head && eq(a[n - 1 - tail], b[m - 1 - tail])) tail++
   const A = a.slice(head, n - tail)
   const B = b.slice(head, m - tail)
+  // The table is A × B cells; past a few million (two long, wholly different texts) read the middle as
+  // removed-then-added instead of spending hundreds of MB and blocking the server to align it.
+  if (A.length * B.length > 4_000_000) {
+    const out: { type: "same" | "del" | "ins"; a?: number; b?: number }[] = []
+    for (let k = 0; k < head; k++) out.push({ type: "same", a: k, b: k })
+    A.forEach((_, i) => out.push({ type: "del", a: head + i }))
+    B.forEach((_, j) => out.push({ type: "ins", b: head + j }))
+    for (let k = 0; k < tail; k++) out.push({ type: "same", a: n - tail + k, b: m - tail + k })
+    return out
+  }
   const rows = A.length + 1
   const cols = B.length + 1
   const dp = new Uint32Array(rows * cols)

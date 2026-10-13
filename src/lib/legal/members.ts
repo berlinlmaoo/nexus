@@ -52,7 +52,7 @@ export async function listLegalMembers(viewer: LegalActor): Promise<LegalMemberR
       orderBy: [{ invitedAt: "asc" }],
       include: {
         user: { select: { id: true, name: true, email: true, avatar: true, deactivatedAt: true } },
-        invitedBy: person,
+        invitedBy: { select: { id: true, name: true, avatar: true, email: true } },
         revokedBy: person,
       },
     }),
@@ -89,11 +89,11 @@ export async function listLegalMembers(viewer: LegalActor): Promise<LegalMemberR
       isRoot: false,
       active,
       invitedAt: m.invitedAt.toISOString(),
-      invitedBy: m.invitedBy,
+      invitedBy: m.invitedBy ? { id: m.invitedBy.id, name: m.invitedBy.name, avatar: m.invitedBy.avatar } : null,
       revokedAt: m.revokedAt?.toISOString() ?? null,
       revokedBy: m.revokedBy,
       canRevoke: !m.revokedAt && mayRevoke(viewer, m.invitedById),
-      invitePower: active && isBoardRole(orgRole) ? "STAFF" : "NONE",
+      invitePower: active && isBoardRole(orgRole) && isLegalRootEmail(m.invitedBy?.email) ? "STAFF" : "NONE",
     })
   }
   out.sort((a, b) => Number(b.isRoot) - Number(a.isRoot) || Number(b.active) - Number(a.active))

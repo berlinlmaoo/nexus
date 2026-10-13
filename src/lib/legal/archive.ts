@@ -2,6 +2,8 @@ import prisma from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma/client"
 import { dateFromDay, documentListInclude, serializeDocumentSummary } from "@/lib/legal/documents"
 import { isLegalDocType, isLegalStatus } from "@/lib/legal/rules"
+import type { LegalActor } from "@/lib/legal/access"
+import { redactLinks } from "@/lib/legal/links"
 
 // The Legal archive (owner, 14 Oct 2026): every legal document, generated here or uploaded, searchable by
 // number, company, counterparty, type, title, date, status and its project / Pipeline deal.
@@ -46,7 +48,7 @@ export function archiveWhere(sp: URLSearchParams): Prisma.LegalDocumentWhereInpu
   return { AND: and }
 }
 
-export async function listDocuments(sp: URLSearchParams) {
+export async function listDocuments(actor: LegalActor, sp: URLSearchParams) {
   const where = archiveWhere(sp)
   const limit = Math.min(Math.max(Number(sp.get("limit")) || 50, 1), 200)
   const page = Math.max(Number(sp.get("page")) || 1, 1)
@@ -57,5 +59,5 @@ export async function listDocuments(sp: URLSearchParams) {
     prisma.legalDocument.findMany({ where, include: documentListInclude, orderBy, take: limit, skip: (page - 1) * limit }),
     prisma.legalDocument.count({ where }),
   ])
-  return { documents: rows.map(serializeDocumentSummary), total, page, pageSize: limit }
+  return { documents: await redactLinks(actor, rows.map(serializeDocumentSummary)), total, page, pageSize: limit }
 }

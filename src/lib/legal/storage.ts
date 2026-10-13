@@ -53,3 +53,13 @@ export function safeFileName(name: string, fallback = "document"): string {
 /** A .docx is a zip: "PK\x03\x04". Checked on the bytes, never trusted from the name or the browser's type. */
 export const looksLikeZip = (b: Buffer) => b.length > 4 && b[0] === 0x50 && b[1] === 0x4b && b[2] === 0x03 && b[3] === 0x04
 export const looksLikePdf = (b: Buffer) => b.length > 4 && b.subarray(0, 5).toString("latin1") === "%PDF-"
+
+/** What a .docx may unpack to. A real contract is a few MB; a 50 KB zip of 1 GB of text is an attack. */
+export const DOCX_MAX_UNZIPPED_BYTES = 100 * 1024 * 1024
+
+/** Total uncompressed size the zip declares for its entries — checked before anything is inflated. */
+export function zipUnpackedSize(zip: { files: Record<string, unknown> }): number {
+  let total = 0
+  for (const f of Object.values(zip.files)) total += (f as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize ?? 0
+  return total
+}

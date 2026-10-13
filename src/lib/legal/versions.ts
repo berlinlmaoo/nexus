@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma/client"
 import { diffParagraphs } from "@/lib/legal/diff"
-import { makePdfForVersion } from "@/lib/legal/generate"
+import { pdfLater } from "@/lib/legal/generate"
 import { applyParagraphEdits, paragraphTexts, ParagraphEditError, readParagraphs, type ParagraphChange } from "@/lib/legal/paragraphs"
 import { deleteLegalFile, readLegalFile, storeLegalFile } from "@/lib/legal/storage"
 import { storeUpload, type StoredUpload } from "@/lib/legal/uploads"
@@ -22,6 +22,16 @@ export async function loadDocForVersions(documentId: string) {
   return doc
 }
 
+/** A Word file that can't be read (not really a .docx, too large) is the caller's 422, not a 500. */
+export function asVersionError<T>(fn: () => T): T {
+  try {
+    return fn()
+  } catch (error) {
+    if (error instanceof ParagraphEditError) throw new LegalVersionError(error.message, error.status)
+    throw error
+  }
+}
+
 /** What may never change by an edit: the paragraph that prints the document's number. */
 export const lockedTextsOf = (doc: { number: string }) => (doc.number ? [doc.number] : [])
 
@@ -36,7 +46,8 @@ export async function versionDocx(documentId: string, version: number): Promise<
 export async function documentParagraphs(documentId: string, version?: number) {
   const doc = await loadDocForVersions(documentId)
   const v = version ?? doc.currentVersion
-  return { version: v, current: doc.currentVersion, paragraphs: readParagraphs(await versionDocx(documentId, v), lockedTextsOf(doc)) }
+  const docx = await versionDocx(documentId, v)
+  return { version: v, current: doc.currentVersion, paragraphs: asVersionError(() => readParagraphs(docx, lockedTextsOf(doc))) }
 }
 
 type NewVersion = {
@@ -109,8 +120,7 @@ export async function saveParagraphEdits(
     note: input.note?.trim() ?? "",
     changes: { paragraphs: edited.changes, ...(input.extraChanges ?? {}) } as Prisma.InputJsonValue,
   })
-  const pdfError = await makePdfForVersion(documentId, version, edited.docx, base.fileName)
-  return { version, changes: edited.changes, pdfError }
+  return { version, changes: edited.changes, pdfError: pdfLater(documentId, version, edited.docx, base.fileName) }
 }
 
 /** Upload a file as the new version — the signed scan of a generated contract, or a Word file edited outside. */
@@ -123,8 +133,7 @@ export async function uploadVersion(actorId: string, documentId: string, form: F
   const stored = await storeUpload(form.get("file"))
   const note = typeof form.get("note") === "string" ? String(form.get("note")) : ""
   const version = await addVersion(actorId, documentId, baseVersion, { kind: "UPLOAD", files: stored, note, status })
-  const pdfError = stored.docx ? await makePdfForVersion(documentId, version, stored.docx, stored.fileName) : null
-  return { version, pdfError }
+  return { version, pdfError: stored.docx ? pdfLater(documentId, version, stored.docx, stored.fileName) : null }
 }
 
 /** Bring back an old version as a new one on top (its files are copied: versions never share a file). */
@@ -144,5 +153,5 @@ export async function restoreVersion(actorId: string, documentId: string, fromVe
 export async function compareVersions(documentId: string, a: number, b: number) {
   await loadDocForVersions(documentId)
   const [pa, pb] = await Promise.all([versionDocx(documentId, a), versionDocx(documentId, b)])
-  return { a, b, diff: diffParagraphs(paragraphTexts(pa), paragraphTexts(pb)) }
+  return { a, b, diff: asVersionError(() => diffParagraphs(paragraphTexts(pa), paragraphTexts(pb))) }
 }

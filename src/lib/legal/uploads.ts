@@ -1,4 +1,5 @@
-import { DOCX_MIME, LEGAL_MAX_UPLOAD_BYTES, looksLikePdf, looksLikeZip, PDF_MIME, safeFileName, storeLegalFile } from "@/lib/legal/storage"
+import PizZip from "pizzip"
+import { DOCX_MAX_UNZIPPED_BYTES, zipUnpackedSize, DOCX_MIME, LEGAL_MAX_UPLOAD_BYTES, looksLikePdf, looksLikeZip, PDF_MIME, safeFileName, storeLegalFile } from "@/lib/legal/storage"
 
 // A file someone uploads into the archive: a signed contract (PDF scan), a Word file, or a photo of a
 // signed page. The type is decided from the bytes, never from the name or the browser's word.
@@ -12,6 +13,16 @@ export class LegalUploadError extends Error {
 const isJpeg = (b: Buffer) => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff
 const isPng = (b: Buffer) => b.length > 8 && b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
 
+/** A zip named .docx is not yet a Word file: it needs word/document.xml, at a size we're willing to unpack. */
+function isWordFile(bytes: Buffer): boolean {
+  try {
+    const zip = new PizZip(bytes)
+    return zipUnpackedSize(zip) <= DOCX_MAX_UNZIPPED_BYTES && !!zip.file("word/document.xml")
+  } catch {
+    return false
+  }
+}
+
 export type StoredUpload = { docxKey: string | null; pdfKey: string | null; fileKey: string | null; fileName: string; mimeType: string; size: number; docx: Buffer | null }
 
 export async function storeUpload(file: FormDataEntryValue | null): Promise<StoredUpload> {
@@ -24,6 +35,7 @@ export async function storeUpload(file: FormDataEntryValue | null): Promise<Stor
     return { docxKey: null, pdfKey: key, fileKey: null, fileName, mimeType: PDF_MIME, size: bytes.length, docx: null }
   }
   if (looksLikeZip(bytes) && /\.docx$/i.test(fileName)) {
+    if (!isWordFile(bytes)) throw new LegalUploadError("This .docx is not a Word file Legal can read", 415)
     const key = await storeLegalFile(fileName, bytes)
     return { docxKey: key, pdfKey: null, fileKey: null, fileName, mimeType: DOCX_MIME, size: bytes.length, docx: bytes }
   }

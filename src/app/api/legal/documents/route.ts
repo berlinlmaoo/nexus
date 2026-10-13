@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   try {
     const gate = await legalGate()
     if (!gate.ok) return gate.response
-    return NextResponse.json(await listDocuments(request.nextUrl.searchParams))
+    return NextResponse.json(await listDocuments(gate.actor, request.nextUrl.searchParams))
   } catch (error) {
     console.error("Error listing Legal documents:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

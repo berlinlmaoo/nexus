@@ -1,4 +1,6 @@
 import PizZip from "pizzip"
+import { DOMParser } from "@xmldom/xmldom"
+import { DOCX_MAX_UNZIPPED_BYTES, zipUnpackedSize } from "@/lib/legal/storage"
 import Docxtemplater from "docxtemplater"
 import InspectModule from "docxtemplater/js/inspect-module.js"
 import {
@@ -20,12 +22,25 @@ export class TemplateFileError extends Error {
 type Part = { type: string; value: string; module?: string; subparsed?: Part[] }
 
 function openZip(buf: Buffer): PizZip {
+  let zip: PizZip
   try {
-    const zip = new PizZip(buf)
-    if (!zip.file("word/document.xml")) throw new Error("no document.xml")
-    return zip
+    zip = new PizZip(buf)
   } catch {
     throw new TemplateFileError("This is not a Word (.docx) file")
+  }
+  if (zipUnpackedSize(zip) > DOCX_MAX_UNZIPPED_BYTES) throw new TemplateFileError("This Word file is too large once unpacked")
+  if (!zip.file("word/document.xml")) throw new TemplateFileError("This is not a Word (.docx) file")
+  return zip
+}
+
+/** Every XML part of a filled file still parses — a value must never be able to break the document. */
+export function assertWellFormed(docx: Buffer) {
+  const zip = new PizZip(docx)
+  for (const name of Object.keys(zip.files)) {
+    if (!/^word\/.*\.xml$/.test(name)) continue
+    let broken = false
+    new DOMParser({ onError: (level) => { if (level !== "warning") broken = true } }).parseFromString(zip.file(name)!.asText(), "text/xml")
+    if (broken) throw new TemplateFileError("The filled document would not open in Word", [`${name} is not valid XML`])
   }
 }
 
@@ -89,6 +104,10 @@ function collect(parts: Part[], problems: string[], top: boolean): TemplateField
     const tag = parseTag(part.value)
     if (!tag) {
       problems.push(`“{{${part.value}}}” is not a valid placeholder: use letters, digits and _ (e.g. {{NAMA_LENGKAP}})`)
+      continue
+    }
+    if (part.module === "rawxml") {
+      problems.push(`{{@${part.value}}} inserts raw Word XML, which a form value must never do; write {{${tag.name}}}`)
       continue
     }
     const bad = unknownFilters(tag.filters)

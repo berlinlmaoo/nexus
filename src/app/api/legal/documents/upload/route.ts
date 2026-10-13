@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { legalGate } from "@/lib/legal/access"
 import { dateFromDay } from "@/lib/legal/documents"
-import { makePdfForVersion } from "@/lib/legal/generate"
+import { pdfLater } from "@/lib/legal/generate"
 import { isLegalDocType, isLegalStatus } from "@/lib/legal/rules"
 import { deleteLegalFile } from "@/lib/legal/storage"
 import { LegalUploadError, storeUpload } from "@/lib/legal/uploads"
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     })
     const upload = stored
     stored = null // the document owns the files now
-    const pdfError = upload.docx ? await makePdfForVersion(doc.id, 1, upload.docx, upload.fileName) : null
+    const pdfError = upload.docx ? pdfLater(doc.id, 1, upload.docx, upload.fileName) : null
     await logAudit({ action: "upload", entityType: "legal_document", entityId: doc.id, entityName: doc.number || doc.title, userId: gate.actor.userId, request })
     return NextResponse.json({ id: doc.id, pdfError }, { status: 201 })
   } catch (error) {

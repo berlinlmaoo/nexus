@@ -143,6 +143,8 @@ export type LegalDocumentSummary = {
   company: { id: string; code: string; name: string };
   project: { id: string; name: string } | null;
   deal: { id: string; code: string; name: string; projectId: string } | null;
+  /** Linked to a project or deal this viewer can't open (its name is withheld). */
+  linkHidden?: boolean;
   currentVersion: number;
   createdBy: LegalPerson | null;
   createdAt: string;
@@ -241,7 +243,7 @@ export const legalUploadApi = {
 };
 
 // ── Review & versions ──
-export type DocParagraph = { index: number; text: string; editable: boolean; lockReason?: "number" | "complex"; style?: string; inTable: boolean };
+export type DocParagraph = { index: number; text: string; editable: boolean; lockReason?: "number" | "complex" | "empty"; style?: string; inTable: boolean };
 export type DiffSegment = { type: "same" | "del" | "ins"; text: string };
 export type ParagraphDiff =
   | { type: "same"; a: number; b: number; text: string }

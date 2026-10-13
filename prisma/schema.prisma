@@ -1812,8 +1812,10 @@ model DocumentNumber {
 
   taskId     String?
   task       Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  issuedById String
-  issuedBy   User    @relation(fields: [issuedById], references: [id], onDelete: Cascade)
+  /// SetNull, not Cascade (14 Oct 2026): deleting a person must never delete the numbers they issued —
+  /// a deleted row would be issued again (max + 1) and two documents would print the same number.
+  issuedById String?
+  issuedBy   User?   @relation(fields: [issuedById], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())
   legalDocument LegalDocument?
 

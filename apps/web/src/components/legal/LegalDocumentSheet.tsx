@@ -23,7 +23,17 @@ import { cn } from "@/lib/utils";
 export function LegalDocumentSheet({ documentId, onClose }: { documentId: string | null; onClose: () => void }) {
   const { t, lang } = useLang();
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["legal", "document", documentId], queryFn: () => legalDocsApi.get(documentId!), enabled: !!documentId });
+  const q = useQuery({
+    queryKey: ["legal", "document", documentId],
+    queryFn: () => legalDocsApi.get(documentId!),
+    enabled: !!documentId,
+    // The server makes a new Word version's PDF after it answers; look again until it is there (3 min at most).
+    refetchInterval: (query) => {
+      const versions = query.state.data?.document.versions ?? [];
+      const waiting = versions.some((v) => v.hasDocx && !v.hasPdf && Date.now() - Date.parse(v.createdAt) < 180_000);
+      return waiting ? 4000 : false;
+    },
+  });
   const doc = q.data?.document;
   const [draft, setDraft] = useState({ title: "", counterparty: "", notes: "" });
   const [view, setView] = useState<"overview" | "edit" | "compare">("overview");
@@ -131,6 +141,7 @@ export function LegalDocumentSheet({ documentId, onClose }: { documentId: string
               <LegalLinkPicker
                 value={doc.deal ? { kind: "deal", id: doc.deal.id, label: `${doc.deal.code} · ${doc.deal.name}` } : doc.project ? { kind: "project", id: doc.project.id, label: doc.project.name } : null}
                 onChange={(v) => update.mutate(v?.kind === "deal" ? { dealId: v.id, projectId: null } : v?.kind === "project" ? { projectId: v.id, dealId: null } : { projectId: null, dealId: null })}
+                placeholder={doc.linkHidden ? t("Linked to a project you can't open") : undefined}
               />
             </div>
 

@@ -1,6 +1,7 @@
 import PizZip from "pizzip"
 import { DOMParser, XMLSerializer, type Element as XElement, type Document as XDocument } from "@xmldom/xmldom"
 import { diffWords } from "@/lib/legal/diff"
+import { DOCX_MAX_UNZIPPED_BYTES, zipUnpackedSize } from "@/lib/legal/storage"
 
 // A generated document, paragraph by paragraph, for review (owner, 14 Oct 2026: "edit lines/paragraphs
 // manually; GIDEON can edit precisely"). Only the body is listed — the kop and the headers/footers are not
@@ -12,7 +13,9 @@ import { diffWords } from "@/lib/legal/diff"
 
 const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
-export type LockReason = "number" | "complex"
+/** number: prints the document number; complex: a field, image, text box, link or tracked change; empty: a
+ *  blank line (nothing to edit — clients hide it). */
+export type LockReason = "number" | "complex" | "empty"
 
 export type DocParagraph = {
   index: number
@@ -68,7 +71,7 @@ function runText(r: XElement): string | null {
   return text
 }
 
-type Analyzed = { el: XElement; runs: { r: XElement; text: string }[]; text: string; simple: boolean; style?: string; inTable: boolean }
+type Analyzed = { el: XElement; runs: { r: XElement; text: string }[]; text: string; simple: boolean; blank: boolean; style?: string; inTable: boolean }
 
 function hasAncestor(el: XElement, localName: string): boolean {
   for (let p = el.parentNode; p; p = p.parentNode) {
@@ -80,6 +83,7 @@ function hasAncestor(el: XElement, localName: string): boolean {
 function analyze(p: XElement): Analyzed {
   const runs: { r: XElement; text: string }[] = []
   let simple = true
+  let other = false
   let style: string | undefined
   for (const c of children(p)) {
     if (c.namespaceURI === W && c.localName === "pPr") {
@@ -90,13 +94,15 @@ function analyze(p: XElement): Analyzed {
     if (c.namespaceURI === W && IGNORED.has(c.localName ?? "")) continue
     if (c.namespaceURI === W && c.localName === "r") {
       const t = runText(c)
-      if (t === null) simple = false
+      if (t === null) { simple = false; other = true }
       else runs.push({ r: c, text: t })
       continue
     }
     simple = false
+    other = true
   }
-  return { el: p, runs, text: runs.map((r) => r.text).join(""), simple: simple && runs.length > 0, style, inTable: hasAncestor(p, "tc") }
+  const text = runs.map((r) => r.text).join("")
+  return { el: p, runs, text, simple: simple && runs.length > 0, blank: !other && !text.trim(), style, inTable: hasAncestor(p, "tc") }
 }
 
 function load(docx: Buffer): { zip: PizZip; dom: XDocument; paragraphs: Analyzed[] } {
@@ -106,6 +112,7 @@ function load(docx: Buffer): { zip: PizZip; dom: XDocument; paragraphs: Analyzed
   } catch {
     throw new ParagraphEditError("This version is not a Word file")
   }
+  if (zipUnpackedSize(zip) > DOCX_MAX_UNZIPPED_BYTES) throw new ParagraphEditError("This Word file is too large once unpacked")
   const xml = zip.file("word/document.xml")?.asText()
   if (!xml) throw new ParagraphEditError("This version is not a Word file")
   const dom = new DOMParser().parseFromString(xml, "text/xml")
@@ -117,7 +124,10 @@ function load(docx: Buffer): { zip: PizZip; dom: XDocument; paragraphs: Analyzed
 }
 
 const locked = (a: Analyzed, lockedTexts: string[]): LockReason | undefined => {
-  if (lockedTexts.some((t) => t && a.text.includes(t))) return "number"
+  // Case-insensitive: a template may print the number through | upper or | lower.
+  const lower = a.text.toLowerCase()
+  if (lockedTexts.some((t) => t && lower.includes(t.toLowerCase()))) return "number"
+  if (a.blank) return "empty"
   if (!a.simple) return "complex"
   return undefined
 }
@@ -185,6 +195,11 @@ function rewrite(dom: XDocument, a: Analyzed, after: string) {
 
 export type ParagraphChange = { index: number; before: string; after: string }
 
+/** Line endings normalised, and the control characters XML 1.0 forbids (pasted from PDFs) dropped. */
+export function cleanParagraphText(s: string): string {
+  return s.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "")
+}
+
 /**
  * Apply `{ index, text }` edits to a DOCX. Refuses a locked paragraph or an unknown index; an edit that
  * changes nothing is dropped. Returns the new file and what changed.
@@ -200,8 +215,9 @@ export function applyParagraphEdits(docx: Buffer, edits: { index: number; text: 
     if (!a) throw new ParagraphEditError(`Paragraph ${e.index + 1} doesn't exist`)
     const reason = locked(a, lockedTexts)
     if (reason === "number") throw new ParagraphEditError(`Paragraph ${e.index + 1} carries the document number and can't be changed`)
+    if (reason === "empty") throw new ParagraphEditError(`Paragraph ${e.index + 1} is a blank line; add text in Word and upload the file`)
     if (reason) throw new ParagraphEditError(`Paragraph ${e.index + 1} has a field, image or link; change it in Word and upload the file`)
-    const after = String(e.text ?? "").replace(/\r\n?/g, "\n").slice(0, 20000)
+    const after = cleanParagraphText(String(e.text ?? "")).slice(0, 20000)
     if (!after.trim()) throw new ParagraphEditError(`Paragraph ${e.index + 1} can't be emptied here`)
     if (after === a.text) continue
     rewrite(dom, a, after)

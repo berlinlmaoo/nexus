@@ -7,7 +7,7 @@ import { logAudit } from "@/lib/audit"
 import { legalGate } from "@/lib/legal/access"
 import { dateFromDay, documentInclude, serializeDocument } from "@/lib/legal/documents"
 import { isLegalDocType, isLegalStatus } from "@/lib/legal/rules"
-import { linkProblem } from "@/lib/legal/links"
+import { linkProblem, redactLinks } from "@/lib/legal/links"
 
 type Ctx = { params: Promise<{ documentId: string }> }
 
@@ -20,7 +20,8 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
     const { documentId } = await params
     const doc = await prisma.legalDocument.findFirst({ where: { id: documentId, deletedAt: null }, include: documentInclude })
     if (!doc) return notFound()
-    return NextResponse.json({ document: serializeDocument(doc) })
+    const [document] = await redactLinks(gate.actor, [serializeDocument(doc)])
+    return NextResponse.json({ document })
   } catch (error) {
     console.error("Error loading a Legal document:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -94,7 +95,8 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
       metadata: { changed: Object.keys(body), ...(data.status ? { status: { from: doc.status, to: data.status } } : {}) },
       request,
     })
-    return NextResponse.json({ document: serializeDocument(updated) })
+    const [document] = await redactLinks(gate.actor, [serializeDocument(updated)])
+    return NextResponse.json({ document })
   } catch (error) {
     console.error("Error updating a Legal document:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
