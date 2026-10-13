@@ -130,6 +130,7 @@ run_app() {
     say "$platform: $name${note:+ — $note}"
     xcrun simctl boot "$udid" >/dev/null 2>&1
     xcrun simctl bootstatus "$udid" -b >/dev/null 2>&1
+    open -a Simulator --args -CurrentDeviceUDID "$udid" >/dev/null 2>&1 || true   # let the owner watch the tour
     xcrun simctl ui "$udid" appearance light >/dev/null 2>&1
     xcrun simctl status_bar "$udid" override --time 9:41 --dataNetwork wifi --wifiBars 3 \
       --batteryState charged --batteryLevel 100 >/dev/null 2>&1
