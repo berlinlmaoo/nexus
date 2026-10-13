@@ -39,10 +39,14 @@ struct NXPageHeader<Actions: View>: View {
 
     private var titleBlock: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(NXFont.text(26, .semibold))
-                .foregroundStyle(NX.foreground)
-                .lineLimit(1)
+            HStack(spacing: 6) {
+                // ≡ while the sidebar is collapsed (iPad / Mac), inline before the title as in Notion.
+                SidebarReopenButton()
+                Text(title)
+                    .font(NXFont.text(26, .semibold))
+                    .foregroundStyle(NX.foreground)
+                    .lineLimit(1)
+            }
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
                     .font(NXFont.text(14))

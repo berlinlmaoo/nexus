@@ -316,12 +316,20 @@ struct DashboardView: View {
     // MARK: greeting
 
     private var greeting: some View {
+        HStack(alignment: .top, spacing: 6) {
+            // ≡ while the iPad / Mac sidebar is collapsed (nothing on the phone).
+            SidebarReopenButton()
+            greetingLines
+        }
+        .padding(.top, 8)
+    }
+
+    private var greetingLines: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(greetingText).font(NXFont.text(20, .medium)).foregroundStyle(NX.foreground.opacity(0.8))
             // No made-up name when the profile has none (copy sweep: "Commander" is gone).
             if !name.isEmpty { Text("\(name)!").font(NXFont.display(32, .bold)).foregroundStyle(NX.foreground) }
         }
-        .padding(.top, 8)
     }
 
     /// Time-of-day greeting in Asia/Jakarta (this was hard-coded to "Good Morning," at any hour).

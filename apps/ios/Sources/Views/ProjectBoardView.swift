@@ -557,6 +557,8 @@ struct ProjectDetailView: View {
 
     private var projectHeader: some View {
         HStack(spacing: 10) {
+            // ≡ while the iPad / Mac sidebar is collapsed: "≡ ✅ Tasks Tracker" (Notion, owner 14 Oct 2026).
+            SidebarReopenButton()
             // Only when there is somewhere to go back to: opened from the sidebar the board is the root.
             if isPresented {
                 Button { dismiss() } label: {
@@ -571,6 +573,8 @@ struct ProjectDetailView: View {
                 ProjectMark(icon: d.icon, color: d.color, size: wide ? 34 : 28)
             }
             Text(displayName).font(NXFont.display(wide ? 26 : 20, wide ? .semibold : .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                // The name before the buttons: a portrait iPad cut it to "Finance P…" (UI tour run 5).
+                .layoutPriority(1)
             if let chip = detail?.readOnlyLevelChip { ProjectLevelChip(text: chip) }
             Spacer(minLength: 6)
             if let d = detail {

@@ -380,6 +380,7 @@ struct GideonPanel: View {
     private var pageHeader: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
+                SidebarReopenButton()
                 Image("GideonLogo")
                     .renderingMode(.template).resizable().scaledToFit()
                     .frame(width: 16, height: 16)
