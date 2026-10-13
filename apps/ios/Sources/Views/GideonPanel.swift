@@ -332,10 +332,14 @@ struct GideonPanel: View {
                     if !embedded { Button(T("Close")) { dismiss() }.keyboardShortcut(.cancelAction) }
                 }
                 ToolbarItem(placement: .principal) { title }
-                ToolbarItem(placement: .primaryAction) {
+                // Chat history and New chat as their own buttons, as web's header (UI tour run 7);
+                // the rest stays in ⋯.
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button { showChats = true } label: { Image(systemName: "clock.arrow.circlepath") }
+                        .accessibilityLabel(T("Chat history"))
+                    Button { newChat() } label: { Image(systemName: "square.and.pencil") }
+                        .accessibilityLabel(T("New chat"))
                     Menu {
-                        Button { newChat() } label: { Label(T("New chat"), systemImage: "square.and.pencil") }
-                        Button { showChats = true } label: { Label(T("Chats"), systemImage: "clock.arrow.circlepath") }
                         Button { showPersonalize = true } label: { Label(T("Personalize"), systemImage: "person.crop.circle.badge.checkmark") }
                         Divider()
                         moreDestructiveItems

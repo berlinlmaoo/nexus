@@ -75,7 +75,8 @@ final class AppLanguage {
     private static var tables: [[String: String]] {
         [indonesian, indonesianRedesign, indonesianQAWork, indonesianQAInteract, indonesianSheetsGrid,
          indonesianSheetsPanels, indonesianAccessR2, indonesianMacShell, indonesianMacPages, indonesianMacProject,
-         indonesianMacScreens, indonesianMacForms, indonesianMacGideon, indonesianUITour, indonesianRun5, indonesianRun6]
+         indonesianMacScreens, indonesianMacForms, indonesianMacGideon, indonesianUITour, indonesianRun5, indonesianRun6,
+         indonesianRun7A, indonesianRun7B, indonesianRun7C]
     }
 
     /// English → Indonesian. Keys must match the source literal EXACTLY.

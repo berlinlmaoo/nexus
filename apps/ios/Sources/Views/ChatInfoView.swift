@@ -362,8 +362,8 @@ struct ChatInfoView: View {
             .accessibilityLabel(T("View profile"))
         } else {
             ZStack {
-                Circle().fill(NX.violet.opacity(0.12)).frame(width: 88, height: 88)
-                Image(systemName: "person.2.fill").font(.system(size: 32)).foregroundStyle(NX.violetText)
+                Circle().fill(NX.muted).frame(width: 88, height: 88)
+                Image(systemName: "person.2").font(.system(size: 30, weight: .medium)).foregroundStyle(NX.mutedFg)
             }
             .accessibilityHidden(true)
         }

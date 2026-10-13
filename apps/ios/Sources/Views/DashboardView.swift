@@ -188,6 +188,11 @@ struct DashboardView: View {
                     singleColumn.padding(16)
                 }
             }
+            // Phone: room under the last card for the floating GIDEON button (52 pt, 76 pt above the
+            // bottom edge) on top of the tab bar's own inset, so the page can always scroll its last
+            // section and tiles clear of both (UI tour run 7: the button sat on Room Booking and the
+            // next section label stayed behind the tab bar). Padding only; the layout is unchanged.
+            .contentMargins(.bottom, hSize == .regular ? 0 : 72, for: .scrollContent)
             .background(NX.background.ignoresSafeArea())
             .overlay { statModal }
             .overlay { levelModal }

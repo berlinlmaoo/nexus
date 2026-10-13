@@ -404,8 +404,9 @@ struct ConvoRow: View {
 
     private var groupGlyph: some View {
         ZStack {
-            Circle().fill(NX.violet.opacity(0.12)).frame(width: 40, height: 40)
-            Image(systemName: "person.2.fill").font(.system(size: 15)).foregroundStyle(NX.violetText)
+            // Grey circle with the outline people glyph, as web's group and project rooms (UI tour run 7).
+            Circle().fill(NX.muted).frame(width: 40, height: 40)
+            Image(systemName: "person.2").font(.system(size: 14, weight: .medium)).foregroundStyle(NX.mutedFg)
         }
     }
 

@@ -42,23 +42,41 @@ struct RoomBookingView: View {
     }
     private var isThisMonth: Bool { month == Self.monthStart(Date()) }
 
+    /// The room filter applies on every width now: the phone has the web's "All rooms" picker too (UI tour run 7).
     private var shown: [RoomBooking] {
-        guard pageRoot, !roomFilter.isEmpty else { return bookings }
+        guard !roomFilter.isEmpty else { return bookings }
         return bookings.filter { $0.room == roomFilter }
     }
 
-    /// Soonest first, the whole month (past days included), as the web's agenda.
+    /// Elapsed days of this month are folded behind "Show N earlier bookings this month" (web room-booking.tsx).
+    @State private var showEarlier = false
+    private var todayKey: String { AgendaRange.dayKey(ISO8601DateFormatter().string(from: Date())) }
+    private var earlierCount: Int {
+        guard isThisMonth else { return 0 }
+        let today = todayKey
+        return shown.filter { AgendaRange.dayKey($0.startsAt) < today }.count
+    }
+
+    /// Soonest first; in the current month the elapsed days stay folded until asked for, as on web.
     private var byDay: [(key: String, items: [RoomBooking])] {
+        let today = todayKey
+        let hidePast = isThisMonth && !showEarlier
         let groups = Dictionary(grouping: shown, by: { AgendaRange.dayKey($0.startsAt) })
-        return groups.keys.sorted().map { ($0, groups[$0]!.sorted { $0.startsAt < $1.startsAt }) }
+        return groups.keys.sorted().filter { !hidePast || $0 >= today }
+            .map { ($0, groups[$0]!.sorted { $0.startsAt < $1.startsAt }) }
+    }
+
+    private var emptyTitle: String {
+        let name = ProjDate.fmt("MMMM").string(from: month)
+        return String(format: T(earlierCount > 0 && !showEarlier ? "Nothing else booked in %@" : "Nothing booked in %@"), name)
     }
 
     var body: some View {
         AgendaScaffold(title: T("Room Booking"), subtitle: T("Book a meeting room and see who has it when."),
-                       loading: loading, error: error, isEmpty: shown.isEmpty,
+                       loading: loading, error: error, isEmpty: byDay.isEmpty,
                        emptyIcon: "calendar",
                        emptyText: T("Book meeting rooms here so two teams never turn up for the same room. Pick a room, a date and a time."),
-                       emptyTitle: String(format: T("Nothing booked in %@"), ProjDate.fmt("MMMM").string(from: month)),
+                       emptyTitle: emptyTitle,
                        emptyActionTitle: T("New booking"),
                        emptyAction: { composing = ComposerTarget(booking: nil) },
                        retry: { await load() },
@@ -92,15 +110,34 @@ struct RoomBookingView: View {
                     .buttonStyle(.nxPrimary)
             }
         }
-        .task(id: month) { await load() }
+        .task(id: month) { showEarlier = false; await load() }
         .task { await viewer.loadIfNeeded() }
         .sheet(item: $composing) { target in
             RoomBookingComposer(booking: target.booking) { await load() }
         }
     }
 
-    /// The web's month row: "October 2026" on the left, ‹ Today › on the right.
+    /// The web's month row: "October 2026" on the left, ‹ Today › on the right; below it, on the phone,
+    /// the room picker, and the "Show N earlier bookings" toggle while the elapsed days are folded.
     private var monthBar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            monthRow
+            if !pageRoot || (!loading && error == nil && earlierCount > 0 && !showEarlier) {
+                HStack(spacing: 8) {
+                    if !pageRoot { roomMenu }
+                    if !loading, error == nil, earlierCount > 0, !showEarlier {
+                        Button(String(format: T(earlierCount == 1 ? "Show %d earlier booking this month" : "Show %d earlier bookings this month"), earlierCount)) {
+                            showEarlier = true
+                        }
+                        .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+
+    private var monthRow: some View {
         HStack(spacing: 4) {
             Text(ProjDate.fmt("MMMM yyyy").string(from: month))
                 .font(NXFont.display(pageRoot ? 20 : 18, .bold)).foregroundStyle(NX.foreground)
@@ -113,9 +150,9 @@ struct RoomBookingView: View {
             }
             .buttonStyle(.plain).foregroundStyle(NX.mutedFg)
             .accessibilityLabel(T("Previous month"))
+            // Always enabled, as on web: a disabled-looking Today read as broken (UI tour run 7).
             Button(T("Today")) { month = Self.monthStart(Date()) }
                 .buttonStyle(.nxBordered)
-                .disabled(isThisMonth)
             Button { shiftMonth(1) } label: {
                 Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold))
                     .frame(width: 44, height: 44).contentShape(Rectangle())
@@ -190,6 +227,14 @@ struct AgendaScaffold<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // The subtitle sits right under the title, above the controls and every state (UI tour run 7);
+            // under the page header (regular width) the header carries it.
+            if !pageRoot {
+                Text(subtitle).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, NXSidebarPage.gutter(pageRoot))
+                    .padding(.top, 4)
+            }
             if let header {
                 header
                     .padding(.horizontal, NXSidebarPage.gutter(pageRoot))
@@ -226,9 +271,6 @@ struct AgendaScaffold<Content: View>: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        if !pageRoot {
-                            Text(subtitle).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                        }
                         content()
                     }
                     .padding(NXSidebarPage.gutter(pageRoot))

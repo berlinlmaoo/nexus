@@ -422,8 +422,9 @@ struct AttendanceRequestsCard: View {
     }
 
     private var subtitle: String {
-        if canReviewOffsite { return T("Review requests and offsite check-outs, and file your own.") }
-        return canReview ? T("Review your team's requests and file your own.") : T("File leave, permit, sick or day-off.")
+        // Web's copy (attendance.tsx "Requests and approvals"), UI tour run 7.
+        if canReviewOffsite { return T("One queue: leave, sick and permit requests plus offsite check-outs waiting on a decision.") }
+        return canReview ? T("Review pending requests (leave, sick, permit, day off) and submit your own.") : T("Submit leave, sick or permit requests.")
     }
 
     /// `.task(id:)` takes one value, and this card now waits on two permissions that land at
@@ -435,7 +436,7 @@ struct AttendanceRequestsCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(T("Submissions")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                    Text(T("Requests and approvals")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
                     Text(subtitle)
                         .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }

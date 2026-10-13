@@ -40,7 +40,6 @@ struct SettingsView: View {
     /// Appearance, Claude (MCP). Remembered on this device.
     @AppStorage("nexus.settings.tab") private var tab: SettingsTab = .profile
 
-    private static let roleLabel: [String: String] = ["ONE_ABOVE_ALL": "One Above All", "BOD": "BoD", "MANAGER": "Manager", "STAFF": "Staff"]
     private var initial: String { String((name.isEmpty ? email : name).first ?? "?").uppercased() }
 
     /// Regular width (iPad, Mac): the dev web's Settings (settings.tsx, owner screenshots 278/279) — a
@@ -246,15 +245,12 @@ struct SettingsView: View {
 
     @ViewBuilder private var profileSection: some View {
         // The web's Profile card head on the phone too (UI tour 13 Oct 2026): "Profile · Visible to your
-        // teammates" with the role, then the photo at the left with Change photo / Remove and the size hint
+        // teammates" (no role badge: web has none there, UI tour run 7), then the photo at the left with Change photo / Remove and the size hint
         // (webPhotoRow), instead of a centred avatar with a "Remove photo" link.
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top) {
                 webCardTitle(T("Profile"), T("Visible to your teammates"))
                 Spacer(minLength: 8)
-                if let role, let label = Self.roleLabel[role.uppercased()] {
-                    NexusChip(text: label, tone: .accent, systemImage: "shield.fill")
-                }
             }
             webPhotoRow
         }
@@ -364,9 +360,6 @@ struct SettingsView: View {
                 HStack(alignment: .top) {
                     webCardTitle(T("Profile"), T("Visible to your teammates"))
                     Spacer(minLength: 8)
-                    if let role, let label = Self.roleLabel[role.uppercased()] {
-                        NexusChip(text: label, tone: .accent, systemImage: "shield.fill")
-                    }
                 }
                 webPhotoRow
                 HStack(alignment: .top, spacing: 16) {
