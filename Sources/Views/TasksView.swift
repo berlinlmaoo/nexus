@@ -2,9 +2,16 @@ import SwiftUI
 
 /// Port of web my-tasks.tsx: Overdue · Due soon · Later · Done recently (lib/my-tasks.ts, QA 13 Oct 2026),
 /// each most urgent first with "Show all" instead of a silent cut; each row a done-toggle checkbox, title,
-/// lane · comments · due (red with "Nd late" when overdue), priority chip. "+" makes a task assigned to you.
+/// lane · comments · due (red with "Nd late" when overdue), priority chip. "+ New task" makes a task
+/// assigned to you.
+///
+/// Regular width (iPad landscape, Mac) follows the dev web (Mac parity, 13 Oct 2026): the left-aligned
+/// page header with its subtitle and a near-black "+ New task", the empty state in the upper middle with
+/// "Browse projects". Compact width keeps the navigation bar and its "+", with the same copy.
 struct TasksView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(AppRouter.self) private var router
+    @Environment(\.horizontalSizeClass) private var hSize
     @State private var tasks: [MyTask] = []
     @State private var loading = true
     @State private var error: String?
@@ -18,6 +25,8 @@ struct TasksView: View {
     /// everything above it (same rule as InboxView and MessagesView).
     var providesOwnStack = true
 
+    private var wide: Bool { hSize == .regular }
+
     var body: some View {
         if providesOwnStack {
             NavigationStack { screen }
@@ -30,15 +39,33 @@ struct TasksView: View {
         Group {
             ZStack {
                 NX.background.ignoresSafeArea()
-                content
+                if wide {
+                    VStack(spacing: 0) {
+                        NXPageHeader(title: T("My Tasks"), subtitle: T("Tasks assigned to you, the most urgent first.")) {
+                            Button { composerOpen = true } label: {
+                                Label(T("New task"), systemImage: "plus")
+                            }
+                            .buttonStyle(.nxPrimary)
+                        }
+                        content
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    }
+                } else {
+                    content
+                }
             }
             .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
             .failureToast($failure)
-            .navigationTitle(T("My Tasks"))
+            // Regular width: the page header carries the title, so the bar stays empty (it still holds
+            // Back on pushed screens). Compact: the native title and "+".
+            .navigationTitle(wide ? "" : T("My Tasks"))
+            .navigationBarTitleDisplayMode(wide ? .inline : .automatic)
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button { composerOpen = true } label: { Image(systemName: "plus") }
-                        .accessibilityLabel(T("New task"))
+                if !wide {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button { composerOpen = true } label: { Image(systemName: "plus") }
+                            .accessibilityLabel(T("New task"))
+                    }
                 }
             }
             .sheet(isPresented: $composerOpen) {
@@ -64,15 +91,31 @@ struct TasksView: View {
         } else if let error {
             errorState(error)
         } else if groups.isEmpty {
-            EmptyState(icon: "checklist", title: T("No tasks yet"),
-                       subtitle: T("Tasks assigned to you land here, from a project or a form. Nothing is waiting on you right now — pick something up from a project."),
-                       actionTitle: T("New task"), actionIcon: "plus") { composerOpen = true }
+            if wide {
+                // Upper middle, as on the web (py-16 under the header), with the dark primary button.
+                ScrollView {
+                    VStack(spacing: 4) {
+                        EmptyState(icon: "checklist", title: T("No tasks yet"),
+                                   subtitle: T("Tasks assigned to you show up here, from a project or a form. Nothing is waiting on you right now — pick something up from a project."), compact: true)
+                        Button { router.go(.projects) } label: { Text(T("Browse projects")) }
+                            .buttonStyle(.nxPrimary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 56)
+                    .padding(.horizontal, 32)
+                }
+                .refreshable { await load() }
+            } else {
+                EmptyState(icon: "checklist", title: T("No tasks yet"),
+                           subtitle: T("Tasks assigned to you show up here, from a project or a form. Nothing is waiting on you right now — pick something up from a project."),
+                           actionTitle: T("Browse projects"), actionIcon: nil) { router.go(.projects) }
+            }
         } else {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 18) {
+                LazyVStack(alignment: .leading, spacing: wide ? 24 : 18) {
                     ForEach(groups) { group in groupSection(group) }
                 }
-                .padding(16)
+                .padding(wide ? 32 : 16)
             }
             .refreshable { await load() }
         }
@@ -85,14 +128,14 @@ struct TasksView: View {
         let now = Date()
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Text(group.key.label.uppercased()).font(NXFont.text(11, .bold)).tracking(0.5)
+                Text(group.key.label.uppercased()).font(NXFont.text(12, .semibold)).tracking(0.6)
                     .foregroundStyle(group.key == .overdue ? NX.danger : NX.mutedFg)
-                Text("· \(group.items.count)").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg.opacity(0.7))
+                Text("· \(group.items.count)").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg.opacity(0.7))
             }
             VStack(spacing: 0) {
                 ForEach(Array(shown.enumerated()), id: \.element.id) { idx, t in
                     if idx > 0 { Divider().overlay(NX.border) }
-                    TaskRow(task: t, daysLate: MyTaskGrouping.daysLateIfOverdue(t, now: now),
+                    TaskRow(task: t, daysLate: MyTaskGrouping.daysLateIfOverdue(t, now: now), wide: wide,
                             onToggle: { await toggle(t) }, onOpen: { openTaskId = t.id })
                 }
                 if group.items.count > first {
@@ -101,7 +144,7 @@ struct TasksView: View {
                         if all { expanded.remove(group.key) } else { expanded.insert(group.key) }
                     } label: {
                         Text(all ? T("Show fewer") : String(format: T("Show all %d"), group.items.count))
-                            .font(NXFont.text(13, .medium)).foregroundStyle(NX.mutedFg)
+                            .font(NXFont.text(14, .medium)).foregroundStyle(NX.mutedFg)
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                             .padding(.horizontal, 14)
                             .contentShape(Rectangle())
@@ -144,6 +187,8 @@ struct TaskRow: View {
     let task: MyTask
     /// Whole WIB days late when the task is overdue (0 = due today, already past); nil = not overdue.
     var daysLate: Int? = nil
+    /// Regular width: the web's wide row, with the status pill at the right (my-tasks.tsx TaskRow).
+    var wide = false
     let onToggle: () async -> Void
     let onOpen: () -> Void
     @State private var working = false
@@ -169,7 +214,7 @@ struct TaskRow: View {
             Button(action: onOpen) {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(UntitledText.task(task.title)).font(NXFont.text(14, .semibold))
+                        Text(UntitledText.task(task.title)).font(NXFont.text(15, .semibold))
                             .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
                             .strikethrough(task.isDone).lineLimit(1)
                         HStack(spacing: 10) {
@@ -184,11 +229,18 @@ struct TaskRow: View {
                                 Text(String(format: T("%dd late"), late)).fontWeight(.semibold).foregroundStyle(NX.danger)
                             }
                         }
-                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     }
                     Spacer(minLength: 4)
                     if let p = task.priority, p.uppercased() != "NONE" {
                         PriorityPill(priority: p)
+                    }
+                    if wide {
+                        Text(TaskStatusName.label((task.status ?? "TODO").uppercased()))
+                            .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                            .lineLimit(1).fixedSize()
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(NX.muted, in: Capsule())
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -196,6 +248,7 @@ struct TaskRow: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(14)
+        .padding(.horizontal, wide ? 16 : 14)
+        .padding(.vertical, wide ? 12 : 14)
     }
 }

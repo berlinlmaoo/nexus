@@ -238,6 +238,7 @@ struct TicketsView: View {
     @State private var showCreate = false
     /// The ticket a notification pointed at (`AppRouter.focus`): opened as soon as the list is in.
     @Environment(AppRouter.self) private var router
+    @Environment(\.horizontalSizeClass) private var hSize
     @State private var focusMissing = false
     @State private var viewer = Viewer.shared
     /// The BoD lands once on the first queue with something in it (web, owner 12 Oct 2026).
@@ -284,11 +285,32 @@ struct TicketsView: View {
         }
     }
 
+    /// The sidebar's Tickets page on an iPad or Mac: the web's page header instead of the nav bar.
+    private var isRoot: Bool { NXSidebarPage.isRoot(.tickets, hSize: hSize, router: router) }
+
+    /// Web complaints.tsx PageHeader: New ticket at the right, the queues in its tabs row.
+    private var pageHeader: some View {
+        VStack(spacing: 0) {
+            NXPageHeader(title: T("Tickets"), subtitle: T("A direct line to the BoD for work or HR issues. Only the BoD can read it.")) {
+                Button { showCreate = true } label: { Label(T("New ticket"), systemImage: "plus") }
+                    .buttonStyle(.nxPrimary)
+            }
+            if !loading, failure == nil {
+                NXPageTabsRow(items: tabItems, selection: $filter, accessibilityName: T("Ticket queues"))
+            }
+        }
+    }
+
+    private var tabItems: [NXTabItem<String>] {
+        filters.map { NXTabItem(id: $0, label: filterLabel($0), count: count($0), attention: $0 == "OPEN") }
+    }
+
     var body: some View {
         ZStack {
             NX.background.ignoresSafeArea()
             content
         }
+        .nxSidebarPageChrome(isRoot) { pageHeader }
         .navigationTitle(T("Tickets"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -316,7 +338,8 @@ struct TicketsView: View {
             LoadErrorView(error: failure, what: T("the tickets"), retry: { Task { loading = true; await load(); claimFocus() } })
         } else {
             VStack(spacing: 0) {
-                filterBar
+                // On the iPad / Mac page the queues sit in the header.
+                if !isRoot { filterBar }
                 if filtered.isEmpty {
                     if filter == "ALL" {
                         EmptyState(icon: "ticket", title: T("No tickets yet"),
@@ -339,7 +362,8 @@ struct TicketsView: View {
                                     .hoverEffect(.highlight)
                             }
                         }
-                        .padding(16)
+                        .padding(.horizontal, NXSidebarPage.gutter(isRoot))
+                        .padding(.vertical, isRoot ? 24 : 16)
                     }
                     .refreshable { await load() }
                 }
@@ -348,15 +372,14 @@ struct TicketsView: View {
     }
 
     private var filterBar: some View {
-        NXUnderlineTabs(items: filters.map { NXTabItem(id: $0, label: filterLabel($0), count: count($0), attention: $0 == "OPEN") },
-                        selection: $filter, accessibilityName: T("Ticket queues"))
+        NXUnderlineTabs(items: tabItems, selection: $filter, accessibilityName: T("Ticket queues"))
             .padding(.top, 4)
     }
 
     private func row(_ t: Complaint) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
-                Text(t.title).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground)
+                Text(t.title).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
                     .lineLimit(2).multilineTextAlignment(.leading)
                 Spacer(minLength: 4)
                 NexusChip(text: t.statusLabel, tone: t.tone)
@@ -367,23 +390,21 @@ struct TicketsView: View {
                     NexusChip(text: humanizeEnum(c), tone: .accent, systemImage: "tag.fill")
                 }
                 if let n = t.reporter?.name, !n.isEmpty {
-                    Label(n, systemImage: "person.fill").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    Label(n, systemImage: "person.fill").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer(minLength: 0)
                 // The date the list is SORTED by. Stamping the row with `createdAt` instead made a
                 // correctly ordered list look shuffled as soon as an old ticket got a new reply.
                 if let d = ProjDate.parse(t.lastMessageAt ?? t.createdAt) {
-                    Text(ProjDate.dayLabel(d)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    Text(ProjDate.dayLabel(d)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
             }
         }
-        .padding(14)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NX.card)
-                .nexusShadowSoft()
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(NX.border))
-        }
+        // Hairline card like the web's, no drop shadow.
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
     }
 
     /// The two things a row could never say before: a decision is sitting unmade, and GIDEON has
@@ -1246,9 +1267,12 @@ struct CorrectionComposerSheet: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         Button { Task { await submit() } } label: {
-                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(T("Send the proposal")) }
+                            HStack(spacing: 8) { if busy { ProgressView().tint(NX.background) }; Text(T("Send the proposal")) }
+                                .frame(maxWidth: .infinity, minHeight: 44)
                         }
-                        .buttonStyle(NexusPrimaryButton()).disabled(busy || !canSubmit)
+                        // Near-black like the web's primary (it was violet).
+                        .buttonStyle(.nxPrimary).disabled(busy || !canSubmit)
+                        .opacity(busy || !canSubmit ? 0.4 : 1)
                     }
                     .padding(20)
                 }
@@ -1388,9 +1412,12 @@ struct NewTicketSheet: View {
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
                         if uploadProgress.isActive { UploadProgressBar(progress: uploadProgress) }
                         Button { Task { await submit() } } label: {
-                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(T("File ticket")) }
+                            HStack(spacing: 8) { if busy { ProgressView().tint(NX.background) }; Text(T("File ticket")) }
+                                .frame(maxWidth: .infinity, minHeight: 44)
                         }
-                        .buttonStyle(NexusPrimaryButton()).disabled(busy || !canSubmit)
+                        // Near-black like the web's primary (it was violet).
+                        .buttonStyle(.nxPrimary).disabled(busy || !canSubmit)
+                        .opacity(busy || !canSubmit ? 0.4 : 1)
                     }
                     .padding(20)
                 }

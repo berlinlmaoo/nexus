@@ -161,6 +161,7 @@ struct ThreadsView: View {
     @Environment(AuthStore.self) private var auth
     /// The post a notification pointed at (`/threads?post=<id>`, a mention or a comment on yours).
     @Environment(AppRouter.self) private var router
+    @Environment(\.horizontalSizeClass) private var hSize
     @State private var posts: [FeedPost] = []
     @State private var loading = true
     @State private var error: String?
@@ -186,10 +187,16 @@ struct ThreadsView: View {
     @State private var confirmingDelete: FeedPost?
     @State private var viewingPhoto: PhotoRef?
 
+    /// The sidebar's Threads page on an iPad or Mac: the web's page header instead of the nav bar.
+    private var isRoot: Bool { NXSidebarPage.isRoot(.threads, hSize: hSize, router: router) }
+
     var body: some View {
         ZStack {
             NX.background.ignoresSafeArea()
             content
+        }
+        .nxSidebarPageChrome(isRoot) {
+            NXPageHeader(title: T("Threads"), subtitle: T("Short updates from the team. Tag someone with @ and they get notified."))
         }
         .navigationTitle(T("Threads"))
         .navigationBarTitleDisplayMode(.inline)
@@ -227,7 +234,8 @@ struct ThreadsView: View {
                         ForEach(posts) { p in postCard(p) }
                     }
                 }
-                .padding(16)
+                .padding(.horizontal, NXSidebarPage.gutter(isRoot))
+                .padding(.vertical, isRoot ? 24 : 16)
             }
             .refreshable { await load() }
         }
@@ -273,7 +281,7 @@ struct ThreadsView: View {
                 Button { showLibrary = true } label: {
                     Image(systemName: "photo.on.rectangle.angled")
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(photos.count >= Self.maxPhotos ? NX.mutedFg : NX.violetText)
+                        .foregroundStyle(photos.count >= Self.maxPhotos ? NX.mutedFg : NX.foreground)
                 }
                 .buttonStyle(.plain)
                 .disabled(posting || photos.count >= Self.maxPhotos)
@@ -284,12 +292,13 @@ struct ThreadsView: View {
                 Spacer()
                 Button { Task { await post() } } label: {
                     HStack(spacing: 6) {
-                        if posting { ProgressView().scaleEffect(0.7).tint(.white) }
+                        if posting { ProgressView().scaleEffect(0.7).tint(NX.background) }
                         Text(T("Post"))
                     }
-                    .font(NXFont.text(13, .bold)).foregroundStyle(.white)
+                    // Near-black like the web's primary (it was a violet capsule).
+                    .font(NXFont.text(14, .semibold)).foregroundStyle(NX.background)
                     .padding(.horizontal, 16).padding(.vertical, 8)
-                    .background(NX.violet, in: Capsule())
+                    .background(NX.onyx, in: Capsule())
                 }
                 .buttonStyle(.plain)
                 // A photo alone is a post. The route refuses only when text AND images are both
@@ -344,9 +353,9 @@ struct ThreadsView: View {
             HStack(spacing: 10) {
                 AvatarView(url: p.author?.avatar, initial: p.initial, size: 34)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(p.authorName).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    Text(p.authorName).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                     if let d = ProjDate.parse(p.createdAt) {
-                        Text(ProjDate.dayLabel(d)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        Text(ProjDate.dayLabel(d)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     }
                 }
                 Spacer(minLength: 0)
@@ -370,7 +379,7 @@ struct ThreadsView: View {
                 }
             }
             if let c = p.text, !c.isEmpty {
-                mentionText(c).font(NXFont.text(14)).foregroundStyle(NX.foreground)
+                mentionText(c).font(NXFont.text(15)).foregroundStyle(NX.foreground)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !p.photos.isEmpty {
@@ -380,26 +389,24 @@ struct ThreadsView: View {
                 Button { Task { await like(p) } } label: {
                     let on = p.likedByMe == true
                     Label("\(p.likes)", systemImage: on ? "heart.fill" : "heart")
-                        .font(NXFont.text(12, .semibold))
+                        .font(NXFont.text(13, .medium))
                         .foregroundStyle(on ? NX.danger : NX.mutedFg)
                         .contentTransition(.numericText())
                 }
                 .buttonStyle(.plain)
                 Button { openPost = p } label: {
                     Label("\(p.comments)", systemImage: "bubble.left")
-                        .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                        .font(NXFont.text(13, .medium)).foregroundStyle(NX.mutedFg)
                 }
                 .buttonStyle(.plain)
                 Spacer()
             }
         }
-        .padding(14)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NX.card)
-                .nexusShadowSoft()
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(NX.border))
-        }
+        // Hairline card like the web's, no drop shadow.
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
         // The comment count was the only way into a thread. On a feed the post itself is the door;
         // the like and comment buttons sit deeper in the hierarchy and still take their own taps.
         .contentShape(Rectangle())

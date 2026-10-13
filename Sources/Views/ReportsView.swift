@@ -10,6 +10,9 @@ import SwiftUI
 struct ReportsView: View {
     private enum Pane: String { case me, team }
 
+    @Environment(AppRouter.self) private var router
+    @Environment(\.horizontalSizeClass) private var hSize
+
     @State private var pane: Pane = .me
     /// nil = the current period, asked for with no parameter.
     @State private var periodKey: String?
@@ -24,15 +27,43 @@ struct ReportsView: View {
     private var options: [ReportPeriodOption] { ReportPeriodOption.options(anchor: anchor) }
     private var offersTeam: Bool { scope != .selfOnly && !rosterRefused }
 
+    /// The sidebar's Reports page on an iPad or Mac: the web's page header instead of the nav bar.
+    private var isRoot: Bool { NXSidebarPage.isRoot(.reports, hSize: hSize, router: router) }
+    private var teamLabel: String { scope == .all ? T("Team") : T("My team") }
+
+    /// Web reports.tsx PageHeader: the subtitle follows the tab, the period picker sits at the right,
+    /// Me / Team in the tabs row.
+    private var pageHeader: some View {
+        let showingTeam = pane == .team && offersTeam
+        let subtitle = showingTeam
+            ? (scope == .all ? T("How everyone is doing this period.") : T("How your direct reports are doing this period."))
+            : T("Your work, attendance and XP for the period.")
+        return VStack(spacing: 0) {
+            NXPageHeader(title: T("Reports"), subtitle: subtitle) {
+                ReportPeriodMenu(options: options, selection: $periodKey)
+                    .foregroundStyle(NX.foreground)
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 36)
+                    .background(NX.card, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(NX.border))
+            }
+            if offersTeam {
+                NXPageTabsRow(items: [NXTabItem(id: Pane.me, label: T("Me")), NXTabItem(id: Pane.team, label: teamLabel)],
+                              selection: $pane, accessibilityName: T("Report view"))
+            }
+        }
+    }
+
     var body: some View {
         ZStack {
             NX.background.ignoresSafeArea()
             VStack(spacing: 0) {
-                if offersTeam {
+                // On the iPad / Mac page Me / Team sit in the header's tabs row.
+                if offersTeam && !isRoot {
                     Picker(T("Show"), selection: $pane) {
                         Text(T("Me")).tag(Pane.me)
                         // BoD/admin see everyone, so "My team" would undersell it.
-                        Text(scope == .all ? T("Team") : T("My team")).tag(Pane.team)
+                        Text(teamLabel).tag(Pane.team)
                     }
                     .pickerStyle(.segmented)
                     .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 4)
@@ -50,6 +81,7 @@ struct ReportsView: View {
                 }
             }
         }
+        .nxSidebarPageChrome(isRoot) { pageHeader }
         .navigationTitle(T("Reports"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

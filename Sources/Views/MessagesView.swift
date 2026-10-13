@@ -170,21 +170,51 @@ struct MessagesView: View {
     /// the selection. The right column keeps a real stack, because the thread does push — into a
     /// task, into project settings.
     private var splitLayout: some View {
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                splitListHeader
-                Divider().overlay(NX.border)
-                ZStack {
-                    NX.background.ignoresSafeArea()
-                    content
+        VStack(spacing: 0) {
+            // The sidebar's Messages page: the web's page header across both columns (messages.tsx),
+            // in place of the list column's own small header.
+            if isRoot { pageHeader }
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    if !isRoot {
+                        splitListHeader
+                        Divider().overlay(NX.border)
+                    }
+                    ZStack {
+                        NX.background.ignoresSafeArea()
+                        content
+                    }
                 }
+                // The web's list column is 300 wide.
+                .frame(width: isRoot ? 300 : 340)
+
+                Divider().overlay(NX.border)
+
+                NavigationStack { threadPane }
+                    .frame(maxWidth: .infinity)
             }
-            .frame(width: 340)
+        }
+    }
 
-            Divider().overlay(NX.border)
+    /// The sidebar's Messages page on an iPad or Mac (never the copy Home pushes).
+    private var isRoot: Bool { NXSidebarPage.isRoot(.messages, hSize: hSize, router: router) }
 
-            NavigationStack { threadPane }
-                .frame(maxWidth: .infinity)
+    /// Web messages.tsx PageHeader: the live-connection dot and New chat (primary) at the right.
+    private var pageHeader: some View {
+        NXPageHeader(title: T("Messages"), subtitle: T("Chat with your team and in project rooms.")) {
+            HStack(spacing: 6) {
+                Circle().fill(realtime.isConnected ? NX.success : NX.warning).frame(width: 8, height: 8)
+                Text(realtime.isConnected ? T("Live") : T("Reconnecting…"))
+                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            }
+            .padding(.horizontal, 4)
+            .accessibilityElement(children: .combine)
+            Button { if !cover.isCovered { showNewChat = true } } label: {
+                Label(T("New chat"), systemImage: "plus")
+                    .background(SheetCover.Anchor(cover: cover))
+            }
+            .buttonStyle(.nxPrimary)
+            .keyboardShortcut("n", modifiers: .command)
         }
     }
 

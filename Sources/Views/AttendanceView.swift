@@ -122,6 +122,19 @@ struct AttendanceView: View {
     private var checkedOut: Bool { rec?.hasCheckedOut == true || queuedCheckOut }
     private var pending: Bool { rec?.checkOutApproval == "PENDING" }   // offsite checkout awaiting BoD approval
 
+    @Environment(\.horizontalSizeClass) private var hSize
+    /// The sidebar's Attendance page on an iPad or Mac: the web's page header instead of the nav bar.
+    private var isRoot: Bool { NXSidebarPage.isRoot(.attendance, hSize: hSize, router: router) }
+
+    /// Web attendance.tsx PageHeader; the subtitle follows whether this person sees the crew board.
+    private var pageHeader: some View {
+        let canSeeBoard = (today?.canManageAttendance ?? false) || (today?.canReviewAttendanceRequests ?? false)
+        return NXPageHeader(title: T("Attendance"),
+                            subtitle: canSeeBoard
+                                ? T("Who's in, on leave or working from home, and everyone's attendance history.")
+                                : T("Check in, ask for leave or a permission, and see your attendance history."))
+    }
+
     var body: some View {
         ZStack {
             NX.background.ignoresSafeArea()
@@ -183,7 +196,8 @@ struct AttendanceView: View {
                             .id(Self.crewBoardAnchor)
                         if today?.canManageAttendance == true { OfficesCard() }
                     }
-                    .padding(16)
+                    .padding(.horizontal, NXSidebarPage.gutter(isRoot))
+                    .padding(.vertical, isRoot ? 24 : 16)
                 }
                 // Dragging the page down puts the keyboard away too.
                 .scrollDismissesKeyboard(.interactively)
@@ -205,6 +219,7 @@ struct AttendanceView: View {
                 }
             }
         }
+        .nxSidebarPageChrome(isRoot) { pageHeader }
         .navigationTitle(T("Attendance"))
         .navigationBarTitleDisplayMode(.inline)
         .task {

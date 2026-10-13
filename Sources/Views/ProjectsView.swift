@@ -3,6 +3,10 @@ import UniformTypeIdentifiers
 
 struct ProjectsView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(AppRouter.self) private var router
+    @Environment(\.horizontalSizeClass) private var hSize
+    /// Web Projects' grid / list switch (header, regular width). Remembered on this device.
+    @AppStorage("nexus.projects.viewMode") private var viewMode = "grid"
     @State private var projects: [Project] = []
     @State private var folders: [ProjectFolder] = []
     @State private var loading = true
@@ -59,11 +63,15 @@ struct ProjectsView: View {
         )
     }
 
+    /// The sidebar's Projects page on an iPad or Mac: the web's page header instead of the nav bar.
+    private var isRoot: Bool { NXSidebarPage.isRoot(.projects, hSize: hSize, router: router) }
+
     var body: some View {
         NavigationStack {
             ZStack {
                 NX.background.ignoresSafeArea()
                 content
+                    .environment(\.projectsListRows, viewMode == "list")
                     // The delete confirmation sits on the content and the error alert on the stack
                     // around it: two alerts on one view and only one of them ever shows.
                     .alert(T("Delete this folder?"), isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }), presenting: confirmDelete) { f in
@@ -131,6 +139,25 @@ struct ProjectsView: View {
             .liveRefresh(every: 30, on: [.nexusWorkspaceChanged], kinds: [RealtimeKind.projects, RealtimeKind.folders]) {
                 await refreshQuietly()
             }
+            .nxSidebarPageChrome(isRoot) { pageHeader }
+        }
+    }
+
+    /// Web projects/index.tsx PageHeader: search, grid / list, Folder, primary New project.
+    private var pageHeader: some View {
+        NXPageHeader(title: T("Projects"), subtitle: T("Every project you're part of.")) {
+            // The same search as the phone's field: projects here, tasks from /api/search.
+            NXHeaderSearchField(prompt: T("Search projects and tasks…"), text: $query)
+            NXHeaderIconToggle(systemImage: "square.grid.2x2", label: T("Grid view"), on: viewMode != "list") { viewMode = "grid" }
+            NXHeaderIconToggle(systemImage: "list.bullet", label: T("List view"), on: viewMode == "list") { viewMode = "list" }
+            Button { sheet = .newFolder } label: { Label(T("Folder"), systemImage: "folder.badge.plus") }
+                .buttonStyle(.nxBordered)
+                .disabled(workspaceId == nil)
+                .accessibilityLabel(T("New folder"))
+            Button { sheet = .newProject } label: { Label(T("New project"), systemImage: "plus") }
+                .buttonStyle(.nxPrimary)
+                .disabled(workspaceId == nil)
+                .opacity(workspaceId == nil ? 0.5 : 1)
         }
     }
 
@@ -146,19 +173,21 @@ struct ProjectsView: View {
         } else {
             ScrollView {
                 LazyVStack(spacing: 16) {
-                    searchField
+                    // On the iPad / Mac page the search lives in the header.
+                    if !isRoot { searchField }
                     if !query.trimmingCharacters(in: .whitespaces).isEmpty {
                         searchResults
                     } else {
                     // hero strip (web: "projects visible")
+                    // Neutral chip, as the web's (it was violet).
                     HStack(spacing: 6) {
-                        Image(systemName: "sparkles").font(.system(size: 12, weight: .bold))
+                        Image(systemName: "sparkles").font(.system(size: 12, weight: .semibold))
                         Text(projects.count == 1 ? T("1 project visible") : String(format: T("%d projects visible"), projects.count))
-                            .font(NXFont.text(12, .semibold))
+                            .font(NXFont.text(13, .semibold))
                     }
-                    .foregroundStyle(NX.violetText)
-                    .padding(.horizontal, 12).padding(.vertical, 7)
-                    .background(NX.violet.opacity(0.1), in: Capsule())
+                    .foregroundStyle(NX.foreground)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(NX.muted, in: Capsule())
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                     let folderTree = tree
@@ -171,12 +200,11 @@ struct ProjectsView: View {
                     if !folders.isEmpty {
                         UnfiledDropZone(isEmpty: ungrouped.isEmpty) { payload in drop(payload, into: nil) }
                     }
-                    ForEach(ungrouped) { p in
-                        ProjectFolderLink(project: p, tree: folderTree, tally: tallies[p.id], actions: rowActions)
-                    }
+                    ProjectLinkGroup(projects: ungrouped, tree: folderTree, tallies: tallies, actions: rowActions)
                     }
                 }
-                .padding(16)
+                .padding(.horizontal, NXSidebarPage.gutter(isRoot))
+                .padding(.vertical, isRoot ? 24 : 16)
             }
             .refreshable { await load() }
             // Keyed on the query: typing cancels the previous run, so only the last word searched
@@ -562,7 +590,7 @@ struct UnfiledDropZone: View {
             Text(T("No folder").uppercased()).font(NXFont.text(11, .bold)).tracking(0.5)
             if isEmpty || targeted {
                 Text(T("Drop a project here to take it out of its folder."))
-                    .font(NXFont.text(11)).lineLimit(2)
+                    .font(NXFont.text(13)).lineLimit(2)
             }
             Spacer(minLength: 0)
         }
@@ -610,11 +638,16 @@ struct ProjectFolderLink: View {
     let tree: FolderTree
     var tally: ProjectTally? = nil
     let actions: ProjectsActions
+    @Environment(\.projectsListRows) private var listRows
     var body: some View {
         NavigationLink {
             ProjectDetailView(projectId: project.id, projectName: project.name)
         } label: {
-            ProjectCard(project: project, tally: tally)
+            if listRows {
+                ProjectsPageListRow(project: project, tally: tally)
+            } else {
+                ProjectCard(project: project, tally: tally)
+            }
         }
         .buttonStyle(PressableCardStyle())
         // The id is the whole payload, as on the board: the screen already holds the project.
@@ -693,8 +726,8 @@ struct FolderNode: View {
                 NavigationLink {
                     FolderAggregateView(folder: folder, allFolders: allFolders, allProjects: Array(projectsByFolder.values.joined()))
                 } label: {
-                    Image(systemName: "calendar").font(.system(size: 14, weight: .semibold)).foregroundStyle(NX.violetText)
-                        .frame(width: 30, height: 30).background(NX.violet.opacity(0.12), in: Circle())
+                    Image(systemName: "calendar").font(.system(size: 14, weight: .medium)).foregroundStyle(NX.foreground)
+                        .frame(width: 30, height: 30).background(NX.muted, in: Circle())
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, 6)
@@ -729,11 +762,9 @@ struct FolderNode: View {
                     FolderNode(folder: sub, depth: depth + 1, tree: tree, projectsByFolder: projectsByFolder,
                                tallies: tallies, collapsed: $collapsed, actions: actions)
                 }
-                ForEach(directProjects) { p in
-                    ProjectFolderLink(project: p, tree: tree, tally: tallies[p.id], actions: actions)
-                }
+                ProjectLinkGroup(projects: directProjects, tree: tree, tallies: tallies, actions: actions)
                 if directProjects.isEmpty && subFolders.isEmpty {
-                    Text(T("Empty folder.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.leading, 8)
+                    Text(T("Empty folder.")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).padding(.leading, 8)
                 }
             }
         }
@@ -844,10 +875,13 @@ struct CreateFolderSheet: View {
                         }
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
                         Button { Task { await create() } } label: {
-                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(editing == nil ? T("Create folder") : T("Save")) }
+                            HStack(spacing: 8) { if busy { ProgressView().tint(NX.background) }; Text(editing == nil ? T("Create folder") : T("Save")) }
+                                .frame(maxWidth: .infinity, minHeight: 44)
                         }
-                        .buttonStyle(NexusPrimaryButton())
+                        // Near-black like the web's primary (it was violet).
+                        .buttonStyle(.nxPrimary)
                         .disabled(busy || name.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .opacity(busy || name.trimmingCharacters(in: .whitespaces).isEmpty ? 0.4 : 1)
                     }
                     .padding(20)
                 }
@@ -1042,12 +1076,15 @@ struct CreateProjectSheet: View {
                         Button { Task { await create() } } label: {
                             // An outlet opens straight away (web: "Create project + open dashboard").
                             HStack(spacing: 8) {
-                                if busy { ProgressView().tint(.white) }
+                                if busy { ProgressView().tint(NX.background) }
                                 Text(kind == .outlet ? T("Create project + open dashboard") : T("Create project"))
                             }
+                            .frame(maxWidth: .infinity, minHeight: 44)
                         }
-                        .buttonStyle(NexusPrimaryButton())
+                        // Near-black like the web's primary (it was violet).
+                        .buttonStyle(.nxPrimary)
                         .disabled(busy || name.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .opacity(busy || name.trimmingCharacters(in: .whitespaces).isEmpty ? 0.4 : 1)
                     }
                     .padding(20)
                     .frame(maxWidth: 720)
@@ -1166,7 +1203,7 @@ struct ProjectCard: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(project.name).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
                     Text(project.description?.isEmpty == false ? project.description! : T("No description yet."))
-                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                        .font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(2)
                 }
                 Spacer(minLength: 4)
                 NexusChip(text: project.statusLabel, tone: statusTone)
@@ -1184,10 +1221,10 @@ struct ProjectCard: View {
             VStack(spacing: 6) {
                 HStack {
                     Text(done == nil ? T("Calculating…") : String(format: T("%d%% done"), Int(progress * 100)))
-                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     Spacer()
-                    Text(done.map { "\(max(0, total - $0)) left" } ?? "")
-                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    Text(done.map { String(format: T("%d left"), max(0, total - $0)) } ?? "")
+                        .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
@@ -1214,12 +1251,12 @@ struct ProjectCard: View {
                         }
                     }
                 } else {
-                    Text(T("Just you")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    Text(T("Just you")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer()
                 HStack(spacing: 4) {
-                    Image(systemName: "clock").font(.system(size: 11))
-                    Text(T("No deadline")).font(NXFont.text(11))
+                    Image(systemName: "clock").font(.system(size: 12))
+                    Text(T("No deadline")).font(NXFont.text(13))
                 }.foregroundStyle(NX.mutedFg)
             }
             .padding(.top, 16)
@@ -1230,23 +1267,108 @@ struct ProjectCard: View {
         // whole card, forcing a per-row offscreen rasterization pass while scrolling; this avoids it and
         // collapses the previous double NX.card fill into one.
         .background {
-            RoundedRectangle(cornerRadius: 28, style: .continuous).fill(NX.card)
+            // A hairline card like the web's (rounded-xl border bg-card); the drop shadow went.
+            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NX.card)
                 .overlay(alignment: .topTrailing) {
                     Circle().fill(accent.opacity(0.10)).frame(width: 110, height: 110).offset(x: 36, y: -36)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                .nexusShadowSoft()
-                .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border, lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border, lineWidth: 1))
         }
     }
 
     private func metric(_ label: String, _ value: String) -> some View {
         VStack(spacing: 2) {
             Text(value).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
-            Text(label).font(NXFont.text(10, .medium)).foregroundStyle(NX.mutedFg)
+            Text(label).font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 8)
         .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var statusTone: ChipTone {
+        switch (project.status ?? "ACTIVE").uppercased() {
+        case "AT_RISK": return .warning
+        case "OFF_TRACK": return .danger
+        case "COMPLETED", "DONE": return .success
+        default: return .accent
+        }
+    }
+}
+
+// MARK: - Grid / list (web Projects' view switch, 13 Oct 2026)
+
+private struct ProjectsListRowsKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// True when the Projects page is in list mode: projects draw as one-line rows instead of cards.
+    var projectsListRows: Bool {
+        get { self[ProjectsListRowsKey.self] }
+        set { self[ProjectsListRowsKey.self] = newValue }
+    }
+}
+
+/// A folder's (or the unfiled) projects: cards in NXCardGrid columns, or rows stacked in list mode.
+struct ProjectLinkGroup: View {
+    let projects: [Project]
+    let tree: FolderTree
+    let tallies: [String: ProjectTally]
+    let actions: ProjectsActions
+    @Environment(\.projectsListRows) private var listRows
+
+    var body: some View {
+        if listRows {
+            VStack(spacing: 8) { links }
+        } else {
+            NXCardGrid(spacing: 12) { links }
+        }
+    }
+
+    private var links: some View {
+        ForEach(projects) { p in
+            ProjectFolderLink(project: p, tree: tree, tally: tallies[p.id], actions: actions)
+        }
+    }
+}
+
+/// One project in list mode: mark, name + description, progress, status.
+struct ProjectsPageListRow: View {
+    let project: Project
+    var tally: ProjectTally? = nil
+
+    private var progress: Double? {
+        guard let tally else { return nil }
+        guard tally.total > 0 else { return 0 }
+        return min(1, Double(tally.done) / Double(tally.total))
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ProjectMark(icon: project.icon, color: project.color, size: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(project.name).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                if let d = project.description, !d.isEmpty {
+                    Text(d).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                }
+            }
+            Spacer(minLength: 8)
+            if let progress {
+                HStack(spacing: 8) {
+                    ProgressView(value: progress).tint(NX.success).frame(width: 80)
+                    Text("\(Int(progress * 100))%").font(NXFont.text(13)).monospacedDigit().foregroundStyle(NX.mutedFg)
+                        .frame(width: 40, alignment: .trailing)
+                }
+            }
+            NexusChip(text: project.statusLabel, tone: statusTone)
+            Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(NX.mutedFg)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var statusTone: ChipTone {

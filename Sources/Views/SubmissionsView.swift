@@ -196,6 +196,7 @@ private func subStatusWord(_ s: String?) -> String { TaskStatusName.label((s ?? 
 
 struct SubmissionsView: View {
     @Environment(AppRouter.self) private var router
+    @Environment(\.horizontalSizeClass) private var hSize
     @Environment(AuthStore.self) private var auth
     @State private var subs: [MySubmission] = []
     @State private var serverColumns: [SubmissionColumn] = []
@@ -249,11 +250,15 @@ struct SubmissionsView: View {
         }
     }
 
+    /// The sidebar's My Submissions page on an iPad or Mac: the web's page header instead of the nav bar.
+    private var isRoot: Bool { NXSidebarPage.isRoot(.submissions, hSize: hSize, router: router) }
+    private var gutter: CGFloat { NXSidebarPage.gutter(isRoot) }
+
     var body: some View {
         ZStack {
             NX.background.ignoresSafeArea()
             if loading {
-                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
+                ProgressView().tint(NX.mutedFg).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if loadError {
                 EmptyState(icon: "wifi.exclamationmark", title: T("Couldn't load your submissions."),
                            subtitle: T("Check your connection and try again."),
@@ -264,7 +269,7 @@ struct SubmissionsView: View {
                            actionTitle: T("Open forms"), actionIcon: "doc.text") { router.go(.forms) }
             } else {
                 VStack(alignment: .leading, spacing: 10) {
-                    if let cachedFrom { OfflineNotice(savedAt: cachedFrom).padding(.horizontal, 16).padding(.top, 8) }
+                    if let cachedFrom { OfflineNotice(savedAt: cachedFrom).padding(.horizontal, gutter).padding(.top, 8) }
                     filterBar
                     if shown.isEmpty {
                         EmptyState(icon: "doc.text.magnifyingglass",
@@ -278,7 +283,12 @@ struct SubmissionsView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.top, isRoot ? 14 : 0)
             }
+        }
+        .nxSidebarPageChrome(isRoot) {
+            NXPageHeader(title: T("My Submissions"),
+                         subtitle: T("Requests you sent through a form. The team that handles them moves them along; this board follows."))
         }
         .navigationTitle(T("My Submissions"))
         .navigationBarTitleDisplayMode(.inline)
@@ -324,12 +334,12 @@ struct SubmissionsView: View {
                 chip(needCount > 0 ? "\(T("Needs my action")) · \(needCount)" : T("Needs my action"), on: needsMine, icon: "exclamationmark.circle") { needsMine.toggle() }
                 HStack(spacing: 4) {
                     Image(systemName: "lock.fill").font(.system(size: 9))
-                    Text(T("Read-only. The team moves the cards.")).font(NXFont.text(11))
+                    Text(T("Read-only. The team moves the cards.")).font(NXFont.text(13))
                 }
                 .foregroundStyle(NX.mutedFg)
                 .padding(.leading, 4)
             }
-            .padding(.horizontal, 16).padding(.top, 10)
+            .padding(.horizontal, gutter).padding(.top, 10)
         }
     }
 
@@ -346,7 +356,7 @@ struct SubmissionsView: View {
 
     private func chipLabel<V: View>(_ content: V, on: Bool) -> some View {
         content
-            .font(NXFont.text(12, .semibold))
+            .font(NXFont.text(13, .semibold))
             .foregroundStyle(on ? NX.foreground : NX.mutedFg)
             .padding(.horizontal, 12).padding(.vertical, 7)
             .background(on ? NX.accentBg : NX.card, in: Capsule())
@@ -367,7 +377,7 @@ struct SubmissionsView: View {
                     column(col, groupLabel: i == 0 || cols[i - 1].statusGroup != col.statusGroup ? col.statusGroup.label : nil)
                 }
             }
-            .padding(.horizontal, 16).padding(.bottom, 16)
+            .padding(.horizontal, gutter).padding(.bottom, 16)
             .scrollTargetLayout()
         }
         .scrollTargetBehavior(.viewAligned)
@@ -393,7 +403,7 @@ struct SubmissionsView: View {
                                 .hoverEffect(.highlight)
                         }
                         if items.isEmpty {
-                            Text(T("Nothing here")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                            Text(T("Nothing here")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                                 .frame(maxWidth: .infinity).padding(.vertical, 22)
                         }
                     }
@@ -411,7 +421,7 @@ struct SubmissionsView: View {
 
     private func card(_ s: MySubmission) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(s.title).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(3)
+            Text(s.title).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(3)
                 .multilineTextAlignment(.leading)
             if let money = subMoney(s.amount) {
                 Text(money).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).monospacedDigit()
@@ -426,9 +436,9 @@ struct SubmissionsView: View {
                 if (s.commentCount ?? 0) > 0 { Label("\(s.commentCount ?? 0)", systemImage: "bubble.left") }
                 if !(s.proofs ?? []).isEmpty { Label(T("Proof"), systemImage: "paperclip").foregroundStyle(NX.success) }
             }
-            .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             HStack(spacing: 6) {
-                Text(s.projectName ?? s.formName ?? "").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                Text(s.projectName ?? s.formName ?? "").font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 Spacer(minLength: 0)
                 HStack(spacing: -6) {
                     ForEach((s.handlers ?? []).prefix(3)) { p in

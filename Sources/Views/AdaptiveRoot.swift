@@ -143,7 +143,11 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     /// ones that need a hand-made sidebar button, because the system's lives in a bar they hide.
     var hidesNavigationBar: Bool {
         switch self {
-        case .dashboard: return true
+        // The web-style page header screens (Mac parity, 13 Oct) hide the bar as the sidebar's root too, so
+        // they get the same top band that keeps their header clear of the window controls.
+        case .dashboard, .inbox, .projects, .threads, .submissions, .leaderboard, .reports, .docs,
+             .attendance, .tickets, .admin, .teamCalendar, .vault, .settings, .roomBooking, .gideon:
+            return true
         default: return false
         }
     }
@@ -185,23 +189,28 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    /// Sidebar grouping, mirroring the web nav and the phone launcher.
+    /// The sidebar's name for a screen. The web sidebar calls Home "Dashboard" (its group is "Home");
+    /// the phone's tab keeps "Home".
+    var sidebarTitle: String {
+        self == .dashboard ? T("Dashboard") : title
+    }
+
+    /// Sidebar grouping, exactly the dev web's AppSidebar.tsx (Mac parity, 13 Oct 2026): Home · Work ·
+    /// Team · System, in the web's order. Only the iPad / Mac sidebar reads this.
     ///
     /// Computed, not a stored `static let`: the titles go through T(), and a stored property is
     /// initialised once and frozen. Switching the app language would then leave every section
     /// header in the old language until the app was killed.
-    /// The plain names the web uses since 12 Oct 2026 (owner: no gimmicky terms): Home · Work · Team ·
-    /// System, with Projects, My Tasks and Notifications at the top.
+    ///
+    /// Reports and Forms have no entry in the web sidebar (the web reaches Reports by its URL and the
+    /// audit log, Forms from My Submissions' empty state). They stay reachable here as the last rows of
+    /// Work rather than disappear. Pages (`.docs`) and `.teams` were already off the sidebar; their
+    /// routes stay alive for old shortcuts and notification links.
     static var groups: [(title: String?, screens: [NXScreen])] { [
-        (nil,                 [.dashboard, .projects, .tasks, .inbox]),
-        (T("Home"),           [.messages, .gideon, .threads, .vault, .submissions, .teamCalendar, .roomBooking]),
-        (T("Work"),           [.leaderboard, .reports, .forms]),
-        (T("Team"),           [.attendance]),
-        // `.teams` dilepas dari daftar: halaman daftar-tim sudah tidak ada di web maupun di HP.
-        // Rute layarnya SENGAJA dibiarkan hidup di bawah — pintasan lama dan tautan dari
-        // notifikasi masih bisa menunjuk ke sana, dan layar kosong lebih buruk daripada layar
-        // yang tidak lagi ada di menu.
-        (T("System"),         [.tickets, .settings, .admin]),
+        (T("Home"),   [.dashboard, .messages, .gideon, .inbox, .threads, .vault, .tasks, .submissions, .teamCalendar, .roomBooking]),
+        (T("Work"),   [.projects, .leaderboard, .reports, .forms]),
+        (T("Team"),   [.attendance]),
+        (T("System"), [.tickets, .settings, .admin]),
     ] }
 }
 
@@ -380,16 +389,24 @@ final class InboxBadge {
 struct SidebarRoot: View {
     @Environment(AppRouter.self) private var router
     @Environment(AuthStore.self) private var auth
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewer = Viewer.shared
     @State private var selection: NXSelection? = .screen(.dashboard)
     @State private var columns: NavigationSplitViewVisibility = .all
     @State private var shortcuts = ProjectShortcuts.shared
-    /// The root's one sheet: search (⌘K) or the keyboard shortcuts (⌘/). One `.sheet(item:)` rather than
-    /// two `.sheet`s, because two on one view leaves one of them dead.
+    /// The root's one sheet: search (⌘K), the keyboard shortcuts (⌘/) or a new project (Projects +).
+    /// One `.sheet(item:)` rather than several `.sheet`s, because two on one view leaves one of them dead.
     @State private var rootSheet: SidebarRootSheet?
     /// The window's shortcuts stay quiet while a sheet / alert is up over it (QA BoD R2: focus stays in
     /// the top-most sheet). SheetCover.swift.
     @State private var cover = SheetCover()
+    /// Live counts on the nav rows, as the web's sidebar shows them: Notifications (unread), Messages
+    /// (unread chat) and Attendance (offsite check-outs waiting on a BoD).
+    @State private var inboxBadge = InboxBadge.shared
+    @State private var chat = ChatStore.shared
+    @State private var offsitePending = 0
+    /// Needed by the new-project sheet (Projects +). Loaded once; + stays disabled until it is known.
+    @State private var workspaceId: String?
 
     /// Company-only screens (Z Vault, Threads) left out for anyone outside the company workspace,
     /// and the Calendar while the server's `flags.calendar` holds it back.
@@ -405,59 +422,86 @@ struct SidebarRoot: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
             List(selection: $selection) {
-                ForEach(Array(navGroups.enumerated()), id: \.offset) { index, group in
-                    // Project shortcuts sit directly under the four top-level destinations, not at
-                    // the bottom of the list. They are the rows reached most often, and a shortcut
-                    // you have to scroll past everything else to reach is not a shortcut.
-                    if index == 1 {
-                        if !shortcuts.pinned.isEmpty {
-                            Section { projectRows(shortcuts.pinned) } header: { SectionLabel(T("Pinned")) }
-                        }
-                        // Anything already pinned is skipped: a project in both lists reads as a
-                        // duplicate rather than as two kinds of shortcut.
-                        let recents = shortcuts.recent.filter { !shortcuts.isPinned($0.id) }
-                        if !recents.isEmpty {
-                            Section { projectRows(recents) } header: { SectionLabel(T("Recent")) }
-                        }
-                    }
+                ForEach(Array(navGroups.enumerated()), id: \.offset) { _, group in
                     Section {
                         // Control Room is drawn only for MANAGER and above, matching the web and the
                         // phone launcher. The routes behind it refuse everyone else regardless; this
                         // just stops offering a door that opens onto a wall of 403s.
                         ForEach(group.screens.filter { $0 != .admin || viewer.canAdminister }) { screen in
-                            Label {
-                                Text(screen.title).font(NXFont.text(15))
-                            } icon: {
-                                // Calm, one colour (dev web); white on the selection fill.
-                                Image(systemName: screen.sidebarIcon)
-                                    .font(.system(size: 15, weight: .regular))
-                                    .foregroundStyle(selection == .screen(screen) ? Color.white : NX.mutedFg)
-                            }
-                            .tag(NXSelection.screen(screen))
+                            navRow(screen)
                         }
-                        // No "Pipeline" row under Missions (owner, 9 Oct 2026): the board is a project
-                        // like any other, reached from Projects (pinned, recent, or the list).
+                        // No "Pipeline" row under Work (owner, 9 Oct 2026): the board is a project
+                        // like any other, reached from Projects (pinned, or the list).
                     } header: {
                         if let title = group.title {
-                            SectionLabel(title)
+                            SidebarGroupLabel(text: title)
                         }
                     }
                 }
 
+                // The web's Projects tree, after the nav groups: "Projects" with its + and the
+                // Pinned shortcuts (SidebarProjectTree.tsx).
                 Section {
-                    AccountFooter { selection = .screen(.settings) }
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
+                    if shortcuts.pinned.isEmpty {
+                        Text(T("Pin a project to keep it here."))
+                            .font(NXFont.text(13))
+                            .foregroundStyle(NX.mutedFg)
+                            .selectionDisabled()
+                    } else {
+                        HStack(spacing: 6) {
+                            Image(systemName: "pin").font(.system(size: 11))
+                            Text(T("Pinned")).font(NXFont.text(12, .medium))
+                        }
+                        .foregroundStyle(NX.mutedFg)
+                        .selectionDisabled()
+                        .accessibilityAddTraits(.isHeader)
+                        projectRows(shortcuts.pinned)
+                    }
+                } header: {
+                    HStack {
+                        SidebarGroupLabel(text: T("Projects"))
+                        Spacer(minLength: 4)
+                        if workspaceId != nil {
+                            Button { rootSheet = .newProject } label: {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 13, weight: .regular))
+                                    .foregroundStyle(NX.mutedFg)
+                                    .frame(width: 26, height: 26)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.borderless)
+                            .help(T("New project"))
+                            .accessibilityLabel(T("New project"))
+                        }
+                    }
                 }
             }
             .listStyle(.sidebar)
             .scrollIndicators(.hidden)
+            // Fixed header and footer, like the web's SidebarHeader / SidebarFooter: they stay put while
+            // the nav scrolls between them.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                SidebarBrandHeader(
+                    onCollapse: {
+                        guard !cover.isCovered else { return }
+                        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) { columns = .detailOnly }
+                    },
+                    onSearch: { if !cover.isCovered { rootSheet = .search } }
+                )
+                .background(.bar)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                SidebarAccountFooter(
+                    onOpenProfile: { selection = .screen(.settings) },
+                    onShortcuts: { if !cover.isCovered { rootSheet = .shortcuts } }
+                )
+                .background(.bar)
+            }
             // Apple's own toggle lives in the DETAIL column's navigation bar, so it appeared on the
             // seventeen screens that have one and vanished on the two that don't — the control moved
             // depending on where you happened to be. Remove it and carry one handle everywhere.
             .toolbar(removing: .sidebarToggle)
-            // No title: the sidebar is the app's own furniture, and a word repeating the app name
-            // above its own menu is a row of pixels that tells the reader nothing.
+            // No title: the header above the nav carries the name, as on the web.
             .navigationTitle("")
             // The pinned projects, live (owner, 8 Oct 2026): a pin, rename or new icon made on another
             // device shows here within 30 s while the sidebar is on screen and the app is in front,
@@ -576,9 +620,41 @@ struct SidebarRoot: View {
             switch which {
             case .search: NavigationStack { SearchView() }.environment(auth).environment(router)
             case .shortcuts: KeyboardShortcutsHelp().environment(auth).environment(router)
+            // The same gallery-first sheet as Projects' own + (ProjectsView.swift); the project made
+            // opens in the detail column.
+            case .newProject:
+                CreateProjectSheet(workspaceId: workspaceId ?? "", onOpenProject: { ref in
+                    selection = .project(ref)
+                }) {
+                    NotificationCenter.default.post(name: .nexusWorkspaceChanged, object: nil,
+                                                    userInfo: [RealtimeKey.kind: RealtimeKind.projects])
+                }
+                .environment(auth).environment(router)
             }
         }
         .task { await viewer.loadIfNeeded() }
+        .task { if workspaceId == nil { workspaceId = try? await APIClient.shared.workspaceInfo().workspaceId } }
+        // The counts beside Notifications and Messages (the phone's tab bar keeps them fresh there).
+        .task { await inboxBadge.refresh(force: true) }
+        .task(id: auth.session?.userId) { await chat.refreshUnread(userId: auth.session?.userId) }
+        // Attendance: offsite check-outs waiting on a BoD, every 45 s like the web; BoD / One Above All only.
+        .task(id: viewer.isBoD) {
+            guard viewer.isBoD else { offsitePending = 0; return }
+            while !Task.isCancelled {
+                if let items = try? await APIClient.shared.offsiteCheckouts(status: "PENDING") {
+                    offsitePending = items.count
+                }
+                try? await Task.sleep(for: .seconds(45))
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await inboxBadge.refresh() }
+            Task { await chat.refreshUnread(userId: auth.session?.userId) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .nexusChatPush)) { _ in
+            Task { await chat.refreshUnread(userId: auth.session?.userId, force: true) }
+        }
         // A request made before this shape existed: the screen the tab bar was showing when the window
         // grew past compact (AppRouter.carryAcrossShapes), or a link that arrived on a cold start.
         .onAppear {
@@ -667,26 +743,41 @@ struct SidebarRoot: View {
         }
     }
 
+    /// One nav row: outline glyph, the web's name, and its live count when there is one.
+    @ViewBuilder private func navRow(_ screen: NXScreen) -> some View {
+        let selected = selection == .screen(screen)
+        Label {
+            HStack(spacing: 6) {
+                Text(screen.sidebarTitle).font(NXFont.text(15)).lineLimit(1)
+                Spacer(minLength: 4)
+                let n = badgeCount(screen)
+                if n > 0 { SidebarCountBadge(count: n, warning: screen == .attendance, onSelection: selected) }
+            }
+        } icon: {
+            // Calm, one colour (dev web); white on the selection fill.
+            Image(systemName: screen.sidebarIcon)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(selected ? Color.white : NX.mutedFg)
+        }
+        .tag(NXSelection.screen(screen))
+    }
+
+    private func badgeCount(_ screen: NXScreen) -> Int {
+        switch screen {
+        case .inbox:      return inboxBadge.count
+        case .messages:   return chat.totalUnread
+        case .attendance: return viewer.isBoD ? offsitePending : 0
+        default:          return 0
+        }
+    }
+
+    /// Pinned project rows. Unpin / remove sit in the context menu (right click, long press), as the web
+    /// keeps them in the row's menu rather than as a visible pin on every row.
     @ViewBuilder private func projectRows(_ refs: [ProjectRef]) -> some View {
         ForEach(refs) { ref in
             HStack(spacing: 10) {
                 projectIcon(ref)
                 Text(ref.name).font(NXFont.text(15)).lineLimit(1)
-                Spacer(minLength: 6)
-                // A visible button, not only a long press: a gesture nobody is told about is a
-                // feature nobody finds. .borderless keeps the tap on the button instead of letting
-                // the row swallow it and change the selection.
-                Button {
-                    shortcuts.togglePin(ref)
-                } label: {
-                    Image(systemName: shortcuts.isPinned(ref.id) ? "pin.fill" : "pin")
-                        .font(.system(size: 13))
-                        .foregroundStyle(shortcuts.isPinned(ref.id) ? NX.violetText : NX.mutedFg)
-                        .frame(width: 26, height: 26)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(shortcuts.isPinned(ref.id) ? T("Unpin") : T("Pin"))
             }
             .tag(NXSelection.project(ref))
             .contextMenu {
@@ -726,6 +817,37 @@ struct ProjectRefIcon: View {
 
 /// What SidebarRoot's single sheet shows.
 enum SidebarRootSheet: String, Identifiable {
-    case search, shortcuts
+    case search, shortcuts, newProject
     var id: String { rawValue }
+}
+
+/// A sidebar group label in the web's style: small, medium weight, muted, not upper-cased
+/// (SidebarGroupLabel, text-xs). `textCase(nil)` because List headers upper-case by default.
+struct SidebarGroupLabel: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(NXFont.text(12, .medium))
+            .foregroundStyle(NX.mutedFg)
+            .textCase(nil)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// The count beside a nav row (web: rounded-full 10px bold; Attendance amber, the others quiet).
+struct SidebarCountBadge: View {
+    let count: Int
+    var warning = false
+    /// The row is selected: on the selection fill a quiet badge turns white.
+    var onSelection = false
+
+    var body: some View {
+        Text(count > 9 ? "9+" : "\(count)")
+            .font(NXFont.text(11, .bold)).monospacedDigit()
+            .foregroundStyle(warning ? Color.white : (onSelection ? Color.white : NX.foreground))
+            .padding(.horizontal, 6).padding(.vertical, 1)
+            .frame(minWidth: 18)
+            .background(warning ? NX.warning : (onSelection ? Color.white.opacity(0.25) : NX.muted), in: Capsule())
+            .accessibilityLabel(String(count))
+    }
 }

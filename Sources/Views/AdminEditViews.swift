@@ -152,21 +152,28 @@ struct AdminView: View {
     @State private var section = 0
     @State private var workspaceId: String?
     @State private var viewer = Viewer.shared
+    @Environment(AppRouter.self) private var router
+    @Environment(\.horizontalSizeClass) private var hSize
+
+    /// The sidebar's Control Room on an iPad or Mac: the web's page header (sections in its tabs row)
+    /// instead of the nav bar and the pill strip.
+    private var isRoot: Bool { NXSidebarPage.isRoot(.admin, hSize: hSize, router: router) }
 
     /// Built rather than fixed, because the announcements tab is BoD-only. Hiding it by index would
     /// silently renumber every tab after it; there is nothing after it today, and that is exactly
     /// the kind of assumption that breaks the day somebody appends one.
     private var tabs: [(title: String, id: String)] {
-        var t: [(String, String)] = [("Users", "users"), ("Absensi", "attendance"),
-                                     ("Audit", "audit"), ("Quests", "quests")]
+        // Through T() like the web's tab names (they were hard-coded, half English and half Indonesian).
+        var t: [(String, String)] = [(T("Users"), "users"), (T("Attendance"), "attendance"),
+                                     (T("Audit log"), "audit"), (T("Quests"), "quests")]
         if viewer.canAnnounce {
             // Same gate as the web tab: BoD and One Above All, who are also the only ones who may change it.
             t.append((T("IP & Division Chart"), "org"))
             t.append((T("Announcements"), "announcements"))
             t.append((T("Extra day off"), "extra-dayoff"))
-            if RemoteConfig.shared.fakeGpsReview { t.append((T("Absen Monitor"), "suspects")) }
+            if RemoteConfig.shared.fakeGpsReview { t.append((T("Attendance monitor"), "suspects")) }
             t.append(("GIDEON", "gideon"))
-            t.append(("App", "app"))
+            t.append((T("App"), "app"))
         }
         return t
     }
@@ -213,8 +220,10 @@ struct AdminView: View {
         ZStack {
             NX.background.ignoresSafeArea()
             VStack(spacing: 0) {
-                tabStrip
-                Divider().overlay(NX.border)
+                if !isRoot {
+                    tabStrip
+                    Divider().overlay(NX.border)
+                }
                 // Switched on the tab's id, not its index, so a hidden tab cannot shift the others.
                 switch tabs.indices.contains(section) ? tabs[section].id : "users" {
                 case "attendance": AttendanceAdminSection(workspaceId: workspaceId)
@@ -231,8 +240,15 @@ struct AdminView: View {
                 }
             }
         }
+        .nxSidebarPageChrome(isRoot) {
+            VStack(spacing: 0) {
+                NXPageHeader(title: T("Control Room"), subtitle: T("Everyone in the workspace and their roles."))
+                NXPageTabsRow(items: tabs.indices.map { NXTabItem(id: $0, label: tabs[$0].title) },
+                              selection: $section, accessibilityName: T("Control Room sections"))
+            }
+        }
         .keyboardDoneBar()
-        .navigationTitle("Control Room").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(T("Control Room")).navigationBarTitleDisplayMode(.inline)
         .task {
             await viewer.loadIfNeeded()
             workspaceId = (try? await APIClient.shared.workspaceInfo())?.workspaceId

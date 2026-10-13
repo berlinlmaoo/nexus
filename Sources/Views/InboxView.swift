@@ -9,6 +9,7 @@ struct InboxView: View {
     var providesOwnStack = true
     @Environment(AuthStore.self) private var auth
     @Environment(AppRouter.self) private var router
+    @Environment(\.horizontalSizeClass) private var hSize
     @State private var items: [NexusNotification] = []
     @State private var unread = 0
     @State private var loading = true
@@ -38,11 +39,15 @@ struct InboxView: View {
         }
     }
 
+    /// The sidebar's Notifications page on an iPad or Mac: the web's page header instead of the nav bar.
+    private var isRoot: Bool { NXSidebarPage.isRoot(.inbox, hSize: hSize, router: router) }
+
     private var screen: some View {
         ZStack {
             NX.background.ignoresSafeArea()
             content
         }
+        .nxSidebarPageChrome(isRoot) { pageHeader }
         .navigationDestination(item: $openTarget) { target in
             switch target {
             case .task(let id):    TaskDetailView(taskId: id)
@@ -68,6 +73,22 @@ struct InboxView: View {
         .liveRefresh(every: 60, on: [.nexusInboxChanged]) { await reloadQuietly() }
     }
 
+    /// Web inbox.tsx PageHeader, with the filter tabs in its tabs row.
+    private var pageHeader: some View {
+        VStack(spacing: 0) {
+            NXPageHeader(title: T("Notifications"), subtitle: T("Mentions, assignments, approvals and replies that need you.")) {
+                Button { Task { await markAll() } } label: { Label(T("Mark all as read"), systemImage: "checkmark") }
+                    .buttonStyle(.nxBordered)
+                    .disabled(unread == 0)
+                    .opacity(unread == 0 ? 0.6 : 1)
+            }
+            if !loading, error == nil, !items.isEmpty, tabs.count > 2 {
+                NXPageTabsRow(items: tabs.map { NXTabItem(id: $0.group, label: $0.group.label, count: $0.count) },
+                              selection: $group, accessibilityName: T("Notifications"))
+            }
+        }
+    }
+
     @ViewBuilder private var content: some View {
         if loading {
             SkeletonList()
@@ -76,21 +97,21 @@ struct InboxView: View {
         } else {
             ScrollView {
                 VStack(spacing: 12) {
-                    HStack {
+                    // A plain line, and only when something is unread (web: an empty inbox had a
+                    // "0 unread" bar over its empty state).
+                    if unread > 0 {
                         Text(unread == 1 ? T("1 unread notification") : String(format: T("%d unread notifications"), unread))
-                            .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
-                        Spacer()
+                            .font(NXFont.text(14, .medium)).foregroundStyle(NX.mutedFg)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(14)
-                    .background(NX.violet.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(NX.violet.opacity(0.12)))
 
                     if items.isEmpty {
                         EmptyState(icon: "tray", title: T("Inbox clean"),
                                    subtitle: T("Requests to approve, replies to your tickets, mentions and announcements land here the moment they happen. Nothing needs you right now."),
                                    tint: NX.success, compact: true)
                     } else {
-                        NotificationFilterBar(tabs: tabs, group: $group)
+                        // On the iPad / Mac page the tabs sit in the header.
+                        if !isRoot { NotificationFilterBar(tabs: tabs, group: $group) }
                         if shown.isEmpty {
                             EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("Nothing of this kind"),
                                        subtitle: T("This filter only shows one type of notification. Everything else is still in All."),
@@ -102,15 +123,15 @@ struct InboxView: View {
                                     NotificationRow(notification: n) { open(n) }
                                 }
                             }
-                            .background {
-                                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NX.card)
-                                    .nexusShadowSoft()
-                                    .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
-                            }
+                            // Hairline card like the web's (rounded-xl border bg-card), no drop shadow.
+                            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                     }
                 }
-                .padding(16)
+                .padding(.horizontal, NXSidebarPage.gutter(isRoot))
+                .padding(.vertical, isRoot ? 24 : 16)
             }
             .refreshable { await load() }
         }
@@ -196,13 +217,14 @@ struct NotificationRow: View {
         HStack(alignment: .top, spacing: 12) {
             mark.accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
-                Text(notification.title ?? notification.typeLabel).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
-                Text(notification.message ?? T("New notification")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(2)
-                Text(metaText).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                Text(notification.title ?? notification.typeLabel).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
+                Text(notification.message ?? T("New notification")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                Text(metaText).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }
             Spacer(minLength: 4)
             if !notification.isRead {
-                Circle().fill(NX.violet).frame(width: 8, height: 8).padding(.top, 6)
+                // Near-black like the web's unread dot (it was violet).
+                Circle().fill(NX.foreground).frame(width: 8, height: 8).padding(.top, 6)
             }
             if notification.tapTarget != nil {
                 Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold))

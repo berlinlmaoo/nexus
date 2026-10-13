@@ -3,6 +3,8 @@ import SwiftUI
 /// Port of leaderboard.tsx: period banner + top-3 podium (gold/silver/bronze) + rankings list.
 struct LeaderboardView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(AppRouter.self) private var router
+    @Environment(\.horizontalSizeClass) private var hSize
     @State private var rows: [LeaderboardRow] = []
     @State private var loading = true
     @State private var error: String?
@@ -37,11 +39,43 @@ struct LeaderboardView: View {
         return out
     }
 
+    /// The sidebar's Leaderboard page on an iPad or Mac: the web's page header instead of the nav bar.
+    private var isRoot: Bool { NXSidebarPage.isRoot(.leaderboard, hSize: hSize, router: router) }
+
+    /// The period the board covers: this calendar month in WIB, shown as its first and LAST day
+    /// ("1 Oct – 31 Oct"), as the web's header since QA 13 Oct 2026.
+    private static var periodText: String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Jakarta") ?? .current
+        let now = Date()
+        guard let start = cal.date(from: cal.dateComponents([.year, .month], from: now)),
+              let next = cal.date(byAdding: .month, value: 1, to: start),
+              let last = cal.date(byAdding: .day, value: -1, to: next) else { return "" }
+        let f = DateFormatter()
+        f.calendar = cal
+        f.timeZone = cal.timeZone
+        f.locale = Locale(identifier: AppLanguage.shared.lang == .id ? "id_ID" : "en_GB")
+        f.dateFormat = "d MMM"
+        return "\(f.string(from: start)) – \(f.string(from: last))"
+    }
+
+    /// Web leaderboard.tsx PageHeader: the current period sits at the right.
+    private static var periodSuffix: String { " · " + periodText }
+
+    private var pageHeader: some View {
+        NXPageHeader(title: T("Leaderboard"), subtitle: T("Everyone's XP this month. It resets on the 1st.")) {
+            (Text(T("Current period")).font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground)
+             + Text(Self.periodSuffix).font(NXFont.text(13)).foregroundStyle(NX.mutedFg))
+                .accessibilityHint(T("XP resets on the 1st at 00:00 WIB"))
+        }
+    }
+
     var body: some View {
         ZStack {
             NX.background.ignoresSafeArea()
             content
         }
+        .nxSidebarPageChrome(isRoot) { pageHeader }
         .safeAreaInset(edge: .top) {
             if let at = showingCacheFrom {
                 Text(T("Showing saved data") + " · " + Self.ago(at))
@@ -51,7 +85,7 @@ struct LeaderboardView: View {
                     .padding(.top, 4)
             }
         }
-        .navigationTitle("Leaderboard")
+        .navigationTitle(T("Leaderboard"))
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $openProfile) { MemberProfileView(target: $0) }
         .task {
@@ -74,11 +108,15 @@ struct LeaderboardView: View {
         } else {
             ScrollView {
                 VStack(spacing: 16) {
-                    Text("Periode berjalan · poin reset tiap tgl 1, jam 00:00 WIB")
-                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity).padding(12)
-                        .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(NX.border))
+                    // The period line went through T() (it was hard-coded Indonesian); on the iPad / Mac
+                    // page it is in the header instead.
+                    if !isRoot {
+                        Text(T("Current period") + " · " + Self.periodText + " · " + T("XP resets on the 1st at 00:00 WIB"))
+                            .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity).padding(12)
+                            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                    }
 
                     if ranked.count >= 1 {
                         Podium(rows: Array(ranked.prefix(3)), labels: Array(ranks.prefix(3))) { row in
@@ -95,13 +133,12 @@ struct LeaderboardView: View {
                             }
                         }
                     }
-                    .background {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NX.card)
-                            .nexusShadowSoft()
-                            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
-                    }
+                    // Hairline card like the web's, no drop shadow.
+                    .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
                 }
-                .padding(16)
+                .padding(.horizontal, NXSidebarPage.gutter(isRoot))
+                .padding(.vertical, isRoot ? 24 : 16)
             }
             .refreshable { await load() }
         }
@@ -168,8 +205,8 @@ struct Podium: View {
                                 .overlay(Circle().strokeBorder(ring, lineWidth: 3))
                             if label(rank) == 1 { Image(systemName: "crown.fill").font(.system(size: 18)).foregroundStyle(crown).offset(y: -avatar/2 - 6) }
                         }
-                        Text(row.name ?? "—").font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Text("\(row.totalXp.formatted(.number.grouping(.automatic))) XP").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                        Text(row.name ?? "—").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        Text("\(row.totalXp.formatted(.number.grouping(.automatic))) XP").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     }
                     .contentShape(Rectangle())
                 }
@@ -196,12 +233,12 @@ struct RankRow: View {
     var body: some View {
         Button(action: onOpen) {
             HStack(spacing: 12) {
-                Text("\(rank)").font(NXFont.display(15, .black)).foregroundStyle(rank <= 3 ? NX.violetText : NX.mutedFg)
+                Text("\(rank)").font(NXFont.text(15, .semibold)).foregroundStyle(rank <= 3 ? NX.foreground : NX.mutedFg)
                     .frame(width: 28)
                 AvatarView(url: row.avatar, initial: row.initial, size: 36)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.name ?? "—").font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    Text("Level \(row.level)\(row.levelName.map { " – \($0)" } ?? "")").font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    Text("Level \(row.level)\(row.levelName.map { " – \($0)" } ?? "")").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
                 Spacer()
                 Text("\(row.totalXp.formatted(.number.grouping(.automatic)))")

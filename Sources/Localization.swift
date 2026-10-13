@@ -64,9 +64,18 @@ final class AppLanguage {
         guard lang == .id else { return english }
         // The dev-redesign table (LocalizationRedesign.swift) holds the strings added since 12 Oct 2026.
         // Later tables (13 Oct 2026): QA web fixes ported (work, interaction) and the spreadsheet.
-        return Self.indonesian[english] ?? Self.indonesianRedesign[english] ?? Self.indonesianQAWork[english]
-            ?? Self.indonesianQAInteract[english] ?? Self.indonesianSheetsGrid[english]
-            ?? Self.indonesianSheetsPanels[english] ?? Self.indonesianAccessR2[english] ?? english
+        // A loop, not one long `??` chain: thirteen operands is a type-checker hot spot.
+        for table in Self.tables {
+            if let v = table[english] { return v }
+        }
+        return english
+    }
+
+    /// Every Indonesian table, oldest first (keys are unique across all of them — check-localization.sh).
+    private static var tables: [[String: String]] {
+        [indonesian, indonesianRedesign, indonesianQAWork, indonesianQAInteract, indonesianSheetsGrid,
+         indonesianSheetsPanels, indonesianAccessR2, indonesianMacShell, indonesianMacPages, indonesianMacProject,
+         indonesianMacScreens, indonesianMacForms, indonesianMacGideon]
     }
 
     /// English → Indonesian. Keys must match the source literal EXACTLY.
