@@ -107,3 +107,17 @@ export function ProjectMarkFor({ projectId, icon, size = 16, className }: { proj
     </span>
   );
 }
+
+/**
+ * A project as a square tile, where a person would be a round avatar (a project chat room in Messages,
+ * the room's info panel): the project's photo filling the tile, else the page icon on a muted square.
+ */
+export function ProjectTile({ projectId, size, className }: { projectId: string; size: number; className?: string }) {
+  const icon = useLiveProjectIcon(projectId);
+  if (isProjectPhoto(icon)) return <ProjectMarkFor projectId={projectId} icon={icon} size={size} className={cn("rounded-lg ring-1 ring-border", className)} />;
+  return (
+    <span aria-hidden className={cn("grid shrink-0 place-items-center rounded-lg bg-muted ring-1 ring-border", className)} style={{ width: size, height: size }}>
+      <ProjectPageIcon size={Math.round(size * 0.55)} />
+    </span>
+  );
+}

@@ -81,7 +81,8 @@ export function QuestionControl({ field, value, onChange, disabled, attachment, 
     control = (
       <label className={cn("flex items-center gap-3 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground", !disabled && "cursor-pointer transition-colors hover:border-foreground/40")}>
         <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 font-medium text-foreground"><Paperclip className="h-3.5 w-3.5" /> {t("Upload")}</span>
-        <span className="min-w-0 truncate">{Array.isArray(value) && value.length ? tn(value.length, "{n} file selected", "{n} files selected") : value instanceof File ? value.name : t("One or more files, up to 50 MB each")}</span>
+        {/* The hint wraps (a phone cut it to "One or more files, up t…", UI tour run 7); a file name stays on one line. */}
+        <span className={cn("min-w-0", (Array.isArray(value) && value.length) || value instanceof File ? "truncate" : "leading-snug")}>{Array.isArray(value) && value.length ? tn(value.length, "{n} file selected", "{n} files selected") : value instanceof File ? value.name : t("One or more files, up to 50 MB each")}</span>
         <input type="file" multiple disabled={disabled} required={field.required} className="hidden" onChange={(e) => onChange(Array.from(e.target.files ?? []))} />
       </label>
     );

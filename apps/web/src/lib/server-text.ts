@@ -206,15 +206,60 @@ const storedText = (texts: NotifTexts) => {
 export function notificationTitle(n: { type?: string | null; title?: string | null; texts?: NotifTexts }) {
   const x = storedText(n.texts);
   if (x?.title) return x.title;
+  const legacy = n.title && isOutsideType(n.type) ? applyOnly(n.title, OUTSIDE_TITLE_RULES) : null;
+  if (legacy) return legacy;
   return n.title ? applyRules(n.title, TITLE_RULES) : notificationTypeTitle(n.type);
 }
 
 /** A notification's message in the UI language: the stored pair, else a known shape rewritten; else as stored. */
-export function notificationMessage(n: { message?: string | null; texts?: NotifTexts }) {
+export function notificationMessage(n: { type?: string | null; message?: string | null; texts?: NotifTexts }) {
   const x = storedText(n.texts);
   if (x && typeof x.message === "string") return x.message;
+  const legacy = n.message && isOutsideType(n.type) ? applyOnly(n.message, OUTSIDE_MESSAGE_RULES) : null;
+  if (legacy) return legacy;
   return n.message ? applyRules(n.message, MESSAGE_RULES) : "";
 }
+
+// Outside-the-office notifications stored before 13 Oct 2026 (no `texts`): the server wrote them in
+// Indonesian only (lib/attendance-outside.ts). UI tour run 7: "Di luar kantor sejak 04:50 (1 jam 30 menit).
+// Jalurnya ada di Absensi." in the English inbox. Matched only on these types, so nobody's own words are
+// ever rewritten.
+const OUTSIDE_TYPES = new Set(["attendance_outside_approver", "attendance_outside_reminder", "attendance_outside_warning", "attendance_auto_offsite_checkout"]);
+const isOutsideType = (type?: string | null) => !!type && OUTSIDE_TYPES.has(type);
+
+/** "1 jam 30 menit" / "2 jam" / "45 menit" (the server's Indonesian duration) → the UI language. */
+function idDuration(text: string) {
+  const m = /^(?:(\d+) jam)?\s*(?:(\d+) menit)?$/.exec(text.trim());
+  if (!m || (!m[1] && !m[2])) return text;
+  const h = Number(m[1] ?? 0), min = Number(m[2] ?? 0);
+  if (!h) return t("{n} min", { n: min });
+  return min ? t("{h} h {m} min", { h, m: min }) : t("{h} h", { h });
+}
+
+function applyOnly(text: string, rules: Rule[]) {
+  for (const r of rules) {
+    const m = r.re.exec(text);
+    if (m) return t(r.key, r.vars(m));
+  }
+  return null;
+}
+
+const OUTSIDE_TITLE_RULES: Rule[] = [
+  { re: /^Masih di luar kantor$/, key: "Still away from the office", vars: () => ({}) },
+  { re: /^Sudah 2 jam di luar kantor$/, key: "2 hours away from the office", vars: () => ({}) },
+  { re: /^30 menit lagi$/, key: "30 minutes left", vars: () => ({}) },
+  { re: /^Check-out otomatis$/, key: "Checked out automatically", vars: () => ({}) },
+  { re: /^(.+?) di luar kantor$/, key: "{name} is away from the office", vars: (m) => ({ name: m[1] }) },
+];
+
+const OUTSIDE_MESSAGE_RULES: Rule[] = [
+  { re: /^Di luar kantor sejak (\d{2}:\d{2}) \((.+)\)\. Jalurnya ada di Absensi\.$/, key: "Away from the office since {time} ({duration}). The route is in Attendance.", vars: (m) => ({ time: m[1], duration: idDuration(m[2]) }) },
+  { re: /^Sudah (.+?) di luar kantor · sisa (.+?) · check-out otomatis (\d{2}:\d{2})\. Ajukan izin kalau ada kegiatan di luar\.$/, key: "{duration} away from the office · {left} left · automatic check-out at {time}. Request a permission if you're working outside.", vars: (m) => ({ duration: idDuration(m[1]), left: idDuration(m[2]), time: m[3] }) },
+  { re: /^Sudah (.+?) di luar kantor · sisa (.+?) · check-out otomatis (\d{2}:\d{2})\.$/, key: "{duration} away from the office · {left} left · automatic check-out at {time}.", vars: (m) => ({ duration: idDuration(m[1]), left: idDuration(m[2]), time: m[3] }) },
+  { re: /^Sudah (.+?) di luar kantor\. Ajukan izin kalau ada kegiatan di luar\.$/, key: "{duration} away from the office. Request a permission if you're working outside.", vars: (m) => ({ duration: idDuration(m[1]) }) },
+  { re: /^Kamu di luar kantor sejak (\d{2}:\d{2}), jadi di-check-out offsite\. Menunggu persetujuan atasanmu\.$/, key: "You've been away from the office since {time}, so you were checked out off-site. Waiting for your manager to approve.", vars: (m) => ({ time: m[1] }) },
+  { re: /^Kamu di luar kantor sejak (\d{2}:\d{2}), jadi di-check-out offsite\. Menunggu persetujuan BoD\.$/, key: "You've been away from the office since {time}, so you were checked out off-site. Waiting for the BoD to approve.", vars: (m) => ({ time: m[1] }) },
+];
 
 const ENUM_LABEL: Record<string, string> = { TODO: "To do", IN_PROGRESS: "In progress", IN_REVIEW: "In review", DONE: "Done", CANCELLED: "Cancelled", URGENT: "Urgent", HIGH: "High", MEDIUM: "Medium", LOW: "Low", NONE: "No priority" };
 

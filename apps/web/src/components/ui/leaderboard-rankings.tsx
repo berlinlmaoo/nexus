@@ -8,7 +8,7 @@ import { ChevronLeft, ChevronRight, Crown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { localeOf } from "@/lib/lang"
 import { type MorphOrigin } from "@/components/motion/MorphPanel"
-import { thumbUrl } from "@/lib/thumb";
+import { AvatarFace } from "@/components/Avatar";
 
 export interface LeaderboardRankingItem {
   userId: string
@@ -20,10 +20,6 @@ export interface LeaderboardRankingItem {
   avatarUrl?: string | null
 }
 
-function initialsOf(name?: string | null) {
-  if (!name) return "?"
-  return name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")
-}
 
 function formatValue(value: number) {
   // Show the full XP number (1,100 / 1.100 in Indonesian) — no "k" abbreviation.
@@ -80,11 +76,9 @@ const LeaderboardRankings = React.forwardRef<HTMLDivElement, LeaderboardRankings
                     {item.rank <= 3 && <Crown className={cn("h-4 w-4", CROWN_COLOR[item.rank])} />}
                   </span>
                   <div className="shrink-0">
-                    {item.avatarUrl ? (
-                      <img src={thumbUrl(item.avatarUrl, 40)} loading="lazy" decoding="async" alt={item.userName} className="h-10 w-10 rounded-full object-cover" />
-                    ) : (
-                      <span className="grid h-10 w-10 place-items-center rounded-full bg-muted text-xs font-bold text-muted-foreground">{initialsOf(item.userName)}</span>
-                    )}
+                    {/* Initials under the photo: a lazy photo far down the list (ranks 27+) is never an empty
+                        circle while it loads (UI tour run 7). */}
+                    <AvatarFace name={item.userName} avatar={item.avatarUrl} seed={item.userName || item.userId} size={40} decorative className="ring-0" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-semibold leading-tight">{item.userName}</div>

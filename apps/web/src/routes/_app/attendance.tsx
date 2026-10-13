@@ -545,7 +545,7 @@ function Attendance() {
             <table className="w-full min-w-max text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr>
-                  <th data-member-col className="sticky left-0 top-0 z-30 w-[15rem] min-w-[15rem] bg-muted px-3 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">{tr("Member")}</th>
+                  <th data-member-col className="sticky left-0 top-0 z-30 w-[11.5rem] min-w-[11.5rem] bg-muted px-3 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">{tr("Member")}</th>
                   {periodDays.map((pd) => (
                     <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} className={cn("sticky top-0 z-20 bg-muted px-1 py-1.5 font-medium text-[10px] leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
                       <span className={cn("block text-[9px] uppercase", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" })}</span>
@@ -569,7 +569,7 @@ function Attendance() {
                 )}
                 {memberRows.map((u) => (
                   <tr key={u.id} className="border-b border-border last:border-0 hover:bg-muted/20">
-                    <td className="sticky left-0 z-10 w-[15rem] min-w-[15rem] bg-card px-3 py-2.5 shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">
+                    <td className="sticky left-0 z-10 w-[11.5rem] min-w-[11.5rem] bg-card px-3 py-2.5 shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">
                       {/* Two lines at every width: who, then everything about them. One row squeezed the
                           badges and pills on top of each other in the 20rem column (28 Sep 2026). */}
                       <div className="flex min-w-0 flex-col gap-1.5">
@@ -594,11 +594,13 @@ function Attendance() {
                             </div>
                           </>
                         )}
+                        {/* Phone (UI tour run 7, 14 Oct 2026): a 11.5rem column with small pills whose tap targets
+                            grow invisibly (tap-area); the 44 px pills and the 15rem column left room for three days. */}
                         <div className="flex min-w-0 flex-wrap items-center gap-1 pl-1">
                         <TrackingBadges rec={recMap.get(`${u.id}:${todayKey}`)} isToday />
                         {/* The person's whole record for this period: counts, XP log with reasons, requests. */}
                         <Link to="/people/$userId" params={{ userId: u.id }} search={{ period: monthKey }} title={tr("{name} — record for this period", { name: u.name ?? tr("Unnamed") })}
-                          className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground ring-1 ring-border transition hover:bg-accent hover:text-foreground pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center">{tr("Record")}</Link>
+                          className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground ring-1 ring-border transition hover:bg-accent hover:text-foreground tap-area">{tr("Record")}</Link>
                         {canManage && (() => {
                           const d = dayOffOf(u.id);
                           if (!d) return null;
@@ -638,7 +640,7 @@ function Attendance() {
                                   void downloadFile(`/api/attendance/history?scope=workspace&month=${monthKey}&userId=${u.id}&format=xlsx`, `absensi-${slug}-${monthKey}.xlsx`)
                                     .catch((err) => alert(err instanceof ApiError ? err.message : tr("Export failed. Try again.")));
                                 }}
-                                className={cn(pill, "bg-muted text-muted-foreground ring-border transition hover:bg-accent hover:text-foreground pointer-coarse:min-h-11 pointer-coarse:min-w-11")}
+                                className={cn(pill, "tap-area bg-muted text-muted-foreground ring-border transition hover:bg-accent hover:text-foreground")}
                               >
                                 <Download className="inline h-3 w-3" />
                               </button>

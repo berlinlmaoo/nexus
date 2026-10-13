@@ -46,6 +46,7 @@ import { ID_TASK_VIEWS } from "@/lib/i18n/id-task-views";
 import { ID_QAFIX_PERM } from "@/lib/i18n/id-qafix-perm";
 import { ID_QAFIX_WORK } from "@/lib/i18n/id-qafix-work";
 import { ID_QAFIX_KBD } from "@/lib/i18n/id-qafix-kbd";
+import { ID_R7WEB } from "@/lib/i18n/id-r7web";
 
 /**
  * Interface language, English or Indonesian (owner, 5 Oct 2026: "make sure there is English and
@@ -61,7 +62,7 @@ export type Lang = "id" | "en";
 const KEY = "nexus-lang";
 const listeners = new Set<() => void>();
 
-const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDAR, ...ID_CALENDAR_PAGE, ...ID_CALENDAR_EXTRA, ...ID_CHAT, ...ID_AUDIT, ...ID_OFFBOARD, ...ID_FORMER, ...ID_PROJECTS, ...ID_TEMPLATES, ...ID_PROFILE, ...ID_VAULT, ...ID_NAV, ...ID_PIPELINE, ...ID_AUTOMATIONS, ...ID_FOLDERS, ...ID_OUTLET, ...ID_PROJECT_OVERVIEW, ...ID_SHEETS, ...ID_SHEETS_MENUS, ...ID_SHEETS_PANELS, ...ID_SHEETS_CHART, ...ID_SHEETS_DATA, ...ID_SHEETS_TOOLBAR, ...ID_SHEETS_GRID, ...ID_SHEETS_PIVOT, ...ID_SHEETS_FORMATS, ...ID_VIEWS, ...ID_EDITOR, ...ID_GIDEON, ...ID_GIDEON_AI, ...ID_CATEGORIES, ...ID_COPY, ...ID_I18N_ADMIN, ...ID_I18N_SHELL, ...ID_I18N_ATTENDANCE, ...ID_I18N_WORK, ...ID_FORMS, ...ID_I18N_PROJECTS_EXTRA, ...ID_SESSIONS, ...ID_FIX_PAGES, ...ID_UISWEEP, ...ID_TASK_VIEWS, ...ID_QAFIX_WORK, ...ID_QAFIX_KBD, ...ID_QAFIX_PERM };
+const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDAR, ...ID_CALENDAR_PAGE, ...ID_CALENDAR_EXTRA, ...ID_CHAT, ...ID_AUDIT, ...ID_OFFBOARD, ...ID_FORMER, ...ID_PROJECTS, ...ID_TEMPLATES, ...ID_PROFILE, ...ID_VAULT, ...ID_NAV, ...ID_PIPELINE, ...ID_AUTOMATIONS, ...ID_FOLDERS, ...ID_OUTLET, ...ID_PROJECT_OVERVIEW, ...ID_SHEETS, ...ID_SHEETS_MENUS, ...ID_SHEETS_PANELS, ...ID_SHEETS_CHART, ...ID_SHEETS_DATA, ...ID_SHEETS_TOOLBAR, ...ID_SHEETS_GRID, ...ID_SHEETS_PIVOT, ...ID_SHEETS_FORMATS, ...ID_VIEWS, ...ID_EDITOR, ...ID_GIDEON, ...ID_GIDEON_AI, ...ID_CATEGORIES, ...ID_COPY, ...ID_I18N_ADMIN, ...ID_I18N_SHELL, ...ID_I18N_ATTENDANCE, ...ID_I18N_WORK, ...ID_FORMS, ...ID_I18N_PROJECTS_EXTRA, ...ID_SESSIONS, ...ID_FIX_PAGES, ...ID_UISWEEP, ...ID_TASK_VIEWS, ...ID_QAFIX_WORK, ...ID_QAFIX_KBD, ...ID_QAFIX_PERM, ...ID_R7WEB };
 
 function read(): Lang {
   try {
