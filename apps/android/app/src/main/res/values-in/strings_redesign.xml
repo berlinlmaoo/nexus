@@ -318,4 +318,8 @@
     <string name="of_none_sub">Office itu titik di peta dengan radius di sekelilingnya. Staff hanya bisa check-in di dalam radius itu, jadi belum ada yang bisa tercatat sebelum office pertama dibuat.</string>
     <string name="vault_folder_short">Folder</string>
     <string name="home_att_check_in">Check in</string>
+    <string name="rb_prev_month">Bulan sebelumnya</string>
+    <string name="rb_next_month">Bulan berikutnya</string>
+    <string name="rb_nothing_in">Belum ada booking di bulan %1$s</string>
+    <string name="rb_by">oleh %1$s</string>
 </resources>

@@ -45,4 +45,14 @@ class BookingLogicTest {
         assertEquals(BookingLogic.Refusal.NOT_YOURS to null, BookingLogic.refusal(ApiError.Http(403, "x", null, null)))
         assertEquals(BookingLogic.Refusal.BAD_TIMES to null, BookingLogic.refusal(ApiError.Http(400, "x", null, null)))
     }
+
+    @Test fun monthInWibAndWhoMayEdit() {
+        val (from, to) = AgendaLogic.monthRange(java.time.YearMonth.of(2026, 10))
+        assertEquals(Instant.parse("2026-09-30T17:00:00Z"), from)
+        assertEquals(Instant.parse("2026-10-31T16:59:59Z"), to)
+        val mine = Booking("b1", createdBy = Booker("me", "Bagas"))
+        assertEquals(true, AgendaLogic.canEdit(mine, "me", false))
+        assertEquals(false, AgendaLogic.canEdit(mine, "other", false))
+        assertEquals(true, AgendaLogic.canEdit(mine, "other", true))
+    }
 }

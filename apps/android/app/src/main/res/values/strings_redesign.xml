@@ -336,4 +336,8 @@
     <string name="of_none_sub">An office is a point on the map with a radius around it. Staff can only check in inside that radius, so nothing can be recorded until the first office exists.</string>
     <string name="vault_folder_short">Folder</string>
     <string name="home_att_check_in">Check in</string>
+    <string name="rb_prev_month">Previous month</string>
+    <string name="rb_next_month">Next month</string>
+    <string name="rb_nothing_in">Nothing booked in %1$s</string>
+    <string name="rb_by">by %1$s</string>
 </resources>

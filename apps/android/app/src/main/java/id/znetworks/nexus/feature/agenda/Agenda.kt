@@ -77,7 +77,7 @@ import java.util.Locale
 
 // Room booking (new / edit / delete like the web, 14 Oct 2026) and the team calendar (read-only).
 
-@Serializable data class Booker(val name: String? = null)
+@Serializable data class Booker(val id: String? = null, val name: String? = null)
 @Serializable data class Booking(val id: String, val room: String = "", val title: String = "", val description: String? = null,
                                  val startsAt: String = "", val endsAt: String = "", val createdBy: Booker? = null)
 @Serializable data class Bookings(val bookings: List<Booking> = emptyList())
@@ -92,7 +92,15 @@ object AgendaLogic {
         b.mapNotNull { x -> zoned(x.startsAt)?.toLocalDate()?.let { it to x } }.groupBy({ it.first }, { it.second })
             .toList().sortedBy { it.first }.let { if (past) it.reversed() else it }.map { (d, l) -> d to l.sortedBy { it.startsAt } }
 
-    /** Several teams' calendars, merged and de-duplicated by id. */
+    /** The month on screen (WIB): its first instant and the last second of its last day, as the web asks. */
+    fun monthRange(month: java.time.YearMonth): Pair<Instant, Instant> {
+        val start = month.atDay(1).atStartOfDay(zone).toInstant()
+        val next = month.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant()
+        return start to next.minusSeconds(1)
+    }
+
+    /** The person who booked it, or a Manager and above (the server's canManageBooking; iOS canEdit). */
+    fun canEdit(b: Booking, meId: String?, canAdminister: Boolean) = (meId != null && b.createdBy?.id == meId) || canAdminister
 }
 
 class AgendaApi(private val api: ApiClient) {
@@ -151,40 +159,60 @@ private fun AgendaRow(time: String, title: String, chip: String?, sub: String?, 
 fun RoomBookingScreen(onBack: () -> Unit) {
     val api = agendaApi()
     val c = Nx.colors
-    val res = LocalContext.current.resources
-    var past by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+    val res = context.resources
+    val container = (context.applicationContext as NexusApplication).container
+    val meId = container.sessionStore.current?.userId
+    var canAdminister by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { runCatching { container.viewer.load(); canAdminister = container.viewer.canAdminister } }
+    // iOS RoomBookingView / web: one month at a time (WIB), every booking of it by day, ‹ Today › to move.
+    var monthKey by rememberSaveable { mutableStateOf(java.time.YearMonth.from(OfficeTime.today()).toString()) }
+    val month = java.time.YearMonth.parse(monthKey)
+    val thisMonth = java.time.YearMonth.from(OfficeTime.today())
     var list by remember { mutableStateOf<List<Booking>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     // The composer: Pair(true, null) = a new booking, Pair(true, b) = editing b.
     var composing by remember { mutableStateOf<Pair<Boolean, Booking?>>(false to null) }
     var reload by remember { mutableIntStateOf(0) }
-    LaunchedEffect(past, reload) {
+    LaunchedEffect(monthKey, reload) {
         list = null
-        val now = Instant.now()
-        try { list = if (past) api.bookings(now.minusSeconds(30L * 86400), now) else api.bookings(now, now.plusSeconds(14L * 86400)); error = null }
-        catch (e: ApiError) { error = e.describe(res) }
+        val (from, to) = AgendaLogic.monthRange(month)
+        try { list = api.bookings(from, to); error = null } catch (e: ApiError) { error = e.describe(res) }
     }
     Column(Modifier.fillMaxSize().background(c.background)) {
         // "New booking" as the header's primary action (web; the phones were read-only).
         id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.home_q_rooms), subtitle = stringResource(R.string.sub_rooms), onBack = onBack,
-            actions = { id.znetworks.nexus.ui.components.HeaderIconButton(androidx.compose.material.icons.Icons.Filled.Add, stringResource(R.string.rb_new), { composing = true to null }, primary = true) })
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(!past, { past = false }, { Text(stringResource(R.string.ag_upcoming)) })
-            FilterChip(past, { past = true }, { Text(stringResource(R.string.ag_history)) })
+            actions = { id.znetworks.nexus.ui.components.HeaderIconButton(Icons.Filled.Add, stringResource(R.string.rb_new), { composing = true to null }, primary = true) })
+        // The month row: "October 2026", then ‹ Today ›.
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.getDefault()).format(month).replaceFirstChar { it.titlecase(Locale.getDefault()) },
+                fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1)
+            IconButton(onClick = { monthKey = month.minusMonths(1).toString() }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.rb_prev_month), tint = c.mutedFg) }
+            id.znetworks.nexus.ui.components.NxButton(stringResource(R.string.cal_today), { monthKey = thisMonth.toString() }, compact = true, enabled = month != thisMonth)
+            IconButton(onClick = { monthKey = month.plusMonths(1).toString() }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.rb_next_month), tint = c.mutedFg) }
         }
         val l = list
         when {
             l == null && error == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             l == null -> TabEmpty(Icons.Filled.MeetingRoom, error!!)
-            l.isEmpty() -> id.znetworks.nexus.ui.components.EmptyState(Icons.Filled.MeetingRoom, stringResource(if (past) R.string.ag_no_bookings_past else R.string.ag_no_bookings_next),
+            l.isEmpty() -> id.znetworks.nexus.ui.components.EmptyState(Icons.Filled.CalendarMonth,
+                stringResource(R.string.rb_nothing_in, DateTimeFormatter.ofPattern("LLLL", Locale.getDefault()).format(month).replaceFirstChar { it.titlecase(Locale.getDefault()) }),
                 stringResource(R.string.rb_empty_sub), stringResource(R.string.rb_new), { composing = true to null }, Modifier.fillMaxSize())
             else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                AgendaLogic.byDay(l, past).forEach { (day, items) ->
+                // Soonest first, the whole month (past days included), as the web's agenda.
+                AgendaLogic.byDay(l, past = false).forEach { (day, items) ->
                     item(key = "d$day") {
                         Text(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()).format(day).replaceFirstChar(Char::titlecase),
                             fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.padding(top = 8.dp))
                     }
-                    items.forEach { b -> item(key = b.id) { AgendaRow("${AgendaLogic.hhmm(b.startsAt)}–${AgendaLogic.hhmm(b.endsAt)}", b.title, roomLabel(b.room), b.createdBy?.name) { composing = true to b } } }
+                    items.forEach { b ->
+                        item(key = b.id) {
+                            val editable = AgendaLogic.canEdit(b, meId, canAdminister)
+                            AgendaRow("${AgendaLogic.hhmm(b.startsAt)}–${AgendaLogic.hhmm(b.endsAt)}", b.title, roomLabel(b.room),
+                                b.createdBy?.name?.takeIf { it.isNotBlank() }?.let { stringResource(R.string.rb_by, it) },
+                                onClick = if (editable) ({ composing = true to b }) else null)
+                        }
+                    }
                 }
             }
         }
