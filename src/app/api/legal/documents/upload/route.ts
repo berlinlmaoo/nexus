@@ -9,6 +9,7 @@ import { makePdfForVersion } from "@/lib/legal/generate"
 import { isLegalDocType, isLegalStatus } from "@/lib/legal/rules"
 import { deleteLegalFile } from "@/lib/legal/storage"
 import { LegalUploadError, storeUpload } from "@/lib/legal/uploads"
+import { linkProblem } from "@/lib/legal/links"
 
 /**
  * Put a document made elsewhere into the archive (multipart): file, companyId, docType, title, and optional
@@ -37,8 +38,8 @@ export async function POST(request: NextRequest) {
     if (!companyId || !(await prisma.legalCompany.findUnique({ where: { id: companyId }, select: { id: true } }))) {
       return NextResponse.json({ error: "Pick the company" }, { status: 400 })
     }
-    if (projectId && !(await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } }))) return NextResponse.json({ error: "Project not found" }, { status: 404 })
-    if (dealId && !(await prisma.pipelineDeal.findUnique({ where: { id: dealId }, select: { id: true } }))) return NextResponse.json({ error: "Deal not found" }, { status: 404 })
+    const badLink = await linkProblem(gate.actor, projectId, dealId)
+    if (badLink) return NextResponse.json({ error: badLink }, { status: 404 })
 
     stored = await storeUpload(form.get("file"))
     const doc = await prisma.legalDocument.create({

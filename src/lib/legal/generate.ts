@@ -11,6 +11,7 @@ import { formatFieldNames, NumberFormatError, renderNumber } from "@/lib/legal/r
 import { deleteLegalFile, DOCX_MIME, readLegalFile, safeFileName, storeLegalFile } from "@/lib/legal/storage"
 import { docxToPdf, pdfConfigured } from "@/lib/legal/pdf"
 import { dateFromDay } from "@/lib/legal/documents"
+import { linkProblem } from "@/lib/legal/links"
 
 // Make a document from a template (owner, 14 Oct 2026). Order is deliberate:
 //   1. check EVERYTHING — the form, the number's own fields, and a dry run of the fill — before a number
@@ -118,12 +119,8 @@ export async function generateLegalDocument(actor: LegalActor, input: GenerateIn
   const title = ((input.title ?? "").trim() || `${template.name}${counterparty ? ` — ${counterparty}` : ""}`).slice(0, 200)
   const projectId = input.projectId || null
   const dealId = input.dealId || null
-  if (projectId && !(await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } }))) {
-    throw new LegalGenerateError("Project not found", 404)
-  }
-  if (dealId && !(await prisma.pipelineDeal.findUnique({ where: { id: dealId }, select: { id: true } }))) {
-    throw new LegalGenerateError("Deal not found", 404)
-  }
+  const badLink = await linkProblem(actor, projectId, dealId)
+  if (badLink) throw new LegalGenerateError(badLink, 404)
   const templateBytes = await readLegalFile(version.storageKey)
   const kopBytes = company.kopStorageKey ? await readLegalFile(company.kopStorageKey) : null
   try {

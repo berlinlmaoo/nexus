@@ -193,4 +193,11 @@ export const ID_LEGAL: Record<string, string> = {
   "Apply the change to paragraph {n}": "Terapkan perubahan di paragraf {n}",
   "Paragraph {n}": "Paragraf {n}",
   "Approve {n} of {total}": "Setujui {n} dari {total}",
+  // Links to projects and deals
+  "Any project or deal": "Semua project atau deal",
+  "Belongs to": "Terkait dengan",
+  "Link to a project or deal": "Kaitkan ke project atau deal",
+  "Search projects and deals…": "Cari project dan deal…",
+  "Nothing found": "Tidak ditemukan",
+  "Pipeline deals": "Deal Pipeline",
 };

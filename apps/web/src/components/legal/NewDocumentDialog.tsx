@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { LegalFieldInput, type FieldValues } from "@/components/legal/LegalFieldInput";
+import { LegalLinkPicker, type LegalLink } from "@/components/legal/LegalLinkPicker";
 import { docTypeLabel } from "@/components/legal/legal-labels";
 import { fieldErrorsOf, legalDocsApi, legalTemplatesApi, templateProblems, type LegalTemplate } from "@/lib/legal-api";
 import { useLang } from "@/lib/lang";
@@ -30,6 +31,7 @@ export function NewDocumentDialog({ open, onOpenChange, onCreated }: { open: boo
   const [values, setValues] = useState<FieldValues>({});
   const [title, setTitle] = useState("");
   const [counterparty, setCounterparty] = useState("");
+  const [link, setLink] = useState<LegalLink>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [problems, setProblems] = useState<string[]>([]);
 
@@ -37,7 +39,7 @@ export function NewDocumentDialog({ open, onOpenChange, onCreated }: { open: boo
   const companies = useQuery({ queryKey: ["legal", "companies"], queryFn: legalTemplatesApi.companies, enabled: open, staleTime: 60_000 });
 
   useEffect(() => {
-    if (!open) { setTemplate(null); setCompanyId(null); setStep("pick"); setValues({}); setTitle(""); setCounterparty(""); setErrors({}); setProblems([]); }
+    if (!open) { setTemplate(null); setCompanyId(null); setStep("pick"); setValues({}); setTitle(""); setCounterparty(""); setLink(null); setErrors({}); setProblems([]); }
   }, [open]);
 
   const effectiveCompany = template?.company?.id ?? companyId;
@@ -67,7 +69,7 @@ export function NewDocumentDialog({ open, onOpenChange, onCreated }: { open: boo
   });
 
   const generate = useMutation({
-    mutationFn: () => legalDocsApi.generate({ templateId: template!.id, companyId: effectiveCompany, values, title: title.trim() || undefined, counterparty: counterparty.trim() || undefined }),
+    mutationFn: () => legalDocsApi.generate({ templateId: template!.id, companyId: effectiveCompany, values, title: title.trim() || undefined, counterparty: counterparty.trim() || undefined, projectId: link?.kind === "project" ? link.id : null, dealId: link?.kind === "deal" ? link.id : null }),
     onSuccess: (res) => {
       toast.success(t("Document {number} made", { number: res.number }));
       if (res.pdfError) toast.warning(t("The PDF couldn't be made yet: {reason}", { reason: res.pdfError }));
@@ -156,6 +158,10 @@ export function NewDocumentDialog({ open, onOpenChange, onCreated }: { open: boo
               <div className="space-y-1.5">
                 <Label htmlFor="legal-new-cp">{t("Counterparty")}</Label>
                 <Input id="legal-new-cp" value={counterparty} onChange={(e) => setCounterparty(e.target.value)} placeholder={t("Who the document is with")} />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label>{t("Belongs to")}</Label>
+                <LegalLinkPicker value={link} onChange={setLink} />
               </div>
             </div>
             <div className="space-y-3 border-t border-border pt-3">

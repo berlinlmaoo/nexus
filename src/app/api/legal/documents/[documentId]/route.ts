@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit"
 import { legalGate } from "@/lib/legal/access"
 import { dateFromDay, documentInclude, serializeDocument } from "@/lib/legal/documents"
 import { isLegalDocType, isLegalStatus } from "@/lib/legal/rules"
+import { linkProblem } from "@/lib/legal/links"
 
 type Ctx = { params: Promise<{ documentId: string }> }
 
@@ -56,12 +57,14 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     }
     if (body.projectId !== undefined) {
       const id = typeof body.projectId === "string" && body.projectId ? body.projectId : null
-      if (id && !(await prisma.project.findUnique({ where: { id }, select: { id: true } }))) return NextResponse.json({ error: "Project not found" }, { status: 404 })
+      const bad = await linkProblem(gate.actor, id, null)
+      if (bad) return NextResponse.json({ error: bad }, { status: 404 })
       data.projectId = id
     }
     if (body.dealId !== undefined) {
       const id = typeof body.dealId === "string" && body.dealId ? body.dealId : null
-      if (id && !(await prisma.pipelineDeal.findUnique({ where: { id }, select: { id: true } }))) return NextResponse.json({ error: "Deal not found" }, { status: 404 })
+      const bad = await linkProblem(gate.actor, null, id)
+      if (bad) return NextResponse.json({ error: bad }, { status: 404 })
       data.dealId = id
     }
     if (body.finalVersion !== undefined) {

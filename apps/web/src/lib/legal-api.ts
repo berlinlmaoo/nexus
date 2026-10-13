@@ -290,3 +290,11 @@ export const legalGideonApi = {
   decide: (id: string, proposalId: string, decision: "approve" | "discard", indexes?: number[]) =>
     apiFetch<{ proposal: LegalProposal; version: number | null; pdfError: string | null }>(`${docUrl(id)}/proposals/${encodeURIComponent(proposalId)}`, { method: "POST", body: JSON.stringify({ decision, indexes }) }),
 };
+
+export type LegalLinkResults = {
+  projects: { id: string; name: string }[];
+  deals: { id: string; code: string; name: string; brand: string; projectId: string }[];
+};
+export const legalLinksApi = {
+  search: (q: string) => apiFetch<LegalLinkResults>(`/api/legal/links?q=${encodeURIComponent(q)}`),
+};

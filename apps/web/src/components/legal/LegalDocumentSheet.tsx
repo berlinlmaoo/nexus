@@ -12,6 +12,7 @@ import { Segmented } from "@/components/PageLayout";
 import { LegalDocumentEditor } from "@/components/legal/LegalDocumentEditor";
 import { LegalGideonPanel } from "@/components/legal/LegalGideonPanel";
 import { LegalDiffView } from "@/components/legal/LegalDiffView";
+import { LegalLinkPicker } from "@/components/legal/LegalLinkPicker";
 import { docTypeLabel, fmtDay, formatBytes, statusClass, statusLabel, versionKindLabel } from "@/components/legal/legal-labels";
 import { fmtDate } from "@/lib/nexus-api";
 import { LEGAL_STATUSES, legalDocsApi, legalVersionsApi, type LegalDocument, type LegalDocumentVersion, type LegalStatus } from "@/lib/legal-api";
@@ -124,6 +125,14 @@ export function LegalDocumentSheet({ documentId, onClose }: { documentId: string
               </div>
             </div>
             <Button disabled={!dirty || !draft.title.trim() || update.isPending} onClick={() => update.mutate(draft)}>{t("Save")}</Button>
+
+            <div className="space-y-1.5">
+              <Label>{t("Belongs to")}</Label>
+              <LegalLinkPicker
+                value={doc.deal ? { kind: "deal", id: doc.deal.id, label: `${doc.deal.code} · ${doc.deal.name}` } : doc.project ? { kind: "project", id: doc.project.id, label: doc.project.name } : null}
+                onChange={(v) => update.mutate(v?.kind === "deal" ? { dealId: v.id, projectId: null } : v?.kind === "project" ? { projectId: v.id, dealId: null } : { projectId: null, dealId: null })}
+              />
+            </div>
 
             <div className="space-y-2 border-t border-border pt-4">
               <div className="flex items-center justify-between gap-2">

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { NewDocumentDialog } from "@/components/legal/NewDocumentDialog";
 import { LegalDocumentSheet } from "@/components/legal/LegalDocumentSheet";
 import { UploadDocumentDialog } from "@/components/legal/UploadDocumentDialog";
+import { LegalLinkPicker, type LegalLink } from "@/components/legal/LegalLinkPicker";
 import { docTypeLabel, fmtDay, statusClass, statusLabel } from "@/components/legal/legal-labels";
 import { LEGAL_DOC_TYPES, LEGAL_STATUSES, legalDocsApi, legalTemplatesApi, type ArchiveQuery } from "@/lib/legal-api";
 import { useLang } from "@/lib/lang";
@@ -28,6 +29,7 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
   const [text, setText] = useState("");
   const [filters, setFilters] = useState<ArchiveQuery>({});
   const [page, setPage] = useState(1);
+  const [link, setLink] = useState<LegalLink>(null);
 
   useEffect(() => {
     const h = setTimeout(() => { setFilters((f) => ({ ...f, q: text.trim() || undefined })); setPage(1); }, 300);
@@ -68,8 +70,10 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
           {t("To")} <Input type="date" className="h-9 w-[9.5rem]" value={filters.to ?? ""} onChange={(e) => set({ to: e.target.value || undefined })} />
         </label>
+        <LegalLinkPicker value={link} placeholder={t("Any project or deal")}
+          onChange={(v) => { setLink(v); set({ projectId: v?.kind === "project" ? v.id : undefined, dealId: v?.kind === "deal" ? v.id : undefined }); }} />
         {filtered && (
-          <Button variant="ghost" size="sm" className="gap-1" onClick={() => { setFilters((f) => ({ q: f.q })); setPage(1); }}>
+          <Button variant="ghost" size="sm" className="gap-1" onClick={() => { setFilters((f) => ({ q: f.q })); setLink(null); setPage(1); }}>
             <X className="h-3.5 w-3.5" /> {t("Clear filters")}
           </Button>
         )}

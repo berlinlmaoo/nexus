@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { docTypeLabel, statusLabel } from "@/components/legal/legal-labels";
+import { LegalLinkPicker, type LegalLink } from "@/components/legal/LegalLinkPicker";
 import { LEGAL_DOC_TYPES, LEGAL_STATUSES, legalTemplatesApi, legalUploadApi, type LegalStatus } from "@/lib/legal-api";
 import { useLang } from "@/lib/lang";
 
@@ -19,10 +20,11 @@ export function UploadDocumentDialog({ open, onOpenChange, onCreated }: { open: 
   const empty = { companyId: "", docType: "", title: "", number: "", counterparty: "", docDate: "", status: "SIGNED" as LegalStatus };
   const [file, setFile] = useState<File | null>(null);
   const [f, setF] = useState(empty);
-  useEffect(() => { if (!open) { setFile(null); setF(empty); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [link, setLink] = useState<LegalLink>(null);
+  useEffect(() => { if (!open) { setFile(null); setF(empty); setLink(null); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const upload = useMutation({
-    mutationFn: () => legalUploadApi.upload({ file: file!, ...f }),
+    mutationFn: () => legalUploadApi.upload({ file: file!, ...f, projectId: link?.kind === "project" ? link.id : null, dealId: link?.kind === "deal" ? link.id : null }),
     onSuccess: (res) => {
       toast.success(t("Added to the archive"));
       if (res.pdfError) toast.warning(t("The PDF couldn't be made yet: {reason}", { reason: res.pdfError }));
@@ -85,6 +87,10 @@ export function UploadDocumentDialog({ open, onOpenChange, onCreated }: { open: 
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{LEGAL_STATUSES.map((s) => <SelectItem key={s} value={s}>{statusLabel(s)}</SelectItem>)}</SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>{t("Belongs to")}</Label>
+              <LegalLinkPicker value={link} onChange={setLink} />
             </div>
           </div>
         </div>
