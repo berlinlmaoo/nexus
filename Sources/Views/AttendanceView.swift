@@ -488,7 +488,9 @@ struct AttendanceView: View {
         // office the record happens to be filed under.
         if locationFree {
             if let a = dispRec?.checkInAddress, !a.isEmpty { return a.components(separatedBy: ",").prefix(2).joined(separator: ",") }
-            return dispRec?.checkInAt != nil ? T("Checked in away from the office") : T("Location-free")
+            // Before check-in the web's tile says what the rule means for you: "Any location /
+            // Check in from anywhere" (attendance.tsx), not "Location-free" (UI tour run 4).
+            return dispRec?.checkInAt != nil ? T("Checked in away from the office") : T("Check in from anywhere")
         }
         if let name = dispRec?.officeLocation?.name { return name }
         if let n = nearby { return n.office.name }
@@ -498,7 +500,7 @@ struct AttendanceView: View {
     private var officeLabel: String {
         if recordAway == true { return T("Where you checked in") }
         if recordAway == false { return dispRec?.officeLocation?.name != nil ? T("Office") : T("Where you are") }
-        if locationFree { return dispRec?.checkInAt != nil ? T("Where you checked in") : T("Where you are") }
+        if locationFree { return dispRec?.checkInAt != nil ? T("Where you checked in") : T("Any location") }
         return dispRec?.officeLocation?.name != nil ? T("Office") : T("Where you are")
     }
     private var officeHelper: String {
@@ -511,6 +513,8 @@ struct AttendanceView: View {
             }
             return recordAway == true ? "\(T("Away from the office")) · \(times)" : times
         }
+        // Location-free and not in yet: no office to measure against, so not "Checking where you are…".
+        if locationFree { return T("Not checked in yet") }
         if let n = nearby {
             return n.inside
                 ? T("You're inside this office area")

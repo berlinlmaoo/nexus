@@ -242,11 +242,14 @@ struct NexusNotification: Decodable, Identifiable, Sendable {
     /// under different tabs.
     var group: NotificationGroup {
         let t = (type ?? "").lowercased()
-        if t.hasPrefix("attendance") || t.hasPrefix("offsite") || t == "dayoff_quota_low" || t == "red_date_quota_low" { return .attendance }
+        if t.hasPrefix("attendance") || t.hasPrefix("offsite") || t == "dayoff_quota_low" || t == "dayoff_bonus_granted"
+            || t == "red_date_quota_low" { return .attendance }
         if t == "submission_status" { return .submissions }
         if t.hasPrefix("complaint") { return .tickets }
         if t.contains("announcement") { return .announcements }
-        if t.hasPrefix("message") || t == "feed_comment" { return .messages }
+        // Every Threads signal (feed_post, feed_like, feed_mention, feed_comment) is conversation, as the
+        // web files it: a "posted on Threads" row sat under "Other" here and "Messages" there (UI tour run 4).
+        if t.hasPrefix("message") || t.hasPrefix("feed_") { return .messages }
         if t.hasPrefix("task") || t.hasPrefix("comment") || t.hasPrefix("quest")
             || t == "project_invite" || t == "status_update" || t == "streak_at_risk" { return .tasks }
         return .other
