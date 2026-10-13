@@ -6,6 +6,8 @@
 # every launch for those users. project.yml runs the same check as a pre-build script; this copy is for
 # Linux / before a commit:  ./scripts/check-localization.sh
 cd "$(dirname "$0")/.." || exit 2
+# Byte-wise compare: in a UTF-8 locale macOS sort/uniq collate "Choose" and "Choose…" as equal.
+export LC_ALL=C
 DUP=$(cat Sources/Localization*.swift | grep -oE '"([^"\\]|\\.)*"[[:space:]]*:' | sed -E 's/[[:space:]]*:$//' | sort | uniq -d)
 if [ -n "$DUP" ]; then
   echo "error: duplicate localization keys:"

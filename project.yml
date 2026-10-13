@@ -47,6 +47,8 @@ targets:
           - $(SRCROOT)/Sources/Localization.swift
           - $(SRCROOT)/Sources/LocalizationRedesign.swift
         script: |
+          # Byte-wise compare: in a UTF-8 locale macOS sort/uniq collate "Choose" and "Choose…" as equal.
+          export LC_ALL=C
           DUP=$(cat "$SRCROOT"/Sources/Localization*.swift | grep -oE '"([^"\\]|\\.)*"[[:space:]]*:' | sed -E 's/[[:space:]]*:$//' | sort | uniq -d)
           if [ -n "$DUP" ]; then
             echo "error: Localization tables have duplicate keys — the app would crash in Bahasa Indonesia:"
