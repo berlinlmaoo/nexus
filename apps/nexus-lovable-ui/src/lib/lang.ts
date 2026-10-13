@@ -65,6 +65,16 @@ const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDA
 
 function read(): Lang {
   try {
+    // `?lang=en|id` in the address picks the language for this browser and keeps it (UI tour, 13 Oct
+    // 2026: real Safari has no way to preset localStorage). Local only: the account setting that
+    // notifications follow is changed by setLang, not by a link.
+    const asked = new URLSearchParams(window.location.search).get("lang");
+    if (asked === "en" || asked === "id") {
+      try { localStorage.setItem(KEY, asked); } catch { /* private mode: this page only */ }
+      return asked;
+    }
+  } catch { /* no location */ }
+  try {
     const saved = localStorage.getItem(KEY);
     if (saved === "en" || saved === "id") return saved;
   } catch { /* ignore */ }
