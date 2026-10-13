@@ -97,9 +97,22 @@ private struct OverviewSection: Identifiable {
     let done: Int
 }
 
+/// One part of the progress bar and its legend entry.
+private struct OverviewSegment: Identifiable {
+    let id: String
+    let label: String
+    let color: Color
+    let n: Int
+    /// Listed in the legend even at zero (To do and Done of the fixed statuses).
+    let always: Bool
+}
+
 /// Everything the Overview shows, computed once per payload.
 private struct OverviewStats {
     var total = 0
+    /// The progress bar's parts: one per status option in its own name and colour when the project
+    /// uses status options (web ProjectOverview `segs`, owner 12 Oct 2026); else the five fixed statuses.
+    var segments: [OverviewSegment] = []
     var done = 0
     var doneLast7 = 0
     var byStatus: [String: Int] = [:]
@@ -197,6 +210,18 @@ private struct OverviewStats {
             return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
         }
         names = nameMap
+        let lanes = detail.taskLists ?? []
+        if StatusOptions.inUse(lanes) {
+            segments = StatusOptions.ordered(lanes).map { lane in
+                OverviewSegment(id: lane.id, label: lane.name, color: lane.swatch.dot,
+                                n: (lane.tasks ?? []).filter { !$0.isSubtask }.count, always: false)
+            }
+        } else {
+            segments = Self.statusKeys.map { k in
+                OverviewSegment(id: k, label: OverviewStyle.statusLabel(k), color: OverviewStyle.statusColor(k),
+                                n: byStatus[k] ?? 0, always: k == "TODO" || k == "DONE")
+            }
+        }
         sections = (detail.taskLists ?? []).map { lane in
             let own = (lane.tasks ?? []).filter { !$0.isSubtask }
             let closed = own.filter { OverviewMath.isClosed(OverviewMath.status($0)) }.count
@@ -422,18 +447,16 @@ private struct OverviewProgressCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
-    private var shownStatuses: [String] {
-        OverviewStats.statusKeys.filter { (stats.byStatus[$0] ?? 0) > 0 || $0 == "TODO" || $0 == "DONE" }
-    }
+    private var shownSegments: [OverviewSegment] { stats.segments.filter { $0.n > 0 || $0.always } }
 
     private var statusBar: some View {
         GeometryReader { geo in
-            let keys = OverviewStats.statusKeys.filter { (stats.byStatus[$0] ?? 0) > 0 }
-            let gaps = CGFloat(max(0, keys.count - 1)) * 2
+            let parts = stats.segments.filter { $0.n > 0 }
+            let gaps = CGFloat(max(0, parts.count - 1)) * 2
             HStack(spacing: 2) {
-                ForEach(keys, id: \.self) { k in
-                    Rectangle().fill(OverviewStyle.statusColor(k))
-                        .frame(width: max(0, (geo.size.width - gaps) * CGFloat(stats.byStatus[k] ?? 0) / CGFloat(max(1, stats.total))))
+                ForEach(parts) { seg in
+                    Rectangle().fill(seg.color)
+                        .frame(width: max(0, (geo.size.width - gaps) * CGFloat(seg.n) / CGFloat(max(1, stats.total))))
                 }
             }
         }
@@ -441,19 +464,17 @@ private struct OverviewProgressCard: View {
         .background(NX.muted)
         .clipShape(Capsule())
         .accessibilityElement()
-        .accessibilityLabel(OverviewStats.statusKeys.filter { (stats.byStatus[$0] ?? 0) > 0 }
-            .map { "\(OverviewStyle.statusLabel($0)) \(stats.byStatus[$0] ?? 0)" }.joined(separator: ", "))
+        .accessibilityLabel(stats.segments.filter { $0.n > 0 }.map { "\($0.label) \($0.n)" }.joined(separator: ", "))
     }
 
     private var legend: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 12, alignment: .leading)], alignment: .leading, spacing: 6) {
-            ForEach(shownStatuses, id: \.self) { k in
-                let n = stats.byStatus[k] ?? 0
+            ForEach(shownSegments) { seg in
                 HStack(spacing: 6) {
-                    Circle().fill(OverviewStyle.statusColor(k)).frame(width: 8, height: 8)
-                    Text(OverviewStyle.statusLabel(k)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                    Text("\(n)").fontWeight(.semibold).foregroundStyle(NX.foreground)
-                    Text("\(stats.total > 0 ? Int((Double(n) / Double(stats.total) * 100).rounded()) : 0)%").foregroundStyle(NX.mutedFg)
+                    Circle().fill(seg.color).frame(width: 8, height: 8)
+                    Text(seg.label).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    Text("\(seg.n)").fontWeight(.semibold).foregroundStyle(NX.foreground)
+                    Text("\(stats.total > 0 ? Int((Double(seg.n) / Double(stats.total) * 100).rounded()) : 0)%").foregroundStyle(NX.mutedFg)
                 }
                 .font(NXFont.text(12)).monospacedDigit()
                 .accessibilityElement(children: .combine)
@@ -724,12 +745,16 @@ private struct OverviewTeamCard: View {
                 HStack(spacing: 10) {
                     AvatarView(url: p.avatar, initial: OverviewStyle.initial(p.name), size: 28)
                     VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Text(p.name).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
-                            if p.isLead {
-                                Text(T("Project Owner")).font(NXFont.text(10, .bold)).foregroundStyle(NX.violetText)
-                                    .padding(.horizontal, 6).padding(.vertical, 1)
-                                    .background(NX.accentBg, in: Capsule()).fixedSize()
+                        // Name and Owner chip side by side when both fit whole; on a phone the chip goes under
+                        // the name instead of cutting it to "Bagas P…" (UI tour run 7).
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 6) {
+                                Text(p.name).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1).fixedSize()
+                                if p.isLead { ownerChip }
+                            }
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(p.name).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+                                if p.isLead { ownerChip }
                             }
                         }
                         OverviewStyle.bar(Double(p.open) / Double(maxOpen), color: NX.violet.opacity(0.7), height: 4)
@@ -749,6 +774,12 @@ private struct OverviewTeamCard: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(p.name)\(p.isLead ? ", " + T("Project Owner") : ""). \(T("Open")) \(p.open), \(T("Overdue")) \(p.overdue), \(T("Done this month")) \(p.doneMonth)")
         .accessibilityAddTraits(.isButton)
+    }
+
+    private var ownerChip: some View {
+        Text(T("Project Owner")).font(NXFont.text(10, .bold)).foregroundStyle(NX.violetText)
+            .padding(.horizontal, 6).padding(.vertical, 1)
+            .background(NX.accentBg, in: Capsule()).fixedSize()
     }
 
     private func unassignedRow(maxOpen: Int) -> some View {
@@ -838,6 +869,13 @@ private struct OverviewBriefCard: View {
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel(m.displayName)
+                            }
+                            // The rest as a count, like web's "+4" (UI tour run 7).
+                            if members.count > 6 {
+                                Text("+\(members.count - 6)").font(NXFont.text(10, .bold)).foregroundStyle(NX.mutedFg)
+                                    .frame(width: 28, height: 28).background(NX.muted, in: Circle())
+                                    .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
+                                    .accessibilityHidden(true)
                             }
                         }
                     }
@@ -948,10 +986,18 @@ private struct OverviewRecentCard: View {
         let cal = OverviewMath.cal
         let days = cal.dateComponents([.day], from: cal.startOfDay(for: d), to: cal.startOfDay(for: Date())).day ?? 0
         if days < 30 {
+            // In whole days, like web's Intl.RelativeTimeFormat(…, "day"): "19 days ago", not the
+            // formatter's own rounding to "2 weeks ago" (UI tour run 7). Today: minutes, then hours.
             let f = RelativeDateTimeFormatter()
             f.locale = OverviewMath.locale
             f.dateTimeStyle = .named
-            return f.localizedString(for: min(d, Date()), relativeTo: Date())
+            if days <= 0 {
+                let mins = Int((min(d, Date()).timeIntervalSinceNow / 60).rounded())
+                return abs(mins) < 60
+                    ? f.localizedString(from: DateComponents(minute: min(0, mins)))
+                    : f.localizedString(from: DateComponents(hour: Int((Double(mins) / 60).rounded())))
+            }
+            return f.localizedString(from: DateComponents(day: -days))
         }
         let f = DateFormatter()
         f.locale = OverviewMath.locale
