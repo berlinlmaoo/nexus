@@ -371,8 +371,12 @@ struct FormQuestionCard: View {
                 titleBlock
                 tools
             }
+            .contentShape(Rectangle())
+            .onTapGesture { if editsOptionsInline { onSelect() } }
             answerArea.padding(.top, 12)
             chipRow
+                .contentShape(Rectangle())
+                .onTapGesture { if editsOptionsInline { onSelect() } }
         }
         .padding(.horizontal, compact ? 16 : 24)
         .padding(.top, 14).padding(.bottom, 16)
@@ -383,9 +387,16 @@ struct FormQuestionCard: View {
                 .strokeBorder(selected ? NX.accentFg.opacity(0.75) : NX.border, lineWidth: selected ? 1.5 : 1)
         )
         .contentShape(Rectangle())
-        .onTapGesture { onSelect() }
+        // iPhone + a choice question: only the title and the chips open the question's screen; the
+        // options in between are typed in place, so a tap there never does both at once.
+        .onTapGesture { if !editsOptionsInline { onSelect() } }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(format: T("Question %d"), index + 1))
+    }
+
+    /// iPhone card whose options are edited in place (UI tour run 7).
+    private var editsOptionsInline: Bool {
+        compact && field.hasOptions && !(field.mappingTarget == "task_list" && sectionCategory == nil)
     }
 
     /// Regular width: the title and description are typed in place. iPhone: drawn, and a tap on the
@@ -435,7 +446,8 @@ struct FormQuestionCard: View {
                     toolButton("slider.horizontal.3", T("Question settings"), action: onOpenSettings)
                 }
                 toolButton("doc.on.doc", T("Duplicate question"), action: onDuplicate)
-                toolButton("trash", T("Delete question"), destructive: true, action: onDelete)
+                // Grey like web's question tools; the delete itself still asks first (UI tour run 7).
+                toolButton("trash", T("Delete question"), action: onDelete)
             }
         }
     }
@@ -473,9 +485,10 @@ struct FormQuestionCard: View {
                     .padding(.horizontal, 12).padding(.vertical, 10)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
-            } else if compact {
-                FormStaticOptions(options: field.options, multi: field.type == "multi_select")
             } else {
+                // Typed in place on every device, as on web (UI tour run 7: the iPhone only drew them).
+                // On the iPhone the card's own tap stays off this block (see body), so typing an option
+                // never also opens the question's screen.
                 FormInlineOptions(options: $field.options, multi: field.type == "multi_select")
             }
         } else if field.type == "checkbox" {
@@ -700,15 +713,22 @@ struct FormCanvasControl: View {
         case "textarea":
             box(T("Your answer"), height: 96)
         case "file":
-            HStack(spacing: 8) {
-                Image(systemName: "paperclip").font(.system(size: 13))
-                Text(T("Choose a file…")).font(NXFont.text(15))
+            // Web FormRenderer: an "Upload" button, then what the field takes (UI tour run 7).
+            HStack(spacing: 10) {
+                Label(T("Upload"), systemImage: "paperclip")
+                    .font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground)
+                    .padding(.horizontal, 9).padding(.vertical, 4)
+                    .background(NX.background, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(NX.border))
+                Text(T("One or more files, up to 50 MB each")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    .lineLimit(2)
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(NX.mutedFg)
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 12).padding(.vertical, 10)
             .frame(maxWidth: .infinity, minHeight: 46)
+            .background(NX.muted.opacity(0.3), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+            .allowsHitTesting(false)
         case "date":
             box(T("Pick a date"), icon: "calendar")
         case "number":

@@ -1760,9 +1760,12 @@ struct LaneColumn: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 8) {
                         ForEach(orderedTasks) { task in card(task) }
-                        if (lane.tasks ?? []).isEmpty && !composing {
+                        // A column that takes cards already says what to do ("+ New task"), as on web;
+                        // a centred "No tasks" there peeked in as a cut-off "No" at the screen edge
+                        // (UI tour run 7). Only a column that can't take a card says it is empty.
+                        if (lane.tasks ?? []).isEmpty && !composing && !canAdd {
                             Text(T("No tasks")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg.opacity(0.7))
-                                .frame(maxWidth: .infinity).padding(.vertical, 18)
+                                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8).padding(.vertical, 18)
                         }
                     }
                     .padding(.bottom, 8)
@@ -1821,7 +1824,7 @@ struct LaneColumn: View {
             editableCard(task)
         } else {
             // Read-only: the card opens the task, nothing else.
-            Button { onOpen(task.id) } label: { BoardCard(task: task) }
+            Button { onOpen(task.id) } label: { BoardCard(task: task, linkedFrom: linked ? lane.name : nil) }
                 .buttonStyle(.plain)
                 .hoverEffect(.lift)
         }
@@ -1833,7 +1836,7 @@ struct LaneColumn: View {
             if selection.active { selection.toggle(task.id) } else { onOpen(task.id) }
         } label: {
             // The tick is drawn inside the card, so the column's scroll view never clips it.
-            BoardCard(task: task, selectMark: selection.active ? selection.contains(task.id) : nil)
+            BoardCard(task: task, selectMark: selection.active ? selection.contains(task.id) : nil, linkedFrom: linked ? lane.name : nil)
                 .overlay {
                     if selection.active && selection.contains(task.id) {
                         RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.violet, lineWidth: 2)
@@ -1973,9 +1976,14 @@ struct BoardCard: View {
     let task: BoardTask
     /// nil = not in selection mode; else whether this card is ticked (multi-select, TaskBatchDuplicate.swift).
     var selectMark: Bool? = nil
+    /// The source project of a card linked in from another project: "From <project>" on top, as web.
+    var linkedFrom: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let linkedFrom {
+                Text(String(format: T("From %@"), linkedFrom)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            }
             if task.isSubtask { SubtaskBadge(parentTitle: task.parent?.title) }
             HStack(alignment: .top, spacing: 8) {
                 if let selectMark { TaskSelectionMark(selected: selectMark) }
@@ -1994,6 +2002,7 @@ struct BoardCard: View {
                 // No "No due" placeholder on every card (Notion shows nothing when there is no date).
                 if let due = dueText {
                     Label(due, systemImage: "clock").font(NXFont.text(11)).foregroundStyle(isOverdue ? NX.danger : NX.mutedFg)
+                        .accessibilityLabel("\(T("Due date")): \(due)")
                 }
                 if task.totalSubs > 0 {
                     NexusChip(text: "\(task.doneSubs)/\(task.totalSubs)", tone: task.doneSubs == task.totalSubs ? .success : .neutral, systemImage: "checklist")

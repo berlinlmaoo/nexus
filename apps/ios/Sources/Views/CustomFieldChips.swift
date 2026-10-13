@@ -7,6 +7,10 @@ struct CFChip: Identifiable, Equatable {
     let tone: ChipTone
     /// A select option's colour (web choiceColor: the palette by the option's position); nil = tone.
     var colorKey: String? = nil
+    /// A date value: drawn like web's PropValue date (clock icon + muted text, no pill), so two date
+    /// fields on one card read as dates and the field name is spoken (UI tour run 7).
+    var isDate = false
+    var fieldName: String? = nil
 }
 
 // Formatters are expensive to construct — build once and reuse. `customFieldChip` runs per card
@@ -61,8 +65,8 @@ func customFieldChip(_ cfv: BoardTask.CFValue) -> CFChip? {
         }
         return nil
     case "DATE", "CREATED":
-        if let d = parseDay(raw) { return CFChip(id: cfv.customFieldId, label: ProjDate.dayLabel(d), tone: .neutral) }
-        return CFChip(id: cfv.customFieldId, label: raw, tone: .neutral)
+        let label = parseDay(raw).map { ProjDate.dayLabel($0) } ?? raw
+        return CFChip(id: cfv.customFieldId, label: label, tone: .neutral, isDate: true, fieldName: cfv.customField?.name)
     case "SELECT":
         return CFChip(id: cfv.customFieldId, label: raw, tone: .neutral, colorKey: choiceColorKey(raw, choices: cfv.customField?.options?.list ?? []))
     default:
@@ -84,7 +88,11 @@ func choiceColorKey(_ value: String, choices: [String]) -> String {
 struct CFChipView: View {
     let chip: CFChip
     var body: some View {
-        if let key = chip.colorKey {
+        if chip.isDate {
+            Label(chip.label, systemImage: "clock").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                .padding(.vertical, 2)
+                .accessibilityLabel(chip.fieldName.map { "\($0): \(chip.label)" } ?? chip.label)
+        } else if let key = chip.colorKey {
             let sw = StatusColor.swatch(key)
             Text(chip.label).font(NXFont.text(10, .semibold)).lineLimit(1)
                 .padding(.horizontal, 7).padding(.vertical, 3)
