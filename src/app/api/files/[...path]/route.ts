@@ -40,6 +40,12 @@ export async function GET(
     return NextResponse.json({ error: 'Gone', message: 'This feature was removed.' }, { status: 410 })
   }
 
+  // Legal files (14 Oct 2026) are served only through /api/legal/*, behind its invitation gate.
+  const legalDir = join(base, 'attachments', 'legal')
+  if (filePath === legalDir || filePath.startsWith(legalDir + sep)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   // Avatar thumbnails (perf pass, 12 Oct 2026): `?w=` on an avatar answers a small WebP instead of the
   // full photo (1-2.5 MB). Without it nothing changes: the released apps use the plain URL.
   // Project icons too (a 2 MB PNG drawn at 36 px in the sidebar, 85 of them for some people).

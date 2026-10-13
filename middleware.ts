@@ -65,6 +65,8 @@ export const config = {
     // locked stream: every iOS vault upload under 10 MB on a slow link failed with "Failed to parse
     // body as FormData". Reproduced against 15.5.18 on Node 20; the bodiless matchers still gate
     // those routes.
+    // /api/legal/* joins them (14 Oct 2026): it takes .docx templates and signed-contract scans as
+    // multipart bodies the same way.
     // Values must stay literals: Next reads this object statically at build time.
     //
     // iOS with X-Nexus-Client (0.1.6+): all of /api.
@@ -74,7 +76,7 @@ export const config = {
       missing: [{ type: "header", key: "content-length" }, { type: "header", key: "transfer-encoding" }],
     },
     {
-      source: "/api/((?!vault/|attachments/chunk).*)",
+      source: "/api/((?!vault/|attachments/chunk|legal/).*)",
       has: [
         { type: "header", key: "x-nexus-client", value: "[iI][oO][sS]/.*" },
         { type: "header", key: "content-length", value: "\\d{1,7}" },
@@ -88,7 +90,7 @@ export const config = {
       missing: [{ type: "header", key: "content-length" }, { type: "header", key: "transfer-encoding" }],
     },
     {
-      source: "/api/((?!vault/|attachments/chunk).*)",
+      source: "/api/((?!vault/|attachments/chunk|legal/).*)",
       has: [
         { type: "header", key: "x-nexus-client", value: "[aA][nN][dD][rR][oO][iI][dD]/.*" },
         { type: "header", key: "content-length", value: "\\d{1,7}" },

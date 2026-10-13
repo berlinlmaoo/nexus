@@ -913,6 +913,8 @@ export type WorkspaceMembersResponse = {
   canAccessPipeline?: boolean;
   /** The company's one Pipeline board, for the "Pipeline" nav entry; only for its project members, else null. */
   pipelineProjectId?: string | null;
+  /** Invited to Legal (or its owner): draws the "Legal" nav entry. Servers since 14 Oct 2026. */
+  canAccessLegal?: boolean;
   workspaceId: string;
   /** Nama workspace si pemanggil — untuk label tombol "Masukkan ke …". */
   workspaceName?: string;

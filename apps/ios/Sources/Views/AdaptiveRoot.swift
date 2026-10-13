@@ -24,6 +24,8 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     case messages, threads, submissions, teamCalendar, roomBooking
     // GIDEON's own page (web sidebar, 12 Oct 2026): the conversation with its chats list. iPad / Mac sidebar.
     case gideon
+    // Work: Legal (owner, 14 Oct 2026), invitation only — drawn when Viewer.canAccessLegal.
+    case legal
     // Missions
     case leaderboard, reports
     // Knowledge
@@ -41,6 +43,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .tasks:        return T("My Tasks")
         case .inbox:        return T("Notifications")
         case .projects:     return T("Projects")
+        case .legal:        return T("Legal")
         case .messages:     return T("Messages")
         case .gideon:       return "GIDEON"
         case .threads:      return T("Threads")
@@ -66,6 +69,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .tasks:        return "checklist"
         case .inbox:        return "tray.fill"
         case .projects:     return "rectangle.stack.fill"
+        case .legal:        return "building.columns.fill"
         case .messages:     return "bubble.left.and.bubble.right.fill"
         case .gideon:       return "sparkles"
         case .threads:      return "text.bubble.fill"
@@ -93,6 +97,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .tasks:        return "checkmark.square"
         case .inbox:        return "tray"
         case .projects:     return "folder"
+        case .legal:        return "building.columns"
         case .messages:     return "bubble.left"
         case .gideon:       return "sparkles"
         case .threads:      return "at"
@@ -116,7 +121,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .dashboard, .projects, .threads, .teamCalendar, .docs, .vault, .settings, .gideon: return NX.violetText
         case .tasks, .attendance, .reports:                                    return NX.success
-        case .inbox, .messages, .forms, .tickets:                              return NX.blue
+        case .inbox, .messages, .forms, .tickets, .legal:                      return NX.blue
         case .submissions, .leaderboard:                                       return NX.warning
         case .roomBooking, .teams:                                             return NX.coral
         case .admin:                                                           return NX.danger
@@ -146,7 +151,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         // The web-style page header screens (Mac parity, 13 Oct) hide the bar as the sidebar's root too, so
         // they get the same top band that keeps their header clear of the window controls.
         case .dashboard, .inbox, .projects, .threads, .submissions, .leaderboard, .reports, .docs,
-             .attendance, .tickets, .admin, .teamCalendar, .vault, .settings, .roomBooking, .gideon:
+             .attendance, .tickets, .admin, .teamCalendar, .vault, .settings, .roomBooking, .gideon, .legal:
             return true
         default: return false
         }
@@ -170,6 +175,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .tasks:        TasksView()
         case .inbox:        InboxView()
         case .projects:     ProjectsView()
+        case .legal:        LegalView()
         case .messages:     MessagesView(providesOwnStack: true)
         case .gideon:       GideonPanel(embedded: true)
         case .threads:      ThreadsView()
@@ -208,7 +214,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     /// routes stay alive for old shortcuts and notification links.
     static var groups: [(title: String?, screens: [NXScreen])] { [
         (T("Home"),   [.dashboard, .messages, .gideon, .inbox, .threads, .vault, .tasks, .submissions, .teamCalendar, .roomBooking]),
-        (T("Work"),   [.projects, .leaderboard, .reports, .forms]),
+        (T("Work"),   [.projects, .legal, .leaderboard, .reports, .forms]),
         (T("Team"),   [.attendance]),
         (T("System"), [.tickets, .settings, .admin]),
     ] }
@@ -411,12 +417,13 @@ struct SidebarRoot: View {
     @State private var workspaceId: String?
 
     /// Company-only screens (Z Vault, Threads) left out for anyone outside the company workspace,
-    /// and the Calendar while the server's `flags.calendar` holds it back.
+    /// Legal for anyone not invited to it, and the Calendar while the server's `flags.calendar` holds it back.
     private var navGroups: [(title: String?, screens: [NXScreen])] {
         let calendarOn = RemoteConfig.shared.calendar
         return NXScreen.groups.map { g in
             (g.title, g.screens.filter {
                 (($0 != .vault && $0 != .threads) || viewer.isCompanyMember) && ($0 != .teamCalendar || calendarOn)
+                    && ($0 != .legal || viewer.canAccessLegal)
             })
         }
     }

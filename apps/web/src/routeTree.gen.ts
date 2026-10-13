@@ -31,6 +31,7 @@ import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppMyTasksRouteImport } from './routes/_app/my-tasks'
 import { Route as AppMessagesRouteImport } from './routes/_app/messages'
 import { Route as AppMasterCalendarRouteImport } from './routes/_app/master-calendar'
+import { Route as AppLegalRouteImport } from './routes/_app/legal'
 import { Route as AppLeaderboardRouteImport } from './routes/_app/leaderboard'
 import { Route as AppInboxRouteImport } from './routes/_app/inbox'
 import { Route as AppGideonRouteImport } from './routes/_app/gideon'
@@ -160,6 +161,11 @@ const AppMasterCalendarRoute = AppMasterCalendarRouteImport.update({
   path: '/master-calendar',
   getParentRoute: () => AppRoute,
 } as any)
+const AppLegalRoute = AppLegalRouteImport.update({
+  id: '/legal',
+  path: '/legal',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppLeaderboardRoute = AppLeaderboardRouteImport.update({
   id: '/leaderboard',
   path: '/leaderboard',
@@ -273,6 +279,7 @@ export interface FileRoutesByFullPath {
   '/gideon': typeof AppGideonRoute
   '/inbox': typeof AppInboxRoute
   '/leaderboard': typeof AppLeaderboardRoute
+  '/legal': typeof AppLegalRoute
   '/master-calendar': typeof AppMasterCalendarRoute
   '/messages': typeof AppMessagesRouteWithChildren
   '/my-tasks': typeof AppMyTasksRoute
@@ -314,6 +321,7 @@ export interface FileRoutesByTo {
   '/gideon': typeof AppGideonRoute
   '/inbox': typeof AppInboxRoute
   '/leaderboard': typeof AppLeaderboardRoute
+  '/legal': typeof AppLegalRoute
   '/master-calendar': typeof AppMasterCalendarRoute
   '/messages': typeof AppMessagesRouteWithChildren
   '/my-tasks': typeof AppMyTasksRoute
@@ -358,6 +366,7 @@ export interface FileRoutesById {
   '/_app/gideon': typeof AppGideonRoute
   '/_app/inbox': typeof AppInboxRoute
   '/_app/leaderboard': typeof AppLeaderboardRoute
+  '/_app/legal': typeof AppLegalRoute
   '/_app/master-calendar': typeof AppMasterCalendarRoute
   '/_app/messages': typeof AppMessagesRouteWithChildren
   '/_app/my-tasks': typeof AppMyTasksRoute
@@ -403,6 +412,7 @@ export interface FileRouteTypes {
     | '/gideon'
     | '/inbox'
     | '/leaderboard'
+    | '/legal'
     | '/master-calendar'
     | '/messages'
     | '/my-tasks'
@@ -444,6 +454,7 @@ export interface FileRouteTypes {
     | '/gideon'
     | '/inbox'
     | '/leaderboard'
+    | '/legal'
     | '/master-calendar'
     | '/messages'
     | '/my-tasks'
@@ -487,6 +498,7 @@ export interface FileRouteTypes {
     | '/_app/gideon'
     | '/_app/inbox'
     | '/_app/leaderboard'
+    | '/_app/legal'
     | '/_app/master-calendar'
     | '/_app/messages'
     | '/_app/my-tasks'
@@ -686,6 +698,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMasterCalendarRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/legal': {
+      id: '/_app/legal'
+      path: '/legal'
+      fullPath: '/legal'
+      preLoaderRoute: typeof AppLegalRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/leaderboard': {
       id: '/_app/leaderboard'
       path: '/leaderboard'
@@ -868,6 +887,7 @@ interface AppRouteChildren {
   AppGideonRoute: typeof AppGideonRoute
   AppInboxRoute: typeof AppInboxRoute
   AppLeaderboardRoute: typeof AppLeaderboardRoute
+  AppLegalRoute: typeof AppLegalRoute
   AppMasterCalendarRoute: typeof AppMasterCalendarRoute
   AppMessagesRoute: typeof AppMessagesRouteWithChildren
   AppMyTasksRoute: typeof AppMyTasksRoute
@@ -897,6 +917,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppGideonRoute: AppGideonRoute,
   AppInboxRoute: AppInboxRoute,
   AppLeaderboardRoute: AppLeaderboardRoute,
+  AppLegalRoute: AppLegalRoute,
   AppMasterCalendarRoute: AppMasterCalendarRoute,
   AppMessagesRoute: AppMessagesRouteWithChildren,
   AppMyTasksRoute: AppMyTasksRoute,

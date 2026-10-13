@@ -17,6 +17,7 @@ import { sendEmail, workspaceAddedEmail, workspaceInviteNewUserEmail } from '@/l
 import type { WorkspaceRole } from '@/generated/prisma/client'
 import { syncUserRoomsSafe } from '@/lib/chat-membership'
 import { pipelineFlags } from '@/lib/pipeline-access'
+import { hasLegalAccess } from '@/lib/legal/access'
 import { personalScope } from '@/lib/personal-visibility'
 
 // Caller's effective tier (system super-admin = top). Used to gate who can assign which role.
@@ -76,6 +77,7 @@ export async function GET(req: NextRequest) {
     const canSeePhoneNumbers = callerTier(member.role, isSystemAdmin) >= 3
 
     const pipeline = await pipelineFlags(session.user.id)
+    const canAccessLegal = await hasLegalAccess(session.user.id)
     // Personal attendance data (shift, per-day shift, rest days, Flexi / no-geofence, approver) only for
     // yourself and the people below you in the approval chain; BoD / One Above All / system admin see all
     // (owner decision 13 Oct 2026, lib/personal-visibility.ts). Hidden rows keep every key with a neutral
@@ -103,6 +105,9 @@ export async function GET(req: NextRequest) {
       /** The company's Pipeline board when this person is a member of it — draws the "Pipeline" nav
        *  entry; null for everyone else (they reach it only through the project list, if their role can). */
       pipelineProjectId: string | null
+      /** Draws the "Legal" nav entry: invited to Legal, or its owner (lib/legal/access.ts). The server
+       *  refuses every /api/legal route for everyone else, so this only hides what would fail anyway. */
+      canAccessLegal: boolean
       members: Array<{
         id: string
         userId: string
@@ -140,6 +145,7 @@ export async function GET(req: NextRequest) {
       isCompany: (await orgRoleOf(session.user.id)) != null,
       canAccessPipeline: pipeline.canAccessPipeline,
       pipelineProjectId: pipeline.pipelineProjectId,
+      canAccessLegal,
       members: members.map(m => ({
         id: m.id,
         userId: m.user.id,

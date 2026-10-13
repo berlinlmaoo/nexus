@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Inbox, CheckSquare, FolderKanban, Menu, X,
   MessageCircle, Calendar, CalendarClock, Users, Trophy,
   ClipboardCheck, Settings, Shield, LogOut, Loader2, FileText, AtSign, Ticket, Sun, Moon,
- HardDrive, Languages, Search,
+ HardDrive, Languages, Search, Scale,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { nexusApi, activeNotifications } from "@/lib/nexus-api";
@@ -52,6 +52,8 @@ const moreGroups = [
     label: "Work",
     items: [
       { title: "Projects", url: "/projects", icon: FolderKanban },
+      // Invitation only (owner, 14 Oct 2026): shown when canAccessLegal; the server refuses everyone else.
+      { title: "Legal", url: "/legal", icon: Scale },
       { title: "Leaderboard", url: "/leaderboard", icon: Trophy },
     ],
   },
@@ -230,6 +232,7 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
   const orgRole = membersInfo?.role;
   // Z Vault and Threads are the company's (Z Networks) only.
   const isCompany = membersInfo?.isCompany === true;
+  const canAccessLegal = membersInfo?.canAccessLegal === true;
   // The pipeline board has no entry in More (owner, 9 Oct 2026): it opens from Projects like any project.
   const canManageOrg = ["ONE_ABOVE_ALL", "BOD", "MANAGER"].includes(orgRole ?? "");
   // Ticket is OPEN to everyone since 2026-07-29 (staff see only their own tickets).
@@ -287,7 +290,7 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
                 <div key={g.label} className="mb-3">
                   <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t(g.label)}</div>
                   <div className="grid grid-cols-1 gap-0.5">
-                    {g.items.filter((item) => isCompany || (item.url !== "/vault" && item.url !== "/threads")).map((item) => {
+                    {g.items.filter((item) => (isCompany || (item.url !== "/vault" && item.url !== "/threads")) && (canAccessLegal || item.url !== "/legal")).map((item) => {
                       const active = isActive(item.url);
                       return (
                         <Link

@@ -146,6 +146,16 @@ model User {
   outletEventsReported OutletSalesEvent[]   @relation("OutletEventReportedBy")
   outletTargetsUpdated OutletSalesTarget[]  @relation("OutletTargetUpdatedBy")
   blockReminders       BlockReminder[]
+  legalMembership      LegalMember?           @relation("LegalMemberUser")
+  legalInvites         LegalMember[]          @relation("LegalMemberInvitedBy")
+  legalRevokes         LegalMember[]          @relation("LegalMemberRevokedBy")
+  legalTemplates       LegalTemplate[]        @relation("LegalTemplateCreatedBy")
+  legalTemplateVersions LegalTemplateVersion[] @relation("LegalTemplateVersionCreatedBy")
+  legalDocsCreated     LegalDocument[]        @relation("LegalDocumentCreatedBy")
+  legalDocsUpdated     LegalDocument[]        @relation("LegalDocumentUpdatedBy")
+  legalDocVersions     LegalDocumentVersion[] @relation("LegalDocumentVersionAuthor")
+  legalProposals       LegalEditProposal[]    @relation("LegalEditProposalCreatedBy")
+  legalProposalsDecided LegalEditProposal[]   @relation("LegalEditProposalDecidedBy")
 }
 
 // Per-user API token for the MCP connector (and other integrations). Only the SHA-256 hash is
@@ -553,6 +563,7 @@ model Project {
   pnlBudgets         PnlBudget[]
   pnlRecurring       PnlRecurringExpense[]
   pipelineDeals      PipelineDeal[] @relation("PipelineDealProject")
+  legalDocuments     LegalDocument[]
   /// When this is the execution project of a won deal (owner/GM, 9 Oct 2026), that deal.
   pipelineExecutionOf PipelineDeal?  @relation("PipelineDealExecution")
   /// When this is the Master Calendar of a won deal's execution folder (owner, 10 Oct 2026), that deal.
@@ -1801,12 +1812,229 @@ model DocumentNumber {
 
   taskId     String?
   task       Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  issuedById String
-  issuedBy   User    @relation(fields: [issuedById], references: [id], onDelete: Cascade)
+  /// SetNull, not Cascade (14 Oct 2026): deleting a person must never delete the numbers they issued —
+  /// a deleted row would be issued again (max + 1) and two documents would print the same number.
+  issuedById String?
+  issuedBy   User?   @relation(fields: [issuedById], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())
+  legalDocument LegalDocument?
 
   @@unique([series, year, month, seq])
   @@index([series, year, month])
+}
+
+// --- Legal (owner 14 Oct 2026): invitation-only document assembly + archive ---
+// Access rule, numbering, templates and versions: src/lib/legal/*. SQL: prisma/sql/2026-10-14-legal.sql.
+// Files live under public/uploads/attachments/legal (src/lib/legal/storage.ts), never as Vault items, so
+// nothing legal is reachable through Z Vault's own access rules.
+
+/// Who may open Legal. The root (LEGAL_ROOT_EMAILS, Berlin) needs no row. Never deleted: a revoke stamps
+/// revokedAt so who-invited-whom survives; inviting the same person again clears it.
+model LegalMember {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  user        User      @relation("LegalMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  invitedById String?
+  invitedBy   User?     @relation("LegalMemberInvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+  invitedAt   DateTime  @default(now())
+  revokedAt   DateTime?
+  revokedById String?
+  revokedBy   User?     @relation("LegalMemberRevokedBy", fields: [revokedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([revokedAt])
+}
+
+/// An issuing company (Intoo, PATS, Suwara Lokal, Z Networks). Its kop is a .docx whose first-page header
+/// is copied into every document it issues.
+model LegalCompany {
+  id            String    @id @default(cuid())
+  /// The {CO} segment of a document number. Editable until the company has issued a number.
+  code          String    @unique
+  name          String
+  /// As printed in contracts ("PT PATS DARI SELATAN"); empty until someone fills it in Settings.
+  legalName     String    @default("")
+  address       String    @default("")
+  kopStorageKey String?
+  kopFileName   String?
+  kopUpdatedAt  DateTime?
+  position      Int       @default(0)
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  series    LegalSeries[]
+  templates LegalTemplate[]
+  documents LegalDocument[]
+}
+
+/// One numbering series: a company × document type and how its printed number looks. DocumentNumber.series
+/// holds `key`, which therefore never changes once a number has been issued.
+model LegalSeries {
+  id          String       @id @default(cuid())
+  key         String       @unique
+  companyId   String
+  company     LegalCompany @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  docType     String
+  label       String
+  /// Tokens: {SEQ} / {SEQ:n}, {ROMAWI}, {MM}, {BLN}, {YYYY}, {YY}, {CO}, and {ANY_FIELD} from the form.
+  format      String
+  /// "YEAR" or "MONTH": when {SEQ} restarts at 1.
+  resetPeriod String       @default("YEAR")
+  active      Boolean      @default(true)
+  position    Int          @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  templates LegalTemplate[]
+  documents LegalDocument[]
+
+  @@index([companyId, docType])
+}
+
+/// A fillable .docx with {{PLACEHOLDERS}}, uploaded from the app. Versioned: a document keeps the version
+/// it was made from, and a new upload never changes documents already made.
+model LegalTemplate {
+  id             String        @id @default(cuid())
+  name           String
+  description    String        @default("")
+  docType        String
+  /// null = usable for every company.
+  companyId      String?
+  company        LegalCompany? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  /// The series its documents are numbered in; null = the company's series for docType.
+  seriesId       String?
+  series         LegalSeries?  @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  currentVersion Int           @default(1)
+  archivedAt     DateTime?
+  createdById    String?
+  createdBy      User?         @relation("LegalTemplateCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  versions LegalTemplateVersion[]
+
+  @@index([docType])
+}
+
+model LegalTemplateVersion {
+  id          String        @id @default(cuid())
+  templateId  String
+  template    LegalTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  version     Int
+  storageKey  String
+  fileName    String
+  size        Int
+  /// The form: [{ name, label, type, required, ... }] — detected from the file, then labelled by people.
+  fields      Json          @default("[]")
+  note        String        @default("")
+  createdById String?
+  createdBy   User?         @relation("LegalTemplateVersionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime      @default(now())
+
+  documents LegalDocument[]
+
+  @@unique([templateId, version])
+}
+
+/// Every legal document: generated here, or uploaded (a signed contract, an outside invoice). Never hard
+/// deleted while it carries an issued number — VOID keeps the number accounted for.
+model LegalDocument {
+  id                String                @id @default(cuid())
+  companyId         String
+  company           LegalCompany          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  seriesId          String?
+  series            LegalSeries?          @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  documentNumberId  String?               @unique
+  documentNumber    DocumentNumber?       @relation(fields: [documentNumberId], references: [id], onDelete: SetNull)
+  /// The printed number (or an outside one on an upload, e.g. a vendor's invoice number).
+  number            String                @default("")
+  docType           String
+  title             String
+  counterparty      String                @default("")
+  docDate           DateTime?
+  /// DRAFT | FINAL | SENT | SIGNED | VOID
+  status            String                @default("DRAFT")
+  /// GENERATED | UPLOADED
+  source            String                @default("GENERATED")
+  templateVersionId String?
+  templateVersion   LegalTemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: SetNull)
+  fieldValues       Json                  @default("{}")
+  projectId         String?
+  project           Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  dealId            String?
+  deal              PipelineDeal?         @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  notes             String                @default("")
+  currentVersion    Int                   @default(1)
+  /// The version Final DOCX/PDF come from; null = currentVersion.
+  finalVersion      Int?
+  createdById       String?
+  createdBy         User?                 @relation("LegalDocumentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById       String?
+  updatedBy         User?                 @relation("LegalDocumentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  deletedAt         DateTime?
+
+  versions  LegalDocumentVersion[]
+  proposals LegalEditProposal[]
+
+  @@index([companyId, docDate])
+  @@index([docType])
+  @@index([status])
+  @@index([number])
+}
+
+/// One state of a document's file. Every change (generate, manual edit, GIDEON, upload, restore) adds one.
+model LegalDocumentVersion {
+  id         String        @id @default(cuid())
+  documentId String
+  document   LegalDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  version    Int
+  /// GENERATED | MANUAL | GIDEON | UPLOAD | RESTORE
+  kind       String
+  docxKey    String?
+  pdfKey     String?
+  /// An upload that is neither DOCX nor PDF-from-DOCX (a scanned signed PDF): the file as uploaded.
+  fileKey    String?
+  fileName   String
+  mimeType   String
+  size       Int           @default(0)
+  note       String        @default("")
+  /// [{ index, before, after }] for edits; restoredFrom for RESTORE.
+  changes    Json?
+  authorId   String?
+  author     User?         @relation("LegalDocumentVersionAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt  DateTime      @default(now())
+
+  @@unique([documentId, version])
+}
+
+/// A change GIDEON proposes to a document: shown as before→after, applied only on Approve.
+model LegalEditProposal {
+  id             String        @id @default(cuid())
+  documentId     String
+  document       LegalDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  baseVersion    Int
+  instruction    String
+  /// PENDING | CLARIFY | APPLIED | DISCARDED | FAILED
+  status         String        @default("PENDING")
+  /// Set when GIDEON asks back instead of proposing (status CLARIFY).
+  question       String?
+  summary        String        @default("")
+  /// [{ index, before, after }]
+  changes        Json          @default("[]")
+  appliedVersion Int?
+  createdById    String?
+  createdBy      User?         @relation("LegalEditProposalCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  decidedById    String?
+  decidedBy      User?         @relation("LegalEditProposalDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([documentId, status])
 }
 
 // --- Finance dashboard (per Finance project, monthly OPEX + Revenue) ---
@@ -3606,6 +3834,7 @@ model PipelineDeal {
   /// Payments per term (owner, 9 Oct 2026: "perlu per termin"). When a deal has any, its receivable,
   /// payment status and days overdue come from them; the manual columns above stay for deals without.
   terms   PipelinePaymentTerm[]
+  legalDocuments LegalDocument[]
 
   @@unique([projectId, code])
   @@index([projectId, stage, position])
