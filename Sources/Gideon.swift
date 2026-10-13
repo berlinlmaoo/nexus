@@ -65,8 +65,13 @@ struct GideonLoose: Decodable, Sendable, Equatable {
 struct GideonStep: Decodable, Sendable, Equatable, Identifiable {
     let id: String
     let tool: String?
+    /// The human handle the tool worked on (a search query, a project or task name). The step line is
+    /// worded from `tool` + `arg` in the app's language, like the web's stepText; `label` is the
+    /// server's English fallback for a tool the app does not know yet.
+    var arg: String? = nil
     let label: String?
     let status: String?
+    var error: String? = nil
 }
 
 /// Something an answer is drawn from: a task, project, page… the account can open.
@@ -104,21 +109,124 @@ struct GideonProposal: Decodable, Sendable, Equatable, Identifiable {
 }
 
 /// Where the person asked from: GIDEON reads that project first, with the person's own access.
+///
+/// Sent as the body's `context` exactly as the web's streamGideon builds it (lib/gideon.ts):
+/// `{projectId?, taskId?, docId?, refs?}` — the page on screen (project / task / doc) plus the pages
+/// added with @. The server re-checks access on every id and silently drops what this account cannot see.
 struct GideonContext: Equatable, Sendable {
     var projectId: String?
     var projectName: String?
     var taskId: String?
     var taskTitle: String?
+    /// A page (doc) the person is reading (web pushGideonPage kind "doc").
+    var docId: String? = nil
+    var docTitle: String? = nil
     /// Pages, tasks and projects added with @ in the composer (web chips; at most 8). The server checks
     /// each one and drops what this account cannot open.
     var refs: [GideonRef] = []
-    var isEmpty: Bool { projectId == nil && taskId == nil && refs.isEmpty }
+    /// True when this names a page (project / task / doc), apart from the @ refs.
+    var hasPage: Bool { projectId != nil || taskId != nil || docId != nil }
+    var isEmpty: Bool { !hasPage && refs.isEmpty }
+    /// The same context without the page part (the @ refs stay).
+    var withoutPage: GideonContext { GideonContext(refs: refs) }
+    /// The chip's words (web chipLabel): the task, else the doc, else the project.
+    var pageLabel: String? {
+        if let taskTitle, !taskTitle.isEmpty {
+            if let projectName, !projectName.isEmpty { return "\(projectName) › \(taskTitle)" }
+            return taskTitle
+        }
+        if let docTitle, !docTitle.isEmpty { return docTitle }
+        return projectName
+    }
+    /// The name the empty state and the suggestions use (web chipLabel without the project prefix).
+    var shortLabel: String? {
+        if let taskTitle, !taskTitle.isEmpty { return taskTitle }
+        if let docTitle, !docTitle.isEmpty { return docTitle }
+        return projectName
+    }
     var json: [String: Any] {
         var o: [String: Any] = [:]
         if let projectId { o["projectId"] = projectId }
         if let taskId { o["taskId"] = taskId }
+        if let docId { o["docId"] = docId }
         if !refs.isEmpty { o["refs"] = refs.map { ["kind": $0.kind, "id": $0.id] } }
         return o
+    }
+}
+
+/// Which writes wait for the person (web GIDEON_APPROVAL_MODES; same ids as the server's needsApproval).
+enum GideonApprovalMode: String, CaseIterable, Identifiable, Sendable {
+    case alwaysAsk = "always_ask"
+    case review
+    case dontAsk = "dont_ask"
+
+    var id: String { rawValue }
+    static let fallback: GideonApprovalMode = .review
+
+    var name: String {
+        switch self {
+        case .alwaysAsk: return T("Always ask")
+        case .review: return T("Review before writing")
+        case .dontAsk: return T("Don't ask")
+        }
+    }
+
+    var blurb: String {
+        switch self {
+        case .alwaysAsk: return T("Every change GIDEON wants to make waits for you.")
+        case .review: return T("Edits, comments and tasks for other people wait for you. Your own new tasks and docs are made directly.")
+        case .dontAsk: return T("GIDEON makes changes right away, as you.")
+        }
+    }
+}
+
+/// The pages on screen that GIDEON should treat as "here" (web lib/gideon-ai.ts pushGideonPage /
+/// useGideonPage): a project board, a task, a doc register themselves while they are showing and leave
+/// when they go. The panel reads the TOP one when it opens or starts a new chat, which is what makes "task
+/// disini" mean the project the person is looking at — and never a project from an earlier "Ask GIDEON"
+/// (owner, 13 Oct 2026: the singleton kept the last project's context alive on the sidebar page).
+@MainActor
+final class GideonPages {
+    static let shared = GideonPages()
+    private var stack: [(token: UUID, context: GideonContext)] = []
+    private init() {}
+
+    /// The page on screen now, or nil (Home, the GIDEON page itself, a list).
+    var current: GideonContext? { stack.last?.context }
+
+    func push(_ context: GideonContext, token: UUID) {
+        stack.removeAll { $0.token == token }
+        stack.append((token, context))
+    }
+
+    func pop(_ token: UUID) {
+        stack.removeAll { $0.token == token }
+    }
+
+    /// Signing out: nothing from the last session is "here" any more.
+    func reset() { stack.removeAll() }
+}
+
+private struct GideonPageModifier: ViewModifier {
+    let context: GideonContext?
+    @State private var token = UUID()
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { register(context) }
+            .onDisappear { GideonPages.shared.pop(token) }
+            .onChange(of: context) { _, next in register(next) }
+    }
+
+    private func register(_ c: GideonContext?) {
+        if let c, c.hasPage { GideonPages.shared.push(c, token: token) } else { GideonPages.shared.pop(token) }
+    }
+}
+
+extension View {
+    /// Marks this screen as the page GIDEON is asked about while it is showing (web pushGideonPage).
+    func gideonPage(_ context: GideonContext?) -> some View {
+        modifier(GideonPageModifier(context: context))
     }
 }
 
@@ -127,6 +235,8 @@ struct GideonChatSummary: Decodable, Identifiable, Sendable {
     let id: String
     let title: String?
     let updatedAt: String?
+    /// For a search: the line that matched, so the list can show why a chat is there.
+    var match: String? = nil
 }
 
 /// One turn of a GIDEON conversation.
@@ -333,6 +443,16 @@ enum GideonClient {
         return (try JSONDecoder().decode(GideonChatsResponse.self, from: data)).chats ?? []
     }
 
+    /// Renames one of the person's own conversations (web ChatHistoryList; the server trims to 80).
+    static func renameChat(_ id: String, title: String) async throws {
+        var request = authed("/api/gideon/chats/\(enc(id))")
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["title": title])
+        let (_, response) = try await URLSession.shared.data(for: request)
+        try check(response)
+    }
+
     static func deleteChat(_ id: String) async throws {
         var request = authed("/api/gideon/chats/\(enc(id))")
         request.httpMethod = "DELETE"
@@ -373,7 +493,8 @@ enum GideonClient {
     /// here changes when that stops being true.
     static func stream(messages: [GideonTurn], model: String, image: Data? = nil,
                        document: GideonDocument? = nil, chatId: String? = nil, newChat: Bool = false,
-                       context: GideonContext? = nil) -> AsyncThrowingStream<GideonStreamEvent, Error> {
+                       context: GideonContext? = nil,
+                       approvalMode: GideonApprovalMode = .fallback) -> AsyncThrowingStream<GideonStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -390,9 +511,9 @@ enum GideonClient {
                         // The new contract (dev server): delta/reset/step/sources/card/proposal/final.
                         "stream": true,
                         "uiLang": AppLanguage.shared.lang == .id ? "id" : "en",
-                        // A change GIDEON wants to make waits for Apply here, as on the web (the
-                        // server's default for clients that send nothing is to just do it).
-                        "approvalMode": "review",
+                        // The composer's "Review before writing ▾" (web default review; the server's
+                        // default for clients that send nothing is to just do it).
+                        "approvalMode": approvalMode.rawValue,
                     ]
                     if let chatId { payload["chatId"] = chatId } else if newChat { payload["newChat"] = true }
                     if let context, !context.isEmpty { payload["context"] = context.json }
@@ -569,8 +690,14 @@ final class GideonChat {
     private(set) var chatId: String?
     private(set) var chatTitle: String?
     private var startNew = false
-    /// Where GIDEON was opened from; sent with every question until removed.
+    /// The assistant turn being answered right now: its steps show live and it has no Copy / Save yet.
+    private(set) var answeringId: String?
+    /// What every question carries as `context`: the page it was opened on (unless its chip was removed)
+    /// plus the @ refs. Sent with every question until removed.
     var context = GideonContext()
+    /// The page this conversation was opened on (web `pageContext` before a dismissal): what New chat and
+    /// opening another chat bring the chip back to. nil on the GIDEON page itself, Home and lists.
+    private(set) var pageContext: GideonContext?
 
     /// Questions the composer has accepted but the network has not taken yet. See `submit()`.
     private var outbox: [Outgoing] = []
@@ -597,6 +724,10 @@ final class GideonChat {
         let model: String
         let image: Data?
         let document: GideonDocument?
+        /// The context as it was when the question was written: a queued question is about the page it was
+        /// asked on, not whatever the chip says by the time the queue reaches it.
+        let context: GideonContext
+        let approvalMode: GideonApprovalMode
     }
 
     /// The one animation a turn arriving is allowed to have.
@@ -629,17 +760,85 @@ final class GideonChat {
         chatTitle = fresh.title ?? chatTitle
     }
 
-    /// A fresh conversation, optionally about a project or task ("Ask GIDEON" from there opens a new chat
-    /// with that context, not the last chat about something else — web G-BUG-1).
-    func startChat(context: GideonContext = GideonContext()) {
-        guard !sending else { self.context = context; return }
+    /// A fresh conversation about `page` (the project / task / doc on screen; nil = none).
+    ///
+    /// "Ask GIDEON" opens a new chat with that context, not the last chat about something else (web
+    /// G-BUG-1). A question still in flight is let go first, as the web's newChat aborts its stream: the
+    /// server keeps answering and saves the reply into the conversation it was asked in. The old code only
+    /// swapped `context` under the running conversation here, which is how a follow-up "task disini"
+    /// landed on a different project than the thread was about (owner, 13 Oct 2026).
+    func startChat(page: GideonContext? = nil) {
+        if sending || !outbox.isEmpty { abandonInFlight() }
         turns = []
         chatId = nil
         chatTitle = nil
         startNew = true
         error = nil
         retryAction = nil
-        self.context = context
+        setPage(page)
+    }
+
+    /// The panel opened on `page` without asking for a new chat (the launcher button): the latest chat,
+    /// with the chip following the page on screen (web contextOf: the page on screen wins). Left alone while
+    /// a question is in flight — that one keeps the context it was asked with.
+    func follow(page: GideonContext?) {
+        guard !sending, outbox.isEmpty else { return }
+        setPage(page)
+    }
+
+    /// The chip was removed: this conversation stops carrying the page until New chat / another chat.
+    func dismissPage() {
+        context = context.withoutPage
+    }
+
+    /// GIDEON's own page while a question from elsewhere is still being answered: no page is "here"
+    /// any more, so neither the next question nor New chat may carry one.
+    func leavePage() {
+        pageContext = nil
+        context = context.withoutPage
+    }
+
+    /// "Delete this chat" in the ⋯ menu: the conversation on screen goes, and a new one starts.
+    func deleteCurrent() async {
+        guard let id = chatId else { startChat(page: pageContext); return }
+        do {
+            try await GideonClient.deleteChat(id)
+            startChat(page: pageContext)
+        } catch APIError.unauthorized {
+            sessionExpired = true
+        } catch {
+            self.error = GideonProblem.from(error).text
+        }
+    }
+
+    /// "Clear all chat history" (web): every conversation of this person, on every device.
+    func clearAll() async {
+        do {
+            try await GideonClient.clearHistory(chatId: nil)
+            startChat(page: pageContext)
+        } catch APIError.unauthorized {
+            sessionExpired = true
+        } catch {
+            self.error = (error as? LocalizedError)?.errorDescription ?? T("Failed.")
+        }
+    }
+
+    private func setPage(_ page: GideonContext?) {
+        let clean: GideonContext? = page.flatMap { $0.hasPage ? GideonContext(projectId: $0.projectId, projectName: $0.projectName,
+                                                                              taskId: $0.taskId, taskTitle: $0.taskTitle,
+                                                                              docId: $0.docId, docTitle: $0.docTitle) : nil }
+        pageContext = clean
+        context = clean ?? GideonContext()
+    }
+
+    /// Lets the running question go (web newChat → abortRef.abort()). A new generation, so the drain that
+    /// was cancelled can neither clear `sending` for the next one nor write into the new transcript.
+    private func abandonInFlight() {
+        generation += 1
+        drainTask?.cancel()
+        drainTask = nil
+        outbox.removeAll()
+        sending = false
     }
 
     /// Opens one conversation from the chats list. A conversation that cannot be loaded says so with
@@ -654,6 +853,8 @@ final class GideonChat {
             startNew = false
             turns = fresh.turns
             chatTitle = fresh.title
+            // Web openChat: the @ refs belong to the conversation that had them; the page chip comes back.
+            context = pageContext ?? GideonContext()
         } catch APIError.unauthorized {
             sessionExpired = true
         } catch APIError.http(404, _) {
@@ -725,7 +926,7 @@ final class GideonChat {
     /// answer would be written against a transcript missing the first. Either way the user's bubble
     /// is drawn at the moment of the tap — text that leaves the composer and appears nowhere is the
     /// one outcome worth ruling out.
-    func submit(tier: GideonTier) -> GideonTurn? {
+    func submit(tier: GideonTier, approvalMode: GideonApprovalMode = .fallback) -> GideonTurn? {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
         draft = ""
@@ -751,7 +952,8 @@ final class GideonChat {
         let turn = GideonTurn(role: .user, content: text, attachments: carried)
         withAnimation(arrive) { turns.append(turn) }
         outbox.append(Outgoing(turnId: turn.id, text: text, model: tier.rawValue,
-                               image: attachment, document: document))
+                               image: attachment, document: document,
+                               context: context, approvalMode: approvalMode))
         // Cleared with the draft, not after the request: an attachment silently riding along on the
         // NEXT question would be baffling, and re-attaching is one tap.
         attachment = nil
@@ -789,6 +991,8 @@ final class GideonChat {
         let answer = GideonTurn(role: .assistant, content: "")
         let at = turns.firstIndex(where: { $0.id == item.turnId }).map { $0 + 1 } ?? turns.count
         withAnimation(arrive) { turns.insert(answer, at: at) }
+        answeringId = answer.id
+        defer { if answeringId == answer.id { answeringId = nil } }
 
         let wantNew = startNew
         startNew = false
@@ -796,7 +1000,9 @@ final class GideonChat {
             for try await event in GideonClient.stream(messages: messages, model: item.model,
                                                        image: item.image, document: item.document,
                                                        chatId: chatId, newChat: wantNew && chatId == nil,
-                                                       context: context) {
+                                                       context: item.context, approvalMode: item.approvalMode) {
+                // Let go by startChat (or reset): nothing here belongs to the transcript on screen any more.
+                if generation != gen { break }
                 guard let index = turns.firstIndex(where: { $0.id == answer.id }) else { continue }
                 switch event {
                 case .delta(let chunk):
@@ -825,6 +1031,7 @@ final class GideonChat {
                     if let title { chatTitle = title }
                 }
             }
+            if generation != gen { return }
             // A stream that ends without a word is a failure the user can see but not explain.
             if let index = turns.firstIndex(where: { $0.id == answer.id }), turns[index].content.isEmpty,
                turns[index].proposals.isEmpty, turns[index].cards.isEmpty {
@@ -895,6 +1102,8 @@ final class GideonChat {
         chatTitle = nil
         startNew = false
         context = GideonContext()
+        pageContext = nil
+        GideonPages.shared.reset()
     }
 }
 

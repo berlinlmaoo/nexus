@@ -51,7 +51,9 @@ struct GideonLauncher: View {
             if !onGideonPage {
                 Button("") {
                     guard !cover.isCovered else { return }
-                    GideonChat.shared.startChat()
+                    // A new chat about the page on screen (web: ⌘O opens a new chat; the panel's chip is
+                    // the page you're on), never the context of an earlier "Ask GIDEON".
+                    GideonChat.shared.startChat(page: GideonPages.shared.current)
                     open = true
                 }
                 .keyboardShortcut("o", modifiers: .command)
@@ -96,11 +98,13 @@ struct GideonLauncher: View {
 struct GideonPanel: View {
     /// Opened from a project or a task ("Ask GIDEON"): a new chat about it (web, 12 Oct 2026).
     var openContext: GideonContext? = nil
-    /// GIDEON's own page in the iPad / Mac sidebar: no Close button (it is not a sheet).
+    /// GIDEON's own page in the iPad / Mac sidebar (or pushed in More on a phone): no Close button (it is
+    /// not a sheet), and — like the web's /gideon — a new chat with no page context when it opens.
     var embedded = false
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.horizontalSizeClass) private var hSize
 
     /// The conversation, the composer's draft and the queue — all of it outside this view, because
     /// this view is a sheet and a sheet is destroyed when it is dismissed. See `GideonChat`.
@@ -118,6 +122,8 @@ struct GideonPanel: View {
     /// Remembered on the device: somebody who picks Terra for quick questions should not have to
     /// pick it again every time the panel opens.
     @AppStorage("gideon.tier") private var tierRaw = GideonTier.fallback.rawValue
+    /// "Review before writing ▾" in the composer (web gideon-approval), remembered on the device.
+    @AppStorage("gideon.approval") private var approvalRaw = GideonApprovalMode.fallback.rawValue
     /// A source or card tapped in an answer: opened inside this sheet's own stack.
     @State private var openRef: GideonRef?
     @State private var showChats = false
@@ -126,14 +132,25 @@ struct GideonPanel: View {
     @State private var showPersonalize = false
     @State private var saveRequest: GideonSaveRequest?
     @State private var savedDocId: String?
+    @State private var confirmDeleteChat = false
+    @State private var confirmClearAll = false
+    /// The answer whose Copy was just pressed ("Copied" for a moment).
+    @State private var copiedId: String?
+    /// Set once this view has decided which conversation and context it opens on. View identity, not
+    /// onAppear: coming back from a source opened in this stack must not start another chat.
+    @State private var didOpen = false
     /// The name the person gave GIDEON (Personalize); empty = "GIDEON".
     @State private var assistantName = ""
 
     private var tier: GideonTier { GideonTier(rawValue: tierRaw) ?? .fallback }
+    private var approvalMode: GideonApprovalMode { GideonApprovalMode(rawValue: approvalRaw) ?? .fallback }
     private var displayName: String {
         let n = assistantName.trimmingCharacters(in: .whitespaces)
         return n.isEmpty ? "GIDEON" : n
     }
+    /// The web's full page (chat list column + header) on iPad landscape and Mac; a sheet, and every
+    /// phone, keeps the compact panel.
+    private var wide: Bool { embedded && hSize == .regular }
 
     @ViewBuilder private func refDestination(_ ref: GideonRef) -> some View {
         switch ref.kind {
@@ -156,6 +173,18 @@ struct GideonPanel: View {
         chat.context.refs.append(ref)
     }
 
+    /// "+ → Add a page, task or project": starts an "@" at the end of the draft (web startMention).
+    private func startMention() {
+        let d = chat.draft
+        chat.draft = d + ((d.isEmpty || d.hasSuffix(" ") || d.hasSuffix("\n")) ? "@" : " @")
+        composerFocused = true
+    }
+
+    private func newChat() {
+        chat.startChat(page: embedded ? nil : chat.pageContext)
+        composerFocused = true
+    }
+
     /// Its own NavigationStack as a sheet; as a page (sidebar, or pushed inside More on a phone) it lives in
     /// the stack it is shown in — a stack inside a stack loses the back button.
     @ViewBuilder private func stackIfNeeded<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
@@ -164,76 +193,47 @@ struct GideonPanel: View {
 
     var body: some View {
         stackIfNeeded {
-            ZStack {
-                NX.background.ignoresSafeArea()
-                VStack(spacing: 0) {
-                    transcript
-                    contextStrip
-                    mentionPicker
-                    attachmentStrip
-                    composer
+            screen
+                .navigationDestination(item: $openRef) { ref in refDestination(ref) }
+                // ⌘O = a new chat (web GideonPanel). A hidden button: a key on a menu item only works while
+                // that menu is open.
+                .background {
+                    Button("") { newChat() }
+                        .keyboardShortcut("o", modifiers: .command)
+                        .opacity(0).accessibilityHidden(true)
                 }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    // Esc closes the panel (hardware keyboard, Mac — web QA 13 Oct 2026).
-                    if !embedded { Button(T("Close")) { dismiss() }.keyboardShortcut(.cancelAction) }
+                // One presentation per host view: every sheet / alert after the first gets its own anchor.
+                .background { Color.clear.sheet(isPresented: $showPersonalize) {
+                    GideonPersonalizeSheet { p in assistantName = p.assistantName ?? "" }
+                } }
+                .sheet(item: $saveRequest) { r in
+                    GideonSaveDocSheet(title: r.title, markdown: r.markdown, contextProjectId: saveProjectId,
+                                       contextProjectName: chat.context.projectName) { id in savedDocId = id }
                 }
-                ToolbarItem(placement: .principal) { title }
-                ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button { chat.startChat(context: chat.context) } label: { Label(T("New chat"), systemImage: "square.and.pencil") }
-                            .disabled(chat.sending)
-                        Button { showChats = true } label: { Label(T("Chats"), systemImage: "clock.arrow.circlepath") }
-                        Button { showPersonalize = true } label: { Label(T("Personalize"), systemImage: "person.crop.circle.badge.checkmark") }
-                        Divider()
-                        Button(T("Clear chat"), role: .destructive) {
-                            Task { await chat.clear() }
-                        }
-                        .disabled(chat.sending || chat.turns.isEmpty)
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
+                .background { Color.clear.alert(T("Saved as a doc"), isPresented: Binding(get: { savedDocId != nil }, set: { if !$0 { savedDocId = nil } })) {
+                    Button(T("Open page")) { if let id = savedDocId { openRef = GideonRef(kind: "doc", id: id, title: nil, projectId: nil) } }
+                    Button("OK", role: .cancel) {}
+                } }
+                .background { Color.clear.sheet(isPresented: $showChats) {
+                    GideonChatsSheet { id in Task { await chat.openChat(id) } }
+                } }
+                .alert(decision?.title ?? "", isPresented: Binding(get: { decision != nil }, set: { if !$0 { decision = nil } }), presenting: decision) { d in
+                    Button(d.apply ? T("Apply") : T("Discard"), role: d.apply ? nil : .destructive) {
+                        Task { await chat.decide(d.proposal, apply: d.apply) }
                     }
-                    .accessibilityLabel(T("Chat options"))
-                }
-            }
-            .navigationDestination(item: $openRef) { ref in refDestination(ref) }
-            // ⌘O = a new chat (web GideonPanel). A hidden button: a key on a menu item only works while
-            // that menu is open.
-            .background {
-                Button("") { if !chat.sending { chat.startChat(context: chat.context); composerFocused = true } }
-                    .keyboardShortcut("o", modifiers: .command)
-                    .opacity(0).accessibilityHidden(true)
-            }
-            .sheet(isPresented: $showPersonalize) {
-                GideonPersonalizeSheet { p in assistantName = p.assistantName ?? "" }
-            }
-            .sheet(item: $saveRequest) { r in
-                GideonSaveDocSheet(title: r.title, markdown: r.markdown, contextProjectId: chat.context.projectId,
-                                   contextProjectName: chat.context.projectName) { id in savedDocId = id }
-            }
-            .alert(T("Saved as a doc"), isPresented: Binding(get: { savedDocId != nil }, set: { if !$0 { savedDocId = nil } })) {
-                Button(T("Open page")) { if let id = savedDocId { openRef = GideonRef(kind: "doc", id: id, title: nil, projectId: nil) } }
-                Button("OK", role: .cancel) {}
-            }
-            .sheet(isPresented: $showChats) {
-                GideonChatsSheet { id in Task { await chat.openChat(id) } }
-            }
-            .alert(decision?.title ?? "", isPresented: Binding(get: { decision != nil }, set: { if !$0 { decision = nil } }), presenting: decision) { d in
-                Button(d.apply ? T("Apply") : T("Discard"), role: d.apply ? nil : .destructive) {
-                    Task { await chat.decide(d.proposal, apply: d.apply) }
-                }
-                Button(T("Cancel"), role: .cancel) {}
-            } message: { d in Text(d.proposal.summary ?? "") }
+                    Button(T("Cancel"), role: .cancel) {}
+                } message: { d in Text(d.proposal.summary ?? "") }
+                .background { Color.clear.alert(T("Delete this chat?"), isPresented: $confirmDeleteChat) {
+                    Button(T("Delete"), role: .destructive) { Task { await chat.deleteCurrent() } }
+                    Button(T("Cancel"), role: .cancel) {}
+                } message: { Text(T("The conversation and its attached files are deleted for good. Tasks and docs GIDEON made stay.")) } }
+                .background { Color.clear.alert(T("Clear every GIDEON chat?"), isPresented: $confirmClearAll) {
+                    Button(T("Clear history"), role: .destructive) { Task { await chat.clearAll() } }
+                    Button(T("Cancel"), role: .cancel) {}
+                } message: { Text(T("Every conversation, message and attached file is deleted for good. Tasks and docs GIDEON made stay.")) } }
         }
         .task { if let p = try? await GideonClient.prefs() { assistantName = p.assistantName ?? "" } }
-        .onAppear {
-            // "Ask GIDEON" from a project/task: a new chat about it, unless that is already the one open.
-            if let openContext, openContext != chat.context {
-                chat.startChat(context: openContext)
-            }
-        }
+        .onAppear { openOnce() }
         // GIDEON answered a 401 while the panel was closed, or answers one now. The store has no
         // AuthStore and deliberately does not go looking for one — this is where the two meet, and
         // `initial` is what makes a refusal that landed while nobody was watching still count.
@@ -278,7 +278,179 @@ struct GideonPanel: View {
         .fullScreenCover(item: $preview) { AttachmentViewerView(preview: $0) }
     }
 
-    // MARK: - title
+    /// Which conversation and which page context this panel opens on — the web's rules, once per view:
+    /// - GIDEON's own page (/gideon): a new chat, no page context (the project page is gone from the
+    ///   screen, so "here" means nothing).
+    /// - "Ask GIDEON" on a project / task: a new chat about it (web openGideon(ctx, {newChat: true})).
+    /// - The launcher: the latest chat, with the chip following the page on screen (none on Home).
+    private func openOnce() {
+        guard !didOpen else { return }
+        didOpen = true
+        if embedded {
+            // A question asked from a sheet may still be in flight: let it finish, but nothing it was
+            // about follows the person onto this page.
+            if chat.sending { chat.leavePage() } else { chat.startChat(page: nil) }
+        } else if let openContext {
+            chat.startChat(page: openContext)
+        } else {
+            chat.follow(page: GideonPages.shared.current)
+        }
+    }
+
+    /// Where "Save as doc" offers "This project" (web: the page's project, else the first @ project).
+    private var saveProjectId: String? {
+        chat.context.projectId ?? chat.context.refs.first(where: { $0.kind == "project" })?.id
+    }
+
+    // MARK: - screen
+
+    @ViewBuilder private var screen: some View {
+        if wide {
+            VStack(spacing: 0) {
+                pageHeader
+                HStack(spacing: 0) {
+                    GideonChatListColumn(activeId: chat.chatId, reloadKey: "\(chat.chatId ?? "-")|\(chat.sending)|\(chat.chatTitle ?? "")",
+                                         onPick: { id in Task { await chat.openChat(id) } },
+                                         onNew: { newChat() })
+                        .frame(width: 288)
+                    Rectangle().fill(NX.border).frame(width: 1)
+                    conversation
+                }
+            }
+            .background(NX.card.ignoresSafeArea())
+            // The page draws the web's header itself; the sidebar is this screen's way back.
+            .toolbar(.hidden, for: .navigationBar)
+        } else {
+            ZStack {
+                NX.background.ignoresSafeArea()
+                conversation
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    // Esc closes the panel (hardware keyboard, Mac — web QA 13 Oct 2026).
+                    if !embedded { Button(T("Close")) { dismiss() }.keyboardShortcut(.cancelAction) }
+                }
+                ToolbarItem(placement: .principal) { title }
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button { newChat() } label: { Label(T("New chat"), systemImage: "square.and.pencil") }
+                        Button { showChats = true } label: { Label(T("Chats"), systemImage: "clock.arrow.circlepath") }
+                        Button { showPersonalize = true } label: { Label(T("Personalize"), systemImage: "person.crop.circle.badge.checkmark") }
+                        Divider()
+                        moreDestructiveItems
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .accessibilityLabel(T("Chat options"))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var moreDestructiveItems: some View {
+        if chat.chatId != nil && !chat.turns.isEmpty {
+            Button(role: .destructive) { confirmDeleteChat = true } label: { Label(T("Delete this chat"), systemImage: "trash") }
+                .disabled(chat.sending)
+        }
+        Button(role: .destructive) { confirmClearAll = true } label: { Label(T("Clear all chat history"), systemImage: "trash") }
+            .disabled(chat.sending)
+    }
+
+    /// The transcript and the composer: one column, capped to the web's reading width on the page.
+    private var conversation: some View {
+        VStack(spacing: 0) {
+            transcript
+            VStack(spacing: 0) {
+                Rectangle().fill(NX.border).frame(height: 1)
+                composerArea
+                    .frame(maxWidth: wide ? 768 : .infinity)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, wide ? 24 : 12)
+                    .padding(.vertical, wide ? 14 : 10)
+            }
+            .background(wide ? NX.card : NX.background)
+        }
+    }
+
+    // MARK: - header (regular width)
+
+    /// The web's page header: the mark, the name and "Acts in NEXUS as you" (or the chat's title), then
+    /// New chat, the tier chip and ⋯ at the right.
+    private var pageHeader: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image("GideonLogo")
+                    .renderingMode(.template).resizable().scaledToFit()
+                    .frame(width: 16, height: 16)
+                    .foregroundStyle(NX.foreground)
+                    .frame(width: 34, height: 34)
+                    .background(NX.muted, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(displayName).font(NXFont.text(16, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    Text(chat.chatTitle.flatMap { GideonChatTitle.text($0) } ?? T("Acts in NEXUS as you"))
+                        .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                }
+                Spacer(minLength: 12)
+                Button { newChat() } label: {
+                    Image(systemName: "square.and.pencil").font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(NX.mutedFg)
+                        .frame(width: 34, height: 34).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .help(T("New chat (⌘O)"))
+                .accessibilityLabel(T("New chat"))
+                tierChip
+                Menu {
+                    Button { showPersonalize = true } label: { Label(T("Personalize"), systemImage: "person.crop.circle") }
+                    Divider()
+                    moreDestructiveItems
+                } label: {
+                    Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(NX.mutedFg)
+                        .frame(width: 34, height: 34).contentShape(Rectangle())
+                }
+                .menuIndicator(.hidden)
+                .buttonStyle(.plain)
+                .accessibilityLabel(T("More"))
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            Rectangle().fill(NX.border).frame(height: 1)
+        }
+        .background(NX.card)
+    }
+
+    /// "Luna ▾" (web SelectPicker): the tier, with each one's blurb in the menu.
+    private var tierChip: some View {
+        Menu {
+            Picker(T("GIDEON tier"), selection: $tierRaw) {
+                ForEach(GideonTier.allCases) { option in
+                    Text(option.label).tag(option.rawValue)
+                }
+            }
+            .pickerStyle(.inline)
+            Text(tier.blurb)
+        } label: {
+            HStack(spacing: 4) {
+                Text(tier.label).font(NXFont.text(13, .semibold))
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+            }
+            .foregroundStyle(NX.mutedFg)
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+            .contentShape(Rectangle())
+        }
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .disabled(chat.sending)
+        .accessibilityLabel(T("GIDEON tier"))
+    }
+
+    // MARK: - title (compact)
 
     /// Every tier name is laid out; only the chosen one is drawn.
     ///
@@ -320,9 +492,12 @@ struct GideonPanel: View {
     private var transcript: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
+                LazyVStack(alignment: .leading, spacing: 16) {
                     if chat.turns.isEmpty && !chat.sending {
-                        empty
+                        GideonEmptyPrompt(assistant: displayName, page: chat.context.hasPage ? chat.context : nil, wide: wide) { s in
+                            chat.draft = s
+                            submit()
+                        }
                     }
                     ForEach(chat.turns) { turn in
                         bubble(turn).id(turn.id).transition(appear)
@@ -334,7 +509,10 @@ struct GideonPanel: View {
                     // sometimes the error line or an answer that has not been given an id yet.
                     Color.clear.frame(height: 1).id("bottom")
                 }
-                .padding(16)
+                .frame(maxWidth: wide ? 768 : .infinity)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, wide ? 24 : 16)
+                .padding(.vertical, 16)
             }
             // Everything that can leave the newest message under the fold: history arriving, a turn
             // being added, the answer landing inside it, and the keyboard taking half the screen.
@@ -352,8 +530,8 @@ struct GideonPanel: View {
                 // Every open, not only the first. The thread lives on the server, so this picks up
                 // whatever was said on the web — and it is what swaps a just-sent attachment's
                 // bytes for the url the server kept, once there is one. `refresh` leaves the
-                // transcript alone while a question is in flight and when the fetch fails, which is
-                // what makes running it on every open safe rather than destructive.
+                // transcript alone while a question is in flight, when a new chat was asked for, and
+                // when the fetch fails, which is what makes running it on every open safe.
                 await chat.refresh()
                 // The stack is lazy, so the last row does not exist on the pass that sets `turns`;
                 // one hop later it does. Unanimated on purpose — opening the panel should START at
@@ -369,14 +547,14 @@ struct GideonPanel: View {
     private func errorLine(_ error: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(error)
-                .font(NXFont.text(12))
+                .font(NXFont.text(13))
                 .foregroundStyle(NX.danger)
                 .fixedSize(horizontal: false, vertical: true)
             if chat.canRetry {
                 Button { chat.retry() } label: {
                     Label(T("Try again"), systemImage: "arrow.clockwise")
-                        .font(NXFont.text(12, .semibold))
-                        .foregroundStyle(NX.violetText)
+                        .font(NXFont.text(13, .semibold))
+                        .foregroundStyle(NX.foreground)
                         .frame(minHeight: 32)
                         .contentShape(Rectangle())
                 }
@@ -401,78 +579,65 @@ struct GideonPanel: View {
         return AnyTransition.opacity.combined(with: .offset(y: 8))
     }
 
-    private var empty: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Image("GideonLogo")
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 28, height: 28)
-                .foregroundStyle(NX.foreground)
-            Text(T("Ask GIDEON about NEXUS"))
-                .font(NXFont.display(16, .bold))
-                .foregroundStyle(NX.foreground)
-            Text(T("Projects, tasks, who is busy, what is overdue."))
-                .font(NXFont.text(13))
-                .foregroundStyle(NX.mutedFg)
-            Text(tier.blurb)
-                .font(NXFont.text(11))
-                .foregroundStyle(NX.mutedFg.opacity(0.8))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 40)
+    @ViewBuilder private func bubble(_ turn: GideonTurn) -> some View {
+        if turn.role == .user { userBubble(turn) } else { assistantTurn(turn) }
     }
 
-    private func bubble(_ turn: GideonTurn) -> some View {
+    /// The question (web): near-black, right-aligned, its attachments above the text.
+    private func userBubble(_ turn: GideonTurn) -> some View {
         HStack {
-            if turn.role == .user { Spacer(minLength: 44) }
+            Spacer(minLength: 44)
             VStack(alignment: .leading, spacing: 6) {
-                // Above the text, the way a chat puts a picture above its caption: the question
-                // reads as being about the thing directly over it. Indices rather than the values,
-                // because two attachments can be identical in every field a struct has.
+                // Indices rather than the values, because two attachments can be identical in every
+                // field a struct has.
                 ForEach(turn.attachments.indices, id: \.self) { index in
                     attachmentChip(turn.attachments[index], key: "\(turn.id)-\(index)")
                 }
-                if turn.role == .assistant && turn.content.isEmpty {
-                    // The answer arrives whole — there is no token stream behind this — so the dots
-                    // claim only that the request is still open, and they are replaced the instant
-                    // the real text lands. A typewriter here would be inventing progress.
-                    GideonTypingDots()
-                        .accessibilityLabel(T("GIDEON is typing…"))
-                        .transition(.opacity)
-                } else {
-                    Text(turn.content)
-                        .font(NXFont.text(14))
-                        .foregroundStyle(turn.role == .user ? .white : NX.foreground)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .transition(.opacity)
-                }
-                if !turn.tools.isEmpty {
-                    Text(turn.tools.joined(separator: " · "))
-                        .font(NXFont.text(10))
-                        .foregroundStyle(turn.role == .user ? .white.opacity(0.7) : NX.mutedFg)
-                }
-                if turn.role == .assistant { answerExtras(turn) }
+                Text(turn.content)
+                    .font(NXFont.text(15))
+                    .lineSpacing(2)
+                    .foregroundStyle(NX.card)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(
-                turn.role == .user ? AnyShapeStyle(NX.violet) : AnyShapeStyle(NX.card),
-                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(turn.role == .user ? .clear : NX.border)
-            )
-            if turn.role == .assistant { Spacer(minLength: 44) }
+            .background(NX.onyx, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
+    }
+
+    /// The answer (web AssistantTurn): what GIDEON did, the answer as Markdown on a soft panel, the
+    /// changes waiting for Apply, what it made, the sources, then Copy · Save as doc.
+    private func assistantTurn(_ turn: GideonTurn) -> some View {
+        let live = chat.answeringId == turn.id
+        return VStack(alignment: .leading, spacing: 8) {
+            GideonStepsLine(steps: turn.steps, streaming: live)
+            if !turn.content.isEmpty {
+                GideonMarkdownView(text: turn.content, size: 15) { ref in openRef = ref }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(NX.muted, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .transition(.opacity)
+            } else if live && turn.steps.isEmpty {
+                // The dots claim only that the request is still open, and they are replaced the instant
+                // the first words land. A typewriter here would be inventing progress.
+                GideonTypingDots()
+                    .accessibilityLabel(T("GIDEON is typing…"))
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .background(NX.muted, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .transition(.opacity)
+            }
+            ForEach(turn.proposals) { p in proposalCard(p) }
+            ForEach(turn.cards) { card in cardRow(card) }
+            if !turn.sources.isEmpty && !live { sourcesBlock(turn.sources) }
+            if !turn.content.isEmpty && !live { answerActions(turn) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.trailing, wide ? 0 : 24)
     }
 
     // MARK: - steps, sources, cards, proposals
 
-    /// Under an answer: one quiet line of what GIDEON did, the sources it cites (tap to open), what it
-    /// made, and the changes waiting for Apply.
     /// The question an answer replies to (its first line), for the page title.
     private func question(before turn: GideonTurn) -> String {
         guard let i = chat.turns.firstIndex(where: { $0.id == turn.id }) else { return "" }
@@ -480,47 +645,50 @@ struct GideonPanel: View {
         return String((prev.components(separatedBy: "\n").first ?? "").prefix(120))
     }
 
-    /// Under an answer, each piece its own small function (type-checks fast): Save as doc, what GIDEON
-    /// did, the sources, what it made, and changes waiting for Apply.
-    @ViewBuilder private func answerExtras(_ turn: GideonTurn) -> some View {
-        if !turn.content.isEmpty && !chat.sending { saveAsDocButton(turn) }
-        stepsLine(turn)
-        if !turn.sources.isEmpty { sourcesBlock(turn.sources) }
-        ForEach(turn.cards) { card in cardRow(card) }
-        ForEach(turn.proposals) { p in proposalCard(p) }
-    }
-
-    private func saveAsDocButton(_ turn: GideonTurn) -> some View {
-        Button {
-            let q = question(before: turn)
-            saveRequest = GideonSaveRequest(title: q.isEmpty ? T("GIDEON answer") : q, markdown: turn.content)
-        } label: {
-            Label(T("Save as doc"), systemImage: "doc.badge.plus").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
-                .frame(minHeight: 28).contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder private func stepsLine(_ turn: GideonTurn) -> some View {
-        let shownSteps: [GideonStep] = turn.steps.filter { $0.status != "error" }
-        if let last = shownSteps.last, let label = last.label, !label.isEmpty {
-            HStack(spacing: 5) {
-                if last.status == "running" && turn.content.isEmpty {
-                    ProgressView().scaleEffect(0.55)
-                } else {
-                    Image(systemName: "checkmark.circle").font(.system(size: 10))
+    /// Copy · Save as doc under a finished answer (web).
+    private func answerActions(_ turn: GideonTurn) -> some View {
+        HStack(spacing: 2) {
+            Button {
+                UIPasteboard.general.string = turn.content
+                copiedId = turn.id
+                Task {
+                    try? await Task.sleep(for: .milliseconds(1500))
+                    if copiedId == turn.id { copiedId = nil }
                 }
-                Text(shownSteps.count > 1 ? "\(label) · \(shownSteps.count)" : label).lineLimit(1)
+            } label: {
+                actionLabel(copiedId == turn.id ? T("Copied") : T("Copy"), icon: copiedId == turn.id ? "checkmark" : "doc.on.doc")
             }
-            .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            Button {
+                let q = question(before: turn)
+                saveRequest = GideonSaveRequest(title: q.isEmpty ? T("GIDEON answer") : q, markdown: turn.content)
+            } label: {
+                actionLabel(T("Save as doc"), icon: "doc.badge.plus")
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            .disabled(chat.sending)
         }
+    }
+
+    private func actionLabel(_ text: String, icon: String) -> some View {
+        Label(text, systemImage: icon)
+            .font(NXFont.text(12))
+            .foregroundStyle(NX.mutedFg)
+            .padding(.horizontal, 6)
+            .frame(minHeight: 28)
+            .contentShape(Rectangle())
     }
 
     private func sourcesBlock(_ sources: [GideonRef]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(T("Sources")).font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
-            FlowLayout(spacing: 5) {
-                ForEach(sources) { ref in refChip(ref) }
+        FlowLayout(spacing: 6) {
+            Text(T("Sources")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                .padding(.vertical, 4)
+            ForEach(sources.prefix(8)) { ref in refChip(ref) }
+            if sources.count > 8 {
+                Text(String(format: T("+%d more"), sources.count - 8)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    .padding(.vertical, 4)
             }
         }
     }
@@ -529,15 +697,17 @@ struct GideonPanel: View {
         let kind: String = card.kind == "doc" ? "doc" : "task"
         let sub: String = [cardActionLabel(card.action), card.projectName].compactMap { $0 }.joined(separator: " · ")
         return Button { openRef = GideonRef(kind: kind, id: card.id, title: card.title, projectId: nil) } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 Image(systemName: card.action == "created" ? "plus.circle.fill" : "pencil.circle.fill").foregroundStyle(NX.success)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(card.title ?? T("Task")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    Text(sub).font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    Text(card.title ?? T("Task")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    Text(sub).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
                 Spacer(minLength: 0)
             }
-            .padding(8).background(NX.success.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(10)
+            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -555,55 +725,63 @@ struct GideonPanel: View {
     private func refChip(_ ref: GideonRef) -> some View {
         Button { openRef = ref } label: {
             HStack(spacing: 4) {
-                Image(systemName: ref.kind == "project" ? "folder" : (ref.kind == "task" ? "checklist" : "doc.text")).font(.system(size: 9, weight: .semibold))
+                Image(systemName: Self.icon(ref.kind)).font(.system(size: 10, weight: .semibold))
                 Text(ref.title ?? "").lineLimit(1)
             }
-            .font(NXFont.text(11, .semibold)).foregroundStyle(NX.violetText)
+            .font(NXFont.text(12, .medium)).foregroundStyle(NX.foreground)
             .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(NX.violet.opacity(0.10), in: Capsule())
+            .background(NX.card, in: Capsule())
+            .overlay(Capsule().strokeBorder(NX.border))
         }
         .buttonStyle(.plain)
         // Only what the app can open; comments, forms and messages are named but not linked here.
         .disabled(!(ref.kind == "task" || ref.kind == "project" || ref.kind == "doc"))
     }
 
+    static func icon(_ kind: String) -> String {
+        switch kind {
+        case "project": return "folder"
+        case "task": return "checklist"
+        case "comment": return "text.bubble"
+        case "message": return "bubble.left"
+        case "form": return "list.clipboard"
+        default: return "doc.text"
+        }
+    }
+
     private func proposalCard(_ p: GideonProposal) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Image(systemName: "hand.raised.fill").font(.system(size: 11)).foregroundStyle(NX.warning)
-                Text(p.summary ?? T("GIDEON wants to make a change")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                Image(systemName: "checkmark.shield").font(.system(size: 12)).foregroundStyle(NX.warning)
+                Text(p.summary ?? T("GIDEON wants to make a change")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                     .fixedSize(horizontal: false, vertical: true)
             }
             ForEach(Array((p.diff ?? []).enumerated()), id: \.offset) { _, row in
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(row.field ?? "").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
-                    if let from = row.from?.text, !from.isEmpty { Text(ServerText.enumWord(from)).strikethrough().font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
+                    Text(row.field ?? "").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                    if let from = row.from?.text, !from.isEmpty { Text(ServerText.enumWord(from)).strikethrough().font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
                     Image(systemName: "arrow.right").font(.system(size: 8)).foregroundStyle(NX.mutedFg)
-                    Text(ServerText.enumWord(row.to?.text ?? "—")).font(NXFont.text(11, .semibold)).foregroundStyle(NX.foreground)
+                    Text(ServerText.enumWord(row.to?.text ?? "—")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
                 }
             }
             if p.isPending {
                 HStack(spacing: 8) {
+                    Spacer(minLength: 0)
+                    Button(T("Discard")) { decision = GideonDecision(proposal: p, apply: false) }
+                        .buttonStyle(.nxBordered)
                     Button { decision = GideonDecision(proposal: p, apply: true) } label: {
-                        Text(T("Apply")).font(NXFont.text(13, .bold)).foregroundStyle(.white)
-                            .padding(.horizontal, 14).frame(minHeight: 36)
-                            .background(NX.violetFill, in: Capsule())
+                        Label(T("Apply"), systemImage: "checkmark")
                     }
-                    .buttonStyle(.plain)
-                    Button { decision = GideonDecision(proposal: p, apply: false) } label: {
-                        Text(T("Discard")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
-                            .padding(.horizontal, 12).frame(minHeight: 36)
-                    }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.nxPrimary)
                 }
             } else {
-                Text(proposalStatus(p)).font(NXFont.text(11, .semibold))
+                Text(proposalStatus(p)).font(NXFont.text(12, .semibold))
                     .foregroundStyle(p.status == "APPLIED" ? NX.success : (p.status == "FAILED" ? NX.danger : NX.mutedFg))
             }
         }
-        .padding(10)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(NX.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(NX.warning.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.warning.opacity(0.3)))
     }
 
@@ -617,45 +795,45 @@ struct GideonPanel: View {
         }
     }
 
-    /// The project / task this chat is about, removable (then GIDEON looks across everything you can see).
-    @ViewBuilder private var contextStrip: some View {
+    // MARK: - context chips
+
+    /// The page this chat is about ("The page you're on") and the @ pages, each removable — then GIDEON
+    /// looks across everything you can see.
+    @ViewBuilder private var contextChips: some View {
         let ctx = chat.context
-        if !ctx.refs.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(ctx.refs, id: \.self) { r in
-                        HStack(spacing: 4) {
-                            Image(systemName: r.kind == "project" ? "folder" : (r.kind == "task" ? "checklist" : "doc.text")).font(.system(size: 10, weight: .semibold))
-                            Text(r.title ?? "").lineLimit(1)
-                            Button { chat.context.refs.removeAll { $0 == r } } label: {
-                                Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).frame(width: 24, height: 24).touchTarget44(drawn: 24)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(T("Remove context"))
-                        }
-                        .font(NXFont.text(11, .semibold)).foregroundStyle(NX.violetText)
-                        .padding(.leading, 8)
-                        .background(NX.violet.opacity(0.10), in: Capsule())
+        if ctx.hasPage || !ctx.refs.isEmpty {
+            FlowLayout(spacing: 6) {
+                if ctx.hasPage {
+                    contextChip(icon: ctx.docId != nil ? "doc.text" : (ctx.taskId != nil ? "checklist" : "folder"),
+                                label: ctx.pageLabel ?? T("This project")) { chat.dismissPage() }
+                        .help(T("The page you're on"))
+                }
+                ForEach(ctx.refs, id: \.self) { r in
+                    contextChip(icon: Self.icon(r.kind), label: r.title ?? "") {
+                        chat.context.refs.removeAll { $0 == r }
                     }
                 }
-                .padding(.horizontal, 16).padding(.top, 4)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        if ctx.projectId != nil || ctx.taskId != nil {
-            HStack(spacing: 6) {
-                Image(systemName: ctx.taskId != nil ? "checklist" : "folder").font(.system(size: 11, weight: .semibold))
-                Text(ctx.taskTitle ?? ctx.projectName ?? T("This project")).lineLimit(1)
-                Button { chat.context = GideonContext(refs: chat.context.refs) } label: {
-                    Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
-                        .frame(width: 28, height: 28).touchTarget44(drawn: 28)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(T("Remove context"))
-                Spacer(minLength: 0)
+    }
+
+    private func contextChip(icon: String, label: String, remove: @escaping () -> Void) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon).font(.system(size: 10, weight: .semibold))
+            Text(label).lineLimit(1).frame(maxWidth: 260, alignment: .leading).fixedSize(horizontal: true, vertical: false)
+            Button(action: remove) {
+                Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
+                    .frame(width: 22, height: 22).touchTarget44(drawn: 22)
             }
-            .font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
-            .padding(.horizontal, 16).padding(.top, 4)
+            .buttonStyle(.plain)
+            .accessibilityLabel(T("Remove this context"))
         }
+        .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+        .padding(.leading, 10).padding(.trailing, 2)
+        .frame(minHeight: 26)
+        .background(NX.muted.opacity(0.6), in: Capsule())
+        .overlay(Capsule().strokeBorder(NX.border))
     }
 
     // MARK: - composer
@@ -673,8 +851,9 @@ struct GideonPanel: View {
                                    remove: { chat.document = nil })
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 6)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .overlay(alignment: .top) { Rectangle().fill(NX.border.opacity(0.6)).frame(height: 1) }
         }
     }
 
@@ -729,10 +908,10 @@ struct GideonPanel: View {
     private func attachmentChip(art: GideonChipArt, label: String,
                                 onBubble: Bool = false,
                                 remove: (() -> Void)?) -> some View {
-        // In a bubble the chip sits on violet, where the muted grey it wears under the composer is
-        // nearly gone. The same white the tools line already uses for a user turn.
-        let tone: Color = onBubble ? .white.opacity(0.85) : NX.mutedFg
-        let plate: Color = onBubble ? .white.opacity(0.18) : NX.muted.opacity(0.6)
+        // In a bubble the chip sits on the near-black question, where the muted grey it wears under the
+        // composer is nearly gone: the bubble's own text colour, softened.
+        let tone: Color = onBubble ? NX.card.opacity(0.85) : NX.mutedFg
+        let plate: Color = onBubble ? NX.card.opacity(0.18) : NX.muted.opacity(0.6)
         return HStack(spacing: 10) {
             switch art {
             case .local(let image):
@@ -759,7 +938,7 @@ struct GideonPanel: View {
                     .frame(width: 38, height: 38)
                     .background(plate, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
-            Text(label).font(NXFont.text(12)).foregroundStyle(tone).lineLimit(1)
+            Text(label).font(NXFont.text(13)).foregroundStyle(tone).lineLimit(1)
             if let remove {
                 Spacer(minLength: 8)
                 Button(action: remove) {
@@ -770,25 +949,26 @@ struct GideonPanel: View {
         }
     }
 
+    /// Above the composer: the @ picker and the context chips; then the composer card (web): the field,
+    /// what is attached, and + · "Review before writing ▾" · send.
+    private var composerArea: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            mentionPicker
+            contextChips
+            composer
+        }
+    }
+
     private var composer: some View {
         // The draft lives on the store, so the field needs a binding INTO it. Declared here for the
         // same reason RootView declares one for the router: `@Bindable` is a local wrapper, and this
         // is the only member that writes through it.
         @Bindable var chat = chat
-        return HStack(spacing: 10) {
-            // One menu rather than three icons: a third button left the field too narrow to read
-            // back what you typed. A PhotosPicker nested in a Menu draws its row but never opens, so
-            // the menu only flips flags and the pickers themselves hang off the panel.
-            Menu {
-                Button { showPhotoPicker = true } label: { Label(T("Photo"), systemImage: "photo") }
-                Button { showCamera = true } label: { Label(T("Camera"), systemImage: "camera") }
-                Button { showFilePicker = true } label: { Label(T("File"), systemImage: "doc") }
-            } label: {
-                Image(systemName: "plus.circle").font(.system(size: 20)).foregroundStyle(NX.mutedFg)
-            }
-            TextField(T("Ask anything about NEXUS…"), text: $chat.draft, axis: .vertical)
-                .font(NXFont.text(14))
-                .lineLimit(1...5)
+        return VStack(alignment: .leading, spacing: 0) {
+            TextField(T("Ask anything. Type @ to add a page"), text: $chat.draft, axis: .vertical)
+                .font(NXFont.text(15))
+                .lineLimit(wide ? 3...10 : 2...6)
+                .textFieldStyle(.plain)
                 .focused($composerFocused)
                 // Hardware keyboard (iPad, Mac): Enter asks, Shift+Enter is a new line (web panel).
                 .onKeyPress(keys: [.return], phases: .down) { press in
@@ -796,26 +976,83 @@ struct GideonPanel: View {
                     submit()
                     return .handled
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(NX.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(NX.border))
-
-            Button {
-                submit()
-            } label: {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 38, height: 38)
-                    .background(canSend ? NX.violet : NX.muted, in: Circle())
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 4)
+            attachmentStrip
+            HStack(spacing: 4) {
+                plusMenu
+                approvalMenu
+                Spacer(minLength: 8)
+                Button {
+                    submit()
+                } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(NX.card)
+                        .frame(width: 34, height: 34)
+                        .background(NX.onyx.opacity(canSend ? 1 : 0.35), in: Circle())
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSend)
+                .accessibilityLabel(T("Send"))
             }
-            .buttonStyle(.plain)
-            .disabled(!canSend)
+            .padding(.horizontal, 4)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(NX.background)
+        .background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .strokeBorder(composerFocused ? NX.onyx.opacity(0.45) : NX.border))
+    }
+
+    /// One menu rather than three icons (web "+"). A PhotosPicker nested in a Menu draws its row but never
+    /// opens, so the menu only flips flags and the pickers themselves hang off the panel.
+    private var plusMenu: some View {
+        Menu {
+            Button { showPhotoPicker = true } label: { Label(T("Add a photo"), systemImage: "photo") }
+            Button { showCamera = true } label: { Label(T("Camera"), systemImage: "camera") }
+            Button { showFilePicker = true } label: { Label(T("Add a file (PDF, Word, Excel, text…)"), systemImage: "paperclip") }
+            Button { startMention() } label: { Label(T("Add a page, task or project"), systemImage: "at") }
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(NX.mutedFg)
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
+        }
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .accessibilityLabel(T("Add photos, files or pages"))
+    }
+
+    /// "Review before writing ▾" (web): what has to wait for Apply before GIDEON changes something.
+    private var approvalMenu: some View {
+        Menu {
+            Section(T("Before GIDEON changes something")) {
+                ForEach(GideonApprovalMode.allCases) { m in
+                    // A Toggle draws the menu's checkmark; two Texts give the row its subtitle.
+                    Toggle(isOn: Binding(get: { approvalMode == m }, set: { on in if on { approvalRaw = m.rawValue } })) {
+                        Text(m.name)
+                        Text(m.blurb)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark.shield").font(.system(size: 12))
+                Text(approvalMode.name).lineLimit(1)
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+            }
+            .font(NXFont.text(13, .semibold))
+            .foregroundStyle(NX.mutedFg)
+            .padding(.horizontal, 6)
+            .frame(minHeight: 36)
+            .contentShape(Rectangle())
+        }
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .help(approvalMode.blurb)
     }
 
     /// Deliberately does not consult `sending`. The composer stays live while GIDEON is thinking;
@@ -944,7 +1181,7 @@ struct GideonPanel: View {
     /// screen: the decode is done in a tap that is already paying for a layout pass, so the bubble's
     /// first draw and every redraw an arriving answer forces are cache reads and nothing more.
     private func submit() {
-        guard let turn = chat.submit(tier: tier) else { return }
+        guard let turn = chat.submit(tier: tier, approvalMode: approvalMode) else { return }
         guard let index = turn.attachments.firstIndex(where: { $0.kind == .image }),
               let bytes = turn.attachments[index].bytes else { return }
         _ = GideonThumbnail.image(bytes, key: "\(turn.id)-\(index)")
@@ -1107,9 +1344,12 @@ struct GideonChatsSheet: View {
                         ForEach(chats) { c in
                             Button { onOpen(c.id); dismiss() } label: {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(GideonChatTitle.text(c.title) ?? T("Untitled chat")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(2)
+                                    Text(GideonChatTitle.text(c.title) ?? T("Untitled chat")).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(2)
+                                    if let m = c.match, !m.isEmpty {
+                                        Text(m).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                                    }
                                     if let d = ProjDate.parse(c.updatedAt) {
-                                        Text(ProjDate.dayLabel(d)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                                        Text(ProjDate.dayLabel(d)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                                     }
                                 }
                                 .frame(minHeight: 44, alignment: .leading)
@@ -1192,6 +1432,9 @@ struct AskGideonButton: View {
         .buttonStyle(.plain)
         .hoverEffect(.lift)
         .accessibilityLabel(T("Ask GIDEON"))
+        // The screen this button sits on is the page GIDEON is asked about while it shows (web
+        // pushGideonPage on the project / task page): ⌘O and the launcher pick it up from there.
+        .gideonPage(context)
         .sheet(isPresented: $open) { GideonPanel(openContext: context).environment(auth).environment(router) }
     }
 

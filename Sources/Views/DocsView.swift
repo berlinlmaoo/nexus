@@ -3,6 +3,8 @@ import SwiftUI
 /// Port of docs.tsx ("Knowledge Library"): searchable doc list → reader.
 struct DocsView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(AppRouter.self) private var router
+    @Environment(\.horizontalSizeClass) private var hSize
     @State private var docs: [Doc] = []
     @State private var query = ""
     @State private var loading = true
@@ -13,14 +15,24 @@ struct DocsView: View {
             : docs.filter { $0.title.lowercased().contains(query.lowercased()) }
     }
 
+    /// The sidebar's Pages screen on an iPad or Mac: the web's page header instead of the nav bar.
+    private var isRoot: Bool { NXSidebarPage.isRoot(.docs, hSize: hSize, router: router) }
+
     var body: some View {
         ZStack {
             NX.background.ignoresSafeArea()
             content
         }
+        .nxSidebarPageChrome(isRoot) {
+            // Web docs.tsx PageHeader. Its "New page" is not here: a page is made from a project's Pages tab.
+            NXPageHeader(title: T("Pages"), subtitle: T("SOPs, meeting notes, briefs and reference pages from every project you're in.")) {
+                NXHeaderSearchField(prompt: T("Search pages…"), text: $query, width: 224)
+            }
+        }
         .navigationTitle(T("Pages"))
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: T("Search pages…"))
+        // The bar's search field only where the bar is shown; the page header carries its own.
+        .modifier(DocsBarSearch(enabled: !isRoot, query: $query))
         .task { await load() }
     }
 
@@ -42,7 +54,8 @@ struct DocsView: View {
                             .hoverEffect(.highlight)
                     }
                 }
-                .padding(16)
+                .padding(.horizontal, NXSidebarPage.gutter(isRoot))
+                .padding(.vertical, isRoot ? 24 : 16)
             }
             .refreshable { await load() }
         }
@@ -57,6 +70,20 @@ struct DocsView: View {
     }
 }
 
+/// `.searchable` in the navigation bar, only while `enabled` (the iPad / Mac page hides that bar).
+private struct DocsBarSearch: ViewModifier {
+    let enabled: Bool
+    @Binding var query: String
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.searchable(text: $query, prompt: T("Search pages…"))
+        } else {
+            content
+        }
+    }
+}
+
 struct DocCard: View {
     let doc: Doc
     var body: some View {
@@ -66,9 +93,9 @@ struct DocCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(UntitledText.any(doc.title)).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
                 if let preview = doc.contentText, !preview.isEmpty {
-                    Text(preview).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                    Text(preview).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(2)
                 } else if let pname = doc.project?.name {
-                    Text(pname).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    Text(pname).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
                 }
             }
             Spacer(minLength: 4)
@@ -123,6 +150,10 @@ struct DocReaderView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
         .task { await load() }
+        // The page on screen is GIDEON's context (web pushGideonPage "doc"): ⌘O / the launcher ask about it.
+        .gideonPage(doc.flatMap { d in
+            d.projectId.map { GideonContext(projectId: $0, projectName: d.project?.name, docId: d.id, docTitle: DocTitle.display(d.title)) }
+        })
         // Live: someone edits the page on the web (or another device): it re-reads, unless this person is
         // editing it here (their edit is merged on save instead).
         .realtimeRoom(doc?.projectId.map { "project:\($0)" })

@@ -140,6 +140,8 @@ struct TaskDetailView: View {
         // another device shows here without a reload. Task events go only to the project's room, so
         // the screen holds it once the task has said which project it lives in.
         .realtimeRoom(task?.projectId.map { "project:\($0)" })
+        // The task on screen is GIDEON's page context (web pushGideonPage "task") for ⌘O and the launcher.
+        .gideonPage(task.flatMap { t in t.projectId.map { GideonContext(projectId: $0, projectName: nil, taskId: t.id, taskTitle: t.title) } })
         .liveRefresh(every: 60, on: [.nexusProjectTasksChanged], projectId: task?.projectId, taskId: taskId) {
             await reloadQuietly()
         }
