@@ -8,6 +8,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.draw.alpha
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -109,9 +110,25 @@ fun LeaderboardScreen(onBack: () -> Unit, onOpenPerson: (String) -> Unit) {
             b == null -> TabEmpty(Icons.Filled.EmojiEvents, error!!)
             b.rows.isEmpty() -> TabEmpty(Icons.Filled.EmojiEvents, stringResource(R.string.lb_empty))
             else -> PullToRefreshBox(isRefreshing = false, onRefresh = { tick++ }) {
+                var query by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+                val ranked = PeopleLogic.ranks(b.rows)
+                val shown = PeopleLogic.search(ranked, query)
                 LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item { Text(stringResource(R.string.lb_period_note), fontSize = 12.sp, color = c.mutedFg) }
-                    items(PeopleLogic.ranks(b.rows), key = { it.second.userId }) { (rank, r) ->
+                    // "Current period · 1 Oct – 31 Oct" (web header; end is exclusive).
+                    PeopleLogic.periodDays(b.period)?.let { (from, to) ->
+                        item {
+                            val f = java.time.format.DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())
+                            Text(stringResource(R.string.lb_current_period) + " · " + f.format(from) + " – " + f.format(to), fontSize = 13.sp, color = c.mutedFg)
+                        }
+                    }
+                    item {
+                        androidx.compose.material3.OutlinedTextField(query, { query = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text(stringResource(R.string.lb_search_people)) }, shape = RoundedCornerShape(10.dp),
+                            leadingIcon = { androidx.compose.material3.Icon(Icons.Filled.Search, null) })
+                    }
+                    if (shown.isEmpty()) item { Text(stringResource(R.string.lb_no_match), fontSize = 14.sp, color = c.mutedFg, modifier = Modifier.padding(8.dp)) }
+                    // A tied rank shares its medal / step: ranks come from the whole board (1, 1, 1, 4).
+                    items(shown, key = { it.second.userId }) { (rank, r) ->
                         val mine = r.userId == me
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(if (mine) c.violet.copy(alpha = 0.1f) else c.card)
                             .border(1.dp, if (mine) c.violet else c.border, RoundedCornerShape(16.dp)).clickable { onOpenPerson(r.userId) }.padding(12.dp),

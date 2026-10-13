@@ -14,17 +14,18 @@ class GideonTest {
     @Test fun textFramesAppendAndStopAtDone() {
         val raw = "data: {\"type\":\"text\",\"content\":\"Halo \"}\n\ndata: not-json\n\ndata: {\"type\":\"tool_result\"}\n\ndata: {\"type\":\"text\",\"content\":\"Budi\"}\n\n" +
             "data: {\"type\":\"done\"}\n\ndata: {\"type\":\"text\",\"content\":\"ignored\"}\n\n"
-        assertEquals("Halo Budi" to null, GideonRules.parse(raw, dec))
+        val r = GideonRules.parse(raw, dec)
+        assertEquals("Halo Budi", r.text); assertNull(r.error)
     }
 
     @Test fun errorFrameIsTheSentence() {
-        val (t, e) = GideonRules.parse("data: {\"type\":\"error\",\"content\":\"Kuota habis.\"}\n\ndata: {\"type\":\"done\"}\n", dec)
-        assertEquals("", t); assertEquals("Kuota habis.", e)
+        val r = GideonRules.parse("data: {\"type\":\"error\",\"content\":\"Kuota habis.\"}\n\ndata: {\"type\":\"done\"}\n", dec)
+        assertEquals("", r.text); assertEquals("Kuota habis.", r.error)
     }
 
     @Test fun documentTypes() {
         assertTrue(GideonRules.acceptsDocument("Laporan Q3.XLSX"))
         assertFalse(GideonRules.acceptsDocument("video.mp4"))
-        assertNull(GideonRules.parse("", dec).second)
+        assertNull(GideonRules.parse("", dec).error)
     }
 }

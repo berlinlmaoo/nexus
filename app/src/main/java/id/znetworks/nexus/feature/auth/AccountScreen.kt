@@ -1,5 +1,12 @@
 package id.znetworks.nexus.feature.auth
 
+import androidx.compose.material.icons.filled.DevicesOther
+import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.TabletAndroid
+import id.znetworks.nexus.ui.components.PageTab
+import id.znetworks.nexus.ui.components.PageTabs
+import id.znetworks.nexus.ui.components.NxButtonKind
+import id.znetworks.nexus.ui.components.NxButton
 import id.znetworks.nexus.ui.components.PageHeader
 import android.app.Application
 import android.content.Context
@@ -92,6 +99,13 @@ data class AccountState(
     val busy: Boolean = false,
     val error: String? = null,
     val info: String? = null,
+    /** Settings › Security › Active sessions: null = not read yet. */
+    val sessions: List<UserSession>? = null,
+    val sessionsFailed: Boolean = false,
+    /** A session being signed out ("others" for all but this one). */
+    val signingOut: String? = null,
+    /** Inline line under the password fields: true = updated, false = refused. */
+    val passwordOk: Boolean? = null,
 )
 
 class AccountViewModel(app: Application) : AndroidViewModel(app) {
@@ -101,7 +115,26 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(AccountState(email = c.sessionStore.current?.userEmail.orEmpty()))
     val state = _state.asStateFlow()
 
-    init { loadPasskeys() }
+    init { loadPasskeys(); loadSessions() }
+
+    fun loadSessions() = viewModelScope.launch {
+        try { val l = account.sessions(); _state.update { it.copy(sessions = l.sortedByDescending { s -> s.current }, sessionsFailed = false) } }
+        catch (e: ApiError) { _state.update { it.copy(sessionsFailed = true) } }
+    }
+
+    /** One device out (the web's row button), or every other one; this device stays signed in. */
+    fun signOutSession(id: String?) {
+        if (_state.value.signingOut != null) return
+        _state.update { it.copy(signingOut = id ?: "others") }
+        viewModelScope.launch {
+            try {
+                if (id == null) account.revokeOtherSessions() else account.revokeSession(id)
+                _state.update { st -> st.copy(sessions = st.sessions?.filter { if (id == null) it.current else it.id != id }) }
+            } catch (e: ApiError) { _state.update { it.copy(error = res.getString(R.string.st_sign_out_failed)) } }
+            _state.update { it.copy(signingOut = null) }
+            loadSessions()
+        }
+    }
 
     private fun loadPasskeys() = viewModelScope.launch {
         runCatching { account.passkeys() }.getOrNull()?.let { l -> _state.update { it.copy(passkeys = l) } }
@@ -139,10 +172,14 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
 
     fun cancelEmail() = _state.update { it.copy(pendingEmail = null) }
 
-    fun changePassword(current: String, new: String, onDone: () -> Unit) = act {
-        account.changePassword(current, new)
-        _state.update { it.copy(info = res.getString(R.string.acct_password_changed)) }
-        onDone()
+    fun changePassword(current: String, new: String, onDone: () -> Unit) {
+        if (_state.value.busy) return
+        _state.update { it.copy(busy = true, passwordOk = null) }
+        viewModelScope.launch {
+            try { account.changePassword(current, new); _state.update { it.copy(passwordOk = true) }; onDone() }
+            catch (e: ApiError) { _state.update { it.copy(passwordOk = false) } }
+            _state.update { it.copy(busy = false) }
+        }
     }
 
     fun addPasskey(activity: Context) = act {
@@ -154,101 +191,53 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     fun revoke(p: Passkey) = act { account.revokePasskey(p.id); loadPasskeys() }
 }
 
+/** Settings' sections (web settings.tsx), as underline tabs on the phone. */
+internal enum class SettingsTab(val label: Int) { PROFILE(R.string.st_tab_profile), SECURITY(R.string.st_tab_security), APPEARANCE(R.string.st_tab_appearance), MEMBERS(R.string.st_tab_members) }
+
 @Composable
 fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, onLogout: () -> Unit = {}, onDeleteAccount: () -> Unit = {}, vm: AccountViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     val context = LocalContext.current
+    var tab by rememberSaveable { mutableStateOf(SettingsTab.PROFILE) }
     Column(Modifier.fillMaxSize().background(c.background)) {
-        PageHeader(stringResource(R.string.nav_settings), subtitle = stringResource(R.string.sub_settings), onBack = onBack) {
+        PageHeader(stringResource(R.string.nav_settings), subtitle = stringResource(R.string.sub_settings), onBack = onBack,
+            tabs = { PageTabs(SettingsTab.entries.map { PageTab(it, stringResource(it.label)) }, tab, { tab = it }) }) {
             if (s.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             UpdateRow()
-            ProfileCard()
-            Section(stringResource(R.string.acct_email)) {
-                var newEmail by rememberSaveable { mutableStateOf("") }
-                var code by rememberSaveable { mutableStateOf("") }
-                Text(s.email, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
-                val pending = s.pendingEmail
-                if (pending == null) {
-                    OutlinedTextField(newEmail, { newEmail = it }, singleLine = true, label = { Text(stringResource(R.string.acct_new_email)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth())
-                    // Never saved into the restorable state: a password only lives while the field does.
-                    var currentPassword by remember { mutableStateOf("") }
-                    OutlinedTextField(currentPassword, { currentPassword = it }, singleLine = true, label = { Text(stringResource(R.string.acct_current_password)) },
-                        supportingText = { Text(stringResource(R.string.acct_email_password_help)) },
-                        visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
-                    OutlinedButton(onClick = { vm.requestEmail(newEmail, currentPassword) { currentPassword = "" } },
-                        enabled = newEmail.contains('@') && currentPassword.isNotEmpty() && !s.busy, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.signup_send_code))
-                    }
-                } else {
-                    Text(stringResource(R.string.code_sub, pending), fontSize = 12.sp, color = c.mutedFg)
-                    OutlinedTextField(code, { code = it.filter(Char::isDigit).take(6) }, singleLine = true, label = { Text(stringResource(R.string.code_label)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), modifier = Modifier.fillMaxWidth())
-                    Row {
-                        TextButton(onClick = vm::cancelEmail) { Text(stringResource(R.string.cancel)) }
-                        Spacer(Modifier.weight(1f))
-                        TextButton(onClick = { vm.verifyEmail(code) }, enabled = code.length == 6 && !s.busy) { Text(stringResource(R.string.acct_confirm), fontWeight = FontWeight.Bold) }
-                    }
-                }
-            }
-            AppearanceCard()
-            LanguageCard()
-            ServerCard()
-            OfflineCard()
-            WorkspaceMembersCard(onOpenProfile)
-            Section(stringResource(R.string.acct_password)) {
-                var current by rememberSaveable { mutableStateOf("") }
-                var new by rememberSaveable { mutableStateOf("") }
-                OutlinedTextField(current, { current = it }, singleLine = true, label = { Text(stringResource(R.string.acct_current_password)) },
-                    visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(new, { new = it }, singleLine = true, label = { Text(stringResource(R.string.reset_new_password)) },
-                    supportingText = { Text(stringResource(R.string.password_min_ph)) },
-                    visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
-                OutlinedButton(onClick = { vm.changePassword(current, new) { current = ""; new = "" } },
-                    enabled = current.isNotEmpty() && new.length >= 8 && !s.busy, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.acct_change_password)) }
-            }
-            Section(stringResource(R.string.acct_passkeys)) {
-                Text(stringResource(R.string.acct_passkeys_sub), fontSize = 12.sp, color = c.mutedFg)
-                val list = s.passkeys
-                if (list == null) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                else if (list.isEmpty()) Text(stringResource(R.string.acct_no_passkeys), fontSize = 13.sp, color = c.mutedFg)
-                list?.forEach { p ->
-                    var confirm by remember { mutableStateOf(false) }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Key, null, tint = c.violetText, modifier = Modifier.size(18.dp))
+            when (tab) {
+                SettingsTab.PROFILE -> {
+                    ProfileCard()
+                    EmailBlock(s, vm)
+                    // Logout, then Delete set apart below it, so the permanent action is never where a thumb lands by habit (iOS).
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(12.dp))
+                        .clickable(onClick = onLogout).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.AutoMirrored.Filled.Logout, null, tint = c.dangerText, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(p.label ?: stringResource(R.string.acct_passkey), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
-                            Text(listOfNotNull(dateOf(p.createdAt)?.let { stringResource(R.string.acct_added_on, it) },
-                                dateOf(p.lastUsedAt)?.let { stringResource(R.string.acct_last_used, it) }).joinToString(" · "), fontSize = 11.sp, color = c.mutedFg)
-                        }
-                        IconButton(onClick = { confirm = true }) { Icon(Icons.Filled.Delete, stringResource(R.string.delete), tint = c.mutedFg) }
+                        Text(stringResource(R.string.nav_log_out), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.dangerText)
                     }
-                    if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text(stringResource(R.string.acct_remove_passkey_q)) },
-                        text = { Text(stringResource(R.string.acct_remove_passkey_body)) },
-                        confirmButton = { TextButton(onClick = { confirm = false; vm.revoke(p) }) { Text(stringResource(R.string.delete), color = c.danger) } },
-                        dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.cancel)) } })
+                    Row(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.card).border(1.dp, c.danger.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                        .clickable(onClick = onDeleteAccount).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Delete, null, tint = c.dangerText, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text(stringResource(R.string.delete_account), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.dangerText, modifier = Modifier.weight(1f))
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
+                    }
                 }
-                OutlinedButton(onClick = { context.findActivity()?.let(vm::addPasskey) }, enabled = !s.busy, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Filled.Key, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.acct_add_passkey))
+                SettingsTab.SECURITY -> {
+                    PasswordBlock(s, vm)
+                    PasskeysBlock(s, vm)
+                    SessionsBlock(s, vm)
                 }
-            }
-            // Logout, then Delete set apart below it, so the permanent action is never where a thumb lands by habit (iOS).
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(18.dp))
-                .clickable(onClick = onLogout).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.AutoMirrored.Filled.Logout, null, tint = c.danger, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(10.dp))
-                Text(stringResource(R.string.logout), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.danger)
-            }
-            Row(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card).border(1.dp, c.danger.copy(alpha = 0.3f), RoundedCornerShape(18.dp))
-                .clickable(onClick = onDeleteAccount).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Delete, null, tint = c.danger, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(10.dp))
-                Text(stringResource(R.string.delete_account), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.danger, modifier = Modifier.weight(1f))
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
+                SettingsTab.APPEARANCE -> {
+                    AppearanceCard()
+                    LanguageCard()
+                    ServerCard()
+                    OfflineCard()
+                }
+                SettingsTab.MEMBERS -> WorkspaceMembersCard(onOpenProfile)
             }
             val identity = (context.applicationContext as NexusApplication).container.identity
             // The live connection (ANDROID-REALTIME): connected / reconnecting / off.
@@ -263,6 +252,187 @@ fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, onLo
         }
     }
     (s.error ?: s.info)?.let { AlertDialog(onDismissRequest = vm::dismiss, text = { Text(it) }, confirmButton = { TextButton(onClick = vm::dismiss) { Text("OK") } }) }
+}
+
+/** Sign-in email: a code to the new address (current password first), then the code. */
+@Composable
+private fun EmailBlock(s: AccountState, vm: AccountViewModel) {
+    val c = Nx.colors
+    SettingsBlock(stringResource(R.string.acct_email)) {
+        var newEmail by rememberSaveable { mutableStateOf("") }
+        var code by rememberSaveable { mutableStateOf("") }
+        Text(s.email, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.foreground)
+        val pending = s.pendingEmail
+        if (pending == null) {
+            OutlinedTextField(newEmail, { newEmail = it }, singleLine = true, label = { Text(stringResource(R.string.acct_new_email)) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth())
+            // Never saved into the restorable state: a password only lives while the field does.
+            var currentPassword by remember { mutableStateOf("") }
+            OutlinedTextField(currentPassword, { currentPassword = it }, singleLine = true, label = { Text(stringResource(R.string.st_current_password)) },
+                supportingText = { Text(stringResource(R.string.acct_email_password_help)) },
+                visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
+            NxButton(stringResource(R.string.signup_send_code), { vm.requestEmail(newEmail, currentPassword) { currentPassword = "" } },
+                enabled = newEmail.contains('@') && currentPassword.isNotEmpty() && !s.busy)
+        } else {
+            Text(stringResource(R.string.code_sub, pending), fontSize = 13.sp, color = c.mutedFg)
+            OutlinedTextField(code, { code = it.filter(Char::isDigit).take(6) }, singleLine = true, label = { Text(stringResource(R.string.code_label)) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), modifier = Modifier.fillMaxWidth())
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NxButton(stringResource(R.string.cancel), vm::cancelEmail, kind = NxButtonKind.GHOST)
+                Spacer(Modifier.weight(1f))
+                NxButton(stringResource(R.string.acct_confirm), { vm.verifyEmail(code) }, kind = NxButtonKind.PRIMARY, enabled = code.length == 6 && !s.busy)
+            }
+        }
+    }
+}
+
+/** Password (web PasswordSection): current + new, "Password updated." / the refusal inline. */
+@Composable
+private fun PasswordBlock(s: AccountState, vm: AccountViewModel) {
+    val c = Nx.colors
+    SettingsBlock(stringResource(R.string.st_password)) {
+        // Never in the restorable state.
+        var current by remember { mutableStateOf("") }
+        var new by remember { mutableStateOf("") }
+        OutlinedTextField(current, { current = it }, singleLine = true, label = { Text(stringResource(R.string.st_current_password)) },
+            visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(new, { new = it }, singleLine = true, label = { Text(stringResource(R.string.st_new_password)) },
+            supportingText = { Text(stringResource(R.string.password_min_ph)) },
+            visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
+        when (s.passwordOk) {
+            true -> Text(stringResource(R.string.st_password_updated), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.success)
+            false -> Text(stringResource(R.string.st_password_failed), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.dangerText)
+            null -> Unit
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            NxButton(stringResource(R.string.st_change_password), { vm.changePassword(current, new) { current = ""; new = "" } }, kind = NxButtonKind.PRIMARY,
+                enabled = current.isNotEmpty() && new.length >= 8 && !s.busy)
+        }
+    }
+}
+
+@Composable
+private fun PasskeysBlock(s: AccountState, vm: AccountViewModel) {
+    val c = Nx.colors
+    val context = LocalContext.current
+    SettingsBlock(stringResource(R.string.acct_passkeys), stringResource(R.string.acct_passkeys_sub)) {
+        val list = s.passkeys
+        if (list == null) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+        else if (list.isEmpty()) Text(stringResource(R.string.acct_no_passkeys), fontSize = 13.sp, color = c.mutedFg)
+        list?.forEach { p ->
+            var confirm by remember { mutableStateOf(false) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Key, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(p.label ?: stringResource(R.string.acct_passkey), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.foreground)
+                    Text(listOfNotNull(dateOf(p.createdAt)?.let { stringResource(R.string.acct_added_on, it) },
+                        dateOf(p.lastUsedAt)?.let { stringResource(R.string.acct_last_used, it) }).joinToString(" · "), fontSize = 12.sp, color = c.mutedFg)
+                }
+                IconButton(onClick = { confirm = true }) { Icon(Icons.Filled.Delete, stringResource(R.string.delete), tint = c.mutedFg) }
+            }
+            if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text(stringResource(R.string.acct_remove_passkey_q)) },
+                text = { Text(stringResource(R.string.acct_remove_passkey_body)) },
+                confirmButton = { TextButton(onClick = { confirm = false; vm.revoke(p) }) { Text(stringResource(R.string.delete), color = c.dangerText) } },
+                dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.cancel)) } })
+        }
+        NxButton(stringResource(R.string.acct_add_passkey), { context.findActivity()?.let(vm::addPasskey) }, icon = Icons.Filled.Key, enabled = !s.busy)
+    }
+}
+
+/**
+ * Security › Active sessions (web ActiveSessions.tsx, iOS): every device signed in, this one first with its badge;
+ * the others can be signed out one by one or all at once, each behind a centred confirm.
+ */
+@Composable
+private fun SessionsBlock(s: AccountState, vm: AccountViewModel) {
+    val c = Nx.colors
+    var confirmOne by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var confirmOthers by remember { mutableStateOf(false) }
+    SettingsBlock(stringResource(R.string.st_sessions), stringResource(R.string.st_sessions_sub)) {
+        val rows = s.sessions
+        when {
+            rows == null && s.sessionsFailed -> Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.st_sessions_failed), fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
+                NxButton(stringResource(R.string.st_try_again), { vm.loadSessions() }, compact = true)
+            }
+            rows == null -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            rows.isEmpty() -> Text(stringResource(R.string.st_sessions_none), fontSize = 13.sp, color = c.mutedFg)
+            else -> Column(Modifier.fillMaxWidth().border(1.dp, c.border, RoundedCornerShape(10.dp))) {
+                rows.forEachIndexed { i, r ->
+                    if (i > 0) androidx.compose.material3.HorizontalDivider(color = c.border)
+                    val device = DeviceLabel.describe(r.userAgent, r.client)
+                    val name = deviceName(device)
+                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(if (r.current) c.accentBg else c.muted), contentAlignment = Alignment.Center) {
+                            Icon(when (device.kind) {
+                                DeviceLabel.Kind.PHONE -> Icons.Filled.PhoneAndroid; DeviceLabel.Kind.TABLET -> Icons.Filled.TabletAndroid
+                                DeviceLabel.Kind.DESKTOP -> Icons.Filled.Computer; DeviceLabel.Kind.UNKNOWN -> Icons.Filled.DevicesOther
+                            }, null, tint = if (r.current) c.accentFg else c.mutedFg, modifier = Modifier.size(18.dp))
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(name, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.foreground, maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                if (r.current) {
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(stringResource(R.string.st_this_device), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.success,
+                                        modifier = Modifier.clip(RoundedCornerShape(50)).background(c.success.copy(alpha = 0.15f)).padding(horizontal = 8.dp, vertical = 2.dp))
+                                }
+                            }
+                            Text(sessionMeta(r), fontSize = 12.sp, color = c.mutedFg, maxLines = 2)
+                        }
+                        if (!r.current) {
+                            Spacer(Modifier.width(6.dp))
+                            if (s.signingOut == r.id) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                            else NxButton(stringResource(R.string.st_sign_out), { confirmOne = r.id to name }, compact = true, enabled = s.signingOut == null)
+                        }
+                    }
+                }
+            }
+        }
+        if (rows.orEmpty().any { !it.current }) NxButton(stringResource(R.string.st_sessions_others), { confirmOthers = true },
+            icon = Icons.AutoMirrored.Filled.Logout, enabled = s.signingOut == null)
+    }
+    confirmOne?.let { (id, name) ->
+        AlertDialog(onDismissRequest = { confirmOne = null }, text = { Text(stringResource(R.string.st_sign_out_q, name)) },
+            confirmButton = { TextButton(onClick = { confirmOne = null; vm.signOutSession(id) }) { Text(stringResource(R.string.st_sign_out), color = c.dangerText) } },
+            dismissButton = { TextButton(onClick = { confirmOne = null }) { Text(stringResource(R.string.cancel)) } })
+    }
+    if (confirmOthers) AlertDialog(onDismissRequest = { confirmOthers = false }, text = { Text(stringResource(R.string.st_sessions_others_q)) },
+        confirmButton = { TextButton(onClick = { confirmOthers = false; vm.signOutSession(null) }) { Text(stringResource(R.string.st_sign_out), color = c.dangerText) } },
+        dismissButton = { TextButton(onClick = { confirmOthers = false }) { Text(stringResource(R.string.cancel)) } })
+}
+
+/** "NEXUS app for Android 0.1.6 (13)", "Chrome on Windows", "Unknown device". */
+@Composable
+private fun deviceName(d: DeviceLabel): String = when (d) {
+    is DeviceLabel.App -> {
+        val app = stringResource(if (d.platform == "ios") R.string.st_app_ios else R.string.st_app_android)
+        when {
+            d.version != null && d.build != null -> "$app ${d.version} (${d.build})"
+            d.version != null -> "$app ${d.version}"
+            d.build != null -> "$app (${stringResource(R.string.st_build, d.build)})"
+            else -> app
+        }
+    }
+    is DeviceLabel.Browser -> if (d.browser != null && d.os != null) stringResource(R.string.st_browser_on, d.browser, d.os) else d.browser ?: d.os ?: stringResource(R.string.st_unknown_device)
+    DeviceLabel.Unknown -> stringResource(R.string.st_unknown_device)
+}
+
+/** "103.x.x.x · Active 3 hours ago · Signed in 2 Oct". */
+@Composable
+private fun sessionMeta(r: UserSession): String {
+    val now = System.currentTimeMillis()
+    val last = r.lastActiveAt?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+    val active = if (r.current || last == null) null else if (SessionTime.activeNow(last, now)) stringResource(R.string.st_active_now)
+        else stringResource(R.string.st_active_ago, android.text.format.DateUtils.getRelativeTimeSpanString(last, now, android.text.format.DateUtils.MINUTE_IN_MILLIS).toString())
+    val started = r.createdAt?.let { iso -> runCatching {
+        val d = Instant.parse(iso).atZone(ZoneId.of("Asia/Jakarta"))
+        DateTimeFormatter.ofPattern(if (d.year == java.time.LocalDate.now().year) "d MMM" else "d MMM yyyy", Locale.getDefault()).format(d)
+    }.getOrNull() } ?: "—"
+    return listOfNotNull(r.ipAddress?.takeIf { it.isNotBlank() }, active, stringResource(R.string.st_signed_in_on, started)).joinToString(" · ")
 }
 
 private fun dateOf(iso: String?): String? = iso?.let {
@@ -308,14 +478,14 @@ private fun AppearanceCard() {
     val c = Nx.colors
     val appearance = (LocalContext.current.applicationContext as NexusApplication).container.appearance
     val theme by appearance.theme.collectAsStateWithLifecycle()
-    SettingsCard(stringResource(R.string.set_appearance_caps)) {
+    SettingsCard(stringResource(R.string.st_theme)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             AppTheme.entries.forEach { t ->
                 val on = theme == t
-                Column(Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(if (on) c.violet else c.muted.copy(alpha = 0.5f))
+                Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (on) c.onyx else c.muted.copy(alpha = 0.5f))
                     .clickable { appearance.set(t) }.padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val fg = if (on) Color.White else c.mutedFg
+                    val fg = if (on) c.background else c.mutedFg
                     Icon(when (t) { AppTheme.SYSTEM -> Icons.Filled.PhoneAndroid; AppTheme.LIGHT -> Icons.Filled.LightMode; AppTheme.DARK -> Icons.Filled.DarkMode }, null, tint = fg, modifier = Modifier.size(20.dp))
                     Text(stringResource(themeLabel(t)), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = fg, maxLines = 1)
                 }
@@ -336,7 +506,7 @@ private fun LanguageCard() {
     val c = Nx.colors
     val context = LocalContext.current
     val current = if (id.znetworks.nexus.core.config.ConfigBody.lang(LocalConfiguration.current.locales[0]) == "id") AppLanguage.INDONESIAN else AppLanguage.ENGLISH
-    SettingsCard(stringResource(R.string.set_language_caps), stringResource(R.string.set_language_hint)) {
+    SettingsCard(stringResource(R.string.st_language), stringResource(R.string.set_language_hint)) {
         listOf(Triple(AppLanguage.ENGLISH, "🇬🇧", "English"), Triple(AppLanguage.INDONESIAN, "🇮🇩", "Bahasa Indonesia")).forEach { (tag, flag, label) ->
             val on = current == tag
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (on) c.violet.copy(alpha = 0.1f) else Color.Transparent)
@@ -356,7 +526,7 @@ private fun ServerCard() {
     val c = Nx.colors
     var switchTo by remember { mutableStateOf<id.znetworks.nexus.core.net.ServerEnv?>(null) }
     val current = id.znetworks.nexus.core.net.NexusConfig.env
-    SettingsCard(stringResource(R.string.server_caps), stringResource(R.string.server_hint)) {
+    SettingsCard(stringResource(R.string.server_caps).lowercase().replaceFirstChar(Char::titlecase), stringResource(R.string.server_hint)) {
         id.znetworks.nexus.core.net.ServerEnv.entries.forEach { env ->
             val on = current == env
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (on) c.violet.copy(alpha = 0.1f) else Color.Transparent)
@@ -371,14 +541,6 @@ private fun ServerCard() {
     switchTo?.let { id.znetworks.nexus.ui.components.ServerSwitchDialog(it) { switchTo = null } }
 }
 
-/** The iOS `.nexusCard()` with a small violet caps label. */
+/** A settings card in the web's look: plain title, optional muted line (was iOS's violet caps label). */
 @Composable
-private fun SettingsCard(label: String, hint: String? = null, content: @Composable () -> Unit) {
-    val c = Nx.colors
-    Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(18.dp)).border(1.dp, c.border, RoundedCornerShape(18.dp)).padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, color = c.violetText)
-        hint?.let { Text(it, fontSize = 11.sp, color = c.mutedFg) }
-        content()
-    }
-}
+private fun SettingsCard(label: String, hint: String? = null, content: @Composable () -> Unit) = SettingsBlock(label, hint, content)

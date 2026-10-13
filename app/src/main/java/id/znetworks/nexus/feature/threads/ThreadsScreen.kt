@@ -120,6 +120,8 @@ data class ThreadsState(
     val notice: String? = null,
     val comments: List<FeedComment>? = null,
     val commentsFor: String? = null,
+    /** All | Mentions (web 13 Oct): the Mentions tab reads `mentions=me` and has no composer. */
+    val mentionsOnly: Boolean = false,
 )
 
 class ThreadsViewModel(app: Application) : AndroidViewModel(app) {
@@ -143,10 +145,20 @@ class ThreadsViewModel(app: Application) : AndroidViewModel(app) {
     private fun rosterIds() = _state.value.roster.mapNotNull { m -> (m.userId ?: m.id)?.let { it to m.name.orEmpty() } }
 
     fun refresh() = viewModelScope.launch {
+        val mentions = _state.value.mentionsOnly
         try {
-            val p = api.page(null)
+            val p = api.page(null, mentionsMe = mentions)
+            // A tab switched while this was on its way: its own answer wins.
+            if (_state.value.mentionsOnly != mentions) return@launch
             _state.update { it.copy(posts = p.posts, cursor = p.nextCursor, hasMore = p.hasMore, loading = false, error = null) }
         } catch (e: ApiError) { _state.update { it.copy(loading = false, error = if (it.posts.isEmpty()) e.describe(res) else null) } }
+    }
+
+    /** All | Mentions: the list starts over from the tab's first page. */
+    fun setMentions(on: Boolean) {
+        if (_state.value.mentionsOnly == on) return
+        _state.update { it.copy(mentionsOnly = on, posts = emptyList(), cursor = null, hasMore = false, loading = true, error = null) }
+        refresh()
     }
 
     /** iOS never pages; Android does, with the server's cursor. */
@@ -156,7 +168,7 @@ class ThreadsViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(loadingMore = true) }
         viewModelScope.launch {
             try {
-                val p = api.page(s.cursor)
+                val p = api.page(s.cursor, mentionsMe = s.mentionsOnly)
                 _state.update { st -> st.copy(posts = st.posts + p.posts.filter { n -> st.posts.none { it.id == n.id } }, cursor = p.nextCursor, hasMore = p.hasMore) }
             } catch (_: ApiError) {}
             _state.update { it.copy(loadingMore = false) }
@@ -263,10 +275,15 @@ fun ThreadsScreen(onBack: () -> Unit, focusPostId: String? = null, vm: ThreadsVi
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(FeedRules.MAX_IMAGES)) { if (it.isNotEmpty()) vm.addPhotos(it) }
 
     Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
-        PageHeader(stringResource(R.string.th_title), subtitle = stringResource(R.string.sub_threads), onBack = onBack)
+        PageHeader(stringResource(R.string.th_title), subtitle = stringResource(R.string.sub_threads), onBack = onBack, tabs = {
+            id.znetworks.nexus.ui.components.PageTabs(
+                listOf(id.znetworks.nexus.ui.components.PageTab(false, stringResource(R.string.th_tab_all)),
+                    id.znetworks.nexus.ui.components.PageTab(true, stringResource(R.string.th_tab_mentions))),
+                s.mentionsOnly, vm::setMentions)
+        })
         PullToRefreshBox(isRefreshing = false, onRefresh = { vm.refresh() }, modifier = Modifier.weight(1f)) {
             LazyColumn(state = list, contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                item(key = "composer") {
+                if (!s.mentionsOnly) item(key = "composer") {
                     Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(18.dp)).border(1.dp, c.border, RoundedCornerShape(18.dp)).padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(draft, { draft = it.take(FeedRules.MAX_TEXT) }, placeholder = { Text(stringResource(R.string.th_whats_new)) },
@@ -297,6 +314,10 @@ fun ThreadsScreen(onBack: () -> Unit, focusPostId: String? = null, vm: ThreadsVi
                     s.loading && s.posts.isEmpty() -> item { Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
                     s.error != null && s.posts.isEmpty() -> item { EmptyState(Icons.Filled.Forum, stringResource(R.string.th_load_failed), s.error!!, stringResource(R.string.try_again), { vm.refresh() }) }
                     // The composer above IS the next step, so no button that would only point at it.
+                    s.posts.isEmpty() && s.mentionsOnly -> item {
+                        EmptyState(Icons.Filled.Forum, stringResource(R.string.th_no_mentions), stringResource(R.string.th_no_mentions_sub),
+                            stringResource(R.string.th_tab_all), { vm.setMentions(false) })
+                    }
                     s.posts.isEmpty() -> item { id.znetworks.nexus.feature.projects.TabEmpty(Icons.Filled.Forum, stringResource(R.string.th_empty_sub)) }
                 }
                 items(s.posts, key = { it.id }) { p -> PostCard(p, vm) }

@@ -52,10 +52,33 @@ data class MemberRecord(val person: RecPerson, val viewer: ViewerRights? = null,
                         val days: List<RecDay> = emptyList(), val xp: RecXp? = null, val requests: List<RecRequest> = emptyList())
 
 object PeopleLogic {
-    /** Dense ranking: equal scores share a place (1, 2, 2, 4). */
+    /**
+     * Standard competition ranking (web lib/competition-rank.ts, QA 13 Oct): equal XP shares a rank and the next
+     * skips (1, 1, 1, 4); within a tie people are listed by name A–Z (Indonesian collation), not "ahead".
+     */
     fun ranks(rows: List<BoardRow>): List<Pair<Int, BoardRow>> {
-        val sorted = rows.sortedByDescending { it.totalXp }
-        return sorted.mapIndexed { i, r -> (sorted.indexOfFirst { it.totalXp == r.totalXp } + 1) to r }
+        val coll = java.text.Collator.getInstance(java.util.Locale.forLanguageTag("id")).apply { strength = java.text.Collator.PRIMARY }
+        val sorted = rows.sortedWith(compareByDescending<BoardRow> { it.totalXp }.thenComparator { a, b -> coll.compare(a.name.orEmpty(), b.name.orEmpty()) })
+        var rank = 0
+        return sorted.mapIndexed { i, r -> if (i == 0 || r.totalXp != sorted[i - 1].totalXp) rank = i + 1; rank to r }
+    }
+
+    /** "Search people": every word in the name; the ranks stay those of the whole board. */
+    fun search(ranked: List<Pair<Int, BoardRow>>, q: String): List<Pair<Int, BoardRow>> {
+        val words = q.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        return if (words.isEmpty()) ranked else ranked.filter { (_, r) -> val n = r.name.orEmpty().lowercase(); words.all { it in n } }
+    }
+
+    /** The period's last counted day: `end` is exclusive (the 1st of next month), "1 Oct – 31 Oct". */
+    fun periodDays(p: BoardPeriod?): Pair<java.time.LocalDate, java.time.LocalDate>? {
+        val zone = java.time.ZoneId.of("Asia/Jakarta")
+        fun day(iso: String?) = iso?.let { runCatching { java.time.Instant.parse(it).atZone(zone).toLocalDate() }.getOrNull()
+            ?: runCatching { java.time.LocalDate.parse(it.take(10)) }.getOrNull() }
+        val start = day(p?.start) ?: return null
+        val endIso = p?.end ?: return null
+        val end = runCatching { java.time.Instant.parse(endIso).minusMillis(1).atZone(zone).toLocalDate() }.getOrNull()
+            ?: day(endIso)?.minusDays(1) ?: return null
+        return start to end
     }
 }
 

@@ -90,6 +90,9 @@ data class TicketDetailState(
     val corrections: Corrections = Corrections(),
     val loading: Boolean = true,
     val error: String? = null,
+    /** 404: gone or a wrong link; 403: someone else's ticket (web 6720b8c). */
+    val missing: Boolean = false,
+    val notYours: Boolean = false,
     val busy: Boolean = false,
     val notice: String? = null,
 )
@@ -109,7 +112,10 @@ class TicketDetailViewModel(app: Application, handle: SavedStateHandle) : Androi
             val t = async { api.detail(id) }
             val cr = async { runCatching { api.corrections(id) }.getOrNull() }
             _state.update { it.copy(ticket = t.await(), corrections = cr.await() ?: it.corrections, loading = false, error = null) }
-        } catch (e: ApiError) { _state.update { it.copy(loading = false, error = e.describe(res)) } }
+        } catch (e: ApiError) {
+            val st = (e as? ApiError.Http)?.status
+            _state.update { it.copy(loading = false, error = e.describe(res), missing = st == 404, notYours = st == 403) }
+        }
     }
 
     fun dismiss() = _state.update { it.copy(notice = null) }
@@ -165,6 +171,8 @@ fun TicketDetailScreen(onBack: () -> Unit, vm: TicketDetailViewModel = viewModel
         }
         when {
             s.loading && t == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            t == null && s.missing -> EmptyState(Icons.AutoMirrored.Filled.Send, stringResource(R.string.tq_gone), stringResource(R.string.tq_gone_sub), stringResource(R.string.tq_back), onBack, Modifier.fillMaxSize())
+            t == null && s.notYours -> EmptyState(Icons.AutoMirrored.Filled.Send, stringResource(R.string.tq_not_yours), stringResource(R.string.tq_not_yours_sub), stringResource(R.string.tq_back), onBack, Modifier.fillMaxSize())
             t == null -> EmptyState(Icons.AutoMirrored.Filled.Send, stringResource(R.string.tk_load_failed), s.error.orEmpty(), stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
             else -> {
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {

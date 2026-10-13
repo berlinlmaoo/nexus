@@ -32,6 +32,24 @@ data class Passkey(val id: String, val label: String? = null, val createdAt: Str
 @Serializable
 data class PasskeyList(val passkeys: List<Passkey> = emptyList())
 
+/** One device signed in to this account (server src/lib/user-sessions.ts). */
+@Serializable
+data class UserSession(
+    val id: String,
+    val ipAddress: String? = null,
+    val userAgent: String? = null,
+    /** That device's X-Nexus-Client (ios/0.1.6/12, android/…, web/1). */
+    val client: String? = null,
+    val createdAt: String? = null,
+    val lastActiveAt: String? = null,
+    val expiresAt: String? = null,
+    /** The session making this request. */
+    val current: Boolean = false,
+)
+
+@Serializable
+data class SessionList(val sessions: List<UserSession> = emptyList())
+
 /** The person closed the system passkey sheet: not an error, the screen stays as it was. */
 class PasskeyCancelled : Exception()
 
@@ -98,6 +116,26 @@ class AccountApi(private val api: ApiClient) {
 
     suspend fun changePassword(current: String, new: String) {
         call("/api/user/password", buildJsonObject { put("currentPassword", current); put("newPassword", new) }, authed = true, method = "PATCH")
+    }
+
+    // endregion
+
+    // region active sessions (Settings › Security; web ActiveSessions.tsx)
+
+    suspend fun sessions() = api.get("/api/user/sessions", SessionList.serializer()).sessions
+
+    /** Ends one session; a 404 means it is already gone. */
+    suspend fun revokeSession(id: String) {
+        try {
+            api.send(Request.Builder().url(api.url("/api/user/sessions/${android.net.Uri.encode(id)}")).delete().build(), JsonObject.serializer())
+        } catch (e: ApiError.Http) {
+            if (e.status != 404) throw e
+        }
+    }
+
+    /** Every session but this one. */
+    suspend fun revokeOtherSessions() {
+        api.send(Request.Builder().url(api.url("/api/user/sessions")).delete().build(), JsonObject.serializer())
     }
 
     // endregion

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.auth
 
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.OutlinedButton
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Image
@@ -68,6 +70,7 @@ import id.znetworks.nexus.ui.theme.TextFont
 /**
  * Port of iOS `LoginView` (itself a port of the web login): cream background with soft glows,
  * frosted card, X mark, "NEXUS PHAËTHON", uppercase labels, onyx CTA, coral pill. Light-only.
+ * Copy as the dev web (13 Oct 2026): Email, Password, Sign in, "Secure sign-in".
  *
  * Sign-up, reset and passkeys are Phase 2 (PRD §3.1). Until then "Forgot password?" and "Create
  * account" open the web pages, so neither button is a dead end.
@@ -120,14 +123,20 @@ fun LoginScreen(vm: LoginViewModel = viewModel()) = NexusLightTheme {
 
                     when (state.mode) {
                         AuthMode.LOGIN -> {
-                            FieldLabel(stringResource(R.string.login_email_label))
+                            // The web's sign-in card (routes/login.tsx): Email, Password with "Forgot password?" beside
+                            // its label, Sign in, "or", a passkey, then "New here? Request access".
+                            FieldLabel(stringResource(R.string.lg_email))
                             NxField(
-                                value = state.email, onChange = vm::onEmail, placeholder = "commander@nexus.app",
+                                value = state.email, onChange = vm::onEmail, placeholder = stringResource(R.string.lg_email_ph),
                                 keyboard = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next, autoCorrectEnabled = false),
                                 actions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
                             )
                             Spacer(Modifier.height(18.dp))
-                            FieldLabel(stringResource(R.string.login_password_label))
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.weight(1f)) { FieldLabel(stringResource(R.string.lg_password)) }
+                                Text(stringResource(R.string.lg_forgot).uppercase(), style = FieldLabelStyle, color = c.onyx,
+                                    modifier = Modifier.padding(bottom = 7.dp).clickable(enabled = !state.busy) { vm.go(AuthMode.FORGOT) })
+                            }
                             NxField(
                                 value = state.password, onChange = vm::onPassword, placeholder = "••••••••", secret = true,
                                 keyboard = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Go),
@@ -135,25 +144,29 @@ fun LoginScreen(vm: LoginViewModel = viewModel()) = NexusLightTheme {
                             )
                             Messages(state)
                             Spacer(Modifier.height(26.dp))
-                            PrimaryButton(stringResource(R.string.login_cta), state.busy, arrow = true) { focus.clearFocus(); vm.submit() }
-                            Spacer(Modifier.height(10.dp))
+                            PrimaryButton(stringResource(R.string.lg_sign_in), state.busy, arrow = true) { focus.clearFocus(); vm.submit() }
                             // Passkeys belong to nexus.znetworks.id (their RP id): not offered on the DEV server.
-                            if (NexusConfig.env == id.znetworks.nexus.core.net.ServerEnv.PRODUCTION) TextButton(onClick = { activity?.let(vm::passkey) }, enabled = !state.busy && activity != null) {
-                                Icon(Icons.Filled.Key, null, Modifier.size(16.dp), tint = c.onyx)
-                                Spacer(Modifier.size(6.dp))
-                                Text(stringResource(R.string.passkey_sign_in), color = c.onyx, fontFamily = TextFont, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            }
-                            TextButton(onClick = { vm.go(AuthMode.SIGNUP) }, enabled = !state.busy) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(stringResource(R.string.login_new_to_nexus), color = c.mutedFg, fontFamily = TextFont, fontSize = 14.sp)
-                                    Spacer(Modifier.size(5.dp))
-                                    Text(stringResource(R.string.login_create_account), color = c.onyx, fontFamily = TextFont,
-                                        fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            if (NexusConfig.env == id.znetworks.nexus.core.net.ServerEnv.PRODUCTION) {
+                                Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Box(Modifier.weight(1f).height(1.dp).background(c.border))
+                                    Text(stringResource(R.string.lg_or).uppercase(), style = FieldLabelStyle, color = c.mutedFg, modifier = Modifier.padding(horizontal = 12.dp))
+                                    Box(Modifier.weight(1f).height(1.dp).background(c.border))
+                                }
+                                OutlinedButton(onClick = { activity?.let(vm::passkey) }, enabled = !state.busy && activity != null, shape = RoundedCornerShape(16.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, c.border), modifier = Modifier.fillMaxWidth().height(50.dp)) {
+                                    Icon(Icons.Filled.Key, null, Modifier.size(16.dp), tint = c.onyx)
+                                    Spacer(Modifier.size(8.dp))
+                                    Text(stringResource(R.string.lg_passkey), color = c.onyx, fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                                 }
                             }
-                            TextButton(onClick = { vm.go(AuthMode.FORGOT) }, enabled = !state.busy) {
-                                Text(stringResource(R.string.login_forgot_password), color = c.mutedFg, fontFamily = TextFont,
-                                    fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            Spacer(Modifier.height(10.dp))
+                            TextButton(onClick = { vm.go(AuthMode.SIGNUP) }, enabled = !state.busy) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(stringResource(R.string.lg_new_here), color = c.mutedFg, fontFamily = TextFont, fontSize = 14.sp)
+                                    Spacer(Modifier.size(5.dp))
+                                    Text(stringResource(R.string.lg_request_access), color = c.onyx, fontFamily = TextFont,
+                                        fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                }
                             }
                             // Signed out on the DEV server (DEV-REDESIGN.md): the way back to Production.
                             if (NexusConfig.env == id.znetworks.nexus.core.net.ServerEnv.DEV) {
@@ -170,12 +183,12 @@ fun LoginScreen(vm: LoginViewModel = viewModel()) = NexusLightTheme {
                             NxField(state.name, vm::onName, stringResource(R.string.signup_name_ph),
                                 keyboard = KeyboardOptions(imeAction = ImeAction.Next), actions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }))
                             Spacer(Modifier.height(14.dp))
-                            FieldLabel(stringResource(R.string.login_email_label))
+                            FieldLabel(stringResource(R.string.lg_email))
                             NxField(state.email, vm::onEmail, "name@company.com",
                                 keyboard = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next, autoCorrectEnabled = false),
                                 actions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }))
                             Spacer(Modifier.height(14.dp))
-                            FieldLabel(stringResource(R.string.login_password_label))
+                            FieldLabel(stringResource(R.string.lg_password))
                             NxField(state.password, vm::onPassword, stringResource(R.string.password_min_ph), secret = true,
                                 keyboard = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
                                 actions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }))
@@ -218,7 +231,7 @@ fun LoginScreen(vm: LoginViewModel = viewModel()) = NexusLightTheme {
                         }
                         AuthMode.FORGOT -> {
                             Title(stringResource(if (state.invited) R.string.set_title else R.string.reset_title), stringResource(if (state.invited) R.string.set_sub else R.string.reset_sub))
-                            FieldLabel(stringResource(R.string.login_email_label))
+                            FieldLabel(stringResource(R.string.lg_email))
                             NxField(state.email, vm::onEmail, "name@company.com",
                                 keyboard = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Go, autoCorrectEnabled = false),
                                 actions = KeyboardActions(onGo = { focus.clearFocus(); vm.resetRequest() }))
@@ -230,7 +243,7 @@ fun LoginScreen(vm: LoginViewModel = viewModel()) = NexusLightTheme {
                     }
                 }
                 Text(
-                    "SECURE UPLINK READY",
+                    stringResource(R.string.lg_secure),
                     color = Color.White, fontFamily = TextFont, fontWeight = FontWeight.Bold, fontSize = 10.sp, letterSpacing = 2.sp,
                     modifier = Modifier.align(Alignment.BottomCenter).offset(y = 14.dp)
                         .background(c.coral, CircleShape).border(2.dp, Color.White, CircleShape)
@@ -327,7 +340,7 @@ private fun PrimaryButton(label: String, busy: Boolean, arrow: Boolean = false, 
         if (busy) {
             CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
             Spacer(Modifier.size(8.dp))
-            Text(stringResource(R.string.login_busy), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(stringResource(R.string.lg_signing_in), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp)
         } else {
             Text(label, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             if (arrow) { Spacer(Modifier.size(8.dp)); Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, Modifier.size(16.dp)) }

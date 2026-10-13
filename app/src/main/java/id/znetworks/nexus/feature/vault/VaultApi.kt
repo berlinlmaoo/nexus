@@ -77,6 +77,25 @@ data class VaultPublic(val slug: String = "", val requireAuth: Boolean = true, v
                        val file: PublicFile = PublicFile(), val previewUrl: String? = null, val downloadUrl: String? = null)
 
 object VaultRules {
+    /** The workspace's shelf (13 Oct): 5 GB, used when the server sends no total. */
+    const val CAP_BYTES = 5L * 1024 * 1024 * 1024
+
+    /** Used / total for the bar: the server's numbers, its total else the 5 GB cap; percent 0–100 (web quotaPct). */
+    data class Usage(val used: Long, val total: Long) {
+        val percent: Int get() = if (total <= 0) 0 else Math.round(used.toDouble() / total * 100).toInt().coerceIn(0, 100)
+        /** Past 90 %: the bar turns red (web). */
+        val nearlyFull: Boolean get() = percent > 90
+    }
+    fun usage(q: Quota?): Usage? = q?.let { Usage(it.usedBytes.coerceAtLeast(0), if (it.totalBytes > 0) it.totalBytes else CAP_BYTES) }
+
+    /** Web humanSize: "512 B", "1.5 MB", "12 MB", "4.7 GB". */
+    fun humanSize(bytes: Long): String {
+        if (bytes < 1024) return "$bytes B"
+        val units = listOf("KB", "MB", "GB", "TB")
+        var n = bytes / 1024.0; var i = 0
+        while (n >= 1024 && i < units.size - 1) { n /= 1024; i++ }
+        return (if (n < 10) String.format(java.util.Locale.ROOT, "%.1f", n) else Math.round(n).toString()) + " " + units[i]
+    }
     /** 3d / 7d / 14d / 30d / permanent, the server's accepted values. */
     val EXPIRES = listOf("permanent", "3d", "7d", "14d", "30d")
     const val MAX_FILE = 1L shl 30

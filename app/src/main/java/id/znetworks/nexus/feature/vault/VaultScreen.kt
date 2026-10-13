@@ -232,13 +232,18 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
             }
             OutlinedTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(stringResource(R.string.vault_search)) },
                 shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp))
-            l?.quota?.takeIf { it.totalBytes > 0 }?.let { qt ->
-                Column(Modifier.padding(horizontal = 16.dp)) {
-                    LinearProgressIndicator(progress = { (qt.usedBytes.toFloat() / qt.totalBytes).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape))
-                    Text(stringResource(R.string.vault_quota, sizeText(qt.usedBytes), sizeText(qt.totalBytes)), fontSize = 11.sp, color = c.mutedFg)
-                }
+        }
+        // The shelf's use against its 5 GB, in every mode (trash counts too); red past 90 % (web).
+        VaultRules.usage(l?.quota)?.let { u ->
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                LinearProgressIndicator(progress = { u.percent / 100f }, color = if (u.nearlyFull) c.dangerText else c.onyx, trackColor = c.muted,
+                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape))
+                Text(stringResource(R.string.vault_quota, VaultRules.humanSize(u.used), VaultRules.humanSize(u.total)), fontSize = 12.sp, color = c.mutedFg,
+                    modifier = Modifier.padding(top = 4.dp))
             }
         }
+        if (vm.trash) Text(stringResource(R.string.vault_trash_note), fontSize = 13.sp, color = c.mutedFg,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.muted).padding(10.dp))
         s.upload?.let { (name, p) ->
             Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
                 Text(stringResource(R.string.td_uploading, name), fontSize = 12.sp, color = c.mutedFg, maxLines = 1)
@@ -249,7 +254,13 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
             when {
                 s.loading && l == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 l == null -> EmptyState(Icons.Filled.Lock, stringResource(R.string.vault_load_failed), s.error.orEmpty(), stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
-                l.items.isEmpty() -> TabEmpty(Icons.Filled.Folder, stringResource(when { vm.trash -> R.string.vault_trash_empty; s.query.isNotBlank() -> R.string.docs_no_match; else -> R.string.vault_empty }))
+                // Why it is empty and the next step, with the action right there.
+                l.items.isEmpty() && vm.trash -> EmptyState(Icons.Filled.Folder, stringResource(R.string.vault_trash_empty), stringResource(R.string.vault_trash_empty_sub),
+                    stringResource(R.string.back), onBack, Modifier.fillMaxSize())
+                l.items.isEmpty() && s.query.isNotBlank() -> EmptyState(Icons.Filled.Search, stringResource(R.string.docs_no_match), stringResource(R.string.vault_no_match_sub),
+                    stringResource(R.string.vault_clear_search), { q = "" }, Modifier.fillMaxSize())
+                l.items.isEmpty() -> EmptyState(Icons.Filled.Folder, stringResource(R.string.vault_empty_title), stringResource(R.string.vault_empty),
+                    stringResource(R.string.td_upload), { pick.launch(arrayOf("*/*")) }, Modifier.fillMaxSize())
                 else -> PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }) {
                     // Trash: a plain list. A folder: folders (rows), then pictures and films (a square grid), then other files (rows).
                     val g = VaultRules.gallery(l.items)

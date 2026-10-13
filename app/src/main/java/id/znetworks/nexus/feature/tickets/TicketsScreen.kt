@@ -183,22 +183,42 @@ fun TicketsScreen(onBack: () -> Unit, onOpenTicket: (String) -> Unit, vm: Ticket
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     var filter by rememberSaveable { mutableStateOf("ALL") }
+    // The BoD's queue: null until chosen, then the first non-empty one (web, 12 Oct).
+    var queue by rememberSaveable { mutableStateOf<TicketRules.Queue?>(null) }
     var composing by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { vm.load() }
     Box(Modifier.fillMaxSize().background(c.background)) {
         Column(Modifier.fillMaxSize()) {
-            val all = s.list?.complaints.orEmpty()
-            val filterTabs = listOf("ALL", "OPEN", "IN_REVIEW", "RESOLVED", "CLOSED").map { f ->
-                id.znetworks.nexus.ui.components.PageTab(f, ticketStatusLabel(f), count = all.count { TicketRules.inFilter(it, f) })
-            }
+            val all = TicketRules.ordered(s.list?.complaints.orEmpty())
+            val bod = s.list?.viewerIsBod == true
+            LaunchedEffect(s.list, bod) { if (bod && queue == null && s.list != null) queue = TicketRules.landing(all) }
+            val q = queue ?: TicketRules.Queue.INBOX
             id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.tk_title), subtitle = stringResource(R.string.sub_tickets), onBack = onBack,
-                tabs = { id.znetworks.nexus.ui.components.PageTabs(filterTabs, filter, { filter = it }) })
+                tabs = {
+                    if (bod) {
+                        val tabs = listOf(TicketRules.Queue.INBOX to R.string.tq_inbox, TicketRules.Queue.REVIEW to R.string.tq_review, TicketRules.Queue.ALL to R.string.th_tab_all).map { (k, l) ->
+                            id.znetworks.nexus.ui.components.PageTab(k, stringResource(l), count = all.count { TicketRules.inQueue(it, k) }, attention = k == TicketRules.Queue.INBOX)
+                        }
+                        id.znetworks.nexus.ui.components.PageTabs(tabs, q, { queue = it })
+                    } else {
+                        // Staff: their own tickets by status.
+                        val filterTabs = listOf("ALL", "OPEN", "IN_REVIEW", "RESOLVED", "CLOSED").map { f ->
+                            id.znetworks.nexus.ui.components.PageTab(f, ticketStatusLabel(f), count = all.count { TicketRules.inFilter(it, f) })
+                        }
+                        id.znetworks.nexus.ui.components.PageTabs(filterTabs, filter, { filter = it })
+                    }
+                })
             s.savedAt?.let { Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(horizontal = 16.dp)) }
             Box(Modifier.weight(1f)) {
-                val shown = all.filter { TicketRules.inFilter(it, filter) }
+                val shown = if (bod) all.filter { TicketRules.inQueue(it, q) } else all.filter { TicketRules.inFilter(it, filter) }
                 when {
-                    s.loading && s.list == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                    s.error != null -> EmptyState(Icons.Filled.SupportAgent, stringResource(R.string.tk_load_failed), s.error!!, stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
+                    (s.loading && s.list == null) || (bod && queue == null) -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    s.error != null && s.list == null -> EmptyState(Icons.Filled.SupportAgent, stringResource(R.string.tk_load_failed), s.error!!, stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
+                    bod && shown.isEmpty() -> when (q) {
+                        TicketRules.Queue.ALL -> EmptyState(Icons.Filled.SupportAgent, stringResource(R.string.tq_none), stringResource(R.string.tq_none_bod_sub), stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
+                        TicketRules.Queue.INBOX -> EmptyState(Icons.Filled.SupportAgent, stringResource(R.string.tq_inbox_clear), stringResource(R.string.tq_inbox_clear_sub), stringResource(R.string.tq_show_all), { queue = TicketRules.Queue.ALL }, Modifier.fillMaxSize())
+                        TicketRules.Queue.REVIEW -> EmptyState(Icons.Filled.SupportAgent, stringResource(R.string.tq_review_none), stringResource(R.string.tq_review_none_sub), stringResource(R.string.tq_show_all), { queue = TicketRules.Queue.ALL }, Modifier.fillMaxSize())
+                    }
                     all.isEmpty() -> EmptyState(Icons.Filled.SupportAgent, stringResource(R.string.tk_empty), stringResource(R.string.tk_empty_sub), stringResource(R.string.tk_new), { composing = true }, Modifier.fillMaxSize())
                     shown.isEmpty() -> EmptyState(Icons.Filled.SupportAgent, stringResource(R.string.tk_empty_filter), stringResource(R.string.tk_empty_filter_sub), stringResource(R.string.tk_show_all), { filter = "ALL" }, Modifier.fillMaxSize())
                     else -> PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }) {

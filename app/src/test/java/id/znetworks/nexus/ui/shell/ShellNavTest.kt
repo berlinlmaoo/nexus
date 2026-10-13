@@ -51,10 +51,15 @@ class ShellNavTest {
     }
 
     @Test fun redesignStringsHaveIndonesian() {
-        val names = { v: String -> Regex("<string name=\"([^\"]+)\"").findAll(File("src/main/res/$v/strings_redesign.xml").readText()).map { it.groupValues[1] }.toSet() }
-        val en = names("values"); val id = names("values-in")
-        assertTrue(en.isNotEmpty())
-        assertEquals("missing Indonesian", emptySet<String>(), en - id)
-        assertEquals("Indonesian without English", emptySet<String>(), id - en)
+        // Every new strings_*.xml (the redesign keeps its copy apart from strings.xml) has an Indonesian twin, key for key.
+        val files = File("src/main/res/values").listFiles { f -> f.name.startsWith("strings_") && f.name.endsWith(".xml") }!!.map { it.name }
+        assertTrue(files.isNotEmpty())
+        val key = Regex("<(?:string|plurals) name=\"([^\"]+)\"")
+        files.forEach { name ->
+            val en = key.findAll(File("src/main/res/values/$name").readText()).map { it.groupValues[1] }.toSet()
+            val id = key.findAll(File("src/main/res/values-in/$name").readText()).map { it.groupValues[1] }.toSet()
+            assertEquals("$name: missing Indonesian", emptySet<String>(), en - id)
+            assertEquals("$name: Indonesian without English", emptySet<String>(), id - en)
+        }
     }
 }

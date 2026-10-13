@@ -1,6 +1,15 @@
 package id.znetworks.nexus.feature.inbox
 
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.MeetingRoom
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.SupportAgent
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material.icons.filled.EventAvailable
@@ -91,18 +100,8 @@ enum class InboxGroup(val label: Int) {
     SUBMISSIONS(R.string.submissions_title), TICKETS(R.string.inbox_tickets), ANNOUNCEMENTS(R.string.inbox_announcements), OTHER(R.string.inbox_other);
 
     companion object {
-        fun of(type: String?): InboxGroup {
-            val t = type.orEmpty().lowercase()
-            return when {
-                t.startsWith("task") || t.startsWith("comment") || t.startsWith("project") || t == "status_update" || t.startsWith("quest") || t == "streak_at_risk" -> TASKS
-                "attendance" in t || "offsite" in t || "dayoff" in t || "red_date" in t -> ATTENDANCE
-                t.startsWith("message") || t.startsWith("feed") -> MESSAGES
-                t.startsWith("submission") -> SUBMISSIONS
-                t.startsWith("complaint") -> TICKETS
-                t.startsWith("announcement") -> ANNOUNCEMENTS
-                else -> OTHER
-            }
-        }
+        /** The web's buckets (InboxRules.group). */
+        fun of(type: String?): InboxGroup = InboxRules.group(type)
     }
 }
 
@@ -138,6 +137,24 @@ class InboxViewModel(app: Application) : AndroidViewModel(app) {
         load()
     }
 
+    /** Off the list at once; back with a message when the server refuses (web: "Couldn't delete it."). */
+    fun delete(item: InboxItem, onResult: (Boolean) -> Unit) {
+        val before = _state.value
+        _state.update { s -> s.copy(items = s.items.filterNot { it.id == item.id }, unread = if (item.read) s.unread else (s.unread - 1).coerceAtLeast(0)) }
+        viewModelScope.launch {
+            val ok = runCatching { api.delete(item.id) }.isSuccess
+            if (!ok) _state.update { before }
+            c.badges.setInbox(_state.value.unread)
+            onResult(ok)
+        }
+    }
+
+    fun markRead(item: InboxItem) {
+        if (item.read) return
+        _state.update { s -> s.copy(items = s.items.map { if (it.id == item.id) it.copy(read = true) else it }, unread = (s.unread - 1).coerceAtLeast(0)) }
+        viewModelScope.launch { runCatching { api.markRead(item.id) }; c.badges.setInbox(_state.value.unread) }
+    }
+
     /** Routes exactly like a push tap (API.md §2.5 Inbox). */
     fun open(item: InboxItem) {
         if (!item.read) viewModelScope.launch {
@@ -154,68 +171,114 @@ fun InboxScreen(vm: InboxViewModel = viewModel()) {
     // A new notification while the Inbox is open (user room, Berlin 8 Oct).
     id.znetworks.nexus.core.realtime.LiveRefresh(Unit, liveMs = null, fallbackMs = 60_000, matches = { it.name == id.znetworks.nexus.core.realtime.RealtimeEvents.NEW_NOTIFICATION }) { vm.load().join() }
     val c = Nx.colors
-    val shown = remember(s.items, s.group) { if (s.group == InboxGroup.ALL) s.items else s.items.filter { InboxGroup.of(it.type) == s.group } }
+    val context = LocalContext.current
+    val shown = remember(s.items, s.group) { InboxRules.filter(s.items, s.group) }
+    // All + only the kinds that have something, each with its count; a single kind has nothing to choose (web).
+    val tabs = remember(s.items) { InboxRules.tabs(s.items.map { it.type }) }
     PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }, modifier = Modifier.fillMaxSize().background(c.background)) {
         Column(Modifier.fillMaxSize()) {
-            id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.inbox_title), subtitle = stringResource(R.string.sub_inbox)) {
+            id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.nav_notifications), subtitle = stringResource(R.string.sub_inbox),
+                tabs = if (tabs.size > 2 && s.items.isNotEmpty()) ({
+                    id.znetworks.nexus.ui.components.PageTabs(tabs.map { (g, n) -> id.znetworks.nexus.ui.components.PageTab(g, stringResource(g.label), n) }, s.group, vm::setGroup)
+                }) else null) {
                 if (s.unread > 0) id.znetworks.nexus.ui.components.NxButton(stringResource(R.string.inbox_mark_all), vm::markAll, compact = true)
-            }
-            Text(stringResource(R.string.inbox_unread, s.unread), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
-            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                InboxGroup.entries.forEach { g -> FilterChip(s.group == g, { vm.setGroup(g) }, { Text(stringResource(g.label), fontSize = 12.sp) }) }
             }
             when {
                 s.loading && s.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 s.error != null && s.items.isEmpty() -> EmptyState(Icons.Filled.Inbox, stringResource(R.string.inbox_load_failed), s.error!!,
                     stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
-                s.items.isEmpty() -> EmptyState(Icons.Filled.MarkEmailRead, stringResource(R.string.inbox_clean), stringResource(R.string.inbox_clean_sub),
+                s.items.isEmpty() -> EmptyState(Icons.Filled.MarkEmailRead, stringResource(R.string.inbox_none), stringResource(R.string.inbox_clean_sub),
                     stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
-                shown.isEmpty() -> EmptyState(Icons.Filled.FilterList, stringResource(R.string.inbox_nothing_kind), stringResource(R.string.inbox_nothing_kind_sub),
+                shown.isEmpty() -> EmptyState(Icons.Filled.FilterList, stringResource(R.string.inbox_kind_none), stringResource(R.string.inbox_kind_none_sub),
                     stringResource(R.string.show_all), { vm.setGroup(InboxGroup.ALL) }, Modifier.fillMaxSize())
-                else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(shown, key = { it.id }) { item -> InboxRow(item, onClick = { vm.open(item) }) }
+                else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)) {
+                    items(shown, key = { it.id }) { item ->
+                        InboxRow(item, onClick = { vm.open(item) }, onMarkRead = { vm.markRead(item) }, onDelete = {
+                            vm.delete(item) { ok ->
+                                android.widget.Toast.makeText(context, context.getString(if (ok) R.string.inbox_deleted else R.string.inbox_delete_failed), android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        })
+                        androidx.compose.material3.HorizontalDivider(color = c.border.copy(alpha = 0.7f))
+                    }
                 }
             }
         }
     }
 }
 
-/** The row's mark, by kind (Berlin, 8 Oct: a staff member outside the office has its own). */
-internal fun inboxIcon(type: String?): ImageVector = when {
-    type.orEmpty().lowercase() == "attendance_outside_approver" -> Icons.AutoMirrored.Filled.DirectionsWalk
-    else -> when (InboxGroup.of(type)) {
-        InboxGroup.TASKS -> Icons.Filled.TaskAlt
-        InboxGroup.ATTENDANCE -> Icons.Filled.EventAvailable
-        InboxGroup.MESSAGES -> Icons.AutoMirrored.Filled.Chat
-        InboxGroup.SUBMISSIONS -> Icons.Filled.Description
-        InboxGroup.TICKETS -> Icons.Filled.ConfirmationNumber
-        InboxGroup.ANNOUNCEMENTS -> Icons.Filled.Campaign
-        else -> Icons.Filled.Notifications
-    }
+/** The kind's icon (web notificationMark, lucide → Material). */
+internal fun inboxIcon(type: String?): ImageVector = when (InboxRules.mark(type)) {
+    InboxRules.Mark.OUTSIDE -> Icons.AutoMirrored.Filled.DirectionsWalk
+    InboxRules.Mark.MENTION -> Icons.Filled.AlternateEmail
+    InboxRules.Mark.ASSIGNED -> Icons.Filled.PersonAdd
+    InboxRules.Mark.COMPLETED -> Icons.Filled.TaskAlt
+    InboxRules.Mark.CONVERSATION -> Icons.AutoMirrored.Filled.Chat
+    InboxRules.Mark.DUE -> Icons.Filled.Alarm
+    InboxRules.Mark.ATTENDANCE -> Icons.Filled.EventAvailable
+    InboxRules.Mark.ANNOUNCEMENT -> Icons.Filled.Campaign
+    InboxRules.Mark.TICKET -> Icons.Filled.SupportAgent
+    InboxRules.Mark.DOCUMENT -> Icons.Filled.Description
+    InboxRules.Mark.QUEST -> Icons.Filled.EmojiEvents
+    InboxRules.Mark.MEMBERSHIP -> Icons.Filled.MeetingRoom
+    InboxRules.Mark.STATUS -> Icons.Filled.Timeline
+    InboxRules.Mark.BELL -> Icons.Filled.Notifications
 }
 
+/** The kind's tone: a soft fill and its ink (web tone classes). */
 @Composable
-internal fun InboxRow(item: InboxItem, onClick: () -> Unit) {
+private fun inboxTone(type: String?): Pair<Color, Color> {
     val c = Nx.colors
-    Row(
-        Modifier.fillMaxWidth().background(if (item.read) c.card else c.accentBg, RoundedCornerShape(16.dp))
-            .border(1.dp, c.border, RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(12.dp),
-    ) {
-        Box(Modifier.padding(top = 5.dp).size(8.dp).background(if (item.read) Color.Transparent else c.violet, CircleShape))
-        Spacer(Modifier.size(8.dp))
-        val outside = item.type.orEmpty().lowercase() == "attendance_outside_approver"
-        Box(Modifier.size(32.dp).background(if (outside) c.warning.copy(alpha = 0.18f) else c.muted, CircleShape), contentAlignment = Alignment.Center) {
-            Icon(inboxIcon(item.type), null, tint = if (outside) c.warningFg else c.mutedFg, modifier = Modifier.size(18.dp))
-        }
-        Spacer(Modifier.size(10.dp))
-        Column(Modifier.weight(1f)) {
-            Text(item.title.orEmpty(), fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = c.foreground)
-            item.message?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, color = c.mutedFg, maxLines = 3) }
-            item.createdAt?.let {
-                Text(runCatching { DateTimeFormatter.ofPattern("d MMM · HH:mm", Locale.getDefault()).format(Instant.parse(it).atZone(OfficeTime.ZONE)) }.getOrDefault(""),
-                    fontSize = 11.sp, color = c.mutedFg)
+    val ink = when (InboxRules.mark(type)) {
+        InboxRules.Mark.MENTION -> Color(0xFF0284C7)
+        InboxRules.Mark.ASSIGNED, InboxRules.Mark.STATUS -> c.foreground
+        InboxRules.Mark.COMPLETED -> c.success
+        InboxRules.Mark.CONVERSATION -> c.violetText
+        InboxRules.Mark.DUE, InboxRules.Mark.OUTSIDE, InboxRules.Mark.QUEST -> c.warningFg
+        InboxRules.Mark.ATTENDANCE -> Color(0xFF0F766E)
+        InboxRules.Mark.ANNOUNCEMENT -> Color(0xFFC2410C)
+        InboxRules.Mark.TICKET -> c.dangerText
+        else -> c.mutedFg
+    }
+    return (if (ink == c.mutedFg || ink == c.foreground) c.muted else ink.copy(alpha = 0.12f)) to ink
+}
+
+/**
+ * One notification (web inbox row): the sender's face with the kind as a small badge (or the kind's mark for
+ * system rows), title, message, the day; Mark as read and Delete at the right, the unread dot.
+ */
+@Composable
+internal fun InboxRow(item: InboxItem, onMarkRead: (() -> Unit)? = null, onDelete: (() -> Unit)? = null, onClick: () -> Unit) {
+    val c = Nx.colors
+    val (fill, ink) = inboxTone(item.type)
+    Row(Modifier.fillMaxWidth().background(if (item.read) c.background else c.accentBg.copy(alpha = 0.35f)).clickable(onClick = onClick)
+        .padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.Top) {
+        val actor = item.actor
+        if (actor?.id != null) Box {
+            id.znetworks.nexus.ui.components.Avatar(actor.name, actor.avatar, size = 36.dp)
+            Box(Modifier.align(Alignment.BottomEnd).size(18.dp).background(c.card, CircleShape).padding(2.dp)) {
+                Box(Modifier.fillMaxSize().background(fill, CircleShape), contentAlignment = Alignment.Center) { Icon(inboxIcon(item.type), null, tint = ink, modifier = Modifier.size(10.dp)) }
             }
+        } else Box(Modifier.size(36.dp).background(fill, CircleShape), contentAlignment = Alignment.Center) {
+            Icon(inboxIcon(item.type), null, tint = ink, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.size(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(item.title.orEmpty(), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = c.foreground, maxLines = 2)
+            Text(item.message?.takeIf { it.isNotBlank() } ?: stringResource(R.string.inbox_new), fontSize = 14.sp, color = c.mutedFg, maxLines = 3)
+            // The day only (web fmtDay).
+            item.createdAt?.let {
+                Text(runCatching { DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(Instant.parse(it).atZone(OfficeTime.ZONE)) }.getOrDefault(""),
+                    fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (!item.read && onMarkRead != null) androidx.compose.material3.IconButton(onClick = onMarkRead, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Filled.Check, stringResource(R.string.inbox_mark_read), tint = c.mutedFg, modifier = Modifier.size(18.dp))
+            }
+            if (onDelete != null) androidx.compose.material3.IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Outlined.Delete, stringResource(R.string.inbox_delete), tint = c.mutedFg, modifier = Modifier.size(18.dp))
+            }
+            if (!item.read) Box(Modifier.padding(start = 2.dp).size(8.dp).background(c.onyx, CircleShape))
         }
     }
 }

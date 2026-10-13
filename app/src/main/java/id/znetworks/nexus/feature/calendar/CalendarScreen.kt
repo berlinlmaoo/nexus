@@ -692,7 +692,7 @@ internal fun activeFilterChips(d: CalDerived): List<Pair<String, (CalendarCore.F
     val f = d.s.filters
     val projects = (d.s.items?.items.orEmpty() + d.s.overdue).mapNotNull { it.project }.associate { it.id to it.name }
     val out = mutableListOf<Pair<String, (CalendarCore.Filters) -> CalendarCore.Filters>>()
-    f.units.forEach { id -> out += (d.ix.byId[id]?.name ?: stringResource(R.string.cal_other)) to { x -> x.copy(units = x.units - id) } }
+    f.units.forEach { id -> out += (d.ix.byId[id]?.name ?: stringResource(R.string.cal_no_division)) to { x -> x.copy(units = x.units - id) } }
     f.people.forEach { id -> out += (d.name(id) ?: stringResource(R.string.cal_former_member)) to { x -> x.copy(people = x.people - id) } }
     f.projects.forEach { id -> out += (projects[id] ?: stringResource(R.string.cal_project_elsewhere)) to { x -> x.copy(projects = x.projects - id) } }
     val prio = mapOf("URGENT" to R.string.cal_prio_urgent, "HIGH" to R.string.cal_prio_high, "MEDIUM" to R.string.cal_prio_medium, "LOW" to R.string.cal_prio_low, "NONE" to R.string.cal_prio_none)
@@ -747,7 +747,7 @@ internal fun Legend(d: CalDerived, vm: CalendarViewModel) {
                 val u = d.ix.byId[l.unitId]
                 val focusable = u != null && d.ix.children[u.id].orEmpty().isNotEmpty()
                 val on = l.unitId in d.s.filters.units
-                val name = u?.name ?: stringResource(R.string.cal_other)
+                val name = u?.name ?: stringResource(R.string.cal_no_division)
                 if (focusable) {
                     // Focus (not a filter): a button chip with the focus icon (contract 1, audit 2 #14).
                     val spoken = pluralStringResource(R.plurals.cal_focus_on_n, l.count, name, l.count)
@@ -855,7 +855,7 @@ private fun androidx.compose.foundation.layout.RowScope.DayCell(data: CalData, i
             Column(Modifier.fillMaxWidth().padding(top = 2.dp).clearAndSetSemantics {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 val list = data.byDay[day].orEmpty()
                 list.take(2).forEach { i ->
-                    val col = index.color(i.placements.firstOrNull()?.unitId)
+                    val col = index.color(i.placements.firstOrNull()?.unitId).let { if (inMonth) it else it.copy(alpha = it.alpha * QUIET_OUT_OF_MONTH) }
                     Text(if (i.masked) stringResource(R.string.cal_internal) else i.title.orEmpty(), style = CalType.s11, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         color = if (i.done) c.mutedFg else c.foreground, textDecoration = if (i.done) TextDecoration.LineThrough else null,
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).background(col.copy(alpha = 0.14f)).padding(horizontal = 4.dp, vertical = 1.dp))
@@ -864,7 +864,8 @@ private fun androidx.compose.foundation.layout.RowScope.DayCell(data: CalData, i
             }
         } else Row(Modifier.padding(top = 3.dp).clearAndSetSemantics {}, horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
             cell?.dots.orEmpty().take(3).forEach { dot ->
-                val col = index.color(dot.unitId.takeIf { it != CalendarCore.OTHER })
+                // One dot per division present that day; a neighbouring month's day shows its dots quieter (still tappable, iOS / web QA 13 Oct).
+                val col = index.color(dot.unitId.takeIf { it != CalendarCore.OTHER }).let { if (inMonth) it else it.copy(alpha = it.alpha * QUIET_OUT_OF_MONTH) }
                 // Rule 10.31 (Berlin, 8 Oct): a full dot = still something to do; a small check in the division's colour = all done / no status.
                 if (dot.filled) Box(Modifier.size(6.dp).clip(CircleShape).background(col))
                 else Icon(painterResource(R.drawable.ic_cal_check), null, tint = col, modifier = Modifier.size(10.dp))
@@ -873,6 +874,9 @@ private fun androidx.compose.foundation.layout.RowScope.DayCell(data: CalData, i
         }
     }
 }
+
+/** How much quieter a neighbouring month's dots and chips are (they stay tappable). */
+internal const val QUIET_OUT_OF_MONTH = 0.45f
 
 /** What monthNotices will show, in order (also counts the items before the day header). */
 internal fun noticeKeys(data: CalData): List<String> {

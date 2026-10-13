@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Z Vault + Notifications redesign (13 Oct 2026, HANDOFF scope 6). -->
+<resources>
+    <string name="vault_trash_note">Berkas di sampah masih menghabiskan kuota. Mengosongkannya membebaskan kuota; selama 90 hari admin masih bisa memulihkannya dari Control Room → Audit.</string>
+    <string name="vault_trash_empty_sub">File dan folder yang dihapus menunggu di sini sebelum hilang permanen. Sekarang belum ada apa-apa.</string>
+    <string name="vault_empty_title">Folder ini masih kosong</string>
+    <string name="vault_no_match_sub">Tidak ada yang bernama itu di vault. Coba kata lain, atau hapus pencariannya.</string>
+    <string name="vault_clear_search">Hapus pencarian</string>
+    <string name="inbox_delete">Hapus notifikasi</string>
+    <string name="inbox_deleted">Notifikasi dihapus</string>
+    <string name="inbox_delete_failed">Gagal menghapusnya.</string>
+    <string name="inbox_mark_read">Tandai sudah dibaca</string>
+    <string name="inbox_new">Notifikasi baru</string>
+    <string name="inbox_none">Tidak ada notifikasi</string>
+    <string name="inbox_kind_none">Tidak ada yang jenis ini</string>
+    <string name="inbox_kind_none_sub">Filter ini hanya menampilkan satu jenis notifikasi. Sisanya tetap ada di Semua.</string>
+</resources>

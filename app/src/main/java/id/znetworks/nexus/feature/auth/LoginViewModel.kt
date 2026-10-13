@@ -67,7 +67,7 @@ class LoginViewModel(app: Application) : AndroidViewModel(app) {
         if (s.busy) return
         val email = s.email.trim()
         if (email.isEmpty() || s.password.isEmpty()) {
-            _state.update { it.copy(error = res.getString(R.string.login_fill_both)) }
+            _state.update { it.copy(error = res.getString(R.string.lg_fill_both)) }
             return
         }
         run {
@@ -79,7 +79,7 @@ class LoginViewModel(app: Application) : AndroidViewModel(app) {
                 // Wrong credentials: the body only says "CredentialsSignin", no sentence for a person.
                 _state.update { it.copy(error = when {
                     LoginErrors.deactivated(e) -> res.getString(R.string.off_deactivated)
-                    e is ApiError.Http && e.status == 401 -> res.getString(R.string.login_failed)
+                    e is ApiError.Http && e.status == 401 -> res.getString(R.string.lg_wrong)
                     else -> e.describe(res)
                 }) }
             }

@@ -11,6 +11,10 @@ import okhttp3.Request
 @Serializable
 data class InboxText(val title: String? = null, val message: String? = null)
 
+/** The sender of a notification (`actor`). */
+@Serializable
+data class InboxActor(val id: String? = null, val name: String? = null, val avatar: String? = null)
+
 @Serializable
 data class InboxItem(
     val id: String,
@@ -20,6 +24,8 @@ data class InboxItem(
     @kotlinx.serialization.SerialName("message") val rawMessage: String? = null,
     /** Both languages when the notifier wrote both (keyed `en` / `id`); older rows have none. */
     val texts: Map<String, InboxText>? = null,
+    /** Who caused it (servers since 13 Oct); null = the system or an older row. */
+    val actor: InboxActor? = null,
     val read: Boolean = false,
     val link: String? = null,
     val createdAt: String? = null,
@@ -70,6 +76,11 @@ class InboxApi(private val api: ApiClient) {
 
     suspend fun markRead(id: String) = patch(MarkBody(id = id))
     suspend fun markAllRead() = patch(MarkBody(markAllRead = true))
+
+    /** One notification gone (web deleteNotification: DELETE with a JSON body). */
+    suspend fun delete(id: String) {
+        api.send(Request.Builder().url(api.url("/api/notifications")).delete(JsonObject(mapOf("id" to kotlinx.serialization.json.JsonPrimitive(id))).toString().toJsonBody()).build(), JsonObject.serializer())
+    }
 
     private suspend fun patch(body: MarkBody) {
         api.send(

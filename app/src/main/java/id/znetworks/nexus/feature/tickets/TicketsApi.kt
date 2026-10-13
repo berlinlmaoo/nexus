@@ -92,6 +92,28 @@ object TicketRules {
         else -> t.status == filter
     }
 
+    /**
+     * The BoD's queues (web complaints.tsx, 13 Oct): Inbox = unclaimed (OPEN), In review = taken on or answered by
+     * GIDEON (IN_REVIEW, AWAITING_DECISION), All.
+     */
+    enum class Queue { INBOX, REVIEW, ALL }
+
+    fun inQueue(t: Ticket, q: Queue) = when (q) {
+        Queue.INBOX -> t.status == "OPEN"
+        Queue.REVIEW -> t.status == "IN_REVIEW" || t.status == "AWAITING_DECISION"
+        Queue.ALL -> true
+    }
+
+    /** Lands on the first queue with something in it (Inbox → In review → All), never an empty Inbox while tickets wait. */
+    fun landing(tickets: List<Ticket>): Queue = when {
+        tickets.any { inQueue(it, Queue.INBOX) } -> Queue.INBOX
+        tickets.any { inQueue(it, Queue.REVIEW) } -> Queue.REVIEW
+        else -> Queue.ALL
+    }
+
+    /** Tickets with a decision waiting float to the top; the rest keep the server's order (stable). */
+    fun ordered(tickets: List<Ticket>) = tickets.sortedByDescending { it.pendingCorrection }
+
     /** Corrections belong to attendance and XP tickets only (server rule). */
     fun canPropose(t: Ticket) = t.category == "ATTENDANCE" || t.category == "EXP"
 

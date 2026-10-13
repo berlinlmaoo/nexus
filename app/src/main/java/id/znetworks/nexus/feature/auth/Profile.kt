@@ -1,5 +1,10 @@
 package id.znetworks.nexus.feature.auth
 
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
+import id.znetworks.nexus.ui.theme.TextFont
+import id.znetworks.nexus.ui.components.NxButtonKind
+import id.znetworks.nexus.ui.components.NxButton
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -55,7 +60,8 @@ import okhttp3.MultipartBody
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-@Serializable data class ProfileUser(val id: String? = null, val name: String? = null, val email: String? = null, val avatar: String? = null, val googleWorkspaceEmail: String? = null)
+@Serializable data class ProfileUser(val id: String? = null, val name: String? = null, val email: String? = null, val avatar: String? = null, val googleWorkspaceEmail: String? = null,
+                                    val phoneNumber: String? = null)
 @Serializable data class ProfileResponse(val user: ProfileUser)
 
 /** Avatars: re-encoded to JPEG with the long edge capped at 1024 px, well under the server's 5 MB. */
@@ -69,6 +75,10 @@ class ProfileApi(private val api: ApiClient) {
     suspend fun profile() = api.get("/api/user/profile", ProfileResponse.serializer()).user
     /** The in-app language for notifications and pushes (server User.uiLanguage, 13 Oct 2026). */
     suspend fun sendUiLanguage(code: String) = api.send(Request.Builder().url(api.url("/api/user/profile")).patch(buildJsonObject { put("uiLanguage", code) }.toString().toJsonBody()).build(), JsonObject.serializer())
+    /** Name and phone together, as the web's Save (`phoneNumber: phone.trim() || null`). */
+    suspend fun updateProfile(name: String, phone: String?) = api.send(Request.Builder().url(api.url("/api/user/profile")).patch(buildJsonObject {
+        put("name", name.trim()); put("phoneNumber", phone?.let { kotlinx.serialization.json.JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull)
+    }.toString().toJsonBody()).build(), JsonObject.serializer())
     suspend fun rename(name: String) = api.send(Request.Builder().url(api.url("/api/user/profile")).patch(buildJsonObject { put("name", name.trim()) }.toString().toJsonBody()).build(), JsonObject.serializer())
     /** `user.avatar` comes back with a `?t=` cache-buster, so the new picture shows at once. */
     suspend fun uploadAvatar(jpeg: ByteArray) = api.send(Request.Builder().url(api.url("/api/upload/avatar")).post(AvatarUpload.part(jpeg)).build(), ProfileResponse.serializer()).user.avatar
@@ -89,7 +99,10 @@ fun rememberAvatarPicker(onPicked: (ByteArray?) -> Unit): () -> Unit {
     return { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
 }
 
-/** Tuning Room › Profile: photo (upload/remove), name, and the company Google address (read-only). */
+/**
+ * Settings › Profile (web ProfileSection): photo (change / remove), full name, phone number, the company Google
+ * address (read-only), one Save for name and phone.
+ */
 @Composable
 fun ProfileCard() {
     val c = Nx.colors
@@ -100,11 +113,13 @@ fun ProfileCard() {
     val scope = rememberCoroutineScope()
     var user by remember { mutableStateOf<ProfileUser?>(null) }
     var name by remember { mutableStateOf(container.sessionStore.current?.userName.orEmpty()) }
+    var phone by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var photoBusy by remember { mutableStateOf(false) }
     var saved by remember { mutableStateOf(false) }
+    var phoneBad by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(Unit) { runCatching { api.profile() }.getOrNull()?.let { user = it; name = it.name ?: name } }
+    LaunchedEffect(Unit) { runCatching { api.profile() }.getOrNull()?.let { user = it; name = it.name ?: name; phone = it.phoneNumber.orEmpty() } }
     val pick = rememberAvatarPicker { jpeg ->
         if (jpeg == null) { problem = res.getString(R.string.chat_photo_unreadable); return@rememberAvatarPicker }
         scope.launch {
@@ -113,39 +128,64 @@ fun ProfileCard() {
             photoBusy = false
         }
     }
-    Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(18.dp)).border(1.dp, c.border, RoundedCornerShape(18.dp)).padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(stringResource(R.string.pf_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = c.foreground)
+    SettingsBlock(stringResource(R.string.st_tab_profile), stringResource(R.string.st_profile_sub)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(name, user?.avatar, 64.dp); Spacer(Modifier.width(14.dp))
-            Column {
-                TextButton(onClick = pick, enabled = !photoBusy) { Text(stringResource(R.string.pf_change_photo)) }
-                if (!user?.avatar.isNullOrEmpty()) TextButton(onClick = {
-                    scope.launch {
-                        photoBusy = true; problem = null
-                        try { api.removeAvatar(); user = user?.copy(avatar = null) } catch (e: ApiError) { problem = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) }
-                        photoBusy = false
-                    }
-                }, enabled = !photoBusy) { Text(stringResource(R.string.pf_remove_photo), color = c.mutedFg) }
+            Avatar(name, user?.avatar, 72.dp); Spacer(Modifier.width(14.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    NxButton(stringResource(R.string.pf_change_photo), pick, compact = true, enabled = !photoBusy)
+                    if (!user?.avatar.isNullOrEmpty()) NxButton(stringResource(R.string.pf_remove_photo), {
+                        scope.launch {
+                            photoBusy = true; problem = null
+                            try { api.removeAvatar(); user = user?.copy(avatar = null) } catch (e: ApiError) { problem = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) }
+                            photoBusy = false
+                        }
+                    }, compact = true, kind = NxButtonKind.GHOST, enabled = !photoBusy)
+                    if (photoBusy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                }
+                Text(stringResource(R.string.st_photo_hint), fontSize = 12.sp, color = c.mutedFg)
             }
-            if (photoBusy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
         }
-        OutlinedTextField(name, { name = it; saved = false }, singleLine = true, label = { Text(stringResource(R.string.signup_name)) }, modifier = Modifier.fillMaxWidth())
-        OutlinedButton(onClick = {
-            scope.launch {
-                busy = true; problem = null
-                try {
-                    api.rename(name)
-                    container.sessionStore.current?.let { container.sessionStore.save(it.copy(userName = name.trim())) }
-                    saved = true
-                } catch (e: ApiError) { problem = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) }
-                busy = false
-            }
-        }, enabled = !busy && name.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(stringResource(if (saved) R.string.pf_saved else R.string.pf_save)) }
+        OutlinedTextField(name, { name = it; saved = false }, singleLine = true, label = { Text(stringResource(R.string.st_full_name)) }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(phone, { phone = it; saved = false; phoneBad = false }, singleLine = true, label = { Text(stringResource(R.string.st_phone)) },
+            placeholder = { Text(stringResource(R.string.st_phone_ph), fontSize = 13.sp) }, isError = phoneBad,
+            supportingText = { Text(stringResource(if (phoneBad) R.string.st_phone_invalid else R.string.st_phone_hint)) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth())
         // Read-only: a BoD links it from Control Room; the person only needs to know which address it is.
-        Text("GOOGLE WORKSPACE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
+        Text("Google Workspace", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.mutedFg)
         val g = user?.googleWorkspaceEmail
-        Text(g ?: stringResource(R.string.pf_no_google), fontSize = if (g == null) 12.sp else 15.sp, color = if (g == null) c.mutedFg else c.foreground, maxLines = 1)
-        problem?.let { Text(it, fontSize = 12.sp, color = c.danger) }
+        Text(g ?: stringResource(R.string.pf_no_google), fontSize = if (g == null) 13.sp else 15.sp, color = if (g == null) c.mutedFg else c.foreground, maxLines = 1)
+        problem?.let { Text(it, fontSize = 13.sp, color = c.dangerText) }
+        if (saved) Text(stringResource(R.string.st_profile_saved), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.success)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            NxButton(stringResource(R.string.st_save), onClick = {
+                when (val p = PhoneRules.check(phone)) {
+                    PhoneRules.Result.Invalid -> phoneBad = true
+                    is PhoneRules.Result.Ok -> scope.launch {
+                        busy = true; problem = null
+                        try {
+                            api.updateProfile(name, p.value)
+                            container.sessionStore.current?.let { container.sessionStore.save(it.copy(userName = name.trim())) }
+                            saved = true
+                        } catch (e: ApiError) { problem = res.getString(R.string.st_profile_failed) + " · " + e.describe(res) }
+                        busy = false
+                    }
+                }
+            }, kind = NxButtonKind.PRIMARY, enabled = !busy && name.isNotBlank())
+        }
+    }
+}
+
+/** A settings card as the web's (`rounded-xl border bg-card p-6`): a plain title, an optional line under it. */
+@Composable
+internal fun SettingsBlock(title: String, subtitle: String? = null, content: @Composable () -> Unit) {
+    val c = Nx.colors
+    Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(12.dp)).border(1.dp, c.border, RoundedCornerShape(12.dp)).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column {
+            Text(title, fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = c.foreground)
+            subtitle?.let { Text(it, fontSize = 13.sp, color = c.mutedFg) }
+        }
+        content()
     }
 }
