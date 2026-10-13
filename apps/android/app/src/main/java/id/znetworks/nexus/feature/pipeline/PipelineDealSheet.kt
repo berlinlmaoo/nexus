@@ -178,6 +178,8 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
                         Money(stringResource(R.string.pl_f_net_cash), deal.netCash, allowNegative = true) { save(one("netCash", JsonPrimitive(it))) }
                     }
                     Group(stringResource(R.string.pl_t_terms), "Finance") { PaymentTerms(deal, vm) }
+                    // Real cost & margin (Control Tower v4, 14 Oct 2026), after billing and its terms; read-only for Can comment / Can view.
+                    Group(stringResource(R.string.pc_title), "Finance") { RealCost(deal, data.canEdit) { edit -> vm.editCosts(deal.id, edit) } }
                     Group(stringResource(R.string.pl_ph_closing), "Finance") {
                         Pick(stringResource(R.string.pl_f_closing_status), deal.text("closingStatus"), v.closingStatuses) { save(one("closingStatus", JsonPrimitive(it))) }
                     }
@@ -407,7 +409,9 @@ private fun History(vm: PipelineViewModel, deal: PipelineDeal) {
                             tf == null -> {
                                 val field = PipelineText.field(ch.field)?.let { stringResource(it) } ?: ch.field
                                 Text("$who ${stringResource(R.string.pl_changed)} $field", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
-                                Text("${shown(ch.before)} → ${shown(ch.after)}", fontSize = 12.sp, color = c.mutedFg, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                                val costs = ch.field == "costs"
+                                Text("${if (costs) costsShown(ch.before) else shown(ch.before)} → ${if (costs) costsShown(ch.after) else shown(ch.after)}",
+                                    fontSize = 12.sp, color = c.mutedFg, maxLines = 3, overflow = TextOverflow.Ellipsis)
                             }
                             // A payment term (§11.2): added / deleted / restored with its amount, or one of its fields.
                             tf == "created" || tf == "deleted" || tf == "restored" -> {

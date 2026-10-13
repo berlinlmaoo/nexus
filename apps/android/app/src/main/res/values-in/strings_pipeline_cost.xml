@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pipeline real cost & margin (Control Tower v4–v6, owner 14 Oct 2026). Same Indonesian as iOS / web id-pipeline.ts. -->
+<resources>
+    <string name="pc_title">Real Cost &amp; Margin</string>
+    <string name="pc_real_cost">Real cost</string>
+    <string name="pc_total">Total real cost</string>
+    <string name="pc_margin">Margin</string>
+    <string name="pc_margin_pct" formatted="false">Margin %</string>
+    <string name="pc_hint">Margin = nilai bersih project − total real cost.</string>
+    <string name="pc_hint_no_net">Isi nilai bersih project untuk melihat margin.</string>
+    <string name="pc_empty">Belum ada biaya. Tambahkan biaya riil deal ini (vendor, talent, produksi) untuk melihat margin-nya.</string>
+    <string name="pc_empty_read">Belum ada biaya yang dicatat.</string>
+    <string name="pc_description">Keterangan biaya</string>
+    <string name="pc_description_hint">mis. Vendor sound</string>
+    <string name="pc_amount">Nominal biaya</string>
+    <string name="pc_delete">Hapus biaya</string>
+    <string name="pc_add">Tambah biaya</string>
+    <string name="pc_invalid">Real cost tidak tersimpan: maksimal 100 baris biaya, nominal angka bulat ≥ 0, keterangan maksimal 120 karakter.</string>
+    <string name="pc_k_real_profit">Real profit</string>
+    <string name="pc_k_real_cost">Real cost %1$s</string>
+    <plurals name="pc_k_have_costs">
+        <item quantity="other">%1$d dari %2$d deal sudah ada biaya</item>
+    </plurals>
+    <plurals name="pc_k_no_net">
+        <item quantity="other">%d deal ada biaya tapi nilai bersih kosong</item>
+    </plurals>
+    <plurals name="pc_h_lines">
+        <item quantity="other">%1$d baris biaya · %2$s</item>
+    </plurals>
+</resources>
