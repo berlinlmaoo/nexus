@@ -132,7 +132,8 @@ for entry in "${SCREENS[@]}"; do
   id="${entry%%|*}"; [ "$id" = login ] && continue
   want "$id" || continue
   launch --es nexusTourStep screen --es nexusTourScreen "$id" --es nexusTourProject "$PROJECT" --es nexusTourForm "$FORM"
-  if st=$(wait_for "^(settled $id|unknown-screen|not-signed-in)" 40) && [ "$st" = "settled $id" ]; then
+  st=$(wait_for "^(settled $id|unknown-screen|not-signed-in)" 40)
+  if echo "$st" | grep -q "^settled $id"; then
     pages "$id"; say "ok: $id"
   else
     shot "$OUT/android/$id.png"; say "FAILED: $id — ${st:-no answer}"; FAILS=$((FAILS + 1))
