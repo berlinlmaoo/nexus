@@ -59,31 +59,35 @@ export function AvatarFace({
 }) {
   const [brokenSrc, setBrokenSrc] = useState<string | null>(null);
   const label = name?.trim() || undefined;
-  if (avatar && avatar !== brokenSrc) {
-    return (
-      <img
-        src={thumbUrl(avatar, size)}
-        alt={decorative ? "" : label ?? ""}
-        width={size}
-        height={size}
-        loading="lazy"
-        decoding="async"
-        aria-hidden={decorative || undefined}
-        title={label}
-        onError={() => setBrokenSrc(avatar)}
-        className={cn("inline-block rounded-full object-cover ring-2 ring-background", className)}
-        style={{ width: size, height: size, minWidth: size }}
-      />
-    );
-  }
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const photo = avatar && avatar !== brokenSrc ? avatar : null;
+  // The initials are always drawn; a photo lies on top of them. Until a lazy photo has loaded (a long list
+  // below the fold, a slow connection) the person still has a face instead of an empty circle (UI tour
+  // run 7, 14 Oct 2026: leaderboard ranks 27-43 showed no avatar at all).
   return (
     <span
-      aria-hidden={decorative || undefined}
-      className={cn("inline-flex items-center justify-center rounded-full font-semibold text-white ring-2 ring-background", className)}
+      aria-hidden={decorative || !label || undefined}
+      role={!decorative && label ? "img" : undefined}
+      aria-label={!decorative && label ? label : undefined}
+      className={cn("relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold text-white ring-2 ring-background", className)}
       style={{ background: avatarColor(seed || label || "?"), width: size, height: size, minWidth: size, fontSize: Math.round(size * 0.4) }}
       title={label}
     >
-      {initialsOf(name)}
+      {/* Hidden once the photo is in, so a photo with transparent parts never shows letters through. */}
+      <span className={photo && loadedSrc === photo ? "invisible" : undefined}>{initialsOf(name)}</span>
+      {photo && (
+        <img
+          src={thumbUrl(photo, size)}
+          alt=""
+          width={size}
+          height={size}
+          loading="lazy"
+          decoding="async"
+          onLoad={() => setLoadedSrc(photo)}
+          onError={() => setBrokenSrc(photo)}
+          className="absolute inset-0 h-full w-full rounded-[inherit] object-cover"
+        />
+      )}
     </span>
   );
 }

@@ -1120,7 +1120,10 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
         key={id}
         aria-label={laneLabel(g)}
         style={{ backgroundColor: tone.lane, ...(over === id && dropOk ? { boxShadow: `inset 0 0 0 1.5px ${tone.dot}` } : {}) }}
-        className={cn("group/lane flex shrink-0 flex-col rounded-lg p-1.5 transition-shadow", laneW, dragLaneId === g.key && "opacity-40")}
+        // Phone, one row of lanes: a lane is capped at the screen and scrolls inside itself (UI tour run 7,
+        // 14 Oct 2026: scrolling the page down along a 90-card column left a short column on screen with
+        // only blank page under it).
+        className={cn("group/lane flex shrink-0 flex-col rounded-lg p-1.5 transition-shadow", laneW, showHeader && "max-sm:max-h-[calc(100dvh-16rem)]", dragLaneId === g.key && "opacity-40")}
         onDragOver={(e) => {
           if (!dropOk) return;
           e.preventDefault();
@@ -1179,7 +1182,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
             </div>
           </div>
         )}
-        <div data-lane-cards className="relative flex min-h-16 flex-col gap-1.5">
+        <div data-lane-cards className={cn("relative flex min-h-16 flex-col gap-1.5", showHeader && "max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto max-sm:overscroll-y-contain")}>
           {slot?.lane === id && <div aria-hidden className="pointer-events-none absolute inset-x-1 z-10 h-0.5 rounded-full" style={{ top: slot.y, backgroundColor: tone.dot }} />}
           {/* "+ New task" sits at the TOP of the column (owner, 10 Oct 2026: "Add task di atas lane"). */}
           {!canEditHere ? null : draft === id ? (
@@ -1216,13 +1219,13 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   };
 
   const linkedLaneEls = linkedLanes.map((lane) => (
-    <section key={`linked-${lane.id}`} className={cn("flex shrink-0 flex-col rounded-lg border border-dashed border-border p-1.5", laneW)}>
+    <section key={`linked-${lane.id}`} className={cn("flex shrink-0 flex-col rounded-lg border border-dashed border-border p-1.5 max-sm:max-h-[calc(100dvh-16rem)]", laneW)}>
       <div className="mb-1 flex items-center gap-1.5 px-1.5 py-1">
         <span className="truncate text-sm font-semibold">{lane.name}</span>
         <span className="shrink-0 rounded bg-muted px-1.5 text-[11px] text-muted-foreground">{t("Linked")}</span>
         <span className="ml-auto text-xs tabular-nums text-muted-foreground">{lane.tasks.length}</span>
       </div>
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto max-sm:overscroll-y-contain">
         <Incremental items={lane.tasks} keyOf={(task) => task.id} render={(task) => <TaskCard task={task} currentProjectId={project.id} keys={keys} cfg={cfg} defs={defs} ctx={ctx} onOpen={onOpen} onDrag={noDrag} onDragEnd={noop} lane={`linked-${lane.id}`} row={null} moving={false} />} />
       </div>
     </section>
@@ -1576,7 +1579,7 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
       data-morph-id={morph ? `list-taskcard-${task.id}` : undefined}
       style={{ borderRadius: 6, ...tint }}
       {...cardProps}
-      className={cn("group flex min-h-9 w-full flex-wrap items-center gap-x-2.5 gap-y-1 border-b sm:flex-nowrap sm:gap-y-0 border-border/70 px-2 py-1.5 text-left transition-colors [contain-intrinsic-size:auto_37px] [content-visibility:auto] hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--accent-foreground)]/40", selected && "bg-accent", task.parentId && "pl-7")}
+      className={cn("group flex min-h-9 w-full flex-wrap items-center gap-x-2.5 gap-y-1 border-b sm:flex-nowrap sm:gap-y-0 border-border/70 px-2 py-1.5 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--accent-foreground)]/40", selected && "bg-accent", task.parentId && "pl-7")}
     >
       {/* The circle is a checkbox (Notion; C-BUG-26): a click marks done / not done, it doesn't open the task. */}
       <span
@@ -1698,7 +1701,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
   onOpen: (task: NexusTask) => void; onCreate: (dueDate: string) => void; onSetDates: (moves: Array<{ task: NexusTask; iso: string }>) => void; canDrag: boolean;
 }) {
   const swipeAt = useRef<{ x: number; y: number; t: number } | null>(null);
-  const { t, locale } = useLang();
+  const { t, tn, locale } = useLang();
   const bulk = useTaskBulk();
   const isMobile = useIsMobile();
   // The view's date property (owner, 12 Oct 2026): due date by default, or the start date / a date field.
@@ -1731,6 +1734,22 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
     byDay.get(k)!.items.push(task);
   }
   const agenda = Array.from(byDay.values()).sort((a, b) => a.date.getTime() - b.date.getTime());
+  // Phone: the day whose tasks show under the grid. Today in the current month, else the month's first day
+  // with tasks, else the 1st.
+  const [pickedDay, setPickedDay] = useState<string | null>(null);
+  const pickedKey = pickedDay && sameMonth(new Date(`${pickedDay}T12:00:00`), viewMonth)
+    ? pickedDay
+    : sameMonth(new Date(), viewMonth) ? todayKey : agenda[0] ? dayKey(agenda[0].date) : dayKey(viewMonth);
+  const pickedDate = days.find((d) => dayKey(d) === pickedKey) ?? null;
+  const pickedTasks = byDay.get(pickedKey)?.items ?? [];
+  const onSwipeStart = (e: React.TouchEvent) => { const tp = e.touches[0]; swipeAt.current = e.touches.length === 1 ? { x: tp.clientX, y: tp.clientY, t: Date.now() } : null; };
+  const onSwipeEnd = (e: React.TouchEvent) => {
+    const st = swipeAt.current; swipeAt.current = null;
+    const tp = e.changedTouches[0];
+    if (!st || !tp || Date.now() - st.t > 800) return;
+    const dx = tp.clientX - st.x; const dy = tp.clientY - st.y;
+    if (Math.abs(dx) >= 50 && Math.abs(dx) >= Math.abs(dy) * 1.5) shiftMonth(dx < 0 ? 1 : -1);
+  };
   const dropOn = (day: Date) => {
     if (!dragTaskId) return;
     const src = tasks.find((x) => x.id === dragTaskId);
@@ -1768,47 +1787,70 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
       </div>
 
       {isMobile ? (
-        <div className="space-y-5">
-          {agenda.map(({ date, items }) => {
-            const isToday = dayKey(date) === todayKey;
-            return (
-              <div key={dayKey(date)} className="flex gap-3">
-                <div className={cn("flex w-11 shrink-0 flex-col items-center rounded-lg py-1.5", isToday ? "bg-primary text-primary-foreground" : "bg-muted text-foreground")}>
-                  <span className="text-[10px] font-medium uppercase opacity-80">{new Intl.DateTimeFormat(locale, { weekday: "short" }).format(date)}</span>
-                  <span className="text-lg font-semibold leading-none">{date.getDate()}</span>
-                </div>
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  {items.map((task) => {
-                    const done = isDone(task.status);
-                    const cs = chipStyle(task);
-                    return (
-                      <button key={task.id} data-morph-id={`calendar-taskcard-${task.id}`} style={{ borderRadius: 8, ...(cs && !done ? cs : {}) }} {...bulk.bindCard(task, () => onOpen(task))} className={cn("flex w-full items-stretch gap-2.5 rounded-lg border border-border bg-card p-2.5 text-left", done && "opacity-60", bulk.isSelected(task.id) && "ring-2 ring-[color:var(--accent-foreground)]")}>
-                        <span className={cn("w-1 shrink-0 rounded-full", done ? "bg-emerald-500" : CAL_STRIPE[(task.priority ?? "NONE").toUpperCase()] ?? CAL_STRIPE.NONE)} />
-                        <div className="min-w-0 flex-1">
-                          <div className={cn("truncate text-sm font-medium", done && "line-through")}>{task.parentId ? `↳ ${task.title}` : task.title}</div>
-                          <PropLine task={task} keys={keys} defs={defs} ctx={ctx} className="mt-1" />
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+        // Phone (UI tour run 7, 14 Oct 2026): the month grid like the desktop and the iPhone app, a dot per
+        // task on its day, then the chosen day's tasks under it. It used to be an agenda with no grid.
+        <div className="space-y-3">
+          <div className="overflow-hidden rounded-lg border border-border" onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
+            <div className="grid grid-cols-7 border-b border-border text-[11px] text-muted-foreground">
+              {weekdays.map((d, i) => <div key={i} className="py-1.5 text-center">{d}</div>)}
+            </div>
+            <div className="grid grid-cols-7">
+              {days.map((day, idx) => {
+                const key = dayKey(day);
+                const inMonth = sameMonth(day, viewMonth);
+                const dayTasks = inMonth ? byDay.get(key)?.items ?? [] : [];
+                const isToday = key === todayKey;
+                const picked = key === pickedKey;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={!inMonth}
+                    onClick={() => setPickedDay(key)}
+                    aria-pressed={picked}
+                    aria-label={`${new Intl.DateTimeFormat(locale, { day: "numeric", month: "long" }).format(day)}${dayTasks.length ? ` · ${tn(dayTasks.length, "{n} task", "{n} tasks")}` : ""}`}
+                    className={cn("flex h-12 flex-col items-center justify-start gap-1 border-border pt-1.5", idx % 7 !== 6 && "border-r", idx >= 7 && "border-t", !inMonth && "bg-muted/30", picked && "bg-accent")}
+                  >
+                    <span className={cn("grid h-6 min-w-6 place-items-center rounded-full px-1 text-xs tabular-nums", isToday ? "bg-rose-500 font-semibold text-white" : inMonth ? "text-foreground" : "text-muted-foreground/50", picked && !isToday && "font-semibold")}>{day.getDate()}</span>
+                    {dayTasks.length > 0 && (
+                      <span className="flex items-center gap-0.5" aria-hidden>
+                        {dayTasks.slice(0, 3).map((task) => <span key={task.id} className={cn("h-1.5 w-1.5 rounded-full", isDone(task.status) ? "bg-emerald-500" : CAL_STRIPE[(task.priority ?? "NONE").toUpperCase()] ?? CAL_STRIPE.NONE)} />)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {pickedDate && (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <h3 className="mr-auto text-sm font-semibold">{new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long" }).format(pickedDate)}</h3>
+                <button type="button" onClick={() => onCreate(ymd(pickedDate))} className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><Plus className="h-3.5 w-3.5" />{t("New task")}</button>
               </div>
-            );
-          })}
-          {agenda.length === 0 && <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">{t("Nothing on the calendar this month.")}</p>}
+              {pickedTasks.map((task) => {
+                const done = isDone(task.status);
+                const cs = chipStyle(task);
+                return (
+                  <button key={task.id} data-morph-id={`calendar-taskcard-${task.id}`} style={{ borderRadius: 8, ...(cs && !done ? cs : {}) }} {...bulk.bindCard(task, () => onOpen(task))} className={cn("flex w-full items-stretch gap-2.5 rounded-lg border border-border bg-card p-2.5 text-left", done && "opacity-60", bulk.isSelected(task.id) && "ring-2 ring-[color:var(--accent-foreground)]")}>
+                    <span className={cn("w-1 shrink-0 rounded-full", done ? "bg-emerald-500" : CAL_STRIPE[(task.priority ?? "NONE").toUpperCase()] ?? CAL_STRIPE.NONE)} />
+                    <div className="min-w-0 flex-1">
+                      <div className={cn("truncate text-sm font-medium", done && "line-through")}>{task.parentId ? `↳ ${task.title}` : task.title}</div>
+                      <PropLine task={task} keys={keys} defs={defs} ctx={ctx} className="mt-1" />
+                    </div>
+                  </button>
+                );
+              })}
+              {pickedTasks.length === 0 && <p className="rounded-lg border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">{agenda.length ? t("Nothing on this day. Days with a dot have tasks.") : t("Nothing on the calendar this month.")}</p>}
+            </div>
+          )}
         </div>
       ) : (
         <div
           className="overflow-hidden rounded-lg border border-border"
           // A sideways swipe on a touch screen (iPad) turns the month (QA S-11).
-          onTouchStart={(e) => { const tp = e.touches[0]; swipeAt.current = e.touches.length === 1 ? { x: tp.clientX, y: tp.clientY, t: Date.now() } : null; }}
-          onTouchEnd={(e) => {
-            const st = swipeAt.current; swipeAt.current = null;
-            const tp = e.changedTouches[0];
-            if (!st || !tp || Date.now() - st.t > 800) return;
-            const dx = tp.clientX - st.x; const dy = tp.clientY - st.y;
-            if (Math.abs(dx) >= 50 && Math.abs(dx) >= Math.abs(dy) * 1.5) shiftMonth(dx < 0 ? 1 : -1);
-          }}
+          onTouchStart={onSwipeStart}
+          onTouchEnd={onSwipeEnd}
         >
           <div className="grid grid-cols-7 border-b border-border text-xs text-muted-foreground">
             {weekdays.map((d, i) => <div key={i} className="px-2 py-1.5 text-right">{d}</div>)}
@@ -2003,7 +2045,9 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   let min = allWins.length ? allWins.reduce((a, w) => (w.start < a ? w.start : a), allWins[0].start) : todayStart;
   let max = allWins.length ? allWins.reduce((a, w) => (w.end > a ? w.end : a), allWins[0].end) : new Date(todayStart.getTime() + DAY_MS * 14);
   if (todayStart < min) min = todayStart;
-  if (todayStart > max) max = todayStart;
+  // Two weeks after today, so the view can open with today near its left edge, not squeezed at the end.
+  const todayPlus = new Date(todayStart.getTime() + DAY_MS * 14);
+  if (todayPlus > max) max = todayPlus;
   min = startOfDay(new Date(min.getTime() - DAY_MS * 2));
   max = startOfDay(new Date(max.getTime() + DAY_MS * 3));
   const dayCount = daysBetween(min, max) + 1;
@@ -2074,8 +2118,21 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
 
   return (
     <div className="px-4 py-3 md:px-8">
-      {/* Opens on today (Notion does), not on the oldest task's month: a callback ref scrolls once. */}
-      <div ref={(el) => { if (el && !el.dataset.scrolled) { el.dataset.scrolled = "1"; el.scrollLeft = Math.max(0, xOf(today) - GANTT_DAY_W * (compact ? 1 : 3)); } }} className="relative overflow-x-auto rounded-lg border border-border bg-card">
+      {/* Opens on today (Notion does), not on the oldest task's month. The range can still grow after the
+          first paint (more tasks arrive, a bar is dragged before the first day): the content then shifts
+          right by the added days, so the scroll shifts with it and the same days stay in view. UI tour run 7
+          (14 Oct 2026): the first scroll landed on today, the range then grew and the view showed mid
+          September with no bars. */}
+      <div ref={(el) => {
+        if (!el) return;
+        const first = min.getTime();
+        const prev = el.dataset.tlMin ? Number(el.dataset.tlMin) : null;
+        if (prev === first) return;
+        el.dataset.tlMin = String(first);
+        el.scrollLeft = prev === null
+          ? Math.max(0, xOf(today) - GANTT_DAY_W * (compact ? 1 : 3))
+          : Math.max(0, el.scrollLeft + Math.round((prev - first) / DAY_MS) * GANTT_DAY_W);
+      }} className="relative overflow-x-auto rounded-lg border border-border bg-card">
         <div style={{ width: leftW + timelineW }}>
           {/* HEADER */}
           <div className="sticky top-0 z-20 flex border-b border-border bg-card">
@@ -2128,7 +2185,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                       </button>
                       {!compact && <div className="w-[90px] px-2 text-xs text-muted-foreground">{gDur ? tn(gDur, "{n} day", "{n} days") : "—"}</div>}
                       {!compact && <div className="flex w-[150px] items-center gap-2 border-l border-border px-3">
-                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-blue-500" style={{ width: `${gPct}%` }} /></div>
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"><div className={cn("h-full rounded-full", pctTone(gPct))} style={{ width: `${gPct}%` }} /></div>
                         <span className="w-8 shrink-0 text-right text-xs font-bold tabular-nums">{gPct}%</span>
                       </div>}
                     </div>
@@ -2182,6 +2239,12 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                             onSetDates(task, { [cfg.endProp]: shiftIso(task, cfg.endProp, day, 0) });
                           }}
                         >
+                          {/* Phone: the Duration column (which says "No date") is hidden, so an undated row says it
+                              in its track, beside today's line where the view opens, as the iPhone app does (UI tour
+                              run 7, 14 Oct 2026). */}
+                          {compact && !win && ghost?.id !== task.id && (
+                            <span aria-hidden className="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground" style={{ left: xOf(today) + GANTT_DAY_W }}>{t("No date")}</span>
+                          )}
                           {!win && endW && ghost?.id === task.id && (
                             <div data-ghost="1" title={t("Click to schedule")} className="absolute top-1.5 flex h-8 cursor-pointer items-center justify-center rounded-lg border border-dashed border-muted-foreground/40 text-muted-foreground" style={{ left: ghost.day * GANTT_DAY_W, width: GANTT_DAY_W }}>
                               <Plus className="pointer-events-none h-3.5 w-3.5" />

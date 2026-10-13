@@ -5,7 +5,7 @@ import { Crown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { localeOf } from "@/lib/lang"
-import { thumbUrl } from "@/lib/thumb";
+import { AvatarFace } from "@/components/Avatar"
 
 export interface LeaderboardRanking {
   userId: string
@@ -18,11 +18,6 @@ export interface LeaderboardRanking {
   avatarUrl?: string | null
 }
 
-function initialsOf(name?: string | null) {
-  if (!name) return "?"
-  return name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")
-}
-
 const PODIUM_STYLE: Record<number, { bar: string; barText: string; ring: string; crown: string; height: string; avatar: number }> = {
   1: { bar: "bg-amber-300 dark:bg-amber-400/25", barText: "text-amber-900 dark:text-amber-200", ring: "ring-amber-300", crown: "text-amber-500", height: "h-32", avatar: 72 },
   2: { bar: "bg-slate-200 dark:bg-slate-400/20", barText: "text-slate-600 dark:text-slate-200", ring: "ring-slate-300", crown: "text-slate-400", height: "h-24", avatar: 56 },
@@ -30,13 +25,7 @@ const PODIUM_STYLE: Record<number, { bar: string; barText: string; ring: string;
 }
 
 function PodiumAvatar({ item, size, ring }: { item: LeaderboardRanking; size: number; ring: string }) {
-  return item.avatarUrl ? (
-    <img src={thumbUrl(item.avatarUrl, 40)} loading="lazy" decoding="async" alt={item.userName} className={cn("rounded-full object-cover ring-2", ring)} style={{ width: size, height: size }} />
-  ) : (
-    <span className={cn("inline-grid place-items-center rounded-full bg-muted font-bold text-foreground ring-2", ring)} style={{ width: size, height: size, fontSize: size * 0.34 }}>
-      {initialsOf(item.userName)}
-    </span>
-  )
+  return <AvatarFace name={item.userName} avatar={item.avatarUrl} seed={item.userName || item.userId} size={size} decorative className={ring} />
 }
 
 interface LeaderboardPodiumProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -46,7 +35,14 @@ interface LeaderboardPodiumProps extends React.HTMLAttributes<HTMLDivElement> {
 const LeaderboardPodium = React.forwardRef<HTMLDivElement, LeaderboardPodiumProps>(
   ({ rankings, className, ...props }, ref) => {
     const byRank = (rank: number) => rankings.find((r) => r.rank === rank)
-    const order = [2, 1, 3]
+    // The classic podium (2nd left, 1st centre, 3rd right) only when the first place is alone at the top.
+    // With a tie at the top every step reads "1", and 2-1-3 then looked like a different order from the
+    // list beneath (UI tour run 7, 14 Oct 2026: list Bayemsore, QA Dev, QA Dev 2; podium QA Dev,
+    // Bayemsore, QA Dev 2). Tied, the steps run left to right in the list's order.
+    const first = byRank(1)
+    const second = byRank(2)
+    const tiedTop = !!first && !!second && (first.label ?? 1) === (second.label ?? 2)
+    const order = tiedTop ? [1, 2, 3] : [2, 1, 3]
 
     return (
       <div ref={ref} className={cn("flex items-end justify-center gap-3", className)} {...props}>

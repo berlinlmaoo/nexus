@@ -672,8 +672,9 @@ function VaultPage() {
         className={cn(
           "grid h-5 w-5 shrink-0 place-items-center rounded-md border transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100",
           on ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/50 bg-card",
-          // Touch has no hover: there the box is always shown, so one tap selects (QA B40).
-          !selecting && "opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100",
+          // Touch has no hover: there the box shows only in Select mode (the "Select" button), as in the
+          // iPhone app; always shown it read as a list of unticked boxes (UI tour run 7, 14 Oct 2026).
+          !selecting && "opacity-0 group-hover:opacity-100 pointer-coarse:hidden",
           "tap-area",
           overlay && "absolute left-2 top-2 z-10 shadow-sm",
         )}

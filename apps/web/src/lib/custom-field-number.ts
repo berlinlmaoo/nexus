@@ -189,3 +189,16 @@ export function formatIdr(value: unknown): string {
   const neg = n.startsWith("-")
   return `${neg ? "-" : ""}Rp ${groupIdrDigits(n.replace("-", ""))}`
 }
+
+const IDR_DIGITS = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 })
+
+/**
+ * A Rupiah amount for display: "Rp 3.849.000", a plain space after "Rp", in every browser and both
+ * languages. Intl's own IDR currency style is not used: Safari prints "Rp3.849.000" and Chromium
+ * "Rp\u00a03.849.000" (UI tour run 7, 14 Oct 2026: the phone web showed "Rp3.849.000" while every other
+ * screen read "Rp 3.849.000").
+ */
+export function rupiah(n: number): string {
+  const r = Math.round(n)
+  return `${r < 0 ? "-" : ""}Rp ${IDR_DIGITS.format(Math.abs(r))}`
+}

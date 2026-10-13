@@ -31,8 +31,10 @@ export function PageHeader({
     // draws above the page's top edge is header, not content. md and up: unchanged (translucent + blur).
     <div data-page-header className={cn("sticky top-0 z-30 border-b border-border bg-background pt-[env(safe-area-inset-top)] before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-24 before:bg-background before:content-[''] md:z-40 md:bg-background/80 md:pt-0 md:backdrop-blur md:before:hidden", className)}>
       <div className={cn("px-4 md:px-8 md:pt-6 flex sm:flex-row sm:items-start sm:justify-between sm:gap-6 sm:pt-4 sm:pb-3", compact ? "flex-row items-center justify-between gap-2 pt-3 pb-1" : "flex-col gap-3 pt-4 pb-3")}>
-        <div className="flex items-start gap-3 min-w-0">
-          {icon && <div className="hidden sm:block text-2xl mt-0.5 shrink-0">{icon}</div>}
+        <div className={cn("flex items-start gap-3 min-w-0", compact && "max-sm:items-center max-sm:gap-2")}>
+          {/* The identity mark shows on the phone too, as on the desktop and in the iPhone app (UI tour run 7:
+              a project opened on the phone had no icon beside its name). */}
+          {icon && <div className="shrink-0 text-2xl sm:mt-0.5">{icon}</div>}
           <div className="min-w-0">
             <h1 className="text-xl md:text-2xl font-semibold tracking-tight truncate">{title}</h1>
             {/* Two lines on the phone too: one line cut most subtitles mid-sentence at 440 px ("Only the

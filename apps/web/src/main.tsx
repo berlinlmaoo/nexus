@@ -2,11 +2,13 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 
+import { installMonthAbbrFix } from "./lib/month-abbr";
 import { getRouter } from "./router";
 import type { QueryClient } from "@tanstack/react-query";
 import { isAuthError, nexusApi } from "./lib/nexus-api";
 import "./styles.css";
 
+installMonthAbbrFix();
 const router = getRouter();
 
 // The session check starts with the page, not after the app shell's code has loaded (perf pass, 12 Oct

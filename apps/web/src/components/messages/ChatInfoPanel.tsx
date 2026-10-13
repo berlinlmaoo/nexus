@@ -8,6 +8,7 @@ import {
   Pencil, Search, Trash2, UserMinus, UserPlus, UserRound, Users as UsersIcon, X,
 } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
+import { ProjectTile } from "@/components/projects/ProjectIcon";
 import { MuteMenu, mutedLabel } from "@/components/messages/MuteMenu";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -304,6 +305,8 @@ function InfoBody({
       <div className="flex flex-col items-center px-6 pb-4 pt-6 text-center">
         {peer ? (
           <Avatar userId={peer.userId} name={peer.name} avatar={peer.avatar} size={88} />
+        ) : isProject && c.projectId ? (
+          <ProjectTile projectId={c.projectId} size={88} className="rounded-2xl" />
         ) : (
           <span className="grid h-[88px] w-[88px] place-items-center rounded-full bg-primary/10 text-primary ring-1 ring-border"><UsersIcon className="h-9 w-9" /></span>
         )}

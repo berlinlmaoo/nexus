@@ -184,7 +184,7 @@ function TypeList({ query, active, onPick, onHover }: { query: string; active: n
               <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-border bg-background text-muted-foreground"><k.icon className="h-3.5 w-3.5" /></span>
               <span className="min-w-0">
                 <span className="block text-sm">{t(k.label)}</span>
-                <span className="block truncate text-[11px] text-muted-foreground">{t(k.hint)}</span>
+                <span className="block text-[11px] leading-snug text-muted-foreground">{t(k.hint)}</span>
               </span>
             </button>
           </div>

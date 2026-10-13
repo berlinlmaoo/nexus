@@ -5,6 +5,7 @@ import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { ProjectTile } from "@/components/projects/ProjectIcon";
 import { ArrowLeft, BellOff, Loader2, MessageCircle, Pencil, Plus, Trash2, UserPlus, Users as UsersIcon, X, MessageSquare } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { ChatThread } from "@/components/messages/ChatThread";
@@ -38,10 +39,15 @@ function dmPeer(c: NexusConversation, meId?: string) {
   return (c.members ?? []).find((m) => (m.userId || m.user?.id) !== meId)?.user ?? null;
 }
 
-/** A chat's picture: the other person's photo for a DM, a people icon for a group or project room. */
+/**
+ * A chat's picture: the other person's photo for a DM, the project's own icon (its photo, else the page
+ * icon every other screen draws) for a project room, a people icon for a group. UI tour run 7: project
+ * rooms showed the same people icon as groups.
+ */
 function ConvoAvatar({ c, meId, size }: { c: NexusConversation; meId?: string; size: number }) {
   const peer = c.type === "DM" ? dmPeer(c, meId) : null;
   if (peer?.id) return <Avatar userId={peer.id} name={peer.name} avatar={peer.avatar} size={size} className="shrink-0" />;
+  if (c.type === "PROJECT" && c.projectId) return <ProjectTile projectId={c.projectId} size={size} />;
   return (
     <span className="grid shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary ring-1 ring-border" style={{ width: size, height: size }}>
       {c.type === "PROJECT" || c.type === "GROUP" ? <UsersIcon className="h-4 w-4" /> : initialsOf(convoTitle(c, meId))}
