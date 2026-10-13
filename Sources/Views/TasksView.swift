@@ -62,7 +62,9 @@ struct TasksView: View {
             // Regular width: the page header carries the title, so the bar stays empty (it still holds
             // Back on pushed screens). Compact: the native title and "+".
             .navigationTitle(wide ? "" : T("My Tasks"))
-            .navigationBarTitleDisplayMode(wide ? .inline : .automatic)
+            // Inline on the phone too, like the other screens with a subtitle line: under a large title the
+            // subtitle never showed (UI tour run 3).
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if !wide {
                     ToolbarItem(placement: .primaryAction) {

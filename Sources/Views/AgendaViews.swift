@@ -135,7 +135,7 @@ struct RoomBookingView: View {
     private func load() async {
         loading = true
         error = nil
-        let r = scope == .upcoming ? AgendaRange.nowToDays(14) : AgendaRange.daysAgo(30)
+        let r = scope == .upcoming ? AgendaRange.todayToDays(14) : AgendaRange.daysAgo(30)
         do { bookings = try await APIClient.shared.roomBookings(start: r.start, end: r.end) }
         catch APIError.unauthorized { auth.logout() }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load bookings.") }

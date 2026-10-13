@@ -61,7 +61,13 @@ struct Conversation: Decodable, Identifiable, Sendable {
         }
         return name ?? (type == "PROJECT" ? "Project chat" : "Group")
     }
-    func initial(meId: String?) -> String { String(title(meId: meId).first ?? "?").uppercased() }
+    /// The web's initials (messages list): first letters of the first two words, "Bagas Z" -> "BZ",
+    /// "Direct message" -> "DM". One letter made two different Bagas rows look alike (UI tour run 3).
+    func initial(meId: String?) -> String {
+        let words = title(meId: meId).split(whereSeparator: { $0 == " " }).prefix(2)
+        let letters = words.compactMap(\.first).map { String($0).uppercased() }.joined()
+        return letters.isEmpty ? "?" : letters
+    }
     /// DM counterpart's photo (nil for group/project — those use a group icon).
     func avatarURL(meId: String?) -> String? { type == "DM" ? otherMember(meId: meId)?.user?.avatar : nil }
 }

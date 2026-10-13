@@ -42,5 +42,7 @@ extension AppLanguage {
         "Sort by name": "Urutkan menurut nama",
         // Leaderboard
         "XP ranking for everyone": "Peringkat XP semua orang",
+        // UI tour run 3
+        "edited": "diubah",
     ]
 }

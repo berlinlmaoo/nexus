@@ -1245,18 +1245,12 @@ struct CalendarView: View {
 
     /// The month's marks, in words: the tall cells' badges and lines, or the phone's dots.
     @ViewBuilder private var legendKeys: some View {
-        if wideCells {
-            // The web's key, in its order: ● has tasks to do, ✓ done or no status, — overdue.
-            legendKey(filled: true, T("has tasks to do"))
-            legendKey(filled: false, T("done or no status"))
-            HStack(spacing: 5) {
-                Capsule().fill(CalTone.overdue).frame(width: 16, height: 2).accessibilityHidden(true)
-                Text(T("overdue"))
-            }
-        } else {
-            HStack(spacing: 5) { keyBadge("1", fill: CalTone.overdue, fg: .white); Text(T("overdue")) }
-            legendKey(filled: true, T("has tasks to do"))
-            legendKey(filled: false, T("done or no status"))
+        // The web's key, in its order: ● has tasks to do, ✓ done or no status, — overdue (phone too).
+        legendKey(filled: true, T("has tasks to do"))
+        legendKey(filled: false, T("done or no status"))
+        HStack(spacing: 5) {
+            Capsule().fill(CalTone.overdue).frame(width: 16, height: 2).accessibilityHidden(true)
+            Text(T("overdue"))
         }
     }
 
@@ -1493,7 +1487,6 @@ struct CalendarView: View {
     /// own, wrapping between words, with TODAY under it.
     private func dayHeading(tree: CalDayTree, rel: Int, holiday: String?) -> some View {
         let date = Text(CalFormat.day(selected, "EEEEdMMMyyyy")).font(NXFont.display(CalType.size(twoPane ? 19 : 17), .bold)).foregroundStyle(NX.foreground)
-        let late = rangeLoaded ? (visibleByDay[selected] ?? []).filter { CalendarCore.overdueState($0, today: today, now: now, windowDays: windowDays) == .recent }.count : 0
         let tag: String? = rel == 0 ? T("Today") : rel == 1 ? T("Tomorrow") : rel == -1 ? T("Yesterday") : nil
         return VStack(alignment: .leading, spacing: 3) {
             if typeSize.isAccessibilitySize {
@@ -1512,14 +1505,7 @@ struct CalendarView: View {
                      : T("No tasks"))
                     .font(NXFont.text(CalType.size(12.5))).foregroundStyle(NX.mutedFg)
                 // The web's day heading has only the counts; the overdue rail and the red marks say the
-                // rest. The phone keeps its badge.
-                if late > 0 && !webChrome {
-                    Text(String(format: T("%d overdue"), late))
-                        .font(NXFont.text(CalType.size(11.5), .bold)).monospacedDigit()
-                        .foregroundStyle(Color.white)
-                        .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(CalTone.overdue, in: Capsule())
-                }
+                // rest — on the phone too (UI tour run 3).
             }
         }
         .accessibilityElement(children: .combine)

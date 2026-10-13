@@ -24,6 +24,8 @@ struct FeedPost: Decodable, Identifiable, Hashable, Sendable {
     let id: String
     let text: String?
     let createdAt: String?
+    /// Set once the author changed the text (web PostCard "· edited").
+    let editedAt: String?
     let author: Author?
     let images: [FeedImage]?
     /// `var` so a like can flip them in place: the heart is drawn from the post itself, which is
@@ -375,8 +377,12 @@ struct ThreadsView: View {
                 AvatarView(url: p.author?.avatar, initial: p.initial, size: 34)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(p.authorName).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    if let d = ProjDate.parse(p.createdAt) {
-                        Text(ProjDate.dayLabel(d)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    // Date and "edited" on one muted line, as the web's "· 30 Jun · edited".
+                    let day = ProjDate.parse(p.createdAt).map { ProjDate.dayLabel($0) }
+                    let edited = (p.editedAt?.isEmpty == false) ? T("edited") : nil
+                    let meta = [day, edited].compactMap { $0 }.joined(separator: " · ")
+                    if !meta.isEmpty {
+                        Text(meta).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 0)
@@ -409,14 +415,14 @@ struct ThreadsView: View {
             HStack(spacing: 16) {
                 Button { Task { await like(p) } } label: {
                     let on = p.likedByMe == true
-                    Label("\(p.likes)", systemImage: on ? "heart.fill" : "heart")
+                    Label(p.likes > 0 ? "\(p.likes)" : "", systemImage: on ? "heart.fill" : "heart")
                         .font(NXFont.text(13, .medium))
                         .foregroundStyle(on ? NX.danger : NX.mutedFg)
                         .contentTransition(.numericText())
                 }
                 .buttonStyle(.plain)
                 Button { openPost = p } label: {
-                    Label("\(p.comments)", systemImage: "bubble.left")
+                    Label(p.comments > 0 ? "\(p.comments)" : "", systemImage: "bubble.left")
                         .font(NXFont.text(13, .medium)).foregroundStyle(NX.mutedFg)
                 }
                 .buttonStyle(.plain)

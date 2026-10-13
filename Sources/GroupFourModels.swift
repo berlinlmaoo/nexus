@@ -107,6 +107,16 @@ enum AgendaRange {
         let f = ISO8601DateFormatter()
         return (f.string(from: Date()), f.string(from: Date().addingTimeInterval(Double(days) * 86400)))
     }
+    /// From the start of today (WIB) for `days` days: the web agenda keeps today's bookings that are
+    /// already over on screen (Room Booking hides elapsed DAYS, not elapsed hours). `nowToDays` dropped a
+    /// 09:00-23:00 booking at 23:01, so the iPad said "No bookings" beside a web showing it (UI tour run 3).
+    static func todayToDays(_ days: Int) -> (start: String, end: String) {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Jakarta") ?? .current
+        let start = cal.startOfDay(for: Date())
+        let f = ISO8601DateFormatter()
+        return (f.string(from: start), f.string(from: Date().addingTimeInterval(Double(days) * 86400)))
+    }
     /// Backwards window, for "history" views.
     static func daysAgo(_ days: Int) -> (start: String, end: String) {
         let f = ISO8601DateFormatter()

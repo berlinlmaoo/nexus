@@ -14,22 +14,20 @@ struct NXPageHeader<Actions: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 24) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(NXFont.text(26, .semibold))
-                        .foregroundStyle(NX.foreground)
-                        .lineLimit(1)
-                    if let subtitle, !subtitle.isEmpty {
-                        Text(subtitle)
-                            .font(NXFont.text(14))
-                            .foregroundStyle(NX.mutedFg)
-                            .lineLimit(2)
-                    }
+            // Side by side while the title keeps ~260 pt; otherwise the actions go on their own row
+            // under it. A portrait iPad with the sidebar open left Projects with no title at all and
+            // Room Booking with "Roo…" (UI tour run 3, 13 Oct 2026).
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 24) {
+                    titleBlock
+                        .frame(minWidth: 200, idealWidth: 260, maxWidth: .infinity, alignment: .leading)
+                    actionRow
                 }
-                Spacer(minLength: 12)
-                HStack(spacing: 8) { actions() }
-                    .fixedSize(horizontal: true, vertical: false)
+                VStack(alignment: .leading, spacing: 12) {
+                    titleBlock
+                    actionRow
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 32)
             .padding(.top, 24)
@@ -37,6 +35,27 @@ struct NXPageHeader<Actions: View>: View {
             Rectangle().fill(NX.border).frame(height: 1)
         }
         .background(NX.background)
+    }
+
+    private var titleBlock: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(NXFont.text(26, .semibold))
+                .foregroundStyle(NX.foreground)
+                .lineLimit(1)
+            if let subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(NXFont.text(14))
+                    .foregroundStyle(NX.mutedFg)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var actionRow: some View {
+        HStack(spacing: 8) { actions() }
+            .fixedSize(horizontal: true, vertical: false)
     }
 }
 

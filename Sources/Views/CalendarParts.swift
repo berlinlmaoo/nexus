@@ -828,13 +828,16 @@ private struct CalMonthGridBody: View {
     /// The phone's cell: the date, then the overdue badge and one dot per division.
     @ViewBuilder private func compactContent(_ day: String, dots: [CalDot], info: CalMonthDay, inMonth: Bool, isToday: Bool, isSel: Bool,
                                              holiday: String?) -> some View {
-        let room = info.overdue > 0 ? 2 : 3
-        let shown = Array(dots.prefix(room))
+        let shown = Array(dots.prefix(3))
         VStack(spacing: 2) {
             number(day, inMonth: inMonth, isToday: isToday, isSel: isSel, holiday: holiday)
+            // The web's mark on every width (mobile web and desktop MonthGrid): a short red dash under
+            // the date, not a red count badge (UI tour run 3: desktop web is the reference).
+            Capsule().fill(info.overdue > 0 ? CalTone.overdue : Color.clear)
+                .frame(width: 14, height: 2)
+                .accessibilityHidden(true)
             Spacer(minLength: 0)
             HStack(spacing: 3) {
-                if info.overdue > 0 { overdueBadge(info.overdue, small: true) }
                 // Filled = something still to do; a tick = nothing left (done or status-less),
                 // quieter than the work still open. Owner, 8 Oct 2026: a ring read as "to do"
                 // beside the task list's ○.

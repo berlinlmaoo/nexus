@@ -86,25 +86,42 @@ struct SettingsView: View {
         }
     }
 
+    private var webScroll: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                notices
+                webTabContent
+                footer
+            }
+            .frame(maxWidth: 1040, alignment: .leading)
+            .padding(.top, 24).padding(.bottom, 32).padding(.trailing, 32)
+            .opacity(loading ? 0.4 : 1)
+        }
+    }
+
     private var webBody: some View {
         VStack(spacing: 0) {
             NXPageHeader(title: T("Settings"), subtitle: T("Your profile, security, notifications and workspace preferences."))
-            HStack(alignment: .top, spacing: 28) {
-                webSideNav
-                    .frame(width: 230)
-                    .padding(.top, 24)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        notices
-                        webTabContent
-                        footer
-                    }
-                    .frame(maxWidth: 1040, alignment: .leading)
-                    .padding(.top, 24).padding(.bottom, 32).padding(.trailing, 32)
-                    .opacity(loading ? 0.4 : 1)
+            // The side menu only where the cards keep a real width beside it. A portrait iPad with the
+            // sidebar open left ~340 pt and "Change photo" broke letter by letter (UI tour run 3); there
+            // the sections become the tab strip over full-width cards, as on a narrow web window.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 28) {
+                    webSideNav
+                        .frame(width: 230)
+                        .padding(.top, 24)
+                    webScroll
                 }
+                .padding(.leading, 32)
+                .frame(minWidth: 860, idealWidth: 860, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                VStack(spacing: 0) {
+                    NXUnderlineTabs(items: SettingsTab.allCases.map { NXTabItem(id: $0, label: $0.label, icon: $0.icon) },
+                                    selection: $tab, accessibilityName: T("Settings"))
+                        .padding(.horizontal, 16)
+                    webScroll.padding(.leading, 32)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
-            .padding(.leading, 32)
         }
         .background(NX.background.ignoresSafeArea())
     }

@@ -152,7 +152,7 @@ struct InboxView: View {
         error = nil
         do {
             let res = try await APIClient.shared.notifications()
-            items = res.notifications ?? []
+            items = activeNotifications(res.notifications ?? [])
             unread = res.unreadCount ?? items.filter { !$0.isRead }.count
             // The tab bar's count (More, or the Inbox tab while the Calendar is held back) follows
             // what this screen just read — a mark-read and Mark all come through here too.
@@ -171,7 +171,7 @@ struct InboxView: View {
     private func reloadQuietly() async {
         guard !loading, error == nil else { return }
         guard let res = try? await APIClient.shared.notifications() else { return }
-        items = res.notifications ?? []
+        items = activeNotifications(res.notifications ?? [])
         unread = res.unreadCount ?? items.filter { !$0.isRead }.count
         InboxBadge.shared.set(unread)
         tabs = notificationFilterTabs(items)
@@ -326,5 +326,17 @@ struct NotificationFilterBar: View {
             NXUnderlineTabs(items: tabs.map { NXTabItem(id: $0.group, label: $0.group.label, count: $0.count) },
                             selection: $group, accessibilityName: T("Notifications"))
         }
+    }
+}
+
+/// The web's inbox rule (nexus-api.ts activeNotifications): a notification READ more than 7 days ago
+/// leaves the list; unread ones always stay. createdAt stands in for the read time, as on the web.
+/// Without it the app listed 50 where the web listed 19 (UI tour run 3, 13 Oct 2026).
+func activeNotifications(_ list: [NexusNotification], maxAgeDays: Double = 7) -> [NexusNotification] {
+    let cutoff = Date().addingTimeInterval(-maxAgeDays * 86400)
+    return list.filter { n in
+        if !n.isRead { return true }
+        guard let raw = n.createdAt, let at = ChatStore.parseDate(raw) else { return false }
+        return at >= cutoff
     }
 }
