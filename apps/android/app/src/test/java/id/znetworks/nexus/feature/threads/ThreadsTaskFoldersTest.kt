@@ -50,7 +50,8 @@ class ThreadsTaskFoldersTest {
             {"id":"undated","status":"DONE"}]""")
         assertEquals(listOf("open", "recent", "undated"), HomeTasks.recent(tasks, now).map { it.id })
         val en = File("src/main/res/values/strings.xml").readText(); val id = File("src/main/res/values-in/strings.xml").readText()
-        assertTrue(en.contains("<string name=\"home_stat_mission\">Task</string>")); assertTrue(id.contains("<string name=\"home_stat_mission\">Tugas</string>"))
+        // The iOS / web tile words (run 5).
+        assertTrue(en.contains("<string name=\"home_stat_mission\">Tasks</string>")); assertTrue(id.contains("<string name=\"home_stat_mission\">Tugas</string>"))
     }
 
     @Test fun foldersSurviveARefresh() {
