@@ -220,4 +220,27 @@
         <item quantity="one">1 response</item>
         <item quantity="other">%d responses</item>
     </plurals>
+    <!-- Status columns (scope 2) -->
+    <string name="col_options">Column options</string>
+    <string name="col_rename">Rename…</string>
+    <string name="col_colour">Colour</string>
+    <string name="col_left">Move left</string>
+    <string name="col_right">Move right</string>
+    <string name="col_status_type">Status type</string>
+    <string name="col_delete">Delete status…</string>
+    <string name="col_moves_to">Its tasks move to</string>
+    <string name="col_add">Add a status</string>
+    <string name="col_add_short">Status</string>
+    <string name="col_new_in">New status in %1$s</string>
+    <string name="col_across">A column moves within its group. Change its group from its ••• menu.</string>
+    <string name="col_rename_title">Rename status</string>
+    <string name="color_gray">Gray</string>
+    <string name="color_brown">Brown</string>
+    <string name="color_orange">Orange</string>
+    <string name="color_yellow">Yellow</string>
+    <string name="color_green">Green</string>
+    <string name="color_blue">Blue</string>
+    <string name="color_purple">Purple</string>
+    <string name="color_pink">Pink</string>
+    <string name="color_red">Red</string>
 </resources>

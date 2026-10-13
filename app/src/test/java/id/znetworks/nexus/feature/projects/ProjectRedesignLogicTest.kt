@@ -52,6 +52,14 @@ class ProjectRedesignLogicTest {
         assertEquals("DONE", StatusOptions.statusFor(StatusOptions.Group.COMPLETE, "Shipped"))
     }
 
+    @Test fun columnsMoveWithinTheirGroup() {
+        // ordered: t (To-do) | p, r (In progress) | d (Complete)
+        assertEquals("r", StatusOptions.neighbour(lanes, "p", 1)?.id)
+        assertNull(StatusOptions.neighbour(lanes, "p", -1)) // would cross into To-do
+        assertNull(StatusOptions.neighbour(lanes, "r", 1))  // would cross into Complete
+        assertNull(StatusOptions.neighbour(lanes, "t", -1))
+    }
+
     private fun field(name: String, type: String = "SELECT", options: String = """{"options":["A","B"],"optionColors":{"B":"rose"}}""") =
         CustomFieldDef("f1", name, type, options = NexusJson.parseToJsonElement(options))
 

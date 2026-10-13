@@ -204,4 +204,27 @@
     <plurals name="fr_count">
         <item quantity="other">%d jawaban</item>
     </plurals>
+    <!-- Status columns (scope 2) -->
+    <string name="col_options">Opsi kolom</string>
+    <string name="col_rename">Ganti nama…</string>
+    <string name="col_colour">Warna</string>
+    <string name="col_left">Geser ke kiri</string>
+    <string name="col_right">Geser ke kanan</string>
+    <string name="col_status_type">Jenis status</string>
+    <string name="col_delete">Hapus status…</string>
+    <string name="col_moves_to">Task-nya dipindah ke</string>
+    <string name="col_add">Tambah status</string>
+    <string name="col_add_short">Status</string>
+    <string name="col_new_in">Status baru di %1$s</string>
+    <string name="col_across">Kolom hanya bisa digeser di dalam grupnya. Ganti grupnya lewat menu •••.</string>
+    <string name="col_rename_title">Ganti nama status</string>
+    <string name="color_gray">Abu-abu</string>
+    <string name="color_brown">Cokelat</string>
+    <string name="color_orange">Oranye</string>
+    <string name="color_yellow">Kuning</string>
+    <string name="color_green">Hijau</string>
+    <string name="color_blue">Biru</string>
+    <string name="color_purple">Ungu</string>
+    <string name="color_pink">Merah muda</string>
+    <string name="color_red">Merah</string>
 </resources>

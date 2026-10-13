@@ -31,6 +31,14 @@ object StatusOptions {
         return o.firstOrNull { inUse(lanes) && groupOf(it.taskStatus) == Group.TODO && it.taskStatus != null } ?: o.firstOrNull()
     }
 
+    /** The column next to [id] in direction [dir] (−1 left, +1 right) within the same status group; null at its edge. */
+    fun neighbour(lanes: List<Lane>, id: String, dir: Int): Lane? {
+        val o = ordered(lanes)
+        val i = o.indexOfFirst { it.id == id }.takeIf { it >= 0 } ?: return null
+        val n = o.getOrNull(i + dir) ?: return null
+        return if (!inUse(lanes) || groupOf(n.taskStatus) == groupOf(o[i].taskStatus)) n else null
+    }
+
     private val ALIASES = mapOf("sky" to "blue", "emerald" to "green", "amber" to "yellow", "rose" to "red", "violet" to "purple", "slate" to "gray", "grey" to "gray")
     val KEYS = listOf("gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red")
 

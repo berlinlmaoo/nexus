@@ -386,6 +386,21 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
 
     fun setMine(on: Boolean) = _state.update { it.copy(mine = on) }
 
+    // region Status columns (web board ••• menu; Full access)
+    fun renameSection(id: String, name: String) = act(R.string.pp_change_failed) { api.updateSection(projectId, id, name = name) }
+    fun colorSection(id: String, color: String) = act(R.string.pp_change_failed) { api.updateSection(projectId, id, color = color) }
+    /** One step left / right within its status group (a column never crosses groups by moving). */
+    fun moveSection(id: String, dir: Int): Boolean {
+        val target = StatusOptions.neighbour(_state.value.lanes, id, dir) ?: return false
+        act(R.string.pp_change_failed) { api.updateSection(projectId, id, position = target.position ?: 0) }
+        return true
+    }
+    fun deleteSection(id: String, moveTo: String?) = act(R.string.pp_change_failed) { api.deleteSection(projectId, id, moveTo) }
+    fun addSection(group: StatusOptions.Group, name: String) = act(R.string.pp_change_failed) {
+        api.createSection(projectId, name, StatusOptions.statusFor(group, name), null)
+    }
+    // endregion
+
     /** The status a section stands for (DEV-REDESIGN §1); null = a plain section. */
     fun setSectionStatus(laneId: String, status: String?) = act(R.string.board_update_failed) { api.setSectionStatus(projectId, laneId, status) }
 

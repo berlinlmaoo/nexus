@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Bolt
@@ -332,13 +333,25 @@ fun BoardView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, acces
               onOpenTask: (String) -> Unit, onDuplicateDate: (List<String>) -> Unit) {
     val c = Nx.colors
     val dark = c.background.luminance() < 0.3f
-    var lastGroup: StatusOptions.Group? = null
     LazyRow(contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
-        items(groups, key = { it.key }) { g ->
+        items(groups.size, key = { groups[it].key }) { i ->
+            val g = groups[i]
+            // The status group's name above the first column of each group only (iOS).
+            BoardColumn(g, cfg, lanes, access, vm, selected, onOpenTask, onDuplicateDate, dark, firstOfGroup = i == 0 || groups[i - 1].statusGroup != g.statusGroup)
+        }
+        if (access.canManage && cfg.groupBy == "section" && StatusOptions.inUse(lanes)) item(key = "+status") { AddStatusColumn(vm) }
+    }
+}
+
+@Composable
+private fun BoardColumn(g: TaskGroup, cfg: ViewConfig, lanes: List<Lane>, access: ProjectAccess, vm: ProjectDetailViewModel, selected: Set<String>,
+                        onOpenTask: (String) -> Unit, onDuplicateDate: (List<String>) -> Unit, dark: Boolean, firstOfGroup: Boolean) {
+    val c = Nx.colors
+    run {
             val tone = g.colorKey?.let { StatusOptions.tone(it, dark) }
             Column(Modifier.width(284.dp).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(tone?.lane ?: c.muted.copy(alpha = 0.5f)).padding(8.dp)) {
                 // The status group's name above the first column of each group (iOS).
-                if (g.statusGroup != null) Text(statusGroupLabel(g.statusGroup), fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+                if (g.statusGroup != null) Text(if (firstOfGroup) statusGroupLabel(g.statusGroup) else " ", fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
                 Row(Modifier.padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.weight(1f)) { GroupPill(g, groupLabel(g, cfg.groupBy), ViewsLogic.calc(g, cfg.calc)) }
                     if (g.laneId != null && access.canManage) SectionStatusButton(g.laneId, lanes, vm)
@@ -350,21 +363,92 @@ fun BoardView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, acces
                     items(g.tasks, key = { it.id }) { t -> MovableTask(t, lanes, onOpenTask, vm, selected, access, onDuplicateDate) }
                 }
             }
+    }
+}
+
+/**
+ * A status column's ••• menu (web board, Full access): Rename…, Colour, Move left / right within its group,
+ * Status type, Delete status… (its tasks move to another column).
+ */
+@Composable
+private fun SectionStatusButton(laneId: String, lanes: List<Lane>, vm: ProjectDetailViewModel) {
+    val c = Nx.colors
+    val context = LocalContext.current
+    val lane = lanes.firstOrNull { it.id == laneId } ?: return
+    var menu by remember { mutableStateOf<String?>(null) }
+    var dialog by remember { mutableStateOf<String?>(null) }
+    Box {
+        androidx.compose.material3.IconButton(onClick = { menu = "root" }, modifier = Modifier.size(32.dp)) {
+            Icon(Icons.Filled.MoreHoriz, stringResource(R.string.col_options), tint = c.mutedFg, modifier = Modifier.size(18.dp))
+        }
+        DropdownMenu(menu != null, { menu = null }) {
+            if (menu == "colour") StatusOptions.KEYS.forEach { k ->
+                DropdownMenuItem(text = { Text(colorName(k)) }, leadingIcon = { Box(Modifier.size(12.dp).background(StatusOptions.tone(k, false).dot, CircleShape)) },
+                    onClick = { menu = null; vm.colorSection(lane.id, k) })
+            } else {
+                DropdownMenuItem(text = { Text(stringResource(R.string.col_rename)) }, onClick = { menu = null; dialog = "rename" })
+                DropdownMenuItem(text = { Text(stringResource(R.string.col_colour)) }, onClick = { menu = "colour" }, trailingIcon = { Icon(Icons.Filled.KeyboardArrowRight, null) })
+                val across = stringResource(R.string.col_across)
+                DropdownMenuItem(text = { Text(stringResource(R.string.col_left)) }, onClick = { menu = null
+                    if (!vm.moveSection(lane.id, -1)) android.widget.Toast.makeText(context, across, android.widget.Toast.LENGTH_SHORT).show() })
+                DropdownMenuItem(text = { Text(stringResource(R.string.col_right)) }, onClick = { menu = null
+                    if (!vm.moveSection(lane.id, 1)) android.widget.Toast.makeText(context, across, android.widget.Toast.LENGTH_SHORT).show() })
+                DropdownMenuItem(text = { Text(stringResource(R.string.col_status_type)) }, onClick = { menu = null; dialog = "type" })
+                if (lanes.size > 1) {
+                    HorizontalDivider(color = c.border)
+                    DropdownMenuItem(text = { Text(stringResource(R.string.col_delete), color = c.dangerText) }, onClick = { menu = null; dialog = "delete" })
+                }
+            }
+        }
+    }
+    when (dialog) {
+        "rename" -> TextPromptDialog(stringResource(R.string.col_rename_title), lane.name, stringResource(R.string.filter_save), onDismiss = { dialog = null }) { n -> dialog = null; vm.renameSection(lane.id, n) }
+        "type" -> SectionStatusDialog(lane.name, lane.taskStatus, onDismiss = { dialog = null }) { dialog = null; if (it != lane.taskStatus) vm.setSectionStatus(lane.id, it) }
+        "delete" -> {
+            val others = StatusOptions.ordered(lanes).filter { it.id != lane.id }
+            var moveTo by remember { mutableStateOf(others.firstOrNull()?.id) }
+            AlertDialog(onDismissRequest = { dialog = null }, title = { Text(stringResource(R.string.col_delete).trimEnd('…') + " “${lane.name}”") },
+                text = {
+                    Column {
+                        Text(stringResource(R.string.col_moves_to), fontSize = 13.sp, color = c.mutedFg)
+                        others.forEach { o ->
+                            Row(Modifier.fillMaxWidth().clickable { moveTo = o.id }, verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(moveTo == o.id, { moveTo = o.id }); Text(o.name)
+                            }
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { dialog = null; vm.deleteSection(lane.id, moveTo) }) { Text(stringResource(R.string.bulk_delete), color = c.dangerText) } },
+                dismissButton = { TextButton(onClick = { dialog = null }) { Text(stringResource(R.string.cancel)) } })
         }
     }
 }
 
-/** The section's status (DEV-REDESIGN §1), from the column header (Full access). */
+/** "+ Status" after the last column (Full access): pick its group, then its name. */
 @Composable
-private fun SectionStatusButton(laneId: String, lanes: List<Lane>, vm: ProjectDetailViewModel) {
+fun AddStatusColumn(vm: ProjectDetailViewModel) {
     val c = Nx.colors
-    val lane = lanes.firstOrNull { it.id == laneId } ?: return
-    var open by remember { mutableStateOf(false) }
-    androidx.compose.material3.IconButton(onClick = { open = true }, modifier = Modifier.size(32.dp)) {
-        Icon(Icons.Filled.CheckCircle, stringResource(R.string.sec_status), tint = if (lane.taskStatus != null) c.mutedFg else c.mutedFg.copy(alpha = 0.5f), modifier = Modifier.size(16.dp))
+    var group by remember { mutableStateOf<StatusOptions.Group?>(null) }
+    var menu by remember { mutableStateOf(false) }
+    Box {
+        Row(Modifier.width(160.dp).clip(RoundedCornerShape(12.dp)).clickable { menu = true }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Add, null, tint = c.mutedFg, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.col_add_short), fontSize = 14.sp, color = c.mutedFg)
+        }
+        DropdownMenu(menu, { menu = false }) {
+            StatusOptions.Group.entries.forEach { g -> DropdownMenuItem(text = { Text(statusGroupLabel(g)) }, onClick = { menu = false; group = g }) }
+        }
     }
-    if (open) SectionStatusDialog(lane.name, lane.taskStatus, onDismiss = { open = false }) { open = false; if (it != lane.taskStatus) vm.setSectionStatus(lane.id, it) }
+    group?.let { g ->
+        TextPromptDialog(stringResource(R.string.col_new_in, statusGroupLabel(g)), "", stringResource(R.string.add), onDismiss = { group = null }) { n -> group = null; vm.addSection(g, n) }
+    }
 }
+
+@Composable
+fun colorName(k: String): String = stringResource(when (k) {
+    "brown" -> R.string.color_brown; "orange" -> R.string.color_orange; "yellow" -> R.string.color_yellow; "green" -> R.string.color_green
+    "blue" -> R.string.color_blue; "purple" -> R.string.color_purple; "pink" -> R.string.color_pink; "red" -> R.string.color_red; else -> R.string.color_gray
+})
 
 /**
  * The List: one collapsible group per value (chevron + pill + done/total), rows with a done circle, the title
