@@ -239,3 +239,30 @@ export const legalUploadApi = {
     return apiFetch<{ id: string; pdfError: string | null }>("/api/legal/documents/upload", { method: "POST", body: fd });
   },
 };
+
+// ── Review & versions ──
+export type DocParagraph = { index: number; text: string; editable: boolean; lockReason?: "number" | "complex"; style?: string; inTable: boolean };
+export type DiffSegment = { type: "same" | "del" | "ins"; text: string };
+export type ParagraphDiff =
+  | { type: "same"; a: number; b: number; text: string }
+  | { type: "removed"; a: number; text: string }
+  | { type: "added"; b: number; text: string }
+  | { type: "changed"; a: number; b: number; before: string; after: string; segments: DiffSegment[] };
+
+export const legalVersionsApi = {
+  paragraphs: (id: string, version?: number) =>
+    apiFetch<{ version: number; current: number; paragraphs: DocParagraph[] }>(`${docUrl(id)}/paragraphs${version ? `?version=${version}` : ""}`),
+  saveEdits: (id: string, baseVersion: number, edits: { index: number; text: string }[], note: string) =>
+    apiFetch<{ version: number; pdfError: string | null }>(`${docUrl(id)}/versions`, { method: "POST", body: JSON.stringify({ baseVersion, edits, note }) }),
+  uploadVersion: (id: string, baseVersion: number, file: File, note: string, status?: LegalStatus) => {
+    const fd = new FormData();
+    fd.set("file", file);
+    fd.set("baseVersion", String(baseVersion));
+    if (note) fd.set("note", note);
+    if (status) fd.set("status", status);
+    return apiFetch<{ version: number; pdfError: string | null }>(`${docUrl(id)}/versions`, { method: "POST", body: fd });
+  },
+  restore: (id: string, version: number, baseVersion: number) =>
+    apiFetch<{ version: number }>(`${docUrl(id)}/versions/${version}/restore`, { method: "POST", body: JSON.stringify({ baseVersion }) }),
+  compare: (id: string, a: number, b: number) => apiFetch<{ a: number; b: number; diff: ParagraphDiff[] }>(`${docUrl(id)}/compare?a=${a}&b=${b}`),
+};
