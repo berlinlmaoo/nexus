@@ -72,6 +72,9 @@ struct ProjectDetail: Decodable, Sendable {
         var color: String? = nil
         /// The project's own order of its sections. nil from older payloads (they arrive in order).
         var position: Int? = nil
+        /// Tasks other projects linked into this section (taskProjects), shown on the board as read-only
+        /// lanes. Each entry decodes on its own and never fails the project.
+        var taskProjects: [LinkedTaskRef]? = nil
     }
     struct ProjectMember: Decodable, Identifiable, Sendable {
         let userId: String?
@@ -355,4 +358,32 @@ func blockText(_ raw: String?) -> String {
     }
     if let arr = json as? [Any] { arr.forEach(walk) } else { walk(json) }
     return lines.joined(separator: "\n")
+}
+
+/// One task linked into a project from another one (`taskLists[].taskProjects[]`): the task, and the
+/// project it lives in (`task.taskList.projectId` / `.project.name`). Lenient by design — a shape this
+/// app does not know leaves `task` nil instead of failing the whole project payload.
+struct LinkedTaskRef: Decodable, Sendable {
+    let task: BoardTask?
+    let sourceProjectId: String?
+    let sourceProjectName: String?
+
+    private enum Keys: String, CodingKey { case task }
+    private enum TaskKeys: String, CodingKey { case taskList }
+    private struct Source: Decodable {
+        let projectId: String?
+        let project: Project?
+        struct Project: Decodable { let name: String? }
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try? decoder.container(keyedBy: Keys.self)
+        task = (try? c?.decodeIfPresent(BoardTask.self, forKey: .task)) ?? nil
+        var source: Source? = nil
+        if let c, let t = try? c.nestedContainer(keyedBy: TaskKeys.self, forKey: .task) {
+            source = (try? t.decodeIfPresent(Source.self, forKey: .taskList)) ?? nil
+        }
+        sourceProjectId = source?.projectId
+        sourceProjectName = source?.project?.name
+    }
 }

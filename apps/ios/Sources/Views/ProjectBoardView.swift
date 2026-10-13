@@ -1102,6 +1102,11 @@ struct ProjectDetailView: View {
                 // vertically (see LaneColumn), so the board never pans in two directions at once.
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 12) {
+                        // Tasks other projects linked in: read-only lanes first, as on the web (grouped by
+                        // section only — a board grouped by another property has nowhere to put them).
+                        if !grouped {
+                            ForEach(linkedLanes(detail)) { lane in linkedColumn(lane, groupRow: statusStyle) }
+                        }
                         ForEach(Array(shown.enumerated()), id: \.element.id) { i, lane in
                             laneColumn(lane, at: i, in: shown, statusStyle: statusStyle, grouped: grouped)
                         }
@@ -1117,6 +1122,44 @@ struct ProjectDetailView: View {
                            actionTitle: T("Project settings"), actionIcon: "gearshape") { showSettings = true }
             }
         }
+    }
+
+    /// The tasks other projects linked into this one, one lane per source project, unfinished first (web
+    /// linkedLanes). A task of this very project linked back into it is not repeated.
+    private func linkedLanes(_ detail: ProjectDetail) -> [ProjectDetail.Lane] {
+        var order: [String] = []
+        var bySource: [String: (name: String, tasks: [BoardTask])] = [:]
+        for list in detail.taskLists ?? [] {
+            for link in list.taskProjects ?? [] {
+                guard let task = link.task else { continue }
+                let source = link.sourceProjectId ?? "linked"
+                if source == projectId { continue }
+                var group = bySource[source] ?? (name: link.sourceProjectName ?? T("Another project"), tasks: [BoardTask]())
+                if !group.tasks.contains(where: { $0.id == task.id }) { group.tasks.append(task) }
+                if bySource[source] == nil { order.append(source) }
+                bySource[source] = group
+            }
+        }
+        return order.compactMap { id in
+            guard let g = bySource[id] else { return nil }
+            let tasks = g.tasks.filter { !$0.isDone } + g.tasks.filter { $0.isDone }
+            return ProjectDetail.Lane(id: "linked:\(id)", name: g.name, tasks: tasks)
+        }
+    }
+
+    /// A linked lane: cards open their task, nothing is added, moved or dropped here.
+    private func linkedColumn(_ lane: ProjectDetail.Lane, groupRow: Bool) -> LaneColumn {
+        LaneColumn(
+            lane: lane, allLanes: [lane], selection: selection,
+            onOpen: { id in open(id) },
+            onAddTask: { _, _ in nil },
+            onDrop: { _, _ in },
+            onMoveTo: { _, _ in },
+            canAdd: false,
+            canEdit: false,
+            linked: true,
+            groupRow: groupRow
+        )
     }
 
     /// One column, built outside the ForEach so the type checker sees one plain call.
@@ -1654,6 +1697,13 @@ struct LaneColumn: View {
     /// Can edit or more (access levels round 2): false = cards open, but nothing drags, drops, moves or
     /// gets selected.
     var canEdit = true
+    /// Tasks another project linked into this one (server taskLists[].taskProjects): a read-only lane
+    /// named after the source project, with a "Linked" tag and a dashed outline — the web board's
+    /// linked lanes, drawn first (UI tour run 5).
+    var linked = false
+    /// Draw the group-label row even when this column is not a status column, so a linked lane lines up
+    /// with status columns beside it.
+    var groupRow = false
     @State private var composing = false
     /// True while a card is hovering over this column, so the target is obvious before you let go.
     @State private var dropTargeted = false
@@ -1669,7 +1719,7 @@ struct LaneColumn: View {
         // A FIXED column header above a per-column vertical scroll (one axis each; the board's
         // horizontal scroll is the parent's). Proven on device; no lazy stack in a two-way scroll.
         VStack(alignment: .leading, spacing: 4) {
-            if statusStyle {
+            if statusStyle || groupRow {
                 Text(groupLabel ?? " ").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg).padding(.leading, 6)
             }
             VStack(alignment: .leading, spacing: 10) {
@@ -1704,10 +1754,11 @@ struct LaneColumn: View {
             }
             .padding(10)
             .frame(maxHeight: .infinity, alignment: .top)
-            .background(statusStyle ? lane.swatch.lane : NX.card.opacity(0.6), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(linked ? Color.clear : (statusStyle ? lane.swatch.lane : NX.card.opacity(0.6)), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(dropTargeted ? NX.violet : (statusStyle ? Color.clear : NX.border), lineWidth: dropTargeted ? 2 : 1)
+                    .strokeBorder(dropTargeted ? NX.violet : (statusStyle && !linked ? Color.clear : NX.border),
+                                  style: StrokeStyle(lineWidth: dropTargeted ? 2 : 1, dash: linked ? [5, 4] : []))
             )
             // The whole column is the target, not just the gap under the last card.
             .dropDestination(for: String.self) { ids, _ in
@@ -1728,6 +1779,12 @@ struct LaneColumn: View {
                 StatusPill(name: lane.name, colorKey: lane.colorKey, size: 13)
             } else {
                 Text(lane.name).font(NXFont.display(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                if linked {
+                    Text(T("Linked")).font(NXFont.text(11, .medium)).foregroundStyle(NX.mutedFg)
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .background(NX.muted, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        .fixedSize()
+                }
                 if let status = lane.taskStatus {
                     Text(TaskStatusName.label(status)).font(NXFont.text(10, .semibold)).foregroundStyle(NX.violetText)
                         .padding(.horizontal, 6).padding(.vertical, 2)
