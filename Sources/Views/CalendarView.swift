@@ -1494,8 +1494,11 @@ struct CalendarView: View {
                 if let tag { relativeTag(tag) }
             } else {
                 HStack(spacing: 8) {
-                    date
-                    if let tag { relativeTag(tag) }
+                    // One line, shrinking a little before it wraps: in the Mac's day rail the date broke
+                    // into three lines with the comma starting the second ("Wednesday / , 14 Oct /
+                    // 2026", UI tour run 4). The web keeps it on one line beside TODAY.
+                    date.lineLimit(1).minimumScaleFactor(0.7)
+                    if let tag { relativeTag(tag).fixedSize() }
                 }
             }
             if let holiday { Text(holiday).font(NXFont.text(CalType.size(12), .semibold)).foregroundStyle(CalTone.overdue) }

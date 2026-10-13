@@ -185,6 +185,10 @@ struct Podium: View {
         HStack(alignment: .bottom, spacing: 10) {
             ForEach(slots, id: \.rank) { slot in podium(slot.rank, slot.row) }
         }
+        // The web's podium is a centred block about 440 wide; on a Mac or iPad page the three steps
+        // stretched into wide yellow slabs across the whole page (UI tour run 4). A phone is narrower.
+        .frame(maxWidth: 440)
+        .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
     }
     private func podium(_ rank: Int, _ row: LeaderboardRow?) -> some View {
