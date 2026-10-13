@@ -44,7 +44,26 @@ struct Complaint: Decodable, Identifiable, Sendable {
     /// GIDEON answering ANNOTATES a ticket, it does not hand it to anybody.
     var isUnclaimed: Bool { statusKey == "OPEN" || statusKey == "AWAITING_DECISION" }
     var awaitsDecision: Bool { pendingCorrection == true }
+    /// The "In review" queue, as the server builds it (GET /api/complaints?status=IN_REVIEW,…, QA 13 Oct
+    /// 2026): taken on, answered by GIDEON, or closed / resolved while an attendance-fix proposal still
+    /// waits for Approve / Reject. The iPhone counted 8 where the web said 10 (UI tour 13 Oct 2026).
+    var inReviewQueue: Bool {
+        statusKey == "IN_REVIEW" || statusKey == "AWAITING_DECISION"
+            || ((statusKey == "CLOSED" || statusKey == "RESOLVED") && awaitsDecision)
+    }
     var hasGideonReply: Bool { gideonReplied == true }
+}
+
+/// A ticket's category as the web's list names it (complaints.tsx CATEGORIES): "XP", not humanizeEnum's
+/// "Exp"; "Leave / day off", not "Day Off" (UI tour 13 Oct 2026). Unknown keys fall back to humanizeEnum.
+func ticketCategoryName(_ key: String) -> String {
+    switch key.uppercased() {
+    case "ATTENDANCE": return T("Attendance")
+    case "EXP": return T("XP")
+    case "DAY_OFF": return T("Leave / day off")
+    case "OTHER": return T("Other")
+    default: return humanizeEnum(key)
+    }
 }
 
 // Free functions rather than members of `Complaint`, because the detail sheet has to draw the same
@@ -61,12 +80,15 @@ func ticketStatusLabel(_ key: String) -> String {
 }
 func ticketStatusTone(_ key: String) -> ChipTone {
     switch key {
+    // The web's colours (complaints.tsx STATUS): Open amber, In review sky, Resolved green
+    // (UI tour 13 Oct 2026: the iPhone had In review amber and Open red).
     case "RESOLVED": return .success
-    case "IN_REVIEW": return .warning
+    case "IN_REVIEW": return .info
     // Violet, the colour the web gives it, and its own case rather than OPEN's red on the way to
     // `default`: the ticket HAS been answered, it just is not anybody's yet. Red said "untouched".
     case "AWAITING_DECISION": return .accent
     case "CLOSED": return .neutral
+    case "OPEN": return .warning
     default: return .danger
     }
 }
@@ -251,7 +273,7 @@ struct TicketsView: View {
         switch f {
         case "ALL": return items.count
         case "OPEN": return items.filter { $0.statusKey == "OPEN" }.count
-        case "IN_REVIEW": return items.filter { $0.statusKey == "IN_REVIEW" || $0.statusKey == "AWAITING_DECISION" }.count
+        case "IN_REVIEW": return items.filter(\.inReviewQueue).count
         default: return items.filter { $0.statusKey == f }.count
         }
     }
@@ -280,7 +302,7 @@ struct TicketsView: View {
         switch filter {
         case "ALL": return items
         case "OPEN": return items.filter { $0.statusKey == "OPEN" }
-        case "IN_REVIEW": return items.filter { $0.statusKey == "IN_REVIEW" || $0.statusKey == "AWAITING_DECISION" }
+        case "IN_REVIEW": return items.filter(\.inReviewQueue)
         default: return items.filter { $0.statusKey == filter }
         }
     }
@@ -387,7 +409,7 @@ struct TicketsView: View {
             markers(t)
             HStack(spacing: 8) {
                 if let c = t.category, !c.isEmpty {
-                    NexusChip(text: humanizeEnum(c), tone: .accent, systemImage: "tag.fill")
+                    NexusChip(text: ticketCategoryName(c), tone: .accent, systemImage: "tag.fill")
                 }
                 if let n = t.reporter?.name, !n.isEmpty {
                     Label(n, systemImage: "person.fill").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
@@ -606,7 +628,7 @@ struct TicketDetailSheet: View {
                         }
                         HStack(spacing: 8) {
                             if let c = ticket.category, !c.isEmpty {
-                                NexusChip(text: humanizeEnum(c), tone: .accent, systemImage: "tag.fill")
+                                NexusChip(text: ticketCategoryName(c), tone: .accent, systemImage: "tag.fill")
                             }
                             if let d = ProjDate.parse(ticket.createdAt) {
                                 Text(ProjDate.longLabel(d)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)

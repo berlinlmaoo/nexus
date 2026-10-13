@@ -61,6 +61,9 @@ struct InboxView: View {
         }
         .sheet(item: $openSubmission) { SubmissionDetailSheet(submissionId: $0.id, preview: $0.preview) }
         .navigationTitle(T("Notifications"))
+        // Inline, like Messages / Tickets / Threads. With the default large title the iPhone (iOS 26+ bar)
+        // drew an empty band that covered the filter tabs: only their underline showed (UI tour 13 Oct 2026).
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { Task { await markAll() } } label: { Label(T("Mark all"), systemImage: "checkmark.circle") }

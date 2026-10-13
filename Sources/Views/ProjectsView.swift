@@ -107,6 +107,9 @@ struct ProjectsView: View {
                 }
             }
             .navigationTitle(T("Projects"))
+            // Inline, like the other tab roots (Chat, Calendar). The default large title left an empty band
+            // with no "Projects" in it above the search field on the iPhone (UI tour 13 Oct 2026).
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {

@@ -690,6 +690,9 @@ final class GideonChat {
     private(set) var chatId: String?
     private(set) var chatTitle: String?
     private var startNew = false
+    /// Bumped whenever a conversation is picked (new chat, a chat from the list): a history read started
+    /// before the pick must not land after it. See `refresh()`.
+    @ObservationIgnored private var pickEpoch = 0
     /// The assistant turn being answered right now: its steps show live and it has no Copy / Save yet.
     private(set) var answeringId: String?
     /// What every question carries as `context`: the page it was opened on (unless its chip was removed)
@@ -754,7 +757,15 @@ final class GideonChat {
     /// somebody opened the panel out of signal.
     func refresh() async {
         guard !sending, outbox.isEmpty, !startNew else { return }
-        guard let fresh = try? await GideonClient.history(chatId: chatId) else { return }
+        // The read takes a moment, and the panel may decide what it opens on meanwhile: the GIDEON page
+        // asks for a new chat on appear, and on the phone that landed AFTER this read had passed the
+        // guard, so the latest old conversation was drawn over the fresh one (UI tour 13 Oct 2026: the
+        // iPhone opened on "task disini …"). Anything that picks a conversation bumps `pickEpoch`, and
+        // an answer for a pick that is no longer current is dropped.
+        let epoch = pickEpoch
+        let asked = chatId
+        guard let fresh = try? await GideonClient.history(chatId: asked) else { return }
+        guard epoch == pickEpoch, chatId == asked, !sending, outbox.isEmpty, !startNew else { return }
         turns = fresh.turns
         if chatId == nil { chatId = fresh.chatId }
         chatTitle = fresh.title ?? chatTitle
@@ -768,6 +779,7 @@ final class GideonChat {
     /// swapped `context` under the running conversation here, which is how a follow-up "task disini"
     /// landed on a different project than the thread was about (owner, 13 Oct 2026).
     func startChat(page: GideonContext? = nil) {
+        pickEpoch += 1
         if sending || !outbox.isEmpty { abandonInFlight() }
         turns = []
         chatId = nil
@@ -845,6 +857,7 @@ final class GideonChat {
     /// Try again (web QA 13 Oct 2026: it used to open as an empty new chat, hiding the failure).
     func openChat(_ id: String) async {
         guard !sending else { return }
+        pickEpoch += 1
         error = nil
         retryAction = nil
         do {
@@ -1087,6 +1100,7 @@ final class GideonChat {
     /// write itself into the transcript the next person sees.
     func reset() {
         generation += 1
+        pickEpoch += 1
         drainTask?.cancel()
         drainTask = nil
         outbox.removeAll()

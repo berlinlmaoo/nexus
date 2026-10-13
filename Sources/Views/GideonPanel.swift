@@ -527,6 +527,10 @@ struct GideonPanel: View {
                 Task { try? await Task.sleep(for: .milliseconds(350)); toBottom(proxy) }
             }
             .task {
+                // Decide what this panel opens on BEFORE reading history. The `.onAppear` that also does it
+                // sits on the outer view, and on the phone this inner task ran first, so the read below
+                // still saw the old conversation (UI tour 13 Oct 2026). openOnce runs once per view.
+                openOnce()
                 // Every open, not only the first. The thread lives on the server, so this picks up
                 // whatever was said on the web — and it is what swaps a just-sent attachment's
                 // bytes for the url the server kept, once there is one. `refresh` leaves the
