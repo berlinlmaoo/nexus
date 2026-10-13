@@ -195,7 +195,12 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
     for (const url of localUrls.current) URL.revokeObjectURL(url);
     localUrls.current = [];
   }, []);
-  useEffect(() => { inputRef.current?.focus(); }, [pageContext?.projectId, chatId, fresh]);
+  // Focus the composer on a keyboard-and-pointer device only. On a phone it raised the keyboard the
+  // moment GIDEON opened, covering the suggestions under it (UI tour run 5, Safari on iPhone).
+  useEffect(() => {
+    if (window.matchMedia?.("(pointer: coarse)").matches) return;
+    inputRef.current?.focus();
+  }, [pageContext?.projectId, chatId, fresh]);
   useEffect(() => {
     if (prefs) return;
     getGideonPrefs().then(setCachedGideonPrefs).catch(() => undefined);

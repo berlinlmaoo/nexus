@@ -82,6 +82,13 @@ function RoomBooking() {
   // month still shows its full history, and future months have no past days anyway.
   const now = new Date();
   const hidePast = viewMonth.getFullYear() === now.getFullYear() && viewMonth.getMonth() === now.getMonth();
+  // The elapsed days of this month stay one tap away. Hidden without a word, a month whose only booking
+  // was yesterday read "Nothing booked in October" while the app listed it (UI tour run 5).
+  const [showEarlier, setShowEarlier] = useState(false);
+  useEffect(() => { setShowEarlier(false); }, [viewMonth]);
+  const earlierCount = hidePast
+    ? (bookingsQ.data?.bookings ?? []).filter((b) => dayKey(new Date(b.startsAt)) < todayKey).length
+    : 0;
   const agenda = useMemo(() => {
     const map = new Map<string, NexusRoomBooking[]>();
     for (const b of bookingsQ.data?.bookings ?? []) {
@@ -90,10 +97,10 @@ function RoomBooking() {
       map.get(k)!.push(b);
     }
     return Array.from(map.entries())
-      .filter(([k]) => !hidePast || k >= todayKey || k === targetKey)
+      .filter(([k]) => !hidePast || showEarlier || k >= todayKey || k === targetKey)
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([k, items]) => [k, items.sort((x, y) => new Date(x.startsAt).getTime() - new Date(y.startsAt).getTime())] as const);
-  }, [bookingsQ.data, hidePast, todayKey, targetKey]);
+  }, [bookingsQ.data, hidePast, showEarlier, todayKey, targetKey]);
 
   // Scroll the linked booking into view once it is on screen, then let the highlight fade.
   const [flashId, setFlashId] = useState<string | null>(null);
@@ -145,8 +152,13 @@ function RoomBooking() {
 
         {bookingsQ.isLoading && <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
         {bookingsQ.isError && <EmptyState icon={AlertTriangle} tone="muted" title={t("Couldn't load bookings")} message={t("Your session may have ended. Sign in again, then try again. If it keeps happening, tell your admin.")} />}
+        {!bookingsQ.isLoading && !bookingsQ.isError && earlierCount > 0 && !showEarlier && (
+          <button onClick={() => setShowEarlier(true)} className="mb-4 inline-flex h-9 items-center rounded-md border border-border px-3 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:h-7">
+            {tn(earlierCount, "Show {n} earlier booking this month", "Show {n} earlier bookings this month")}
+          </button>
+        )}
         {!bookingsQ.isLoading && !bookingsQ.isError && agenda.length === 0 && (
-          <EmptyState icon={CalendarDays} title={t("Nothing booked in {month}", { month: viewMonth.toLocaleDateString(locale, { month: "long" }) })}
+          <EmptyState icon={CalendarDays} title={t(earlierCount > 0 && !showEarlier ? "Nothing else booked in {month}" : "Nothing booked in {month}", { month: viewMonth.toLocaleDateString(locale, { month: "long" }) })}
             message={t("Book meeting rooms here so two teams never turn up for the same room. Pick a room, a date and a time.")}
             action={<EmptyAction onClick={() => setComposer({ date: todayKey })}>{t("New booking")}</EmptyAction>} />
         )}
