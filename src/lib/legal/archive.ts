@@ -3,7 +3,7 @@ import type { Prisma } from "@/generated/prisma/client"
 import { dateFromDay, documentListInclude, serializeDocumentSummary } from "@/lib/legal/documents"
 import { isLegalDocType, isLegalStatus } from "@/lib/legal/rules"
 import type { LegalActor } from "@/lib/legal/access"
-import { redactLinks } from "@/lib/legal/links"
+import { linkProblem, redactLinks } from "@/lib/legal/links"
 
 // The Legal archive (owner, 14 Oct 2026): every legal document, generated here or uploaded, searchable by
 // number, company, counterparty, type, title, date, status and its project / Pipeline deal.
@@ -52,6 +52,11 @@ export async function listDocuments(actor: LegalActor, sp: URLSearchParams) {
   const where = archiveWhere(sp)
   const limit = Math.min(Math.max(Number(sp.get("limit")) || 50, 1), 200)
   const page = Math.max(Number(sp.get("page")) || 1, 1)
+  // Filtering by a project or deal the viewer can't open would tell them which documents are linked to it,
+  // which redactLinks hides on every row. Such a filter matches nothing.
+  if (await linkProblem(actor, sp.get("projectId") || null, sp.get("dealId") || null)) {
+    return { documents: [], total: 0, page, pageSize: limit }
+  }
   const sort = sp.get("sort")
   const orderBy: Prisma.LegalDocumentOrderByWithRelationInput[] =
     sort === "created" ? [{ createdAt: "desc" }] : sort === "number" ? [{ number: "asc" }] : [{ docDate: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }]
