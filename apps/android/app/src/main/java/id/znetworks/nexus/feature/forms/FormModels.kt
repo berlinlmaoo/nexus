@@ -63,13 +63,32 @@ data class Submission(
     val procStatus: String? = null,
     val proofs: List<Proof> = emptyList(),
     val answers: List<Answer> = emptyList(),
+    // My Submissions board (web, 12 Oct 2026): the column it sits in and what the card shows.
+    val projectId: String? = null,
+    val column: SubmissionColumn? = null,
+    /** "finance" | "multimedia" | …: the filter chips. */
+    val kind: String? = null,
+    val amount: Long? = null,
+    val category: String? = null,
+    val date: String? = null,
+    val handlers: List<SubmissionPerson> = emptyList(),
+    val needsAction: Boolean = false,
+    val commentCount: Int = 0,
 )
+
+/** A board column: the target project's status option (name, colour, To-do / In progress / Complete group). */
+@Serializable
+data class SubmissionColumn(val key: String, val name: String = "", val color: String? = null, val group: String = "todo",
+                            val taskStatus: String? = null, val projectIds: List<String>? = null)
+
+@Serializable
+data class SubmissionPerson(val id: String? = null, val name: String? = null, val avatar: String? = null)
 
 @Serializable
 data class Answer(val id: String? = null, val label: String? = null, val type: String? = null, val value: JsonElement? = null)
 
 @Serializable
-data class Submissions(val submissions: List<Submission> = emptyList(), val statusColumns: List<String> = emptyList())
+data class Submissions(val submissions: List<Submission> = emptyList(), val statusColumns: List<String> = emptyList(), val columns: List<SubmissionColumn> = emptyList())
 
 @Serializable
 data class SubmitResult(val task: SubmitTask? = null)

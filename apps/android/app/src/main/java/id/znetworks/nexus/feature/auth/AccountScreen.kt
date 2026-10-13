@@ -1,5 +1,11 @@
 package id.znetworks.nexus.feature.auth
 
+import androidx.compose.material.icons.outlined.Power
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Group
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.filled.DevicesOther
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.TabletAndroid
@@ -192,7 +198,12 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
 }
 
 /** Settings' sections (web settings.tsx), as underline tabs on the phone. */
-internal enum class SettingsTab(val label: Int) { PROFILE(R.string.st_tab_profile), SECURITY(R.string.st_tab_security), APPEARANCE(R.string.st_tab_appearance), MEMBERS(R.string.st_tab_members) }
+internal enum class SettingsTab(val label: Int, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    // Web / iOS order and icons (14 Oct 2026): Notifications and Claude (MCP) were missing.
+    PROFILE(R.string.st_tab_profile, Icons.Outlined.Person), MEMBERS(R.string.st_tab_members, Icons.Outlined.Group),
+    NOTIFICATIONS(R.string.st_tab_notifications, Icons.Outlined.Notifications), SECURITY(R.string.st_tab_security, Icons.Outlined.Lock),
+    APPEARANCE(R.string.st_tab_appearance, Icons.Outlined.Palette), MCP(R.string.st_tab_mcp, Icons.Outlined.Power),
+}
 
 @Composable
 fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, onLogout: () -> Unit = {}, onDeleteAccount: () -> Unit = {}, vm: AccountViewModel = viewModel()) {
@@ -202,7 +213,7 @@ fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, onLo
     var tab by rememberSaveable { mutableStateOf(SettingsTab.PROFILE) }
     Column(Modifier.fillMaxSize().background(c.background)) {
         PageHeader(stringResource(R.string.nav_settings), subtitle = stringResource(R.string.sub_settings), onBack = onBack,
-            tabs = { PageTabs(SettingsTab.entries.map { PageTab(it, stringResource(it.label)) }, tab, { tab = it }) }) {
+            tabs = { PageTabs(SettingsTab.entries.map { PageTab(it, stringResource(it.label), icon = it.icon) }, tab, { tab = it }) }) {
             if (s.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -211,6 +222,8 @@ fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, onLo
                 SettingsTab.PROFILE -> {
                     ProfileCard()
                     EmailBlock(s, vm)
+                    // The web and iOS show the Password card under Profile too (Security keeps it, with passkeys and sessions).
+                    PasswordBlock(s, vm)
                     // Logout, then Delete set apart below it, so the permanent action is never where a thumb lands by habit (iOS).
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(12.dp))
                         .clickable(onClick = onLogout).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -238,6 +251,8 @@ fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, onLo
                     OfflineCard()
                 }
                 SettingsTab.MEMBERS -> WorkspaceMembersCard(onOpenProfile)
+                SettingsTab.NOTIFICATIONS -> NotificationsSettingsCard()
+                SettingsTab.MCP -> ClaudeMcpCard()
             }
             val identity = (context.applicationContext as NexusApplication).container.identity
             // The live connection (ANDROID-REALTIME): connected / reconnecting / off.

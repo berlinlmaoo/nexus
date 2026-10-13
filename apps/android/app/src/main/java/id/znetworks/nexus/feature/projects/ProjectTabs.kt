@@ -1,5 +1,8 @@
 package id.znetworks.nexus.feature.projects
 
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -223,12 +226,15 @@ fun CalendarTab(tasks: List<BoardTask>, onOpen: (String) -> Unit, plot: Calendar
                 }
             }
         }
+        val today = OfficeTime.today()
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { offset--; selected = null }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null) }
             Text(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()).format(month).replaceFirstChar(Char::titlecase),
                 fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground, modifier = Modifier.weight(1f),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             IconButton(onClick = { offset++; selected = null }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) }
+            // "Today" (web): back to this month with today picked.
+            id.znetworks.nexus.ui.components.NxButton(stringResource(R.string.cal_today), { offset = 0; selected = today.dayOfMonth }, compact = true)
         }
         Row {
             DayOfWeek.entries.forEach { d ->
@@ -245,9 +251,11 @@ fun CalendarTab(tasks: List<BoardTask>, onOpen: (String) -> Unit, plot: Calendar
                         if (day != null) {
                             val on = selected == day
                             val has = byDay[day].orEmpty().isNotEmpty()
+                            val isToday = month == YearMonth.from(today) && day == today.dayOfMonth
                             Column(
                                 Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp))
                                     .background(if (on) c.violet else if (has) c.violet.copy(alpha = 0.08f) else Color.Transparent)
+                                    .then(if (isToday && !on) Modifier.border(1.5.dp, c.foreground, RoundedCornerShape(10.dp)) else Modifier)
                                     .clickable { selected = day },
                                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
                             ) {
@@ -273,6 +281,29 @@ fun CalendarTab(tasks: List<BoardTask>, onOpen: (String) -> Unit, plot: Calendar
             if (items.isEmpty()) Text(stringResource(R.string.pt_cal_none), fontSize = 12.sp, color = c.mutedFg)
             items.forEach { t -> TaskCard(t, onClick = { onOpen(t.id) }) }
         }
+        // Tasks without a date (web "No date · n"): every one as a chip that opens it, under the month.
+        val undated = remember(tasks, plot.fieldId) { tasks.filter { TemplateLogic.plotDate(it, plot.fieldId) == null } }
+        if (undated.isNotEmpty()) UndatedChips(undated, onOpen)
+    }
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun UndatedChips(undated: List<BoardTask>, onOpen: (String) -> Unit) {
+    val c = Nx.colors
+    val shape = RoundedCornerShape(10.dp)
+    Column(Modifier.fillMaxWidth().drawBehind {
+        drawRoundRect(c.border, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(10.dp.toPx()))
+    }.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(R.string.pt_cal_no_date, undated.size), fontSize = 12.sp, color = c.mutedFg)
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            undated.forEach { t ->
+                Text(t.title.ifBlank { "—" }, fontSize = 13.sp, color = c.foreground, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 220.dp).clip(shape).border(1.dp, c.border, shape).background(c.card).clickable { onOpen(t.id) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp))
+            }
+        }
     }
 }
 
@@ -297,14 +328,17 @@ private fun ganttColor(p: String?) = when (p.orEmpty().uppercase()) {
 fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) -> Unit) {
     val c = Nx.colors
     val today = OfficeTime.today()
-    val rowsByGroup = groups.map { (name, ts) ->
+    // Every group, empty ones too, each collapsible (web phone timeline: "To Do" shows with nothing under it).
+    var collapsed by rememberSaveable { mutableStateOf(setOf<String>()) }
+    val allRows = groups.map { (name, ts) ->
         name to ts.map { it to BoardLogic.windowOrNull(it) }.sortedWith(compareBy(nullsLast()) { it.second?.start })
-    }.filter { it.second.isNotEmpty() }
-    if (rowsByGroup.isEmpty()) {
+    }
+    val rowsByGroup = allRows.map { (name, rows) -> name to if (name in collapsed) emptyList() else rows }
+    if (allRows.all { it.second.isEmpty() }) {
         EmptyState(Icons.Filled.TrackChanges, stringResource(R.string.tl_empty), stringResource(R.string.tl_empty_sub), stringResource(R.string.pt_add_task), {}, Modifier.fillMaxSize())
         return
     }
-    val wins = rowsByGroup.flatMap { g -> g.second.mapNotNull { it.second } }
+    val wins = allRows.flatMap { g -> g.second.mapNotNull { it.second } }
     val minD = (wins.minOfOrNull { it.start }?.let { minOf(it, today) } ?: today).minusDays(2)
     val maxD = (wins.maxOfOrNull { it.end }?.let { maxOf(it, today) } ?: today.plusDays(14)).plusDays(3)
     val dayCount = ChronoUnit.DAYS.between(minD, maxD).toInt() + 1
@@ -324,13 +358,21 @@ fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) ->
                 Text(stringResource(R.string.pp_col_name), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.mutedFg)
             }
             rowsByGroup.forEach { (name, rows) ->
-                Box(Modifier.height(groupH).fillMaxWidth().background(c.muted.copy(alpha = 0.4f)).padding(start = 12.dp), contentAlignment = Alignment.CenterStart) {
-                    Text(name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(Modifier.height(groupH).fillMaxWidth().background(c.muted.copy(alpha = 0.4f))
+                    .clickable { collapsed = if (name in collapsed) collapsed - name else collapsed + name }.padding(start = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(if (name in collapsed) Icons.AutoMirrored.Filled.KeyboardArrowRight else Icons.Filled.KeyboardArrowDown, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 rows.forEach { (t, _) ->
                     // The name opens the task too: the bar may be weeks off to the right.
-                    Box(Modifier.height(rowH).fillMaxWidth().clickable { onOpen(t.id) }.padding(start = if (t.isSubtask) 20.dp else 12.dp, end = 6.dp), contentAlignment = Alignment.CenterStart) {
-                        Text((if (t.isSubtask) "↳ " else "") + t.title, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    Row(Modifier.height(rowH).fillMaxWidth().clickable { onOpen(t.id) }.padding(start = if (t.isSubtask) 24.dp else 10.dp, end = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(if (t.isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null,
+                            tint = if (t.isDone) c.foreground else c.mutedFg.copy(alpha = 0.45f), modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text((if (t.isSubtask) "↳ " else "") + t.title, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             color = if (t.isDone) c.mutedFg else c.foreground, textDecoration = if (t.isDone) TextDecoration.LineThrough else null)
                     }
                 }
@@ -366,9 +408,8 @@ fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) ->
                         Box(Modifier.height(groupH).fillMaxWidth().background(c.muted.copy(alpha = 0.4f)))
                         rows.forEach { (t, win) ->
                             Box(Modifier.height(rowH).fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
-                                if (win == null) {
-                                    Text(stringResource(R.string.tl_no_date), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.offset(x = x(today) + 8.dp))
-                                } else Row(
+                                // An undated row stays empty (web phone); "No date" was drawn across the today line.
+                                if (win != null) Row(
                                     Modifier.offset(x = x(win.start) + 2.dp).width(maxOf(w(win) - 4.dp, dayW * 0.8f)).height(32.dp).clip(RoundedCornerShape(8.dp))
                                         .background(ganttColor(t.priority)).clickable { onOpen(t.id) }.padding(horizontal = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,

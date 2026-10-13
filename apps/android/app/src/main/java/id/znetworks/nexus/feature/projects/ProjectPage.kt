@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.projects
 
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -246,8 +248,13 @@ fun viewLabel(v: ProjectView): String = ViewsLogic.name(v) ?: when {
 fun ProjectTabRow(items: List<PageTabItem>, selected: PageTabItem?, canAddView: Boolean, onSelect: (PageTabItem) -> Unit, onViewMenu: (ProjectView) -> Unit, onAddView: () -> Unit,
                   onAdd: (() -> Unit)? = null) {
     val c = Nx.colors
+    // The open tab is scrolled into view (it sat clipped under "Add task" on List / Table / Calendar / Timeline).
+    val scroll = rememberScrollState()
+    var selectedX by remember { mutableStateOf<Int?>(null) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    LaunchedEffect(selected, selectedX) { selectedX?.let { scroll.animateScrollTo((it - with(density) { 48.dp.roundToPx() }).coerceAtLeast(0)) } }
     Row(Modifier.fillMaxWidth().padding(end = if (onAdd != null) 12.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
-    Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 4.dp),
+    Row(Modifier.weight(1f).horizontalScroll(scroll).padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
         var dividerDrawn = false
         items.forEach { item ->
@@ -257,6 +264,7 @@ fun ProjectTabRow(items: List<PageTabItem>, selected: PageTabItem?, canAddView: 
                 dividerDrawn = true
             }
             val on = item == selected
+            Box(if (on) Modifier.onGloballyPositioned { selectedX = it.positionInParent().x.toInt() } else Modifier) {
             when (item) {
                 PageTabItem.Overview -> TabChip(Icons.Outlined.Dashboard, stringResource(R.string.ptab_overview), on, { onSelect(item) })
                 is PageTabItem.View -> TabChip(layoutIcon(ViewsLogic.layoutOf(item.view)), viewLabel(item.view), on, { onSelect(item) },
@@ -264,6 +272,7 @@ fun ProjectTabRow(items: List<PageTabItem>, selected: PageTabItem?, canAddView: 
                 // Module tabs that are not open show their icon only (web).
                 is PageTabItem.Module -> TabChip(moduleIcon(item.tab), if (on) stringResource(item.tab.label) else null, on, { onSelect(item) },
                     description = stringResource(item.tab.label))
+            }
             }
         }
         if (!dividerDrawn && canAddView) TabChip(Icons.Filled.Add, null, on = false, onClick = onAddView, description = stringResource(R.string.view_add))

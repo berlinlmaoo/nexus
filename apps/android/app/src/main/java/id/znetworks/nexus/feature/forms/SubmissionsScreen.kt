@@ -1,5 +1,8 @@
 package id.znetworks.nexus.feature.forms
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.filled.Add
 import kotlinx.coroutines.launch
 import androidx.lifecycle.repeatOnLifecycle
@@ -106,43 +109,118 @@ fun SubmissionsScreen(onBack: () -> Unit, onOpen: (String) -> Unit, onOpenForms:
     }
 }
 
-/** The board itself: the read-only chip, then the columns side by side. */
+/**
+ * The board like the web (submissions.tsx, 12 Oct 2026): filter chips (All · Finance · Multimedia · project ▾ ·
+ * Needs my action), "Read-only. The team moves the cards.", then the target projects' status options as columns
+ * grouped To-do / In progress / Complete in their colours; an older server's plain status names still work.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun SubmissionBoardView(d: Submissions, onOpen: (String) -> Unit) {
     val c = Nx.colors
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("submissions", android.content.Context.MODE_PRIVATE) }
+    var kind by rememberSaveable { mutableStateOf<String?>(null) }
+    var mine by rememberSaveable { mutableStateOf(false) }
+    // The project filter is remembered on this device (web localStorage nx-submissions-project).
+    var project by remember { mutableStateOf(prefs.getString("project", null)) }
+    fun pickProject(id: String?) { project = id; prefs.edit().apply { if (id == null) remove("project") else putString("project", id) }.apply() }
+    val newCol = stringResource(R.string.sub_col_new)
+    val board = SubmissionBoard.board(d, kind, project, mine, newCol)
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.padding(start = 16.dp, top = 8.dp).background(c.muted.copy(alpha = 0.5f), CircleShape).padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Lock, null, tint = c.mutedFg, modifier = Modifier.size(11.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(stringResource(R.string.sub_read_only), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
+        androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+            FilterPill(stringResource(R.string.sub_f_all), kind == null) { kind = null }
+            if ("finance" in board.kinds) FilterPill(stringResource(R.string.sub_f_finance), kind == "finance") { kind = "finance" }
+            if ("multimedia" in board.kinds) FilterPill(stringResource(R.string.sub_f_multimedia), kind == "multimedia") { kind = "multimedia" }
+            if (board.projects.isNotEmpty()) Box {
+                var open by remember { mutableStateOf(false) }
+                FilterPill((board.projects.firstOrNull { it.id == board.project }?.name ?: stringResource(R.string.sub_f_all_projects)) + " ▾", board.project != null) { open = true }
+                androidx.compose.material3.DropdownMenu(open, { open = false }) {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.sub_f_all_projects)) }, onClick = { open = false; pickProject(null) },
+                        leadingIcon = { if (board.project == null) Icon(Icons.Filled.Check, null) })
+                    board.projects.forEach { p ->
+                        androidx.compose.material3.DropdownMenuItem(text = { Text("${p.name}  ·  ${p.count}") }, onClick = { open = false; pickProject(p.id) },
+                            leadingIcon = { if (board.project == p.id) Icon(Icons.Filled.Check, null) })
+                    }
+                }
+            }
+            FilterPill(stringResource(R.string.sub_f_needs_me) + if (board.needCount > 0) "  ${board.needCount}" else "", mine) { mine = !mine }
         }
-        val newCol = stringResource(R.string.sub_col_new)
-        val columns = SubmissionBoard.columns(d, newCol)
+        Row(Modifier.padding(start = 16.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Lock, null, tint = c.mutedFg, modifier = Modifier.size(12.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.sub_read_only_web), fontSize = 12.sp, color = c.mutedFg)
+        }
+        if (board.columns.all { it.second.isEmpty() }) {
+            EmptyState(Icons.Filled.Description, stringResource(if (mine) R.string.sub_none_needs_me else R.string.sub_none_here),
+                stringResource(if (mine) R.string.sub_none_needs_me_sub else R.string.sub_try_filter), stringResource(R.string.show_all),
+                { kind = null; mine = false; pickProject(null) }, Modifier.fillMaxSize())
+            return@Column
+        }
         val state = rememberLazyListState()
+        val dark = androidx.compose.foundation.isSystemInDarkTheme()
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            // One column plus a hint of the next on any width (iOS: min(320, 82%)).
-            val colWidth = minOf(320.dp, maxWidth * 0.82f)
+            val colWidth = minOf(300.dp, maxWidth * 0.82f)
             LazyRow(state = state, contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
                 flingBehavior = rememberSnapFlingBehavior(state, SnapPosition.Start), modifier = Modifier.fillMaxSize()) {
-                items(columns, key = { it.first }) { (name, items) -> BoardColumn(name, items, colWidth, onOpen) }
+                items(board.columns.size, key = { board.columns[it].first.key }) { i ->
+                    val (col, items) = board.columns[i]
+                    val firstOfGroup = i == 0 || board.columns[i - 1].first.group != col.group
+                    BoardColumn(col, items, colWidth, firstOfGroup, dark, onOpen)
+                }
             }
         }
     }
 }
 
+@Composable
+private fun FilterPill(text: String, on: Boolean, onClick: () -> Unit) {
+    val c = Nx.colors
+    Text(text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (on) c.foreground else c.mutedFg, maxLines = 1,
+        modifier = Modifier.clip(CircleShape).background(if (on) c.muted else c.card).border(1.dp, if (on) c.foreground.copy(alpha = 0.25f) else c.border, CircleShape)
+            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp))
+}
+
 /** Grouping for the board: kept pure so it is tested on the JVM. */
 object SubmissionBoard {
+    data class ProjectOption(val id: String, val name: String, val count: Int)
+    data class Board(
+        val columns: List<Pair<SubmissionColumn, List<Submission>>>,
+        val kinds: Set<String>,
+        val projects: List<ProjectOption>,
+        /** The project filter in force (a remembered one with nothing left in it is ignored). */
+        val project: String?,
+        val needCount: Int,
+    )
+
+    private fun keyOf(s: Submission) = s.column?.key ?: (s.procStatus?.trim()?.takeIf { it.isNotEmpty() } ?: "new")
+
     /**
-     * Ours first (no status yet), then the server's columns in order; a status the server did not list
-     * still gets a column, after them, so nothing sent ever disappears from the board.
+     * Web MySubmissions: filter by kind, project and "needs my action"; columns = the server's status options of the
+     * filtered requests' projects (empty ones too) plus any column a shown request sits in. An older server sends only
+     * status names: "New" first, then those, then any status it did not list (nothing sent ever disappears).
      */
-    fun columns(d: Submissions, newName: String): List<Pair<String, List<Submission>>> {
-        fun key(s: Submission) = s.procStatus?.trim()?.takeIf { it.isNotEmpty() }
-        val names = d.statusColumns.filter { it.isNotBlank() }.distinct()
-        val extra = d.submissions.mapNotNull(::key).distinct().filter { it !in names }
-        return listOf(newName to d.submissions.filter { key(it) == null }) + (names + extra).map { n -> n to d.submissions.filter { key(it) == n } }
+    fun board(d: Submissions, kind: String?, projectFilter: String?, mine: Boolean, newName: String): Board {
+        val projects = d.submissions.filter { !it.projectId.isNullOrBlank() }.groupBy { it.projectId!! }
+            .map { (id, l) -> ProjectOption(id, l.first().projectName?.takeIf { it.isNotBlank() } ?: "—", l.size) }.sortedBy { it.name.lowercase() }
+        val project = projectFilter?.takeIf { p -> projects.any { it.id == p } }
+        fun base(s: Submission) = (kind == null || s.kind == kind) && (project == null || s.projectId == project)
+        val shown = d.submissions.filter { base(it) && (!mine || it.needsAction) }
+        val cols: List<SubmissionColumn> = if (d.columns.isNotEmpty()) d.columns else {
+            val names = d.statusColumns.filter { it.isNotBlank() }.distinct()
+            val extra = d.submissions.mapNotNull { it.procStatus?.trim()?.takeIf(String::isNotEmpty) }.distinct().filter { it !in names }
+            listOf(SubmissionColumn("new", newName, group = "todo")) + (names + extra).map { SubmissionColumn(it, it, group = "in_progress") }
+        }
+        val inScope = d.submissions.filter(::base).mapNotNull { it.projectId }.toSet()
+        val visible = cols.filter { c -> c.projectIds?.any { it in inScope } ?: true || shown.any { keyOf(it) == c.key } }
+        return Board(visible.map { c -> c to shown.filter { keyOf(it) == c.key } }, d.submissions.mapNotNull { it.kind }.toSet(), projects, project,
+            d.submissions.count { base(it) && it.needsAction })
     }
+
+    /** The older columns (status names only): kept for servers without `columns`. */
+    fun columns(d: Submissions, newName: String): List<Pair<String, List<Submission>>> =
+        board(d.copy(columns = emptyList()), null, null, false, newName).columns.map { it.first.name to it.second }
 
     /** Column tint, as iOS subColTone: done/approved green, in progress blue, rejected red, else grey. */
     enum class Tone { SUCCESS, BLUE, DANGER, MUTED }
@@ -155,53 +233,66 @@ object SubmissionBoard {
             else -> Tone.MUTED
         }
     }
+
+    /** The column's palette key: its own colour, else by group (web GROUP_COLOR). */
+    fun colorKey(c: SubmissionColumn): String =
+        if (c.color != null) id.znetworks.nexus.feature.projects.StatusOptions.colorKey(c.color, null)
+        else when (c.group) { "in_progress" -> "blue"; "complete" -> "green"; else -> "gray" }
 }
 
 @Composable
-private fun BoardColumn(name: String, items: List<Submission>, width: androidx.compose.ui.unit.Dp, onOpen: (String) -> Unit) {
+private fun BoardColumn(col: SubmissionColumn, items: List<Submission>, width: androidx.compose.ui.unit.Dp, firstOfGroup: Boolean, dark: Boolean, onOpen: (String) -> Unit) {
     val c = Nx.colors
-    val tone = when (SubmissionBoard.tone(name)) {
-        SubmissionBoard.Tone.SUCCESS -> c.success; SubmissionBoard.Tone.BLUE -> c.blue
-        SubmissionBoard.Tone.DANGER -> c.danger; SubmissionBoard.Tone.MUTED -> c.mutedFg
-    }
-    val shape = RoundedCornerShape(18.dp)
-    Column(Modifier.width(width).fillMaxHeight().clip(shape).background(tone.copy(alpha = 0.08f)).border(1.dp, tone.copy(alpha = 0.3f), shape)) {
-        Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(name, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = c.foreground, maxLines = 1,
-                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Text("${items.size}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg,
-                modifier = Modifier.background(c.card, CircleShape).padding(horizontal = 8.dp, vertical = 2.dp))
-        }
-        // Each column scrolls on its own: swipe sideways between columns, down inside one (iOS).
-        LazyColumn(contentPadding = PaddingValues(start = 8.dp, end = 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(items, key = { it.id }) { s -> BoardCard(s) { onOpen(s.id) } }
-            if (items.isEmpty()) item {
-                Box(Modifier.fillMaxWidth().dashedBorder(c.border).padding(vertical = 18.dp), contentAlignment = Alignment.Center) {
-                    Text(stringResource(R.string.sub_col_empty), fontSize = 11.sp, color = c.mutedFg.copy(alpha = 0.7f))
+    val tone = id.znetworks.nexus.feature.projects.StatusOptions.tone(SubmissionBoard.colorKey(col), dark)
+    Column(Modifier.width(width).fillMaxHeight()) {
+        Text(if (firstOfGroup) stringResource(when (col.group) { "in_progress" -> R.string.grp_progress; "complete" -> R.string.grp_complete; else -> R.string.grp_todo }) else " ",
+            fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, modifier = Modifier.padding(start = 2.dp, bottom = 4.dp))
+        Column(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(12.dp)).background(tone.lane)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.clip(RoundedCornerShape(6.dp)).background(tone.bg).padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(6.dp).background(tone.dot, CircleShape)); Spacer(Modifier.width(6.dp))
+                    Text(col.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = tone.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Spacer(Modifier.width(8.dp))
+                Text("${items.size}", fontSize = 12.sp, color = c.mutedFg)
+            }
+            // Each column scrolls on its own: swipe sideways between columns, down inside one.
+            LazyColumn(contentPadding = PaddingValues(start = 8.dp, end = 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(items, key = { it.id }) { s -> BoardCard(s) { onOpen(s.id) } }
+                if (items.isEmpty()) item {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 22.dp), contentAlignment = Alignment.Center) {
+                        Text(stringResource(R.string.sub_nothing_here), fontSize = 12.sp, color = c.mutedFg)
+                    }
                 }
             }
         }
     }
 }
 
+/** Web Card: title, the amount, category / date / comments / proof, project and handlers, "Needs your reply". */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun BoardCard(s: Submission, onClick: () -> Unit) {
     val c = Nx.colors
-    val shape = RoundedCornerShape(12.dp)
-    Row(Modifier.fillMaxWidth().clip(shape).background(c.card).border(1.dp, c.border, shape).clickable(onClick = onClick).padding(10.dp),
-        verticalAlignment = Alignment.Top) {
-        Box(Modifier.size(28.dp).background(c.violet.copy(alpha = 0.12f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Description, null, tint = c.violetText, modifier = Modifier.size(15.dp))
+    val shape = RoundedCornerShape(10.dp)
+    Column(Modifier.fillMaxWidth().clip(shape).background(c.card).border(1.dp, c.border, shape).clickable(onClick = onClick).padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(s.taskTitle ?: s.formName ?: stringResource(R.string.sub_fallback_title), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground,
+            maxLines = 3, overflow = TextOverflow.Ellipsis)
+        s.amount?.let { a -> Text(id.znetworks.nexus.feature.projects.CardProps.number(a.toString(), "currency-idr") ?: "", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground) }
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
+            itemVerticalAlignment = Alignment.CenterVertically) {
+            s.category?.takeIf { it.isNotBlank() }?.let { Text("🏷 $it", fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(c.muted).padding(horizontal = 6.dp, vertical = 2.dp)) }
+            id.znetworks.nexus.feature.projects.dueDate(s.date)?.let { Text("📅 " + java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(it), fontSize = 11.sp, color = c.mutedFg) }
+            if (s.commentCount > 0) Text("💬 ${s.commentCount}", fontSize = 11.sp, color = c.mutedFg)
+            if (s.proofs.isNotEmpty()) Text("📎 " + stringResource(R.string.sub_proof), fontSize = 11.sp, color = c.success)
         }
-        Spacer(Modifier.width(8.dp))
-        Column(Modifier.weight(1f)) {
-            Text(s.taskTitle ?: s.formName ?: stringResource(R.string.sub_fallback_title), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.foreground,
-                maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(listOfNotNull(s.formName, s.projectName).joinToString(" · "), fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(stringResource(R.string.sub_submitted_at, submittedText(s.createdAt)), fontSize = 10.sp, color = c.mutedFg.copy(alpha = 0.8f))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(s.projectName.orEmpty(), fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (s.handlers.isNotEmpty()) id.znetworks.nexus.ui.components.AvatarStack(s.handlers.map { it.name to it.avatar }, size = 20.dp)
         }
-        Spacer(Modifier.width(4.dp))
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+        if (s.needsAction) Text("⚠ " + stringResource(R.string.sub_needs_reply), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF92400E),
+            modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(Color(0xFFFEF3C7)).padding(horizontal = 6.dp, vertical = 2.dp))
     }
 }
 

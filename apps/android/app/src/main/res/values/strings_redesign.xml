@@ -254,4 +254,59 @@
         <item quantity="one">%d file</item>
         <item quantity="other">%d files</item>
     </plurals>
+    <string name="pt_cal_no_date">No date · %1$d</string>
+    <string name="lb_ranking_everyone">XP ranking for everyone</string>
+    <!-- Room booking composer (web BookingComposer), 14 Oct 2026 -->
+    <string name="rb_new">New booking</string>
+    <string name="rb_edit">Edit booking</string>
+    <string name="rb_room">Room</string>
+    <string name="rb_title">Title</string>
+    <string name="rb_title_hint">e.g. Client meeting</string>
+    <string name="rb_date">Date</string>
+    <string name="rb_start">Start</string>
+    <string name="rb_end">End</string>
+    <string name="rb_notes">Notes (optional)</string>
+    <string name="rb_book">Book room</string>
+    <string name="rb_update">Update</string>
+    <string name="rb_delete">Delete booking</string>
+    <string name="rb_delete_q">Delete this booking?</string>
+    <string name="rb_end_before_start">End time has to be after the start time.</string>
+    <string name="rb_in_past">That time has already passed. Pick a time later today or another day.</string>
+    <string name="rb_need_title">Add a title to book the room.</string>
+    <string name="rb_save_failed">Couldn\'t save the booking.</string>
+    <string name="rb_delete_failed">Couldn\'t delete the booking.</string>
+    <string name="rb_taken_by">%1$s is already booked at that time (%2$s).</string>
+    <string name="rb_taken">%1$s is already booked at that time.</string>
+    <string name="rb_not_yours">Only the person who booked it or a manager can change this booking.</string>
+    <string name="rb_bad_times">Check the date and times, then try again.</string>
+    <string name="rb_room_vip">VIP Meeting Room</string>
+    <string name="rb_room_meeting">Meeting Room</string>
+    <string name="rb_room_studio">Studio</string>
+    <string name="rb_empty_sub">Book meeting rooms here so two teams never turn up for the same room. Pick a room, a date and a time.</string>
+    <!-- My Submissions filters (web), 14 Oct 2026 -->
+    <string name="sub_f_all">All</string>
+    <string name="sub_f_finance">Finance</string>
+    <string name="sub_f_multimedia">Multimedia</string>
+    <string name="sub_f_all_projects">All projects</string>
+    <string name="sub_f_needs_me">Needs my action</string>
+    <string name="sub_read_only_web">Read-only. The team moves the cards.</string>
+    <string name="sub_nothing_here">Nothing here</string>
+    <string name="sub_needs_reply">Needs your reply</string>
+    <string name="sub_proof">Proof</string>
+    <string name="sub_none_needs_me">Nothing needs your action</string>
+    <string name="sub_none_needs_me_sub">When the team asks for a revision or replies to you, the request shows up here.</string>
+    <string name="sub_none_here">No submissions here</string>
+    <string name="sub_try_filter">Try another filter.</string>
+    <!-- Settings › Notifications and Claude (MCP), 14 Oct 2026 -->
+    <string name="st_tab_notifications">Notifications</string>
+    <string name="st_tab_mcp">Claude (MCP)</string>
+    <string name="st_notif_loading">Loading preferences…</string>
+    <string name="st_notif_load_failed">Couldn\'t load your notification settings.</string>
+    <string name="st_notif_automation">Automation notifications</string>
+    <string name="st_notif_automation_sub">Push when a project automation notifies you. Off: they still land in your inbox, silently.</string>
+    <string name="st_notif_failed">Couldn\'t save that setting.</string>
+    <string name="st_mcp_url">Server URL for Claude</string>
+    <string name="st_copy">Copy</string>
+    <string name="st_copied">Copied</string>
+    <string name="st_mcp_body">Connect Claude (the app, Claude Code or Claude Desktop) to NEXUS so it can read and update your tasks and pages with your access. The connection token is created on the web, in Settings › Claude (MCP), and shown once.</string>
 </resources>
