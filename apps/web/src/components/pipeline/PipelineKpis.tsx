@@ -14,7 +14,8 @@ type Tile = { label: string; value: string; full?: string; sub: string; zero: bo
  * parent: one row of eight on a wide screen, money above counts (5 + 3) on a narrower one, and a row that
  * scrolls sideways on a phone. Hairline dividers come from the 1px gap over the border colour, so they stay
  * right in every arrangement. A reading of zero is drawn quietly instead of in bold. "Real profit" (Control
- * Tower v5, 14 Oct 2026) = Σ margin (net value − real cost) of the deals with a net value; red below zero.
+ * Tower v6, 14 Oct 2026) = Σ (net value − real cost) over the deals not Lost that have cost lines; red
+ * below zero (lib/pipeline.ts summarize).
  */
 export function PipelineKpis({ s }: { s: PipelineSummary }) {
   const { t, lang } = useLang();
@@ -30,7 +31,8 @@ export function PipelineKpis({ s }: { s: PipelineSummary }) {
     },
     {
       kind: "money", label: t("Real profit"), ...money(s.realProfit ?? 0),
-      sub: t("{amount} real cost · {n} with costs", { amount: fmtIdr(s.realCost ?? 0, lang), n: s.costDealCount ?? 0 }),
+      full: `${fmtIdrFull(s.realProfit ?? 0, lang)} · ${t("Real cost")} ${fmtIdrFull(s.realCost ?? 0, lang)}`,
+      sub: t("{n} of {total} deals have costs", { n: s.costDealCount ?? 0, total: s.costEligibleCount ?? 0 }),
       tone: (s.realProfit ?? 0) < 0 ? "bad" : undefined,
     },
     { kind: "count", label: t("Critical"), value: String(s.criticalCount), zero: !s.criticalCount, sub: t("{n} need attention", { n: s.attentionCount }), tone: s.criticalCount > 0 ? "bad" : undefined },

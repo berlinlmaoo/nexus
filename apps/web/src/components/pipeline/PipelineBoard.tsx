@@ -265,9 +265,9 @@ const DealCard = memo(function DealCard({
           )}
         </div>
       )}
-      {/* Margin on the net value (Control Tower v5, 14 Oct 2026), live with the cost lines; only on a deal
-          that has a net value — none is better than a misleading 100% or 0. */}
-      {margin.margin !== null && (
+      {/* Margin on the net value (Control Tower v6, 14 Oct 2026), live with the cost lines; only on a deal
+          that has cost lines and a net value — none is better than a misleading 100% or 0. */}
+      {margin.costCount > 0 && margin.margin !== null && (
         <p className="mt-0.5 text-xs tabular-nums text-muted-foreground" title={t("Net value − real cost")}>
           {t("Margin")}:{" "}
           <span className={cn("font-medium", marginTone(margin.margin))}>

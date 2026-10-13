@@ -457,18 +457,20 @@ struct PipelineSummary: Decodable, Sendable {
     var attentionCount = 0
     var deliverablesOnTrack = 0
     var deliverablesDone = 0
-    /// Real cost & margin (Control Tower v5, 14 Oct 2026): Σ real cost, Σ margin of the deals with a net
-    /// value ("Real profit"), and how many deals have cost lines. 0 from a server from before them.
+    /// Real cost & margin (Control Tower v6, 14 Oct 2026): over the deals that are not Lost and have cost
+    /// lines — Σ real cost, Σ (net value − real cost) ("Real profit") and how many. 0 from an older server.
     var realCost: Double = 0
     var realProfit: Double = 0
     var costDealCount = 0
+    /// Every deal that is not Lost / Cancelled: the M of "N of M deals have costs" (Control Tower v6).
+    var costEligibleCount = 0
 
     init() {}
 
     private enum CodingKeys: String, CodingKey {
         case total, openCount, openValue, weightedValue, wonCount, wonValue, activeCount, lostCount, lostValue
         case readyCount, blockedCount, receivable, receivableOverdue, criticalCount, attentionCount
-        case deliverablesOnTrack, deliverablesDone, realCost, realProfit, costDealCount
+        case deliverablesOnTrack, deliverablesDone, realCost, realProfit, costDealCount, costEligibleCount
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -479,7 +481,7 @@ struct PipelineSummary: Decodable, Sendable {
         lostValue = n(.lostValue); readyCount = i(.readyCount); blockedCount = i(.blockedCount)
         receivable = n(.receivable); receivableOverdue = n(.receivableOverdue); criticalCount = i(.criticalCount)
         attentionCount = i(.attentionCount); deliverablesOnTrack = i(.deliverablesOnTrack); deliverablesDone = i(.deliverablesDone)
-        realCost = n(.realCost); realProfit = n(.realProfit); costDealCount = i(.costDealCount)
+        realCost = n(.realCost); realProfit = n(.realProfit); costDealCount = i(.costDealCount); costEligibleCount = i(.costEligibleCount)
     }
 }
 

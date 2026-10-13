@@ -299,5 +299,5 @@ export const ID_PIPELINE: Record<string, string> = {
   "Margin = net project value − total real cost.": "Margin = nilai bersih project − total real cost.",
   "Net value − real cost": "Nilai bersih − real cost",
   "{n} cost lines · {amount}": "{n} baris biaya · {amount}",
-  "{amount} real cost · {n} with costs": "Real cost {amount} · {n} deal berbiaya",
+  "{n} of {total} deals have costs": "{n} dari {total} deal sudah ada biaya",
 };

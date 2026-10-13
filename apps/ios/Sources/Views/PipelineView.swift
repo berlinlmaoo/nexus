@@ -790,9 +790,9 @@ struct PipelineKpiStrip: View {
             Tile(id: "receivable", label: T("Receivable"), value: PipelineFormat.idr(s.receivable),
                  sub: s.receivableOverdue > 0 ? String(format: T("%@ overdue"), PipelineFormat.idr(s.receivableOverdue)) : T("Nothing overdue"),
                  zero: s.receivable == 0, tone: s.receivableOverdue > 0 ? ChipTone.danger.fg : nil),
-            // Control Tower v5 (14 Oct 2026): Σ margin (net value − real cost); red below zero.
+            // Control Tower v6 (14 Oct 2026): Σ (net value − real cost) of the deals not Lost that have costs; red below zero.
             Tile(id: "realProfit", label: T("Real profit"), value: PipelineFormat.idr(s.realProfit),
-                 sub: String(format: T("%@ real cost · %d with costs"), PipelineFormat.idr(s.realCost), s.costDealCount),
+                 sub: String(format: T("%d of %d deals have costs"), s.costDealCount, s.costEligibleCount),
                  zero: s.realProfit == 0, tone: s.realProfit < 0 ? ChipTone.danger.fg : nil),
             Tile(id: "critical", label: T("Critical"), value: "\(s.criticalCount)",
                  sub: String(format: T("%d need attention"), s.attentionCount),
@@ -1097,8 +1097,8 @@ struct PipelineDealCard: View {
                     }
                 }
             }
-            // Margin on the net value (Control Tower v5, 14 Oct 2026); only on a deal that has a net value.
-            if let margin = deal.margin {
+            // Margin on the net value (Control Tower v6, 14 Oct 2026); only on a deal with cost lines and a net value.
+            if !deal.costs.isEmpty, let margin = deal.margin {
                 HStack(spacing: 4) {
                     Text("\(T("Margin")):").foregroundStyle(NX.mutedFg)
                     Text("\(PipelineFormat.idr(margin)) (\(PipelineFormat.pct(deal.marginPct ?? 0)))")

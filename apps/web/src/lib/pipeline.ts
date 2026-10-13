@@ -387,12 +387,17 @@ export type PipelineSummary = {
   /** Deliverable risk "Aman" outside the open pipeline and not yet completed — the GM's "Deliverable Aman". */
   deliverablesOnTrack: number
   deliverablesDone: number
-  /** Σ real cost over every deal (Control Tower v5, 14 Oct 2026). */
+  /**
+   * "Real Profit" (Control Tower v6, owner + Gerro 14 Oct 2026): only deals that are NOT Lost / Cancelled
+   * AND have at least one cost line count. realProfit = Σ (net value − real cost) over them (a deal with
+   * costs but no net value counts its costs as a loss); realCost = Σ real cost over them.
+   */
   realCost: number
-  /** Σ margin (net value − real cost) over the deals that have a net value — the "Real Profit" tile. */
   realProfit: number
-  /** Deals with at least one cost line. */
+  /** N of "N of M deals have costs": the counted deals. */
   costDealCount: number
+  /** M: every deal that is not Lost / Cancelled. */
+  costEligibleCount: number
 }
 
 /** The KPI strip, over every deal of the project (never the filtered view). The GM's renderInstruments. */
@@ -401,7 +406,7 @@ export function summarize(deals: PipelineDealFacts[], today: string): PipelineSu
     total: deals.length, openCount: 0, openValue: 0, weightedValue: 0, wonCount: 0, wonValue: 0, activeCount: 0,
     lostCount: 0, lostValue: 0, readyCount: 0, blockedCount: 0, receivable: 0, receivableOverdue: 0,
     criticalCount: 0, attentionCount: 0, deliverablesOnTrack: 0, deliverablesDone: 0,
-    realCost: 0, realProfit: 0, costDealCount: 0,
+    realCost: 0, realProfit: 0, costDealCount: 0, costEligibleCount: 0,
   }
   for (const d0 of deals) {
     const terms = termSummaryOf(d0.terms, today)
@@ -431,10 +436,15 @@ export function summarize(deals: PipelineDealFacts[], today: string): PipelineSu
     if (h === "ATTENTION") s.attentionCount++
     if (d.deliverableStatus === "Completed" || d.deliverableStatus === "Approved") s.deliverablesDone++
     else if (d.deliverableRisk === "Aman" && group !== "Pipeline") s.deliverablesOnTrack++
-    const m = marginOf(d0)
-    s.realCost += m.totalCost
-    if (m.margin !== null) s.realProfit += m.margin
-    if (m.costCount > 0) s.costDealCount++
+    if (group !== "Lost") {
+      s.costEligibleCount++
+      const m = marginOf(d0)
+      if (m.costCount > 0) {
+        s.costDealCount++
+        s.realCost += m.totalCost
+        s.realProfit += (d0.netValue || 0) - m.totalCost
+      }
+    }
   }
   return s
 }
