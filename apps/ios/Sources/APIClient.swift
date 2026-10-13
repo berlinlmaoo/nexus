@@ -2828,14 +2828,6 @@ struct APIClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: fields)
         _ = try await run(req, decode: SuccessResponse.self)
-        // This device's own photo change or removal shows on every mark now, not when the ping returns.
-        if fields.keys.contains("icon") {
-            let icon = fields["icon"] as? String
-            await MainActor.run {
-                ProjectIconStore.shared.set(id, icon)
-                ProjectShortcuts.shared.updateIcon(id, icon)
-            }
-        }
         return true
     }
     @discardableResult
@@ -2850,14 +2842,6 @@ struct APIClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: fields)
         _ = try await run(req, decode: SuccessResponse.self)
-        // This device's own photo change or removal shows on every mark now, not when the ping returns.
-        if fields.keys.contains("icon") {
-            let icon = fields["icon"] as? String
-            await MainActor.run {
-                ProjectIconStore.shared.set(id, icon)
-                ProjectShortcuts.shared.updateIcon(id, icon)
-            }
-        }
         return true
     }
 
