@@ -69,9 +69,11 @@ object RealtimeEvents {
     const val OUTLET_SALES_CHANGED = "outlet-sales-changed"
     /** A project's automation was made, changed, toggled, deleted or ran (project room; DEV-REDESIGN §2): refetch the list / run log. */
     const val AUTOMATIONS_CHANGED = "automations-changed"
+    /** Taken out of a room (server 13 Oct): `{ room, reason }`; reason "revoked" = access to that project ended. */
+    const val JOIN_DENIED = "join-denied"
 
     val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, TYPING, PIPELINE_CHANGED,
-        OUTLET_SALES_CHANGED, AUTOMATIONS_CHANGED) + TASK
+        OUTLET_SALES_CHANGED, AUTOMATIONS_CHANGED, JOIN_DENIED) + TASK
 
     /**
      * The handshake refusals that are about the session (deleted, offboarded, revoked, no cookie): stop, and
@@ -107,6 +109,9 @@ object RealtimeEvents {
             OUTLET_SALES_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("eventId"), userId = o.str("actorId"))
             // { projectId, automationId, actorId }
             AUTOMATIONS_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("automationId"), userId = o.str("actorId"))
+            // { room: "project:<id>" | "sheet:<id>", reason }
+            JOIN_DENIED -> o.str("room").let { room -> RealtimeEvent(name, reason = o.str("reason"),
+                projectId = room?.takeIf { it.startsWith("project:") }?.removePrefix("project:"), taskId = room?.takeIf { it.startsWith("sheet:") }?.removePrefix("sheet:")) }
             else -> RealtimeEvent(name)
         }
     }
@@ -122,7 +127,10 @@ object RealtimeEvents {
     fun isProjectsOrFolders(e: RealtimeEvent) = e.name == WORKSPACE_CHANGED && (e.kind == "projects" || e.kind == "folders")
     /** Something about this project: its tasks (project room) or the project itself (workspace room). */
     fun touchesProject(e: RealtimeEvent, projectId: String) =
-        e.name in TASK || (e.name == WORKSPACE_CHANGED && e.kind == "projects" && (e.projectId == null || e.projectId == projectId))
+        e.name in TASK || (e.name == WORKSPACE_CHANGED && e.kind == "projects" && (e.projectId == null || e.projectId == projectId)) || revoked(e, projectId)
+    /** Access to [projectId] ended while its room was held: refetch (→ the no-access state) and say so. */
+    fun revoked(e: RealtimeEvent, projectId: String) = e.name == JOIN_DENIED && e.reason == "revoked" && e.projectId == projectId
+
     /** Something about this task (task-created never is: it is a new one). */
     fun touchesTask(e: RealtimeEvent, taskId: String) = e.name != "task-created" && e.name in TASK && e.taskId == taskId
 }

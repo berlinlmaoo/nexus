@@ -11,7 +11,7 @@ class MemberPickerTest {
         val api = File("src/main/java/id/znetworks/nexus/feature/projects/ProjectsApi.kt").readText()
         assertTrue(api.contains("put(\"userIds\""))
         val screen = File("src/main/java/id/znetworks/nexus/feature/projects/ProjectSettingsScreen.kt").readText()
-        assertTrue(screen.contains("api.addMembers(projectId, ids)")); assertFalse(screen.contains("ids.forEach { api.addMember("))
+        assertTrue(screen.contains("api.addMembers(projectId, ids, level)")) // one request, with the level picked (13 Oct); assertFalse(screen.contains("ids.forEach { api.addMember("))
         // The full-height picker is shared with New project (PROJECT-SETUP-MEMBERS).
         assertTrue(screen.contains("PeoplePickerDialog("))
         val picker = File("src/main/java/id/znetworks/nexus/feature/projects/ProjectSetup.kt").readText()

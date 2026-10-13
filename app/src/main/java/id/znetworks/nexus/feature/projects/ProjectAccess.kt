@@ -35,3 +35,10 @@ data class ProjectAccess(val level: AccessLevel?, val viewerCanManage: Boolean?)
         fun of(d: ProjectDetail?): ProjectAccess = ProjectAccess(AccessLevel.of(d?.viewerAccessLevel), d?.viewerCanManage)
     }
 }
+
+object AccessText {
+    /** The role an older server reads for a level (LEAD = Project Owner = Full access). */
+    fun roleFor(l: AccessLevel): String = when (l) { AccessLevel.FULL -> "LEAD"; AccessLevel.EDIT -> "MEMBER"; AccessLevel.COMMENT -> "GUEST"; AccessLevel.VIEW -> "VIEWER" }
+    /** The levels offered, most first. */
+    val LEVELS = listOf(AccessLevel.FULL, AccessLevel.EDIT, AccessLevel.COMMENT, AccessLevel.VIEW)
+}

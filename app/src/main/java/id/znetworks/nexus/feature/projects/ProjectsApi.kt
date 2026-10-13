@@ -49,7 +49,7 @@ class ProjectsApi(private val api: ApiClient) {
      */
     suspend fun createProject(name: String, workspaceId: String, folderId: String?, type: ProjectType = ProjectType.TASK,
                               hiddenTabs: List<String>? = null, memberIds: List<String>? = null,
-                              template: ProjectTemplate? = null, lang: String = "id", starter: Boolean = true): String {
+                              template: ProjectTemplate? = null, lang: String = "id", starter: Boolean = true, memberLevel: AccessLevel = AccessLevel.EDIT): String {
         val body = buildJsonObject {
             put("name", name.trim()); put("workspaceId", workspaceId)
             // No "icon" or "color": every project shares one default mark, the server stores its defaults (PROJECT-ICON, 11 Oct).
@@ -58,7 +58,7 @@ class ProjectsApi(private val api: ApiClient) {
             put("type", type.code)
             // PROJECT-SETUP-MEMBERS (server eecca18): starting tabs (TASK only) and members; left out when empty.
             if (type == ProjectType.TASK) hiddenTabs?.let { put("hiddenTabs", kotlinx.serialization.json.JsonArray(it.map(::JsonPrimitive))) }
-            memberIds?.let { put("memberIds", kotlinx.serialization.json.JsonArray(it.map(::JsonPrimitive))) }
+            memberIds?.let { put("memberIds", kotlinx.serialization.json.JsonArray(it.map(::JsonPrimitive))); put("memberAccessLevel", memberLevel.code) }
             if (template != null && type == ProjectType.TASK) { put("templateId", template.id); put("lang", lang); put("starter", starter) }
         }
         return (post("/api/projects", body)["id"] as? JsonPrimitive)?.content.orEmpty()
@@ -197,9 +197,11 @@ class ProjectsApi(private val api: ApiClient) {
      * Several people in one request (MEMBER-PICKER.md): `{ userIds }` → `{ added, alreadyMembers, unknown }`; anyone
      * already in is skipped, not an error. Answers how many were added.
      */
-    suspend fun addMembers(projectId: String, userIds: Collection<String>): Int {
+    suspend fun addMembers(projectId: String, userIds: Collection<String>, accessLevel: AccessLevel = AccessLevel.EDIT): Int {
         val o = post("/api/projects/$projectId/members", buildJsonObject {
-            put("userIds", kotlinx.serialization.json.JsonArray(userIds.map { JsonPrimitive(it) })); put("role", "MEMBER")
+            put("userIds", kotlinx.serialization.json.JsonArray(userIds.map { JsonPrimitive(it) }))
+            // The level (13 Oct), exactly as the web sends it.
+            put("accessLevel", accessLevel.code)
         })
         return (o["added"] as? kotlinx.serialization.json.JsonArray)?.size ?: if (o["userId"] != null || o["id"] != null) 1 else 0
     }
@@ -208,7 +210,13 @@ class ProjectsApi(private val api: ApiClient) {
     suspend fun removeMember(projectId: String, userId: String): JsonObject =
         api.send(Request.Builder().url(api.url("/api/projects/$projectId/members")).delete(buildJsonObject { put("userId", userId) }.toString().toJsonBody()).build(), JsonObject.serializer())
 
-    suspend fun invite(projectId: String, email: String, role: String) = post("/api/projects/$projectId/invite", buildJsonObject { put("email", email.trim()); put("role", role) })
+    suspend fun invite(projectId: String, email: String, level: AccessLevel) = post("/api/projects/$projectId/invite", buildJsonObject {
+        put("email", email.trim()); put("accessLevel", level.code)
+    })
+
+    /** One member's level (Full access only; 409 LAST_OWNER would leave no Project Owner). */
+    suspend fun setMemberAccess(projectId: String, userId: String, level: AccessLevel) =
+        patch("/api/projects/$projectId/members", buildJsonObject { put("userId", userId); put("accessLevel", level.code) })
 
     // endregion
 

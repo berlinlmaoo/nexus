@@ -49,6 +49,8 @@ data class TaskDetailState(
     val busy: Boolean = false,
     val actionError: String? = null,
     val deleted: Boolean = false,
+    /** The viewer's level in the task's project (13 Oct); unknown = nothing locked. */
+    val access: id.znetworks.nexus.feature.projects.ProjectAccess = id.znetworks.nexus.feature.projects.ProjectAccess(null, null),
 )
 
 class TaskDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
@@ -79,13 +81,14 @@ class TaskDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidV
         val files = async { runCatching { api.attachments(taskId).value }.getOrNull() }
         val deps = async { runCatching { api.dependencies(taskId) }.getOrNull() }
         val time = async { runCatching { api.timeEntries(taskId) }.getOrNull() }
-        val members = async { projectId?.let { runCatching { projects.project(it).value.members }.getOrNull() } }
+        val project = async { projectId?.let { runCatching { projects.project(it).value }.getOrNull() } }
         _state.update { s ->
             s.copy(
                 attachments = files.await() ?: s.attachments,
                 deps = deps.await() ?: s.deps, depsLoaded = true,
                 time = time.await() ?: s.time,
-                members = members.await() ?: s.members,
+                members = project.await()?.members ?: s.members,
+                access = project.await()?.let { id.znetworks.nexus.feature.projects.ProjectAccess.of(it) } ?: s.access,
             )
         }
     }

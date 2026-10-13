@@ -1,5 +1,10 @@
 package id.znetworks.nexus.feature.projects
 
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.draw.clip
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -129,8 +134,8 @@ class ProjectSettingsViewModel(app: Application, handle: SavedStateHandle) : And
             block()
             _state.update { it.copy(toast = done?.let(res::getString)) }
         } catch (e: ApiError) {
-            // LEAD / BoD refusals come with their own sentence.
-            _state.update { it.copy(error = (e as? ApiError.Http)?.serverMessage ?: e.describe(res)) }
+            // Access refusals in words (LAST_OWNER, NEEDS_FULL_ACCESS), else the server's own sentence.
+            _state.update { it.copy(error = e.describe(res)) }
         }
         _state.update { it.copy(busy = false) }
         load()
@@ -170,10 +175,10 @@ class ProjectSettingsViewModel(app: Application, handle: SavedStateHandle) : And
     fun createField(name: String, type: String, options: List<String>) = act(R.string.ps_saved) { api.createField(projectId, name, type, options) }
     fun deleteField(id: String) = act { api.deleteField(id) }
     /** Everyone picked in one request; a refusal stays in the picker ([onDone] gets its sentence), success says how many. */
-    fun addMembers(ids: Set<String>, onDone: (String?) -> Unit) = viewModelScope.launch {
+    fun addMembers(ids: Set<String>, level: AccessLevel, onDone: (String?) -> Unit) = viewModelScope.launch {
         _state.update { it.copy(busy = true) }
         try {
-            val n = api.addMembers(projectId, ids)
+            val n = api.addMembers(projectId, ids, level)
             id.znetworks.nexus.feature.pipeline.PipelineViewModel.membersChanged() // BD / PM pickers read them again
             _state.update { it.copy(busy = false, toast = if (n > 0) res.getQuantityString(R.plurals.ps_n_added, n, n) else res.getString(R.string.ps_already_in)) }
             onDone(null); load()
@@ -184,7 +189,9 @@ class ProjectSettingsViewModel(app: Application, handle: SavedStateHandle) : And
         }
     }
     fun removeMember(userId: String) = act { api.removeMember(projectId, userId) }
-    fun invite(email: String, role: String) = act(R.string.ps_invite_sent) { api.invite(projectId, email, role) }
+    fun invite(email: String, level: AccessLevel) = act(R.string.ps_invite_sent) { api.invite(projectId, email, level) }
+    /** A member's level; 409 LAST_OWNER is said in words. */
+    fun setAccess(userId: String, level: AccessLevel) = act { api.setMemberAccess(projectId, userId, level) }
     fun duplicate() = act(R.string.ps_duplicated) { val id = api.duplicateProject(projectId); _state.update { it.copy(duplicatedId = id.ifBlank { null }) } }
     fun delete() = viewModelScope.launch {
         _state.update { it.copy(busy = true) }
@@ -209,14 +216,17 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
     var inviting by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().background(c.background)) {
-        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Text(stringResource(R.string.ps_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, modifier = Modifier.weight(1f))
-            if (s.busy) CircularProgressIndicator(Modifier.size(18.dp).padding(end = 4.dp), strokeWidth = 2.dp)
+        id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.pp_settings), subtitle = s.detail?.name, onBack = onBack) {
+            if (s.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
         }
         val d = s.detail
         if (d == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return@Column }
+        // Read-only for anyone without Full access (13 Oct); an older server sends no level and nothing is locked.
+        val access = ProjectAccess.of(d)
+        val ro = !access.canManage
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (ro) Text(stringResource(R.string.acc_settings_readonly), fontSize = 13.sp, color = c.warningFg,
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.warningBg).padding(12.dp))
             // Identity
             Section(stringResource(R.string.ps_identity)) {
                 var name by rememberSaveable(d.name) { mutableStateOf(d.name) }
@@ -230,21 +240,21 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
                 val hasPhoto = ProjectMarkLogic.isPhoto(d.icon)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ProjectMark(d.icon, 48.dp)
-                    OutlinedButton(onClick = pick, enabled = !s.busy) { Text(stringResource(if (hasPhoto) R.string.ps_photo_change else R.string.ps_photo_add)) }
-                    if (hasPhoto) TextButton(onClick = vm::removePhoto, enabled = !s.busy) { Text(stringResource(R.string.ps_photo_remove), color = c.danger) }
+                    OutlinedButton(onClick = pick, enabled = !s.busy && !ro) { Text(stringResource(if (hasPhoto) R.string.ps_photo_change else R.string.ps_photo_add)) }
+                    if (hasPhoto) TextButton(onClick = vm::removePhoto, enabled = !s.busy && !ro) { Text(stringResource(R.string.ps_photo_remove), color = c.danger) }
                 }
                 if (unreadable) Text(stringResource(R.string.chat_photo_unreadable), fontSize = 12.sp, color = c.danger)
                 val dirty = name.trim() != d.name || desc.trim() != d.description.orEmpty()
                 OutlinedButton(onClick = {
                     vm.save("name" to JsonPrimitive(name.trim()), "description" to JsonPrimitive(desc.trim()))
-                }, enabled = dirty && name.isNotBlank() && !s.busy, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ps_save_identity)) }
+                }, enabled = dirty && name.isNotBlank() && !s.busy && !ro, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ps_save_identity)) }
             }
             // Flags
             Section(stringResource(R.string.ps_customize)) {
                 // Only Auto assign is left (PROJECT-CUSTOMIZE-CLEANUP, 11 Oct): duplicate mode is always on (multi-select
                 // on Board / List), P&L, Finance and the proof-before-Done rule are gone, and the server ignores those keys.
                 var autoIds by remember(d.autoAssignAssigneeIds) { mutableStateOf(d.autoAssignAssigneeIds.toSet()) }
-                Flag("Auto assign", stringResource(R.string.ps_auto_sub), d.autoAssignEnabled == true) { on ->
+                Flag("Auto assign", stringResource(R.string.ps_auto_sub), d.autoAssignEnabled == true, enabled = !ro) { on ->
                     if (on && autoIds.isEmpty()) vm.say(R.string.ps_auto_pick_first) else vm.save("autoAssignEnabled" to JsonPrimitive(on), "autoAssignAssigneeIds" to JsonArray(autoIds.map { JsonPrimitive(it) }))
                 }
                 Text(stringResource(R.string.ps_auto_to), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
@@ -264,7 +274,7 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
             if (d.type != "PIPELINE" && d.type != "OUTLET_SALES") Section(stringResource(R.string.ps_tabs)) {
                 Text(stringResource(R.string.ps_tabs_sub), fontSize = 12.sp, color = c.mutedFg)
                 val hidden = s.hiddenDraft ?: ProjectTabsLogic.hidden(d.hiddenTabs)
-                val canChange = s.isManager
+                val canChange = s.isManager && !ro
                 ProjectTab.entries.forEach { t ->
                     val key = ProjectTabsLogic.key(t) ?: return@forEach
                     val locked = ProjectTabsLogic.locked(key, hidden)
@@ -274,7 +284,7 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
                 if (s.roleKnown && !canChange) Text(stringResource(R.string.ps_tabs_managers), fontSize = 11.sp, color = c.mutedFg)
             }
             // Custom fields
-            Section(stringResource(R.string.ps_fields), action = { TextButton(onClick = { addingField = true }) { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Text(stringResource(R.string.add)) } }) {
+            Section(stringResource(R.string.ps_fields), action = { if (!ro) TextButton(onClick = { addingField = true }) { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Text(stringResource(R.string.add)) } }) {
                 if (s.fields.isEmpty()) Text(stringResource(R.string.ps_no_fields), fontSize = 12.sp, color = c.mutedFg)
                 s.fields.forEach { f ->
                     var confirm by remember { mutableStateOf(false) }
@@ -284,7 +294,7 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
                             Text(listOfNotNull(FIELD_TYPES.firstOrNull { it.first == f.kind }?.let { stringResource(it.second) } ?: f.kind,
                                 f.choices.takeIf { it.isNotEmpty() }?.joinToString(", ")).joinToString(" · "), fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        IconButton(onClick = { confirm = true }) { Icon(Icons.Filled.Delete, stringResource(R.string.delete), tint = c.mutedFg) }
+                        if (!ro) IconButton(onClick = { confirm = true }) { Icon(Icons.Filled.Delete, stringResource(R.string.delete), tint = c.mutedFg) }
                     }
                     if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text(stringResource(R.string.ps_delete_field_q, f.name)) },
                         text = { Text(stringResource(R.string.ps_delete_field_body)) },
@@ -292,31 +302,52 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
                         dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.cancel)) } })
                 }
             }
-            // Members
+            // Members: a level on every row (Full access changes it), Remove asks first; "Lead" reads Project Owner.
             Section(stringResource(R.string.ps_members)) {
                 d.members.forEach { m ->
                     val uid = m.userId ?: m.user?.id
+                    val level = AccessLevel.ofMember(m.role, m.accessLevel)
+                    var levelMenu by remember { mutableStateOf(false) }
+                    var confirmRemove by remember { mutableStateOf(false) }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Avatar(m.user?.name, m.user?.avatar, 30.dp)
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(m.user?.name ?: "—", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
-                            m.role?.let { Text(it.lowercase().replaceFirstChar(Char::titlecase), fontSize = 11.sp, color = c.mutedFg) }
+                            Text(m.user?.name ?: "—", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.foreground)
+                            if (m.role.equals("LEAD", true)) Text(stringResource(R.string.pp_owner), fontSize = 12.sp, color = c.mutedFg)
                         }
-                        if (uid != null && m.role != "LEAD") IconButton(onClick = { vm.removeMember(uid) }) { Icon(Icons.Filled.Close, stringResource(R.string.ps_remove), tint = c.mutedFg) }
+                        Box {
+                            TextButton(onClick = { levelMenu = true }, enabled = !ro && uid != null && !s.busy) {
+                                Text(accessLabel(level), fontSize = 13.sp, color = if (ro) c.mutedFg else c.foreground)
+                                if (!ro) Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(16.dp))
+                            }
+                            DropdownMenu(levelMenu, { levelMenu = false }) {
+                                AccessText.LEVELS.forEach { l ->
+                                    DropdownMenuItem(text = { Text(accessLabel(l)) }, leadingIcon = { if (l == level) Icon(Icons.Filled.Check, null) },
+                                        onClick = { levelMenu = false; if (l != level && uid != null) vm.setAccess(uid, l) })
+                                }
+                                HorizontalDivider(color = c.border)
+                                DropdownMenuItem(text = { Text(stringResource(R.string.acc_remove), color = c.dangerText) }, onClick = { levelMenu = false; confirmRemove = true })
+                            }
+                        }
                     }
+                    if (confirmRemove && uid != null) AlertDialog(onDismissRequest = { confirmRemove = false },
+                        text = { Text(stringResource(R.string.acc_remove_q, m.user?.name ?: m.user?.email ?: "—")) },
+                        confirmButton = { TextButton(onClick = { confirmRemove = false; vm.removeMember(uid) }) { Text(stringResource(R.string.acc_remove), color = c.dangerText) } },
+                        dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text(stringResource(R.string.cancel)) } })
                 }
-                Row {
+                if (!ro) Row {
                     TextButton(onClick = { addingPeople = true }) { Icon(Icons.Filled.PersonAdd, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.ps_add_member)) }
-                    TextButton(onClick = { inviting = true }) { Icon(Icons.Filled.Email, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.ps_invite)) }
+                    TextButton(onClick = { inviting = true }) { Icon(Icons.Filled.Email, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.acc_invite)) }
                 }
             }
             // Danger
-            Section(stringResource(R.string.ps_danger)) {
+            // Delete = Full access; Duplicate = BoD.
+            if (!ro || s.isBoD) Section(stringResource(R.string.ps_danger)) {
                 if (s.isBoD) OutlinedButton(onClick = vm::duplicate, enabled = !s.busy, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.ContentCopy, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.ps_duplicate))
                 }
-                OutlinedButton(onClick = { confirmDelete = true }, enabled = !s.busy, modifier = Modifier.fillMaxWidth()) {
+                if (!ro) OutlinedButton(onClick = { confirmDelete = true }, enabled = !s.busy, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.Delete, null, Modifier.size(16.dp), tint = c.danger); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.ps_delete), color = c.danger)
                 }
             }
@@ -331,8 +362,8 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) } },
     )
     if (addingField) FieldEditorDialog(onDismiss = { addingField = false }) { n, t, o -> addingField = false; vm.createField(n, t, o) }
-    if (addingPeople) AddPeopleDialog(s, onDismiss = { addingPeople = false }) { ids, done -> vm.addMembers(ids) { err -> done(err); if (err == null) addingPeople = false } }
-    if (inviting) InviteDialog(onDismiss = { inviting = false }) { e, r -> inviting = false; vm.invite(e, r) }
+    if (addingPeople) AddPeopleDialog(s, onDismiss = { addingPeople = false }) { ids, level, done -> vm.addMembers(ids, level) { err -> done(err); if (err == null) addingPeople = false } }
+    if (inviting) InviteDialog(onDismiss = { inviting = false }) { e, l -> inviting = false; vm.invite(e, l) }
     (s.error ?: s.toast)?.let { msg ->
         AlertDialog(onDismissRequest = vm::dismiss, text = { Text(msg) }, confirmButton = { TextButton(onClick = vm::dismiss) { Text("OK") } })
     }
@@ -401,37 +432,63 @@ private fun FieldEditorDialog(onDismiss: () -> Unit, onCreate: (String, String, 
  * one request. Same screen for task projects and the Pipeline Dashboard.
  */
 @Composable
-private fun AddPeopleDialog(s: ProjectSettingsState, onDismiss: () -> Unit, onAdd: (Set<String>, (String?) -> Unit) -> Unit) {
+private fun AddPeopleDialog(s: ProjectSettingsState, onDismiss: () -> Unit, onAdd: (Set<String>, AccessLevel, (String?) -> Unit) -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val inProject = s.detail?.members.orEmpty().mapNotNull { it.userId ?: it.user?.id }.toSet()
     var adding by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    // Multi-select, one "Add N" — no team step (PROJECT-SETUP-MEMBERS B); the picker is shared with New project.
-    PeoplePickerDialog(s.roster.filter { m -> ProjectSetupLogic.id(m).let { it != null && it !in inProject } }, emptySet(),
-        stringResource(R.string.ps_add_member), { n -> ctx.getString(R.string.ps_add_n, n) },
-        stringResource(R.string.ps_everyone_here), stringResource(R.string.ps_everyone_hint), busy = adding, error = error, onDismiss = onDismiss) { picked ->
-        adding = true; error = null; onAdd(picked) { err -> adding = false; error = err }
+    // Picked people, then their level (13 Oct: adding a person asks the level).
+    var picked by remember { mutableStateOf<Set<String>?>(null) }
+    val p = picked
+    if (p == null) {
+        // Multi-select, one "Add N" — no team step (PROJECT-SETUP-MEMBERS B); the picker is shared with New project.
+        PeoplePickerDialog(s.roster.filter { m -> ProjectSetupLogic.id(m).let { it != null && it !in inProject } }, emptySet(),
+            stringResource(R.string.ps_add_member), { n -> ctx.getString(R.string.ps_add_n, n) },
+            stringResource(R.string.ps_everyone_here), stringResource(R.string.ps_everyone_hint), busy = adding, error = error, onDismiss = onDismiss) { ids -> picked = ids }
+    } else LevelDialog(stringResource(R.string.ps_add_member), busy = adding, error = error, onDismiss = { picked = null }) { level ->
+        adding = true; error = null; onAdd(p, level) { err -> adding = false; error = err }
     }
 }
 
-
-@OptIn(ExperimentalLayoutApi::class)
+/** "They get": the four levels, Can edit picked. */
 @Composable
-private fun InviteDialog(onDismiss: () -> Unit, onInvite: (String, String) -> Unit) {
+private fun LevelDialog(title: String, busy: Boolean, error: String?, onDismiss: () -> Unit, onPick: (AccessLevel) -> Unit) {
+    var level by rememberSaveable { mutableStateOf(AccessLevel.EDIT) }
+    AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text(title) },
+        text = {
+            Column {
+                Text(stringResource(R.string.acc_they_get), fontSize = 13.sp, color = Nx.colors.mutedFg)
+                AccessText.LEVELS.forEach { l ->
+                    Row(Modifier.fillMaxWidth().clickable { level = l }, verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.RadioButton(level == l, { level = l }); Text(accessLabel(l))
+                    }
+                }
+                error?.let { Text(it, color = Nx.colors.dangerText, fontSize = 13.sp) }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onPick(level) }, enabled = !busy) { if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp) else Text(stringResource(R.string.add)) } },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.cancel)) } })
+}
+
+@Composable
+private fun InviteDialog(onDismiss: () -> Unit, onInvite: (String, AccessLevel) -> Unit) {
     var email by rememberSaveable { mutableStateOf("") }
-    var role by rememberSaveable { mutableStateOf("GUEST") }
+    var level by rememberSaveable { mutableStateOf(AccessLevel.EDIT) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.ps_invite)) },
+        title = { Text(stringResource(R.string.acc_invite)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedTextField(email, { email = it }, singleLine = true, placeholder = { Text("name@company.com") }, modifier = Modifier.fillMaxWidth())
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("GUEST", "MEMBER", "VIEWER").forEach { r -> FilterChip(role == r, { role = r }, { Text(r.lowercase().replaceFirstChar(Char::titlecase), fontSize = 12.sp) }) }
+                Text(stringResource(R.string.acc_they_get), fontSize = 13.sp, color = Nx.colors.mutedFg)
+                AccessText.LEVELS.forEach { l ->
+                    Row(Modifier.fillMaxWidth().clickable { level = l }, verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.RadioButton(level == l, { level = l }); Text(accessLabel(l))
+                    }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onInvite(email, role) }, enabled = email.contains('@')) { Text(stringResource(R.string.ps_send_invite)) } },
+        confirmButton = { TextButton(onClick = { onInvite(email, level) }, enabled = email.contains('@')) { Text(stringResource(R.string.ps_send_invite)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }

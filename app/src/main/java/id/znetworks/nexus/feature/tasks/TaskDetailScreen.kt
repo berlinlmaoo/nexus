@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.tasks
 
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.withStyle
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -131,7 +133,7 @@ fun TaskDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenPro
             Text(stringResource(R.string.td_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp,
                 color = c.foreground, modifier = Modifier.weight(1f))
             if (s.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-            if (s.task != null) Box {
+            if (s.task != null && s.access.canEdit) Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.more)) }
                 DropdownMenu(menu, { menu = false }) {
                     DropdownMenuItem(text = { Text(stringResource(R.string.td_delete), color = c.danger) },
@@ -148,18 +150,23 @@ fun TaskDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenPro
                 else -> PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }) {
                     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         s.savedAt?.let { Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.mutedFg) }
-                        Header(t, vm, onOpenTask)
-                        QuestBanner(t, s.isBoD, vm)
-                        MetaCard(t, s, vm, onOpenProject)
+                        // Can view / Can comment (13 Oct): one line says why, and the task's own fields don't take edits.
+                        val ro = !s.access.canEdit
+                        if (ro) Text(stringResource(if (s.access.canComment) R.string.acc_task_comment else R.string.acc_task_view), fontSize = 13.sp,
+                            color = c.warningFg, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.warningBg).padding(12.dp))
+                        ReadOnly(ro) { Header(t, vm, onOpenTask) }
+                        ReadOnly(ro) { QuestBanner(t, s.isBoD, vm) }
+                        ReadOnly(ro) { MetaCard(t, s, vm, onOpenProject) }
                         // Who made it, on every task (web c1809a0, iOS c61edb6), and whether they have since left.
                         t.creator?.let { u -> CreatedBy(u) }
-                        t.projectId?.let { pid -> TaskFieldsCard(pid, t.id, vm::showError) }
-                        DescriptionCard(t, vm)
+                        ReadOnly(ro) { t.projectId?.let { pid -> TaskFieldsCard(pid, t.id, vm::showError) } }
+                        ReadOnly(ro) { DescriptionCard(t, vm) }
                         SubtasksCard(t, vm, onOpenTask)
                         FilesCard(s, vm)
                         DependenciesCard(s, vm, onOpenTask)
                         TimeCard(s, vm)
-                        CommentsCard(t, vm)
+                        // Can view: the thread is read, not written.
+                        ReadOnly(!s.access.canComment) { CommentsCard(t, vm) }
                         ActivityCard(t)
                     }
                 }
@@ -720,3 +727,15 @@ private fun CreatedBy(u: id.znetworks.nexus.feature.projects.UserRef) {
     }
 }
 
+/**
+ * Draws [content] as it is but takes no taps when [on] (Can view / Can comment): a layer over it is hit first,
+ * while the page around it still scrolls. The server refuses these writes anyway.
+ */
+@Composable
+private fun ReadOnly(on: Boolean, content: @Composable () -> Unit) {
+    if (!on) { content(); return }
+    Box {
+        Box(Modifier.alpha(0.75f)) { content() }
+        Box(Modifier.matchParentSize().pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } })
+    }
+}

@@ -86,6 +86,7 @@ import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.feature.attendance.LocalNotifier
 import id.znetworks.nexus.ui.components.EmptyState
 import id.znetworks.nexus.ui.components.describe
+import id.znetworks.nexus.ui.components.sentence
 import id.znetworks.nexus.ui.theme.DisplayFont
 import id.znetworks.nexus.ui.theme.Nx
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -215,7 +216,7 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
         try {
             val v = api.createView(projectId, name, layout, shared)
             loadViewsAndFields(); onDone(v?.id)
-        } catch (e: ApiError) { _state.update { it.copy(actionError = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.view_save_failed)) } }
+        } catch (e: ApiError) { _state.update { it.copy(actionError = e.sentence(res, R.string.view_save_failed)) } }
     }
 
     fun renameView(v: ProjectView, name: String) = viewAct { api.updateView(projectId, v.id, name = name) }
@@ -225,7 +226,7 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
             val copy = api.createView(projectId, name, ViewsLogic.layoutOf(v), shared = v.shared && _state.value.canEditShared)
             if (copy != null && v.config != null) api.updateView(projectId, copy.id, config = v.config)
             loadViewsAndFields(); onDone(copy?.id)
-        } catch (e: ApiError) { _state.update { it.copy(actionError = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.view_save_failed)) } }
+        } catch (e: ApiError) { _state.update { it.copy(actionError = e.sentence(res, R.string.view_save_failed)) } }
     }
     /** A built-in view is hidden through the project's hidden tabs (Board or List stays on: the server says so). */
     fun hideBuiltin(key: String) = act(R.string.view_save_failed) {
@@ -242,13 +243,13 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
                 api.updateView(projectId, v.id, patch = ViewsLogic.patchFor(cfg.rules, cfg.sort, cfg.groupBy, cfg.advanced))
                 loadViewsAndFields()
                 _state.update { it.copy(screenConfigs = it.screenConfigs - v.id) }
-            } catch (e: ApiError) { _state.update { it.copy(actionError = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.view_save_failed)) } }
+            } catch (e: ApiError) { _state.update { it.copy(actionError = e.sentence(res, R.string.view_save_failed)) } }
         }
     }
 
     private fun viewAct(block: suspend () -> Unit) = viewModelScope.launch {
         try { block(); loadViewsAndFields() } catch (e: ApiError) {
-            _state.update { it.copy(actionError = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.view_save_failed)) }
+            _state.update { it.copy(actionError = e.sentence(res, R.string.view_save_failed)) }
         }
     }
 
@@ -347,7 +348,7 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
     private fun bulk(block: suspend () -> Unit) = viewModelScope.launch {
         _state.update { it.copy(busy = true) }
         try { block(); _state.update { it.copy(selected = emptySet()) } } catch (e: ApiError) {
-            _state.update { it.copy(actionError = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.pp_change_failed)) }
+            _state.update { it.copy(actionError = e.sentence(res, R.string.pp_change_failed)) }
         }
         _state.update { it.copy(busy = false) }
         load()
@@ -442,7 +443,7 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
             block()
         } catch (e: ApiError) {
             // PROOF_REQUIRED and the like carry their own sentence.
-            _state.update { it.copy(actionError = (e as? ApiError.Http)?.serverMessage ?: res.getString(fallback)) }
+            _state.update { it.copy(actionError = e.sentence(res, fallback)) }
         }
         _state.update { it.copy(busy = false) }
         load()
@@ -484,6 +485,14 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     var renameFor by remember { mutableStateOf<ProjectView?>(null) }
     var deleteViewFor by remember { mutableStateOf<ProjectView?>(null) }
     var filterFor by remember { mutableStateOf<ProjectView?>(null) }
+    // Access ended while this project was open (join-denied "revoked"): LiveRefresh refetches into the no-access
+    // state; say why it changed (web f661bfb).
+    LaunchedEffect(vm.projectId) {
+        (context.applicationContext as NexusApplication).container.realtime.events.collect { e ->
+            if (id.znetworks.nexus.core.realtime.RealtimeEvents.revoked(e, vm.projectId))
+                android.widget.Toast.makeText(context, context.getString(R.string.acc_changed), android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
     LaunchedEffect(s.notice) { s.notice?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show(); vm.noticeShown() } }
     androidx.activity.compose.BackHandler(enabled = s.selected.isNotEmpty()) { vm.clearSelection() }
     val meId = (context.applicationContext as NexusApplication).container.sessionStore.current?.userId

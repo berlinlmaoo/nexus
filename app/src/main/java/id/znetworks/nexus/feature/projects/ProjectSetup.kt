@@ -62,6 +62,8 @@ import id.znetworks.nexus.ui.theme.Nx
 data class ProjectSetup(
     val hiddenTabs: List<String>? = null, val memberIds: List<String>? = null,
     val template: ProjectTemplate? = null, val lang: String = "id", val starter: Boolean = true,
+    /** The level the picked members get (13 Oct); sent only with members. */
+    val memberLevel: AccessLevel = AccessLevel.EDIT,
 )
 
 object ProjectSetupLogic {

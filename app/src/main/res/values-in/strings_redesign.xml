@@ -168,4 +168,21 @@
     <plurals name="bulk_delete_title">
         <item quantity="other">Hapus %d task?</item>
     </plurals>
+    <!-- Access levels (scope 3) -->
+    <string name="acc_changed">Akses kamu ke project ini berubah</string>
+    <string name="acc_full_only">Hanya yang punya Akses penuh ke project yang bisa melakukan ini.</string>
+    <string name="acc_settings_readonly">Hanya yang punya Akses penuh yang bisa mengubah pengaturan project ini. Kamu tetap bisa melihatnya di sini.</string>
+    <string name="acc_last_owner">Project harus punya minimal satu Pemilik Project. Beri orang lain Akses penuh dulu.</string>
+    <string name="acc_needs_edit">Kamu bisa melihat project ini tapi tidak bisa mengubahnya. Minta Pemilik Project akses Bisa edit.</string>
+    <string name="acc_needs_comment">Kamu bisa melihat project ini tapi tidak bisa berkomentar. Minta Pemilik Project akses Bisa komentar.</string>
+    <string name="acc_remove_q">Keluarkan %1$s dari project ini? Aksesnya langsung hilang.</string>
+    <string name="acc_remove">Keluarkan</string>
+    <string name="acc_level">Akses</string>
+    <string name="acc_they_get">Mereka dapat</string>
+    <string name="acc_task_view">Kamu bisa melihat task ini, tapi tidak bisa mengubahnya.</string>
+    <string name="acc_task_comment">Kamu bisa berkomentar di task ini, tapi tidak bisa mengubahnya.</string>
+    <string name="acc_view_only">Hanya lihat</string>
+    <string name="acc_invite">Undang lewat email</string>
+    <string name="acc_change_failed">Akses gagal diubah</string>
+    <string name="chat_view_only">Hanya lihat: kamu bisa membaca chat project ini tapi tidak bisa mengirim pesan. Minta Pemilik Project akses Bisa komentar.</string>
 </resources>

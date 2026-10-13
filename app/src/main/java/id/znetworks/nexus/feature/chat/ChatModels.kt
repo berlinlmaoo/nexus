@@ -49,6 +49,8 @@ data class Conversation(
     val mutedUntil: String? = null,
     /** Whether you may add or remove members of this GROUP (owner, 8 Oct: Manager and above). Null = a server from before the rule. */
     val canManageMembers: Boolean? = null,
+    /** False in a project room the viewer may only read (Can view, 13 Oct); null = an older server. */
+    val canPost: Boolean? = null,
 ) {
     fun muted(nowMs: Long = System.currentTimeMillis()): Boolean =
         mutedUntil?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() > nowMs }.getOrDefault(true) } ?: false

@@ -592,7 +592,10 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                     }
                 }
             }
-            Row(verticalAlignment = Alignment.Bottom) {
+            // Can view in a project room: read, no composer (web N-03).
+            if (s.conversation?.canPost == false) Text(stringResource(R.string.chat_view_only), fontSize = 12.sp, color = c.mutedFg,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 16.dp))
+            else Row(verticalAlignment = Alignment.Bottom) {
                 Box {
                     IconButton(onClick = { attachMenu = true }, enabled = !s.uploading) { Icon(Icons.Filled.Add, stringResource(R.string.chat_attach), tint = c.violetText) }
                     DropdownMenu(attachMenu, { attachMenu = false }) {

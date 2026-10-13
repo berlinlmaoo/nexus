@@ -182,4 +182,21 @@
         <item quantity="one">Delete 1 task?</item>
         <item quantity="other">Delete %d tasks?</item>
     </plurals>
+    <!-- Access levels (scope 3) -->
+    <string name="acc_changed">Your access to this project changed</string>
+    <string name="acc_full_only">Only people with Full access to the project can do this.</string>
+    <string name="acc_settings_readonly">Only people with Full access can change this project\'s settings. You can still see them here.</string>
+    <string name="acc_last_owner">A project keeps at least one Project Owner. Give someone else Full access first.</string>
+    <string name="acc_needs_edit">You can view this project but not change it. Ask its Project Owner for Can edit access.</string>
+    <string name="acc_needs_comment">You can view this project but not comment. Ask its Project Owner for Can comment access.</string>
+    <string name="acc_remove_q">Remove %1$s from this project? They lose access right away.</string>
+    <string name="acc_remove">Remove</string>
+    <string name="acc_level">Access</string>
+    <string name="acc_they_get">They get</string>
+    <string name="acc_task_view">You can view this task, but not change it.</string>
+    <string name="acc_task_comment">You can comment on this task, but not change it.</string>
+    <string name="acc_view_only">View only</string>
+    <string name="acc_invite">Invite by email</string>
+    <string name="acc_change_failed">Couldn\'t change the access</string>
+    <string name="chat_view_only">View only: you can read this project\'s chat but not post in it. Ask its Project Owner for Can comment access.</string>
 </resources>

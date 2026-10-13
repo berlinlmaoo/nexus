@@ -189,7 +189,7 @@ class ProjectsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun createProject(name: String, folderId: String?, type: ProjectType = ProjectType.TASK, setup: ProjectSetup = ProjectSetup(), onDone: (String) -> Unit) = act {
         val ws = workspaceId() ?: throw IllegalStateException()
-        val id = try { api.createProject(name, ws, folderId, type, setup.hiddenTabs, setup.memberIds, setup.template, setup.lang, setup.starter) } catch (e: ApiError) {
+        val id = try { api.createProject(name, ws, folderId, type, setup.hiddenTabs, setup.memberIds, setup.template, setup.lang, setup.starter, setup.memberLevel) } catch (e: ApiError) {
             // Many boards (PIPELINE-DASHBOARD §16, 11 Oct): a Pipeline is created like any project, never "opened
             // instead"; the only refusal left is the company-workspace rule.
             val h = e as? ApiError.Http
@@ -576,6 +576,7 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pip
     // PROJECT-SETUP-MEMBERS A: starting tabs (Task Project; all on but Automations) and members (any type).
     var hidden by rememberSaveable { mutableStateOf(ProjectSetupLogic.DEFAULT_HIDDEN.toList()) }
     var members by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    var memberLevel by rememberSaveable { mutableStateOf(AccessLevel.EDIT) }
     var picking by remember { mutableStateOf(false) }
     // First: what the project is for, from the template gallery (DEV-REDESIGN §1): blank, a template or a dashboard type.
     var pick by remember { mutableStateOf<GalleryPick?>(null) }
@@ -623,10 +624,21 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pip
                     }
                 }
                 StartingMembers(members.toSet(), roster, enabled = !busy, onEdit = { picking = true }) { uid -> members = members - uid }
+                // The level the picked people get (13 Oct).
+                if (members.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.acc_they_get), fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
+                    var open by remember { mutableStateOf(false) }
+                    Box {
+                        TextButton(onClick = { open = true }, enabled = !busy) { Text(accessLabel(memberLevel)) }
+                        DropdownMenu(open, { open = false }) {
+                            AccessText.LEVELS.filter { it != AccessLevel.FULL }.forEach { l -> DropdownMenuItem(text = { Text(accessLabel(l)) }, onClick = { memberLevel = l; open = false }) }
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onCreate(name, folder, type, ProjectSetup(ProjectSetupLogic.hiddenToSend(hidden.toSet()), ProjectSetupLogic.membersToSend(members.toSet(), meId), template, lang, starter)) }, enabled = name.isNotBlank() && !busy) {
+            TextButton(onClick = { onCreate(name, folder, type, ProjectSetup(ProjectSetupLogic.hiddenToSend(hidden.toSet()), ProjectSetupLogic.membersToSend(members.toSet(), meId), template, lang, starter, memberLevel)) }, enabled = name.isNotBlank() && !busy) {
                 if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 else Text(stringResource(if (type == ProjectType.OUTLET_SALES) R.string.pt_outlet_create else R.string.project_launch))
             }
