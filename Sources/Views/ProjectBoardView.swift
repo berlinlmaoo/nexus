@@ -461,6 +461,10 @@ struct ProjectDetailView: View {
             }
         }
         .task { await load() }
+        // Reported for the UI tour's "did the route land" check (AppRouter.projectOnScreen).
+        .onAppear { AppRouter.shared.projectOnScreen = projectId }
+        .onDisappear { if AppRouter.shared.projectOnScreen == projectId { AppRouter.shared.projectOnScreen = nil } }
+        .onChange(of: tab, initial: true) { _, now in AppRouter.shared.projectTabOnScreen = now.rawValue.lowercased() }
         // The open tab was just hidden (in settings, or live from another device): land on Board,
         // else List, else whatever is left.
         .onChange(of: visibleTabs) { _, tabs in

@@ -1,15 +1,17 @@
 #!/bin/bash
 # NEXUS UI screenshot tour: one command, results side by side. Owner guide: docs/UI-TOUR.md.
 #
-#   scripts/ui-tour.sh                  iPhone 17 Pro Max simulator + dev web (desktop 1440x900, mobile 440x956 @3x)
+#   scripts/ui-tour.sh                  iPhone 17 Pro Max simulator: the app, then the dev web in real Safari
+#                                       (mobile reference) + dev web desktop 1440x900 in Chrome (master reference)
 #   scripts/ui-tour.sh --ipad           … plus the iPad simulator
 #   scripts/ui-tour.sh --mac            … plus "My Mac (Mac Catalyst)"
 #   scripts/ui-tour.sh --all            iPhone + iPad + Mac + web
 #   --only calendar,settings            just these screen ids (scripts/ui-tour-screens.json)
 #   --no-web | --web-only | --no-upload | --no-pull | --no-open | --keep-xcresult
+#   --chrome-mobile                     web mobile from Chrome emulation (440x956@3x) instead of Safari
 #   --set-password                      store the QA password in the macOS Keychain, check it, stop
 #
-# Order of work: iPhone, web, iPad, Mac. Results: ~/nexus-ui-tour/<timestamp>/index.html, then copied to
+# Order of work: iPhone (app, then Safari), web desktop, iPad, Mac. Results: ~/nexus-ui-tour/<timestamp>/index.html, then copied to
 # the agents VM (~/ui-tour/<timestamp>/) over Tailscale so Claude can look at them.
 #
 # The QA password is read from the Keychain (service "nexus-ui-tour"), or TOUR_PASSWORD. Never in git,
@@ -20,7 +22,7 @@ cd "$(dirname "$0")/.." || exit 2
 REPO=$(pwd)
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
-DO_IPHONE=1 DO_IPAD=0 DO_MAC=0 DO_WEB=1 DO_UPLOAD=1 DO_PULL=1 DO_OPEN=1 KEEP_XCRESULT=0 SET_PASSWORD=0
+SAFARI_MOBILE=1 DO_IPHONE=1 DO_IPAD=0 DO_MAC=0 DO_WEB=1 DO_UPLOAD=1 DO_PULL=1 DO_OPEN=1 KEEP_XCRESULT=0 SET_PASSWORD=0
 ONLY=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -30,6 +32,7 @@ while [ $# -gt 0 ]; do
     --only) ONLY="${2:-}"; shift ;;
     --only=*) ONLY="${1#--only=}" ;;
     --no-web) DO_WEB=0 ;;
+    --chrome-mobile) SAFARI_MOBILE=0 ;;
     --web-only) DO_IPHONE=0; DO_IPAD=0; DO_MAC=0 ;;
     --no-upload) DO_UPLOAD=0 ;;
     --no-pull) DO_PULL=0 ;;
@@ -109,10 +112,13 @@ case "$LOGIN_CHECK" in refused:*) say "stopping: fix the password first (--set-p
   echo "account=$TOUR_EMAIL"
   echo "server=https://nexus-prod.tail765d02.ts.net:8443 (dev)"
   echo "web-desktop=1440x900 @1x, Chromium"
-  echo "web-mobile=440x956 @3x, Chromium (iPhone UA)"
+  [ "$SAFARI_MOBILE" = 1 ] || echo "web-mobile=440x956 @3x, Chrome emulation (iPhone UA)"
 } >"$OUT/meta.txt"
 
-if [ $((DO_IPHONE + DO_IPAD + DO_MAC)) -gt 0 ]; then
+# Safari on the iPhone simulator is the web's mobile reference (owner, 13 Oct 2026).
+SAFARI_RUN=0
+[ "$DO_WEB" = 1 ] && [ "$SAFARI_MOBILE" = 1 ] && SAFARI_RUN=1
+if [ $((DO_IPHONE + DO_IPAD + DO_MAC + SAFARI_RUN)) -gt 0 ]; then
   need xcodebuild "install Xcode"
   need xcodegen "brew install xcodegen"
   if ! xcodegen generate --quiet >"$OUT/logs/xcodegen.log" 2>&1; then
@@ -121,9 +127,14 @@ if [ $((DO_IPHONE + DO_IPAD + DO_MAC)) -gt 0 ]; then
 fi
 
 # --------------------------------------------------------------------------------------------- app tours
-# run_app <iphone|ipad|mac>
+# run_app <iphone|ipad|mac> [app|app+safari|safari]
 run_app() {
-  local platform=$1 dest name note=""
+  local platform=$1 what=${2:-app} dest name note="" tests=()
+  case "$what" in
+    app) tests=(-only-testing:NEXUSUITour/NEXUSUITour/testTour) ;;
+    safari) tests=(-only-testing:NEXUSUITour/NEXUSUITour/testWebSafariTour) ;;
+    *) tests=(-only-testing:NEXUSUITour/NEXUSUITour/testTour -only-testing:NEXUSUITour/NEXUSUITour/testWebSafariTour) ;;
+  esac
   if [ "$platform" = mac ]; then
     dest="platform=macOS,variant=Mac Catalyst"
     name="My Mac (Mac Catalyst), macOS $(sw_vers -productVersion 2>/dev/null)"
@@ -141,12 +152,13 @@ run_app() {
       --batteryState charged --batteryLevel 100 >/dev/null 2>&1
     dest="id=$udid"
   fi
-  echo "$platform=$name${note:+ ($note)}" >>"$OUT/meta.txt"
+  [ "$what" != safari ] && echo "$platform=$name${note:+ ($note)}" >>"$OUT/meta.txt"
+  [ "$what" != app ] && echo "web-mobile=Safari on $name${note:+ ($note)}" >>"$OUT/meta.txt"
 
   local result="$WORK/$platform.xcresult" log="$OUT/logs/$platform-xcodebuild.log" extra=()
   [ "$platform" = mac ] && extra=(-allowProvisioningUpdates)
   rm -rf "$result"
-  say "$platform: building + running the tour (several minutes; log: logs/$platform-xcodebuild.log)"
+  say "$platform: building + running the tour [$what] (several minutes; log: logs/$platform-xcodebuild.log)"
   TEST_RUNNER_TOUR_EMAIL="$TOUR_EMAIL" \
   TEST_RUNNER_TOUR_PASSWORD="$TOUR_PASSWORD" \
   TEST_RUNNER_TOUR_SCREENS_JSON="$(cat "$REPO/scripts/ui-tour-screens.json")" \
@@ -155,7 +167,7 @@ run_app() {
   TEST_RUNNER_TOUR_FORM_ID="${TOUR_FORM_ID:-}" \
   TEST_RUNNER_TOUR_MAC_WINDOW="${TOUR_MAC_WINDOW:-}" \
     xcodebuild test -project NEXUS.xcodeproj -scheme NEXUSUITour -destination "$dest" \
-      -resultBundlePath "$result" -only-testing:NEXUSUITour/NEXUSUITour/testTour \
+      -resultBundlePath "$result" "${tests[@]}" \
       -destination-timeout 180 ${extra[@]+"${extra[@]}"} >"$log" 2>&1
   local rc=$?
 
@@ -170,26 +182,33 @@ run_app() {
   if ! xcrun xcresulttool export attachments --path "$result" --output-path "$export_dir" >>"$log" 2>&1; then
     say "$platform: could not export attachments (xcresulttool) — kept $result"; KEEP_XCRESULT=1
   fi
-  local count
-  count=$(node "$TOOLS" extract "$export_dir" "$OUT/$platform" 2>&1)
-  local line="$platform: $count"
-  [ $rc -ne 0 ] && line="$line, test exit $rc"
-  if [ -f "$OUT/$platform/login-error.txt" ]; then
-    line="$line — SIGN-IN FAILED: $(cut -c1-400 "$OUT/$platform/login-error.txt")"
+  [ "$what" != safari ] && collect "$export_dir" tour- "$OUT/$platform" "$platform" $rc
+  [ "$what" != app ] && collect "$export_dir" safari- "$OUT/web-mobile" "web mobile (Safari)" $rc
+  [ "$KEEP_XCRESULT" = 1 ] || rm -rf "$result" "$export_dir"
+}
+
+# collect <exportDir> <prefix> <destDir> <label> <xcodebuild exit>: PNGs out of the result, one summary line.
+collect() {
+  local export_dir=$1 prefix=$2 dest=$3 label=$4 rc=$5 count line bad
+  count=$(node "$TOOLS" extract "$export_dir" "$dest" "$prefix" 2>&1)
+  line="$label: $count"
+  [ "$rc" -ne 0 ] && line="$line, test exit $rc"
+  if [ -f "$dest/login-error.txt" ]; then
+    line="$line — SIGN-IN FAILED: $(cut -c1-400 "$dest/login-error.txt")"
   fi
-  if [ -f "$OUT/$platform/results.json" ]; then
-    local bad
-    bad=$(node -e 'const r=require(process.argv[1]);const b=r.filter(x=>x.status!=="ok").map(x=>x.id+": "+x.status);if(b.length)console.log(b.join("; "))' "$OUT/$platform/results.json" 2>/dev/null)
+  if [ -f "$dest/results.json" ]; then
+    bad=$(node -e 'const r=require(process.argv[1]);const b=r.filter(x=>x.status!=="ok").map(x=>x.id+": "+x.status);if(b.length)console.log(b.join("; "))' "$dest/results.json" 2>/dev/null)
     [ -n "$bad" ] && line="$line — not clean: $bad"
   fi
   say "$line"
   SUMMARY+=("$line")
-  [ "$KEEP_XCRESULT" = 1 ] || rm -rf "$result" "$export_dir"
 }
 
 run_web() {
   local dir="$REPO/scripts/ui-tour-web" log="$OUT/logs/web.log"
-  say "web: dev web desktop 1440x900 + mobile 440x956@3x"
+  local variants=desktop,mobile
+  [ "$SAFARI_MOBILE" = 1 ] && variants=desktop
+  say "web: dev web in Chrome ($variants)"
   if [ ! -d "$dir/node_modules/playwright" ]; then
     (cd "$dir" && npm install --no-audit --no-fund --silent) >>"$log" 2>&1 || { SUMMARY+=("web: npm install failed — logs/web.log"); return; }
   fi
@@ -197,17 +216,22 @@ run_web() {
   if [ "$(uname)" != "Darwin" ] || [ ! -d "/Applications/Google Chrome.app" ]; then
     (cd "$dir" && npx --no-install playwright install chromium) >>"$log" 2>&1 || { SUMMARY+=("web: playwright install chromium failed — logs/web.log"); return; }
   fi
-  if node "$dir/tour.mjs" --out "$OUT" --only "$ONLY" >>"$log" 2>&1; then
+  if node "$dir/tour.mjs" --out "$OUT" --only "$ONLY" --variants "$variants" >>"$log" 2>&1; then
     local bad
     bad=$(grep -vE ": ok$" "$log" | grep -E "^web-(desktop|mobile) " | head -10 | tr '\n' ';')
-    SUMMARY+=("web: $(find "$OUT/web-desktop" -name '*.png' 2>/dev/null | wc -l | tr -d ' ') desktop + $(find "$OUT/web-mobile" -name '*.png' 2>/dev/null | wc -l | tr -d ' ') mobile screenshots${bad:+ — not clean: $bad}")
+    local mobile=""
+    [ "$SAFARI_MOBILE" = 1 ] || mobile=" + $(find "$OUT/web-mobile" -name '*.png' 2>/dev/null | wc -l | tr -d ' ') mobile"
+    SUMMARY+=("web (Chrome): $(find "$OUT/web-desktop" -name '*.png' 2>/dev/null | wc -l | tr -d ' ') desktop$mobile screenshots${bad:+ — not clean: $bad}")
   else
     SUMMARY+=("web: FAILED — $(tail -1 "$log")")
   fi
   say "${SUMMARY[${#SUMMARY[@]}-1]}"
 }
 
-[ "$DO_IPHONE" = 1 ] && run_app iphone
+if [ "$DO_IPHONE" = 1 ] && [ "$SAFARI_RUN" = 1 ]; then run_app iphone app+safari
+elif [ "$DO_IPHONE" = 1 ]; then run_app iphone app
+elif [ "$SAFARI_RUN" = 1 ]; then run_app iphone safari
+fi
 [ "$DO_WEB" = 1 ] && run_web
 [ "$DO_IPAD" = 1 ] && run_app ipad
 [ "$DO_MAC" = 1 ] && run_app mac

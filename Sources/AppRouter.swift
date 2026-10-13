@@ -210,6 +210,14 @@ final class AppRouter {
     /// when somebody taps one.
     var projectRequest: ProjectRef?
 
+    /// What is actually on screen, written by the screens themselves (ProjectDetailView, FormBuilderView):
+    /// the project id, its tab (ProjectTab raw value, lowercased) and an open form builder's form id.
+    /// The UI tour checks these before it photographs a project, so a route that did not land is
+    /// reported as the wrong screen instead of a picture of the Projects list.
+    var projectOnScreen: String?
+    var projectTabOnScreen: String?
+    var formOnScreen: String?
+
     func openProjectPage(_ ref: ProjectRef) {
         // Not `go(.projects)`: that also asks the sidebar for the Projects list, and the sidebar would
         // then land on the list instead of the project.

@@ -338,8 +338,11 @@ struct FormBuilderView: View {
         // Once: coming back from a pushed screen must not reload over the edits.
         .task { if !loaded { await load() } }
         .onChange(of: draft) { _, _ in scheduleSave() }
-        .onAppear { scheduleSave() }
-        .onDisappear { leaving() }
+        .onAppear { scheduleSave(); AppRouter.shared.formOnScreen = formId }
+        .onDisappear {
+            leaving()
+            if AppRouter.shared.formOnScreen == formId { AppRouter.shared.formOnScreen = nil }
+        }
         .navigationDestination(item: $openFieldId) { id in fieldEditor(id, embedded: false) }
         .navigationDestination(isPresented: $showDuplicate) {
             FormDuplicateView(sourceProjectId: projectId, initialName: draft.name, description: draft.description,

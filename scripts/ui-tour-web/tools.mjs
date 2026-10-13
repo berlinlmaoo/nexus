@@ -2,7 +2,8 @@
 // Helpers for ../ui-tour.sh (docs/UI-TOUR.md). Node instead of bash because they all read JSON.
 //
 //   node tools.mjs pick-sim iphone|ipad          → "<udid>\t<name (runtime)>\t<note>"
-//   node tools.mjs extract <exportDir> <destDir> → copies tour-<id>.png/.txt/.json out of an
+//   node tools.mjs extract <exportDir> <destDir> [prefix] → copies <prefix><id>.png/.txt/.json (prefix
+//                                                   "tour-" = app, "safari-" = Safari) out of an
 //                                                   `xcresulttool export attachments` folder
 //   node tools.mjs check-login                   → POSTs the QA account to the DEV server once
 //   node tools.mjs index <outDir>                → writes <outDir>/index.html
@@ -63,10 +64,11 @@ function pickSim(kind) {
 }
 
 // ----------------------------------------------------------------------------------------------- extract
-function extract(exportDir, destDir) {
+function extract(exportDir, destDir, prefix = "tour-") {
   fs.mkdirSync(destDir, { recursive: true });
   const found = [];
-  const pattern = /^tour-(.+?)(?:_\d+_[0-9A-Fa-f-]{36})?\.(png|jpe?g|heic|txt|json)$/;
+  const esc = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`^${esc}(.+?)(?:_\\d+_[0-9A-Fa-f-]{36})?\\.(png|jpe?g|heic|txt|json)$`);
   const take = (file, human) => {
     const m = (human || "").match(pattern) || path.basename(file).match(pattern);
     if (!m) return;
@@ -119,11 +121,11 @@ async function checkLogin() {
 function index(outDir) {
   const config = JSON.parse(fs.readFileSync(new URL("../ui-tour-screens.json", import.meta.url), "utf8"));
   const columns = [
-    ["web-desktop", "Web desktop 1440×900 (master)"],
-    ["web-mobile", "Web mobile 440×956"],
-    ["iphone", "iPhone"],
-    ["ipad", "iPad"],
-    ["mac", "Mac"],
+    ["web-desktop", "Web desktop 1440×900 (reference)"],
+    ["web-mobile", "Web mobile"],
+    ["iphone", "iPhone app"],
+    ["ipad", "iPad app"],
+    ["mac", "Mac app"],
   ].filter(([dir]) => fs.existsSync(path.join(outDir, dir)));
   const meta = {};
   const metaFile = path.join(outDir, "meta.txt");
@@ -136,7 +138,7 @@ function index(outDir) {
   const status = {};
   const note = (dir, id, s) => { if (s && s !== "ok") (status[`${dir}/${id}`] = s); };
   try { for (const r of JSON.parse(fs.readFileSync(path.join(outDir, "web-results.json"), "utf8"))) note(r.variant, r.id, r.status + (r.horizontalOverflowPx > 0 ? `; scrolls sideways ${r.horizontalOverflowPx}px` : "")); } catch {}
-  for (const dir of ["iphone", "ipad", "mac"]) {
+  for (const dir of ["web-mobile", "iphone", "ipad", "mac"]) {
     try { for (const r of JSON.parse(fs.readFileSync(path.join(outDir, dir, "results.json"), "utf8"))) note(dir, r.id, r.status); } catch {}
   }
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -152,16 +154,28 @@ function index(outDir) {
         const file = `${dir}/${id}.png`;
         const txt = path.join(outDir, dir, `${id}.txt`);
         const s = status[`${dir}/${id}`];
-        const body = fs.existsSync(path.join(outDir, file))
-          ? `<a href="${file}" target="_blank"><img loading="lazy" src="${file}" alt="${esc(id)} ${dir}"></a>`
+        // Every page of the screen, top to bottom: <id>.png, then <id>-2.png, <id>-3.png … (scrolled shots).
+        const pages = fs.existsSync(path.join(outDir, file)) ? [file] : [];
+        const more = fs.existsSync(path.join(outDir, dir))
+          ? fs.readdirSync(path.join(outDir, dir))
+              .map((f) => [f, (f.match(new RegExp(`^${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(\\d+)\\.png$`)) || [])[1]])
+              .filter(([, n]) => n)
+              .sort((a, b) => Number(a[1]) - Number(b[1]))
+              .map(([f]) => `${dir}/${f}`)
+          : [];
+        pages.push(...more);
+        const body = pages.length
+          ? pages.map((f, i) => `<a href="${f}" target="_blank"><img loading="lazy" src="${f}" alt="${esc(id)} ${dir} page ${i + 1}"></a>`).join("")
+            + (pages.length > 1 ? `<small>${pages.length} pages</small>` : "")
           : `<div class="none">—</div>`;
         const extraText = fs.existsSync(txt) ? `<pre>${esc(fs.readFileSync(txt, "utf8"))}</pre>` : "";
-        return `<td>${body}${s ? `<div class="warn">${esc(s)}</div>` : ""}${extraText}</td>`;
+        const cls = s && /^(wrong-screen|timeout|no-session|bounced|error)/.test(s) ? "bad" : "warn";
+        return `<td>${s ? `<div class="${cls}">${esc(s)}</div>` : ""}${body}${extraText}</td>`;
       }).join("");
       return `<tr id="${esc(id)}"><th><a href="#${esc(id)}">${esc(title)}</a><small>${esc(id)}</small></th>${cells}</tr>`;
     }).join("\n");
   const head = columns.map(([dir, label]) => `<th>${esc(label)}${meta[dir] ? `<small>${esc(meta[dir])}</small>` : ""}</th>`).join("");
-  const loginError = ["iphone", "ipad", "mac"].map((d) => path.join(outDir, d, "login-error.txt")).filter((f) => fs.existsSync(f))
+  const loginError = ["web-mobile", "iphone", "ipad", "mac"].map((d) => path.join(outDir, d, "login-error.txt")).filter((f) => fs.existsSync(f))
     .map((f) => `<div class="err"><b>${esc(path.basename(path.dirname(f)))} sign-in failed:</b> ${esc(fs.readFileSync(f, "utf8"))}</div>`).join("");
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -176,9 +190,9 @@ thead th{position:sticky;top:0;background:var(--bg);text-align:left;padding:6px 
 th small,td small{display:block;color:var(--muted);font-weight:400;font-size:12px}
 tbody th{vertical-align:top;text-align:left;width:150px;padding:10px;font-size:14px}tbody th a{color:inherit;text-decoration:none}
 td{vertical-align:top;padding:0 10px;background:var(--card);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-td img{display:block;max-height:560px;max-width:100%;margin:10px 0;border:1px solid var(--line);border-radius:6px}
-td:nth-of-type(1) img{max-width:520px}td:nth-of-type(2) img,td:nth-of-type(3) img{max-width:260px}
-.none{color:var(--muted);padding:20px 0}.warn{color:var(--warn);font-size:12px;margin-bottom:8px}
+td img{display:block;max-width:100%;margin:10px 0;border:1px solid var(--line);border-radius:6px}
+td img{max-height:none}td:nth-of-type(1) img{max-width:520px}td:nth-of-type(2) img,td:nth-of-type(3) img{max-width:260px}
+.none{color:var(--muted);padding:20px 0}.bad{color:#fff;background:var(--err);font-weight:600;font-size:12px;padding:4px 8px;border-radius:6px;margin-top:10px}.warn{color:var(--warn);font-size:12px;margin-bottom:8px}
 .err{margin:8px 16px;padding:10px 12px;border:1px solid var(--err);color:var(--err);border-radius:8px;background:var(--card)}
 pre{white-space:pre-wrap;font-size:12px;color:var(--err)}
 </style></head><body>
@@ -194,7 +208,7 @@ ${rows}
 
 try {
   if (cmd === "pick-sim") console.log(pickSim(rest[0] || "iphone"));
-  else if (cmd === "extract") extract(rest[0], rest[1]);
+  else if (cmd === "extract") extract(rest[0], rest[1], rest[2] || "tour-");
   else if (cmd === "check-login") await checkLogin();
   else if (cmd === "index") index(rest[0]);
   else { console.error("usage: tools.mjs pick-sim|extract|check-login|index …"); process.exit(2); }

@@ -2,6 +2,7 @@
 import { existsSync } from "node:fs";
 // Web half of the NEXUS UI screenshot tour (../ui-tour.sh, docs/UI-TOUR.md).
 //
+// Full-page screenshots (owner, 13 Oct 2026): the whole document, not just the first viewport.
 // Photographs every screen in ../ui-tour-screens.json on the DEV web twice: desktop 1440x900 (the master
 // reference) and mobile 440x956 @3x (iPhone 17 Pro Max). Signs in ONCE with the QA account and reuses
 // that session for both. One Chromium, closed in `finally`.
@@ -176,7 +177,7 @@ async function main() {
             } catch (e) {
               status = `error: ${String(e.message || e).split("\n")[0]}`;
             }
-            await page.screenshot({ path: path.join(dir, `${s.id}.png`) }).catch((e) => { status = `no screenshot: ${e.message}`; });
+            await page.screenshot({ path: path.join(dir, `${s.id}.png`), fullPage: true }).catch((e) => { status = `no screenshot: ${e.message}`; });
             const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth).catch(() => null);
             results.push({ variant: variant.dir, id: s.id, status, seconds: (Date.now() - started) / 1000, horizontalOverflowPx: overflow, pageErrors: [...errors] });
             console.log(`${variant.dir} ${s.id}: ${status}`);

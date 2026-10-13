@@ -66,7 +66,12 @@ struct ProjectsView: View {
     private func takeProjectRequest() {
         guard let ref = router.projectRequest else { return }
         router.projectRequest = nil
-        openBoard = ref
+        // A beat later, not inside the same update: set while the tab is still switching in (onAppear),
+        // the push was dropped and the Projects list stayed on screen (UI tour, 13 Oct 2026).
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            openBoard = ref
+        }
     }
 
     /// The sidebar's Projects page on an iPad or Mac: the web's page header instead of the nav bar.

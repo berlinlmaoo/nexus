@@ -151,9 +151,62 @@ struct TourDriver: ViewModifier {
         try? await Task.sleep(for: .milliseconds(1200))
         if let route = TourMode.argument("nexusTourRoute"), let url = URL(string: route) {
             open(url)
+            if let expected = ProjectTarget(url) {
+                if let problem = await waitUntilLanded(expected) {
+                    state.status = "wrong-screen:\(screen) \(problem)"
+                    return
+                }
+            }
         }
         try? await Task.sleep(for: .milliseconds(800))
         state.status = "ready:\(screen)"
+    }
+
+    /// Where a project route must end up: the project, on its tab, or its form builder.
+    private struct ProjectTarget {
+        let id: String
+        let view: String?
+        let form: String?
+        let query: [URLQueryItem]
+
+        init?(_ url: URL) {
+            guard url.scheme?.lowercased() == "nexus", url.host?.lowercased() == "projects",
+                  let id = url.pathComponents.first(where: { $0 != "/" }), !id.isEmpty else { return nil }
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            self.id = id
+            self.query = items
+            self.view = items.first { $0.name == "view" }?.value?.lowercased()
+            self.form = items.first { $0.name == "form" }?.value
+        }
+    }
+
+    private func landed(_ target: ProjectTarget) -> Bool {
+        if let form = target.form { return router.formOnScreen == form }
+        guard router.projectOnScreen == target.id else { return false }
+        guard let view = target.view else { return true }
+        let tab = router.projectTabOnScreen ?? ""
+        return tab == view || (view == "sheet" && tab == "spreadsheet")
+    }
+
+    /// Up to ~12 s. Every 4 s without the project on screen the request is made again: the first one can
+    /// arrive before the Projects tab is listening. nil when it landed, else what is on screen instead.
+    private func waitUntilLanded(_ target: ProjectTarget) async -> String? {
+        for _ in 0..<3 {
+            for _ in 0..<16 {
+                if landed(target) { return nil }
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+            if router.projectOnScreen != target.id && router.formOnScreen == nil {
+                if router.projectLink == nil { router.projectLink = NXProjectLink(projectId: target.id, query: target.query) }
+                router.projectRequest = nil
+                try? await Task.sleep(for: .milliseconds(150))
+                router.openProjectPage(ProjectRef(id: target.id, name: ""))
+            }
+        }
+        if landed(target) { return nil }
+        return "(expected project \(target.id), tab \(target.view ?? "any"), form \(target.form ?? "none");"
+            + " on screen: project \(router.projectOnScreen ?? "none"), tab \(router.projectTabOnScreen ?? "none"),"
+            + " form \(router.formOnScreen ?? "none"))"
     }
 
     /// `nexus://projects/<id>?view=board&form=<id>` opens the project as a page, the way a tap on it
