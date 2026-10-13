@@ -298,12 +298,14 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
     waiters: Waiter[];
     timer: ReturnType<typeof setTimeout> | null;
     inflight: Edit[] | null;
+    /** Each in-flight row's version (updatedAt) when it was sent: a newer server copy may have overtaken it. */
+    inflightBase: Map<string, string>;
     failures: number;
   };
   const queues = useRef(new Map<string, Queue>());
   const queueOf = (id: string) => {
     let q = queues.current.get(id);
-    if (!q) { q = { pending: new Map(), waiters: [], timer: null, inflight: null, failures: 0 }; queues.current.set(id, q); }
+    if (!q) { q = { pending: new Map(), waiters: [], timer: null, inflight: null, inflightBase: new Map(), failures: 0 }; queues.current.set(id, q); }
     return q;
   };
   const [saving, setSaving] = useState(0);
@@ -348,6 +350,8 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
     q.waiters = [];
     if (!batch.length) { done.forEach((w) => w.resolve()); recount(); return; }
     q.inflight = batch;
+    const sent = qc.getQueryData<NexusSheet>(["nexus", "sheet", id]);
+    q.inflightBase = new Map(batch.map((e) => [e.rowId, sent?.rows.find((r) => r.id === e.rowId)?.updatedAt ?? ""]));
     recount();
     setSaving((n) => n + 1);
     let retryIn = 0;
@@ -405,7 +409,17 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
     const q = queues.current.get(sheetId);
     if (!q || (!q.pending.size && !q.inflight)) return;
     const overlay = new Map<string, Record<string, unknown>>();
-    for (const e of q.inflight ?? []) overlay.set(e.rowId, { ...e.values });
+    const version = new Map(sheetQ.data.rows.map((r) => [r.id, r.updatedAt]));
+    // A request already on its way is put back only over a copy that is not NEWER than the one it was sent
+    // from (a refetch of the old state). A newer server copy (someone's later write, realtime bug 4) is the
+    // truth until this request's own answer arrives, which then wins or loses by version — re-applying the
+    // in-flight value over it kept "my" value on screen for good when the other write committed last.
+    for (const e of q.inflight ?? []) {
+      const base = q.inflightBase.get(e.rowId) ?? "";
+      const now = version.get(e.rowId) ?? "";
+      if (base && now && Date.parse(now) > Date.parse(base)) continue;
+      overlay.set(e.rowId, { ...e.values });
+    }
     for (const [rowId, v] of q.pending) overlay.set(rowId, { ...(overlay.get(rowId) ?? {}), ...v });
     let changed = false;
     const rows = sheetQ.data.rows.map((r) => {
