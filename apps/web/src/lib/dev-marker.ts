@@ -30,5 +30,12 @@ export function installDevMarker() {
     font: "600 11px/18px system-ui, sans-serif", letterSpacing: "0.04em", opacity: "0.9", pointerEvents: "none",
   } satisfies Partial<CSSStyleDeclaration>);
 
+  // Phone width: the stripe (and "[DEV]" in the title) only. The label sat on the bottom tab bar
+  // labels and on the login card's "Secure sign-in" pill (UI tour run 5, Safari on iPhone).
+  const narrow = window.matchMedia("(max-width: 767px)");
+  const place = () => { label.style.display = narrow.matches ? "none" : ""; };
+  place();
+  narrow.addEventListener("change", place);
+
   document.body.append(stripe, label);
 }

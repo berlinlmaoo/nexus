@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.MeetingRoom
 import androidx.compose.material3.CircularProgressIndicator
@@ -74,7 +75,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
-// Room booking and the team calendar: read-only on the phones (API.md §2.4).
+// Room booking (new / edit / delete like the web, 14 Oct 2026) and the team calendar (read-only).
 
 @Serializable data class Booker(val name: String? = null)
 @Serializable data class Booking(val id: String, val room: String = "", val title: String = "", val description: String? = null,
@@ -97,6 +98,23 @@ object AgendaLogic {
 class AgendaApi(private val api: ApiClient) {
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
     suspend fun bookings(from: Instant, to: Instant) = api.get("/api/room-bookings?rangeStart=${enc(from.toString())}&rangeEnd=${enc(to.toString())}", Bookings.serializer()).bookings
+
+    private fun body(room: String, title: String, from: Instant, to: Instant, notes: String?) = kotlinx.serialization.json.buildJsonObject {
+        put("room", kotlinx.serialization.json.JsonPrimitive(room)); put("title", kotlinx.serialization.json.JsonPrimitive(title))
+        put("startsAt", kotlinx.serialization.json.JsonPrimitive(from.toString())); put("endsAt", kotlinx.serialization.json.JsonPrimitive(to.toString()))
+        put("description", notes?.let { kotlinx.serialization.json.JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull)
+    }.toString().let { with(ApiClient) { it.toJsonBody() } }
+
+    /** POST /api/room-bookings (web createRoomBooking); 409 = the room is taken (`conflict.title`). */
+    suspend fun create(room: String, title: String, from: Instant, to: Instant, notes: String?) =
+        api.send(okhttp3.Request.Builder().url(api.url("/api/room-bookings")).post(body(room, title, from, to, notes)).build(), kotlinx.serialization.json.JsonObject.serializer())
+
+    suspend fun update(id: String, room: String, title: String, from: Instant, to: Instant, notes: String?) =
+        api.send(okhttp3.Request.Builder().url(api.url("/api/room-bookings/${enc(id)}")).patch(body(room, title, from, to, notes)).build(), kotlinx.serialization.json.JsonObject.serializer())
+
+    /** Only the person who booked it or a manager (403 otherwise). */
+    suspend fun delete(id: String) =
+        api.send(okhttp3.Request.Builder().url(api.url("/api/room-bookings/${enc(id)}")).delete().build(), kotlinx.serialization.json.JsonObject.serializer())
 }
 
 @Composable
@@ -115,9 +133,10 @@ private fun Header(title: String, onBack: () -> Unit, trailing: @Composable () -
 }
 
 @Composable
-private fun AgendaRow(time: String, title: String, chip: String?, sub: String?) {
+private fun AgendaRow(time: String, title: String, chip: String?, sub: String?, onClick: (() -> Unit)? = null) {
     val c = Nx.colors
-    Row(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(14.dp)).border(1.dp, c.border, RoundedCornerShape(14.dp)).padding(12.dp),
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(14.dp))
+        .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(12.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Text(time, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.violetText, modifier = Modifier.width(92.dp))
         Column(Modifier.weight(1f)) {
@@ -136,14 +155,19 @@ fun RoomBookingScreen(onBack: () -> Unit) {
     var past by rememberSaveable { mutableStateOf(false) }
     var list by remember { mutableStateOf<List<Booking>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(past) {
+    // The composer: Pair(true, null) = a new booking, Pair(true, b) = editing b.
+    var composing by remember { mutableStateOf<Pair<Boolean, Booking?>>(false to null) }
+    var reload by remember { mutableIntStateOf(0) }
+    LaunchedEffect(past, reload) {
         list = null
         val now = Instant.now()
         try { list = if (past) api.bookings(now.minusSeconds(30L * 86400), now) else api.bookings(now, now.plusSeconds(14L * 86400)); error = null }
         catch (e: ApiError) { error = e.describe(res) }
     }
     Column(Modifier.fillMaxSize().background(c.background)) {
-        id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.home_q_rooms), subtitle = stringResource(R.string.sub_rooms), onBack = onBack)
+        // "New booking" as the header's primary action (web; the phones were read-only).
+        id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.home_q_rooms), subtitle = stringResource(R.string.sub_rooms), onBack = onBack,
+            actions = { id.znetworks.nexus.ui.components.HeaderIconButton(androidx.compose.material.icons.Icons.Filled.Add, stringResource(R.string.rb_new), { composing = true to null }, primary = true) })
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(!past, { past = false }, { Text(stringResource(R.string.ag_upcoming)) })
             FilterChip(past, { past = true }, { Text(stringResource(R.string.ag_history)) })
@@ -152,16 +176,18 @@ fun RoomBookingScreen(onBack: () -> Unit) {
         when {
             l == null && error == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             l == null -> TabEmpty(Icons.Filled.MeetingRoom, error!!)
-            l.isEmpty() -> TabEmpty(Icons.Filled.MeetingRoom, stringResource(if (past) R.string.ag_no_bookings_past else R.string.ag_no_bookings_next))
+            l.isEmpty() -> id.znetworks.nexus.ui.components.EmptyState(Icons.Filled.MeetingRoom, stringResource(if (past) R.string.ag_no_bookings_past else R.string.ag_no_bookings_next),
+                stringResource(R.string.rb_empty_sub), stringResource(R.string.rb_new), { composing = true to null }, Modifier.fillMaxSize())
             else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 AgendaLogic.byDay(l, past).forEach { (day, items) ->
                     item(key = "d$day") {
                         Text(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()).format(day).replaceFirstChar(Char::titlecase),
                             fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.padding(top = 8.dp))
                     }
-                    items.forEach { b -> item(key = b.id) { AgendaRow("${AgendaLogic.hhmm(b.startsAt)}–${AgendaLogic.hhmm(b.endsAt)}", b.title, b.room, b.createdBy?.name) } }
+                    items.forEach { b -> item(key = b.id) { AgendaRow("${AgendaLogic.hhmm(b.startsAt)}–${AgendaLogic.hhmm(b.endsAt)}", b.title, roomLabel(b.room), b.createdBy?.name) { composing = true to b } } }
                 }
             }
         }
     }
+    if (composing.first) BookingComposer(composing.second, api, onDismiss = { composing = false to null }, onSaved = { composing = false to null; reload++ })
 }

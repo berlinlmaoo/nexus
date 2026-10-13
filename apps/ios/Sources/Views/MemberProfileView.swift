@@ -231,7 +231,7 @@ struct MemberProfileView: View {
             SectionLabel(T("Total XP"))
             if let xp = xpTotal, let level = levelNumber {
                 HStack(alignment: .center, spacing: 8) {
-                    Text(xp.formatted(.number.grouping(.automatic)))
+                    Text(AppNumber.int(xp))
                         .font(NXFont.display(28, .bold)).foregroundStyle(NX.foreground)
                     Spacer(minLength: 8)
                     NexusChip(text: "\(T("Level")) \(level)\(levelName.map { " · \($0)" } ?? "")", tone: .accent)

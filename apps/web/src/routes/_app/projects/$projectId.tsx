@@ -720,7 +720,7 @@ function ProjectDetail() {
       <PageHeader
         compact
         className="bg-card/95"
-        icon={<span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted/60 text-2xl leading-none"><ProjectMark icon={data?.icon} color={data?.color} className="max-h-9 max-w-9 rounded-lg object-cover" /></span>}
+        icon={<span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted/60 text-[28px] leading-none"><ProjectMark icon={data?.icon} color={data?.color} className="max-h-9 max-w-9 rounded-lg object-cover" /></span>}
         title={data?.name || tr("Project")}
         subtitle={data?.description || (project.isLoading ? tr("Loading…") : projectFailed ? (projectOffline ? tr("No connection. Check your internet and try again.") : projectMissing ? tr("This project was deleted, or the link is wrong.") : tr("Couldn't open this project. You may not be a member.")) : undefined)}
         actions={

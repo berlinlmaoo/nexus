@@ -511,7 +511,7 @@ private struct OverviewProgressCard: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(c.value == 0 || onDrill == nil)
+                .allowsHitTesting(!(c.value == 0 || onDrill == nil))
                 .accessibilityHint(c.value > 0 && onDrill != nil ? c.hint : "")
             }
         }
@@ -743,7 +743,9 @@ private struct OverviewTeamCard: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(p.open == 0 || onDrill == nil)
+        // Not .disabled: a disabled Button greys its whole label, so every member with nothing open
+        // read as switched off (UI tour run 5). A row with nothing to drill into just doesn't take the tap.
+        .allowsHitTesting(!(p.open == 0 || onDrill == nil))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(p.name)\(p.isLead ? ", " + T("Project Owner") : ""). \(T("Open")) \(p.open), \(T("Overdue")) \(p.overdue), \(T("Done this month")) \(p.doneMonth)")
         .accessibilityAddTraits(.isButton)
@@ -770,7 +772,7 @@ private struct OverviewTeamCard: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(onDrill == nil)
+        .allowsHitTesting(onDrill != nil)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(T("Unassigned")). \(T("Open")) \(stats.unassigned)")
         .accessibilityAddTraits(.isButton)
@@ -888,7 +890,7 @@ private struct OverviewPriorityCard: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .disabled(n == 0 || onDrill == nil)
+                        .allowsHitTesting(!(n == 0 || onDrill == nil))
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel("\(OverviewStyle.priorityLabel(k)) \(n)")
                         .accessibilityAddTraits(.isButton)
@@ -926,7 +928,7 @@ private struct OverviewSectionsCard: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .disabled(s.open == 0 || onDrill == nil)
+                    .allowsHitTesting(!(s.open == 0 || onDrill == nil))
                     .accessibilityElement(children: .combine)
                 }
             }

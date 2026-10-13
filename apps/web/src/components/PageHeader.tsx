@@ -24,8 +24,12 @@ export function PageHeader({
   compact?: boolean;
 }) {
   return (
-    // Sticky from md up only: on a phone a sticky header took a fifth of the screen (audit 12 Oct 2026).
-    <div data-page-header className={cn("border-b border-border bg-background/80 backdrop-blur md:sticky md:top-0 md:z-40", className)}>
+    // Sticky on every width (UI tour run 5). On a phone it was left to scroll away (audit 12 Oct 2026), and
+    // Safari then showed the page scrolling on behind its status bar. Phone only: an opaque surface (Safari
+    // carries the colour of a sticky bar at the top edge into the status-bar area; a translucent one it does
+    // not), padding for the top safe area, and a band of the same colour above the bar, so whatever Safari
+    // draws above the page's top edge is header, not content. md and up: unchanged (translucent + blur).
+    <div data-page-header className={cn("sticky top-0 z-30 border-b border-border bg-background pt-[env(safe-area-inset-top)] before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-24 before:bg-background before:content-[''] md:z-40 md:bg-background/80 md:pt-0 md:backdrop-blur md:before:hidden", className)}>
       <div className={cn("px-4 md:px-8 md:pt-6 flex sm:flex-row sm:items-start sm:justify-between sm:gap-6 sm:pt-4 sm:pb-3", compact ? "flex-row items-center justify-between gap-2 pt-3 pb-1" : "flex-col gap-3 pt-4 pb-3")}>
         <div className="flex items-start gap-3 min-w-0">
           {icon && <div className="hidden sm:block text-2xl mt-0.5 shrink-0">{icon}</div>}

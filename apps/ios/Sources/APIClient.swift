@@ -716,7 +716,7 @@ struct APIClient {
     /// `type`: "TASK" or "PIPELINE" (owner, 9 Oct 2026); FINANCE and CONTENT answer 400 TYPE_COMING_SOON.
     /// `folderId`: made straight inside that folder (folder → New project here); nil = no folder.
     /// No `icon` and no `color` (owner, 11 Oct 2026): the server gives a new project its defaults and
-    /// the app draws the Tasks icon (ProjectMark) until someone adds a photo in Project settings.
+    /// the app draws the default page icon (ProjectMark) until someone adds a photo in Project settings.
     /// `hiddenTabs` (Task Project only) is sent whenever it is given, even empty: with no hiddenTabs the
     /// server hides Automations by default (owner, 11 Oct 2026), so an empty list is how "every tab on"
     /// is said. `memberIds` is sent only when there is something in it.

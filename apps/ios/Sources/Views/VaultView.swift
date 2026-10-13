@@ -1429,9 +1429,7 @@ struct VaultView: View {
     }
 
     static func human(_ bytes: Int) -> String {
-        let f = ByteCountFormatter()
-        f.countStyle = .binary
-        return f.string(fromByteCount: Int64(bytes))
+        AppNumber.bytes(bytes)
     }
 
     private static func subtitle(_ item: VaultItem) -> String {

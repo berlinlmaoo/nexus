@@ -188,6 +188,8 @@ struct ThreadsView: View {
     /// thing to do on one accidental tap.
     @State private var confirmingDelete: FeedPost?
     @State private var viewingPhoto: PhotoRef?
+    /// Your photo beside the composer (web). The Keychain session has none: fetched once.
+    @State private var myAvatar: String?
     /// All | Mentions, as on the web (UI tour 13 Oct 2026: the app had no way to see only the posts
     /// that tag you). Mentions asks the server for `&mentions=me`.
     @State private var tab: FeedTab = .all
@@ -221,6 +223,7 @@ struct ThreadsView: View {
         .navigationTitle(T("Threads"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load(); claimFocus(); await loadRoster() }
+        .task(id: auth.session?.userId) { myAvatar = try? await APIClient.shared.profile().user.avatar }
         .onChange(of: router.focus) { _, _ in if !loading { claimFocus() } }
         .navigationDestination(item: $openPost) { p in PostThreadView(post: p) }
         .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
@@ -244,19 +247,28 @@ struct ThreadsView: View {
             ErrorState(message: error) { Task { await load() } }
         } else {
             ScrollView {
-                LazyVStack(spacing: 12) {
+                // Web feed: ONE hairline card, the composer on top and every post a row under it,
+                // split by hairlines (UI tour run 5: the app drew a card per post).
+                LazyVStack(spacing: 0) {
                     if tab == .all { composer }
                     if posts.isEmpty, tab == .mentions {
                         EmptyState(icon: "at", title: T("No mentions yet"),
                                    subtitle: T("When someone tags you, it shows up here."), compact: true)
+                            .padding(.vertical, 12)
                     } else if posts.isEmpty {
                         EmptyState(icon: "bubble.left.and.text.bubble.right", title: T("Nothing on the feed yet"),
                                    subtitle: T("Threads is the company feed: wins, photos, questions for everyone. Write the first post in the box above and it appears here for the whole office."),
                                    compact: true)
+                            .padding(.vertical, 12)
                     } else {
                         ForEach(posts) { p in postCard(p) }
                     }
                 }
+                .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                .frame(maxWidth: isRoot ? 720 : .infinity)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, NXSidebarPage.gutter(isRoot))
                 .padding(.vertical, isRoot ? 24 : 16)
             }
@@ -266,10 +278,14 @@ struct ThreadsView: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField(T("What's new?"), text: $draft, axis: .vertical)
-                .font(NXFont.text(15)).lineLimit(2...6)
-                .padding(10)
-                .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            // Web Composer: your photo, then a borderless field.
+            HStack(alignment: .top, spacing: 12) {
+                let me = auth.session.map { $0.userName.isEmpty ? $0.userEmail : $0.userName } ?? ""
+                AvatarView(url: myAvatar, initial: String(me.first ?? "?").uppercased(), size: 40)
+                TextField(T("What's new?"), text: $draft, axis: .vertical)
+                    .font(NXFont.text(15)).lineLimit(2...6)
+                    .padding(.vertical, 8)
+            }
             let tagMatches = MentionDraft.matches(roster, in: draft)
             if !tagMatches.isEmpty {
                 MentionSuggestions(matches: tagMatches) { MentionDraft.insert($0, into: &draft, picked: &pickedMentions) }
@@ -300,22 +316,28 @@ struct ThreadsView: View {
                     .padding(.vertical, 2)
                 }
             }
+            Divider().overlay(NX.border)
             HStack(spacing: 10) {
+                // Web: "Photo" as a labelled button, with the count once there are any.
                 Button { showLibrary = true } label: {
-                    Image(systemName: "photo.on.rectangle.angled")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(photos.count >= Self.maxPhotos ? NX.mutedFg : NX.foreground)
+                    HStack(spacing: 6) {
+                        Image(systemName: "photo").font(.system(size: 14, weight: .semibold))
+                        Text(photos.isEmpty ? T("Photo") : "\(T("Photo")) (\(photos.count)/\(Self.maxPhotos))")
+                            .font(NXFont.text(14, .semibold))
+                    }
+                    .foregroundStyle(NX.foreground)
+                    .padding(.horizontal, 8).frame(minHeight: 36).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .padding(.leading, -8)
                 .disabled(posting || photos.count >= Self.maxPhotos)
-                if !photos.isEmpty {
-                    Text("\(photos.count)/\(Self.maxPhotos)")
-                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-                }
                 Spacer()
                 Button { Task { await post() } } label: {
                     HStack(spacing: 6) {
-                        if posting { ProgressView().scaleEffect(0.7).tint(NX.background) }
+                        if posting { ProgressView().scaleEffect(0.7).tint(NX.background) } else {
+                            Image(systemName: "paperplane").font(.system(size: 13, weight: .semibold))
+                        }
                         Text(T("Post"))
                     }
                     // Near-black like the web's primary (it was a violet capsule).
@@ -326,11 +348,13 @@ struct ThreadsView: View {
                 .buttonStyle(.plain)
                 // A photo alone is a post. The route refuses only when text AND images are both
                 // empty, and a picture with nothing to say is the commonest thing on this screen.
+                // .disabled alone: a plain-style Button already dims when disabled, and the extra
+                // .opacity(0.5) on top left "Post" all but invisible (UI tour run 5).
                 .disabled(posting || !canPost)
-                .opacity(canPost ? 1 : 0.5)
             }
         }
-        .nexusCard()
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .overlay(alignment: .bottom) { Rectangle().fill(NX.border).frame(height: 1) }
         // Presented from the view, not from inside a Menu: a PhotosPicker nested in a Menu draws its
         // row and never opens, because the menu tears down its content as it dismisses.
         .photosPicker(isPresented: $showLibrary, selection: $picking,
@@ -371,71 +395,79 @@ struct ThreadsView: View {
         picking = []
     }
 
+    /// Web timeAgo: "just now", "5m", "3h", "5d", then the date ("30 Jun").
+    private static func timeAgo(_ iso: String) -> String? {
+        guard let d = ProjDate.parse(iso) else { return nil }
+        let secs = Int(Date().timeIntervalSince(d))
+        if secs < 45 { return T("just now") }
+        let m = secs / 60; if m < 60 { return String(format: T("%dm"), m) }
+        let h = m / 60; if h < 24 { return String(format: T("%dh"), h) }
+        let days = h / 24; if days < 7 { return String(format: T("%dd"), days) }
+        return ProjDate.dayLabel(d)
+    }
+
+    /// One post as a row of the feed card, laid out like the web's PostCard: the photo on the left,
+    /// "Name · 5d · edited" on one line, the text and photos under the name, then like · comment.
     private func postCard(_ p: FeedPost) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                AvatarView(url: p.author?.avatar, initial: p.initial, size: 34)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(p.authorName).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    // Date and "edited" on one muted line, as the web's "· 30 Jun · edited".
-                    let day = ProjDate.parse(p.createdAt).map { ProjDate.dayLabel($0) }
+        HStack(alignment: .top, spacing: 12) {
+            AvatarView(url: p.author?.avatar, initial: p.initial, size: 40)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text(p.authorName).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        .layoutPriority(1)
                     let edited = (p.editedAt?.isEmpty == false) ? T("edited") : nil
-                    let meta = [day, edited].compactMap { $0 }.joined(separator: " · ")
+                    let meta = [p.createdAt.flatMap { Self.timeAgo($0) }, edited].compactMap { $0 }
                     if !meta.isEmpty {
-                        Text(meta).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                        Text("· " + meta.joined(separator: " · ")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                    if p.canDelete == true {
+                        Button { confirmingDelete = p } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(NX.mutedFg)
+                                // 44x44 target around a small glyph, pulled back into the row's padding.
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(T("More options"))
+                        .padding(.trailing, -12)
+                        .padding(.vertical, -14)
                     }
                 }
-                Spacer(minLength: 0)
-                if p.canDelete == true {
-                    Button { confirmingDelete = p } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(NX.mutedFg)
-                            // 44x44 is Apple's minimum tap target and this was 28: the glyph is
-                            // small on purpose, but the area you can hit should not be. contentShape
-                            // is what makes the whole frame tappable — without it only the drawn
-                            // pixels of the ellipsis respond, which is three dots' worth of target.
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
+                if let c = p.text, !c.isEmpty {
+                    mentionText(c).font(NXFont.text(15)).foregroundStyle(NX.foreground)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if !p.photos.isEmpty {
+                    FeedPhotoStrip(photos: p.photos) { viewingPhoto = $0 }.padding(.top, 4)
+                }
+                HStack(spacing: 16) {
+                    Button { Task { await like(p) } } label: {
+                        let on = p.likedByMe == true
+                        Label(p.likes > 0 ? "\(p.likes)" : "", systemImage: on ? "heart.fill" : "heart")
+                            .font(NXFont.text(13, .medium))
+                            .foregroundStyle(on ? NX.danger : NX.mutedFg)
+                            .contentTransition(.numericText())
+                            .frame(minHeight: 32).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    // Pulls the bigger button back so the row keeps its old spacing: the target grew
-                    // into the padding around it rather than pushing the card wider.
-                    .padding(.trailing, -8)
-                    .padding(.vertical, -8)
+                    Button { openPost = p } label: {
+                        Label(p.comments > 0 ? "\(p.comments)" : "", systemImage: "bubble.left")
+                            .font(NXFont.text(13, .medium)).foregroundStyle(NX.mutedFg)
+                            .frame(minHeight: 32).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    Spacer()
                 }
-            }
-            if let c = p.text, !c.isEmpty {
-                mentionText(c).font(NXFont.text(15)).foregroundStyle(NX.foreground)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if !p.photos.isEmpty {
-                FeedPhotoStrip(photos: p.photos) { viewingPhoto = $0 }
-            }
-            HStack(spacing: 16) {
-                Button { Task { await like(p) } } label: {
-                    let on = p.likedByMe == true
-                    Label(p.likes > 0 ? "\(p.likes)" : "", systemImage: on ? "heart.fill" : "heart")
-                        .font(NXFont.text(13, .medium))
-                        .foregroundStyle(on ? NX.danger : NX.mutedFg)
-                        .contentTransition(.numericText())
-                }
-                .buttonStyle(.plain)
-                Button { openPost = p } label: {
-                    Label(p.comments > 0 ? "\(p.comments)" : "", systemImage: "bubble.left")
-                        .font(NXFont.text(13, .medium)).foregroundStyle(NX.mutedFg)
-                }
-                .buttonStyle(.plain)
-                Spacer()
+                .padding(.top, 2)
             }
         }
-        .padding(16)
+        .padding(.horizontal, 16).padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // Hairline card like the web's, no drop shadow.
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
-        // The comment count was the only way into a thread. On a feed the post itself is the door;
-        // the like and comment buttons sit deeper in the hierarchy and still take their own taps.
+        .overlay(alignment: .bottom) { Rectangle().fill(NX.border).frame(height: 1) }
+        // The post itself opens its thread; the like / comment / menu buttons take their own taps.
         .contentShape(Rectangle())
         .onTapGesture { openPost = p }
     }

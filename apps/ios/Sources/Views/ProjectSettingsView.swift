@@ -451,7 +451,7 @@ struct ProjectSettingsView: View {
         }
     }
 
-    /// Back to the default mark: "folder" is the column's default, which ProjectMark draws as the square.
+    /// Back to the default mark: "folder" is the column's default, which ProjectMark draws as the default page icon.
     private func removePhoto() async {
         photoBusy = true
         photoError = nil

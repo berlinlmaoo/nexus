@@ -380,17 +380,22 @@ struct FormBuilderView: View {
         }
     }
 
+    /// "Project / Form". A toolbar item is laid out at its ideal size, and the old `maxWidth` frame let the
+    /// bar squeeze it to "F / P" on iPad and Mac (UI tour run 5): each part now has its own cap and the
+    /// whole thing keeps its ideal width.
     private var breadcrumb: some View {
         HStack(spacing: 6) {
             if !projectName.isEmpty {
                 Text(projectName).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    .frame(maxWidth: 140, alignment: .leading)
                 Text("/").foregroundStyle(NX.mutedFg.opacity(0.6))
             }
             Text(draft.branding.icon.isEmpty ? displayName : "\(draft.branding.icon) \(displayName)")
                 .fontWeight(.medium).foregroundStyle(NX.foreground).lineLimit(1)
+                .frame(maxWidth: 220, alignment: .leading)
         }
         .font(NXFont.text(14))
-        .frame(maxWidth: 360, alignment: .leading)
+        .fixedSize()
     }
 
     @ViewBuilder private var previewButton: some View {

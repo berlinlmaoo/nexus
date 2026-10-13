@@ -1,5 +1,11 @@
 package id.znetworks.nexus.feature.people
 
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material.icons.outlined.WorkspacePremium
+import androidx.compose.foundation.lazy.itemsIndexed
 import id.znetworks.nexus.ui.components.PageHeader
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.height
@@ -113,35 +119,85 @@ fun LeaderboardScreen(onBack: () -> Unit, onOpenPerson: (String) -> Unit) {
                 var query by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
                 val ranked = PeopleLogic.ranks(b.rows)
                 val shown = PeopleLogic.search(ranked, query)
-                LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // One joined list like the web: no gaps between the rows; the period, search and podium keep their spacing.
+                LazyColumn(contentPadding = PaddingValues(16.dp)) {
                     // "Current period · 1 Oct – 31 Oct" (web header; end is exclusive).
                     PeopleLogic.periodDays(b.period)?.let { (from, to) ->
                         item {
                             val f = java.time.format.DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())
-                            Text(stringResource(R.string.lb_current_period) + " · " + f.format(from) + " – " + f.format(to), fontSize = 13.sp, color = c.mutedFg)
+                            Text(stringResource(R.string.lb_current_period) + " · " + f.format(from) + " – " + f.format(to), fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.padding(bottom = 8.dp))
                         }
                     }
                     item {
-                        androidx.compose.material3.OutlinedTextField(query, { query = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        androidx.compose.material3.OutlinedTextField(query, { query = it }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                             placeholder = { Text(stringResource(R.string.lb_search_people)) }, shape = RoundedCornerShape(10.dp),
                             leadingIcon = { androidx.compose.material3.Icon(Icons.Filled.Search, null) })
                     }
+                    // The web card: "XP ranking for everyone", the podium (2 · 1 · 3), then one list of everyone.
+                    if (query.isBlank() && ranked.isNotEmpty()) item(key = "podium") { Box(Modifier.padding(bottom = 12.dp)) { Podium(ranked.take(3)) } }
                     if (shown.isEmpty()) item { Text(stringResource(R.string.lb_no_match), fontSize = 14.sp, color = c.mutedFg, modifier = Modifier.padding(8.dp)) }
-                    // A tied rank shares its medal / step: ranks come from the whole board (1, 1, 1, 4).
-                    items(shown, key = { it.second.userId }) { (rank, r) ->
+                    // A tied rank shares its crown / step: ranks come from the whole board (1, 1, 1, 4).
+                    itemsIndexed(shown, key = { _, it -> it.second.userId }) { i, (rank, r) ->
                         val mine = r.userId == me
-                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(if (mine) c.violet.copy(alpha = 0.1f) else c.card)
-                            .border(1.dp, if (mine) c.violet else c.border, RoundedCornerShape(16.dp)).clickable { onOpenPerson(r.userId) }.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Text(when (rank) { 1 -> "🥇"; 2 -> "🥈"; 3 -> "🥉"; else -> "#$rank" }, fontSize = if (rank <= 3) 22.sp else 14.sp,
-                                fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.width(40.dp), textAlign = TextAlign.Center)
-                            Avatar(r.name, r.avatar, 36.dp); Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(r.name ?: "—", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
-                                Text(stringResource(R.string.home_level_n, r.level) + (r.levelName?.let { " · $it" } ?: ""), fontSize = 11.sp, color = c.mutedFg)
+                        val first = i == 0; val last = i == shown.lastIndex
+                        val shape = RoundedCornerShape(topStart = if (first) 14.dp else 0.dp, topEnd = if (first) 14.dp else 0.dp,
+                            bottomStart = if (last) 14.dp else 0.dp, bottomEnd = if (last) 14.dp else 0.dp)
+                        // One outlined list: each row draws its sides and bottom, the first its top too (no doubled lines between rows).
+                        Column(Modifier.fillMaxWidth().clip(shape).background(if (mine) c.violet.copy(alpha = 0.08f) else c.card).then(
+                            if (first && last) Modifier.border(1.dp, c.border, shape) else Modifier.joinedRowOutline(c.border, first, last))) {
+                            Row(Modifier.fillMaxWidth().clickable { onOpenPerson(r.userId) }.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("$rank", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, modifier = Modifier.width(22.dp), textAlign = TextAlign.Center)
+                                Box(Modifier.width(26.dp), contentAlignment = Alignment.Center) {
+                                    if (rank == 1) Icon(Icons.Outlined.WorkspacePremium, null, tint = Color(0xFFF59E0B), modifier = Modifier.size(18.dp))
+                                }
+                                Avatar(r.name, r.avatar, 40.dp); Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(r.name ?: "—", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(stringResource(R.string.home_level_n, r.level) + (r.levelName?.let { " – $it" } ?: ""), fontSize = 13.sp, color = c.mutedFg, maxLines = 1)
+                                }
+                                Text("%,d".format(Locale.getDefault(), r.totalXp), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground)
                             }
-                            Text("%,d".format(Locale.getDefault(), r.totalXp), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.violetText)
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Web leaderboard-podium.tsx: places 2 · 1 · 3; a tie shares its step (1 / 1 / 1 are three gold steps of one height). */
+@Composable
+private fun Podium(top: List<Pair<Int, BoardRow>>) {
+    val c = Nx.colors
+    val dark = isSystemInDarkTheme()
+    data class Step(val bar: Color, val text: Color, val ring: Color, val crown: Color, val height: androidx.compose.ui.unit.Dp, val avatar: androidx.compose.ui.unit.Dp)
+    fun style(rank: Int) = when (rank.coerceIn(1, 3)) {
+        1 -> Step(if (dark) Color(0x40FBBF24) else Color(0xFFFCD34D), if (dark) Color(0xFFFDE68A) else Color(0xFF78350F), Color(0xFFFCD34D), Color(0xFFF59E0B), 128.dp, 72.dp)
+        2 -> Step(if (dark) Color(0x3394A3B8) else Color(0xFFE2E8F0), if (dark) Color(0xFFE2E8F0) else Color(0xFF475569), Color(0xFFCBD5E1), Color(0xFF94A3B8), 96.dp, 56.dp)
+        else -> Step(if (dark) Color(0x40FB923C) else Color(0xFFFDBA74), if (dark) Color(0xFFFED7AA) else Color(0xFF7C2D12), Color(0xFFFDBA74), Color(0xFFF97316), 80.dp, 56.dp)
+    }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(16.dp)).padding(16.dp)) {
+        Text(stringResource(R.string.lb_ranking_everyone), fontSize = 14.sp, color = c.mutedFg)
+        Spacer(Modifier.height(16.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
+            listOf(1, 0, 2).forEach { place ->
+                val entry = top.getOrNull(place)
+                if (entry == null) { Spacer(Modifier.weight(1f)); return@forEach }
+                val (rank, r) = entry
+                val st = style(rank)
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box {
+                        Box(Modifier.border(2.dp, st.ring, CircleShape).padding(2.dp)) { Avatar(r.name, r.avatar, st.avatar) }
+                        Box(Modifier.align(Alignment.BottomEnd).offset(x = 4.dp, y = 4.dp).size(24.dp).background(c.card, CircleShape).border(1.dp, c.border, CircleShape),
+                            contentAlignment = Alignment.Center) { Icon(Icons.Outlined.WorkspacePremium, null, tint = st.crown, modifier = Modifier.size(14.dp)) }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(r.name ?: "—", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("%,d".format(Locale.getDefault(), r.totalXp), fontSize = 14.sp, color = c.mutedFg)
+                    Spacer(Modifier.height(8.dp))
+                    Box(Modifier.fillMaxWidth().height(st.height).clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)).background(st.bar),
+                        contentAlignment = Alignment.TopCenter) {
+                        Text("$rank", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = st.text, modifier = Modifier.padding(top = 10.dp))
                     }
                 }
             }
@@ -497,3 +553,15 @@ private fun ValueRow(icon: androidx.compose.ui.graphics.vector.ImageVector, name
     }
 }
 
+/** The outline of a row inside a joined, rounded list: sides, a bottom line, and the top on the first row (14 dp corners). */
+private fun Modifier.joinedRowOutline(color: Color, first: Boolean, last: Boolean) = drawBehind {
+    val w = 1.dp.toPx(); val r = 14.dp.toPx()
+    val path = androidx.compose.ui.graphics.Path().apply {
+        addRoundRect(androidx.compose.ui.geometry.RoundRect(w / 2, w / 2, size.width - w / 2, size.height - w / 2,
+            topLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius(if (first) r else 0f), topRightCornerRadius = androidx.compose.ui.geometry.CornerRadius(if (first) r else 0f),
+            bottomRightCornerRadius = androidx.compose.ui.geometry.CornerRadius(if (last) r else 0f), bottomLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius(if (last) r else 0f)))
+    }
+    // The top edge is left out below the first row: the row above already drew it as its bottom.
+    if (first) drawPath(path, color, style = androidx.compose.ui.graphics.drawscope.Stroke(w))
+    else clipRect(top = w) { drawPath(path, color, style = androidx.compose.ui.graphics.drawscope.Stroke(w)) }
+}

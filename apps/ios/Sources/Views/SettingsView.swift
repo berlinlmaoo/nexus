@@ -105,6 +105,9 @@ struct SettingsView: View {
             // The side menu only where the cards keep a real width beside it. A portrait iPad with the
             // sidebar open left ~340 pt and "Change photo" broke letter by letter (UI tour run 3); there
             // the sections become the tab strip over full-width cards, as on a narrow web window.
+            // The threshold was 860 pt, so an iPad in portrait with the sidebar open (~700 pt) always
+            // fell back to the strip (UI tour run 5). From 680 pt the list sits at the left in a narrower
+            // column and the cards keep ~420 pt, enough for the profile row; wider pages get the web's 230.
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: 28) {
                     webSideNav
@@ -114,6 +117,14 @@ struct SettingsView: View {
                 }
                 .padding(.leading, 32)
                 .frame(minWidth: 860, idealWidth: 860, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                HStack(alignment: .top, spacing: 20) {
+                    webSideNav
+                        .frame(width: 176)
+                        .padding(.top, 24)
+                    webScroll
+                }
+                .padding(.leading, 20)
+                .frame(minWidth: 680, idealWidth: 680, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 VStack(spacing: 0) {
                     NXUnderlineTabs(items: SettingsTab.allCases.map { NXTabItem(id: $0, label: $0.label, icon: $0.icon) },
                                     selection: $tab, accessibilityName: T("Settings"))

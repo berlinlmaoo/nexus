@@ -393,6 +393,8 @@ struct SidebarRoot: View {
     @State private var viewer = Viewer.shared
     @State private var selection: NXSelection? = .screen(.dashboard)
     @State private var columns: NavigationSplitViewVisibility = .all
+    /// The collapsed sidebar floating over the page while the pointer rests on ≡ (Notion's peek).
+    @State private var peeking = false
     @State private var shortcuts = ProjectShortcuts.shared
     /// The root's one sheet: search (⌘K), the keyboard shortcuts (⌘/) or a new project (Projects +).
     /// One `.sheet(item:)` rather than several `.sheet`s, because two on one view leaves one of them dead.
@@ -419,92 +421,98 @@ struct SidebarRoot: View {
         }
     }
 
-    var body: some View {
-        NavigationSplitView(columnVisibility: $columns) {
-            List(selection: $selection) {
-                ForEach(Array(navGroups.enumerated()), id: \.offset) { _, group in
-                    Section {
-                        // Control Room is drawn only for MANAGER and above, matching the web and the
-                        // phone launcher. The routes behind it refuse everyone else regardless; this
-                        // just stops offering a door that opens onto a wall of 403s.
-                        ForEach(group.screens.filter { $0 != .admin || viewer.canAdminister }) { screen in
-                            navRow(screen)
-                        }
-                        // No "Pipeline" row under Work (owner, 9 Oct 2026): the board is a project
-                        // like any other, reached from Projects (pinned, or the list).
-                    } header: {
-                        if let title = group.title {
-                            SidebarGroupLabel(text: title)
-                        }
+    /// The sidebar itself: the docked column, and the same list floating over the page while it peeks.
+    @ViewBuilder private func sidebarList() -> some View {
+        List(selection: $selection) {
+            ForEach(Array(navGroups.enumerated()), id: \.offset) { _, group in
+                Section {
+                    // Control Room is drawn only for MANAGER and above, matching the web and the
+                    // phone launcher. The routes behind it refuse everyone else regardless; this
+                    // just stops offering a door that opens onto a wall of 403s.
+                    ForEach(group.screens.filter { $0 != .admin || viewer.canAdminister }) { screen in
+                        navRow(screen)
+                    }
+                    // No "Pipeline" row under Work (owner, 9 Oct 2026): the board is a project
+                    // like any other, reached from Projects (pinned, or the list).
+                } header: {
+                    if let title = group.title {
+                        SidebarGroupLabel(text: title)
                     }
                 }
+            }
 
-                // The web's Projects tree, after the nav groups: "Projects" with its + and the
-                // Pinned shortcuts (SidebarProjectTree.tsx).
-                Section {
-                    if shortcuts.pinned.isEmpty {
-                        Text(T("Pin a project to keep it here."))
-                            .font(NXFont.text(13))
-                            .foregroundStyle(NX.mutedFg)
-                            .selectionDisabled()
-                    } else {
-                        HStack(spacing: 6) {
-                            Image(systemName: "pin").font(.system(size: 11))
-                            Text(T("Pinned")).font(NXFont.text(12, .medium))
-                        }
+            // The web's Projects tree, after the nav groups: "Projects" with its + and the
+            // Pinned shortcuts (SidebarProjectTree.tsx).
+            Section {
+                if shortcuts.pinned.isEmpty {
+                    Text(T("Pin a project to keep it here."))
+                        .font(NXFont.text(13))
                         .foregroundStyle(NX.mutedFg)
                         .selectionDisabled()
-                        .accessibilityAddTraits(.isHeader)
-                        projectRows(shortcuts.pinned)
+                } else {
+                    HStack(spacing: 6) {
+                        Image(systemName: "pin").font(.system(size: 11))
+                        Text(T("Pinned")).font(NXFont.text(12, .medium))
                     }
-                } header: {
-                    HStack {
-                        SidebarGroupLabel(text: T("Projects"))
-                        Spacer(minLength: 4)
-                        if workspaceId != nil {
-                            Button { rootSheet = .newProject } label: {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 13, weight: .regular))
-                                    .foregroundStyle(NX.mutedFg)
-                                    .frame(width: 26, height: 26)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.borderless)
-                            .help(T("New project"))
-                            .accessibilityLabel(T("New project"))
+                    .foregroundStyle(NX.mutedFg)
+                    .selectionDisabled()
+                    .accessibilityAddTraits(.isHeader)
+                    projectRows(shortcuts.pinned)
+                }
+            } header: {
+                HStack {
+                    SidebarGroupLabel(text: T("Projects"))
+                    Spacer(minLength: 4)
+                    if workspaceId != nil {
+                        Button { rootSheet = .newProject } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 13, weight: .regular))
+                                .foregroundStyle(NX.mutedFg)
+                                .frame(width: 26, height: 26)
+                                .contentShape(Rectangle())
                         }
+                        .buttonStyle(.borderless)
+                        .help(T("New project"))
+                        .accessibilityLabel(T("New project"))
                     }
                 }
             }
-            .listStyle(.sidebar)
+        }
+        .listStyle(.sidebar)
+        #if targetEnvironment(macCatalyst)
+        // The web's sidebar is 256 wide with 30 pt rows. The Mac (the iPad app at 77 %) used the iPad's
+        // touch sidebar: about 375 wide with 47 pt rows, so the nav ran off the bottom before Team and
+        // System and the page lost a quarter of the window (UI tour run 4). A pointer needs no 44 pt
+        // rows; the iPad keeps them.
+        .environment(\.defaultMinListRowHeight, 30)
+        #endif
+        .scrollIndicators(.hidden)
+        // Fixed header and footer, like the web's SidebarHeader / SidebarFooter: they stay put while
+        // the nav scrolls between them.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            SidebarBrandHeader(
+                // The one sidebar control while it is open. In the peek panel the same icon docks
+                // the sidebar open, as in Notion.
+                onCollapse: { toggleSidebar() },
+                onSearch: { if !cover.isCovered { rootSheet = .search } }
+            )
+            .background(.bar)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            SidebarAccountFooter(
+                onOpenProfile: { selection = .screen(.settings) },
+                onShortcuts: { if !cover.isCovered { rootSheet = .shortcuts } }
+            )
+            .background(.bar)
+        }
+    }
+
+    var body: some View {
+        NavigationSplitView(columnVisibility: $columns) {
+            sidebarList()
             #if targetEnvironment(macCatalyst)
-            // The web's sidebar is 256 wide with 30 pt rows. The Mac (the iPad app at 77 %) used the iPad's
-            // touch sidebar: about 375 wide with 47 pt rows, so the nav ran off the bottom before Team and
-            // System and the page lost a quarter of the window (UI tour run 4). A pointer needs no 44 pt
-            // rows; the iPad keeps them.
-            .environment(\.defaultMinListRowHeight, 30)
             .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 340)
             #endif
-            .scrollIndicators(.hidden)
-            // Fixed header and footer, like the web's SidebarHeader / SidebarFooter: they stay put while
-            // the nav scrolls between them.
-            .safeAreaInset(edge: .top, spacing: 0) {
-                SidebarBrandHeader(
-                    onCollapse: {
-                        guard !cover.isCovered else { return }
-                        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) { columns = .detailOnly }
-                    },
-                    onSearch: { if !cover.isCovered { rootSheet = .search } }
-                )
-                .background(.bar)
-            }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                SidebarAccountFooter(
-                    onOpenProfile: { selection = .screen(.settings) },
-                    onShortcuts: { if !cover.isCovered { rootSheet = .shortcuts } }
-                )
-                .background(.bar)
-            }
             // Apple's own toggle lives in the DETAIL column's navigation bar, so it appeared on the
             // seventeen screens that have one and vanished on the two that don't — the control moved
             // depending on where you happened to be. Remove it and carry one handle everywhere.
@@ -519,88 +527,49 @@ struct SidebarRoot: View {
                 keepProjectSelection()
             }
         } detail: {
-            let needsOwnButton = detailHidesNavigationBar
+            let needsTopBand = detailHidesNavigationBar
             detail(for: selection ?? .screen(.dashboard))
                 // The bar sat against the right edge of the reading column rather than the window,
                 // which read as a stray line down the middle of the screen. Content is scrolled by
                 // hand here, not dragged by the bar.
                 .scrollIndicators(.hidden)
-                // NavigationSplitView parks its own show/hide button in the DETAIL column's
-                // navigation bar. Dashboard and the project board both hide that bar to draw their
-                // own headers, so there it has nowhere to live: collapse the sidebar once and it
-                // can never be brought back.
-                //
-                // Two insets, both only while the sidebar is away, because they answer two
-                // different problems.
-                //
-                // The LEADING strip carries the button: left edge, vertically centred, like a
-                // handle you pull the sidebar out by. It cannot sit in the top-left corner —
-                // iPadOS draws its own window controls there and they do not move for anyone —
-                // and safeAreaInset reserves the strip rather than floating over content, so
-                // nothing is ever covered.
-                //
-                // The TOP band is empty on purpose. It exists only to push the screen's own header
-                // clear of those same window controls, which land on the detail column once the
-                // sidebar is no longer underneath them.
-                .safeAreaInset(edge: .leading, spacing: 0) {
-                    // Always present, and it swings both ways. Removing Apple's toolbar toggle took
-                    // the only control that could CLOSE the sidebar with it — a handle that appears
-                    // once the sidebar is gone can bring it back but can never send it away.
-                    VStack {
-                        Spacer(minLength: 0)
-                        Button {
-                            // ⌘S reaches here from under a sheet too: nothing moves behind it.
-                            guard !cover.isCovered else { return }
-                            // A spring rather than .snappy, and named here rather than left to the
-                            // system: .snappy is short by design, and NavigationSplitView reveals a
-                            // column more generously than it takes one away — closing looked
-                            // instant next to opening. The same curve in both directions is the
-                            // point; the duration is only long enough to be seen.
-                            withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
-                                columns = columns == .detailOnly ? .all : .detailOnly
-                            }
-                        } label: {
-                            Image(systemName: "sidebar.leading")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(columns == .detailOnly ? NX.foreground : NX.violetText)
-                                .frame(width: 38, height: 38)
-                                .background(.regularMaterial, in: Circle())
-                                .overlay(Circle().strokeBorder(NX.border))
-                                .nexusShadowSoft()
-                                // The 38 pt circle is what is drawn; the tap takes the 44 pt square
-                                // around it, the least a finger needs (impeccable re-audit round 3,
-                                // 8 Oct 2026). The pointer's lift keeps to the circle.
-                                .frame(width: 44, height: 44)
-                                .contentShape(.interaction, Rectangle())
-                                .contentShape(.hoverEffect, Circle().inset(by: 3))
-                        }
-                        .buttonStyle(.plain)
-                        // A trackpad pointer that doesn't change shape over a control leaves you
-                        // guessing whether it is one. .lift also makes the circle read as a button
-                        // rather than a decoration parked at the edge.
-                        .hoverEffect(.lift)
-                        // ⌘S because the sidebar is the thing being shown or hidden, and nothing
-                        // else in the app claims it. Works whether or not the button is on screen.
-                        .keyboardShortcut("s", modifiers: .command)
-                        .accessibilityLabel(columns == .detailOnly ? T("Show sidebar") : T("Hide sidebar"))
-                        Spacer(minLength: 0)
-                    }
-                    // 3 pt less each side than with the 38 pt frame: the strip keeps its width and the
-                    // circle its place.
-                    .padding(.leading, 7)
-                    .padding(.trailing, 1)
-                }
-                // Reserved on every screen that hides its navigation bar, whatever the sidebar is
-                // doing. It used to appear and disappear with the sidebar, and a safe-area inset
-                // that comes and goes mid-animation is not animated by the same transaction as the
-                // columns are — the content snapped while the sidebar slid, which is why the
-                // collapse looked instant one time and animated the next.
+                // The sidebar control for the page headers: the ≡ before a title while the sidebar is
+                // collapsed (SidebarToggle.swift). Notion-like (owner, 14 Oct 2026); it replaces the round
+                // handle that floated in the gutter between the sidebar and the page.
+                .environment(\.sidebarControl, SidebarControl(
+                    collapsed: columns == .detailOnly,
+                    toggle: { toggleSidebar() },
+                    peek: { on in peeking = on && columns == .detailOnly }
+                ))
+                // Screens that hide their navigation bar get an empty band at the top: once the sidebar
+                // is away, iPadOS's window controls (and the Mac's traffic lights) land on the detail
+                // column, and the band keeps the page header clear of them. Reserved whatever the
+                // sidebar is doing — an inset that comes and goes mid-animation snaps instead of sliding.
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    if needsOwnButton {
+                    if needsTopBand {
                         Color.clear.frame(height: 44)
                     }
                 }
         }
+        // Peek: the pointer rests on ≡ while the sidebar is collapsed → the sidebar floats over the page
+        // and goes away once the pointer leaves it (Notion). Picking a row closes it (onChange(selection)).
+        .overlay(alignment: .topLeading) {
+            if peeking && columns == .detailOnly {
+                sidebarList()
+                    .frame(width: 280)
+                    .frame(maxHeight: .infinity)
+                    .background(NX.background)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                    .shadow(color: .black.opacity(0.18), radius: 18, y: 6)
+                    .padding(.leading, 8)
+                    .padding(.top, 52)
+                    .padding(.bottom, 12)
+                    .onHover { inside in if !inside { peeking = false } }
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.9), value: peeking)
         // Keyboard (iPad keyboard, Mac): ⌘1…⌘7 jump to Home, Projects, My Tasks, Notifications, Messages,
         // Calendar and Attendance — the menu bar lists them under the app's commands.
         .background {
@@ -616,6 +585,9 @@ struct SidebarRoot: View {
                 // ⌘/: every keyboard shortcut of the app (web "?" / ⌘/ dialog, QA 13 Oct 2026).
                 Button(T("Keyboard shortcuts")) { if !cover.isCovered { rootSheet = .shortcuts } }
                     .keyboardShortcut("/", modifiers: .command)
+                // ⌘\ shows or hides the sidebar, as in Notion (owner, 14 Oct 2026; it was ⌘S).
+                Button(T("Show or hide the sidebar")) { toggleSidebar() }
+                    .keyboardShortcut("\\", modifiers: .command)
                 SheetCover.Anchor(cover: cover).frame(width: 0, height: 0)
             }
             .opacity(0).accessibilityHidden(true)
@@ -694,10 +666,22 @@ struct SidebarRoot: View {
         // whole app, outside this layout — can tell Home from everything else. A project shortcut
         // is not Home, and reports itself as Projects.
         .onChange(of: selection) { _, now in
+            peeking = false
             switch now ?? .screen(.dashboard) {
             case .screen(let screen): router.sidebarScreen = screen
             case .project:            router.sidebarScreen = .projects
             }
+        }
+    }
+
+    /// Opens or closes the sidebar. A spring, named here rather than left to the system: .snappy is short
+    /// by design and NavigationSplitView reveals a column more generously than it takes one away, so
+    /// closing looked instant next to opening. Nothing moves behind a sheet.
+    private func toggleSidebar() {
+        guard !cover.isCovered else { return }
+        peeking = false
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+            columns = columns == .detailOnly ? .all : .detailOnly
         }
     }
 
@@ -731,8 +715,11 @@ struct SidebarRoot: View {
             readable(screen.contentMaxWidth) {
                 if screen.ownsNavigationStack {
                     screen.view
-                } else {
+                } else if screen.hidesNavigationBar {
                     NavigationStack { screen.view }
+                } else {
+                    // A screen that keeps its navigation bar (Forms, Teams): ≡ is the bar's first item.
+                    NavigationStack { screen.view.modifier(SidebarReopenToolbar()) }
                 }
             }
         case .project(let ref):
@@ -821,8 +808,8 @@ struct SidebarRoot: View {
     }
 }
 
-/// A shortcut row's project mark: its photo, or the default task tile (ProjectMark, owner 11 Oct
-/// 2026 — stored emoji are no longer drawn).
+/// A shortcut row's project mark: its photo, or the default grey page icon (ProjectMark; stored
+/// emoji are no longer drawn since 11 Oct 2026, page icon = option A since 14 Oct).
 ///
 /// Shared rather than private to the sidebar: the phone's Dashboard shows the same shortcuts, and
 /// two drawings of the same thing drift apart the first time one of them is touched.

@@ -275,12 +275,20 @@ private struct FolderCalendar: View {
                 }
                 let cols = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
                 LazyVGrid(columns: cols, spacing: 4) {
-                    ForEach(["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"], id: \.self) { d in
+                    // Monday first, in the app's language (was "Sen Sel…" hard-coded).
+                    let names = ProjDate.fmt("EEE").shortWeekdaySymbols ?? []
+                    // String ids: Int ids here would collide with the day cells below.
+                    ForEach(Array(names.dropFirst()) + Array(names.prefix(1)), id: \.self) { d in
                         Text(d).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg).frame(maxWidth: .infinity).padding(.vertical, 2)
                     }
-                    ForEach(0..<leadingBlanks, id: \.self) { _ in Color.clear.frame(height: 38) }
-                    ForEach(1...daysInMonth, id: \.self) { day in
-                        dayCell(day, has: days[day] != nil, isSel: day == selected, isToday: day == todayDay)
+                    // Blanks and days in ONE ForEach with distinct ids: two Int ForEach (0…n-1 and 1…31) in
+                    // one grid collide and drop days (the project Calendar lost the 1st and 2nd, UI tour run 5).
+                    ForEach(Array(-leadingBlanks..<0) + Array(1...daysInMonth), id: \.self) { day in
+                        if day < 0 {
+                            Color.clear.frame(height: 38)
+                        } else {
+                            dayCell(day, has: days[day] != nil, isSel: day == selected, isToday: day == todayDay)
+                        }
                     }
                 }
             }
