@@ -5,6 +5,14 @@ import SwiftUI
 /// see anything that already happened.
 struct RoomBookingView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(AppRouter.self) private var router
+    @Environment(\.horizontalSizeClass) private var hSize
+    /// Regular width, as the sidebar's selection: the web's page header (room-booking.tsx) with the
+    /// room picker and a near-black "New booking". The phone, and the screen pushed elsewhere, keep
+    /// the bar.
+    private var pageRoot: Bool { NXSidebarPage.isRoot(.roomBooking, hSize: hSize, router: router) }
+    /// The web header's room filter ("" = all rooms). Only applies under the page header.
+    @State private var roomFilter = ""
     @State private var bookings: [RoomBooking] = []
     @State private var loading = true
     @State private var error: String?
@@ -33,8 +41,13 @@ struct RoomBookingView: View {
         }
     }
 
+    private var shown: [RoomBooking] {
+        guard pageRoot, !roomFilter.isEmpty else { return bookings }
+        return bookings.filter { $0.room == roomFilter }
+    }
+
     private var byDay: [(key: String, items: [RoomBooking])] {
-        let groups = Dictionary(grouping: bookings, by: { AgendaRange.dayKey($0.startsAt) })
+        let groups = Dictionary(grouping: shown, by: { AgendaRange.dayKey($0.startsAt) })
         // History reads newest-first; upcoming reads soonest-first.
         let keys = scope == .past ? groups.keys.sorted(by: >) : groups.keys.sorted()
         return keys.map { ($0, groups[$0]!.sorted { $0.startsAt < $1.startsAt }) }
@@ -42,10 +55,11 @@ struct RoomBookingView: View {
 
     var body: some View {
         AgendaScaffold(title: T("Room Booking"), subtitle: T("Room bookings — VIP, Meeting, Studio."),
-                       loading: loading, error: error, isEmpty: bookings.isEmpty,
+                       loading: loading, error: error, isEmpty: shown.isEmpty,
                        emptyIcon: "calendar.badge.clock", emptyText: scope.empty,
                        retry: { await load() },
-                       toolbar: AnyView(scopePicker)) {
+                       toolbar: pageRoot ? nil : AnyView(scopePicker),
+                       pageRoot: pageRoot) {
             ForEach(byDay, id: \.key) { day in
                 AgendaDay(label: AgendaRange.dayLabel(day.key)) {
                     ForEach(day.items) { b in
@@ -67,11 +81,38 @@ struct RoomBookingView: View {
                 }
             }
         }
+        .nxSidebarPageChrome(pageRoot) {
+            NXPageHeader(title: T("Room Booking"), subtitle: T("Book a meeting room and see who has it when.")) {
+                NXSegmented(selection: $scope, options: Scope.allCases, label: { $0.label }).frame(width: 190)
+                roomMenu
+                Button { composing = ComposerTarget(booking: nil) } label: { Label(T("New booking"), systemImage: "plus") }
+                    .buttonStyle(.nxPrimary)
+            }
+        }
         .task(id: scope) { await load() }
         .task { await viewer.loadIfNeeded() }
         .sheet(item: $composing) { target in
             RoomBookingComposer(booking: target.booking) { await load() }
         }
+    }
+
+    /// The web's room picker: All rooms, or one of the three.
+    private var roomMenu: some View {
+        Menu {
+            Picker(T("Room"), selection: $roomFilter) {
+                Text(T("All rooms")).tag("")
+                ForEach(RoomBooking.rooms, id: \.self) { r in Text(RoomBooking.label(r)).tag(r) }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(roomFilter.isEmpty ? T("All rooms") : RoomBooking.label(roomFilter)).lineLimit(1)
+                Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(NX.mutedFg)
+            }
+        }
+        .menuStyle(.button)
+        .buttonStyle(.nxBordered)
+        .fixedSize()
+        .accessibilityLabel(T("Room"))
     }
 
     private var scopePicker: some View {
@@ -109,6 +150,9 @@ struct AgendaScaffold<Content: View>: View {
     let emptyText: String
     let retry: () async -> Void
     var toolbar: AnyView? = nil
+    /// Under the web's page header (regular width, sidebar root): the header carries the subtitle,
+    /// and the page takes the web's 32 pt gutters.
+    var pageRoot: Bool = false
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -126,10 +170,12 @@ struct AgendaScaffold<Content: View>: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        Text(subtitle).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        if !pageRoot {
+                            Text(subtitle).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        }
                         content()
                     }
-                    .padding(16)
+                    .padding(NXSidebarPage.gutter(pageRoot))
                 }
             }
         }

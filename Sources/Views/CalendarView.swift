@@ -57,6 +57,8 @@ struct CalendarView: View {
     @State private var layoutHeight: CGFloat?
     @State private var paneContent: CGFloat = 0
     @State private var paneGrid: CGFloat = 0
+    /// Two panes: the height of the page header above them (see `gridRoom`).
+    @State private var headerHeight: CGFloat = 0
     /// Bumped to bring the picked day's list into view on iPhone; `revealedDay` is the last one done.
     @State private var revealDay = 0
     @State private var revealedDay = 0
@@ -103,10 +105,13 @@ struct CalendarView: View {
     /// preview is a sheet only for a masked row: there is nothing to read, only why.
     enum CalSheet: Identifiable {
         case filters
+        /// Every keyboard shortcut (the web header's keyboard button).
+        case shortcuts
         case preview(taskId: String, project: String?, notMember: Bool, masked: Bool)
         var id: String {
             switch self {
             case .filters: return "filters"
+            case .shortcuts: return "shortcuts"
             case .preview(let id, _, _, _): return "preview-\(id)"
             }
         }
@@ -213,11 +218,16 @@ struct CalendarView: View {
     /// the screen scrolls as one.
     private var gridRoom: CGFloat? {
         guard twoPane, let h = layoutHeight, paneContent > 0, paneGrid > 0 else { return nil }
-        return h - (paneContent - paneGrid)
+        // The page header runs across both panes above them (web layout), so it comes off first.
+        return h - headerHeight - 1 - (paneContent - paneGrid)
     }
     /// The People week as a table (names held on the left, seven days beside them) on regular width
     /// with room for the names and at least a few days; the days scroll sideways under 7 readable ones.
     private var peopleTable: Bool { hSize == .regular && width >= 700 }
+    /// Regular width (iPad, Mac): the dev web's page header (CalendarPage.tsx) — the calendar mark and
+    /// "Calendar", ‹ month ›, Today, the two switches, Filters, Reset and the keyboard — across the
+    /// whole page above the grid and the day panel, instead of the centred bar title and a funnel.
+    private var webChrome: Bool { hSize == .regular }
     /// Month / People and Everyone / Mine / My division side by side as two switches.
     private var headerWide: Bool { gridWidth >= 560 }
     /// The month, Today and both switches as one toolbar line, where it holds them without squeezing.
@@ -438,9 +448,11 @@ struct CalendarView: View {
                     }
                 }
         }
-        .navigationTitle(T("Calendar"))
+        .navigationTitle(webChrome ? "" : T("Calendar"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
+        // The sidebar's root draws its own header (webChrome); pushed, the bar stays for Back.
+        .toolbar(NXSidebarPage.isRoot(.teamCalendar, hSize: hSize, router: router) ? .hidden : .automatic, for: .navigationBar)
         // The iPhone's keyboard shortcuts; the iPad and the Mac have them in the Calendar menu.
         .background { if !CalendarKeys.inMenu { shortcuts } }
         .publishesCalendarMenu(menuActions)
@@ -470,6 +482,8 @@ struct CalendarView: View {
             switch s {
             case .filters:
                 CalFilterSheet(filters: filtersBinding, ix: ix, items: items?.items ?? [], people: people, myHomes: myHomes)
+            case .shortcuts:
+                KeyboardShortcutsHelp().environment(auth).environment(router)
             case let .preview(id, project, notMember, masked):
                 CalTaskReadOnly(taskId: id, projectName: project, notMember: notMember, masked: masked)
             }
@@ -511,9 +525,31 @@ struct CalendarView: View {
         } else if let error, items == nil || structure == nil {
             ErrorState(message: error, icon: "calendar") { Task { await refreshAll(silent: false) } }
         } else if twoPane {
+            VStack(spacing: 0) {
+                header
+                    .padding(.horizontal, 24).padding(.top, 14).padding(.bottom, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background {
+                        GeometryReader { g in
+                            Color.clear.onChange(of: g.size.height, initial: true) { _, h in
+                                let v = h.rounded()
+                                if headerHeight != v { headerHeight = v }
+                            }
+                        }
+                    }
+                Divider().overlay(NX.border)
+                panes
+            }
+        } else {
+            stacked
+        }
+    }
+
+    /// Two panes under the header: the month on the left, the day beside it.
+    private var panes: some View {
             HStack(spacing: 0) {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 14) { header; gridArea }
+                    VStack(alignment: .leading, spacing: 14) { gridArea }
                         .padding(20)
                         // How tall the pane's content is (see `gridRoom`).
                         .background {
@@ -530,7 +566,10 @@ struct CalendarView: View {
                 sidePanel
                     .frame(width: panelWidth)
             }
-        } else {
+    }
+
+    /// One scroll: the iPhone, and a regular width too narrow for two panes (or the People week).
+    private var stacked: some View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
@@ -561,14 +600,15 @@ struct CalendarView: View {
                     }
                 }
             }
-        }
     }
 
     // MARK: Header (month, view, scope, legend, filters)
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if toolbarLine {
+            if webChrome {
+                webTitleRow
+            } else if toolbarLine {
                 toolbarRow
             } else {
                 monthRow
@@ -579,6 +619,148 @@ struct CalendarView: View {
             if !chipFilters(filters).isEmpty { activeFilterRow }
             if let savedAt { CalSavedNotice(savedAt: savedAt) }
         }
+    }
+
+    // MARK: Web header (regular width)
+
+    /// The dev web's header line (CalendarPage.tsx): the calendar mark and title, ‹ month › and Today on
+    /// the left; Month / People, Everyone / Mine / My division, Filters, Reset and the keyboard on the
+    /// right. Where one line does not hold them, the switches take a second line; narrower still (or at
+    /// the accessibility text sizes), everything stacks.
+    private var webTitleRow: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                webTitle
+                webDateNav
+                Spacer(minLength: 12)
+                webSwitches
+                webTools
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    webTitle
+                    webDateNav
+                    Spacer(minLength: 8)
+                    webTools
+                }
+                HStack(spacing: 10) {
+                    webSwitches
+                    Spacer(minLength: 0)
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    webTitle
+                    Spacer(minLength: 8)
+                    webTools
+                }
+                webDateNav
+                modeSwitch
+                NXSegmented(selection: scopeBinding, options: scopeOptions, label: { scopeLabel($0) }, title: T("Show"))
+            }
+        }
+    }
+
+    /// The calendar mark on its dark tile and the page's name.
+    private var webTitle: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "calendar")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(NX.background)
+                .frame(width: 32, height: 32)
+                .background(NX.onyx, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .accessibilityHidden(true)
+            Text(T("Calendar"))
+                .font(NXFont.text(26, .semibold))
+                .foregroundStyle(NX.foreground)
+                .lineLimit(1)
+                .fixedSize()
+                .accessibilityAddTraits(.isHeader)
+        }
+    }
+
+    /// ‹ October 2026 › and Today. Today stays on screen, dimmed on today, as on the web.
+    private var webDateNav: some View {
+        HStack(spacing: 2) {
+            stepButton(-1)
+            Text(title)
+                .font(NXFont.display(18, .bold)).monospacedDigit()
+                .foregroundStyle(NX.foreground)
+                .lineLimit(1)
+                .frame(minWidth: 150)
+                .fixedSize()
+                .accessibilityAddTraits(.isHeader)
+            stepButton(1)
+            Button(T("Today")) {
+                select(today)
+                peek()
+            }
+            .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+            .disabled(selected == today)
+            .opacity(selected == today ? 0.5 : 1)
+            .padding(.leading, 4)
+            .macHelp("\(T("Today")) (⌘T)")
+        }
+    }
+
+    private var webSwitches: some View {
+        HStack(spacing: 10) {
+            modeSwitch.frame(width: 180)
+            NXSegmented(selection: scopeBinding, options: scopeOptions, label: { scopeLabel($0) }, title: T("Show"))
+                .frame(width: scopeOptions.count > 2 ? 300 : 210)
+        }
+    }
+
+    /// Filters (its count on it), Reset while a filter is on, and the keyboard shortcuts.
+    private var webTools: some View {
+        let count = filters.activeCount
+        return HStack(spacing: 8) {
+            Button { sheet = .filters } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "slider.horizontal.3").font(.system(size: 13, weight: .semibold))
+                    Text(T("Filters"))
+                    if count > 0 {
+                        Text("\(count)")
+                            .font(NXFont.text(12, .bold)).monospacedDigit()
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .background(NX.muted, in: Capsule())
+                    }
+                }
+            }
+            .buttonStyle(.nxBordered)
+            .accessibilityLabel(count > 0 ? "\(T("Filters")) (\(count))" : T("Filters"))
+            .accessibilityFocused($a11yTarget, equals: .filtersButton)
+            // A big iPhone in landscape is regular width too, and has no Calendar menu: ⌘F lives here.
+            .calendarShortcut("f", .command, bound: !CalendarKeys.inMenu)
+            .macHelp("\(T("Filters")) (⌘F)")
+            if count > 0 {
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) { resetFilters() }
+                    moveVoiceOver(to: .filtersButton)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "xmark").font(.system(size: 11, weight: .bold))
+                        Text(T("Reset"))
+                    }
+                }
+                .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+                .accessibilityLabel(T("Reset filters"))
+            }
+            if CalendarKeys.inMenu {
+                Button { sheet = .shortcuts } label: {
+                    Image(systemName: "keyboard")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(NX.mutedFg)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityLabel(T("Keyboard shortcuts"))
+                .macHelp("\(T("Keyboard shortcuts")) (⌘/)")
+            }
+        }
+        .fixedSize()
     }
 
     /// ‹ October 2026 › Today on the left, the view and whose tasks on the right: one line, the way a
@@ -1034,12 +1216,12 @@ struct CalendarView: View {
                     HStack(spacing: 14) { legendKeys }
                 }
                 if !legendEntries.isEmpty {
-                    Text(wideCells ? T("Colours follow the IP & Division Chart. A name with the focus icon focuses the calendar on that division; any other name filters it.")
-                                   : T("Dots follow the IP & Division Chart. A name with the focus icon focuses the calendar on that division; any other name filters it."))
+                    // Both widths draw dots now (the tall cells' task lines are gone, as on the web).
+                    Text(T("Dots follow the IP & Division Chart. A name with the focus icon focuses the calendar on that division; any other name filters it."))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg)
+            .font(NXFont.text(CalType.size(wideCells ? 12 : 11))).foregroundStyle(NX.mutedFg)
             if loaded, items?.truncated == true {
                 banner(T("This month has more tasks than the calendar can show at once."), action: nil)
             }
@@ -1063,14 +1245,16 @@ struct CalendarView: View {
 
     /// The month's marks, in words: the tall cells' badges and lines, or the phone's dots.
     @ViewBuilder private var legendKeys: some View {
-        HStack(spacing: 5) { keyBadge("1", fill: CalTone.overdue, fg: .white); Text(T("overdue")) }
         if wideCells {
-            HStack(spacing: 5) { keyBadge("3", fill: NX.muted, fg: NX.mutedFg); Text(T("tasks that day")) }
+            // The web's key, in its order: ● has tasks to do, ✓ done or no status, — overdue.
+            legendKey(filled: true, T("has tasks to do"))
+            legendKey(filled: false, T("done or no status"))
             HStack(spacing: 5) {
-                RoundedRectangle(cornerRadius: 1.5).fill(NX.mutedFg.opacity(0.45)).frame(width: 3, height: 10)
-                Text(T("done or no status")).strikethrough(true, color: NX.mutedFg.opacity(0.7))
+                Capsule().fill(CalTone.overdue).frame(width: 16, height: 2).accessibilityHidden(true)
+                Text(T("overdue"))
             }
         } else {
+            HStack(spacing: 5) { keyBadge("1", fill: CalTone.overdue, fg: .white); Text(T("overdue")) }
             legendKey(filled: true, T("has tasks to do"))
             legendKey(filled: false, T("done or no status"))
         }
@@ -1327,7 +1511,9 @@ struct CalendarView: View {
                      : !rangeLoaded ? (failedHere ? T("Couldn't load this") : T("Loading…"))
                      : T("No tasks"))
                     .font(NXFont.text(CalType.size(12.5))).foregroundStyle(NX.mutedFg)
-                if late > 0 {
+                // The web's day heading has only the counts; the overdue rail and the red marks say the
+                // rest. The phone keeps its badge.
+                if late > 0 && !webChrome {
                     Text(String(format: T("%d overdue"), late))
                         .font(NXFont.text(CalType.size(11.5), .bold)).monospacedDigit()
                         .foregroundStyle(Color.white)
@@ -1354,6 +1540,14 @@ struct CalendarView: View {
         let name = n < 0 ? T("Previous day") : T("Next day")
         return Button { select(CalDays.addDays(selected, n)) } label: {
             Image(systemName: n < 0 ? "chevron.left" : "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                // Regular width: the web's bordered square; the tap keeps its 44 pt.
+                .frame(width: webChrome ? 32 : 44, height: webChrome ? 32 : 44)
+                .overlay {
+                    if webChrome {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border)
+                    }
+                }
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
@@ -1363,27 +1557,38 @@ struct CalendarView: View {
         .macHelp(n < 0 ? "\(name) (⌥←)" : "\(name) (⌥→)")
     }
 
+    /// Today's overdue tasks, two at first. As on the web (DayPanel.tsx), "Show all" sits at the right
+    /// of the rail's heading and the whole heading toggles it; it used to be a row under the list.
     private func overdueRail(_ rail: [CalItem]) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(String(format: T("Overdue · %d"), rail.count).uppercased()).calCaps()
-                .foregroundStyle(CalTone.overdue)
-                .padding(.horizontal, 10).padding(.top, 8)
+        let heading = Text(String(format: T("Overdue · %d"), rail.count).uppercased()).calCaps()
+            .foregroundStyle(CalTone.overdue)
+        return VStack(alignment: .leading, spacing: 2) {
+            if rail.count > 2 {
+                Button { railOpen.toggle() } label: {
+                    HStack(spacing: 8) {
+                        heading
+                        Spacer(minLength: 8)
+                        Text(railOpen ? T("Show less") : T("Show all"))
+                            .font(NXFont.text(CalType.size(12), .semibold)).foregroundStyle(CalTone.overdue)
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
                 .accessibilityAddTraits(.isHeader)
+                .accessibilityValue(railOpen ? T("Show less") : T("Show all"))
+            } else {
+                heading
+                    .padding(.horizontal, 10).padding(.top, 8)
+                    .accessibilityAddTraits(.isHeader)
+            }
             ForEach(rail.prefix(railOpen ? rail.count : 2)) { item in
                 CalItemRow(item: item, unitId: item.placements.first?.unitId, ix: ix, people: people, today: today, now: now, windowDays: windowDays,
                            trailingNote: CalFormat.day(item.day, "dMMM"), onOpen: openItem)
             }
-            if rail.count > 2 {
-                Button { railOpen.toggle() } label: {
-                    Text(railOpen ? T("Show less") : T("Show all"))
-                        .font(NXFont.text(CalType.size(12), .semibold)).foregroundStyle(CalTone.overdue)
-                        .padding(.horizontal, 10)
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
         }
+        .padding(.bottom, 4)
         .background(CalTone.overdue.opacity(0.07), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(CalTone.overdue.opacity(0.25)))
     }
@@ -1429,6 +1634,8 @@ struct CalendarView: View {
         if !twoPane && mode == .month {
             ToolbarItem(placement: .principal) { barTitle }
         }
+        // Regular width has Filters in its own header (webChrome).
+        if !webChrome {
         ToolbarItem(placement: .topBarTrailing) {
             // Filters only: whose tasks (Everyone / Mine / My division) is a view and has no say in
             // the count.
@@ -1450,6 +1657,7 @@ struct CalendarView: View {
             // ⌘F here on the iPhone only: on the iPad and the Mac, Calendar › Filters… has it.
             .calendarShortcut("f", .command, bound: !CalendarKeys.inMenu)
             .macHelp("\(T("Filters")) (⌘F)")
+        }
         }
     }
 

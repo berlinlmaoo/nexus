@@ -6,7 +6,13 @@ import UIKit
 /// The web's integrations/billing/MCP sections are desktop-oriented; omitted on mobile.
 struct SettingsView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(\.horizontalSizeClass) private var hSize
+    /// Pushed (Home's avatar on the iPad) rather than the sidebar's own root: the bar then keeps Back.
+    @Environment(\.isPresented) private var isPresented
     @State private var name = ""
+    /// The profile's phone number, saved with the name (web ProfileSection). Loaded separately: the
+    /// shared AppUser does not carry it.
+    @State private var phone = ""
     @State private var signOutBlocked = false
     @State private var email = ""
     @State private var googleEmail = ""
@@ -37,34 +43,34 @@ struct SettingsView: View {
     private static let roleLabel: [String: String] = ["ONE_ABOVE_ALL": "One Above All", "BOD": "BoD", "MANAGER": "Manager", "STAFF": "Staff"]
     private var initial: String { String((name.isEmpty ? email : name).first ?? "?").uppercased() }
 
+    /// Regular width (iPad, Mac): the dev web's Settings (settings.tsx, owner screenshots 278/279) — a
+    /// page header, the sections as a list on the left with the chosen one on a pill, and the section's
+    /// cards on the right. The phone keeps the tab strip over one column.
+    private var webChrome: Bool { hSize == .regular }
+
     var body: some View {
+        Group {
+            if webChrome { webBody } else { phoneBody }
+        }
+        .alert(T("Couldn't save"), isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+            Button("OK") { saveError = nil }
+        } message: { Text(saveError ?? "") }
+        .sheet(isPresented: $showDeleteAccount) { DeleteAccountSheet() }
+        .navigationTitle(webChrome ? "" : T("Settings"))
+        .navigationBarTitleDisplayMode(.inline)
+        // The sidebar's root draws its own header (webChrome); pushed, the bar stays for Back.
+        .toolbar(webChrome && !isPresented ? .hidden : .automatic, for: .navigationBar)
+        .task { await load() }
+    }
+
+    private var phoneBody: some View {
         ZStack {
             NX.background.ignoresSafeArea()
             ScrollView {
                 VStack(spacing: 18) {
-                    // A row, not a sheet: Tuning Room is the one place an optional update is
-                    // mentioned, and it waits to be noticed. A deadline outranks a mere "newer
-                    // version", so only one of the two is ever drawn.
-                    if let grace = versionGate.grace {
-                        UpdateDeadlineRow(grace: grace, storeUrl: versionGate.storeUrl)
-                    } else if let latest = versionGate.available, let url = versionGate.storeUrl {
-                        UpdateAvailableRow(version: latest, storeUrl: url)
-                    }
-                    Group {
-                        ForEach(deniedKinds) { PermissionBanner(kind: $0) }
-                    }
-                    .task { deniedKinds = await Permissions.denied() }
-                    .onChange(of: scenePhase) { _, phase in
-                        if phase == .active { Task { deniedKinds = await Permissions.denied() } }
-                    }
+                    notices
                     tabContent
-                    // Branch dev only: Production or the DEV server (ServerSwitchViews.swift).
-                    ServerSwitchCard()
-
-                    // Whether this device is live, so a Mac that shows nothing new can be told apart
-                    // from a Mac that is not connected.
-                    RealtimeStatusLine()
-                    Text("NEXUS by Z Networks").font(NXFont.text(11)).foregroundStyle(NX.mutedFg.opacity(0.7))
+                    footer
                 }
                 .padding(16)
             }
@@ -75,15 +81,104 @@ struct SettingsView: View {
             }
             .opacity(loading ? 0.4 : 1)
         }
-        .alert(T("Couldn't save"), isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
-            Button("OK") { saveError = nil }
-        } message: { Text(saveError ?? "") }
-        .sheet(isPresented: $showDeleteAccount) { DeleteAccountSheet() }
-        .navigationTitle(T("Settings"))
-        .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
     }
 
+    private var webBody: some View {
+        VStack(spacing: 0) {
+            NXPageHeader(title: T("Settings"), subtitle: T("Your profile, security, notifications and workspace preferences."))
+            HStack(alignment: .top, spacing: 28) {
+                webSideNav
+                    .frame(width: 230)
+                    .padding(.top, 24)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        notices
+                        webTabContent
+                        footer
+                    }
+                    .frame(maxWidth: 1040, alignment: .leading)
+                    .padding(.top, 24).padding(.bottom, 32).padding(.trailing, 32)
+                    .opacity(loading ? 0.4 : 1)
+                }
+            }
+            .padding(.leading, 32)
+        }
+        .background(NX.background.ignoresSafeArea())
+    }
+
+    /// The sections as the web's vertical list: icon and name, the chosen one on a muted pill.
+    private var webSideNav: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(SettingsTab.allCases) { t in
+                let on = tab == t
+                Button { tab = t } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: t.icon).font(.system(size: 15)).frame(width: 20)
+                        Text(t.label).font(NXFont.text(15, on ? .medium : .regular)).lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .foregroundStyle(on ? NX.foreground : NX.mutedFg)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                    .background(on ? NX.muted : Color.clear, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(T("Settings"))
+    }
+
+    /// An update waiting, and whatever is switched off for NEXUS, above every section.
+    @ViewBuilder private var notices: some View {
+        // A row, not a sheet: Tuning Room is the one place an optional update is
+        // mentioned, and it waits to be noticed. A deadline outranks a mere "newer
+        // version", so only one of the two is ever drawn.
+        if let grace = versionGate.grace {
+            UpdateDeadlineRow(grace: grace, storeUrl: versionGate.storeUrl)
+        } else if let latest = versionGate.available, let url = versionGate.storeUrl {
+            UpdateAvailableRow(version: latest, storeUrl: url)
+        }
+        Group {
+            ForEach(deniedKinds) { PermissionBanner(kind: $0) }
+        }
+        .task { deniedKinds = await Permissions.denied() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { deniedKinds = await Permissions.denied() } }
+        }
+    }
+
+    /// Under every section: the server switch (dev builds), whether realtime is live, the name.
+    @ViewBuilder private var footer: some View {
+        // Branch dev only: Production or the DEV server (ServerSwitchViews.swift).
+        ServerSwitchCard()
+        // Whether this device is live, so a Mac that shows nothing new can be told apart
+        // from a Mac that is not connected.
+        HStack {
+            Spacer(minLength: 0)
+            VStack(spacing: 8) {
+                RealtimeStatusLine()
+                Text("NEXUS by Z Networks").font(NXFont.text(11)).foregroundStyle(NX.mutedFg.opacity(0.7))
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// Regular width: Profile is the web's Profile card, Password card, Delete account card (and Logout,
+    /// which the web has in its sidebar footer); the other sections are the same cards as on the phone.
+    @ViewBuilder private var webTabContent: some View {
+        if tab == .profile {
+            webProfileCard
+            SecurityCard()
+            webDeleteCard
+            webLogoutCard
+        } else {
+            tabContent
+        }
+    }
 
     // MARK: tabs
 
@@ -128,7 +223,7 @@ struct SettingsView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(width: 28, height: 28)
-                        .background(NX.violet, in: Circle())
+                        .background(NX.onyx, in: Circle())
                         .overlay(Circle().strokeBorder(NX.background, lineWidth: 2))
                 }
                 .disabled(uploadingPhoto)
@@ -182,13 +277,28 @@ struct SettingsView: View {
                 .padding(12).frame(maxWidth: .infinity, alignment: .leading)
                 .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
-            Button { Task { await save() } } label: {
-                HStack(spacing: 8) {
-                    if saving { ProgressView().tint(.white) }
-                    Text(savedOK ? T("Saved ✓") : T("Save profile"))
+            // Saved with the name, as on the web (PATCH /api/user/profile {phoneNumber}).
+            field(T("Phone number")) {
+                VStack(alignment: .leading, spacing: 5) {
+                    TextField(T("08xxxxxxxxxx · outside Indonesia, start with + (e.g. +65…)"), text: $phone)
+                        .font(NXFont.text(16)).padding(12)
+                        .keyboardType(.phonePad)
+                        .textContentType(.telephoneNumber)
+                        .background(NX.muted, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    Text(T("For numbers outside Indonesia, type + and the country code."))
+                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 }
             }
-            .buttonStyle(NexusPrimaryButton())
+            // Near-black like the web's primary, not the old violet fill.
+            Button { Task { await save() } } label: {
+                HStack(spacing: 8) {
+                    if saving { ProgressView().tint(NX.background) }
+                    Text(savedOK ? T("Saved ✓") : T("Save"))
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(NXButtonStyle(kind: .primary))
+            .frame(minHeight: 44)
             .disabled(saving || name.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .nexusCard()
@@ -231,6 +341,174 @@ struct SettingsView: View {
 
     }
 
+    // MARK: Web cards (regular width)
+
+    /// The web's Profile card: "Visible to your teammates", the photo with Change photo / Remove and its
+    /// hint, Full name | Email side by side, Google Workspace, Phone number, and Save at the right.
+    private var webProfileCard: some View {
+        NXCard(padding: 24) {
+            VStack(alignment: .leading, spacing: 22) {
+                HStack(alignment: .top) {
+                    webCardTitle(T("Profile"), T("Visible to your teammates"))
+                    Spacer(minLength: 8)
+                    if let role, let label = Self.roleLabel[role.uppercased()] {
+                        NexusChip(text: label, tone: .accent, systemImage: "shield.fill")
+                    }
+                }
+                webPhotoRow
+                HStack(alignment: .top, spacing: 16) {
+                    webField(T("Full name")) {
+                        TextField(T("Your name"), text: $name)
+                            .textContentType(.name)
+                            .modifier(WebInputStyle())
+                    }
+                    webField(T("Email")) { WebEmailField(email: $email) }
+                }
+                webField(T("Google Workspace")) {
+                    HStack(spacing: 8) {
+                        if googleEmail.isEmpty {
+                            Text(T("No company Google account linked yet. A BoD links it from Control Room."))
+                                .font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                        } else {
+                            Image(systemName: "at").font(.system(size: 14, weight: .semibold)).foregroundStyle(NX.foreground)
+                            Text(googleEmail).font(NXFont.text(15, .medium)).foregroundStyle(NX.foreground)
+                                .lineLimit(1).truncationMode(.middle)
+                                .textSelection(.enabled)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                    .background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                }
+                webField(T("Phone number")) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        TextField(T("08xxxxxxxxxx · outside Indonesia, start with + (e.g. +65…)"), text: $phone)
+                            .keyboardType(.phonePad)
+                            .textContentType(.telephoneNumber)
+                            .modifier(WebInputStyle())
+                        Text(T("For numbers outside Indonesia, type + and the country code."))
+                            .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    }
+                }
+                Divider().overlay(NX.border)
+                HStack(spacing: 10) {
+                    Spacer(minLength: 0)
+                    if savedOK {
+                        Text(T("Profile saved.")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.success)
+                    }
+                    Button { Task { await save() } } label: {
+                        HStack(spacing: 6) {
+                            if saving { ProgressView().controlSize(.small).tint(NX.background) }
+                            Text(T("Save"))
+                        }
+                    }
+                    .buttonStyle(.nxPrimary)
+                    .disabled(saving || name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .opacity(name.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1)
+                }
+            }
+        }
+        .onChange(of: pickedPhoto) { _, item in
+            guard let item else { return }
+            Task { await upload(item) }
+        }
+    }
+
+    private var webPhotoRow: some View {
+        HStack(alignment: .center, spacing: 16) {
+            AvatarView(url: avatarURL, initial: initial, size: 80)
+                .overlay(Circle().strokeBorder(NX.border, lineWidth: 2))
+                .overlay {
+                    if uploadingPhoto {
+                        ZStack {
+                            Circle().fill(NX.background.opacity(0.6))
+                            ProgressView()
+                        }
+                    }
+                }
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    PhotosPicker(selection: $pickedPhoto, matching: .images, photoLibrary: .shared()) {
+                        Label(T("Change photo"), systemImage: "photo.badge.plus")
+                    }
+                    .buttonStyle(.nxBordered)
+                    .disabled(uploadingPhoto)
+                    if avatarURL?.isEmpty == false {
+                        Button { Task { await removePhoto() } } label: {
+                            Label(T("Remove"), systemImage: "trash").foregroundStyle(NX.mutedFg)
+                        }
+                        .buttonStyle(.nxGhost)
+                        .disabled(uploadingPhoto)
+                    }
+                }
+                Text(T("PNG, JPG or WEBP. Max 5 MB.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                if let photoError {
+                    Text(photoError).font(NXFont.text(12)).foregroundStyle(NX.danger)
+                }
+                if uploadProgress.isActive {
+                    UploadProgressBar(progress: uploadProgress).frame(maxWidth: 180)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// The web's Delete account card: what it does, and the red button at its right.
+    private var webDeleteCard: some View {
+        NXCard(padding: 24) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(T("Delete account")).font(NXFont.text(16, .semibold)).foregroundStyle(NX.danger)
+                Text(T("Permanently delete your NEXUS account. You won't be able to sign in again, and this can't be undone."))
+                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Spacer(minLength: 0)
+                    Button { showDeleteAccount = true } label: { Label(T("Delete account"), systemImage: "trash") }
+                        .buttonStyle(.nxDestructive)
+                }
+            }
+        }
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.danger.opacity(0.4)))
+    }
+
+    /// Logout, which the web keeps in its sidebar footer: a card of its own here, after Delete account.
+    private var webLogoutCard: some View {
+        NXCard(padding: 20) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(T("Logout")).font(NXFont.text(16, .semibold)).foregroundStyle(NX.foreground)
+                    Text(T("Sign out of NEXUS on this device.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                }
+                Spacer(minLength: 8)
+                Button { if !auth.signOutIfAllowed() { signOutBlocked = true } } label: {
+                    Label(T("Logout"), systemImage: "rectangle.portrait.and.arrow.right").foregroundStyle(NX.danger)
+                }
+                .buttonStyle(.nxBordered)
+            }
+        }
+        .signOutBlockedAlert(isPresented: $signOutBlocked)
+    }
+
+    private func webCardTitle(_ title: String, _ subtitle: String?) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(NXFont.text(17, .semibold)).foregroundStyle(NX.foreground)
+                .accessibilityAddTraits(.isHeader)
+            if let subtitle {
+                Text(subtitle).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            }
+        }
+    }
+
+    private func webField<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label).font(NXFont.text(13, .medium)).foregroundStyle(NX.mutedFg)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private func field<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             // Sentence case, as the web's form labels (no tracked capitals).
@@ -249,6 +527,7 @@ struct SettingsView: View {
             googleEmail = p.user.googleWorkspaceEmail ?? ""
         }
         if let info = try? await APIClient.shared.workspaceInfo() { role = info.role; workspaceId = info.workspaceId }
+        if let number = try? await APIClient.shared.profilePhoneNumber() { phone = number }
         loading = false
     }
     /// The library hands back whatever the camera produced - often HEIC, which the server
@@ -294,8 +573,16 @@ struct SettingsView: View {
     private func save() async {
         saving = true; savedOK = false; defer { saving = false }
         let v = name.trimmingCharacters(in: .whitespaces)
-        do { try await APIClient.shared.updateProfile(name: v); savedOK = true }
-        catch { saveError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save your profile.") }
+        do {
+            // Name and phone number together, as the web's Save; the field shows the number as stored.
+            let stored = try await APIClient.shared.updateProfile(name: v, phoneNumber: phone)
+            phone = stored ?? ""
+            savedOK = true
+        } catch APIError.unauthorized {
+            auth.logout()
+        } catch {
+            saveError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save your profile.")
+        }
     }
 }
 
@@ -378,5 +665,45 @@ struct ClaudeMCPCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .nexusCard()
+    }
+}
+
+
+/// The web's text input (settings.tsx): a bordered box on the page colour, 15 pt.
+private struct WebInputStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .font(NXFont.text(15))
+            .textFieldStyle(.plain)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+            .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+    }
+}
+
+/// The web's Email field: the address in a read-only box and a bordered Change beside it, which opens
+/// the same two-step sheet as the phone's row (ChangeEmailSheet). Owns that sheet, so SettingsView keeps
+/// its one `.sheet`.
+private struct WebEmailField: View {
+    @Binding var email: String
+    @State private var changing = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(email.isEmpty ? "—" : email)
+                .font(NXFont.text(15)).foregroundStyle(NX.mutedFg)
+                .lineLimit(1).truncationMode(.middle)
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                .background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+            Button(T("Change")) { changing = true }
+                .buttonStyle(.nxBordered)
+                .accessibilityHint(T("Change the email you sign in with"))
+        }
+        .sheet(isPresented: $changing) {
+            ChangeEmailSheet(current: email) { email = $0 }
+        }
     }
 }

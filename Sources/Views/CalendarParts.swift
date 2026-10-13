@@ -554,12 +554,12 @@ extension CalendarCore {
 
 /// Monday first, always six weeks.
 ///
-/// Regular width (iPad, Mac): each day is a bordered cell, like Calendar's month on the Mac. The date
-/// and its counts sit together in the cell's top row (a red badge for what is overdue, a quiet one for
-/// the day's total), and under them as many of the day's tasks as the cell has room for, each a line
-/// with its division's colour; the rest is "+N more". The count used to sit at the cell's far edge,
-/// right beside the next day's number, with no line between them, so "1  4  2  14" read as counts of
-/// the wrong day (owner, 11 Oct 2026).
+/// Regular width (iPad, Mac), as the dev web (MonthGrid.tsx, owner screenshots 280/281, 13 Oct 2026):
+/// each day is a bordered cell with the date top left, the day's count top right, a short red dash
+/// under the date when something due that day is overdue, and one dot per division along the bottom.
+/// Task titles are read in the day panel beside the grid, not in the cells; the Mac shows the web's
+/// tooltip ("Thu 8 Oct · 5 tasks" and the divisions) under the pointer. Today is a near-black disc and
+/// the picked day an outlined cell.
 ///
 /// Compact width (iPhone): the date, then one dot per division (filled = still something to do, a
 /// small tick = only done / status-less) after a red badge with the overdue count. A red dash under
@@ -598,14 +598,12 @@ private struct CalMonthGridBody: View {
     /// Cell heights and the number's disc follow Dynamic Type, so a larger text size grows the rows
     /// instead of spilling a day into the week below it.
     @ScaledMetric(relativeTo: .body) private var phoneHeight: CGFloat = 54
-    /// Room for the date row and three task lines.
-    @ScaledMetric(relativeTo: .body) private var wideHeight: CGFloat = 104
+    /// The tall cell: the date row, the overdue dash, a holiday's name and the dots.
+    @ScaledMetric(relativeTo: .body) private var wideHeight: CGFloat = 96
     /// The least a tall week shrinks to when fitting two panes (`fitHeight`): the date and one line.
     @ScaledMetric(relativeTo: .body) private var wideFloor: CGFloat = 60
     @ScaledMetric(relativeTo: .body) private var disc: CGFloat = 24
     @ScaledMetric(relativeTo: .body) private var dotRow: CGFloat = 12
-    /// One task line in a tall cell.
-    @ScaledMetric(relativeTo: .body) private var lineHeight: CGFloat = 16
     /// The weekday row's measured height, taken off `fitHeight` with the six dividers.
     @State private var headRow: CGFloat = 30
 
@@ -684,7 +682,7 @@ private struct CalMonthGridBody: View {
         } label: {
             Group {
                 if g.wide {
-                    wideContent(day, cell: cell, info: info, inMonth: inMonth, isToday: isToday, isSel: isSel, holiday: holiday, height: height)
+                    webContent(day, cell: cell, inMonth: inMonth, isToday: isToday, isSel: isSel, holiday: holiday, height: height)
                 } else {
                     compactContent(day, dots: dots, info: info, inMonth: inMonth, isToday: isToday, isSel: isSel, holiday: holiday)
                 }
@@ -700,22 +698,24 @@ private struct CalMonthGridBody: View {
             // tanggal hari ini yang bulet"). The tall cell has room for an edge as well, well clear of
             // the disc, so the pick is seen at a glance across a big grid.
             .background {
-                if isSel {
-                    RoundedRectangle(cornerRadius: g.wide ? 10 : 12, style: .continuous)
-                        .fill(CalTone.accent.opacity(g.wide ? 0.10 : 0.14))
-                        .overlay {
-                            if g.wide {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .strokeBorder(CalTone.accent.opacity(0.55), lineWidth: 1.5)
-                            }
-                        }
+                if isSel && !g.wide {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(CalTone.accent.opacity(0.14))
                         .padding(2)
+                }
+            }
+            // Regular width, as the dev web's grid (MonthGrid.tsx `ring-2 ring-inset`): the picked day
+            // is an outlined cell in the near-black of the web's primary, no tint behind its dots.
+            .overlay {
+                if isSel && g.wide {
+                    Rectangle().strokeBorder(NX.onyx, lineWidth: 2)
                 }
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .hoverEffect(.highlight)
+        .modifier(CalCellTip(text: g.wide ? tipText(day, cell) : nil))
         .accessibilityLabel(cellLabel(day, cell, info, holiday, isToday))
         .modifier(CalCellDivisions(todo: dots.filter(\.filled).map(unitName).joined(separator: ", "),
                                    done: dots.filter { !$0.filled }.map(unitName).joined(separator: ", ")))
@@ -724,14 +724,90 @@ private struct CalMonthGridBody: View {
 
     /// The date on today's violet disc, or plain; red on a holiday; the accent when picked.
     private func number(_ day: String, inMonth: Bool, isToday: Bool, isSel: Bool, holiday: String?) -> some View {
-        let color: Color = isToday ? Color.white : !inMonth ? NX.mutedFg : (holiday != nil ? CalTone.overdue : (isSel ? CalTone.accent : NX.foreground))
-        let side = CalType.size(min(disc, grid.wide ? 36 : 32))
+        let wide = grid.wide
+        // Regular width: today is a near-black disc (web `bg-cal-accent` / dark `bg-primary`) and the
+        // pick is the cell's outline, so the number itself is not tinted.
+        let todayFg: Color = wide ? NX.background : Color.white
+        let picked: Color = wide ? NX.foreground : CalTone.accent
+        let color: Color = isToday ? todayFg : !inMonth ? NX.mutedFg : (holiday != nil ? CalTone.overdue : (isSel ? picked : NX.foreground))
+        let side = CalType.size(min(disc, wide ? 36 : 32))
         return Text("\(Int(day.suffix(2)) ?? 0)")
             .font(NXFont.text(CalType.size(13), inMonth ? (isToday || isSel ? .bold : .semibold) : .regular)).monospacedDigit()
             .lineLimit(1).minimumScaleFactor(0.7)
             .foregroundStyle(color)
             .frame(minWidth: side, minHeight: side)
-            .background { if isToday { Circle().fill(CalTone.accentFill) } }
+            .background { if isToday { Circle().fill(wide ? NX.onyx : CalTone.accentFill) } }
+    }
+
+    /// The pointer's tooltip on a day (Mac), as the web's: "Thu 8 Oct · 5 tasks" over the divisions and
+    /// their counts. Nil for a day with nothing on it.
+    private func tipText(_ day: String, _ cell: CalDayCell?) -> String? {
+        guard grid.loaded, let cell, cell.count > 0 else { return nil }
+        let head = "\(CalFormat.day(day, "EEEdMMM")) · \(CalFormat.tasks(cell.count))"
+        let parts = cell.dots.map { dot -> String in
+            let name = dot.unitId == "other" ? T("No division") : (grid.ix.byId[dot.unitId]?.name ?? "")
+            return "\(name) \(dot.count)"
+        }
+        return parts.isEmpty ? head : head + "\n" + parts.joined(separator: " · ")
+    }
+
+    /// One division's mark: filled = something still to do; a tick = nothing left (done or no status).
+    @ViewBuilder private func dotMark(_ dot: CalDot, size: CGFloat) -> some View {
+        let tint = dot.unitId == "other" ? CalTone.unknown : calUnitColor(grid.ix.byId[dot.unitId])
+        if dot.filled {
+            Circle().fill(tint).frame(width: size, height: size)
+        } else {
+            Image(systemName: "checkmark")
+                .font(.system(size: CalType.size(size + 1), weight: .black))
+                .foregroundStyle(tint.opacity(0.6))
+                .frame(width: size + 2, height: size + 2)
+        }
+    }
+
+    /// The regular-width cell, as the dev web draws it (MonthGrid.tsx): the date top left, the day's
+    /// count top right, a short red dash under the date when something due that day is overdue, the
+    /// holiday's name where there is room, and one dot per division along the bottom (up to four, then
+    /// "+N"). No task titles: the day panel beside the grid is where they are read (owner, 13 Oct 2026).
+    @ViewBuilder private func webContent(_ day: String, cell: CalDayCell?, inMonth: Bool, isToday: Bool, isSel: Bool,
+                                         holiday: String?, height: CGFloat) -> some View {
+        let dots = cell?.dots ?? []
+        let shown = Array(dots.prefix(4))
+        let more = dots.count - shown.count
+        let roomForHoliday = height >= CalType.size(78)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 3) {
+                number(day, inMonth: inMonth, isToday: isToday, isSel: isSel, holiday: holiday)
+                Spacer(minLength: 2)
+                if let cell, cell.count > 0 {
+                    Text("\(cell.count)")
+                        .font(NXFont.text(CalType.size(11), .semibold)).monospacedDigit()
+                        .foregroundStyle(NX.mutedFg)
+                        .lineLimit(1)
+                        .padding(.top, 4).padding(.trailing, 2)
+                }
+            }
+            if cell?.overdue == true {
+                Capsule().fill(CalTone.overdue)
+                    .frame(width: 16, height: 2)
+                    .padding(.top, 2).padding(.leading, 4)
+            }
+            if roomForHoliday, let holiday {
+                Text(holiday).font(NXFont.text(CalType.size(10.5), .medium))
+                    .foregroundStyle(inMonth ? CalTone.overdue : NX.mutedFg).lineLimit(1)
+                    .padding(.top, 2)
+            }
+            Spacer(minLength: 0)
+            HStack(spacing: 3) {
+                ForEach(shown, id: \.unitId) { dot in dotMark(dot, size: 7) }
+                if more > 0 {
+                    Text("+\(more)").font(NXFont.text(CalType.size(10), .bold)).foregroundStyle(NX.mutedFg)
+                        .lineLimit(1)
+                }
+            }
+            .frame(minHeight: CalType.size(dotRow), alignment: .leading)
+            .padding(.leading, 3)
+        }
+        .padding(6)
     }
 
     /// The red count of what is overdue that day: a filled badge, not a line under the date.
@@ -749,86 +825,6 @@ private struct CalMonthGridBody: View {
         .background(CalTone.overdue, in: Capsule())
     }
 
-    /// The day's total, quiet: it says how much there is, the lines say what.
-    private func totalBadge(_ n: Int) -> some View {
-        Text("\(n)").font(NXFont.text(CalType.size(10.5), .semibold)).monospacedDigit()
-            .lineLimit(1)
-            .foregroundStyle(NX.mutedFg)
-            .padding(.horizontal, 5)
-            .frame(minWidth: CalType.size(18), minHeight: CalType.size(17))
-            .background(NX.muted, in: Capsule())
-    }
-
-    /// Date and counts in one row, then the tasks: as many lines as the cell holds, the last one
-    /// "+N more" when they do not all fit.
-    @ViewBuilder private func wideContent(_ day: String, cell: CalDayCell?, info: CalMonthDay, inMonth: Bool, isToday: Bool, isSel: Bool,
-                                          holiday: String?, height: CGFloat) -> some View {
-        let pad: CGFloat = 5
-        let line = CalType.size(lineHeight)
-        let top = CalType.size(min(disc, 36))
-        let room = height - pad * 2 - top - 3
-        let showHoliday = holiday != nil && room >= line * 2
-        let slots = max(0, Int((room - (showHoliday ? line : 0)) / line))
-        let all = info.lines
-        let fits = all.count <= slots
-        let shown = fits ? all : Array(all.prefix(max(slots - 1, 0)))
-        let rest = all.count - shown.count
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: 3) {
-                number(day, inMonth: inMonth, isToday: isToday, isSel: isSel, holiday: holiday)
-                Spacer(minLength: 2)
-                if let cell, cell.count > 0 {
-                    // Both badges where the column has room; the red one alone where it has not.
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 3) {
-                            if info.overdue > 0 { overdueBadge(info.overdue, small: false) }
-                            totalBadge(cell.count)
-                        }
-                        if info.overdue > 0 { overdueBadge(info.overdue, small: true) } else { totalBadge(cell.count) }
-                    }
-                }
-            }
-            .frame(height: top)
-            .padding(.bottom, 3)
-            if showHoliday, let holiday {
-                Text(holiday).font(NXFont.text(CalType.size(10.5), .semibold))
-                    .foregroundStyle(inMonth ? CalTone.overdue : NX.mutedFg).lineLimit(1)
-                    .frame(height: line, alignment: .leading)
-            }
-            ForEach(shown, id: \.key) { l in eventLine(l) }
-            if rest > 0 {
-                Text(String(format: T("+%d more"), rest))
-                    .font(NXFont.text(CalType.size(10.5), .semibold)).foregroundStyle(NX.mutedFg)
-                    .lineLimit(1)
-                    .frame(height: line, alignment: .leading)
-                    .padding(.leading, 7)
-            }
-        }
-        .padding(pad)
-    }
-
-    /// A task in a tall cell: its division's colour, then the title. Still to do in full type, overdue
-    /// in red, done struck through and muted.
-    private func eventLine(_ l: CalMonthLine) -> some View {
-        let tint = l.unitId == "other" ? CalTone.unknown : calUnitColor(grid.ix.byId[l.unitId])
-        let fg: Color = l.quiet || l.masked ? NX.mutedFg : (l.overdue ? CalTone.overdue : NX.foreground)
-        return HStack(spacing: 4) {
-            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                .fill(tint.opacity(l.quiet ? 0.45 : 1))
-                .frame(width: 3, height: CalType.size(11))
-            if l.urgent && !l.quiet {
-                Image(systemName: "flag.fill").font(NXFont.text(CalType.size(8), .bold)).foregroundStyle(CalTone.overdue)
-            }
-            Text(l.title)
-                .font(NXFont.text(CalType.size(11), l.quiet ? .regular : .medium))
-                .italic(l.masked)
-                .foregroundStyle(fg)
-                .strikethrough(l.done, color: NX.mutedFg.opacity(0.7))
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, minHeight: CalType.size(lineHeight), maxHeight: CalType.size(lineHeight), alignment: .leading)
-    }
-
     /// The phone's cell: the date, then the overdue badge and one dot per division.
     @ViewBuilder private func compactContent(_ day: String, dots: [CalDot], info: CalMonthDay, inMonth: Bool, isToday: Bool, isSel: Bool,
                                              holiday: String?) -> some View {
@@ -839,20 +835,10 @@ private struct CalMonthGridBody: View {
             Spacer(minLength: 0)
             HStack(spacing: 3) {
                 if info.overdue > 0 { overdueBadge(info.overdue, small: true) }
-                ForEach(shown, id: \.unitId) { dot in
-                    let tint = calUnitColor(grid.ix.byId[dot.unitId])
-                    // Filled = something still to do; a tick = nothing left (done or status-less),
-                    // quieter than the work still open. Owner, 8 Oct 2026: a ring read as "to do"
-                    // beside the task list's ○.
-                    if dot.filled {
-                        Circle().fill(tint).frame(width: 6, height: 6)
-                    } else {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: CalType.size(7), weight: .black))
-                            .foregroundStyle(tint.opacity(0.6))
-                            .frame(width: 8, height: 8)
-                    }
-                }
+                // Filled = something still to do; a tick = nothing left (done or status-less),
+                // quieter than the work still open. Owner, 8 Oct 2026: a ring read as "to do"
+                // beside the task list's ○.
+                ForEach(shown, id: \.unitId) { dot in dotMark(dot, size: 6) }
                 if dots.count > shown.count {
                     Text("+\(dots.count - shown.count)").font(NXFont.text(CalType.size(9.5), .bold)).foregroundStyle(NX.mutedFg)
                         .lineLimit(1).minimumScaleFactor(0.6)
@@ -878,6 +864,20 @@ private struct CalMonthGridBody: View {
         if let holiday { parts.append(holiday) }
         if isToday { parts.append(T("Today")) }
         return parts.joined(separator: ", ")
+    }
+}
+
+/// The day's tooltip under the pointer (Mac): `help` is a tooltip there. Not on the iPad or iPhone, where
+/// `help` becomes the VoiceOver hint and would repeat what the cell's label and "More content" say.
+private struct CalCellTip: ViewModifier {
+    let text: String?
+
+    @ViewBuilder func body(content: Content) -> some View {
+        #if targetEnvironment(macCatalyst)
+        if let text { content.help(text) } else { content }
+        #else
+        content
+        #endif
     }
 }
 

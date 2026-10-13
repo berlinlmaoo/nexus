@@ -181,9 +181,9 @@ struct LanguageCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(T("LANGUAGE")).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violetText)
+            Text(T("LANGUAGE")).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
             Text(T("Applies immediately across the whole app."))
-                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             ForEach(AppLang.allCases) { l in
                 Button {
                     store.lang = l
@@ -196,10 +196,10 @@ struct LanguageCard: View {
                         Spacer(minLength: 0)
                         Image(systemName: store.lang == l ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 18))
-                            .foregroundStyle(store.lang == l ? NX.violetText : NX.mutedFg.opacity(0.4))
+                            .foregroundStyle(store.lang == l ? NX.onyx : NX.mutedFg.opacity(0.4))
                     }
                     .padding(.vertical, 9).padding(.horizontal, 11)
-                    .background(store.lang == l ? NX.violet.opacity(0.10) : Color.clear,
+                    .background(store.lang == l ? NX.muted : Color.clear,
                                 in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(.plain)
@@ -218,20 +218,21 @@ struct AppearanceCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(T("APPEARANCE")).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violetText)
+            Text(T("APPEARANCE")).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
             HStack(spacing: 8) {
                 ForEach(AppTheme.allCases) { t in
                     let on = store.theme == t
                     Button { store.theme = t } label: {
                         VStack(spacing: 6) {
                             Image(systemName: t.icon).font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(on ? Color.white : NX.mutedFg)
-                            Text(t.label).font(NXFont.text(11, .semibold))
-                                .foregroundStyle(on ? Color.white : NX.mutedFg)
+                                .foregroundStyle(on ? NX.background : NX.mutedFg)
+                            Text(t.label).font(NXFont.text(13, .semibold))
+                                .foregroundStyle(on ? NX.background : NX.mutedFg)
                                 .lineLimit(1).minimumScaleFactor(0.75)
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 12)
-                        .background(on ? NX.violet : NX.muted.opacity(0.5),
+                        // The web's primary (near-black) for the chosen theme, not violet.
+                        .background(on ? NX.onyx : NX.muted.opacity(0.5),
                                     in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     .buttonStyle(.plain)
@@ -252,38 +253,95 @@ struct AppearanceCard: View {
 // MARK: - Security (change own password)
 
 struct SecurityCard: View {
+    @Environment(\.horizontalSizeClass) private var hSize
     @State private var current = ""
     @State private var new1 = ""
     @State private var new2 = ""
     @State private var busy = false
     @State private var msg: (text: String, ok: Bool)?
 
-    private var valid: Bool { !current.isEmpty && new1.count >= 6 && new1 == new2 }
+    /// Regular width is the web's Password card: Current | New side by side and Change password at the
+    /// right, no repeat field (PasswordSection in settings.tsx). The phone keeps its repeat field.
+    private var web: Bool { hSize == .regular }
+    private var valid: Bool { !current.isEmpty && new1.count >= 6 && (web || new1 == new2) }
 
     var body: some View {
+        if web { webBody } else { phoneBody }
+    }
+
+    private var phoneBody: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("SECURITY").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violetText)
+            Text(T("Password").uppercased()).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
             secureField(T("Current password"), $current)
             secureField(T("New password (min 6)"), $new1)
             secureField(T("Repeat new password"), $new2)
             if let msg { Text(msg.text).font(NXFont.text(12, .semibold)).foregroundStyle(msg.ok ? NX.success : NX.danger) }
+            // Near-black like the web's primary, not the old violet fill.
             Button { Task { await change() } } label: {
-                HStack(spacing: 6) { if busy { ProgressView().scaleEffect(0.7).tint(.white) }; Text(T("Change password")) }
-                    .font(NXFont.text(13, .bold)).foregroundStyle(.white)
-                    .frame(maxWidth: .infinity).padding(.vertical, 10).background(valid ? NX.violet : NX.mutedFg.opacity(0.4), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                HStack(spacing: 6) { if busy { ProgressView().scaleEffect(0.7).tint(NX.background) }; Text(T("Change password")) }
+                    .font(NXFont.text(14, .semibold)).foregroundStyle(valid ? NX.background : Color.white)
+                    .frame(maxWidth: .infinity).padding(.vertical, 11)
+                    .background(valid ? NX.onyx : NX.mutedFg.opacity(0.4), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }.buttonStyle(.plain).disabled(busy || !valid)
         }
         .nexusCard()
     }
 
+    private var webBody: some View {
+        NXCard(padding: 24) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(T("Password")).font(NXFont.text(17, .semibold)).foregroundStyle(NX.foreground)
+                    .accessibilityAddTraits(.isHeader)
+                HStack(alignment: .top, spacing: 16) {
+                    webSecure(T("Current password"), $current)
+                    webSecure(T("New password"), $new1)
+                }
+                HStack(spacing: 10) {
+                    Spacer(minLength: 0)
+                    if let msg {
+                        Text(msg.text).font(NXFont.text(13, .semibold)).foregroundStyle(msg.ok ? NX.success : NX.danger)
+                    }
+                    Button { Task { await change() } } label: {
+                        HStack(spacing: 6) {
+                            if busy { ProgressView().controlSize(.small).tint(NX.background) }
+                            Text(T("Change password"))
+                        }
+                    }
+                    .buttonStyle(.nxPrimary)
+                    .disabled(busy || !valid)
+                    .opacity(valid ? 1 : 0.5)
+                }
+            }
+        }
+    }
+
+    private func webSecure(_ label: String, _ text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label).font(NXFont.text(13, .medium)).foregroundStyle(NX.mutedFg)
+            SecureField("", text: text)
+                .font(NXFont.text(15))
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                .accessibilityLabel(label)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private func secureField(_ ph: String, _ text: Binding<String>) -> some View {
-        SecureField(ph, text: text).font(NXFont.text(14)).padding(10)
+        SecureField(ph, text: text).font(NXFont.text(15)).padding(10)
             .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
     private func change() async {
         busy = true; msg = nil; defer { busy = false }
-        do { try await APIClient.shared.changePassword(current: current, new: new1); msg = (T("Password changed ✓"), true); current = ""; new1 = ""; new2 = "" }
-        catch { msg = (T("Failed — check your current password."), false) }
+        do {
+            try await APIClient.shared.changePassword(current: current, new: new1)
+            msg = (web ? T("Password updated.") : T("Password changed ✓"), true)
+            current = ""; new1 = ""; new2 = ""
+        }
+        catch { msg = (web ? T("Couldn't change it. Check your current password.") : T("Failed — check your current password."), false) }
     }
 }
 

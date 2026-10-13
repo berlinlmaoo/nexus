@@ -40,6 +40,8 @@ import UniformTypeIdentifiers
 struct VaultView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(\.horizontalSizeClass) private var hSize
+    /// Pushed (a folder, or a Home tile on the iPad) rather than the sidebar's own root.
+    @Environment(\.isPresented) private var isPresented
 
     /// The folder this screen shows; nil is the top of the vault.
     var folder: VaultCrumb? = nil
@@ -93,18 +95,29 @@ struct VaultView: View {
     @State private var showPhotos = false
     @State private var pickedPhotos: [PhotosPickerItem] = []
 
+    /// Regular width (iPad, Mac): the dev web's page (vault.tsx, owner screenshots 276/277) — a page
+    /// header with a compact search field and Select · Trash · Folder · Upload, the usage bar, the path,
+    /// and the items as cards in a grid. The phone keeps its bar, its search drawer and its rows.
+    private var webChrome: Bool { hSize == .regular }
+
     var body: some View {
-        page
+        VStack(spacing: 0) {
+            if webChrome { webHeader }
+            page
+        }
             .background { NX.background.ignoresSafeArea() }
-            .navigationTitle(selecting ? selectionTitle : (folder?.name ?? T("Z Vault")))
+            .navigationTitle(navTitle)
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(selecting)
+            // The sidebar's root draws its own header (webChrome); a pushed folder keeps the bar for Back.
+            .toolbar(webChrome && !isPresented ? .hidden : .automatic, for: .navigationBar)
             // Always shown, from the first frame. With the default placement the field was laid over
             // the quota line for a few seconds after a folder opened and then jumped into its place
             // (owner, 9 Oct 2026): the bar was deciding whether to show it while the screen's scroll
             // view did not exist yet. Now the field's height is part of the bar from the start, and
-            // the scroll view below is there from the start too (`page`).
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: T("Search files…"))
+            // the scroll view below is there from the start too (`page`). Regular width has the
+            // web's compact field in its header instead.
+            .modifier(VaultSearchDrawer(enabled: !webChrome, query: $query))
             .navigationDestination(item: $pushed) { next in
                 VaultView(folder: next, popTo: { go(to: $0) })
             }
@@ -154,7 +167,109 @@ struct VaultView: View {
                 alertMessage(which)
             }
             .overlay(alignment: .bottom) { bottomCapsules }
+            .overlay(alignment: .bottom) {
+                if webChrome && selecting { webSelectionBar }
+            }
             .animation(.easeOut(duration: 0.2), value: notice)
+    }
+
+    private var navTitle: String {
+        if selecting && !webChrome { return selectionTitle }
+        // Regular width: the page header names the screen; a pushed folder still says where it is.
+        if webChrome { return folder?.name ?? "" }
+        return folder?.name ?? T("Z Vault")
+    }
+
+    // MARK: Web page header (regular width)
+
+    private var webHeader: some View {
+        NXPageHeader(title: T("Z Vault"), subtitle: T("The whole office's shared shelf — logos, decks, assets.")) {
+            webSearchField
+            if selecting {
+                Button(allSelected ? T("Deselect All") : T("Select All")) { toggleAll() }
+                    .buttonStyle(.nxBordered)
+                Button { endSelecting() } label: { Label(T("Done"), systemImage: "checklist") }
+                    .buttonStyle(.nxPrimary)
+            } else if canSelect {
+                Button { startSelecting() } label: { Label(T("Select"), systemImage: "checklist") }
+                    .buttonStyle(.nxBordered)
+            }
+            Button { trash.toggle(); endSelecting(); Task { await load() } } label: {
+                Label(T("Trash"), systemImage: "trash")
+            }
+            .buttonStyle(trash ? NXButtonStyle(kind: .primary) : NXButtonStyle(kind: .bordered))
+            .accessibilityAddTraits(trash ? .isSelected : [])
+            if listing?.canWrite == true && !trash {
+                Button { newFolderName = ""; vaultAlert = .newFolder } label: {
+                    Label(T("Folder"), systemImage: "folder.badge.plus")
+                }
+                .buttonStyle(.nxBordered)
+                // A click uploads files, as the web's button; the arrow beside it offers Photos too.
+                Menu {
+                    Button { sheet = .importer } label: { Label(T("Upload file"), systemImage: "arrow.up.doc") }
+                    Button { showPhotos = true } label: { Label(T("Upload from Photos"), systemImage: "photo.on.rectangle") }
+                } label: {
+                    Label(T("Upload"), systemImage: "square.and.arrow.up")
+                } primaryAction: {
+                    sheet = .importer
+                }
+                .menuStyle(.button)
+                .buttonStyle(.nxPrimary)
+                .fixedSize()
+            }
+        }
+    }
+
+    /// The web's search box: a bordered field in the header, about 200 pt wide.
+    private var webSearchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(NX.mutedFg)
+            TextField(T("Search files…"), text: $query)
+                .font(NXFont.text(14))
+                .textFieldStyle(.plain)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .submitLabel(.search)
+            if !query.isEmpty {
+                Button { query = "" } label: {
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 13)).foregroundStyle(NX.mutedFg)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(T("Clear"))
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(width: 210, height: 36)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(NX.border))
+    }
+
+    /// The selection's actions while selecting, floating at the bottom of the page like the web's bar
+    /// (the phone keeps the bottom toolbar).
+    private var webSelectionBar: some View {
+        HStack(spacing: 2) {
+            Text(selectionTitle)
+                .font(NXFont.text(14, .semibold)).monospacedDigit()
+                .foregroundStyle(NX.foreground)
+                .padding(.horizontal, 10)
+            Button { moveSelection() } label: { Label(T("Move to…"), systemImage: "folder") }
+                .disabled(!canModifySelection)
+            Button { Task { await shareSelection() } } label: { Label(T("Share"), systemImage: "square.and.arrow.up") }
+                .disabled(selectedFiles.isEmpty || fetchLabel != nil)
+            Button { Task { await saveSelection() } } label: { Label(T("Save to Files"), systemImage: "square.and.arrow.down") }
+                .disabled(selectedFiles.isEmpty || fetchLabel != nil)
+            Button { vaultAlert = .trashSelection(selectedItems) } label: {
+                Label(T("Move to trash"), systemImage: "trash").foregroundStyle(NX.danger)
+            }
+            .disabled(!canModifySelection)
+        }
+        .buttonStyle(.nxGhost)
+        .padding(6)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
+        .shadow(color: .black.opacity(0.12), radius: 14, y: 4)
+        .padding(.bottom, 20)
+        .padding(.horizontal, 16)
     }
 
     // MARK: Content
@@ -197,7 +312,9 @@ struct VaultView: View {
                     }
                 }
             }
-            .padding(.vertical, 14)
+            .padding(.vertical, webChrome ? 18 : 14)
+            // Clear of the floating selection bar.
+            .padding(.bottom, webChrome && selecting ? 70 : 0)
         }
         .refreshable { await load() }
         // The page itself takes a drop: files land in the folder on screen. Not in the trash or
@@ -230,7 +347,8 @@ struct VaultView: View {
     /// The toolbar in its two modes. Two separate `if`s rather than an if/else: a plain `if` is what
     /// the toolbar builder is proven to take in this app (CalendarParts).
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
-        if selecting {
+        // Regular width has these in its page header and floating bar (webChrome).
+        if selecting && !webChrome {
             ToolbarItem(placement: .topBarLeading) {
                 Button(allSelected ? T("Deselect All") : T("Select All")) { toggleAll() }
             }
@@ -240,7 +358,7 @@ struct VaultView: View {
             }
             ToolbarItemGroup(placement: .bottomBar) { selectionBar }
         }
-        if !selecting {
+        if !selecting && !webChrome {
             if canSelect {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(T("Select")) { startSelecting() }
@@ -317,7 +435,7 @@ struct VaultView: View {
             }
         }
         .padding(.horizontal, 24)
-        .padding(.bottom, uploadPillShown ? 72 : 18)
+        .padding(.bottom, uploadPillShown ? 72 : (webChrome && selecting ? 84 : 18))
         .allowsHitTesting(false)
     }
 
@@ -329,7 +447,9 @@ struct VaultView: View {
     /// server sends inside each group is kept. The trash stays one flat list: nothing in it can be
     /// opened, so a grid of pictures there would promise something a tap cannot do.
     @ViewBuilder private func sections(_ items: [VaultItem]) -> some View {
-        if trash {
+        if webChrome {
+            webSections(items)
+        } else if trash {
             LazyVStack(spacing: 8) { ForEach(items) { row($0) } }
                 .padding(.horizontal, 16)
         } else {
@@ -353,6 +473,56 @@ struct VaultView: View {
         }
     }
 
+    /// Regular width, as the web: folders and files as cards in columns, pictures and films as a
+    /// gallery, each group under its name when there is more than one.
+    @ViewBuilder private func webSections(_ items: [VaultItem]) -> some View {
+        let cards = [GridItem(.adaptive(minimum: 270, maximum: 440), spacing: 10, alignment: .top)]
+        if trash {
+            LazyVGrid(columns: cards, alignment: .leading, spacing: 10) { ForEach(items) { row($0) } }
+                .padding(.horizontal, Self.webGutter)
+        } else {
+            let folders = items.filter(\.isFolder)
+            let media = items.filter { VaultMedia.isMedia($0) }
+            let files = items.filter { !$0.isFolder && !VaultMedia.isMedia($0) }
+            let labelled = [folders.isEmpty, media.isEmpty, files.isEmpty].filter { !$0 }.count > 1
+            VStack(alignment: .leading, spacing: 20) {
+                if !folders.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if labelled { webSectionLabel(T("Folders")) }
+                        LazyVGrid(columns: cards, alignment: .leading, spacing: 10) { ForEach(folders) { row($0) } }
+                    }
+                }
+                if !media.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if labelled { webSectionLabel(T("Photos and videos")) }
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 230), spacing: 12, alignment: .top)],
+                                  alignment: .leading, spacing: 12) {
+                            ForEach(media) { tile($0, in: media) }
+                        }
+                    }
+                }
+                if !files.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if labelled { webSectionLabel(T("Files")) }
+                        LazyVGrid(columns: cards, alignment: .leading, spacing: 10) { ForEach(files) { row($0) } }
+                    }
+                }
+            }
+            .padding(.horizontal, Self.webGutter)
+        }
+    }
+
+    private func webSectionLabel(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(NXFont.text(12, .medium)).tracking(0.5)
+            .foregroundStyle(NX.mutedFg)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    /// The page's side margin: the web's px-8 on regular width, 16 on the phone.
+    private static let webGutter: CGFloat = 32
+    private var gutter: CGFloat { webChrome ? Self.webGutter : 16 }
+
     /// The items in the order they are on screen (folders, pictures and films, other files) — what
     /// Select All and a ⇧-click range count through.
     private var orderedItems: [VaultItem] {
@@ -363,22 +533,26 @@ struct VaultView: View {
             + items.filter { !$0.isFolder && !VaultMedia.isMedia($0) }
     }
 
+    /// The web's usage line: a short bar and "19 MB of 60 GB used" beside it (both widths).
     private func quotaBar(_ quota: VaultQuota) -> some View {
         let fraction = quota.totalBytes > 0 ? min(1, Double(quota.usedBytes) / Double(quota.totalBytes)) : 0
-        return VStack(alignment: .leading, spacing: 5) {
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(NX.muted)
-                    Capsule()
-                        .fill(fraction > 0.9 ? NX.danger : NX.violet)
-                        .frame(width: geo.size.width * fraction)
-                }
+        let text = String(format: T("%@ of %@ used"), Self.human(quota.usedBytes), Self.human(quota.totalBytes))
+        return HStack(spacing: 12) {
+            ZStack(alignment: .leading) {
+                Capsule().fill(NX.muted)
+                Capsule()
+                    .fill(fraction > 0.9 ? NX.danger : NX.onyx)
+                    .frame(width: 160 * fraction)
             }
-            .frame(height: 5)
-            Text("\(Self.human(quota.usedBytes)) / \(Self.human(quota.totalBytes))")
-                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            .frame(width: 160, height: 6)
+            .accessibilityHidden(true)
+            Text(text)
+                .font(NXFont.text(webChrome ? 13 : 12)).foregroundStyle(NX.mutedFg)
+                .lineLimit(1)
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16)
+        .accessibilityElement(children: .combine)
+        .padding(.horizontal, gutter)
     }
 
     /// The path, and on iPad and Mac also a drop target: an item dragged onto "Vault" goes to the
@@ -392,7 +566,7 @@ struct VaultView: View {
                     crumb(id: c.id, name: c.name, muted: false)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, gutter)
             .padding(.vertical, 2)
         }
     }
@@ -401,7 +575,7 @@ struct VaultView: View {
         let key = VaultDropKey.crumb(id)
         let targeted = dropKey == key
         return Button(name) { go(to: id.map { VaultCrumb(id: $0, name: name) }) }
-            .font(NXFont.text(12, targeted ? .bold : .regular))
+            .font(NXFont.text(webChrome ? 14 : 12, targeted ? .bold : .regular))
             .foregroundStyle(targeted ? NX.violetText : muted ? NX.mutedFg : NX.foreground)
             .padding(.horizontal, 6).padding(.vertical, 3)
             .background(targeted ? NX.accentBg : Color.clear, in: Capsule())
@@ -422,7 +596,7 @@ struct VaultView: View {
         }
         .padding(12)
         .background(NX.muted, in: RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal, 16)
+        .padding(.horizontal, gutter)
     }
 
     private func row(_ item: VaultItem) -> some View {
@@ -434,8 +608,8 @@ struct VaultView: View {
             rowIcon(item)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.name).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-                Text(Self.subtitle(item)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                Text(item.name).font(NXFont.text(webChrome ? 15 : 14, webChrome ? .medium : .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                Text(Self.subtitle(item)).font(NXFont.text(webChrome ? 13 : 11)).foregroundStyle(NX.mutedFg).lineLimit(1)
             }
             Spacer(minLength: 6)
 
@@ -451,7 +625,7 @@ struct VaultView: View {
                 Button { sheet = .shareLink(item) } label: {
                     Image(systemName: "link")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(NX.violetText)
+                        .foregroundStyle(webChrome ? NX.mutedFg : NX.violetText)
                         .frame(width: 40, height: 44)
                         .contentShape(Rectangle())
                 }
@@ -471,6 +645,8 @@ struct VaultView: View {
                 Menu { menuItems(item) } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 15))
+                        // The web's ⋮ on a card.
+                        .rotationEffect(.degrees(webChrome ? 90 : 0))
                         .foregroundStyle(NX.mutedFg)
                         // 44pt of tappable area behind a 15pt glyph. The same fix the Threads delete
                         // button needed: a menu that only opens on the third try reads as a broken app.
@@ -479,13 +655,13 @@ struct VaultView: View {
                 }
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, webChrome ? 4 : 8)
         .padding(.leading, 12)
-        .background(targeted || chosen ? NX.accentBg : NX.card, in: RoundedRectangle(cornerRadius: 12))
+        .background(targeted || chosen ? (webChrome && !targeted ? NX.muted : NX.accentBg) : NX.card, in: RoundedRectangle(cornerRadius: 12))
         .overlay {
+            // Regular width: the web's card edge, near-black when chosen; the phone's rows have none.
             RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(targeted ? NX.violet : chosen ? NX.violet.opacity(0.55) : Color.clear,
-                              lineWidth: targeted ? 2 : 1.5)
+                .strokeBorder(rowEdge(targeted: targeted, chosen: chosen), lineWidth: targeted ? 2 : (chosen ? 1.5 : 1))
         }
         .contentShape(Rectangle())
         .onTapGesture { tapped(item) }
@@ -497,10 +673,18 @@ struct VaultView: View {
         return movable(dropTarget(base, item), item)
     }
 
+    private func rowEdge(targeted: Bool, chosen: Bool) -> Color {
+        if targeted { return NX.violet }
+        if chosen { return webChrome ? NX.onyx : NX.violet.opacity(0.55) }
+        return webChrome ? NX.border : Color.clear
+    }
+
     private func rowIcon(_ item: VaultItem) -> some View {
-        Image(systemName: Self.icon(for: item))
-            .font(.system(size: 18))
-            .foregroundStyle(item.isFolder ? NX.violetText : NX.mutedFg)
+        // Regular width: the web's outline folder in the text colour.
+        let symbol = webChrome && item.isFolder ? "folder" : Self.icon(for: item)
+        return Image(systemName: symbol)
+            .font(.system(size: webChrome ? 19 : 18))
+            .foregroundStyle(item.isFolder ? (webChrome ? NX.foreground : NX.violetText) : NX.mutedFg)
             .frame(width: 26)
     }
 
@@ -530,14 +714,14 @@ struct VaultView: View {
                             .accessibilityHidden(true)
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: webChrome ? 0 : 12, style: .continuous))
                 .overlay {
-                    if chosen {
+                    if chosen && !webChrome {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .strokeBorder(NX.violet, lineWidth: 3)
                     }
                 }
-                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .contentShape(Rectangle())
                 .onTapGesture {
                     if selecting { toggle(item) } else { openMedia(item, in: media) }
                 }
@@ -548,19 +732,32 @@ struct VaultView: View {
 
             HStack(spacing: 2) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(item.name).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    Text(Self.subtitle(item)).font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    Text(item.name).font(NXFont.text(webChrome ? 13 : 12, webChrome ? .medium : .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    Text(Self.subtitle(item)).font(NXFont.text(webChrome ? 12 : 10)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 if !selecting {
                     Menu { menuItems(item) } label: {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 13))
+                            .rotationEffect(.degrees(webChrome ? 90 : 0))
                             .foregroundStyle(NX.mutedFg)
                             .frame(width: 32, height: 32)
                             .contentShape(Rectangle())
                     }
                 }
+            }
+            .padding(.leading, webChrome ? 10 : 0)
+            .padding(.trailing, webChrome ? 2 : 0)
+            .padding(.bottom, webChrome ? 4 : 0)
+        }
+        // Regular width: the web's thumbnail card — picture on top, name under it, one hairline edge.
+        .background { if webChrome { RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NX.card) } }
+        .clipShape(RoundedRectangle(cornerRadius: webChrome ? 12 : 0, style: .continuous))
+        .overlay {
+            if webChrome {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(chosen ? NX.onyx : NX.border, lineWidth: chosen ? 2 : 1)
             }
         }
         .contextMenu { contextItems(item) }
@@ -1614,5 +1811,21 @@ struct VaultPickedFile: Transferable {
     private static func stash(_ file: URL) throws -> URL {
         let name = VaultDropFiles.fileName(suggested: nil, received: file.lastPathComponent, ext: file.pathExtension)
         return try VaultDropFiles.stash(file, as: name)
+    }
+}
+
+
+/// The phone's search field in the navigation bar's drawer; regular width has the web's compact field
+/// in the page header instead (VaultView.webSearchField). Both edit the same query.
+private struct VaultSearchDrawer: ViewModifier {
+    let enabled: Bool
+    @Binding var query: String
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if enabled {
+            content.searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: T("Search files…"))
+        } else {
+            content
+        }
     }
 }
