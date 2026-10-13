@@ -115,7 +115,8 @@ private fun Stat(icon: ImageVector, value: String, label: String, modifier: Modi
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Icon(icon, null, tint = c.foreground, modifier = Modifier.size(16.dp))
         Text(value, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
-        Text(label, fontSize = 11.sp, color = c.mutedFg, maxLines = 1)
+        // Two lines when a phone is narrow ("Average progress" was cut to "Average"); iOS shrinks the text instead.
+        Text(label, fontSize = 11.sp, lineHeight = 13.sp, color = c.mutedFg, maxLines = 2, minLines = 2)
     }
 }
 

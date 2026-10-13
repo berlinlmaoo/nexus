@@ -58,7 +58,7 @@
     <string name="status_done">Done for today 🎉</string>
     <string name="status_finish_yesterday">Finish yesterday\'s attendance</string>
     <string name="my_schedule">My Work Schedule</string>
-    <string name="location_free">📍 Location-free — clock in from anywhere</string>
+    <string name="location_free">📍 Any location · Check in from anywhere</string>
     <string name="reflection_title">Daily reflection</string>
     <string name="reflection_help">Required before check-out. Tell us what you worked on today.</string>
     <string name="reflection_placeholder">Today I worked on…</string>
@@ -100,7 +100,7 @@
     <string name="metric_today">Today\'s status</string>
     <string name="metric_office">Office checkpoint</string>
     <string name="metric_where">Where you are</string>
-    <string name="metric_dayoff">Day-off tokens</string>
+    <string name="metric_dayoff">Days off left</string>
     <string name="metric_dayoff_help">This period\'s day-off allowance</string>
     <string name="metric_holidays">Public holidays</string>
     <string name="metric_holidays_help">This month\'s public-holiday allowance</string>
@@ -182,7 +182,7 @@
     <string name="submissions_title">Submissions</string>
     <string name="submissions_sub_review">Review the team\'s requests and offsite check-outs, and file your own.</string>
     <string name="submissions_sub_staff">File leave, permit, sick or day-off.</string>
-    <string name="req_new">New request</string>
+    <string name="req_new">New</string>
     <string name="req_new_title">New request</string>
     <string name="window_recent">Last 3 days</string>
     <string name="window_period">This period</string>

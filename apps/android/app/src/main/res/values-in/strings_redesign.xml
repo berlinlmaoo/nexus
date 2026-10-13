@@ -309,4 +309,11 @@
     <plurals name="psum_n_of_m">
         <item quantity="other">%1$d dari %2$d project</item>
     </plurals>
+    <!-- Offices card on Attendance (iOS OfficesCard), 14 Oct 2026 -->
+    <string name="of_title">Kantor &amp; geofence</string>
+    <string name="of_sub">Titik kantor + radius check-in.</string>
+    <string name="of_add_short">Office</string>
+    <string name="of_add">Tambah office</string>
+    <string name="of_none">Belum ada office</string>
+    <string name="of_none_sub">Office itu titik di peta dengan radius di sekelilingnya. Staff hanya bisa check-in di dalam radius itu, jadi belum ada yang bisa tercatat sebelum office pertama dibuat.</string>
 </resources>

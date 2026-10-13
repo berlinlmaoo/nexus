@@ -54,7 +54,7 @@
     <string name="status_done">Selesai hari ini 🎉</string>
     <string name="status_finish_yesterday">Selesaikan absen kemarin</string>
     <string name="my_schedule">Jadwal Kerjaku</string>
-    <string name="location_free">📍 Bebas lokasi — absen dari mana saja</string>
+    <string name="location_free">📍 Lokasi bebas · Bisa absen dari mana saja</string>
     <string name="reflection_title">Refleksi harian</string>
     <string name="reflection_help">Wajib sebelum absen pulang. Ceritakan apa yang kamu kerjakan hari ini.</string>
     <string name="reflection_placeholder">Hari ini aku mengerjakan…</string>
@@ -94,7 +94,7 @@
     <string name="metric_today">Status hari ini</string>
     <string name="metric_office">Titik kantor</string>
     <string name="metric_where">Posisimu</string>
-    <string name="metric_dayoff">Token day-off</string>
+    <string name="metric_dayoff">Sisa jatah day off</string>
     <string name="metric_dayoff_help">Jatah day-off periode ini</string>
     <string name="metric_holidays">Tanggal merah</string>
     <string name="metric_holidays_help">Jatah tanggal merah bulan ini</string>
@@ -176,7 +176,7 @@
     <string name="submissions_title">Pengajuan</string>
     <string name="submissions_sub_review">Tinjau pengajuan tim dan check-out di luar kantor, dan ajukan milikmu.</string>
     <string name="submissions_sub_staff">Ajukan cuti, izin, sakit, atau day-off.</string>
-    <string name="req_new">Ajukan</string>
+    <string name="req_new">Baru</string>
     <string name="req_new_title">Pengajuan baru</string>
     <string name="window_recent">3 hari terakhir</string>
     <string name="window_period">Periode ini</string>

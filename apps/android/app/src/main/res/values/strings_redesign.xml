@@ -327,4 +327,11 @@
         <item quantity="one">%1$d of %2$d project</item>
         <item quantity="other">%1$d of %2$d projects</item>
     </plurals>
+    <!-- Offices card on Attendance (iOS OfficesCard), 14 Oct 2026 -->
+    <string name="of_title">Offices &amp; geofence</string>
+    <string name="of_sub">Office points and the check-in radius.</string>
+    <string name="of_add_short">Office</string>
+    <string name="of_add">Add office</string>
+    <string name="of_none">No offices yet</string>
+    <string name="of_none_sub">An office is a point on the map with a radius around it. Staff can only check in inside that radius, so nothing can be recorded until the first office exists.</string>
 </resources>

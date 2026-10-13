@@ -182,7 +182,10 @@ fun AttendanceScreen(
 
     Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
     if (onBack != null) {
-        id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.home_attendance), subtitle = stringResource(R.string.sub_attendance), onBack = onBack)
+        // iOS pageSubtitle: whoever sees everyone's board reads what the board is for.
+        val seesBoard = s.today?.canManageAttendance == true || s.today?.canReviewAttendanceRequests == true
+        id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.home_attendance),
+            subtitle = stringResource(if (seesBoard) R.string.sub_attendance_board else R.string.sub_attendance), onBack = onBack)
     }
     // While typing the reflection the Check out button stays in sight above the keyboard.
     var reflectionFocused by remember { mutableStateOf(false) }
@@ -250,6 +253,8 @@ fun AttendanceScreen(
             // Filing changes today's quota and cover: re-read it after a request goes in.
             SubmissionsCard(requests, onFiled = { vm.load() })
             CrewBoardCard(board)
+            // Offices and their check-in radius, for whoever manages attendance (iOS OfficesCard after the board).
+            if (s.today?.canManageAttendance == true) id.znetworks.nexus.feature.admin.OfficesCard()
         }
     }
     }
@@ -378,8 +383,8 @@ private fun Hero(s: AttendanceUiState, modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // Short date in Indonesian, as iOS ("Sel, 29 Sep").
-        Text(DateTimeFormatter.ofPattern("EEE, d MMM", Locale.forLanguageTag("id-ID")).format(zoned), color = Color.White.copy(alpha = 0.9f),
+        // Short date in the app's language, as iOS AppDateLocale ("Wed, 14 Oct" / "Rab, 14 Okt").
+        Text(DateTimeFormatter.ofPattern("EEE, d MMM", id.znetworks.nexus.core.i18n.AppLanguage.locale()).format(zoned), color = Color.White.copy(alpha = 0.9f),
             fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth())
         Text(DateTimeFormatter.ofPattern("HH:mm:ss").format(zoned), color = Color.White, fontFamily = DisplayFont,
             fontWeight = FontWeight.Bold, fontSize = 46.sp)
