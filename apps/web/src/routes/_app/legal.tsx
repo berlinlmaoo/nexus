@@ -1,10 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Lock, Users } from "lucide-react";
+import { FileText, Loader2, Lock, Users } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { PageBody, PageTabs } from "@/components/PageLayout";
 import { EmptyState } from "@/components/EmptyState";
 import { LegalMembers } from "@/components/legal/LegalMembers";
+import { LegalTemplates } from "@/components/legal/LegalTemplates";
 import { ApiError } from "@/lib/nexus-api";
 import { legalApi } from "@/lib/legal-api";
 import { useLang } from "@/lib/lang";
@@ -14,10 +15,10 @@ import { useLang } from "@/lib/lang";
  * and the archive of every legal document. Invitation only — the nav entry is hidden for everyone else and
  * the server refuses every /api/legal call, so a typed URL lands on the "by invitation" state below.
  */
-type LegalTab = "members";
+type LegalTab = "templates" | "members";
 type LegalSearch = { tab?: LegalTab };
 
-const TABS: LegalTab[] = ["members"];
+const TABS: LegalTab[] = ["templates", "members"];
 
 export const Route = createFileRoute("/_app/legal")({
   component: LegalPage,
@@ -30,7 +31,7 @@ function LegalPage() {
   const { t, lang } = useLang();
   const search = Route.useSearch();
   const navigate = useNavigate({ from: "/legal" });
-  const tab: LegalTab = search.tab ?? "members";
+  const tab: LegalTab = search.tab ?? "templates";
   const me = useQuery({ queryKey: ["legal", "me"], queryFn: legalApi.me, retry: false, staleTime: 60_000 });
 
   if (me.isLoading) {
@@ -66,11 +67,17 @@ function LegalPage() {
             label={t("Legal sections")}
             value={tab}
             onChange={(k) => navigate({ search: { tab: k } })}
-            tabs={[{ key: "members", label: t("Members"), icon: Users }]}
+            tabs={[
+              { key: "templates", label: t("Templates"), icon: FileText },
+              { key: "members", label: t("Members"), icon: Users },
+            ]}
           />
         }
       />
-      <PageBody>{tab === "members" && <LegalMembers />}</PageBody>
+      <PageBody>
+        {tab === "templates" && <LegalTemplates />}
+        {tab === "members" && <LegalMembers />}
+      </PageBody>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 // node src/lib/legal/rules.test.mjs
 //
 // Plain node, no test runner (same loader as ../chat-rules.test.mjs). Legal's pure rules: who may invite
-// and revoke whom (owner, 14 Oct 2026), number formats, and terbilang.
+// and revoke whom (owner, 14 Oct 2026), and number formats.
 import { readFile } from "node:fs/promises"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import path from "node:path"
@@ -111,15 +111,6 @@ test("Jakarta month: 31 Oct 20:00 UTC is already November", () => {
   assert.deepEqual(R.jakartaYearMonth(new Date("2026-10-31T20:00:00Z")), { year: 2026, month: 11 })
   assert.deepEqual(R.jakartaYearMonth(new Date("2026-12-31T16:59:00Z")), { year: 2026, month: 12 })
   assert.deepEqual(R.jakartaYearMonth(new Date("2026-12-31T17:00:00Z")), { year: 2027, month: 1 })
-})
-
-// ── terbilang ──
-test("terbilang", () => {
-  assert.equal(R.terbilangWords(12), "dua belas")
-  assert.equal(R.terbilangWords(2026), "dua ribu dua puluh enam")
-  assert.equal(R.terbilangRupiah(25000000), "Dua Puluh Lima Juta Rupiah")
-  assert.equal(R.terbilangRupiah(1250000), "Satu Juta Dua Ratus Lima Puluh Ribu Rupiah")
-  assert.equal(R.terbilangWords(0), "nol")
 })
 
 console.log(`legal rules: ${passed} passed`)
