@@ -47,6 +47,10 @@ extension APIClient {
 struct FormResponsesView: View {
     let formId: String
     let projectId: String
+    /// Inside the form builder's Responses tab: the builder's bar keeps its own title.
+    var embedded = false
+    /// The total, for the builder's "Responses (n)" tab.
+    var onCount: ((Int) -> Void)? = nil
 
     @Environment(AuthStore.self) private var auth
     @State private var payload: FormResponsesPayload?
@@ -59,8 +63,7 @@ struct FormResponsesView: View {
     var body: some View {
         content
             .background(NX.background.ignoresSafeArea())
-            .navigationTitle(T("Responses"))
-            .navigationBarTitleDisplayMode(.inline)
+            .modifier(ResponsesTitle(on: !embedded))
             .task { await load() }
             .refreshable { await load() }
             // Held here too: the builder may be opened from the Forms page, where nothing else joined the room.
@@ -113,12 +116,26 @@ struct FormResponsesView: View {
         loading = true
         defer { loading = false }
         do {
-            payload = try await APIClient.shared.formResponses(formId)
+            let p = try await APIClient.shared.formResponses(formId)
+            payload = p
             loadError = nil
+            onCount?(p.total ?? p.responses?.count ?? 0)
         } catch APIError.unauthorized {
             auth.logout()
         } catch {
             loadError = error
+        }
+    }
+}
+
+/// The screen's title when pushed on its own; none when embedded in the builder.
+private struct ResponsesTitle: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View {
+        if on {
+            content.navigationTitle(T("Responses")).navigationBarTitleDisplayMode(.inline)
+        } else {
+            content
         }
     }
 }

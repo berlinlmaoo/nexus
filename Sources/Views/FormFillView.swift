@@ -11,6 +11,8 @@ struct FormFillView: View {
     let formId: String
     /// Shown in the navigation bar until the form itself arrives with its real name.
     let title: String
+    /// The form builder's Preview: the form exactly as people see it, but nothing is sent.
+    var preview = false
 
     @Environment(AuthStore.self) private var auth
 
@@ -420,8 +422,12 @@ struct FormFillView: View {
                 }
             }
             .buttonStyle(NexusPrimaryButton())
-            .disabled(submitting || !missing.isEmpty)
-            .opacity(missing.isEmpty ? 1 : 0.5)
+            .disabled(preview || submitting || !missing.isEmpty)
+            .opacity(missing.isEmpty && !preview ? 1 : 0.5)
+            if preview {
+                Label(T("Preview — answers here are not sent."), systemImage: "eye")
+                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            }
 
             if missing.isEmpty, let form {
                 // Email / link answers the server would refuse, said before the tap (F-BUG-13).
@@ -642,7 +648,7 @@ struct FormFillView: View {
     }
 
     private func submit() async {
-        guard let form, !submitting else { return }
+        guard let form, !submitting, !preview else { return }
         let visible = FormLogic.visibleFields(form.fields, values: values)
         guard FormLogic.missingRequired(visible, values: values).isEmpty else { return }
         if let bad = FormLogic.invalidAnswers(visible, values: values).first { actionError = bad; return }

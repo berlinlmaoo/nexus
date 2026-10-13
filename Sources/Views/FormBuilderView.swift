@@ -242,11 +242,15 @@ struct FormBuilderRow: View {
     }
 }
 
-// MARK: - Builder
+// MARK: - Builder (the studio)
 
-/// New form / Edit form. A pushed screen with Cancel (when there is something to lose) and
-/// Create / Save. Creating keeps the screen open on the new form so its link is right there;
-/// saving an existing form goes back to the list, as the web's drawer closes.
+/// New form / Edit form — the dev web's form studio (FormStudio.tsx, 12–13 Oct 2026). Tabs Questions ·
+/// Settings · Share · Responses; the Questions tab is a page-like canvas of question cards, with the
+/// selected question's settings in a side panel on iPad and Mac, and pushed on iPhone.
+///
+/// Changes save themselves, like the web: 700 ms after the last edit, one save at a time (an edit made
+/// during a save is sent right after it), and once more on the way out. A new form is created by its
+/// first edit — nothing is created for a builder opened and left untouched.
 struct FormBuilderView: View {
     let projectId: String
     let projectName: String
@@ -255,60 +259,63 @@ struct FormBuilderView: View {
 
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var hSize
 
     /// The form as the server last returned it; nil until a new form is created.
     @State private var saved: BuilderForm?
     @State private var loaded = false
     @State private var loadError: String?
 
-    @State private var name = ""
-    @State private var description = ""
-    @State private var isPublic = false
-    @State private var requireAuth = false
-    @State private var schedule = BuilderSchedule(raw: nil)
-    @State private var fields: [BuilderField] = []
-    /// The draft as it was loaded or last saved — what "unsaved changes" is measured against.
-    @State private var baseline: Draft?
+    @State private var draft = FormStudioDraft.blank()
+    /// What the server has: the loaded form, the last saved draft, or — for a form not created yet —
+    /// the untouched starting draft. Autosave sends whenever `draft` differs from it.
+    @State private var baseline: FormStudioDraft?
+    @State private var saveState: FormSaveState = .idle
+    @State private var debounce: Task<Void, Never>?
+    @State private var inflight = false
+    @State private var again = false
+    /// A forced save (Preview) asked for while another was in flight.
+    @State private var againForce = false
+    /// Deleted or discarded: nothing more is saved.
+    @State private var stopped = false
+    @State private var responseCount = 0
 
     // Routing and mapping pick from these, exactly as the web's editor does.
     @State private var sections: [ProjectDetail.Lane] = []
     @State private var members: [ProjectDetail.ProjectMember] = []
     @State private var customFields: [CustomField] = []
 
-    @State private var editMode: EditMode = .inactive
+    @State private var tab: FormStudioTab = .questions
+    /// Regular width: the question whose settings fill the side panel.
+    @State private var selectedId: String?
+    /// Compact width: the question whose settings screen is pushed.
     @State private var openFieldId: String?
     @State private var showDuplicate = false
+    @State private var showPreview = false
     @State private var showFill = false
-    @State private var saving = false
     @State private var deleting = false
-    @State private var justCreated = false
-    @State private var copied = false
-    /// The one alert this screen has — discard, delete, delete-with-submissions or a failure.
     @State private var alert: BuilderAlert?
-
-    private struct Draft: Equatable {
-        var name: String
-        var description: String
-        var isPublic: Bool
-        var requireAuth: Bool
-        var schedule: BuilderSchedule
-        var fields: [BuilderField]
-    }
+    @State private var undo: DeletedQuestion?
 
     private enum BuilderAlert: Equatable {
-        case discard
         case delete(submissions: Int)
         case forceDelete(submissions: Int)
         case failed(title: String, message: String)
     }
 
-    private var draft: Draft {
-        Draft(name: name, description: description, isPublic: isPublic, requireAuth: requireAuth, schedule: schedule, fields: fields)
+    /// A deleted question and the conditions that read it, for Undo.
+    private struct DeletedQuestion: Equatable {
+        let field: BuilderField
+        let index: Int
+        let dependents: [String: BuilderCondition]
     }
-    private var isDirty: Bool { baseline != nil && draft != baseline }
+
+    private var regular: Bool { hSize == .regular }
     private var currentId: String? { saved?.id ?? formId }
-    private var canSave: Bool {
-        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !fields.isEmpty
+    private var shareURL: URL? { saved?.publicURL }
+    private var displayName: String {
+        let n = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return n.isEmpty ? T("Untitled form") : n
     }
 
     var body: some View {
@@ -320,41 +327,30 @@ struct FormBuilderView: View {
                     Task { loaded = false; await load() }
                 }
             } else {
-                editor
+                studio
             }
         }
         .background(NX.background.ignoresSafeArea())
-        .navigationTitle(currentId == nil ? T("New form") : T("Edit form"))
+        // Regular width: the breadcrumb and the tabs are the bar; the system Back stays.
+        .navigationTitle(regular ? "" : displayName)
         .navigationBarTitleDisplayMode(.inline)
-        // With unsaved changes the back button becomes Cancel, which asks first. Hiding it also
-        // turns off the swipe back, which would otherwise throw the changes away without a word.
-        .navigationBarBackButtonHidden(isDirty)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                if isDirty {
-                    Button(T("Cancel")) { alert = .discard }
-                }
-            }
-            ToolbarItem(placement: .confirmationAction) {
-                if saving {
-                    ProgressView()
-                } else {
-                    Button(currentId == nil ? T("Create") : T("Save")) { Task { await save() } }
-                        .fontWeight(.semibold)
-                        .disabled(!loaded || loadError != nil || !canSave || (currentId != nil && !isDirty))
-                }
-            }
-        }
-        // Once: coming back from a field's screen must not reload over the edits made there.
+        .toolbar { toolbarContent }
+        // Once: coming back from a pushed screen must not reload over the edits.
         .task { if !loaded { await load() } }
-        .navigationDestination(item: $openFieldId) { id in fieldEditor(id) }
+        .onChange(of: draft) { _, _ in scheduleSave() }
+        .onAppear { scheduleSave() }
+        .onDisappear { leaving() }
+        .navigationDestination(item: $openFieldId) { id in fieldEditor(id, embedded: false) }
         .navigationDestination(isPresented: $showDuplicate) {
-            FormDuplicateView(sourceProjectId: projectId, initialName: name, description: description,
-                              fields: fields, isPublic: isPublic, requireAuth: requireAuth, accessSchedule: scheduleJSON)
+            FormDuplicateView(sourceProjectId: projectId, initialName: draft.name, description: draft.description,
+                              fields: draft.fields, isPublic: draft.isPublic, requireAuth: draft.requireAuth,
+                              accessSchedule: duplicateSchedule, branding: draft.branding.json, settings: draft.settings.duplicateJSON)
         }
-        // Only reachable from Manage, which only exists once the form has an id.
+        .navigationDestination(isPresented: $showPreview) {
+            FormFillView(formId: currentId ?? "", title: displayName, preview: true)
+        }
         .navigationDestination(isPresented: $showFill) {
-            FormFillView(formId: currentId ?? "", title: saved?.name ?? name)
+            FormFillView(formId: currentId ?? "", title: displayName)
         }
         .alert(alertTitle, isPresented: Binding(get: { alert != nil }, set: { if !$0 { alert = nil } }), presenting: alert) { a in
             alertButtons(a)
@@ -363,273 +359,297 @@ struct FormBuilderView: View {
         }
     }
 
-    // MARK: editor
+    // MARK: top bar
 
-    private var editor: some View {
-        Form {
-            if justCreated {
-                Section {
-                    Label(T("Form created."), systemImage: "checkmark.circle.fill")
-                        .font(NXFont.text(14, .semibold)).foregroundStyle(NX.success)
+    @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
+        if loaded && loadError == nil {
+            if regular {
+                ToolbarItem(placement: .topBarLeading) { breadcrumb }
+                ToolbarItem(placement: .principal) {
+                    FormStudioTabBar(selection: $tab, responseCount: responseCount)
                 }
             }
-            detailsSection
-            publishingSection
-            availabilitySection
-            fieldsSection
-            if currentId != nil { manageSection }
-        }
-        .environment(\.editMode, $editMode)
-        .scrollContentBackground(.hidden)
-    }
-
-    private var detailsSection: some View {
-        Section {
-            TextField(T("Form name"), text: $name)
-                .font(NXFont.text(16, .semibold))
-            TextField(T("Description (optional)…"), text: $description, axis: .vertical)
-                .font(NXFont.text(14))
-                .lineLimit(2...6)
-        } header: {
-            Text(T("Form"))
-        } footer: {
-            if !projectName.isEmpty {
-                Text(String(format: T("Each submission becomes a task in %@."), projectName))
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                FormSaveIndicator(state: saveState, hasId: currentId != nil, compact: !regular) { retry() }
+                previewButton
+                moreMenu
             }
         }
     }
 
-    private var publishingSection: some View {
-        Section {
-            Toggle(isOn: $isPublic) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(T("Public form")).font(NXFont.text(15))
-                    Text(T("A shareable link that opens without a NEXUS login.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                }
-            }
-            .tint(NX.violet)
-            Toggle(isOn: $requireAuth) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(T("Require NEXUS login to submit")).font(NXFont.text(15))
-                    Text(T("Anyone logged in can submit, and their submissions show in My Submissions.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                }
-            }
-            .tint(NX.violet)
-            if let saved, saved.isPublic == true {
-                linkRows(saved.publicURL)
-            }
-        } header: {
-            Text(T("Publishing"))
-        } footer: {
-            Text(publishingFooter)
-        }
-    }
-
-    private var publishingFooter: String {
-        guard let saved else {
-            return isPublic ? T("The link is ready as soon as you create the form.") : T("Turn this on to share the form by link.")
-        }
-        let wasPublic = saved.isPublic ?? false
-        if isPublic != wasPublic {
-            return isPublic ? T("Save to publish the link.") : T("Save to unpublish — the public link stops working.")
-        }
-        return isPublic ? T("Anyone with this link can open the form.") : T("Turn this on to share the form by link.")
-    }
-
-    @ViewBuilder private func linkRows(_ url: URL) -> some View {
-        Text(url.absoluteString)
-            .font(.system(.footnote, design: .monospaced))
-            .foregroundStyle(NX.foreground)
-            .textSelection(.enabled)
-            .lineLimit(2)
-        HStack(spacing: 20) {
-            Button {
-                UIPasteboard.general.string = url.absoluteString
-                copied = true
-                Task {
-                    try? await Task.sleep(nanoseconds: 1_500_000_000)
-                    copied = false
-                }
-            } label: {
-                Label(copied ? T("Copied!") : T("Copy link"), systemImage: copied ? "checkmark" : "doc.on.doc")
-            }
-            .buttonStyle(.borderless)
-            ShareLink(item: url) {
-                Label(T("Share"), systemImage: "square.and.arrow.up")
-            }
-            .buttonStyle(.borderless)
-            Spacer(minLength: 0)
-        }
-        .font(NXFont.text(14, .semibold))
-        .tint(NX.violetText)
-    }
-
-    private var availabilitySection: some View {
-        Section {
-            Picker(T("Form status"), selection: $schedule.override) {
-                Text(T("Auto")).tag("")
-                Text(T("Force open")).tag("open")
-                Text(T("Force closed")).tag("closed")
-            }
-            .pickerStyle(.menu)
-            Toggle(T("Limit access by schedule"), isOn: scheduleEnabled)
-                .tint(NX.violet)
-            if schedule.enabled {
-                dayPicker
-                DatePicker(T("Opens at"), selection: timeBinding(\.start), displayedComponents: .hourAndMinute)
-                DatePicker(T("Closes at"), selection: timeBinding(\.end), displayedComponents: .hourAndMinute)
-                LabeledContent(T("Time zone"), value: schedule.timezone)
-            }
-        } header: {
-            Text(T("Availability"))
-        } footer: {
-            Text(availabilityFooter)
-        }
-    }
-
-    private var availabilityFooter: String {
-        switch schedule.override {
-        case "open":
-            return schedule.enabled ? T("Forced open — always accepting submissions. The schedule is ignored while this is set.")
-                                    : T("Forced open — always accepting submissions.")
-        case "closed":
-            return schedule.enabled ? T("Forced closed — not accepting submissions for now. The schedule is ignored while this is set.")
-                                    : T("Forced closed — not accepting submissions for now.")
-        default:
-            return schedule.enabled ? T("Accepting submissions only on the days and hours above.")
-                                    : T("Always accepting submissions.")
-        }
-    }
-
-    /// The web's day chips: Sun … Sat, any number of them.
-    private var dayPicker: some View {
+    private var breadcrumb: some View {
         HStack(spacing: 6) {
-            ForEach(0..<7, id: \.self) { i in
-                let on = schedule.days.contains(i)
-                Button {
-                    if on { schedule.days.removeAll { $0 == i } } else { schedule.days = (schedule.days + [i]).sorted() }
-                } label: {
-                    Text(T(FormBuilderVocab.weekdays[i]))
-                        .font(NXFont.text(12, .bold))
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                        .frame(maxWidth: .infinity, minHeight: 32)
-                        .foregroundStyle(on ? Color.white : NX.foreground)
-                        .background(on ? NX.violetFill : NX.muted, in: Capsule())
-                }
-                .buttonStyle(.borderless)
-                .accessibilityAddTraits(on ? .isSelected : [])
+            if !projectName.isEmpty {
+                Text(projectName).foregroundStyle(NX.mutedFg).lineLimit(1)
+                Text("/").foregroundStyle(NX.mutedFg.opacity(0.6))
             }
+            Text(draft.branding.icon.isEmpty ? displayName : "\(draft.branding.icon) \(displayName)")
+                .fontWeight(.medium).foregroundStyle(NX.foreground).lineLimit(1)
         }
-        .padding(.vertical, 2)
+        .font(NXFont.text(14))
+        .frame(maxWidth: 360, alignment: .leading)
     }
 
-    /// Turning the schedule on with no days picked starts from Mon–Fri, as the web does.
-    private var scheduleEnabled: Binding<Bool> {
-        Binding(get: { schedule.enabled }, set: { on in
-            schedule.enabled = on
-            if on && schedule.days.isEmpty { schedule.days = [1, 2, 3, 4, 5] }
-        })
-    }
-
-    /// "HH:mm" in the schedule's own zone, shown on a time wheel. Only the hour and minute are
-    /// read back, so the device's zone never leaks into the stored value.
-    private func timeBinding(_ key: WritableKeyPath<BuilderSchedule, String>) -> Binding<Date> {
-        Binding(get: { Self.date(fromHHmm: schedule[keyPath: key]) },
-                set: { schedule[keyPath: key] = Self.hhmm($0) })
-    }
-
-    private static func date(fromHHmm s: String) -> Date {
-        let parts = s.split(separator: ":").compactMap { Int($0) }
-        let h = parts.first ?? 0, m = parts.count > 1 ? parts[1] : 0
-        return Calendar.current.date(bySettingHour: h, minute: m, second: 0, of: Date()) ?? Date()
-    }
-
-    private static func hhmm(_ d: Date) -> String {
-        let c = Calendar.current.dateComponents([.hour, .minute], from: d)
-        return String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
-    }
-
-    private var fieldsSection: some View {
-        Section {
-            ForEach(fields) { f in
-                NavigationLink { fieldEditor(f.id) } label: {
-                    FormBuilderFieldRow(field: f, categoryName: FormCategory.fieldForSectionQuestion(
-                        type: f.type, target: f.mappingTarget, options: f.options,
-                        fields: customFields, sections: sections.map(\.name))?.name)
-                }
-            }
-            .onMove { fields.move(fromOffsets: $0, toOffset: $1) }
-            .onDelete { fields.remove(atOffsets: $0) }
-            Button { addField() } label: {
-                Label(T("Add field"), systemImage: "plus.circle.fill")
-                    .font(NXFont.text(15, .semibold)).foregroundStyle(NX.violetText)
-            }
-        } header: {
-            HStack {
-                Text(String(format: T("Fields · %d"), fields.count))
-                Spacer()
-                if fields.count > 1 {
-                    EditButton().font(NXFont.text(13, .semibold)).textCase(nil)
-                }
-            }
-        } footer: {
-            Text(fields.isEmpty ? T("A form needs at least one field.") : T("Tap a field to edit it. Edit reorders them; swipe left to delete one."))
+    @ViewBuilder private var previewButton: some View {
+        if regular {
+            Button { Task { await openPreview() } } label: { Label(T("Preview"), systemImage: "eye").labelStyle(.titleAndIcon) }
+                .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+        } else {
+            Button { Task { await openPreview() } } label: { Label(T("Preview"), systemImage: "eye") }
         }
     }
 
-    private var manageSection: some View {
-        Section {
-            if let saved, let id = currentId {
-                // The web's Responses tab: every submission, as the task it created.
-                NavigationLink {
-                    FormResponsesView(formId: id, projectId: projectId)
-                } label: {
-                    LabeledContent(T("Responses"), value: "\(saved.submissionCount)")
+    private var moreMenu: some View {
+        Menu {
+            if currentId != nil {
+                Button { Task { await flush(); showFill = true } } label: {
+                    Label(T("Open the form page"), systemImage: "arrow.up.right.square")
+                }
+                Button { showDuplicate = true } label: {
+                    Label(T("Duplicate to another project"), systemImage: "plus.square.on.square")
                 }
             }
-            Button { showFill = true } label: {
-                Label(T("Open the form"), systemImage: "square.and.pencil")
-            }
-            Button { showDuplicate = true } label: {
-                Label(T("Duplicate to another project"), systemImage: "plus.square.on.square")
-            }
-            Button(role: .destructive) { alert = .delete(submissions: saved?.submissionCount ?? 0) } label: {
-                Label(T("Delete form"), systemImage: "trash")
+            Divider()
+            Button(role: .destructive) { Task { await askDelete() } } label: {
+                Label(currentId != nil ? T("Delete form") : T("Discard draft"), systemImage: "trash")
             }
             .disabled(deleting)
-        } header: {
-            Text(T("Manage"))
-        } footer: {
-            Text(T("Open the form shows the last saved version. A duplicate copies the fields only — no submissions or tasks."))
+        } label: {
+            Image(systemName: "ellipsis").font(.system(size: 15, weight: .medium))
+                .frame(width: 30, height: 30).contentShape(Rectangle())
+        }
+        .accessibilityLabel(T("More"))
+    }
+
+    // MARK: body
+
+    private var tabItems: [NXTabItem<FormStudioTab>] {
+        FormStudioTab.allCases.map { t in
+            NXTabItem(id: t, label: t.label, count: t == .responses && responseCount > 0 ? responseCount : nil)
         }
     }
 
-    private func addField() {
-        let f = BuilderField.fresh()
-        fields.append(f)
-        openFieldId = f.id
+    private var studio: some View {
+        VStack(spacing: 0) {
+            if !regular {
+                NXUnderlineTabs(items: tabItems, selection: $tab, accessibilityName: T("Form builder"))
+            } else {
+                Rectangle().fill(NX.border).frame(height: 1)
+            }
+            tabContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .overlay(alignment: .bottom) { undoToast }
     }
 
-    private func fieldEditor(_ id: String) -> some View {
-        FormFieldEditorView(field: fieldBinding(id),
-                            others: fields.filter { $0.id != id },
-                            sections: sections, members: members, customFields: customFields,
-                            onDelete: { fields.removeAll { $0.id == id } })
+    @ViewBuilder private var tabContent: some View {
+        switch tab {
+        case .questions:
+            questionsTab
+        case .settings:
+            ScrollView {
+                FormStudioSettingsTab(draft: $draft, projectName: projectName, members: members,
+                                      responseCount: responseCount, regular: regular)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .background(NX.muted.opacity(0.25))
+        case .share:
+            ScrollView {
+                FormStudioShareTab(url: shareURL, isPublic: draft.isPublic, regular: regular,
+                                   onOpen: { Task { await flush(); showFill = true } },
+                                   onGoSettings: { tab = .settings })
+            }
+            .background(NX.muted.opacity(0.25))
+        case .responses:
+            if let id = currentId {
+                FormResponsesView(formId: id, projectId: projectId, embedded: true) { n in responseCount = n }
+                    .frame(maxWidth: regular ? 820 : .infinity)
+                    .frame(maxWidth: .infinity)
+            } else {
+                ScrollView {
+                    EmptyState(icon: "tray", title: T("No responses yet"),
+                               subtitle: T("Share the link from the Share tab. Each answer arrives here and on the project board as a task."))
+                        .padding(.horizontal, 24).padding(.top, 64)
+                }
+            }
+        }
     }
 
-    /// By id, never by index: a field can be deleted or moved while its screen is the one on top.
+    // MARK: questions
+
+    /// Regular width: the canvas and a fixed settings panel side by side (each scrolls on its own, one
+    /// axis). Compact: the canvas only; a question's settings are pushed.
+    @ViewBuilder private var questionsTab: some View {
+        if regular {
+            HStack(spacing: 0) {
+                canvas
+                Rectangle().fill(NX.border).frame(width: 1)
+                panel
+                    .frame(width: 340)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .background(NX.background)
+            }
+        } else {
+            canvas
+        }
+    }
+
+    private var canvas: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                FormCoverBand(cover: draft.branding.cover, height: regular ? 176 : 128)
+                VStack(alignment: .leading, spacing: 0) {
+                    FormStudioHead(name: $draft.name, description: $draft.description, branding: $draft.branding,
+                                   isPublic: draft.isPublic, large: regular, onChangeAccess: { tab = .settings })
+                    questionList.padding(.top, 28)
+                }
+                .frame(maxWidth: 720, alignment: .leading)
+                .padding(.horizontal, regular ? 40 : 16)
+                .padding(.bottom, 120)
+                .frame(maxWidth: .infinity)
+            }
+            // A click on the page around the questions closes the panel's selection, as on the web.
+            .background {
+                Color.clear.contentShape(Rectangle()).onTapGesture { selectedId = nil }
+            }
+        }
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    private var questionList: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ForEach(Array(draft.fields.enumerated()), id: \.element.id) { i, f in
+                questionCard(f, index: i)
+            }
+            if draft.fields.isEmpty {
+                Text(T("No questions yet. Add the first one below."))
+                    .font(NXFont.text(15)).foregroundStyle(NX.mutedFg)
+            }
+            FormAddQuestionMenu { kind in add(kind) }
+                .padding(.leading, -10)
+        }
+    }
+
+    private func questionCard(_ f: BuilderField, index i: Int) -> some View {
+        let id = f.id
+        return FormQuestionCard(field: fieldBinding(id), index: i, selected: regular && selectedId == id,
+                                others: draft.fields.filter { $0.id != id },
+                                customFields: customFields, sections: sections, compact: !regular,
+                                onSelect: { select(id) },
+                                onOpenSettings: { openFieldId = id },
+                                onDuplicate: { duplicate(id) },
+                                onDelete: { remove(id) })
+    }
+
+    @ViewBuilder private var panel: some View {
+        if let id = selectedId, draft.fields.contains(where: { $0.id == id }) {
+            fieldEditor(id, embedded: true)
+                .id(id)
+        } else {
+            ScrollView { FormPanelHint() }
+        }
+    }
+
+    private func fieldEditor(_ id: String, embedded: Bool) -> some View {
+        let index = draft.fields.firstIndex(where: { $0.id == id }) ?? 0
+        return FormFieldEditorView(field: fieldBinding(id),
+                                   others: draft.fields.filter { $0.id != id },
+                                   allFields: draft.fields,
+                                   sections: sections, members: members, customFields: customFields,
+                                   onDelete: { remove(id) },
+                                   index: index, total: draft.fields.count, embedded: embedded,
+                                   onMove: { dir in move(id, dir) },
+                                   onDuplicate: { duplicate(id) })
+    }
+
+    /// By id, never by index: a question can be deleted or moved while its settings are open.
     private func fieldBinding(_ id: String) -> Binding<BuilderField> {
-        Binding(get: { fields.first(where: { $0.id == id }) ?? BuilderField(raw: ["id": .string(id)]) },
-                set: { new in if let i = fields.firstIndex(where: { $0.id == id }) { fields[i] = new } })
+        Binding(get: { draft.fields.first(where: { $0.id == id }) ?? BuilderField(raw: ["id": .string(id)]) },
+                set: { new in if let i = draft.fields.firstIndex(where: { $0.id == id }) { draft.fields[i] = new } })
+    }
+
+    private func select(_ id: String) {
+        if regular { selectedId = id } else { openFieldId = id }
+    }
+
+    private func add(_ kind: FormQuestionKind) {
+        let q = BuilderField.fresh(kind: kind)
+        draft.fields.append(q)
+        select(q.id)
+    }
+
+    private func duplicate(_ id: String) {
+        guard let i = draft.fields.firstIndex(where: { $0.id == id }) else { return }
+        let copy = draft.fields[i].duplicated()
+        draft.fields.insert(copy, at: i + 1)
+        if regular { selectedId = copy.id }
+    }
+
+    private func move(_ id: String, _ dir: Int) {
+        guard let i = draft.fields.firstIndex(where: { $0.id == id }) else { return }
+        let j = i + dir
+        guard j >= 0, j < draft.fields.count else { return }
+        draft.fields.swapAt(i, j)
+    }
+
+    /// Questions shown only after this one would never show again (their condition reads a missing
+    /// answer), so their condition goes with it; Undo puts both back.
+    private func remove(_ id: String) {
+        guard let i = draft.fields.firstIndex(where: { $0.id == id }) else { return }
+        let gone = draft.fields[i]
+        var dependents: [String: BuilderCondition] = [:]
+        for f in draft.fields where f.showIf?.fieldId == id { dependents[f.id] = f.showIf }
+        var next = draft.fields
+        next.remove(at: i)
+        for k in next.indices where dependents[next[k].id] != nil { next[k].showIf = nil }
+        draft.fields = next
+        if selectedId == id { selectedId = nil }
+        let u = DeletedQuestion(field: gone, index: i, dependents: dependents)
+        withAnimation(.snappy) { undo = u }
+        Task {
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            withAnimation(.snappy) { if undo == u { undo = nil } }
+        }
+    }
+
+    private func restore(_ u: DeletedQuestion) {
+        var next = draft.fields
+        for k in next.indices where next[k].showIf == nil {
+            if let c = u.dependents[next[k].id] { next[k].showIf = c }
+        }
+        next.insert(u.field, at: min(u.index, next.count))
+        draft.fields = next
+        withAnimation(.snappy) { undo = nil }
+    }
+
+    @ViewBuilder private var undoToast: some View {
+        if let u = undo {
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(T("Question deleted")).font(NXFont.text(14, .semibold))
+                    if !u.dependents.isEmpty {
+                        Text(u.dependents.count == 1 ? T("1 question was shown only after it; it now always shows.")
+                             : String(format: T("%d questions were shown only after it; they now always show."), u.dependents.count))
+                            .font(NXFont.text(12)).opacity(0.8)
+                    }
+                }
+                Button(T("Undo")) { restore(u) }
+                    .font(NXFont.text(14, .semibold))
+                    .buttonStyle(.plain)
+            }
+            .foregroundStyle(NX.background)
+            .padding(.horizontal, 16).padding(.vertical, 11)
+            .background(NX.onyx, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.bottom, 20)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
     }
 
     // MARK: alert
 
     private var alertTitle: String {
         switch alert {
-        case .discard: return T("Discard your changes?")
-        case .delete: return T("Delete this form?")
-        case .forceDelete: return T("This form has submissions")
+        case .delete, .forceDelete: return T("Delete this form?")
         case .failed(let title, _): return title
         case nil: return ""
         }
@@ -637,11 +657,8 @@ struct FormBuilderView: View {
 
     @ViewBuilder private func alertButtons(_ a: BuilderAlert) -> some View {
         switch a {
-        case .discard:
-            Button(T("Discard"), role: .destructive) { dismiss() }
-            Button(T("Keep editing"), role: .cancel) {}
         case .delete(let n):
-            Button(T("Delete"), role: .destructive) { Task { await delete(force: n > 0, expect: n) } }
+            Button(T("Delete form"), role: .destructive) { Task { await delete(force: n > 0, expect: n) } }
             Button(T("Cancel"), role: .cancel) {}
         case .forceDelete(let n):
             Button(T("Delete anyway"), role: .destructive) { Task { await delete(force: true, expect: n) } }
@@ -653,18 +670,18 @@ struct FormBuilderView: View {
 
     private func alertMessage(_ a: BuilderAlert) -> String {
         switch a {
-        case .discard:
-            return T("The changes you made to this form haven't been saved.")
         case .delete(let n), .forceDelete(let n):
-            if n == 0 { return T("Its fields and its link go with it.") }
-            if n == 1 { return T("It has 1 submission. Deleting the form removes it and its My Submissions history too.") }
-            return String(format: T("It has %d submissions. Deleting the form removes them and their My Submissions history too."), n)
+            var text = ""
+            if case .forceDelete = a { text = T("New responses came in while you were here.") + " " }
+            if n == 0 { return text + T("The link stops working. Control Room → Audit can restore it.") }
+            let count = n == 1 ? T("This form has 1 submission.") : String(format: T("This form has %d submissions."), n)
+            return text + count + " " + T("Their tasks stay on the board, but the responses leave their senders' My Submissions. The link stops working. Control Room → Audit can restore the form with its responses.")
         case .failed(_, let message):
             return message
         }
     }
 
-    // MARK: load / save / delete
+    // MARK: load
 
     private func load() async {
         loadError = nil
@@ -674,7 +691,12 @@ struct FormBuilderView: View {
             do {
                 let all = try await APIClient.shared.builderForms(projectId: projectId)
                 if let f = all.first(where: { $0.id == formId }) {
-                    apply(f)
+                    saved = f
+                    responseCount = f.submissionCount
+                    let d = FormStudioDraft(form: f)
+                    draft = d
+                    baseline = d
+                    saveState = .saved
                 } else {
                     loadError = T("This form no longer exists.")
                 }
@@ -685,8 +707,9 @@ struct FormBuilderView: View {
                 loadError = (failure as? LocalizedError)?.errorDescription ?? T("Couldn't load this form.")
             }
         } else if baseline == nil {
-            fields = [BuilderField.fresh()]
-            baseline = draft
+            let d = FormStudioDraft.blank()
+            draft = d
+            baseline = d
         }
         let detail = try? await detailCall
         sections = detail?.taskLists ?? []
@@ -695,70 +718,147 @@ struct FormBuilderView: View {
         loaded = true
     }
 
-    /// The web's load: the stored fields intact (advanced keys included), or one blank field.
-    private func apply(_ f: BuilderForm) {
-        saved = f
-        name = f.name
-        description = f.description ?? ""
-        isPublic = f.isPublic ?? false
-        requireAuth = f.requireAuth ?? false
-        schedule = BuilderSchedule(raw: f.accessSchedule)
-        let rows = (f.fields?.array ?? []).compactMap { $0.object }
-        fields = rows.isEmpty ? [BuilderField.fresh()] : rows.map { BuilderField(raw: $0) }
-        baseline = draft
-    }
+    // MARK: autosave
 
-    /// What goes out as `accessSchedule`: the stored value as it was when the person left the
-    /// schedule alone (null for a form that never had one — the server ignores null), the full
-    /// schedule once they touched it.
-    private var scheduleJSON: Any {
-        if schedule != BuilderSchedule(raw: saved?.accessSchedule) { return schedule.json }
-        return saved?.accessSchedule?.any ?? NSNull()
-    }
-
-    private func save() async {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !fields.isEmpty else { return }
-        saving = true
-        defer { saving = false }
-        // The web's body, key for key: description is `description || null`.
-        var payload: [String: Any] = [
-            "name": trimmed,
-            "description": jsonOrNull(description.isEmpty ? nil : description),
-            "fields": fields.map { $0.json() },
-            "isPublic": isPublic,
-            "requireAuth": requireAuth,
-            "accessSchedule": scheduleJSON,
-        ]
-        do {
-            if let id = currentId {
-                try await APIClient.shared.updateForm(id, payload)
-                baseline = draft
-                // Leave first, then tell the lists — never the other way round (see `delete`).
-                dismiss()
-                NotificationCenter.default.post(name: .nexusFormsChanged, object: nil)
-            } else {
-                payload["projectId"] = projectId
-                let created = try await APIClient.shared.createForm(payload)
-                apply(created)
-                justCreated = true
-                NotificationCenter.default.post(name: .nexusFormsChanged, object: nil)
-            }
-        } catch APIError.unauthorized {
-            auth.logout()
-        } catch let failure {
-            alert = .failed(title: T("Couldn't save the form"),
-                             message: (failure as? LocalizedError)?.errorDescription ?? T("Try again in a moment."))
+    private func scheduleSave() {
+        guard loaded, loadError == nil, !stopped, let base = baseline else { return }
+        debounce?.cancel()
+        guard draft != base else {
+            if saveState == .pending { saveState = currentId == nil ? .idle : .saved }
+            return
+        }
+        if !inflight { saveState = .pending }
+        debounce = Task {
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            if Task.isCancelled { return }
+            await flush()
         }
     }
 
+    /// One save at a time; an edit made meanwhile goes right after. `force` creates a new form even
+    /// when nothing was typed yet (Preview needs a form to open).
+    private func flush(force: Bool = false) async {
+        guard !stopped, let base = baseline else { return }
+        if inflight { again = true; againForce = againForce || force; return }
+        let snapshot = draft
+        guard snapshot != base || (force && currentId == nil) else { return }
+        let creating = currentId == nil
+        var requestBody = payload(snapshot, base: base, creating: creating)
+        inflight = true
+        saveState = .saving
+        do {
+            let out: BuilderForm
+            if let id = currentId {
+                out = try await APIClient.shared.updateForm(id, requestBody)
+            } else {
+                requestBody["projectId"] = projectId
+                out = try await APIClient.shared.createForm(requestBody)
+            }
+            inflight = false
+            if stopped && creating {
+                // Discarded while it was being created: don't leave it behind.
+                try? await APIClient.shared.deleteForm(out.id, force: false)
+                return
+            }
+            saved = out
+            baseline = snapshot
+            if creating { NotificationCenter.default.post(name: .nexusFormsChanged, object: nil) }
+            if draft != snapshot { saveState = .pending; scheduleSave() } else { saveState = .saved }
+        } catch APIError.unauthorized {
+            inflight = false
+            auth.logout()
+            return
+        } catch let failure {
+            inflight = false
+            saveState = .failed((failure as? LocalizedError)?.errorDescription ?? T("Try again in a moment."))
+        }
+        if again {
+            let forced = againForce
+            again = false
+            againForce = false
+            await flush(force: forced)
+        }
+    }
+
+    /// The web's body. Name, description, questions and access always; the schedule, branding and
+    /// settings only when they changed (the route writes only the keys it is sent), or all of them for
+    /// a new form.
+    private func payload(_ d: FormStudioDraft, base: FormStudioDraft, creating: Bool) -> [String: Any] {
+        let trimmed = d.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let desc = d.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        var p: [String: Any] = [
+            "name": trimmed.isEmpty ? T("Untitled form") : trimmed,
+            "description": desc.isEmpty ? NSNull() : d.description,
+            "fields": d.fields.map { $0.cleanJSON() },
+            "isPublic": d.isPublic,
+            "requireAuth": d.requireAuth,
+        ]
+        if creating {
+            p["accessSchedule"] = d.schedule == base.schedule ? NSNull() : d.schedule.json
+        } else if d.schedule != base.schedule {
+            p["accessSchedule"] = d.schedule.json
+        }
+        if creating || d.branding != base.branding { p["branding"] = d.branding.json }
+        if creating || d.settings != base.settings { p["settings"] = d.settings.json }
+        return p
+    }
+
+    /// What a duplicate takes as `accessSchedule`: the stored value while the schedule is untouched
+    /// (null for a form that never had one), the full schedule once it was edited.
+    private var duplicateSchedule: Any {
+        if draft.schedule != BuilderSchedule(raw: saved?.accessSchedule) { return draft.schedule.json }
+        return saved?.accessSchedule?.any ?? NSNull()
+    }
+
+    private func retry() {
+        saveState = .pending
+        Task { await flush() }
+    }
+
+    /// Leaving — or a screen pushed on top: what was typed inside the debounce is saved now instead of dropped.
+    private func leaving() {
+        debounce?.cancel()
+        guard !stopped, let base = baseline, draft != base else { return }
+        Task {
+            await flush()
+            NotificationCenter.default.post(name: .nexusFormsChanged, object: nil)
+        }
+    }
+
+    /// Preview shows the saved form as people see it, so what was typed is saved first.
+    private func openPreview() async {
+        debounce?.cancel()
+        // A save already on its way (e.g. the first create): wait for it, then save what's left.
+        var waited = 0
+        while inflight && waited < 50 { try? await Task.sleep(nanoseconds: 100_000_000); waited += 1 }
+        await flush(force: true)
+        if currentId != nil && !saveState.isFailed { showPreview = true }
+    }
+
+    // MARK: delete
+
+    /// The count shown in the dialog is read again first: the builder may have been open for a while.
+    private func askDelete() async {
+        guard let id = currentId else {
+            stopped = true
+            debounce?.cancel()
+            dismiss()
+            return
+        }
+        if let all = try? await APIClient.shared.builderForms(projectId: projectId),
+           let f = all.first(where: { $0.id == id }) {
+            responseCount = f.submissionCount
+        }
+        alert = .delete(submissions: responseCount)
+    }
+
     /// No submissions → a plain delete, and if somebody submitted in the meantime the server's 409
-    /// asks again with the count. With submissions → the person already saw the count, so force.
-    /// `expect` is the count the person was shown; a response that arrived since makes the server ask
-    /// again (409 with the new count → the same centred alert, with that count).
+    /// asks again with the count. With submissions → the person saw the count, so force with it.
     private func delete(force: Bool, expect: Int) async {
         guard let id = currentId, !deleting else { return }
         deleting = true
+        stopped = true
+        debounce?.cancel()
         defer { deleting = false }
         do {
             try await APIClient.shared.deleteForm(id, force: force, expect: expect)
@@ -768,68 +868,39 @@ struct FormBuilderView: View {
             dismiss()
             NotificationCenter.default.post(name: .nexusFormsChanged, object: nil)
         } catch FormBuilderError.hasSubmissions(let count, _) {
+            stopped = false
+            responseCount = count
             alert = .forceDelete(submissions: count)
         } catch APIError.unauthorized {
             auth.logout()
         } catch let failure {
+            stopped = false
             alert = .failed(title: T("Couldn't delete the form"),
                             message: (failure as? LocalizedError)?.errorDescription ?? T("Try again in a moment."))
         }
     }
 }
 
-/// One field in the builder's list: its type, name, and what is set on it.
-private struct FormBuilderFieldRow: View {
-    let field: BuilderField
-    /// A Section question whose options are categories: its answers go to this field (web "Kategori" chip).
-    var categoryName: String? = nil
+// MARK: - One question's settings
 
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: field.kind?.icon ?? "questionmark.square")
-                .font(.system(size: 14, weight: .semibold)).foregroundStyle(NX.violetText)
-                .frame(width: 30, height: 30)
-                .background(NX.violet.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(field.displayName)
-                    .font(NXFont.text(15, .medium))
-                    .foregroundStyle(field.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? NX.mutedFg : NX.foreground)
-                    .lineLimit(1)
-                Text(summary).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
-            }
-            Spacer(minLength: 4)
-            if field.required { NexusChip(text: T("Required"), tone: .accent) }
-        }
-    }
-
-    private var summary: String {
-        var parts = [field.kind?.label ?? field.type]
-        if field.hasOptions {
-            let n = field.options.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
-            parts.append(n == 1 ? T("1 option") : String(format: T("%d options"), n))
-        }
-        if field.showIf != nil { parts.append(T("Conditional")) }
-        if !field.rules.isEmpty { parts.append(field.rules.count == 1 ? T("1 rule") : String(format: T("%d rules"), field.rules.count)) }
-        if let categoryName {
-            parts.append("→ " + categoryName)
-        } else if let m = FormBuilderVocab.mappingTargets.first(where: { $0.value == field.mappingTarget }), m.value != "none" {
-            parts.append("→ " + T(m.label))
-        }
-        return parts.joined(separator: " · ")
-    }
-}
-
-// MARK: - One field
-
-/// Everything about one field — the web's per-field card and its "Advanced" panel (branching,
-/// routing, mapping), one screen. Changes stay in the builder's draft until the form is saved.
+/// Everything about one question — the web's QuestionPanel: type, options, logic, where the answer goes,
+/// routing, and moving it. Embedded in the studio's side panel on iPad and Mac, pushed on iPhone.
+/// Edits go straight into the builder's draft, which saves itself.
 struct FormFieldEditorView: View {
     @Binding var field: BuilderField
     let others: [BuilderField]
+    /// Every question, this one included — to keep "Show only when" from making a loop.
+    var allFields: [BuilderField] = []
     let sections: [ProjectDetail.Lane]
     let members: [ProjectDetail.ProjectMember]
     let customFields: [CustomField]
     let onDelete: () -> Void
+    var index = 0
+    var total = 1
+    /// In the side panel: no navigation title, no preview (the card is the preview), delete at once.
+    var embedded = false
+    var onMove: ((Int) -> Void)? = nil
+    var onDuplicate: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var editMode: EditMode = .inactive
@@ -840,32 +911,24 @@ struct FormFieldEditorView: View {
     var body: some View {
         Form {
             basicsSection
-            extraSections
-            if field.hasOptions { optionsSection }
+            optionToggles
+            if field.hasOptions && !embedded { optionsSection }
             branchingSection
-            routingSections
             mappingSection
-            Section {
-                FormFieldPreview(field: field)
-            } header: {
-                Text(T("Preview"))
-            }
-            Section {
-                Button(role: .destructive) {
-                    deleteOnLeave = true
-                    dismiss()
-                } label: {
-                    Label(T("Delete field"), systemImage: "trash")
+            routingSections
+            if !embedded {
+                Section {
+                    FormFieldPreview(field: field)
+                } header: {
+                    Text(T("Preview"))
                 }
-            } footer: {
-                Text(T("Changes here are kept in the form until you save it."))
             }
+            questionSection
         }
         .environment(\.editMode, $editMode)
         .scrollContentBackground(.hidden)
         .background(NX.background.ignoresSafeArea())
-        .navigationTitle(field.displayName)
-        .navigationBarTitleDisplayMode(.inline)
+        .modifier(FieldEditorTitle(title: field.displayName, on: !embedded))
         .onDisappear { if deleteOnLeave { onDelete() } }
     }
 
@@ -873,72 +936,92 @@ struct FormFieldEditorView: View {
 
     private var basicsSection: some View {
         Section {
-            TextField(T("e.g. Request amount"), text: nameBinding)
+            TextField(T("Question"), text: nameBinding, axis: .vertical)
                 .font(NXFont.text(16, .semibold))
-            Picker(T("Type"), selection: typeBinding) {
-                ForEach(FormFieldKind.allCases) { k in
-                    Label(k.label, systemImage: k.icon).tag(k.rawValue)
+            Picker(T("Type"), selection: kindBinding) {
+                ForEach(FormQuestionKind.allCases) { k in
+                    Label(k.label, systemImage: k.icon).tag(k)
                 }
-                if field.kind == nil { Text(field.type).tag(field.type) }
             }
-            Toggle(T("Required"), isOn: $field.required)
-                .tint(NX.violet)
         } header: {
-            Text(T("Field name"))
+            Text(String(format: T("Question %d"), index + 1))
         }
     }
 
     /// The web writes the name to both `name` and `label`.
     private var nameBinding: Binding<String> {
-        Binding(get: { field.name }, set: { field.name = $0; field.label = $0 })
-    }
-
-    /// A choice field starts with one empty option row to type into, like the web's editor.
-    private var typeBinding: Binding<String> {
-        Binding(get: { field.type }, set: { new in
-            field.type = new
-            if field.hasOptions && field.options.isEmpty { field.options = [""] }
+        Binding(get: { field.name }, set: { v in
+            let one = v.replacingOccurrences(of: "\n", with: " ")
+            field.name = one
+            field.label = one
         })
     }
 
-    @ViewBuilder private var extraSections: some View {
-        if field.type != "file" {
-            Section {
-                Toggle(isOn: $field.attachmentEnabled) {
-                    Label(T("Allow file attachment"), systemImage: "paperclip")
+    private var kindBinding: Binding<FormQuestionKind> {
+        Binding(get: { field.questionKind }, set: { field.applyKind($0) })
+    }
+
+    // MARK: options (the toggles)
+
+    private var optionToggles: some View {
+        Section {
+            Toggle(T("Required"), isOn: $field.required).tint(NX.onyx)
+            Toggle(isOn: descriptionOn) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(T("Description"))
+                    Text(T("Helper text under the question")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
-                .tint(NX.violet)
-            } footer: {
-                Text(T("Lets the person attach a file to this answer. Attaching stays optional for them."))
             }
-        }
-        if field.type == "text" || field.type == "email" {
-            Section {
-                Picker(T("Auto-fill from account"), selection: $field.autofill) {
-                    Text(T("None")).tag("")
-                    Text(T("User's name")).tag("name")
-                    Text(T("User's email")).tag("email")
-                }
-            } footer: {
-                Text(field.autofill.isEmpty
-                     ? T("For a field like “Request by”: filled from the account of whoever submits.")
-                     : T("The person doesn't type it — it's filled from their account and locked."))
+            .tint(NX.onyx)
+            if field.description != nil {
+                TextField(T("Description (optional)"), text: Binding(get: { field.description ?? "" }, set: { field.description = $0 }), axis: .vertical)
+                    .font(NXFont.text(14))
             }
-        }
-        if field.type == "number" {
-            Section {
-                Picker(T("Number format"), selection: $field.numberFormat) {
-                    Text(T("Plain (9240943)")).tag("")
-                    Text(T("Rupiah (Rp 9.240.943)")).tag("currency-idr")
-                    if !field.numberFormat.isEmpty && field.numberFormat != "currency-idr" {
-                        Text(field.numberFormat).tag(field.numberFormat)
+            if field.type == "dropdown" {
+                Toggle(isOn: Binding(get: { field.display == "list" }, set: { field.display = $0 ? "list" : "" })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(T("Show options as a list"))
+                        Text(T("On the web form. The apps show a menu.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     }
                 }
+                .tint(NX.onyx)
+            }
+            if field.type == "number" {
+                Toggle(isOn: Binding(get: { field.questionKind == .rupiah }, set: { field.applyKind($0 ? .rupiah : .number) })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(T("Rupiah amount"))
+                        Text("Rp 1.500.000").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    }
+                }
+                .tint(NX.onyx)
+            }
+            if field.type == "text" || field.type == "email" {
+                Picker(T("Fill from the sender's account"), selection: $field.autofill) {
+                    Text(T("Off")).tag("")
+                    Text(T("Name")).tag("name")
+                    Text(T("Email")).tag("email")
+                }
+            }
+            if field.type != "file" {
+                Toggle(isOn: $field.attachmentEnabled) {
+                    Label(T("Allow a file with the answer"), systemImage: "paperclip")
+                }
+                .tint(NX.onyx)
+            }
+        } header: {
+            Text(T("Options"))
+        } footer: {
+            if !field.autofill.isEmpty {
+                Text(T("The person doesn't type it — it's filled from their account and locked."))
             }
         }
     }
 
-    // MARK: options
+    private var descriptionOn: Binding<Bool> {
+        Binding(get: { field.description != nil }, set: { field.description = $0 ? (field.description ?? "") : nil })
+    }
+
+    // MARK: options (the list, pushed screen only — the card edits them in place)
 
     private var optionsSection: some View {
         Section {
@@ -952,14 +1035,14 @@ struct FormFieldEditorView: View {
             }
         } header: {
             HStack {
-                Text(T("Options"))
+                Text(T("Answer options"))
                 Spacer()
                 if field.options.count > 1 {
                     EditButton().font(NXFont.text(13, .semibold)).textCase(nil)
                 }
             }
         } footer: {
-            Text(T("Blank options are dropped when you save."))
+            Text(T("Blank options are dropped when the form saves."))
         }
     }
 
@@ -972,18 +1055,37 @@ struct FormFieldEditorView: View {
         field.options.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
     }
 
-    // MARK: branching (showIf)
+    // MARK: logic (showIf)
+
+    /// Questions this one may depend on: not those already shown only because of it.
+    private var parents: [BuilderField] {
+        let everything = allFields.isEmpty ? [field] + others : allFields
+        return FormStudioLogic.logicParents(everything, selfId: field.id)
+    }
+
+    /// The closest question above with options, else the one above, else the first allowed.
+    private var defaultParent: BuilderField? {
+        let everything = allFields.isEmpty ? [field] + others : allFields
+        let myIndex = everything.firstIndex(where: { $0.id == field.id }) ?? everything.count
+        let above = parents.filter { p in (everything.firstIndex(where: { $0.id == p.id }) ?? 0) < myIndex }
+        return above.last(where: { $0.hasOptions }) ?? above.last ?? parents.first
+    }
 
     private var branchingSection: some View {
         Section {
-            Toggle(T("Only show this field if…"), isOn: showIfOn)
-                .tint(NX.violet)
+            Toggle(T("Show only when…"), isOn: showIfOn)
+                .tint(NX.onyx)
+                .disabled(field.showIf == nil && parents.isEmpty)
             if let cond = field.showIf {
-                Picker(T("Field"), selection: condBinding(\.fieldId, resetsValue: true)) {
-                    if !others.contains(where: { $0.id == cond.fieldId }) {
-                        Text(others.isEmpty ? T("No other fields") : T("Choose a field")).tag(cond.fieldId)
+                let parent = others.first(where: { $0.id == cond.fieldId })
+                Picker(T("Question"), selection: condBinding(\.fieldId, resetsValue: true)) {
+                    if parent == nil {
+                        Text(parents.isEmpty ? T("No other questions") : T("Choose a question")).tag(cond.fieldId)
                     }
-                    ForEach(others) { o in Text(o.displayName).tag(o.id) }
+                    ForEach(parents) { o in Text(o.displayName).tag(o.id) }
+                    if let parent, !parents.contains(where: { $0.id == parent.id }) {
+                        Text(parent.displayName).tag(parent.id)
+                    }
                 }
                 Picker(T("Condition"), selection: condBinding(\.op)) {
                     ForEach(FormBuilderVocab.operators, id: \.value) { o in Text(T(o.label)).tag(o.value) }
@@ -1002,22 +1104,42 @@ struct FormFieldEditorView: View {
                         }
                     }
                 }
+                logicWarnings(cond, parent: parent)
             }
         } header: {
-            Text(T("Branching"))
+            Text(T("Logic"))
         } footer: {
-            Text(T("While the condition isn't met, the field is hidden and isn't required."))
+            Text(parents.isEmpty && field.showIf == nil ? T("Add another question first.")
+                 : T("While the condition isn't met, the question is hidden and isn't required."))
+        }
+    }
+
+    @ViewBuilder private func logicWarnings(_ cond: BuilderCondition, parent: BuilderField?) -> some View {
+        if FormBuilderVocab.needsValue(cond.op) && cond.value.trimmingCharacters(in: .whitespaces).isEmpty {
+            Text(T("Pick a value. Until then the question always shows."))
+                .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+        }
+        if let parent, FormStudioLogic.staleOption(parent, op: cond.op, value: cond.value) {
+            Label(String(format: T("“%@” is no longer an option, so this question never shows. Pick a value again."), cond.value),
+                  systemImage: "exclamationmark.circle")
+                .font(NXFont.text(13, .medium)).foregroundStyle(NX.warning)
+        }
+        if let parent, !parents.contains(where: { $0.id == parent.id }) {
+            Label(String(format: T("“%@” is itself shown only after this question, so neither can ever show. Pick another question."), parent.displayName),
+                  systemImage: "exclamationmark.circle")
+                .font(NXFont.text(13, .medium)).foregroundStyle(NX.warning)
         }
     }
 
     private var showIfOn: Binding<Bool> {
         Binding(get: { field.showIf != nil }, set: { on in
-            field.showIf = on ? BuilderCondition(fieldId: others.first?.id ?? "", op: "equals", value: "") : nil
+            if !on { field.showIf = nil }
+            else if let p = defaultParent { field.showIf = BuilderCondition(fieldId: p.id, op: "equals", value: "") }
         })
     }
 
-    /// Picking another field clears the value, as the web does: the old value was one of the
-    /// previous field's options.
+    /// Picking another question clears the value, as the web does: the old value was one of the
+    /// previous question's options.
     private func condBinding(_ key: WritableKeyPath<BuilderCondition, String>, resetsValue: Bool = false) -> Binding<String> {
         Binding(get: { field.showIf?[keyPath: key] ?? "" }, set: { v in
             guard var c = field.showIf else { return }
@@ -1034,64 +1156,105 @@ struct FormFieldEditorView: View {
 
     // MARK: routing
 
+    private var settableFields: [CustomField] {
+        customFields.filter { FormBuilderVocab.settableFieldTypes.contains($0.type.uppercased()) }
+    }
+
     @ViewBuilder private var routingSections: some View {
         Section {
             if field.rules.isEmpty {
-                Text(T("No rules yet.")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                Text(T("When this answer matches, assign someone, set a field or move the task to a section."))
+                    .font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
             }
             Button { field.rules.append(BuilderRule.fresh()) } label: {
                 Label(T("Add rule"), systemImage: "plus.circle").foregroundStyle(NX.violetText)
             }
         } header: {
             Text(T("Routing"))
-        } footer: {
-            Text(T("When the answer matches, the new task moves to a section or is assigned to a member."))
         }
         ForEach(Array(field.rules.enumerated()), id: \.element.id) { i, rule in
-            Section {
-                Picker(T("If the answer"), selection: ruleBinding(rule.id, \.op)) {
-                    ForEach(FormBuilderVocab.operators, id: \.value) { o in Text(T(o.label)).tag(o.value) }
-                }
-                if FormBuilderVocab.needsValue(rule.op) {
-                    if ownOptions.isEmpty {
-                        TextField(T("Value"), text: ruleBinding(rule.id, \.value))
-                    } else {
-                        Picker(T("Value"), selection: ruleBinding(rule.id, \.value)) {
-                            Text("—").tag("")
-                            ForEach(ownOptions, id: \.self) { o in Text(o).tag(o) }
-                            if !rule.value.isEmpty && !ownOptions.contains(rule.value) {
-                                Text(rule.value).tag(rule.value)
-                            }
-                        }
-                    }
-                }
-                Picker(T("Then"), selection: ruleBinding(rule.id, \.action)) {
-                    ForEach(FormBuilderVocab.routingActions, id: \.value) { a in Text(T(a.label)).tag(a.value) }
-                }
-                if rule.action == "set_task_list" {
-                    Picker(T("Section"), selection: ruleBinding(rule.id, \.targetTaskListId)) {
-                        Text(T("Choose a section")).tag("")
-                        ForEach(sections) { s in Text(s.name).tag(s.id) }
-                        if !rule.targetTaskListId.isEmpty && !sections.contains(where: { $0.id == rule.targetTaskListId }) {
-                            Text(T("A section that no longer exists")).tag(rule.targetTaskListId)
-                        }
-                    }
+            ruleSection(rule, number: i + 1)
+        }
+    }
+
+    private func ruleSection(_ rule: BuilderRule, number: Int) -> some View {
+        Section {
+            Picker(T("If the answer"), selection: ruleBinding(rule.id, \.op)) {
+                ForEach(FormBuilderVocab.operators, id: \.value) { o in Text(T(o.label)).tag(o.value) }
+            }
+            if FormBuilderVocab.needsValue(rule.op) {
+                if ownOptions.isEmpty {
+                    TextField(T("Value"), text: ruleBinding(rule.id, \.value))
                 } else {
-                    Picker(T("Member"), selection: ruleBinding(rule.id, \.targetUserId)) {
-                        Text(T("Choose a member")).tag("")
-                        ForEach(members) { m in Text(m.displayName).tag(m.uid) }
-                        if !rule.targetUserId.isEmpty && !members.contains(where: { $0.uid == rule.targetUserId }) {
-                            Text(T("Someone no longer in this project")).tag(rule.targetUserId)
+                    Picker(T("Value"), selection: ruleBinding(rule.id, \.value)) {
+                        Text("—").tag("")
+                        ForEach(ownOptions, id: \.self) { o in Text(o).tag(o) }
+                        if !rule.value.isEmpty && !ownOptions.contains(rule.value) {
+                            Text(rule.value).tag(rule.value)
                         }
                     }
                 }
-                Button(role: .destructive) {
-                    field.rules.removeAll { $0.id == rule.id }
-                } label: {
-                    Label(T("Delete rule"), systemImage: "trash")
+            }
+            if FormStudioLogic.staleOption(field, op: rule.op, value: rule.value) {
+                Label(String(format: T("“%@” is no longer an option, so this rule never runs. Pick a value again."), rule.value),
+                      systemImage: "exclamationmark.circle")
+                    .font(NXFont.text(13, .medium)).foregroundStyle(NX.warning)
+            }
+            Picker(T("Then"), selection: ruleBinding(rule.id, \.action)) {
+                ForEach(FormBuilderVocab.routingActions, id: \.value) { a in Text(T(a.label)).tag(a.value) }
+                if !FormBuilderVocab.routingActions.contains(where: { $0.value == rule.action }) {
+                    Text(rule.action).tag(rule.action)
                 }
-            } header: {
-                Text(String(format: T("Rule %d"), i + 1))
+            }
+            ruleTarget(rule)
+            Button(role: .destructive) {
+                field.rules.removeAll { $0.id == rule.id }
+            } label: {
+                Label(T("Delete rule"), systemImage: "trash")
+            }
+        } header: {
+            Text(String(format: T("Rule %d"), number))
+        }
+    }
+
+    @ViewBuilder private func ruleTarget(_ rule: BuilderRule) -> some View {
+        if rule.action == "set_task_list" {
+            Picker(T("Section"), selection: ruleBinding(rule.id, \.targetTaskListId)) {
+                Text(T("Choose a section")).tag("")
+                ForEach(sections) { s in Text(s.name).tag(s.id) }
+                if !rule.targetTaskListId.isEmpty && !sections.contains(where: { $0.id == rule.targetTaskListId }) {
+                    Text(T("A section that no longer exists")).tag(rule.targetTaskListId)
+                }
+            }
+        } else if rule.action == "set_field" {
+            Picker(T("Field"), selection: ruleFieldBinding(rule.id)) {
+                Text(T("Choose a field")).tag("")
+                ForEach(settableFields) { c in Text(c.name).tag(c.id) }
+                if !rule.targetCustomFieldId.isEmpty && !settableFields.contains(where: { $0.id == rule.targetCustomFieldId }) {
+                    Text(T("A custom field that no longer exists")).tag(rule.targetCustomFieldId)
+                }
+            }
+            if let target = settableFields.first(where: { $0.id == rule.targetCustomFieldId }) {
+                let choices = target.choices
+                if choices.isEmpty {
+                    TextField(T("Value"), text: ruleBinding(rule.id, \.targetValue))
+                } else {
+                    Picker(T("Value"), selection: ruleBinding(rule.id, \.targetValue)) {
+                        Text("—").tag("")
+                        ForEach(choices, id: \.self) { o in Text(o).tag(o) }
+                        if !rule.targetValue.isEmpty && !choices.contains(rule.targetValue) {
+                            Text(rule.targetValue).tag(rule.targetValue)
+                        }
+                    }
+                }
+            }
+        } else {
+            Picker(T("Member"), selection: ruleBinding(rule.id, \.targetUserId)) {
+                Text(T("Choose a member")).tag("")
+                ForEach(members) { m in Text(m.displayName).tag(m.uid) }
+                if !rule.targetUserId.isEmpty && !members.contains(where: { $0.uid == rule.targetUserId }) {
+                    Text(T("Someone no longer in this project")).tag(rule.targetUserId)
+                }
             }
         }
     }
@@ -1101,18 +1264,29 @@ struct FormFieldEditorView: View {
                 set: { v in if let i = field.rules.firstIndex(where: { $0.id == id }) { field.rules[i][keyPath: key] = v } })
     }
 
+    /// Another field: its value from the previous one no longer applies.
+    private func ruleFieldBinding(_ id: String) -> Binding<String> {
+        Binding(get: { field.rules.first(where: { $0.id == id })?.targetCustomFieldId ?? "" },
+                set: { v in
+                    if let i = field.rules.firstIndex(where: { $0.id == id }) {
+                        field.rules[i].targetCustomFieldId = v
+                        field.rules[i].targetValue = ""
+                    }
+                })
+    }
+
     // MARK: mapping
 
     private var mappingSection: some View {
         Section {
-            Picker(T("Map answer to"), selection: $field.mappingTarget) {
+            Picker(T("Answer goes to"), selection: $field.mappingTarget) {
                 ForEach(FormBuilderVocab.mappingTargets, id: \.value) { m in Text(T(m.label)).tag(m.value) }
                 if !FormBuilderVocab.mappingTargets.contains(where: { $0.value == field.mappingTarget }) {
                     Text(field.mappingTarget).tag(field.mappingTarget)
                 }
             }
             if field.mappingTarget == "custom_field" {
-                Picker(T("Custom field"), selection: customFieldBinding) {
+                Picker(T("Field"), selection: customFieldBinding) {
                     Text(T("Choose a custom field")).tag("")
                     ForEach(customFields) { c in Text(c.name).tag(c.id) }
                     if !field.mappingCustomFieldId.isEmpty && !customFields.contains(where: { $0.id == field.mappingCustomFieldId }) {
@@ -1129,7 +1303,9 @@ struct FormFieldEditorView: View {
                     Label(String(format: T("Send answers to “%@”"), cat.name), systemImage: "arrow.right").foregroundStyle(NX.violetText)
                 }
             } else if field.mappingTarget == "task_list" {
-                if let cat = FormCategory.projectField(customFields), field.type == "dropdown" {
+                Text(T("The answer picks the section the task lands in, matched by section name — so the options must match the section names exactly. With no match, it goes to the first section."))
+                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                if let cat = FormCategory.projectField(customFields), field.hasOptions, field.type != "multi_select" {
                     Text(String(format: T("Sections are the project's statuses. To sort answers by category, send them to “%@”."), cat.name))
                         .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     Button { sendTo(cat) } label: {
@@ -1140,23 +1316,17 @@ struct FormFieldEditorView: View {
                     Label(T("This project has no sections yet. Add a section on the board first, then this mapping works."),
                           systemImage: "exclamationmark.triangle.fill")
                         .font(NXFont.text(13)).foregroundStyle(NX.warning)
-                } else {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(T("Sections in this project")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
-                        Text(sections.map(\.name).joined(separator: " · ")).font(NXFont.text(13)).foregroundStyle(NX.foreground)
-                    }
-                    if field.type == "dropdown" && FormCategory.projectField(customFields) == nil {
-                        Button { field.options = sections.map(\.name) } label: {
-                            Label(String(format: T("Use these %d sections as options"), sections.count), systemImage: "doc.on.doc")
-                                .foregroundStyle(NX.violetText)
-                        }
+                } else if field.hasOptions && field.type != "multi_select" {
+                    Button { field.options = sections.map(\.name) } label: {
+                        Label(String(format: T("Use these %d sections as options"), sections.count), systemImage: "doc.on.doc")
+                            .foregroundStyle(NX.violetText)
                     }
                 }
             }
         } header: {
-            Text(T("Task mapping"))
+            Text(T("Answer goes to"))
         } footer: {
-            Text(mappingFooter)
+            Text(T("Every response becomes a task in this project. Answers that go nowhere are listed in the task's description."))
         }
     }
 
@@ -1210,16 +1380,46 @@ struct FormFieldEditorView: View {
         }
     }
 
-    private var mappingFooter: String {
-        switch field.mappingTarget {
-        case "task_list":
-            return T("The answer picks the section the task lands in, matched by section name — so the options must match the section names exactly. With no match, it goes to the first section.")
-        case "custom_field":
-            return T("The answer is written into this custom field on the new task.")
-        case "none":
-            return T("Every answer is listed on the task. Mapping also puts this one into a task field.")
-        default:
-            return T("The answer fills this field of the new task.")
+    // MARK: move / duplicate / delete
+
+    private var questionSection: some View {
+        Section {
+            if let onMove {
+                Button { onMove(-1) } label: { Label(T("Move up"), systemImage: "arrow.up") }
+                    .disabled(index == 0)
+                Button { onMove(1) } label: { Label(T("Move down"), systemImage: "arrow.down") }
+                    .disabled(index >= total - 1)
+            }
+            if let onDuplicate {
+                Button(action: onDuplicate) { Label(T("Duplicate"), systemImage: "doc.on.doc") }
+            }
+            Button(role: .destructive) {
+                if embedded {
+                    onDelete()
+                } else {
+                    deleteOnLeave = true
+                    dismiss()
+                }
+            } label: {
+                Label(T("Delete question"), systemImage: "trash")
+            }
+        } header: {
+            Text(T("Question"))
+        } footer: {
+            Text(T("Changes save by themselves."))
+        }
+    }
+}
+
+/// The pushed editor's title; in the side panel the builder's own bar stays as it is.
+private struct FieldEditorTitle: ViewModifier {
+    let title: String
+    let on: Bool
+    func body(content: Content) -> some View {
+        if on {
+            content.navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+        } else {
+            content
         }
     }
 }
@@ -1315,6 +1515,9 @@ struct FormDuplicateView: View {
     let isPublic: Bool
     let requireAuth: Bool
     let accessSchedule: Any
+    /// The cover and icon come along; the people to notify don't (they belong to this project).
+    let branding: Any
+    let settings: Any
 
     @Environment(AuthStore.self) private var auth
     @State private var newName: String
@@ -1325,7 +1528,7 @@ struct FormDuplicateView: View {
     @State private var problem: String?
 
     init(sourceProjectId: String, initialName: String, description: String, fields: [BuilderField],
-         isPublic: Bool, requireAuth: Bool, accessSchedule: Any) {
+         isPublic: Bool, requireAuth: Bool, accessSchedule: Any, branding: Any = NSNull(), settings: Any = NSNull()) {
         self.sourceProjectId = sourceProjectId
         self.initialName = initialName
         self.description = description
@@ -1333,6 +1536,8 @@ struct FormDuplicateView: View {
         self.isPublic = isPublic
         self.requireAuth = requireAuth
         self.accessSchedule = accessSchedule
+        self.branding = branding
+        self.settings = settings
         _newName = State(initialValue: initialName)
     }
 
@@ -1411,6 +1616,8 @@ struct FormDuplicateView: View {
             "requireAuth": requireAuth,
             "projectId": p.id,
             "accessSchedule": accessSchedule,
+            "branding": branding,
+            "settings": settings,
         ]
         do {
             _ = try await APIClient.shared.createForm(payload)
