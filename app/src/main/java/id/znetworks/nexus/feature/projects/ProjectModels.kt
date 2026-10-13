@@ -16,7 +16,9 @@ data class UserRef(val id: String? = null, val name: String? = null, val email: 
                    val deactivatedAt: String? = null)
 
 @Serializable
-data class ProjectMemberRef(val userId: String? = null, val role: String? = null, val user: UserRef? = null) {
+data class ProjectMemberRef(val userId: String? = null, val role: String? = null, val user: UserRef? = null,
+                            /** FULL | EDIT | COMMENT | VIEW (access levels, 13 Oct); older servers send none. */
+                            val accessLevel: String? = null) {
     val uid: String get() = userId ?: user?.id.orEmpty()
 }
 
@@ -129,6 +131,8 @@ data class Lane(
     val id: String, val name: String = "", val position: Int? = null, val tasks: List<BoardTask> = emptyList(),
     /** The task status this section stands for (DEV-REDESIGN §1, TaskList.taskStatus); null = a plain section. */
     val taskStatus: String? = null,
+    /** The status option's colour key (gray, blue, …; StatusOptions.palette); null = by its status. */
+    val color: String? = null,
 )
 
 /** `GET /api/projects/{id}`. */
@@ -158,6 +162,10 @@ data class ProjectDetail(
     val financeEnabled: kotlinx.serialization.json.JsonElement? = null,
     /** The template it was built from (DEV-REDESIGN §1); null = blank. */
     val templateId: String? = null,
+    /** The viewer's level here (FULL | EDIT | COMMENT | VIEW, 13 Oct); null = an older server, nothing is gated. */
+    val viewerAccessLevel: String? = null,
+    /** May manage the project (members, settings); null = an older server. */
+    val viewerCanManage: Boolean? = null,
 )
 
 /** Custom field options arrive as `[..]`, `{options:[..]}` or `{choices:[..]}` (API.md §2.4). */

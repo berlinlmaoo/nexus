@@ -506,7 +506,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onOpenForm = { nav.navigate("form/${android.net.Uri.encode(it)}") },
                     onOpenDoc = { nav.navigate("doc/$it") },
                     onBuildForm = { form -> nav.navigate("form-builder/${entry.arguments?.getString("id")}" + (form?.let { "?form=$it" } ?: "")) },
-                    onOpenProject = { nav.navigate("project/$it") }, onOpenFolder = { nav.navigate("folder/$it") })
+                    onOpenProject = { nav.navigate("project/$it") }, onOpenFolder = { nav.navigate("folder/$it") },
+                    onOpenGideon = { nav.navigate("gideon") { launchSingleTop = true } }, onOpenProjects = { nav.popBackStack(); goTab(Tab.PROJECTS) })
             }
             composable("form-builder/{projectId}?form={form}", arguments = listOf(androidx.navigation.navArgument("form") { nullable = true; defaultValue = null })) {
                 FormBuilderScreen(onBack = { nav.popBackStack() }, onOpenForm = { nav.navigate("form/${android.net.Uri.encode(it)}") })

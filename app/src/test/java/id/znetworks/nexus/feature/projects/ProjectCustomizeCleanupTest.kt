@@ -29,10 +29,11 @@ class ProjectCustomizeCleanupTest {
     @Test fun boardAndListAlwaysOfferIt() {
         val s = src("feature/projects/ProjectDetailScreen.kt")
         assertFalse(s.contains("enableTaskBatchDuplicate"))
-        assertTrue(s.contains("TaskBulkMenuItems(") && s.contains("TaskSelectionBar(") && s.contains("DuplicateDateDialog("))
-        // List uses the same long-press card as Board.
-        val list = s.substringAfter("private fun ListTab(").substringBefore("\n}\n")
-        assertTrue(list.contains("MovableTask("))
+        val page = src("feature/projects/ProjectPage.kt")
+        assertTrue(page.contains("TaskBulkMenuItems(") && page.contains("fun ProjectSelectionBar(") && s.contains("DuplicateDateDialog("))
+        // List rows use the same long-press menu as Board cards.
+        val list = page.substringAfter("private fun ListRow(").substringBefore("\n}\n")
+        assertTrue(list.contains("TaskMenu("))
     }
 
     @Test fun customizeHasOnlyAutoAssign() {

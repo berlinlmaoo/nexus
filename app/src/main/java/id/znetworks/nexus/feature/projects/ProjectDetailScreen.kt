@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ViewKanban
@@ -106,7 +107,8 @@ enum class ProjectTab(val label: Int, val searches: Boolean = false) {
     /** An Outlet Sales Dashboard (type OUTLET_SALES, OUTLET-SALES §1): these four, then Chat; never on a task project. */
     OUTLET_OVERVIEW(R.string.os_tab_overview), OUTLET_CALENDAR(R.string.ptab_calendar), OUTLET_BOARD(R.string.ptab_board), OUTLET_FORM(R.string.os_tab_form),
     OVERVIEW(R.string.ptab_overview), BOARD(R.string.ptab_board, true), LIST(R.string.ptab_list, true),
-    SHEET(R.string.ptab_sheet, true), CALENDAR(R.string.ptab_calendar, true), TIMELINE(R.string.ptab_timeline, true),
+    /** The task grid (key "table"); [SHEET] is the project Spreadsheet (key "sheet", 13 Oct). */
+    TABLE(R.string.ptab_table, true), SHEET(R.string.ptab_spreadsheet), CALENDAR(R.string.ptab_calendar, true), TIMELINE(R.string.ptab_timeline, true),
     AUTOMATIONS(R.string.ptab_automations), PAGES(R.string.ptab_pages), FORMS(R.string.ptab_forms),
     CHAT(R.string.ptab_chat),
 }
@@ -136,7 +138,29 @@ data class ProjectDetailState(
     val plotBy: String? = null,
     /** The template's "My …" chip is on: Board / List / Calendar show only the person's own tasks. */
     val mine: Boolean = false,
+    /** Saved views (13 Oct): every view is a tab; null = not read yet. */
+    val views: List<ProjectView>? = null,
+    val canEditShared: Boolean = false,
+    /** The project's custom fields (Kategori, columns, groups); null = not read yet. */
+    val fields: List<CustomFieldDef>? = null,
+    /** Filter / sort / group changes that live on this screen only (below Can edit, or not saved yet). */
+    val screenConfigs: Map<String, ViewConfig> = emptyMap(),
+    /** The last action that can be taken back, shown for 10 s. */
+    val undo: UndoEntry? = null,
+    /** 404: the project is gone or the link is wrong. */
+    val notFound: Boolean = false,
 ) {
+    val access: ProjectAccess get() = ProjectAccess.of(detail)
+    /** A plain task project (not a Pipeline / Outlet board): the one with views. */
+    val taskProject: Boolean get() = detail?.type != "PIPELINE" && detail?.type != "OUTLET_SALES"
+    /** The view tabs: the project's own, else built-in fallbacks of its visible layouts. */
+    val shownViews: List<ProjectView> get() {
+        val hidden = ProjectTabsLogic.hidden(detail?.hiddenTabs)
+        val v = views
+        return if (v.isNullOrEmpty()) ViewsLogic.fallbacks(hidden) else ViewsLogic.visible(v, hidden)
+    }
+    fun config(v: ProjectView): ViewConfig = screenConfigs[v.id] ?: ViewsLogic.config(v)
+
     /** The project's tabs (9 Oct, PROJECT-TYPES-TABS): its hidden ones out. No Finance / P&L (PROJECT-CUSTOMIZE-CLEANUP, 11 Oct). */
     val tabs: List<ProjectTab> get() = ProjectTabsLogic.visible(ProjectTabsLogic.hidden(detail?.hiddenTabs),
         isPipeline = detail?.type == "PIPELINE", isOutlet = detail?.type == "OUTLET_SALES")
@@ -163,12 +187,178 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
             val lanes = BoardLogic.mergeSubtasks(d.value.taskLists.sortedBy { it.position ?: Int.MAX_VALUE }, all)
             _state.update { it.copy(detail = d.value, lanes = lanes, loading = false, error = null, locked = false, savedAt = d.savedAtMillis) }
             if (d.value.type.isNullOrEmpty() || d.value.type == "TASK") loadTemplateBits(d.value.templateId)
+            loadViewsAndFields()
             c.shortcuts.visited(id.znetworks.nexus.feature.home.ShortcutRef(d.value.id, d.value.name, d.value.icon, d.value.color))
         } catch (e: ApiError) {
-            // 403: an existing project this person is not in.
-            val locked = e is ApiError.Http && e.status == 403
-            _state.update { it.copy(loading = false, locked = locked, error = if (locked) null else e.describe(res)) }
+            // 403: an existing project this person is not in; 404: gone, or a wrong link.
+            val locked = e is ApiError.Http && (e.status == 403 || e.status == 401)
+            val gone = e is ApiError.Http && e.status == 404
+            _state.update { it.copy(loading = false, locked = locked, notFound = gone, error = if (locked || gone) null else e.describe(res)) }
         }
+    }
+
+    /** Saved views and custom fields; a view list that can't be read falls back to the built-in layouts. */
+    private suspend fun loadViewsAndFields() {
+        val v = runCatching { api.views(projectId) }.getOrNull()
+        val f = runCatching { api.customFields(projectId) }.getOrNull()
+        _state.update { it.copy(views = v?.views ?: it.views ?: emptyList(), canEditShared = v?.canEditShared ?: it.canEditShared, fields = f ?: it.fields ?: emptyList()) }
+    }
+
+    // region Views
+
+    private val viewPrefs get() = getApplication<Application>().getSharedPreferences("project_view", android.content.Context.MODE_PRIVATE)
+    /** The last view opened here, per project on this phone. */
+    fun savedViewId(): String? = viewPrefs.getString(projectId, null)
+    fun rememberView(id: String) = viewPrefs.edit().putString(projectId, id).apply()
+
+    fun createView(name: String?, layout: String, shared: Boolean, onDone: (String?) -> Unit) = viewModelScope.launch {
+        try {
+            val v = api.createView(projectId, name, layout, shared)
+            loadViewsAndFields(); onDone(v?.id)
+        } catch (e: ApiError) { _state.update { it.copy(actionError = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.view_save_failed)) } }
+    }
+
+    fun renameView(v: ProjectView, name: String) = viewAct { api.updateView(projectId, v.id, name = name) }
+    fun deleteView(v: ProjectView) = viewAct { api.deleteView(projectId, v.id) }
+    fun duplicateView(v: ProjectView, name: String, onDone: (String?) -> Unit) = viewModelScope.launch {
+        try {
+            val copy = api.createView(projectId, name, ViewsLogic.layoutOf(v), shared = v.shared && _state.value.canEditShared)
+            if (copy != null && v.config != null) api.updateView(projectId, copy.id, config = v.config)
+            loadViewsAndFields(); onDone(copy?.id)
+        } catch (e: ApiError) { _state.update { it.copy(actionError = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.view_save_failed)) } }
+    }
+    /** A built-in view is hidden through the project's hidden tabs (Board or List stays on: the server says so). */
+    fun hideBuiltin(key: String) = act(R.string.view_save_failed) {
+        val next = ProjectTabsLogic.hidden(_state.value.detail?.hiddenTabs) + key
+        api.updateProject(projectId, buildJsonObject { put("hiddenTabs", kotlinx.serialization.json.JsonArray(next.map { JsonPrimitive(it) })) })
+    }
+
+    /** Filter / sort / group: saved to the view when [save], else on this screen only. */
+    fun applyConfig(v: ProjectView, cfg: ViewConfig, save: Boolean) {
+        _state.update { it.copy(screenConfigs = it.screenConfigs + (v.id to cfg)) }
+        if (!save) return
+        viewModelScope.launch {
+            try {
+                api.updateView(projectId, v.id, patch = ViewsLogic.patchFor(cfg.rules, cfg.sort, cfg.groupBy, cfg.advanced))
+                loadViewsAndFields()
+                _state.update { it.copy(screenConfigs = it.screenConfigs - v.id) }
+            } catch (e: ApiError) { _state.update { it.copy(actionError = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.view_save_failed)) } }
+        }
+    }
+
+    private fun viewAct(block: suspend () -> Unit) = viewModelScope.launch {
+        try { block(); loadViewsAndFields() } catch (e: ApiError) {
+            _state.update { it.copy(actionError = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.view_save_failed)) }
+        }
+    }
+
+    // endregion
+
+    // region Bulk edits with Undo (web task-bulk.tsx + lib/task-undo.ts)
+
+    private var undoSeq = 0L
+    private fun offerUndo(label: String, run: suspend () -> Unit) = _state.update { it.copy(undo = UndoEntry(++undoSeq, label, run)) }
+    fun dismissUndo(id: Long) = _state.update { if (it.undo?.id == id) it.copy(undo = null) else it }
+
+    /** Runs the entry once: a second tap on the same Undo does nothing. */
+    fun undo(entry: UndoEntry) {
+        if (_state.value.undo?.id != entry.id) return
+        _state.update { it.copy(undo = null) }
+        viewModelScope.launch {
+            try { entry.run() } catch (_: ApiError) { _state.update { it.copy(actionError = res.getString(R.string.undo_failed)) } }
+            load()
+        }
+    }
+
+    private fun tasksById(ids: Collection<String>) = _state.value.lanes.flatMap { it.tasks }.filter { it.id in ids }.distinctBy { it.id }
+
+    private fun plural(id: Int, n: Int) = res.getQuantityString(id, n, n)
+
+    fun moveTo(ids: List<String>, laneId: String) = bulk {
+        val before = tasksById(ids)
+        val r = api.batchMove(projectId, ids, taskListId = laneId)
+        if (r.failed.isNotEmpty()) _state.update { it.copy(actionError = plural(R.plurals.bulk_update_failed, r.failed.size)) }
+        val moved = before.filter { it.id in r.moved.ifEmpty { ids } }
+        if (moved.isNotEmpty()) offerUndo(plural(R.plurals.undo_moved, moved.size)) {
+            moved.groupBy { (it.taskListId ?: "") to it.status }.forEach { (k, ts) ->
+                if (k.first.isNotEmpty()) api.batchMove(projectId, ts.map { it.id }, taskListId = k.first, status = k.second)
+            }
+        }
+    }
+
+    fun setPriority(ids: List<String>, priority: String) = bulk {
+        val before = tasksById(ids)
+        val r = api.batchMove(projectId, ids, priority = priority)
+        if (r.failed.isNotEmpty()) _state.update { it.copy(actionError = plural(R.plurals.bulk_update_failed, r.failed.size)) }
+        offerUndo(plural(R.plurals.undo_priority, before.size)) {
+            before.groupBy { it.priority?.uppercase() ?: "NONE" }.forEach { (p, ts) -> api.batchMove(projectId, ts.map { it.id }, priority = p) }
+        }
+    }
+
+    fun assign(ids: List<String>, userId: String) = bulk {
+        val targets = tasksById(ids).filter { t -> t.assignees.none { (it.user?.id ?: it.userId) == userId } }
+        var failed = 0
+        val done = targets.filter { t -> runCatching { api.addAssignee(t.id, userId) }.onFailure { failed++ }.isSuccess }
+        if (failed > 0) _state.update { it.copy(actionError = plural(R.plurals.bulk_update_failed, failed)) }
+        if (done.isNotEmpty()) offerUndo(plural(R.plurals.undo_assigned, done.size)) { done.forEach { api.removeAssignee(it.id, userId) } }
+    }
+
+    fun setDue(ids: List<String>, due: LocalDate?) = bulk {
+        val before = tasksById(ids)
+        var failed = 0
+        val done = before.filter { t ->
+            runCatching { api.updateTask(t.id, buildJsonObject { put("dueDate", due?.let { JsonPrimitive(it.toString()) } ?: kotlinx.serialization.json.JsonNull) }) }
+                .onFailure { failed++ }.isSuccess
+        }
+        if (failed > 0) _state.update { it.copy(actionError = plural(R.plurals.bulk_update_failed, failed)) }
+        if (done.isNotEmpty()) offerUndo(plural(if (due == null) R.plurals.undo_due_cleared else R.plurals.undo_due_set, done.size)) {
+            done.forEach { t -> api.updateTask(t.id, buildJsonObject { put("dueDate", t.dueDate?.let { JsonPrimitive(it.take(10)) } ?: kotlinx.serialization.json.JsonNull) }) }
+        }
+    }
+
+    /** Gone from the board at once; Undo brings them back through their audit entries (30 min, own deletes). */
+    fun delete(ids: List<String>) = bulk {
+        _state.update { st -> st.copy(lanes = st.lanes.map { l -> l.copy(tasks = l.tasks.filterNot { it.id in ids }) }) }
+        val audit = mutableListOf<String>()
+        var failed = 0
+        ids.forEach { id -> try { api.deleteTaskForUndo(id)?.let(audit::add) } catch (_: ApiError) { failed++ } }
+        if (failed > 0) _state.update { it.copy(actionError = plural(R.plurals.bulk_delete_failed, failed)) }
+        val ok = ids.size - failed
+        // An older server returns no audit entry: no Undo then.
+        if (ok > 0 && audit.isNotEmpty()) offerUndo(plural(R.plurals.undo_deleted, ok)) {
+            val r = api.undoDelete(audit)
+            if (r.failed.isNotEmpty()) _state.update { it.copy(actionError = plural(R.plurals.bulk_restore_failed, r.failed.size)) }
+        }
+    }
+
+    /** Status of one task from a table cell (its column = its status option). */
+    fun setStatusOption(taskId: String, laneId: String) = moveTo(listOf(taskId), laneId)
+
+    fun setTaskPriority(taskId: String, p: String) = setPriority(listOf(taskId), p)
+
+    fun toggleAssignee(t: BoardTask, userId: String) = act(R.string.pp_change_failed) {
+        if (t.assignees.any { (it.user?.id ?: it.userId) == userId }) api.removeAssignee(t.id, userId) else api.addAssignee(t.id, userId)
+    }
+
+    /** Keep only what is on screen: a filter, search or view change drops the hidden ones (web C-BUG-4). */
+    fun prune(visible: Set<String>) = _state.update { if (it.selected.isEmpty() || visible.containsAll(it.selected)) it else it.copy(selected = it.selected intersect visible) }
+    fun selectAll(ids: Collection<String>) = _state.update { it.copy(selected = ids.toSet()) }
+
+    private fun bulk(block: suspend () -> Unit) = viewModelScope.launch {
+        _state.update { it.copy(busy = true) }
+        try { block(); _state.update { it.copy(selected = emptySet()) } } catch (e: ApiError) {
+            _state.update { it.copy(actionError = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.pp_change_failed)) }
+        }
+        _state.update { it.copy(busy = false) }
+        load()
+    }
+
+    // endregion
+
+    /** A task in a group that is not a section (a Kategori lane): made in the default section, then given the value. */
+    fun createInGroup(fieldId: String, value: String, title: String) {
+        val lane = StatusOptions.defaultOption(_state.value.lanes)?.id ?: return
+        create(lane, title, fields = mapOf(fieldId to JsonPrimitive(value)))
     }
 
     /** Once per screen: the template (cached 5 min) and the Date fields; the Calendar's field from the saved choice or the template. */
@@ -212,13 +402,15 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
         val body = TaskBulkLogic.body(due)
         var failed = 0
         var reason: String? = null
+        val copies = mutableListOf<String>()
         ids.forEach { id ->
-            try { api.duplicateTask(id, body) } catch (e: ApiError) { failed++; if (reason == null) reason = (e as? ApiError.Http)?.serverMessage }
+            try { api.duplicateTaskId(id, body)?.let(copies::add) } catch (e: ApiError) { failed++; if (reason == null) reason = (e as? ApiError.Http)?.serverMessage }
         }
         val ok = ids.size - failed
+        if (copies.isNotEmpty()) offerUndo(plural(R.plurals.undo_duplicated, copies.size)) { copies.forEach { api.deleteTask(it) } }
         _state.update {
             it.copy(busy = false, selected = if (failed == 0) emptySet() else it.selected,
-                notice = if (ok > 0) res.getQuantityString(R.plurals.bulk_dup_done, ok, ok) else null,
+                notice = null,
                 actionError = if (failed > 0) listOfNotNull(res.getString(R.string.bulk_dup_failed, failed, ids.size), reason).joinToString("\n") else null)
         }
         onDone()
@@ -261,7 +453,10 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
 fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenSettings: () -> Unit = {}, onOpenChat: (String) -> Unit = {}, onOpenForm: (String) -> Unit = {}, onOpenDoc: (String) -> Unit = {},
                         /** The form builder: null = a new form (FORM-BUILDER). */ onBuildForm: (String?) -> Unit = {},
                         /** Another project (a won deal's Master Task / Master Calendar, PIPELINE §15). */ onOpenProject: (String) -> Unit = {},
-                        /** A won deal's execution folder (PIPELINE §15). */ onOpenFolder: (String) -> Unit = {}, vm: ProjectDetailViewModel = viewModel()) {
+                        /** A won deal's execution folder (PIPELINE §15). */ onOpenFolder: (String) -> Unit = {},
+                        /** A fresh GIDEON chat about this project. */ onOpenGideon: () -> Unit = {},
+                        /** Projects (a project that is gone). */ onOpenProjects: () -> Unit = onBack,
+                        vm: ProjectDetailViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     // Back from settings or a task: what changed there shows here.
@@ -271,247 +466,236 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     id.znetworks.nexus.core.realtime.RealtimeRoom("project:${vm.projectId}")
     id.znetworks.nexus.core.realtime.LiveRefresh(vm.projectId, liveMs = 120_000, fallbackMs = 30_000, matches = { id.znetworks.nexus.core.realtime.RealtimeEvents.touchesProject(it, vm.projectId) }) { vm.load().join() }
     var tab by rememberSaveable { mutableStateOf(ProjectTab.BOARD) }
-    // A selection belongs to the view it was made in (Board / List share the same cards, so they keep it).
-    LaunchedEffect(tab) { if (tab != ProjectTab.BOARD && tab != ProjectTab.LIST) { vm.clearSelection(); vm.setDrill(null) } }
+    // The open view (a saved view's id); the tab follows its layout.
+    var viewId by rememberSaveable { mutableStateOf(vm.savedViewId()) }
+    // A selection belongs to the task views; leaving them drops it.
+    LaunchedEffect(tab) { if (!tab.searches || tab == ProjectTab.CALENDAR || tab == ProjectTab.TIMELINE) { vm.clearSelection() }; if (tab != ProjectTab.BOARD && tab != ProjectTab.LIST) vm.setDrill(null) }
     var newDealRequest by rememberSaveable { mutableStateOf(0) }
     var creating by rememberSaveable { mutableStateOf(false) }
     var createDue by remember { mutableStateOf<LocalDate?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     // Duplicate + date…: the ids waiting for the optional due-date popup.
     var dupDateFor by remember { mutableStateOf<List<String>?>(null) }
+    var dueFor by remember { mutableStateOf<List<String>?>(null) }
+    var deleting by remember { mutableStateOf<List<String>?>(null) }
+    var membersOpen by rememberSaveable { mutableStateOf(false) }
+    var newView by rememberSaveable { mutableStateOf(false) }
+    var menuFor by remember { mutableStateOf<ProjectView?>(null) }
+    var renameFor by remember { mutableStateOf<ProjectView?>(null) }
+    var deleteViewFor by remember { mutableStateOf<ProjectView?>(null) }
+    var filterFor by remember { mutableStateOf<ProjectView?>(null) }
     LaunchedEffect(s.notice) { s.notice?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show(); vm.noticeShown() } }
     androidx.activity.compose.BackHandler(enabled = s.selected.isNotEmpty()) { vm.clearSelection() }
     val meId = (context.applicationContext as NexusApplication).container.sessionStore.current?.userId
+    val access = s.access
     val lanes = BoardLogic.filter(OverviewLogic.filter(TemplateLogic.mine(s.lanes, if (s.mine) meId else null), s.drill), s.query)
     val total = s.lanes.sumOf { it.tasks.size }
     val shown = lanes.sumOf { it.tasks.size }
+    val members = s.detail?.members.orEmpty()
+
+    // The tab row: Overview, the views, then the module tabs (web order); Pipeline / Outlet boards keep their own tabs.
+    val tabs = s.tabs
+    val views = s.shownViews
+    val items: List<PageTabItem> = if (!s.taskProject) tabs.map { PageTabItem.Module(it) } else buildList {
+        if (ProjectTab.OVERVIEW in tabs) add(PageTabItem.Overview)
+        views.forEach { add(PageTabItem.View(it)) }
+        listOf(ProjectTab.SHEET, ProjectTab.PAGES, ProjectTab.FORMS, ProjectTab.CHAT, ProjectTab.AUTOMATIONS).filter { it in tabs }.forEach { add(PageTabItem.Module(it)) }
+    }
+    val view = views.firstOrNull { it.id == viewId }
+    val selectedItem: PageTabItem? = when {
+        !s.taskProject -> PageTabItem.Module(tab)
+        tab == ProjectTab.OVERVIEW -> PageTabItem.Overview
+        tab.searches && view != null -> PageTabItem.View(view)
+        else -> items.firstOrNull { it is PageTabItem.Module && it.tab == tab }
+    }
+    fun select(item: PageTabItem) {
+        when (item) {
+            PageTabItem.Overview -> tab = ProjectTab.OVERVIEW
+            is PageTabItem.View -> { viewId = item.view.id; vm.rememberView(item.view.id); tab = layoutTab(ViewsLogic.layoutOf(item.view)) }
+            is PageTabItem.Module -> tab = item.tab
+        }
+    }
+    // The open view gone (deleted, hidden, another device): the first view. Built from a template: its tab, once.
+    var templateOpened by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(views, tabs, s.template, s.detail?.id) {
+        if (s.detail == null) return@LaunchedEffect
+        if (!s.taskProject) { tab = ProjectTabsLogic.fallback(tab, tabs); return@LaunchedEffect }
+        val t = s.template
+        if (t != null && !templateOpened && viewId == null) {
+            templateOpened = true
+            TemplateLogic.openingTab(t, tabs)?.let { want -> views.firstOrNull { layoutTab(ViewsLogic.layoutOf(it)) == want }?.let { select(PageTabItem.View(it)); return@LaunchedEffect } }
+        }
+        if (tab.searches && views.none { it.id == viewId }) views.firstOrNull()?.let { select(PageTabItem.View(it)) }
+        if (!tab.searches && tab != ProjectTab.OVERVIEW && tab !in tabs) views.firstOrNull()?.let { select(PageTabItem.View(it)) }
+    }
+
+    val cfg = view?.let { s.config(it) } ?: ViewConfig()
+    val fields = s.fields.orEmpty()
+    val today = id.znetworks.nexus.core.time.OfficeTime.today()
+    val visibleTasks = ViewsLogic.sort(ViewsLogic.filter(lanes.flatMap { it.tasks }, cfg, meId, today), cfg)
+    val groups = ViewsLogic.group(visibleTasks, s.lanes, cfg.groupBy, fields)
+        .filter { it.key !in cfg.hiddenGroups }
+        .let { gs -> if (cfg.hideEmptyGroups && tab == ProjectTab.LIST) gs.filter { it.tasks.isNotEmpty() } else gs }
+    LaunchedEffect(visibleTasks.map { it.id }) { vm.prune(visibleTasks.map { it.id }.toSet()) }
+    val canAddTask = access.canEdit && s.taskProject && s.lanes.isNotEmpty() && s.detail != null
 
     Box(Modifier.fillMaxSize().background(c.background)) {
         Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-                s.detail?.let { ProjectMark(it.icon, 34.dp) }
-                Spacer(Modifier.size(10.dp))
-                Text(s.detail?.name ?: "", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                s.detail?.let { StatusChip(it.status) }
-                if (s.detail != null) IconButton(onClick = onOpenSettings) { Icon(Icons.Filled.Settings, stringResource(R.string.ps_title)) }
+            ProjectPageHeader(s.detail, onBack, onMembers = { membersOpen = true }, onGideon = onOpenGideon, onSettings = onOpenSettings,
+                onAdd = if (canAddTask && tab != ProjectTab.FORMS) ({ createDue = null; creating = true }) else if (tab == ProjectTab.FORMS && access.canEdit) ({ onBuildForm(null) }) else null)
+            if (s.detail != null && !s.locked) {
+                ProjectTabRow(items, selectedItem, canAddView = s.taskProject && access.canEdit && s.views != null, onSelect = ::select,
+                    onViewMenu = { menuFor = it }, onAddView = { newView = true })
             }
-            val tabs = s.tabs
-            // The open tab hidden (here or on another device): Board, else List, else the first.
-            LaunchedEffect(tabs) { if (s.detail != null) tab = ProjectTabsLogic.fallback(tab, tabs) }
-            // Built from a template (DEV-REDESIGN §1): open once on its tab, unless a tab was already picked.
-            var templateOpened by rememberSaveable { mutableStateOf(false) }
-            LaunchedEffect(s.template, tabs) {
-                val t = s.template ?: return@LaunchedEffect
-                if (!templateOpened) { templateOpened = true; TemplateLogic.openingTab(t, tabs)?.let { tab = it } }
-            }
-            ScrollableTabRow(selectedTabIndex = tabs.indexOf(tab).coerceAtLeast(0), edgePadding = 12.dp, containerColor = c.background) {
-                tabs.forEach { t -> Tab(selected = tab == t, onClick = { templateOpened = true; tab = t }, text = { Text(stringResource(t.label)) }) }
-            }
+            androidx.compose.material3.HorizontalDivider(color = c.border)
             // The template's "My …" preset (Notion's "My meetings"): assignee = me, on its tab.
             val myView = s.template?.myView
-            if (myView != null && meId != null && !s.locked) {
+            if (myView != null && meId != null && !s.locked && tab.searches) {
                 val lang = templateLang()
                 Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 8.dp)) {
-                    MineChip(TemplateLogic.say(myView.name, lang), s.mine) {
-                        val on = !s.mine
-                        vm.setMine(on)
-                        if (on) TemplateLogic.myViewTab(s.template!!, tabs)?.let { templateOpened = true; tab = it }
-                    }
+                    MineChip(TemplateLogic.say(myView.name, lang), s.mine) { vm.setMine(!s.mine) }
                 }
             }
             if (tab.searches && !s.locked && s.detail != null) {
-                OutlinedTextField(
-                    s.query, vm::setQuery, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) },
-                    trailingIcon = {
-                        if (s.query.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically) {
-                            // "0/84" is an answer, not a failure: an empty board otherwise reads as one that failed.
-                            Text("$shown/$total", fontSize = 11.sp, color = c.mutedFg)
-                            IconButton(onClick = { vm.setQuery("") }) { Icon(Icons.Filled.Close, stringResource(R.string.clear_search)) }
+                Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        s.query, vm::setQuery, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) },
+                        trailingIcon = {
+                            if (s.query.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically) {
+                                // "0/84" is an answer, not a failure: an empty board otherwise reads as one that failed.
+                                Text("$shown/$total", fontSize = 11.sp, color = c.mutedFg)
+                                IconButton(onClick = { vm.setQuery("") }) { Icon(Icons.Filled.Close, stringResource(R.string.clear_search)) }
+                            }
+                        },
+                        placeholder = { Text(stringResource(R.string.board_search)) }, shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (view != null && s.taskProject) {
+                        Spacer(Modifier.width(8.dp))
+                        // The filter button: filled ink with the rule count when the view filters something.
+                        Box {
+                            id.znetworks.nexus.ui.components.HeaderIconButton(Icons.Filled.FilterList, stringResource(R.string.view_filter), { filterFor = view },
+                                primary = cfg.filtered, badge = cfg.rules.size.takeIf { it > 0 }?.toString())
                         }
-                    },
-                    placeholder = { Text(stringResource(R.string.board_search)) }, shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
-                )
+                    }
+                }
             }
             s.drill?.takeIf { tab == ProjectTab.BOARD || tab == ProjectTab.LIST }?.let { d -> DrillBar(d, s.detail, s.lanes, shown) { vm.setDrill(null) } }
             s.savedAt?.let { Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(horizontal = 16.dp)) }
             Box(Modifier.weight(1f)) {
                 when {
                     s.loading && s.detail == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                    s.locked -> EmptyState(Icons.Filled.Lock, stringResource(R.string.project_locked), stringResource(R.string.project_locked_sub),
+                    s.notFound -> EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.pp_not_found), stringResource(R.string.pp_not_found_sub),
+                        stringResource(R.string.pp_go_projects), onOpenProjects, Modifier.fillMaxSize())
+                    s.locked -> EmptyState(Icons.Filled.Lock, stringResource(R.string.pp_no_access), stringResource(R.string.pp_no_access_sub),
                         stringResource(R.string.back), onBack, Modifier.fillMaxSize())
-                    s.error != null && s.detail == null -> EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.project_load_failed), s.error!!,
+                    s.error != null && s.detail == null -> EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.pp_load_failed), s.error!!,
                         stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
                     s.detail != null -> PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }) {
                         val web = { id.znetworks.nexus.ui.shell.openWeb(context, "/projects/${vm.projectId}") }
-                        when (tab) {
-                            ProjectTab.OVERVIEW -> ProjectOverview(s.detail!!, s.lanes, onOpenTask,
-                                onDrill = { d -> vm.setDrill(d); tab = if (ProjectTab.BOARD in tabs) ProjectTab.BOARD else ProjectTab.LIST },
-                                onEditBrief = onOpenSettings,
-                                onAddTask = { if (s.lanes.isNotEmpty()) { createDue = null; creating = true } else tab = ProjectTab.BOARD })
-                            ProjectTab.BOARD -> Board(lanes, s.lanes, onOpenTask, vm, s.selected) { dupDateFor = it }
-                            ProjectTab.LIST -> ListTab(lanes, s.lanes, onOpenTask, vm, s.selected) { dupDateFor = it }
-                            ProjectTab.SHEET -> SheetTab(vm.projectId, lanes, onOpenTask)
-                            ProjectTab.CALENDAR -> CalendarTab(lanes.flatMap { it.tasks }, onOpenTask,
-                                plot = CalendarPlot(s.dateFields.orEmpty(), s.plotBy, vm::setPlotBy)) { d -> createDue = d; creating = true }
-                            ProjectTab.TIMELINE -> TimelineTab(lanes, onOpenTask)
-                            ProjectTab.AUTOMATIONS -> AutomationsTab(vm.projectId, s.lanes, s.detail!!.members)
-                            ProjectTab.PIPELINE -> id.znetworks.nexus.feature.pipeline.PipelineTab(newDealRequest, onOpenProject, onOpenFolder)
-                            ProjectTab.OUTLET_OVERVIEW, ProjectTab.OUTLET_CALENDAR, ProjectTab.OUTLET_BOARD, ProjectTab.OUTLET_FORM -> {
-                                val views = mapOf(ProjectTab.OUTLET_OVERVIEW to id.znetworks.nexus.feature.outlet.OutletView.OVERVIEW,
-                                    ProjectTab.OUTLET_CALENDAR to id.znetworks.nexus.feature.outlet.OutletView.CALENDAR,
-                                    ProjectTab.OUTLET_BOARD to id.znetworks.nexus.feature.outlet.OutletView.BOARD,
-                                    ProjectTab.OUTLET_FORM to id.znetworks.nexus.feature.outlet.OutletView.FORM)
-                                id.znetworks.nexus.feature.outlet.OutletTab(views.getValue(tab), goTo = { v -> tab = views.entries.first { it.value == v }.key })
+                        val filteredEmpty = tab.searches && visibleTasks.isEmpty() && (s.query.isNotBlank() || cfg.filtered || s.mine || s.drill != null)
+                        when {
+                            s.taskProject && tab.searches && views.isEmpty() -> EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.pp_no_views), stringResource(R.string.pp_no_views_sub),
+                                stringResource(R.string.pp_settings), onOpenSettings, Modifier.fillMaxSize())
+                            filteredEmpty && tab != ProjectTab.BOARD -> EmptyState(Icons.Filled.FilterList, stringResource(R.string.pp_no_match), stringResource(R.string.pp_no_match_sub),
+                                stringResource(R.string.filter_clear), {
+                                    vm.setQuery(""); vm.setMine(false); vm.setDrill(null)
+                                    if (view != null && cfg.rules.isNotEmpty()) vm.applyConfig(view, cfg.copy(rules = emptyList()), save = ViewsLogic.canEditView(view, access, s.canEditShared))
+                                }, Modifier.fillMaxSize())
+                            s.lanes.isEmpty() && tab.searches && tab != ProjectTab.CALENDAR -> EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.board_no_lanes),
+                                stringResource(R.string.board_no_lanes_sub), stringResource(R.string.open_on_web), web, Modifier.fillMaxSize())
+                            total == 0 && (tab == ProjectTab.LIST || tab == ProjectTab.TABLE) && canAddTask -> EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.pp_no_tasks),
+                                stringResource(R.string.pp_no_tasks_sub), stringResource(R.string.pp_add_task), { createDue = null; creating = true }, Modifier.fillMaxSize())
+                            else -> when (tab) {
+                                ProjectTab.OVERVIEW -> ProjectOverview(s.detail!!, s.lanes, onOpenTask,
+                                    onDrill = { d -> vm.setDrill(d); views.firstOrNull { it.layout == "board" || it.layout == "list" }?.let { select(PageTabItem.View(it)) } },
+                                    onEditBrief = onOpenSettings,
+                                    onAddTask = { if (s.lanes.isNotEmpty() && access.canEdit) { createDue = null; creating = true } })
+                                ProjectTab.BOARD -> BoardView(groups, cfg, s.lanes, access, vm, s.selected, onOpenTask) { dupDateFor = it }
+                                ProjectTab.LIST -> ListView(view?.id ?: "list", groups, cfg, s.lanes, access, vm, s.selected, onOpenTask) { dupDateFor = it }
+                                ProjectTab.TABLE -> TableView(groups, cfg, s.lanes, fields, members, access, vm, s.selected, onOpenTask) { t -> dueFor = listOf(t.id) }
+                                ProjectTab.SHEET -> ProjectSpreadsheetTab(vm.projectId, web)
+                                ProjectTab.CALENDAR -> CalendarTab(visibleTasks, onOpenTask,
+                                    plot = CalendarPlot(s.dateFields.orEmpty(), s.plotBy, vm::setPlotBy)) { d -> if (canAddTask) { createDue = d; creating = true } }
+                                ProjectTab.TIMELINE -> TimelineTab(groups.map { groupLabel(it, cfg.groupBy) to it.tasks }, onOpenTask)
+                                ProjectTab.AUTOMATIONS -> AutomationsTab(vm.projectId, s.lanes, s.detail!!.members)
+                                ProjectTab.PIPELINE -> id.znetworks.nexus.feature.pipeline.PipelineTab(newDealRequest, onOpenProject, onOpenFolder)
+                                ProjectTab.OUTLET_OVERVIEW, ProjectTab.OUTLET_CALENDAR, ProjectTab.OUTLET_BOARD, ProjectTab.OUTLET_FORM -> {
+                                    val outletViews = mapOf(ProjectTab.OUTLET_OVERVIEW to id.znetworks.nexus.feature.outlet.OutletView.OVERVIEW,
+                                        ProjectTab.OUTLET_CALENDAR to id.znetworks.nexus.feature.outlet.OutletView.CALENDAR,
+                                        ProjectTab.OUTLET_BOARD to id.znetworks.nexus.feature.outlet.OutletView.BOARD,
+                                        ProjectTab.OUTLET_FORM to id.znetworks.nexus.feature.outlet.OutletView.FORM)
+                                    id.znetworks.nexus.feature.outlet.OutletTab(outletViews.getValue(tab), goTo = { v -> tab = outletViews.entries.first { it.value == v }.key })
+                                }
+                                ProjectTab.PAGES -> id.znetworks.nexus.feature.docs.ProjectPagesTab(vm.projectId, onOpenDoc)
+                                ProjectTab.FORMS -> id.znetworks.nexus.feature.forms.ProjectFormsTab(vm.projectId, onOpenForm, onBuildForm)
+                                ProjectTab.CHAT -> id.znetworks.nexus.feature.chat.ProjectChatTab(vm.projectId) { onOpenChat(it); views.firstOrNull()?.let { select(PageTabItem.View(it)) } }
                             }
-                            ProjectTab.PAGES -> id.znetworks.nexus.feature.docs.ProjectPagesTab(vm.projectId, onOpenDoc)
-                            ProjectTab.FORMS -> id.znetworks.nexus.feature.forms.ProjectFormsTab(vm.projectId, onOpenForm, onBuildForm)
-                            ProjectTab.CHAT -> id.znetworks.nexus.feature.chat.ProjectChatTab(vm.projectId) { onOpenChat(it); tab = ProjectTab.BOARD }
                         }
                     }
                 }
             }
         }
-        // On the Forms tab the "+" makes a form, never a task (the iOS bug, FORM-BUILDER).
         // A Pipeline Dashboard: "+" is New deal on Pipeline, and no task "+" anywhere (its task sections are hidden).
         if (s.detail != null && tab == ProjectTab.PIPELINE) {
-            FloatingActionButton(onClick = { newDealRequest++ }, containerColor = c.violet, contentColor = Color.White,
+            FloatingActionButton(onClick = { newDealRequest++ }, containerColor = c.onyx, contentColor = c.background,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)) { Icon(Icons.Filled.Add, stringResource(R.string.pl_new_deal)) }
         }
-        if (s.detail != null && tab == ProjectTab.FORMS) {
-            FloatingActionButton(onClick = { onBuildForm(null) }, containerColor = c.violet, contentColor = Color.White,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)) { Icon(Icons.Filled.Add, stringResource(R.string.fb_new)) }
-        }
-        if (s.selected.isNotEmpty() && (tab == ProjectTab.BOARD || tab == ProjectTab.LIST)) {
-            TaskSelectionBar(s.selected.size, s.busy, onDuplicate = { vm.duplicate(TaskBulkLogic.ordered(s.lanes, s.selected), null) },
-                onDuplicateDate = { dupDateFor = TaskBulkLogic.ordered(s.lanes, s.selected) }, onClear = vm::clearSelection,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp))
-        } else if (s.detail != null && s.detail?.type != "PIPELINE" && s.detail?.type != "OUTLET_SALES" && s.lanes.isNotEmpty() && tab.searches) {
-            FloatingActionButton(onClick = { createDue = null; creating = true }, containerColor = c.violet, contentColor = Color.White,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)) { Icon(Icons.Filled.Add, stringResource(R.string.task_new)) }
+        val selectingTab = tab == ProjectTab.BOARD || tab == ProjectTab.LIST || tab == ProjectTab.TABLE
+        if (s.selected.isNotEmpty() && selectingTab) {
+            val ordered = visibleTasks.map { it.id }.filter { it in s.selected }
+            ProjectSelectionBar(s.selected.size, s.busy, s.lanes, members, access.canDelete,
+                onMove = { vm.moveTo(ordered, it) }, onPriority = { vm.setPriority(ordered, it) }, onAssign = { vm.assign(ordered, it) },
+                onDue = { dueFor = ordered }, onClearDue = { vm.setDue(ordered, null) },
+                onDuplicate = { vm.duplicate(ordered, null) }, onDuplicateDate = { dupDateFor = ordered }, onDelete = { deleting = ordered },
+                onSelectAll = { vm.selectAll(visibleTasks.map { it.id }) }, onClear = vm::clearSelection,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp))
+        } else s.undo?.let { u ->
+            UndoBar(u, onUndo = { vm.undo(u) }, onDismiss = { vm.dismissUndo(u.id) }, modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp))
         }
     }
     dupDateFor?.let { ids ->
         DuplicateDateDialog(ids.size, s.busy, onDismiss = { dupDateFor = null }) { due -> vm.duplicate(ids, due) { dupDateFor = null } }
     }
-    if (creating) CreateTaskDialog(s.lanes, busy = s.busy, initialDue = createDue, projectId = vm.projectId, onDismiss = { creating = false }) { lane, title, prio, due, fields ->
+    dueFor?.let { ids ->
+        val initial = s.lanes.flatMap { it.tasks }.firstOrNull { it.id == ids.firstOrNull() }?.dueDate?.let { dueDate(it) }
+        DuePickerDialog(if (ids.size == 1) initial else null, onDismiss = { dueFor = null }) { d -> dueFor = null; vm.setDue(ids, d) }
+    }
+    deleting?.let { ids -> DeleteTasksDialog(ids.size, onDismiss = { deleting = null }) { deleting = null; vm.delete(ids) } }
+    if (membersOpen && s.detail != null) MembersDialog(members, canAdd = access.canManage, onAdd = { membersOpen = false; onOpenSettings() }) { membersOpen = false }
+    if (newView) NewViewDialog(s.canEditShared, onDismiss = { newView = false }) { name, layout, shared ->
+        newView = false
+        vm.createView(name, layout, shared) { id -> id?.let { viewId = it; vm.rememberView(it); tab = layoutTab(layout) } }
+    }
+    menuFor?.let { v ->
+        val canEdit = ViewsLogic.canEditView(v, access, s.canEditShared)
+        ViewMenuDialog(v, canEdit, ViewsLogic.canDeleteView(v, access, s.canEditShared), onDismiss = { menuFor = null },
+            onRename = { renameFor = v }, onFilter = { filterFor = v },
+            onDuplicate = {
+                val name = context.getString(R.string.view_copy_name, ViewsLogic.name(v) ?: context.getString(layoutTab(ViewsLogic.layoutOf(v)).label))
+                vm.duplicateView(v, name) { id -> id?.let { viewId = it; vm.rememberView(it) } }
+            },
+            onHide = v.builtin?.takeIf { it in ViewsLogic.LAYOUTS }?.let { key -> { vm.hideBuiltin(key) } },
+            onDelete = { deleteViewFor = v })
+    }
+    renameFor?.let { v -> TextPromptDialog(stringResource(R.string.view_rename), ViewsLogic.name(v).orEmpty(), stringResource(R.string.filter_save), onDismiss = { renameFor = null }) { n -> renameFor = null; vm.renameView(v, n) } }
+    deleteViewFor?.let { v -> ConfirmDeleteViewDialog(viewLabel(v), onDismiss = { deleteViewFor = null }) { deleteViewFor = null; vm.deleteView(v) } }
+    filterFor?.let { v ->
+        val canSave = ViewsLogic.canEditView(v, access, s.canEditShared)
+        ViewFilterDialog(s.config(v), s.lanes, members, fields, canSave, onDismiss = { filterFor = null }) { next -> filterFor = null; vm.applyConfig(v, next, canSave) }
+    }
+    if (creating) CreateTaskDialog(StatusOptions.ordered(s.lanes), busy = s.busy, initialDue = createDue, projectId = vm.projectId, onDismiss = { creating = false }) { lane, title, prio, due, fields ->
         vm.create(lane, title, prio, due, fields) { id -> creating = false; if (id.isNotBlank()) onOpenTask(id) }
     }
     s.actionError?.let { AlertDialog(onDismissRequest = vm::dismissError, title = { Text(stringResource(R.string.board_update_failed)) },
         text = { Text(it) }, confirmButton = { TextButton(onClick = vm::dismissError) { Text("OK") } }) }
 }
 
+/** The project Spreadsheet (key "sheet"); built natively in the Spreadsheet step, the web until then. */
 @Composable
-private fun Board(lanes: List<Lane>, allLanes: List<Lane>, onOpenTask: (String) -> Unit, vm: ProjectDetailViewModel, selected: Set<String>, onDuplicateDate: (List<String>) -> Unit) {
-    val c = Nx.colors
-    val context = androidx.compose.ui.platform.LocalContext.current
-    if (allLanes.isEmpty()) {
-        // Lanes are set up on the web board (as on iOS); a task needs a lane to live in.
-        EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.board_no_lanes), stringResource(R.string.board_no_lanes_sub),
-            stringResource(R.string.open_on_web), { id.znetworks.nexus.ui.shell.openWeb(context, "/projects/${vm.projectId}") }, Modifier.fillMaxSize())
-        return
-    }
-    LazyRow(contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
-        items(lanes, key = { it.id }) { lane ->
-            Column(Modifier.width(290.dp).fillMaxHeight().clip(RoundedCornerShape(20.dp)).background(c.muted.copy(alpha = 0.5f)).padding(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(lane.name, fontWeight = FontWeight.Bold, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1)
-                    Text("${lane.tasks.size}", fontSize = 12.sp, color = c.mutedFg)
-                    // The status this section stands for (DEV-REDESIGN §1; any project's section can have one).
-                    val st = allLanes.firstOrNull { it.id == lane.id }?.taskStatus
-                    var statusOpen by remember { mutableStateOf(false) }
-                    IconButton(onClick = { statusOpen = true }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Filled.CheckCircle, stringResource(R.string.sec_status), tint = if (st != null) c.violetText else c.mutedFg.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
-                    }
-                    if (statusOpen) SectionStatusDialog(lane.name, st, onDismiss = { statusOpen = false }) { statusOpen = false; if (it != st) vm.setSectionStatus(lane.id, it) }
-                }
-                Spacer(Modifier.height(8.dp))
-                // Add task sits under the lane header, outside the card list (the web board's "Spawn card",
-                // iOS db37e62), so a long lane never has to be scrolled to its end to add one.
-                InlineAdd(onAdd = { vm.create(lane.id, it) })
-                Spacer(Modifier.height(8.dp))
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f, fill = false)) {
-                    if (lane.tasks.isEmpty()) item { Text(stringResource(R.string.board_empty_lane), fontSize = 12.sp, color = c.mutedFg.copy(alpha = 0.6f), modifier = Modifier.padding(8.dp)) }
-                    items(lane.tasks, key = { it.id }) { t -> MovableTask(t, allLanes, onOpenTask, vm, selected, onDuplicateDate) }
-                }
-            }
-        }
-    }
+internal fun ProjectSpreadsheetTab(projectId: String, openWeb: () -> Unit) {
+    WebOnlyTab(Icons.Filled.ViewKanban, stringResource(R.string.ptab_spreadsheet), openWeb)
 }
-
-/**
- * A card whose long-press opens its menu: Select multiple / Duplicate / Duplicate + date… (always on,
- * PROJECT-CUSTOMIZE-CLEANUP §1), then "Move to" another lane (drag on iOS; a menu works everywhere).
- * While selecting, a tap (or long-press) toggles the card instead.
- */
-@Composable
-private fun MovableTask(t: BoardTask, lanes: List<Lane>, onOpenTask: (String) -> Unit, vm: ProjectDetailViewModel, selected: Set<String>, onDuplicateDate: (List<String>) -> Unit) {
-    var menu by remember { mutableStateOf(false) }
-    val selecting = selected.isNotEmpty()
-    Box {
-        TaskCard(t, onClick = { if (selecting) vm.toggleSelect(t.id) else onOpenTask(t.id) }, onToggleDone = if (selecting) null else ({ vm.toggleDone(t) }),
-            onLongClick = { if (selecting) vm.toggleSelect(t.id) else menu = true }, selected = if (selecting) t.id in selected else null)
-        DropdownMenu(menu, { menu = false }) {
-            TaskBulkMenuItems(onSelect = { menu = false; vm.toggleSelect(t.id) }, onDuplicate = { menu = false; vm.duplicate(listOf(t.id), null) },
-                onDuplicateDate = { menu = false; onDuplicateDate(listOf(t.id)) })
-            if (lanes.size > 1) Text(stringResource(R.string.board_move_to), fontSize = 12.sp, color = Nx.colors.mutedFg, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
-            lanes.filter { it.id != t.taskListId }.forEach { l ->
-                DropdownMenuItem(text = { Text(l.name) }, onClick = { menu = false; vm.move(t.id, l.id) })
-            }
-        }
-    }
-}
-
-@Composable
-private fun InlineAdd(onAdd: (String) -> Unit) {
-    val c = Nx.colors
-    var composing by remember { mutableStateOf(false) }
-    var title by remember { mutableStateOf("") }
-    if (!composing) {
-        // Dashed outline, as on the web's Spawn card and iOS.
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.muted.copy(alpha = 0.5f))
-                .drawBehind {
-                    drawRoundRect(c.border, cornerRadius = androidx.compose.ui.geometry.CornerRadius(14.dp.toPx()),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx(),
-                            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 5.dp.toPx()))))
-                }
-                .clickable { composing = true }.padding(vertical = 10.dp),
-            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Filled.Add, null, Modifier.size(16.dp), tint = c.mutedFg); Spacer(Modifier.size(6.dp))
-            Text(stringResource(R.string.board_add_task), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
-        }
-    } else {
-        Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(12.dp)).padding(8.dp)) {
-            OutlinedTextField(title, { title = it }, placeholder = { Text(stringResource(R.string.board_task_title)) }, modifier = Modifier.fillMaxWidth())
-            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                TextButton(onClick = { composing = false; title = "" }) { Text(stringResource(R.string.cancel)) }
-                TextButton(onClick = { onAdd(title); composing = false; title = "" }, enabled = title.isNotBlank()) { Text(stringResource(R.string.add)) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ListTab(lanes: List<Lane>, allLanes: List<Lane>, onOpenTask: (String) -> Unit, vm: ProjectDetailViewModel, selected: Set<String>, onDuplicateDate: (List<String>) -> Unit) {
-    val c = Nx.colors
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
-        lanes.forEach { lane ->
-            item(key = "h-" + lane.id) {
-                Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(lane.name.uppercase(Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, letterSpacing = 1.sp, modifier = Modifier.weight(1f))
-                    Text("${lane.tasks.size}", fontSize = 11.sp, color = c.mutedFg)
-                }
-            }
-            if (lane.tasks.isEmpty()) item(key = "e-" + lane.id) { Text(stringResource(R.string.board_empty_lane), fontSize = 12.sp, color = c.mutedFg) }
-            items(lane.tasks, key = { it.id }) { t -> MovableTask(t, allLanes, onOpenTask, vm, selected, onDuplicateDate) }
-        }
-    }
-}
-
 
 /** "Showing: Overdue · 4 tasks ×" over the Board / List after a tap on the Overview. */
 @Composable
@@ -600,7 +784,7 @@ private fun MineChip(label: String, on: Boolean, onClick: () -> Unit) {
 
 /** Section status (DEV-REDESIGN §1): centred, None + the five statuses; tasks moved in take the one picked. */
 @Composable
-private fun SectionStatusDialog(section: String, current: String?, onDismiss: () -> Unit, onPick: (String?) -> Unit) {
+internal fun SectionStatusDialog(section: String, current: String?, onDismiss: () -> Unit, onPick: (String?) -> Unit) {
     val c = Nx.colors
     AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(R.string.sec_status_title, section)) },
         text = {
@@ -617,3 +801,6 @@ private fun SectionStatusDialog(section: String, current: String?, onDismiss: ()
         },
         confirmButton = {}, dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } })
 }
+
+/** One user action that can be taken back, however many tasks it touched. */
+class UndoEntry(val id: Long, val label: String, val run: suspend () -> Unit)

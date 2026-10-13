@@ -13,7 +13,7 @@ class ProjectSetupMembersTest {
 
     @Test fun tabsOfferedAreTheSettingsOnes() {
         val keys = ProjectSetupLogic.TABS.map { ProjectTabsLogic.key(it) }
-        assertEquals(listOf("overview", "board", "list", "sheet", "calendar", "timeline", "automations", "pages", "forms", "chat"), keys)
+        assertEquals(listOf("overview", "board", "list", "table", "sheet", "calendar", "timeline", "automations", "pages", "forms", "chat"), keys)
         assertFalse(ProjectSetupLogic.TABS.any { it == ProjectTab.PIPELINE || it.name.startsWith("OUTLET_") })
     }
 

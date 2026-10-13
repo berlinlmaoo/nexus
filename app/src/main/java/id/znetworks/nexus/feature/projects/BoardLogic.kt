@@ -66,6 +66,14 @@ object BoardLogic {
         return Window(s, if (e.isBefore(s)) s else e)
     }
 
+    /** The bar of a dated task (start→due, one date = one day); none for an undated one (web: never a bar from today). */
+    fun windowOrNull(t: BoardTask): Window? {
+        val s = dueDate(t.startDate); val e = dueDate(t.dueDate)
+        if (s == null && e == null) return null
+        val start = s ?: e!!; val end = e ?: s!!
+        return Window(start, if (end.isBefore(start)) start else end)
+    }
+
     /** Tasks with a due date in [month], by day of month (dated subtasks included). */
     /** [dateOf]: the day a task sits on (its due date, or a plotted Date field, DEV-REDESIGN §1). */
     fun byDay(tasks: List<BoardTask>, month: java.time.YearMonth, dateOf: (BoardTask) -> java.time.LocalDate? = { dueDate(it.dueDate) }): Map<Int, List<BoardTask>> =

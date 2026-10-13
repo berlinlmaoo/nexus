@@ -10,13 +10,13 @@ import kotlinx.serialization.json.booleanOrNull
 
 object ProjectTabsLogic {
     /**
-     * The server's tab keys, in tab-bar order. "table" is web-only: never drawn here, kept when saving. "sprints" is
+     * The server's tab keys, in tab-bar order ("table" = the task grid, "sheet" = the Spreadsheet, 13 Oct). "sprints" is
      * retired (SPRINTS-OVERVIEW, 11 Oct): an old project's hidden "sprints" is kept as an unknown key and ignored.
      */
     val KEYS = listOf("overview", "board", "list", "table", "sheet", "calendar", "timeline", "automations", "pages", "forms", "chat")
 
     fun key(t: ProjectTab): String? = when (t) {
-        ProjectTab.OVERVIEW -> "overview"; ProjectTab.BOARD -> "board"; ProjectTab.LIST -> "list"; ProjectTab.SHEET -> "sheet"
+        ProjectTab.OVERVIEW -> "overview"; ProjectTab.BOARD -> "board"; ProjectTab.LIST -> "list"; ProjectTab.TABLE -> "table"; ProjectTab.SHEET -> "sheet"
         ProjectTab.CALENDAR -> "calendar"; ProjectTab.TIMELINE -> "timeline"
         ProjectTab.AUTOMATIONS -> "automations"; ProjectTab.PAGES -> "pages"; ProjectTab.FORMS -> "forms"; ProjectTab.CHAT -> "chat"
         ProjectTab.PIPELINE -> null // the project's type, not a tab key

@@ -227,6 +227,69 @@ class ProjectsApi(private val api: ApiClient) {
 
     // endregion
 
+    // region Redesign (13 Oct 2026): saved views, bulk edits with undo, manual order, status options
+
+    suspend fun views(projectId: String) = api.get("/api/projects/$projectId/views", ProjectViewsResponse.serializer())
+
+    suspend fun createView(projectId: String, name: String?, layout: String, shared: Boolean): ProjectView? =
+        api.send(Request.Builder().url(api.url("/api/projects/$projectId/views")).post(buildJsonObject {
+            put("name", name?.trim()?.takeIf { it.isNotEmpty() }?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("layout", layout); put("shared", shared)
+            put("config", buildJsonObject { if (layout in setOf("board", "list", "table", "timeline")) put("groupBy", "section") })
+        }.toString().toJsonBody()).build(), ProjectViewResponse.serializer()).view
+
+    /** `patch` merges top-level config keys; [name] / [shared] when set. */
+    suspend fun updateView(projectId: String, viewId: String, name: String? = null, shared: Boolean? = null, patch: JsonObject? = null, config: JsonObject? = null): ProjectView? =
+        api.send(Request.Builder().url(api.url("/api/projects/$projectId/views/$viewId")).patch(buildJsonObject {
+            name?.let { put("name", it.trim()) }; shared?.let { put("shared", it) }
+            patch?.let { put("patch", it) }; config?.let { put("config", it) }
+        }.toString().toJsonBody()).build(), ProjectViewResponse.serializer()).view
+
+    suspend fun deleteView(projectId: String, viewId: String) = delete("/api/projects/$projectId/views/$viewId")
+
+    /** Move to a section and/or set the priority (≤ 200 tasks); some may fail while the rest move. */
+    suspend fun batchMove(projectId: String, taskIds: List<String>, taskListId: String? = null, priority: String? = null, status: String? = null): BatchResult =
+        api.json.decodeFromJsonElement(BatchResult.serializer(), post("/api/tasks/batch-move", buildJsonObject {
+            putJsonArray("taskIds") { taskIds.forEach { add(JsonPrimitive(it)) } }
+            taskListId?.let { put("taskListId", it); put("projectContextId", projectId) }
+            priority?.let { put("priority", it) }
+            status?.let { put("status", it) }
+        }))
+
+    suspend fun addAssignee(taskId: String, userId: String) = post("/api/tasks/$taskId/assignees", buildJsonObject { put("userId", userId) })
+
+    suspend fun removeAssignee(taskId: String, userId: String) =
+        api.send(Request.Builder().url(api.url("/api/tasks/$taskId/assignees")).delete(buildJsonObject { put("userId", userId) }.toString().toJsonBody()).build(), JsonObject.serializer())
+
+    /** The delete's audit entry, for Undo (null = an older server: no Undo offered). */
+    suspend fun deleteTaskForUndo(taskId: String): String? = (delete("/api/tasks/$taskId")["auditLogId"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+
+    suspend fun undoDelete(auditLogIds: List<String>): BatchResult =
+        api.json.decodeFromJsonElement(UndoDeleteResult.serializer(), post("/api/tasks/undo-delete", buildJsonObject {
+            putJsonArray("auditLogIds") { auditLogIds.forEach { add(JsonPrimitive(it)) } }
+        })).let { BatchResult(it.restored, it.failed) }
+
+    /** A column's top-level order, top first (manual order). */
+    suspend fun reorder(taskListId: String, orderedIds: List<String>, movedId: String?) = post("/api/tasks/reorder", buildJsonObject {
+        put("taskListId", taskListId); putJsonArray("orderedIds") { orderedIds.forEach { add(JsonPrimitive(it)) } }; movedId?.let { put("movedId", it) }
+    })
+
+    /** The copy's id (`{task, copiedTo}`). */
+    suspend fun duplicateTaskId(taskId: String, body: JsonObject): String? =
+        ((duplicateTask(taskId, body)["task"] as? JsonObject)?.get("id") as? JsonPrimitive)?.content
+
+    suspend fun createSection(projectId: String, name: String, taskStatus: String?, color: String?) = post("/api/projects/$projectId/sections", buildJsonObject {
+        put("name", name.trim()); taskStatus?.let { put("taskStatus", it) }; color?.let { put("color", it) }
+    })
+
+    suspend fun updateSection(projectId: String, id: String, name: String? = null, position: Int? = null, color: String? = null) =
+        patch("/api/projects/$projectId/sections", buildJsonObject { put("id", id); name?.let { put("name", it.trim()) }; position?.let { put("position", it) }; color?.let { put("color", it) } })
+
+    suspend fun deleteSection(projectId: String, id: String, moveTo: String?) =
+        api.send(Request.Builder().url(api.url("/api/projects/$projectId/sections")).delete(buildJsonObject { put("id", id); moveTo?.let { put("moveTo", it) } }.toString().toJsonBody()).build(), JsonObject.serializer())
+
+    // endregion
+
     private suspend fun post(path: String, body: JsonElement): JsonObject =
         api.send(Request.Builder().url(api.url(path)).post(body.toString().toJsonBody()).build(), JsonObject.serializer())
 
@@ -236,3 +299,13 @@ class ProjectsApi(private val api: ApiClient) {
     private suspend fun delete(path: String): JsonObject =
         api.send(Request.Builder().url(api.url(path)).delete().build(), JsonObject.serializer())
 }
+
+@kotlinx.serialization.Serializable
+data class BatchFailure(val id: String? = null, val error: String? = null)
+
+/** `batch-move` / `undo-delete`: what went through and what didn't (HTTP 200 either way). */
+@kotlinx.serialization.Serializable
+data class BatchResult(val moved: List<String> = emptyList(), val failed: List<BatchFailure> = emptyList())
+
+@kotlinx.serialization.Serializable
+data class UndoDeleteResult(val restored: List<String> = emptyList(), val failed: List<BatchFailure> = emptyList())

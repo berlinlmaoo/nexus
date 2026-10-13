@@ -41,4 +41,131 @@
     <string name="sub_vault">Rak berkas bersama satu kantor — logo, deck, aset.</string>
     <string name="sub_projects">Semua project yang kamu ikuti.</string>
     <string name="nav_pages">Halaman</string>
+    <!-- Project page (scope 2/3) -->
+    <string name="pp_ask_gideon">Tanya GIDEON</string>
+    <string name="pp_settings">Pengaturan project</string>
+    <string name="pp_add_task">Tambah task</string>
+    <string name="pp_members_title">Member project · %1$d</string>
+    <string name="pp_owner">Pemilik Project</string>
+    <string name="pp_add_people">Tambah orang ke project</string>
+    <string name="pp_not_found">Project tidak ditemukan</string>
+    <string name="pp_not_found_sub">Project-nya sudah dihapus, atau link-nya salah. Project yang dihapus bisa dipulihkan dari Control Room → Audit.</string>
+    <string name="pp_go_projects">Buka Projects</string>
+    <string name="pp_no_access">Kamu tidak bisa membuka project ini</string>
+    <string name="pp_no_access_sub">Kamu harus masuk dan menjadi anggota project ini. Minta Pemilik Project menambahkanmu.</string>
+    <string name="pp_load_failed">Project ini tidak bisa dimuat</string>
+    <string name="acc_full">Akses penuh</string>
+    <string name="acc_edit">Bisa edit</string>
+    <string name="acc_comment">Bisa komentar</string>
+    <string name="acc_view">Bisa lihat</string>
+    <string name="acc_hint">Minta Pemilik Project kalau kamu butuh akses lebih.</string>
+    <string name="ptab_table">Tabel</string>
+    <string name="ptab_spreadsheet">Spreadsheet</string>
+    <string name="view_add">Tambah view</string>
+    <string name="view_new">View baru</string>
+    <string name="view_name">Nama view</string>
+    <string name="view_create">Buat view</string>
+    <string name="view_layout">Tata letak</string>
+    <string name="view_who">Siapa yang bisa lihat</string>
+    <string name="view_only_me">Cuma saya</string>
+    <string name="view_everyone">Semua orang di project ini</string>
+    <string name="view_viewers_hint">Viewer dan tamu bisa bikin view untuk diri sendiri.</string>
+    <string name="view_only_you">Cuma kamu yang lihat view ini</string>
+    <string name="view_rename">Ganti nama</string>
+    <string name="view_duplicate">Buat duplikat tampilan</string>
+    <string name="view_hide">Sembunyikan view ini</string>
+    <string name="view_delete">Hapus tampilan</string>
+    <string name="view_copy_name">%1$s (salinan)</string>
+    <string name="view_delete_confirm">Hapus view “%1$s”? Task-nya tetap ada; yang hilang cuma cara lihatnya. Bisa dipulihkan dari Control Room → Audit.</string>
+    <string name="view_save_failed">View gagal disimpan</string>
+    <string name="view_category">Per kategori</string>
+    <string name="view_untitled">Tampilan tanpa nama</string>
+    <string name="view_filter">Filter dan urutan…</string>
+    <string name="filter_where">Tampilkan task yang</string>
+    <string name="filter_sort">Urutkan</string>
+    <string name="filter_group">Kelompokkan</string>
+    <string name="filter_manual">Urutan manual</string>
+    <string name="filter_desc">Menurun</string>
+    <string name="filter_only_screen">Hanya di layar ini. Menyimpan filter ke tampilan butuh akses Bisa edit.</string>
+    <string name="filter_advanced">Tampilan ini punya filter lanjutan. Ubah di web; urutan dan pengelompokan bisa diubah di sini.</string>
+    <string name="filter_apply">Terapkan</string>
+    <string name="filter_save">Simpan</string>
+    <string name="filter_clear">Hapus filter</string>
+    <string name="filter_status">Status</string>
+    <string name="filter_priority">Prioritas</string>
+    <string name="filter_assignee">Assignee</string>
+    <string name="filter_due">Tenggat</string>
+    <string name="filter_me">Saya</string>
+    <string name="filter_any">Semua</string>
+    <string name="filter_overdue">Lewat tenggat</string>
+    <string name="filter_today">Hari ini</string>
+    <string name="filter_this_week">Minggu ini</string>
+    <string name="filter_no_date">Tanpa tanggal</string>
+    <string name="grp_todo">Belum dikerjakan</string>
+    <string name="grp_progress">Sedang dikerjakan</string>
+    <string name="grp_complete">Selesai</string>
+    <string name="grp_no_value">Tanpa nilai</string>
+    <string name="grp_no_assignee">Tanpa assignee</string>
+    <string name="pp_no_tasks">Belum ada task</string>
+    <string name="pp_no_tasks_sub">Task yang kamu tambahkan ke project ini muncul di sini. Mulai dari yang pertama.</string>
+    <string name="pp_no_match">Tidak ada task yang cocok</string>
+    <string name="pp_no_match_sub">Tidak ada task di project ini yang cocok dengan pencarian atau filter. Hapus filternya untuk melihat semua task lagi.</string>
+    <string name="pp_no_views">Tidak ada view yang tampil</string>
+    <string name="pp_no_views_sub">Semua view project ini disembunyikan. Nyalakan lagi Board atau Daftar di Pengaturan project → Tab, atau tambah view dengan +.</string>
+    <string name="bulk_edit">Ubah</string>
+    <string name="bulk_status">Status</string>
+    <string name="bulk_priority">Prioritas</string>
+    <string name="bulk_assign">Tugaskan ke</string>
+    <string name="bulk_due">Tenggat…</string>
+    <string name="bulk_due_clear">Hapus tenggat</string>
+    <string name="bulk_delete">Hapus</string>
+    <string name="bulk_select_all">Pilih semua</string>
+    <string name="bulk_delete_sub">Bisa dibatalkan langsung setelahnya. Setelah itu, Control Room → Audit bisa memulihkannya selama 90 hari.</string>
+    <string name="undo_failed">Tidak bisa dibatalkan</string>
+    <string name="pp_show_more">Tampilkan %1$d lagi</string>
+    <string name="pp_new_task">Task baru</string>
+    <string name="pp_col_name">Nama</string>
+    <string name="tl_no_date">Tanpa tanggal</string>
+    <string name="tl_empty">Timeline masih kosong</string>
+    <string name="tl_empty_sub">Task tampil di sini sebagai bar dari tanggal mulai sampai tenggatnya.</string>
+    <string name="pp_move_failed">Task gagal dipindah</string>
+    <string name="pp_change_failed">Perubahan gagal disimpan</string>
+    <string name="pp_add_failed_back">Task gagal ditambahkan. Judulnya dikembalikan ke kotak.</string>
+    <string name="pp_filters">Filter</string>
+    <plurals name="undo_moved">
+        <item quantity="other">%d task dipindah</item>
+    </plurals>
+    <plurals name="undo_status">
+        <item quantity="other">Status diubah di %d task</item>
+    </plurals>
+    <plurals name="undo_priority">
+        <item quantity="other">Prioritas diubah di %d task</item>
+    </plurals>
+    <plurals name="undo_assigned">
+        <item quantity="other">%d task di-assign</item>
+    </plurals>
+    <plurals name="undo_due_set">
+        <item quantity="other">Tenggat diatur di %d task</item>
+    </plurals>
+    <plurals name="undo_due_cleared">
+        <item quantity="other">Tenggat dihapus di %d task</item>
+    </plurals>
+    <plurals name="undo_deleted">
+        <item quantity="other">%d task dihapus</item>
+    </plurals>
+    <plurals name="undo_duplicated">
+        <item quantity="other">%d task diduplikasi</item>
+    </plurals>
+    <plurals name="bulk_update_failed">
+        <item quantity="other">%d task tidak bisa diubah</item>
+    </plurals>
+    <plurals name="bulk_delete_failed">
+        <item quantity="other">%d task tidak bisa dihapus</item>
+    </plurals>
+    <plurals name="bulk_restore_failed">
+        <item quantity="other">%d task tidak bisa dikembalikan. Masih ada di Control Room → Audit.</item>
+    </plurals>
+    <plurals name="bulk_delete_title">
+        <item quantity="other">Hapus %d task?</item>
+    </plurals>
 </resources>

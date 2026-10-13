@@ -43,4 +43,143 @@
     <string name="sub_vault">The whole office\'s shared shelf — logos, decks, assets.</string>
     <string name="sub_projects">Every project you\'re part of.</string>
     <string name="nav_pages">Pages</string>
+    <!-- Project page (scope 2/3) -->
+    <string name="pp_ask_gideon">Ask GIDEON</string>
+    <string name="pp_settings">Project settings</string>
+    <string name="pp_add_task">Add task</string>
+    <string name="pp_members_title">Project members · %1$d</string>
+    <string name="pp_owner">Project Owner</string>
+    <string name="pp_add_people">Add people to project</string>
+    <string name="pp_not_found">Project not found</string>
+    <string name="pp_not_found_sub">It was deleted, or the link is wrong. A deleted project can be restored from Control Room → Audit.</string>
+    <string name="pp_go_projects">Go to Projects</string>
+    <string name="pp_no_access">You can\'t open this project</string>
+    <string name="pp_no_access_sub">You need to be signed in and be a member of this project. Ask its Project Owner to add you.</string>
+    <string name="pp_load_failed">Couldn\'t load this project</string>
+    <string name="acc_full">Full access</string>
+    <string name="acc_edit">Can edit</string>
+    <string name="acc_comment">Can comment</string>
+    <string name="acc_view">Can view</string>
+    <string name="acc_hint">Ask the Project Owner if you need more access.</string>
+    <string name="ptab_table">Table</string>
+    <string name="ptab_spreadsheet">Spreadsheet</string>
+    <string name="view_add">Add view</string>
+    <string name="view_new">New view</string>
+    <string name="view_name">View name</string>
+    <string name="view_create">Create view</string>
+    <string name="view_layout">Layout</string>
+    <string name="view_who">Who sees it</string>
+    <string name="view_only_me">Only me</string>
+    <string name="view_everyone">Everyone in this project</string>
+    <string name="view_viewers_hint">Viewers and guests can make views for themselves.</string>
+    <string name="view_only_you">Only you see this view</string>
+    <string name="view_rename">Rename</string>
+    <string name="view_duplicate">Duplicate view</string>
+    <string name="view_hide">Hide this view</string>
+    <string name="view_delete">Delete view</string>
+    <string name="view_copy_name">%1$s (copy)</string>
+    <string name="view_delete_confirm">Delete the view “%1$s”? The tasks stay; only this way of looking at them goes. It can be restored from Control Room → Audit.</string>
+    <string name="view_save_failed">Couldn\'t save the view</string>
+    <string name="view_category">By category</string>
+    <string name="view_untitled">Untitled view</string>
+    <string name="view_filter">Filter and sort…</string>
+    <string name="filter_where">Show tasks where</string>
+    <string name="filter_sort">Sort</string>
+    <string name="filter_group">Group by</string>
+    <string name="filter_manual">Manual order</string>
+    <string name="filter_desc">Descending</string>
+    <string name="filter_only_screen">Only on this screen. Saving a filter to the view needs Can edit access.</string>
+    <string name="filter_advanced">This view has an advanced filter. Edit it on the web; sort and grouping can be changed here.</string>
+    <string name="filter_apply">Apply</string>
+    <string name="filter_save">Save</string>
+    <string name="filter_clear">Clear filters</string>
+    <string name="filter_status">Status</string>
+    <string name="filter_priority">Priority</string>
+    <string name="filter_assignee">Assignee</string>
+    <string name="filter_due">Due date</string>
+    <string name="filter_me">Me</string>
+    <string name="filter_any">Any</string>
+    <string name="filter_overdue">Overdue</string>
+    <string name="filter_today">Today</string>
+    <string name="filter_this_week">This week</string>
+    <string name="filter_no_date">No date</string>
+    <string name="grp_todo">To-do</string>
+    <string name="grp_progress">In progress</string>
+    <string name="grp_complete">Complete</string>
+    <string name="grp_no_value">No value</string>
+    <string name="grp_no_assignee">No assignee</string>
+    <string name="pp_no_tasks">No tasks yet</string>
+    <string name="pp_no_tasks_sub">Tasks you add to this project show up here. Start with the first one.</string>
+    <string name="pp_no_match">No tasks match</string>
+    <string name="pp_no_match_sub">Nothing in this project fits the search or filters. Clear them to see every task again.</string>
+    <string name="pp_no_views">No views to show</string>
+    <string name="pp_no_views_sub">Every view of this project is hidden. Turn Board or List back on in Project settings → Tabs, or add a view with +.</string>
+    <string name="bulk_edit">Edit</string>
+    <string name="bulk_status">Status</string>
+    <string name="bulk_priority">Priority</string>
+    <string name="bulk_assign">Assign to</string>
+    <string name="bulk_due">Due date…</string>
+    <string name="bulk_due_clear">Remove due date</string>
+    <string name="bulk_delete">Delete</string>
+    <string name="bulk_select_all">Select all</string>
+    <string name="bulk_delete_sub">You can undo this right after. Later, Control Room → Audit can restore it for 90 days.</string>
+    <string name="undo_failed">Couldn\'t undo</string>
+    <string name="pp_show_more">Show %1$d more</string>
+    <string name="pp_new_task">New task</string>
+    <string name="pp_col_name">Name</string>
+    <string name="tl_no_date">No date</string>
+    <string name="tl_empty">Nothing on the timeline</string>
+    <string name="tl_empty_sub">Tasks show here as bars from their start date to their due date.</string>
+    <string name="pp_move_failed">Couldn\'t move the task</string>
+    <string name="pp_change_failed">Couldn\'t save the change</string>
+    <string name="pp_add_failed_back">Couldn\'t add the task. It\'s back in the box.</string>
+    <string name="pp_filters">Filters</string>
+    <plurals name="undo_moved">
+        <item quantity="one">Task moved</item>
+        <item quantity="other">Moved %d tasks</item>
+    </plurals>
+    <plurals name="undo_status">
+        <item quantity="one">Status changed</item>
+        <item quantity="other">Status changed on %d tasks</item>
+    </plurals>
+    <plurals name="undo_priority">
+        <item quantity="one">Priority changed</item>
+        <item quantity="other">Priority changed on %d tasks</item>
+    </plurals>
+    <plurals name="undo_assigned">
+        <item quantity="one">Assigned 1 task</item>
+        <item quantity="other">Assigned %d tasks</item>
+    </plurals>
+    <plurals name="undo_due_set">
+        <item quantity="one">Due date set</item>
+        <item quantity="other">Due date set on %d tasks</item>
+    </plurals>
+    <plurals name="undo_due_cleared">
+        <item quantity="one">Due date cleared</item>
+        <item quantity="other">Due date cleared on %d tasks</item>
+    </plurals>
+    <plurals name="undo_deleted">
+        <item quantity="one">Task deleted</item>
+        <item quantity="other">%d tasks deleted</item>
+    </plurals>
+    <plurals name="undo_duplicated">
+        <item quantity="one">Task duplicated</item>
+        <item quantity="other">%d tasks duplicated</item>
+    </plurals>
+    <plurals name="bulk_update_failed">
+        <item quantity="one">Couldn\'t update 1 task</item>
+        <item quantity="other">Couldn\'t update %d tasks</item>
+    </plurals>
+    <plurals name="bulk_delete_failed">
+        <item quantity="one">Couldn\'t delete 1 task</item>
+        <item quantity="other">Couldn\'t delete %d tasks</item>
+    </plurals>
+    <plurals name="bulk_restore_failed">
+        <item quantity="one">Couldn\'t bring back 1 task. It\'s still in Control Room → Audit.</item>
+        <item quantity="other">Couldn\'t bring back %d tasks. They\'re still in Control Room → Audit.</item>
+    </plurals>
+    <plurals name="bulk_delete_title">
+        <item quantity="one">Delete 1 task?</item>
+        <item quantity="other">Delete %d tasks?</item>
+    </plurals>
 </resources>

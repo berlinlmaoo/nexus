@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -279,87 +280,108 @@ fun CalendarTab(tasks: List<BoardTask>, onOpen: (String) -> Unit, plot: Calendar
 
 // region Timeline
 
+/** Bar colour by priority (web timeline). */
 private fun ganttColor(p: String?) = when (p.orEmpty().uppercase()) {
-    "URGENT", "HIGH" -> Color(0xFFFB7185)   // HIGH red like URGENT (owner, 10 Oct)
-    "MEDIUM" -> Color(0xFF38BDF8)
-    "LOW" -> Color(0xFFA78BFA)
-    else -> Color(0xFF2DD4BF)
+    "URGENT" -> Color(0xFFF43F5E)
+    "HIGH" -> Color(0xFFEF4444)
+    "MEDIUM" -> Color(0xFF0EA5E9)
+    "LOW" -> Color(0xFF8B5CF6)
+    else -> Color(0xFF14B8A6)
 }
 
-/** Gantt (web taskWindow): a fixed title column, a scrolling day axis, today's line. */
+/**
+ * Gantt (web ProjectTimelineView): a fixed name column, 40 dp per day, today's line, opened with today one day
+ * from the left edge. Undated tasks keep their row with "No date" on the track (never a bar from today).
+ */
 @Composable
-fun TimelineTab(lanes: List<Lane>, onOpen: (String) -> Unit) {
+fun TimelineTab(groups: List<Pair<String, List<BoardTask>>>, onOpen: (String) -> Unit) {
     val c = Nx.colors
     val today = OfficeTime.today()
-    val groups = lanes.map { l -> l to l.tasks.map { it to BoardLogic.window(it, today) }.sortedBy { it.second.start } }.filter { it.second.isNotEmpty() }
-    if (groups.isEmpty()) { TabEmpty(Icons.Filled.TrackChanges, stringResource(R.string.pt_timeline_empty)); return }
-    val wins = groups.flatMap { g -> g.second.map { it.second } }
-    val minD = wins.minOf { it.start }.minusDays(2)
-    val maxD = wins.maxOf { it.end }.plusDays(3)
+    val rowsByGroup = groups.map { (name, ts) ->
+        name to ts.map { it to BoardLogic.windowOrNull(it) }.sortedWith(compareBy(nullsLast()) { it.second?.start })
+    }.filter { it.second.isNotEmpty() }
+    if (rowsByGroup.isEmpty()) {
+        EmptyState(Icons.Filled.TrackChanges, stringResource(R.string.tl_empty), stringResource(R.string.tl_empty_sub), stringResource(R.string.pt_add_task), {}, Modifier.fillMaxSize())
+        return
+    }
+    val wins = rowsByGroup.flatMap { g -> g.second.mapNotNull { it.second } }
+    val minD = (wins.minOfOrNull { it.start }?.let { minOf(it, today) } ?: today).minusDays(2)
+    val maxD = (wins.maxOfOrNull { it.end }?.let { maxOf(it, today) } ?: today.plusDays(14)).plusDays(3)
     val dayCount = ChronoUnit.DAYS.between(minD, maxD).toInt() + 1
-    val dayW = 36.dp; val leftW = 130.dp; val rowH = 44.dp; val groupH = 32.dp
+    val dayW = 40.dp; val rowH = 44.dp; val groupH = 32.dp
+    val leftW = (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp * 0.4f).dp.coerceIn(120.dp, 200.dp)
     fun x(d: LocalDate) = dayW * ChronoUnit.DAYS.between(minD, d).toInt()
     fun w(win: BoardLogic.Window) = dayW * (ChronoUnit.DAYS.between(win.start, win.end).toInt() + 1)
     val days = (0 until dayCount).map { minD.plusDays(it.toLong()) }
+    val h = rememberScrollState()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    // Opens on today, one day from the left edge.
+    LaunchedEffect(minD) { with(density) { h.scrollTo((x(today) - dayW).coerceAtLeast(0.dp).roundToPx()) } }
+    val bodyH = 74.dp + groupH * rowsByGroup.size + rowH * rowsByGroup.sumOf { it.second.size }
     Row(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Column(Modifier.width(leftW).background(c.card)) {
-            Box(Modifier.height(50.dp).fillMaxWidth().padding(start = 12.dp, bottom = 8.dp), contentAlignment = Alignment.BottomStart) {
-                Text(stringResource(R.string.pt_col_task).uppercase(Locale.getDefault()), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
+            Box(Modifier.height(74.dp).fillMaxWidth().padding(start = 12.dp, bottom = 8.dp), contentAlignment = Alignment.BottomStart) {
+                Text(stringResource(R.string.pp_col_name), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.mutedFg)
             }
-            groups.forEach { (lane, rows) ->
+            rowsByGroup.forEach { (name, rows) ->
                 Box(Modifier.height(groupH).fillMaxWidth().background(c.muted.copy(alpha = 0.4f)).padding(start = 12.dp), contentAlignment = Alignment.CenterStart) {
-                    Text(lane.name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 rows.forEach { (t, _) ->
                     // The name opens the task too: the bar may be weeks off to the right.
-                    Box(Modifier.height(rowH).fillMaxWidth().clickable { onOpen(t.id) }.padding(start = if (t.isSubtask) 20.dp else 12.dp), contentAlignment = Alignment.CenterStart) {
-                        Text((if (t.isSubtask) "↳ " else "") + t.title, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    Box(Modifier.height(rowH).fillMaxWidth().clickable { onOpen(t.id) }.padding(start = if (t.isSubtask) 20.dp else 12.dp, end = 6.dp), contentAlignment = Alignment.CenterStart) {
+                        Text((if (t.isSubtask) "↳ " else "") + t.title, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             color = if (t.isDone) c.mutedFg else c.foreground, textDecoration = if (t.isDone) TextDecoration.LineThrough else null)
                     }
                 }
             }
         }
-        Box(Modifier.width(1.dp).height(50.dp + (groupH + 0.dp) * groups.size + rowH * groups.sumOf { it.second.size }).background(c.border))
-        Box(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
-            Column(Modifier.width(dayW * dayCount)) {
-                // Month labels, then day numbers (weekends shaded, today violet).
-                Row(Modifier.height(22.dp)) {
-                    days.groupBy { YearMonth.from(it) }.forEach { (m, ds) ->
-                        Box(Modifier.width(dayW * ds.size).padding(start = 6.dp), contentAlignment = Alignment.CenterStart) {
-                            Text(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()).format(m).replaceFirstChar(Char::titlecase),
-                                fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.foreground.copy(alpha = 0.7f), maxLines = 1)
-                        }
-                    }
-                }
-                Row(Modifier.height(28.dp)) {
-                    days.forEach { d ->
-                        val isToday = d == today
-                        val weekend = d.dayOfWeek == DayOfWeek.SATURDAY || d.dayOfWeek == DayOfWeek.SUNDAY
-                        Box(Modifier.width(dayW).height(28.dp).background(if (isToday) c.violet else if (weekend) c.muted.copy(alpha = 0.4f) else Color.Transparent),
-                            contentAlignment = Alignment.Center) {
-                            Text("${d.dayOfMonth}", fontSize = 10.sp, fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal, color = if (isToday) Color.White else c.mutedFg)
-                        }
-                    }
-                }
-                groups.forEach { (_, rows) ->
-                    val gs = rows.minOf { it.second.start }; val ge = rows.maxOf { it.second.end }
-                    Box(Modifier.height(groupH).fillMaxWidth().background(c.muted.copy(alpha = 0.4f)), contentAlignment = Alignment.CenterStart) {
-                        Box(Modifier.offset(x = x(gs) + 3.dp).width(maxOf(w(BoardLogic.Window(gs, ge)) - 6.dp, 4.dp)).height(6.dp)
-                            .background(c.mutedFg.copy(alpha = 0.3f), CircleShape))
-                    }
-                    rows.forEach { (t, win) ->
-                        Box(Modifier.height(rowH).fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
-                            if (!today.isBefore(minD) && !today.isAfter(maxD)) {
-                                Box(Modifier.offset(x = x(today) + dayW / 2).width(1.dp).height(rowH).background(c.violet.copy(alpha = 0.55f)))
+        Box(Modifier.width(1.dp).height(bodyH).background(c.border))
+        Box(Modifier.weight(1f).horizontalScroll(h)) {
+            Box(Modifier.width(dayW * dayCount).height(bodyH)) {
+                Column(Modifier.fillMaxSize()) {
+                    // Month row, then weekday + date (weekends tinted, today in a filled circle).
+                    Row(Modifier.height(32.dp)) {
+                        days.groupBy { YearMonth.from(it) }.forEach { (m, ds) ->
+                            Box(Modifier.width(dayW * ds.size).padding(start = 6.dp), contentAlignment = Alignment.CenterStart) {
+                                Text(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()).format(m).replaceFirstChar(Char::titlecase),
+                                    fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground.copy(alpha = 0.75f), maxLines = 1)
                             }
-                            Box(
-                                Modifier.offset(x = x(win.start) + 3.dp).width(maxOf(w(win) - 6.dp, 16.dp)).height(22.dp).clip(RoundedCornerShape(6.dp))
-                                    .background(ganttColor(t.priority)).clickable { onOpen(t.id) }.padding(start = 5.dp),
-                                contentAlignment = Alignment.CenterStart,
-                            ) { if (t.isDone) Text("✓", fontSize = 10.sp, fontWeight = FontWeight.Black, color = Color.White) }
+                        }
+                    }
+                    Row(Modifier.height(42.dp)) {
+                        days.forEach { d ->
+                            val isToday = d == today
+                            val weekend = d.dayOfWeek == DayOfWeek.SATURDAY || d.dayOfWeek == DayOfWeek.SUNDAY
+                            Column(Modifier.width(dayW).fillMaxHeight().background(if (weekend) c.muted.copy(alpha = 0.5f) else Color.Transparent),
+                                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                Text(d.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()), fontSize = 10.sp, color = c.mutedFg)
+                                Box(Modifier.size(20.dp).background(if (isToday) c.onyx else Color.Transparent, CircleShape), contentAlignment = Alignment.Center) {
+                                    Text("${d.dayOfMonth}", fontSize = 11.sp, fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal, color = if (isToday) c.background else c.mutedFg)
+                                }
+                            }
+                        }
+                    }
+                    rowsByGroup.forEach { (_, rows) ->
+                        Box(Modifier.height(groupH).fillMaxWidth().background(c.muted.copy(alpha = 0.4f)))
+                        rows.forEach { (t, win) ->
+                            Box(Modifier.height(rowH).fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
+                                if (win == null) {
+                                    Text(stringResource(R.string.tl_no_date), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.offset(x = x(today) + 8.dp))
+                                } else Row(
+                                    Modifier.offset(x = x(win.start) + 2.dp).width(maxOf(w(win) - 4.dp, dayW * 0.8f)).height(32.dp).clip(RoundedCornerShape(8.dp))
+                                        .background(ganttColor(t.priority)).clickable { onOpen(t.id) }.padding(horizontal = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    if (t.isDone) Text("✓ ", fontSize = 11.sp, fontWeight = FontWeight.Black, color = Color.White)
+                                    Text(t.title, fontSize = 12.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
                         }
                     }
                 }
+                // Today's line down the body, at the centre of its column.
+                Box(Modifier.offset(x = x(today) + dayW / 2, y = 74.dp).width(1.dp).height(bodyH - 74.dp).background(c.onyx.copy(alpha = 0.55f)))
             }
         }
     }
