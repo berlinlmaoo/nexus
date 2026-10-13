@@ -14,7 +14,7 @@ class InboxRulesTest {
         assertEquals(InboxRules.Mark.CONVERSATION, InboxRules.mark("complaint_reply"))
         assertEquals(InboxRules.Mark.DUE, InboxRules.mark("task_due_soon"))
         assertEquals(InboxRules.Mark.ATTENDANCE, InboxRules.mark("dayoff_bonus_granted"))
-        assertEquals(InboxRules.Mark.OUTSIDE, InboxRules.mark("attendance_outside_approver"))
+        assertEquals(InboxRules.Mark.ATTENDANCE, InboxRules.mark("attendance_outside_approver")) // web / iOS: teal calendar check (run 5)
         assertEquals(InboxRules.Mark.TICKET, InboxRules.mark("complaint_status"))
         assertEquals(InboxRules.Mark.DOCUMENT, InboxRules.mark("submission_status"))
         assertEquals(InboxRules.Mark.MEMBERSHIP, InboxRules.mark("group_removed"))

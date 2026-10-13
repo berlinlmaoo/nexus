@@ -81,9 +81,9 @@ fun RemoteImage(url: String?, modifier: Modifier, contentScale: ContentScale = C
 
 /** A person: their photo, or their initial on a colour derived from the name (stable across launches). */
 @Composable
-fun Avatar(name: String?, url: String?, size: Dp = 28.dp, ring: Boolean = false) {
+fun Avatar(name: String?, url: String?, size: Dp = 28.dp, ring: Boolean = false, initials: String? = null) {
     val c = Nx.colors
-    val initial = name?.trim()?.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+    val initial = initials ?: name?.trim()?.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
     val palette = listOf(Color(0xFF7B68EE), Color(0xFF0091FF), Color(0xFF10B981), Color(0xFFF59E0B), Color(0xFFEF4444), Color(0xFFEC4899))
     val tint = palette[((name ?: "").fold(0) { a, ch -> (a * 31 + ch.code) and 0xFFFF }) % palette.size]
     val mod = Modifier.size(size).clip(CircleShape).then(if (ring) Modifier.border(1.5.dp, c.card, CircleShape) else Modifier)

@@ -154,7 +154,7 @@ fun ProjectPageHeader(
             if (detail != null) {
                 MemberFaces(detail.members, onMembers)
                 Spacer(Modifier.width(6.dp))
-                HeaderIconButton(Icons.Outlined.AutoAwesome, stringResource(R.string.pp_ask_gideon), onGideon, size = 36.dp)
+                HeaderIconButton(Icons.Outlined.AutoAwesome, stringResource(R.string.pp_ask_gideon), onGideon, size = 36.dp, painter = id.znetworks.nexus.ui.components.gideonPainter())
                 Spacer(Modifier.width(6.dp))
                 HeaderIconButton(Icons.Outlined.Settings, stringResource(R.string.pp_settings), onSettings, size = 36.dp)
                 // Without tabs (no access, still loading) "Add task" has no row to sit in: it stays here.

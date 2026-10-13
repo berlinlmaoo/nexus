@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.gideon
 
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.height
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
@@ -118,7 +120,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
         val title = if (showChats) stringResource(R.string.gx_chats)
             else GideonChatTitle.text(s.chatTitle, indonesian)?.takeIf { it.isNotBlank() } ?: "GIDEON"
         val back: () -> Unit = if (showChats) ({ showChats = false }) else onBack
-        PageHeader(title, onBack = back, leading = { Icon(Icons.Filled.AutoAwesome, null, tint = c.violetText) }) {
+        PageHeader(title, onBack = back, leading = { id.znetworks.nexus.ui.components.GideonMark(22.dp, c.foreground) }) {
             if (!showChats) Box {
                 TextButton(onClick = { tierMenu = true }) { Text(s.tier.label, color = c.foreground) }
                 DropdownMenu(tierMenu, { tierMenu = false }) {
@@ -186,17 +188,29 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     note?.let { AlertDialog(onDismissRequest = { note = null }, text = { Text(it) }, confirmButton = { TextButton(onClick = { note = null }) { Text("OK") } }) }
 }
 
-/** A new chat: the calm empty state, its action the first suggestion, two more under it. */
+/**
+ * A new chat like iOS GideonEmptyPrompt / the web: the mark in a rounded tile, "What can GIDEON do for you?", what it
+ * reads, and three suggestions as equal outlined rows asked with one tap.
+ */
 @Composable
 private fun FreshChat(onAsk: (String) -> Unit) {
     val c = Nx.colors
     val chips = listOf(stringResource(R.string.gx_chip_overdue), stringResource(R.string.gx_chip_week), stringResource(R.string.gx_chip_decide))
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        EmptyState(Icons.Filled.AutoAwesome, stringResource(R.string.gx_empty_title), stringResource(R.string.gx_empty_sub), chips[0], { onAsk(chips[0]) })
-        chips.drop(1).forEach { q ->
-            Text(q, fontSize = 14.sp, color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 32.dp, vertical = 4.dp).clip(RoundedCornerShape(10.dp)).border(1.dp, c.border, RoundedCornerShape(10.dp))
-                    .clickable { onAsk(q) }.defaultMinSize(minHeight = 44.dp).padding(horizontal = 14.dp, vertical = 11.dp))
+    Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 24.dp, vertical = 32.dp),
+        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(c.background).border(1.dp, c.border, RoundedCornerShape(16.dp)),
+            contentAlignment = Alignment.Center) { id.znetworks.nexus.ui.components.GideonMark(24.dp, c.foreground.copy(alpha = 0.8f)) }
+        Spacer(Modifier.height(12.dp))
+        Text(stringResource(R.string.gx_empty_title, "GIDEON"), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = c.foreground,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Spacer(Modifier.height(6.dp))
+        Text(stringResource(R.string.gx_empty_sub), fontSize = 13.sp, color = c.mutedFg, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Spacer(Modifier.height(20.dp))
+        chips.forEach { q ->
+            Text(q, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.foreground,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(12.dp)).background(c.background)
+                    .border(1.dp, c.border, RoundedCornerShape(12.dp)).clickable { onAsk(q) }.defaultMinSize(minHeight = 44.dp)
+                    .padding(horizontal = 14.dp, vertical = 10.dp))
         }
     }
 }

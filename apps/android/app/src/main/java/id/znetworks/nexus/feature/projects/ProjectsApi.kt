@@ -19,11 +19,11 @@ import java.net.URLEncoder
 /** Projects, folders and task writes (API.md §2.4). Reads go through the response cache. */
 class ProjectsApi(private val api: ApiClient) {
 
-    suspend fun projects() = api.getCached("/api/projects", "projects", ListSerializer(Project.serializer()))
+    suspend fun projects() = api.getCached("/api/projects", "projects", ListSerializer(Project.serializer())).also { ProjectIcons.put(it.value) }
 
     suspend fun folders() = api.getCached("/api/project-folders", "project-folders", ListSerializer(ProjectFolder.serializer()))
 
-    suspend fun project(id: String) = api.getCached("/api/projects/$id", "project-$id", ProjectDetail.serializer())
+    suspend fun project(id: String) = api.getCached("/api/projects/$id", "project-$id", ProjectDetail.serializer()).also { ProjectIcons.put(id, it.value.icon) }
 
     /** Every task of a project, subtasks included (flat). */
     suspend fun projectTasks(id: String) = api.getCached("/api/tasks?projectId=$id", "project-tasks-$id", ListSerializer(BoardTask.serializer()))

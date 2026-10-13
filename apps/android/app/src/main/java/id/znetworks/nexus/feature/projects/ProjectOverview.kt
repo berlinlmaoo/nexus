@@ -467,7 +467,7 @@ private fun StatusUpdatesCard(projectId: String) {
             drafting = true; problem = null
             scope.launch { try { text = api.draftStatusUpdate(projectId) } catch (e: ApiError) { problem = R.string.ov_draft_failed }; drafting = false }
         }, enabled = !drafting) {
-            if (drafting) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp) else Icon(Icons.Filled.AutoAwesome, null, Modifier.size(14.dp))
+            if (drafting) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp) else id.znetworks.nexus.ui.components.GideonMark(14.dp)
             Spacer(Modifier.width(4.dp)); Text(stringResource(R.string.ov_draft_ai), fontSize = 12.sp)
         }
     }) {

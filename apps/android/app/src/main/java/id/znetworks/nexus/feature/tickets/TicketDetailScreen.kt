@@ -192,7 +192,7 @@ fun TicketDetailScreen(onBack: () -> Unit, vm: TicketDetailViewModel = viewModel
                             Column(Modifier.widthIn(max = 300.dp).background(if (m.mine) c.violet.copy(alpha = 0.12f) else c.card, RoundedCornerShape(14.dp))
                                 .border(1.dp, c.border, RoundedCornerShape(14.dp)).padding(10.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (m.fromGideon) { Icon(Icons.Filled.AutoAwesome, null, tint = c.violetText, modifier = Modifier.size(12.dp)); Spacer(Modifier.width(4.dp)) }
+                                    if (m.fromGideon) { id.znetworks.nexus.ui.components.GideonMark(12.dp, c.violetText); Spacer(Modifier.width(4.dp)) }
                                     Text(if (m.fromGideon) "GIDEON" else m.author?.name ?: stringResource(R.string.tk_someone), fontSize = 12.sp, fontWeight = FontWeight.Bold,
                                         color = if (m.fromReviewer || m.fromGideon) c.violetText else c.foreground)
                                     Spacer(Modifier.width(6.dp)); Text(chatTime(m.createdAt), fontSize = 10.sp, color = c.mutedFg)

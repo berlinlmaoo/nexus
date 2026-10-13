@@ -11,7 +11,8 @@ object InboxRules {
     fun mark(type: String?): Mark {
         val t = type.orEmpty().lowercase()
         return when {
-            t == "attendance_outside_approver" -> Mark.OUTSIDE // a staff member outside the office (Berlin, 8 Oct)
+            // Someone outside the office (attendance_outside_approver) is an attendance signal like the web and iOS
+            // (teal calendar check, run 5, 14 Oct 2026); it had its own walking-person mark.
             "mention" in t -> Mark.MENTION
             t == "task_assigned" || t == "project_invite" || t == "members_added" -> Mark.ASSIGNED
             t == "task_completed" -> Mark.COMPLETED

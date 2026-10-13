@@ -825,7 +825,7 @@
     <string name="chat_direct">Direct</string>
     <string name="chat_groups">Groups</string>
     <string name="chat_projects">Projects</string>
-    <string name="chat_no_message">No message yet</string>
+    <string name="chat_no_message">No messages yet</string>
     <string name="chat_photo">Photo</string>
     <string name="chat_location">Location</string>
     <string name="chat_group_name">Group name (optional)</string>
@@ -3226,4 +3226,5 @@
     <string name="mytasks_later">Later</string>
     <string name="mytasks_show_all">Show all %1$d</string>
     <string name="mytasks_show_fewer">Show fewer</string>
+    <string name="chat_direct_message">Direct message</string>
 </resources>

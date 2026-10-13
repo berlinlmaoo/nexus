@@ -54,11 +54,17 @@ data class Conversation(
 ) {
     fun muted(nowMs: Long = System.currentTimeMillis()): Boolean =
         mutedUntil?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() > nowMs }.getOrDefault(true) } ?: false
-    /** A DM is titled by the other person; a group or project room by its name. */
-    fun title(meId: String?): String = when (type) {
-        "DM" -> members.firstOrNull { it.uid != meId }?.displayName ?: name ?: "—"
+    /**
+     * A DM is titled by the other person, else the room's name, else [dmFallback] ("Direct message", iOS / web); a group
+     * or project room by its name.
+     */
+    fun title(meId: String?, dmFallback: String = "—"): String = when (type) {
+        "DM" -> members.firstOrNull { it.uid != meId }?.user?.name ?: name ?: dmFallback
         else -> name ?: members.filter { it.uid != meId }.joinToString(", ") { it.displayName }.ifBlank { "—" }
     }
+
+    /** The web's initials: first letters of the first two words ("Bagas Z" → "BZ", "Direct message" → "DM"); never "?" for a named room. */
+    fun initials(meId: String?, dmFallback: String): String = ChatInitials.of(title(meId, dmFallback))
     fun other(meId: String?): ChatUser? = if (type == "DM") members.firstOrNull { it.uid != meId }?.user else null
 }
 
@@ -176,4 +182,9 @@ object ChatRules {
 
     /** The server's 403 for someone below Manager, told apart from other 403s by its code, never its sentence. */
     fun managerRequired(e: Throwable): Boolean = (e as? id.znetworks.nexus.core.net.ApiError.Http)?.let { it.status == 403 && it.code == "MANAGER_REQUIRED" } == true
+}
+
+object ChatInitials {
+    fun of(title: String): String =
+        title.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2).mapNotNull { it.firstOrNull()?.uppercaseChar()?.toString() }.joinToString("").ifEmpty { "?" }
 }

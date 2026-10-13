@@ -161,6 +161,8 @@ fun HeaderIconButton(
     badge: String? = null,
     enabled: Boolean = true,
     size: androidx.compose.ui.unit.Dp = 40.dp,
+    /** Drawn instead of [icon] when set (the GIDEON mark is a picture, not a vector). */
+    painter: androidx.compose.ui.graphics.painter.Painter? = null,
 ) {
     val c = Nx.colors
     val shape = RoundedCornerShape(8.dp)
@@ -173,7 +175,8 @@ fun HeaderIconButton(
                 .semantics { this.contentDescription = contentDescription },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, null, tint = (if (primary) c.background else c.foreground).copy(alpha = if (enabled) 1f else 0.5f), modifier = Modifier.size(19.dp))
+            val tint = (if (primary) c.background else c.foreground).copy(alpha = if (enabled) 1f else 0.5f)
+            if (painter != null) Icon(painter, null, tint = tint, modifier = Modifier.size(19.dp)) else Icon(icon, null, tint = tint, modifier = Modifier.size(19.dp))
         }
         if (badge != null) {
             Box(Modifier.align(Alignment.TopEnd).defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)

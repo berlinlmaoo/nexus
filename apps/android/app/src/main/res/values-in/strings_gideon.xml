@@ -27,7 +27,7 @@
     <string name="gx_delete">Hapus chat ini</string>
     <string name="gx_open_failed">Chat ini tidak bisa dimuat</string>
     <string name="gx_chats_failed">Chat-mu tidak bisa dimuat</string>
-    <string name="gx_empty_title">Tanya apa saja ke GIDEON</string>
+    <string name="gx_empty_title">%1$s bisa bantu apa?</string>
     <string name="gx_empty_sub">GIDEON mencari dan membaca project, task, dokumen, dan chat hanya dengan aksesmu, lalu menunjukkan apa saja yang dibacanya.</string>
     <string name="gx_chip_overdue">Apa saja task-ku yang terlambat?</string>
     <string name="gx_chip_week">Ringkas mingguku di semua project</string>
