@@ -22,22 +22,49 @@ enum NXSidebarPage {
 extension View {
     /// Puts `header` above the screen and hides the navigation bar while `active`. Always the same
     /// VStack so a size-class change (iPad multitasking) does not rebuild the screen's state.
-    func nxSidebarPageChrome<Header: View>(_ active: Bool, @ViewBuilder header: () -> Header) -> some View {
-        modifier(NXSidebarPageChrome(active: active, header: header()))
+    /// `phoneSubtitle`: the page header's subtitle, drawn under the navigation bar while the header is not
+    /// (iPhone, pushed screens), so the phone reads the same line as the web (UI tour 13 Oct 2026).
+    func nxSidebarPageChrome<Header: View>(_ active: Bool, phoneSubtitle: String? = nil,
+                                           @ViewBuilder header: () -> Header) -> some View {
+        modifier(NXSidebarPageChrome(active: active, phoneSubtitle: phoneSubtitle, header: header()))
     }
 }
 
 struct NXSidebarPageChrome<Header: View>: ViewModifier {
     let active: Bool
+    var phoneSubtitle: String? = nil
     let header: Header
 
     func body(content: Content) -> some View {
         VStack(spacing: 0) {
-            if active { header }
+            if active {
+                header
+            } else if let phoneSubtitle, !phoneSubtitle.isEmpty {
+                NXPhoneSubtitle(text: phoneSubtitle)
+            }
             content.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(NX.background.ignoresSafeArea())
         .toolbar(active ? .hidden : .automatic, for: .navigationBar)
+    }
+}
+
+/// The web page header's subtitle on the iPhone: one or two muted lines under the navigation bar's title,
+/// left-aligned on the 16 pt phone gutter (web PageHeader subtitle, UI tour 13 Oct 2026).
+struct NXPhoneSubtitle: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(NXFont.text(14))
+            .foregroundStyle(NX.mutedFg)
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.top, 2)
+            .padding(.bottom, 8)
+            .background(NX.background)
     }
 }
 

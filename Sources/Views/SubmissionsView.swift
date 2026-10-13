@@ -286,7 +286,7 @@ struct SubmissionsView: View {
                 .padding(.top, isRoot ? 14 : 0)
             }
         }
-        .nxSidebarPageChrome(isRoot) {
+        .nxSidebarPageChrome(isRoot, phoneSubtitle: T("Requests you sent through a form. The team that handles them moves them along; this board follows.")) {
             NXPageHeader(title: T("My Submissions"),
                          subtitle: T("Requests you sent through a form. The team that handles them moves them along; this board follows."))
         }

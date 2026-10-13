@@ -332,7 +332,7 @@ struct TicketsView: View {
             NX.background.ignoresSafeArea()
             content
         }
-        .nxSidebarPageChrome(isRoot) { pageHeader }
+        .nxSidebarPageChrome(isRoot, phoneSubtitle: T("A direct line to the BoD for work or HR issues. Only the BoD can read it.")) { pageHeader }
         .navigationTitle(T("Tickets"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

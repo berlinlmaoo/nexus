@@ -51,7 +51,10 @@ struct TasksView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     }
                 } else {
-                    content
+                    VStack(spacing: 0) {
+                        NXPhoneSubtitle(text: T("Tasks assigned to you, the most urgent first."))
+                        content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    }
                 }
             }
             .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }

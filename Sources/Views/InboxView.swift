@@ -47,7 +47,7 @@ struct InboxView: View {
             NX.background.ignoresSafeArea()
             content
         }
-        .nxSidebarPageChrome(isRoot) { pageHeader }
+        .nxSidebarPageChrome(isRoot, phoneSubtitle: T("Mentions, assignments, approvals and replies that need you.")) { pageHeader }
         .navigationDestination(item: $openTarget) { target in
             switch target {
             case .task(let id):    TaskDetailView(taskId: id)
@@ -123,7 +123,7 @@ struct InboxView: View {
                             VStack(spacing: 0) {
                                 ForEach(Array(shown.enumerated()), id: \.element.id) { idx, n in
                                     if idx > 0 { Divider().overlay(NX.border) }
-                                    NotificationRow(notification: n) { open(n) }
+                                    NotificationRow(notification: n, onDelete: { Task { await delete(n) } }) { open(n) }
                                 }
                             }
                             // Hairline card like the web's (rounded-xl border bg-card), no drop shadow.
@@ -210,10 +210,25 @@ struct InboxView: View {
         try? await APIClient.shared.markAllNotificationsRead()
         await load()
     }
+    /// The web's per-row trash: gone at once, put back if the server says no. Restorable from Audit.
+    private func delete(_ n: NexusNotification) async {
+        let before = items
+        withAnimation(.easeOut(duration: 0.18)) { items.removeAll { $0.id == n.id } }
+        do {
+            try await APIClient.shared.deleteNotification(id: n.id)
+            await reloadQuietly()
+        } catch APIError.unauthorized {
+            auth.logout()
+        } catch {
+            items = before
+        }
+    }
 }
 
 struct NotificationRow: View {
     let notification: NexusNotification
+    /// The web's trash button at the row's right (Inbox only; nil elsewhere).
+    var onDelete: (() -> Void)? = nil
     let onTap: () -> Void
 
     var body: some View {
@@ -229,7 +244,17 @@ struct NotificationRow: View {
                 // Near-black like the web's unread dot (it was violet).
                 Circle().fill(NX.foreground).frame(width: 8, height: 8).padding(.top, 6)
             }
-            if notification.tapTarget != nil {
+            if let onDelete {
+                Button(action: onDelete) {
+                    Image(systemName: "trash").font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(NX.foreground)
+                        .frame(width: 34, height: 34)
+                        .background(NX.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(T("Delete notification"))
+            } else if notification.tapTarget != nil {
                 Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold))
                     .foregroundStyle(NX.mutedFg).padding(.top, 4)
             }
@@ -254,18 +279,16 @@ struct NotificationRow: View {
         }
     }
 
-    /// The kind's own circle: outside the office = the crew board's walking figure in amber, else "N".
+    /// The kind's own circle, mapped from the type as the web's notificationMark does (inbox.tsx): a chat
+    /// bubble for threads and comments, an alarm for reminders and streaks, a calendar check for attendance…
+    /// (UI tour 13 Oct 2026: every kind but "outside the office" was a violet "N").
     private func kindMark(size: CGFloat) -> some View {
-        ZStack {
-            if let symbol = notification.symbol {
-                Circle().fill(ChipTone.warning.bg)
-                Image(systemName: symbol).font(.system(size: size * 0.42, weight: .bold)).foregroundStyle(ChipTone.warning.fg)
-            } else {
-                // On the card colour first, so the small badge is not see-through over the avatar.
-                Circle().fill(NX.card)
-                Circle().fill(NX.violet.opacity(0.12))
-                Text("N").font(NXFont.display(size * 0.4, .black)).foregroundStyle(NX.violetText)
-            }
+        let mark = NotificationMark.of(notification.type)
+        return ZStack {
+            // On the card colour first, so the small badge is not see-through over the avatar.
+            Circle().fill(NX.card)
+            Circle().fill(mark.color.opacity(0.14))
+            Image(systemName: mark.symbol).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(mark.color)
         }
         .frame(width: size, height: size)
     }

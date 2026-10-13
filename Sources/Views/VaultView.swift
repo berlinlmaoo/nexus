@@ -102,7 +102,7 @@ struct VaultView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if webChrome { webHeader }
+            if webChrome { webHeader } else if !selecting { phoneHeader }
             page
         }
             .background { NX.background.ignoresSafeArea() }
@@ -218,6 +218,48 @@ struct VaultView: View {
                 .fixedSize()
             }
         }
+    }
+
+    /// The phone's take on the web header (UI tour 13 Oct 2026): the subtitle at the top level, and Trash,
+    /// Folder and Upload as visible buttons instead of only inside the ⋯ menu. Upload is the primary.
+    private var phoneHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if folder == nil {
+                Text(T("The whole office's shared shelf — logos, decks, assets."))
+                    .font(NXFont.text(14))
+                    .foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 8) {
+                Button { trash.toggle(); endSelecting(); Task { await load() } } label: {
+                    Label(T("Trash"), systemImage: "trash")
+                }
+                .buttonStyle(trash ? NXButtonStyle(kind: .primary) : NXButtonStyle(kind: .bordered))
+                .accessibilityAddTraits(trash ? .isSelected : [])
+                if listing?.canWrite == true && !trash {
+                    Button { newFolderName = ""; vaultAlert = .newFolder } label: {
+                        Label(T("Folder"), systemImage: "folder.badge.plus")
+                    }
+                    .buttonStyle(.nxBordered)
+                    Menu {
+                        Button { sheet = .importer } label: { Label(T("Upload file"), systemImage: "arrow.up.doc") }
+                        Button { showPhotos = true } label: { Label(T("Upload from Photos"), systemImage: "photo.on.rectangle") }
+                    } label: {
+                        Label(T("Upload"), systemImage: "square.and.arrow.up")
+                    } primaryAction: {
+                        sheet = .importer
+                    }
+                    .menuStyle(.button)
+                    .buttonStyle(.nxPrimary)
+                    .fixedSize()
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .padding(.bottom, 8)
     }
 
     /// The web's search box: a bordered field in the header, about 200 pt wide.

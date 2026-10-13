@@ -2175,6 +2175,14 @@ struct APIClient {
         return true
     }
 
+    /// DELETE /api/notifications {id} — one row, the web's trash button (restorable from Audit).
+    func deleteNotification(id: String) async throws {
+        var req = makeRequest("/api/notifications", method: "DELETE")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["id": id])
+        _ = try await run(req, decode: SuccessResponse.self)
+    }
+
     @discardableResult
     func markAllNotificationsRead() async throws -> Bool {
         var req = makeRequest("/api/notifications", method: "PATCH")

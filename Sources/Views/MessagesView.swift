@@ -129,10 +129,15 @@ struct MessagesView: View {
 
     /// The list on its own — the whole screen on a phone, the left column on an iPad.
     private var listPane: some View {
-        ZStack {
-            NX.background.ignoresSafeArea()
-            content
+        VStack(spacing: 0) {
+            // The web header's subtitle on the phone (the iPad column has its own small header).
+            if !isSplit { NXPhoneSubtitle(text: T("Chat with your team and in project rooms.")) }
+            ZStack {
+                NX.background.ignoresSafeArea()
+                content
+            }
         }
+        .background(NX.background.ignoresSafeArea())
         // Inside the stack, whichever stack that is: this pane is pushed into Home's, More's, or its own.
         .navigationDestination(item: $pushedConvo) { f in
             if let c = convos.first(where: { $0.id == f.id }) ?? focusedConvos[f.id] {

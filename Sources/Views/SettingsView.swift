@@ -75,9 +75,12 @@ struct SettingsView: View {
                 .padding(16)
             }
             .safeAreaInset(edge: .top, spacing: 0) {
-                NXUnderlineTabs(items: SettingsTab.allCases.map { NXTabItem(id: $0, label: $0.label, icon: $0.icon) },
-                                selection: $tab, accessibilityName: T("Settings"))
-                    .background(NX.background)
+                VStack(spacing: 0) {
+                    NXPhoneSubtitle(text: T("Your profile, security, notifications and workspace preferences."))
+                    NXUnderlineTabs(items: SettingsTab.allCases.map { NXTabItem(id: $0, label: $0.label, icon: $0.icon) },
+                                    selection: $tab, accessibilityName: T("Settings"))
+                }
+                .background(NX.background)
             }
             .opacity(loading ? 0.4 : 1)
         }
@@ -186,6 +189,8 @@ struct SettingsView: View {
         switch tab {
         case .profile:
             profileSection
+            // The web shows the Password card under Profile (Security keeps it too, with passkeys and sessions).
+            SecurityCard()
             accountSection
         case .members:
             if let wsId = workspaceId {
@@ -212,40 +217,20 @@ struct SettingsView: View {
     }
 
     @ViewBuilder private var profileSection: some View {
-        // profile header
-        VStack(spacing: 10) {
-            // Shows the photo already on the account; falls back to the initial while
-            // none is set. Tapping the badge opens the library.
-            ZStack(alignment: .bottomTrailing) {
-                AvatarView(url: avatarURL, initial: initial, size: 76)
-                PhotosPicker(selection: $pickedPhoto, matching: .images, photoLibrary: .shared()) {
-                    Image(systemName: uploadingPhoto ? "hourglass" : "camera.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 28, height: 28)
-                        .background(NX.onyx, in: Circle())
-                        .overlay(Circle().strokeBorder(NX.background, lineWidth: 2))
+        // The web's Profile card head on the phone too (UI tour 13 Oct 2026): "Profile · Visible to your
+        // teammates" with the role, then the photo at the left with Change photo / Remove and the size hint
+        // (webPhotoRow), instead of a centred avatar with a "Remove photo" link.
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top) {
+                webCardTitle(T("Profile"), T("Visible to your teammates"))
+                Spacer(minLength: 8)
+                if let role, let label = Self.roleLabel[role.uppercased()] {
+                    NexusChip(text: label, tone: .accent, systemImage: "shield.fill")
                 }
-                .disabled(uploadingPhoto)
             }
-            if avatarURL?.isEmpty == false {
-                Button(T("Remove photo")) { Task { await removePhoto() } }
-                    .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
-                    .disabled(uploadingPhoto)
-            }
-            if let photoError {
-                Text(photoError).font(NXFont.text(11)).foregroundStyle(NX.danger)
-                    .multilineTextAlignment(.center)
-            }
-            // Held to a readable width: this column is centred on the avatar, and a bar
-            // spanning the whole screen would read as belonging to the card below it.
-            if uploadProgress.isActive {
-                UploadProgressBar(progress: uploadProgress).frame(maxWidth: 180)
-            }
-            if let role, let label = Self.roleLabel[role.uppercased()] {
-                NexusChip(text: label, tone: .accent, systemImage: "shield.fill")
-            }
+            webPhotoRow
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onChange(of: pickedPhoto) { _, item in
             guard let item else { return }
             Task { await upload(item) }

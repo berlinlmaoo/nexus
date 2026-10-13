@@ -34,17 +34,49 @@ struct ProjectsView: View {
     @State private var confirmDelete: ProjectFolder?
     /// A move, delete or drop the server refused, shown in an alert (same as the board).
     @State private var actionError: String?
+    /// The web's Filters row (projects/index.tsx): a status filter and a sort, kept on the device.
+    @AppStorage("projects.statusFilter") private var statusFilter = "all"
+    @AppStorage("projects.sortMode") private var sortMode = "energy"
 
     // grouping
+    private static let statusOptions: [ProjectsMenuOption] = [
+        .init(value: "all", label: "All projects"), .init(value: "ACTIVE", label: "Active"),
+        .init(value: "PLANNING", label: "Planning"), .init(value: "ON_HOLD", label: "On hold"),
+        .init(value: "COMPLETED", label: "Completed"), .init(value: "ARCHIVED", label: "Archived"),
+    ]
+    private static let sortOptions: [ProjectsMenuOption] = [
+        .init(value: "energy", label: "Sort by progress"), .init(value: "tasks", label: "Sort by number of tasks"),
+        .init(value: "name", label: "Sort by name"),
+    ]
+    private func progress(_ p: Project) -> Double {
+        guard let t = tallies[p.id], t.total > 0 else { return 0 }
+        return Double(t.done) / Double(t.total)
+    }
+    /// The projects the filter lets through, in the chosen order (web visibleProjects).
+    private var visibleProjects: [Project] {
+        projects
+            .filter { statusFilter == "all" || ($0.status ?? "ACTIVE").uppercased() == statusFilter }
+            .sorted { a, b in
+                // Ties fall back to the name, so equal rows keep one order between redraws.
+                let byName = a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+                switch sortMode {
+                case "name": return byName
+                case "tasks": return a.taskCount != b.taskCount ? a.taskCount > b.taskCount : byName
+                default:
+                    let pa = progress(a), pb = progress(b)
+                    return pa != pb ? pa > pb : byName
+                }
+            }
+    }
     private var byFolder: [String: [Project]] {
-        Dictionary(grouping: projects.filter { $0.folderId != nil }) { $0.folderId! }
+        Dictionary(grouping: visibleProjects.filter { $0.folderId != nil }) { $0.folderId! }
     }
     private var rootFolders: [ProjectFolder] {
         folders.filter { $0.parentFolderId == nil }.sorted { ($0.position ?? 0, $0.name) < ($1.position ?? 0, $1.name) }
     }
     private var ungrouped: [Project] {
         let folderIds = Set(folders.map(\.id))
-        return projects.filter { $0.folderId == nil || !folderIds.contains($0.folderId!) }
+        return visibleProjects.filter { $0.folderId == nil || !folderIds.contains($0.folderId!) }
     }
     private var tree: FolderTree { FolderTree(folders) }
 
@@ -157,8 +189,25 @@ struct ProjectsView: View {
             .liveRefresh(every: 30, on: [.nexusWorkspaceChanged], kinds: [RealtimeKind.projects, RealtimeKind.folders]) {
                 await refreshQuietly()
             }
-            .nxSidebarPageChrome(isRoot) { pageHeader }
+            .nxSidebarPageChrome(isRoot, phoneSubtitle: T("Every project you're part of.")) { pageHeader }
         }
+    }
+
+    // The web's three numbers (projects/index.tsx MiniStat): over every project, not only the filtered ones.
+    // "–" while the per-project tallies are still being counted.
+    private var summaryProgress: String {
+        guard !tallies.isEmpty else { return "–" }
+        let total = tallies.values.reduce(0) { $0 + $1.total }
+        let done = tallies.values.reduce(0) { $0 + $1.done }
+        return total > 0 ? "\(Int((Double(done) / Double(total) * 100).rounded()))%" : "0%"
+    }
+    private var summaryDone: String {
+        tallies.isEmpty ? "–" : "\(tallies.values.reduce(0) { $0 + $1.done })"
+    }
+    /// Distinct people, not memberships summed over projects (web QA 13 Oct 2026).
+    private var summaryMembers: String {
+        let ids = Set(projects.flatMap { ($0.members ?? []).compactMap { $0.user?.id } })
+        return "\(ids.count)"
     }
 
     /// Web projects/index.tsx PageHeader: search, grid / list, Folder, primary New project.
@@ -196,17 +245,10 @@ struct ProjectsView: View {
                     if !query.trimmingCharacters(in: .whitespaces).isEmpty {
                         searchResults
                     } else {
-                    // hero strip (web: "projects visible")
-                    // Neutral chip, as the web's (it was violet).
-                    HStack(spacing: 6) {
-                        Image(systemName: "sparkles").font(.system(size: 12, weight: .semibold))
-                        Text(projects.count == 1 ? T("1 project visible") : String(format: T("%d projects visible"), projects.count))
-                            .font(NXFont.text(13, .semibold))
-                    }
-                    .foregroundStyle(NX.foreground)
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(NX.muted, in: Capsule())
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    ProjectsSummaryCard(shown: visibleProjects.count, total: projects.count,
+                                        progressText: summaryProgress, doneText: summaryDone, members: summaryMembers,
+                                        statusFilter: $statusFilter, sortMode: $sortMode,
+                                        statusOptions: Self.statusOptions, sortOptions: Self.sortOptions)
 
                     let folderTree = tree
                     let rowActions = actions
@@ -997,16 +1039,36 @@ struct FolderPlacementNote: View {
 /// Folder icon: uploaded photo (AsyncImage) or emoji, on a muted tile.
 struct FolderIconTile: View {
     let folder: ProjectFolder
+
+    /// The web's FolderGlyph (project-tree.tsx): a folder's own photo or emoji when it has one, else a drawn
+    /// folder in the folder's colour (UI tour 13 Oct 2026: every folder was the same grey 📁, so INTOO's
+    /// green and SUWARA's pink were lost).
+    private static let folderish: Set<String> = ["📁", "📂", "🗂️", "🗂", "folder"]
+    private var hasOwnEmoji: Bool {
+        guard let icon = folder.icon?.trimmingCharacters(in: .whitespaces), !icon.isEmpty else { return false }
+        return !Self.folderish.contains(icon.lowercased()) && folder.emoji != "📁"
+    }
+    /// The stored colour; a near-black one (the picker offers #111827) draws in the text colour so it
+    /// stays visible in dark mode.
+    private var tint: Color {
+        guard let hex = folder.color, hex.hasPrefix("#"), hex.count == 7 else { return NX.mutedFg }
+        let v = Int(hex.dropFirst(), radix: 16) ?? 0
+        let r = (v >> 16) & 0xff, g = (v >> 8) & 0xff, b = v & 0xff
+        return (r + g + b) < 120 ? NX.foreground : Color(hex: hex)
+    }
+
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 11, style: .continuous).fill(NX.muted)
             if folder.isUploadedIcon {
+                RoundedRectangle(cornerRadius: 11, style: .continuous).fill(NX.muted)
                 CachedImage(url: URL(string: Config.baseURL.absoluteString + (folder.icon ?? ""))) { img in
                     img.resizable().scaledToFill()
-                } placeholder: { Text("📁").font(.system(size: 18)) }
+                } placeholder: { Image(systemName: "folder").font(.system(size: 18, weight: .medium)).foregroundStyle(tint) }
                 .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-            } else {
+            } else if hasOwnEmoji {
                 Text(folder.emoji).font(.system(size: 18))
+            } else {
+                Image(systemName: "folder").font(.system(size: 18, weight: .medium)).foregroundStyle(tint)
             }
         }
         .frame(width: 34, height: 34)

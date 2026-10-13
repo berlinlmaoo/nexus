@@ -128,11 +128,13 @@ struct AttendanceView: View {
 
     /// Web attendance.tsx PageHeader; the subtitle follows whether this person sees the crew board.
     private var pageHeader: some View {
+        NXPageHeader(title: T("Attendance"), subtitle: pageSubtitle)
+    }
+    private var pageSubtitle: String {
         let canSeeBoard = (today?.canManageAttendance ?? false) || (today?.canReviewAttendanceRequests ?? false)
-        return NXPageHeader(title: T("Attendance"),
-                            subtitle: canSeeBoard
-                                ? T("Who's in, on leave or working from home, and everyone's attendance history.")
-                                : T("Check in, ask for leave or a permission, and see your attendance history."))
+        return canSeeBoard
+            ? T("Who's in, on leave or working from home, and everyone's attendance history.")
+            : T("Check in, ask for leave or a permission, and see your attendance history.")
     }
 
     var body: some View {
@@ -219,7 +221,7 @@ struct AttendanceView: View {
                 }
             }
         }
-        .nxSidebarPageChrome(isRoot) { pageHeader }
+        .nxSidebarPageChrome(isRoot, phoneSubtitle: pageSubtitle) { pageHeader }
         .navigationTitle(T("Attendance"))
         .navigationBarTitleDisplayMode(.inline)
         .task {

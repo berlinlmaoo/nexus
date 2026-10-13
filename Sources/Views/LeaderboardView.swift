@@ -75,7 +75,7 @@ struct LeaderboardView: View {
             NX.background.ignoresSafeArea()
             content
         }
-        .nxSidebarPageChrome(isRoot) { pageHeader }
+        .nxSidebarPageChrome(isRoot, phoneSubtitle: T("Everyone's XP this month. It resets on the 1st.")) { pageHeader }
         .safeAreaInset(edge: .top) {
             if let at = showingCacheFrom {
                 Text(T("Showing saved data") + " · " + Self.ago(at))
@@ -110,13 +110,17 @@ struct LeaderboardView: View {
                 VStack(spacing: 16) {
                     // The period line went through T() (it was hard-coded Indonesian); on the iPad / Mac
                     // page it is in the header instead.
+                    // A plain line as on the web phone ("Current period · 1 Oct – 31 Oct"); the reset rule is in
+                    // the subtitle above (UI tour 13 Oct 2026: it was a bordered banner).
                     if !isRoot {
-                        Text(T("Current period") + " · " + Self.periodText + " · " + T("XP resets on the 1st at 00:00 WIB"))
-                            .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity).padding(12)
-                            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                        (Text(T("Current period")).foregroundStyle(NX.foreground).fontWeight(.medium)
+                            + Text(" · " + Self.periodText).foregroundStyle(NX.mutedFg))
+                            .font(NXFont.text(13))
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    Text(T("XP ranking for everyone"))
+                        .font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     if ranked.count >= 1 {
                         Podium(rows: Array(ranked.prefix(3)), labels: Array(ranks.prefix(3))) { row in
@@ -206,7 +210,7 @@ struct Podium: View {
                             if label(rank) == 1 { Image(systemName: "crown.fill").font(.system(size: 18)).foregroundStyle(crown).offset(y: -avatar/2 - 6) }
                         }
                         Text(row.name ?? "—").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Text("\(row.totalXp.formatted(.number.grouping(.automatic))) XP").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                        Text(row.totalXp.formatted(.number.locale(AppDateLocale.current))).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     }
                     .contentShape(Rectangle())
                 }
@@ -214,7 +218,8 @@ struct Podium: View {
             }
             ZStack(alignment: .top) {
                 RoundedRectangle(cornerRadius: 12, style: .continuous).fill(barColor).frame(height: height)
-                Text("\(label(rank))").font(NXFont.display(22, .black)).foregroundStyle(.white.opacity(0.9)).padding(.top, 8)
+                // Dark on the coloured step, as the web's podium (white was hard to read on gold).
+                Text("\(label(rank))").font(NXFont.display(22, .black)).foregroundStyle(Color(hex: "#78350f").opacity(0.9)).padding(.top, 8)
             }
         }
         .frame(maxWidth: .infinity)
@@ -235,15 +240,21 @@ struct RankRow: View {
             HStack(spacing: 12) {
                 Text("\(rank)").font(NXFont.text(15, .semibold)).foregroundStyle(rank <= 3 ? NX.foreground : NX.mutedFg)
                     .frame(width: 28)
+                // The web marks first place with a crown in every row that holds it.
+                Image(systemName: "crown")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color(hex: "#f59e0b"))
+                    .frame(width: 18)
+                    .opacity(rank == 1 ? 1 : 0)
+                    .accessibilityHidden(true)
                 AvatarView(url: row.avatar, initial: row.initial, size: 36)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.name ?? "—").font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                     Text("Level \(row.level)\(row.levelName.map { " – \($0)" } ?? "")").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
                 Spacer()
-                Text("\(row.totalXp.formatted(.number.grouping(.automatic)))")
+                Text(row.totalXp.formatted(.number.locale(AppDateLocale.current)))
                     .font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
-                Text("XP").font(NXFont.text(10, .bold)).foregroundStyle(NX.mutedFg)
             }
             .padding(.horizontal, 14).padding(.vertical, 11)
             .contentShape(Rectangle())

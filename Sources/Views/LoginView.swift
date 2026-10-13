@@ -107,9 +107,12 @@ struct LoginView: View {
                     .shadow(color: NX.violet.opacity(0.3), radius: 16, y: 10)
                     .padding(.bottom, 22)
 
-                Text("NEXUS")
-                    .font(NXFont.display(22, .bold))
-                    .tracking(4)
+                // The web's wordmark (login.tsx): "NEXUS PHAËTHON".
+                Text("NEXUS PHAËTHON")
+                    .font(NXFont.display(20, .bold))
+                    .tracking(3)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                     .foregroundStyle(NX.onyx)
                     // Dev builds: a long press picks Production or the DEV server (ServerSwitchViews.swift).
                     .modifier(LoginServerSwitch())
@@ -126,7 +129,7 @@ struct LoginView: View {
                 }
 
                 // Encryption Key
-                fieldBlock(label: T("Password")) {
+                fieldBlock(label: T("Password"), accessory: AnyView(forgotButton)) {
                     inputField("••••••••", text: $password, field: .password, secure: true)
                         .submitLabel(.go)
                         .onSubmit(attemptLogin)
@@ -174,7 +177,7 @@ struct LoginView: View {
                 // onyx CTA stay exactly where they were and keep working on their own.
                 HStack(spacing: 10) {
                     Rectangle().fill(NX.onyx.opacity(0.12)).frame(height: 1)
-                    Text(T("or")).font(NXFont.text(11, .bold)).tracking(1).foregroundStyle(NX.mutedFg)
+                    Text(T("or").uppercased()).font(NXFont.text(11, .bold)).tracking(1).foregroundStyle(NX.mutedFg)
                     Rectangle().fill(NX.onyx.opacity(0.12)).frame(height: 1)
                 }
                 .padding(.top, 20)
@@ -185,9 +188,9 @@ struct LoginView: View {
                         if auth.isPasskeyLoggingIn {
                             ProgressView().tint(NX.onyx)
                         } else {
-                            Image(systemName: "person.badge.key.fill").font(.system(size: 15, weight: .bold))
+                            Image(systemName: "key").font(.system(size: 15, weight: .bold))
                         }
-                        Text(T("Sign in with passkey"))
+                        Text(T("Sign in with a passkey"))
                     }
                     .font(NXFont.display(15, .bold))
                     .foregroundStyle(NX.onyx)
@@ -211,7 +214,7 @@ struct LoginView: View {
                     withAnimation(.easeInOut(duration: 0.25)) { signUpCode = "" }
                 } label: {
                     HStack(spacing: 5) {
-                        Text(T("New to NEXUS?")).foregroundStyle(NX.mutedFg)
+                        Text(T("New here?")).foregroundStyle(NX.mutedFg)
                         Text(T("Create account")).font(NXFont.text(14, .bold)).foregroundStyle(NX.onyx)
                         Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.onyx)
                     }
@@ -223,22 +226,6 @@ struct LoginView: View {
                 .disabled(auth.isBusy)
                 .padding(.top, 22)
 
-                // Self-serve now (email code, the web's /forgot-password flow). Carries whatever is
-                // in the email field over, so the first step is usually just "Send code".
-                Button {
-                    auth.loginError = nil
-                    openReset(NXPasswordResetRequest(email: email.trimmingCharacters(in: .whitespacesAndNewlines),
-                                                     invited: false))
-                } label: {
-                    Text(T("Forgot password?"))
-                        .font(NXFont.text(13, .semibold))
-                        .foregroundStyle(NX.mutedFg)
-                        .padding(.vertical, 6)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(auth.isBusy)
-                .padding(.top, 2)
             }
             .padding(.horizontal, 30)
             .padding(.vertical, 40)
@@ -262,13 +249,35 @@ struct LoginView: View {
     }
 
     @ViewBuilder
-    private func fieldBlock<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
+    /// Upper-case label as on the web, with an optional control at its right ("FORGOT PASSWORD?").
+    private func fieldBlock<Content: View>(label: String, accessory: AnyView? = nil,
+                                           @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(label).font(NXFont.text(11, .bold)).tracking(1).foregroundStyle(NX.mutedFg)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 4)
+            HStack(alignment: .firstTextBaseline) {
+                Text(label.uppercased()).font(NXFont.text(11, .bold)).tracking(1).foregroundStyle(NX.mutedFg)
+                Spacer(minLength: 8)
+                if let accessory { accessory }
+            }
+            .padding(.horizontal, 4)
             content()
         }
+    }
+
+    /// Self-serve reset (email code, the web's /forgot-password flow), at the right of the PASSWORD label
+    /// as on the web. Carries whatever is in the email field over, so the first step is usually "Send code".
+    private var forgotButton: some View {
+        Button {
+            auth.loginError = nil
+            openReset(NXPasswordResetRequest(email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                                             invited: false))
+        } label: {
+            Text(T("Forgot password?").uppercased())
+                .font(NXFont.text(11, .bold)).tracking(0.5)
+                .foregroundStyle(NX.onyx)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(auth.isBusy)
     }
 
     @ViewBuilder

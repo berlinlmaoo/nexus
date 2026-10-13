@@ -209,7 +209,7 @@ struct ThreadsView: View {
             }
         }
         .background(NX.background.ignoresSafeArea())
-        .nxSidebarPageChrome(isRoot) {
+        .nxSidebarPageChrome(isRoot, phoneSubtitle: T("Short updates from the team. Tag someone with @ and they get notified.")) {
             VStack(spacing: 0) {
                 NXPageHeader(title: T("Threads"), subtitle: T("Short updates from the team. Tag someone with @ and they get notified."))
                 NXPageTabsRow(items: tabItems, selection: $tab, accessibilityName: T("Threads"))
