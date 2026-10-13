@@ -1,0 +1,717 @@
+package id.znetworks.nexus.feature.projects
+
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.ui.platform.LocalContext
+import id.znetworks.nexus.feature.home.ShortcutRef
+import android.app.Application
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ViewKanban
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import id.znetworks.nexus.NexusApplication
+import id.znetworks.nexus.R
+import id.znetworks.nexus.core.net.ApiError
+import id.znetworks.nexus.feature.attendance.LocalNotifier
+import id.znetworks.nexus.ui.components.AvatarStack
+import id.znetworks.nexus.ui.components.EmptyState
+import id.znetworks.nexus.ui.components.RemoteImage
+import id.znetworks.nexus.ui.components.describe
+import id.znetworks.nexus.ui.theme.DisplayFont
+import id.znetworks.nexus.ui.theme.Nx
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+data class Tally(val done: Int, val total: Int, val nextDue: LocalDate?)
+
+data class ProjectsState(
+    val projects: List<Project> = emptyList(),
+    val folders: List<ProjectFolder> = emptyList(),
+    val tallies: Map<String, Tally>? = null,
+    val loading: Boolean = true,
+    val error: String? = null,
+    val savedAt: Long? = null,
+    val query: String = "",
+    val taskHits: List<BoardTask> = emptyList(),
+    val searching: Boolean = false,
+    val busy: Boolean = false,
+    val message: String? = null,
+    /** The person's pinned folders, in the server's order (FOLDERS-DND). */
+    val pinnedFolders: List<String> = emptyList(),
+    /** OAA / BoD / Manager: may move, edit, delete and make folders. The server decides again on every call. */
+    val canManage: Boolean = false,
+    /** Folders the person closed; remembered on this phone. Everything else shows open. */
+    val collapsed: Set<String> = emptySet(),
+    /** "Moved X to Y" with Undo, once. */
+    val toast: TreeToast? = null,
+    /** Workspace people for New project's members (PROJECT-SETUP-MEMBERS); loaded when the form opens. */
+    val roster: List<RosterMember> = emptyList(),
+)
+
+data class TreeToast(val text: String, val undo: (() -> Unit)? = null, val at: Long = System.nanoTime())
+
+class ProjectsViewModel(app: Application) : AndroidViewModel(app) {
+    private val c = (app as NexusApplication).container
+    val api = ProjectsApi(c.api)
+    private val res get() = getApplication<Application>().resources
+    private val _state = MutableStateFlow(ProjectsState())
+    val state = _state.asStateFlow()
+    private var searchJob: Job? = null
+
+    private val prefs = app.getSharedPreferences("projects_tree", android.content.Context.MODE_PRIVATE)
+
+    init {
+        _state.update { it.copy(collapsed = prefs.getStringSet("collapsed", emptySet()).orEmpty().toSet()) }
+        viewModelScope.launch { c.viewer.load(); _state.update { it.copy(canManage = c.viewer.canAdminister) } }
+        load()
+    }
+
+    fun load() = viewModelScope.launch {
+        try {
+            val p = api.projects()
+            val f = runCatching { api.folders().value }.getOrDefault(_state.value.folders)
+            val pins = runCatching { api.folderPins() }.getOrDefault(_state.value.pinnedFolders)
+            _state.update { it.copy(projects = p.value, folders = f, pinnedFolders = pins, loading = false, error = null, savedAt = p.savedAtMillis) }
+            loadTallies(p.value.map { it.id })
+        } catch (e: ApiError) {
+            _state.update { it.copy(loading = false, error = e.describe(res)) }
+        }
+    }
+
+    /** Done/total and the next open due date per project, from ONE fetch, so the numbers agree. */
+    private suspend fun loadTallies(ids: List<String>) {
+        val tasks = runCatching { api.tasksOf(ids) }.getOrNull() ?: return
+        val byProject = tasks.groupBy { it.projectId }
+        val today = id.znetworks.nexus.core.time.OfficeTime.today()
+        _state.update {
+            it.copy(tallies = ids.associateWith { pid ->
+                val ts = byProject[pid].orEmpty()
+                Tally(
+                    done = ts.count { t -> t.isDone },
+                    total = ts.size,
+                    nextDue = ts.filter { t -> !t.isDone }.mapNotNull { t -> dueDate(t.dueDate) }.filter { d -> !d.isBefore(today) }.minOrNull(),
+                )
+            })
+        }
+    }
+
+    fun setQuery(q: String) {
+        _state.update { it.copy(query = q) }
+        searchJob?.cancel()
+        if (q.trim().length < 2) { _state.update { it.copy(taskHits = emptyList(), searching = false) }; return }
+        searchJob = viewModelScope.launch {
+            delay(300) // debounce, as iOS
+            _state.update { it.copy(searching = true) }
+            val hits = runCatching { api.searchTasks(q.trim()) }.getOrDefault(emptyList())
+            _state.update { it.copy(taskHits = hits.take(20), searching = false) }
+        }
+    }
+
+    private suspend fun workspaceId(): String? =
+        _state.value.projects.firstNotNullOfOrNull { it.workspaceId }
+            ?: _state.value.folders.firstNotNullOfOrNull { it.workspaceId }
+            ?: runCatching { c.attendanceApi.today().workspace?.id }.getOrNull()
+
+    fun loadRoster() = viewModelScope.launch {
+        runCatching { api.roster().members }.getOrNull()?.let { r -> _state.update { it.copy(roster = r) } }
+    }
+
+    fun createProject(name: String, folderId: String?, type: ProjectType = ProjectType.TASK, setup: ProjectSetup = ProjectSetup(), onDone: (String) -> Unit) = act {
+        val ws = workspaceId() ?: throw IllegalStateException()
+        val id = try { api.createProject(name, ws, folderId, type, setup.hiddenTabs, setup.memberIds, setup.template, setup.lang, setup.starter, setup.memberLevel) } catch (e: ApiError) {
+            // Many boards (PIPELINE-DASHBOARD §16, 11 Oct): a Pipeline is created like any project, never "opened
+            // instead"; the only refusal left is the company-workspace rule.
+            val h = e as? ApiError.Http
+            when {
+                // PROJECT-SETUP-MEMBERS: the server words these in Indonesian only, so the app says them in both.
+                h?.code == "MEMBER_NOT_IN_WORKSPACE" -> { _state.update { it.copy(message = res.getString(R.string.setup_err_outside)) }; return@act }
+                h?.code == "TOO_MANY_MEMBERS" -> { _state.update { it.copy(message = res.getString(R.string.setup_err_too_many)) }; return@act }
+                h?.code == "TASK_VIEW_REQUIRED" -> { _state.update { it.copy(message = res.getString(R.string.setup_err_view)) }; return@act }
+                h?.code == "PIPELINE_COMPANY_ONLY" -> { _state.update { it.copy(message = res.getString(R.string.pl_company_only)) }; return@act }
+                // A template the server no longer has (a deploy between the gallery and Create).
+                h?.code == "UNKNOWN_TEMPLATE" || h?.code == "TEMPLATE_TASK_ONLY" -> { _state.update { it.copy(message = res.getString(R.string.tg_err_unknown)) }; return@act }
+                else -> throw e
+            }
+        }
+        load()
+        if (id.isNotBlank()) onDone(id)
+    }
+
+    fun saveFolder(editing: ProjectFolder?, parentId: String?, name: String, icon: String, color: String, photo: ByteArray?, onDone: () -> Unit) = act {
+        val id = if (editing == null) api.createFolder(workspaceId() ?: throw IllegalStateException(), name, icon, color, parentId)
+        else { api.updateFolder(editing.id, name, icon, color); editing.id }
+        // The folder is saved by now: a refused picture keeps it and says why, not a silent close.
+        if (photo != null && id != null) {
+            try { api.uploadFolderIcon(id, photo) } catch (e: ApiError) { load(); onDone(); throw e }
+        }
+        load(); onDone()
+    }
+
+    fun deleteFolder(f: ProjectFolder) = viewModelScope.launch {
+        try {
+            api.deleteFolder(f.id)
+            toast(res.getString(R.string.folder_deleted, f.name) + " " + res.getString(R.string.folder_deleted_sub))
+            load()
+        } catch (e: ApiError) { _state.update { it.copy(message = res.getString(R.string.tree_delete_failed, f.name) + "\n" + e.describe(res)) } }
+    }
+
+    private fun folderName(id: String?) = _state.value.folders.firstOrNull { it.id == id }?.name
+
+    /** At once on screen, then the server; a refusal puts it back and says why. [undoable] offers Undo (not on the undo itself). */
+    fun moveProject(p: Project, folderId: String?, undoable: Boolean = true) {
+        val tree = FolderTree(_state.value.folders, _state.value.projects)
+        val now = _state.value.projects.firstOrNull { it.id == p.id } ?: return
+        if (!tree.canMoveProject(now, folderId)) return
+        val from = now.folderId
+        _state.update { s -> s.copy(projects = s.projects.map { if (it.id == p.id) it.copy(folderId = folderId) else it }) }
+        viewModelScope.launch {
+            try {
+                api.moveProject(p.id, folderId)
+                val text = folderId?.let { res.getString(R.string.tree_moved, p.name, folderName(it).orEmpty()) } ?: res.getString(R.string.tree_took_out, p.name)
+                toast(text, if (undoable) ({ moveProject(now.copy(folderId = folderId), from, undoable = false) }) else null)
+                load()
+            } catch (e: ApiError) {
+                _state.update { s -> s.copy(projects = s.projects.map { if (it.id == p.id) it.copy(folderId = from) else it },
+                    message = res.getString(R.string.tree_move_failed, p.name) + "\n" + e.describe(res)) }
+            }
+        }
+    }
+
+    /** A folder with everything in it; the depth / cycle rule is checked here first, and by the server. */
+    fun moveFolder(f: ProjectFolder, parentId: String?, undoable: Boolean = true) {
+        val tree = FolderTree(_state.value.folders, _state.value.projects)
+        val now = _state.value.folders.firstOrNull { it.id == f.id } ?: return
+        if (!tree.canMoveFolder(f.id, parentId)) {
+            if (parentId != now.parentFolderId) _state.update { it.copy(message = res.getString(R.string.tree_rule)) }
+            return
+        }
+        val from = now.parentFolderId
+        _state.update { s -> s.copy(folders = s.folders.map { if (it.id == f.id) it.copy(parentFolderId = parentId) else it }) }
+        viewModelScope.launch {
+            try {
+                api.moveFolder(f.id, parentId)
+                val text = parentId?.let { res.getString(R.string.tree_moved, f.name, folderName(it).orEmpty()) } ?: res.getString(R.string.tree_moved_top, f.name)
+                toast(text, if (undoable) ({ moveFolder(now.copy(parentFolderId = parentId), from, undoable = false) }) else null)
+                load()
+            } catch (e: ApiError) {
+                _state.update { s -> s.copy(folders = s.folders.map { if (it.id == f.id) it.copy(parentFolderId = from) else it },
+                    message = res.getString(R.string.tree_move_failed, f.name) + "\n" + e.describe(res)) }
+            }
+        }
+    }
+
+    fun toggleFolderPin(id: String) {
+        val before = _state.value.pinnedFolders
+        val pin = id !in before
+        _state.update { it.copy(pinnedFolders = if (pin) listOf(id) + before else before - id) }
+        viewModelScope.launch {
+            try { api.setFolderPin(id, pin) }
+            catch (e: ApiError) { _state.update { it.copy(pinnedFolders = before, message = res.getString(R.string.tree_pin_failed)) } }
+        }
+    }
+
+    fun toggleOpen(id: String) {
+        val next = _state.value.collapsed.let { if (id in it) it - id else it + id }
+        _state.update { it.copy(collapsed = next) }
+        prefs.edit().putStringSet("collapsed", next).apply()
+    }
+
+    private fun toast(text: String, undo: (() -> Unit)? = null) = _state.update { it.copy(toast = TreeToast(text, undo)) }
+    fun toastShown() = _state.update { it.copy(toast = null) }
+    fun dismissMessage() = _state.update { it.copy(message = null) }
+
+    private fun act(block: suspend () -> Unit) = viewModelScope.launch {
+        _state.update { it.copy(busy = true, message = null) }
+        try {
+            block()
+        } catch (e: ApiError) {
+            _state.update { it.copy(message = e.describe(res)) }
+        } catch (e: IllegalStateException) {
+            _state.update { it.copy(message = res.getString(R.string.error_cant_reach)) }
+        }
+        _state.update { it.copy(busy = false) }
+    }
+}
+
+fun dueDate(iso: String?): LocalDate? = iso?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+
+fun parseColor(hex: String?, fallback: Color): Color = runCatching {
+    val h = hex!!.trim().removePrefix("#").let { if (it.length == 3) it.map { ch -> "$ch$ch" }.joinToString("") else it }
+    Color(("FF$h").toLong(16))
+}.getOrDefault(fallback)
+
+val PROJECT_COLORS = listOf("#7b68ee", "#0091ff", "#16a34a", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#7B2FBE")
+val FOLDER_ICONS = listOf("📁", "🎬", "📣", "💼", "⭐️", "🎯", "🚀", "📦")
+
+/** A FOLDER's icon: an emoji, or an uploaded photo at a `/api/files/…` path. Projects use [ProjectMark]. */
+@Composable
+fun IconTile(icon: String?, fallback: String, size: Int = 44) {
+    val c = Nx.colors
+    Box(Modifier.size(size.dp).background(c.muted, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
+        if (icon != null && icon.startsWith("/")) {
+            RemoteImage(icon, Modifier.size(size.dp), maxPx = 200) { Text(fallback, fontSize = (size / 2).sp) }
+        } else {
+            // An emoji, or a name ("briefcase" → 💼; PROJECT-TYPES-TABS).
+            Text(ProjectIcon.emoji(icon) ?: fallback, fontSize = (size / 2).sp)
+        }
+    }
+}
+
+/** "Mission Control" (iOS ProjectsView): search, folder tree, project cards, create. */
+@Composable
+fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit, onOpenFolder: (String) -> Unit = {},
+                   onOpenSettings: (String) -> Unit = {}, vm: ProjectsViewModel = viewModel()) {
+    val shortcuts = (LocalContext.current.applicationContext as NexusApplication).container.shortcuts
+    val shortcutLists by shortcuts.lists.collectAsStateWithLifecycle()
+    val pinnedIds = shortcutLists.pinned.map { it.id }
+    androidx.compose.runtime.LaunchedEffect(Unit) { shortcuts.refresh() }
+    val s by vm.state.collectAsStateWithLifecycle()
+    // Live (Berlin, 8 Oct): a project or folder changed anywhere in the workspace; polling only as a fallback.
+    id.znetworks.nexus.core.realtime.LiveRefresh(Unit, liveMs = 120_000, fallbackMs = 30_000, matches = id.znetworks.nexus.core.realtime.RealtimeEvents::isProjectsOrFolders) { vm.load().join() }
+    val c = Nx.colors
+    var menu by remember { mutableStateOf(false) }
+    var creating by rememberSaveable { mutableStateOf(false) }
+    var folderEdit by remember { mutableStateOf<ProjectFolder?>(null) }
+    var folderCreate by rememberSaveable { mutableStateOf(false) }
+    // FOLDERS-DND: where a new project / subfolder goes, and what "Move to…" is moving.
+    var createIn by remember { mutableStateOf<String?>(null) }
+    var subfolderOf by remember { mutableStateOf<ProjectFolder?>(null) }
+    var placingFolder by remember { mutableStateOf<ProjectFolder?>(null) }
+    var placingProject by remember { mutableStateOf<Project?>(null) }
+    val drag = remember { TreeDrag() }
+    var origin by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    val snackbar = remember { androidx.compose.material3.SnackbarHostState() }
+    val undoLabel = stringResource(R.string.undo)
+    LaunchedEffect(s.toast) {
+        val t = s.toast ?: return@LaunchedEffect
+        vm.toastShown()
+        val r = snackbar.showSnackbar(t.text, actionLabel = t.undo?.let { undoLabel }, duration = androidx.compose.material3.SnackbarDuration.Short)
+        if (r == androidx.compose.material3.SnackbarResult.ActionPerformed) t.undo?.invoke()
+    }
+    val tree = FolderTree(s.folders, s.projects)
+    drag.onDrop = { item, target ->
+        when (item) {
+            is TreeDrag.ProjectItem -> vm.moveProject(item.project, target)
+            is TreeDrag.FolderItem -> vm.moveFolder(item.folder, target)
+        }
+    }
+    val actions = TreeActions(
+        tree, s, drag, pinnedIds.toSet(),
+        openProject = onOpenProject, openFolderView = onOpenFolder, openSettings = onOpenSettings,
+        newProjectIn = { createIn = it.id; creating = true }, newSubfolder = { subfolderOf = it },
+        edit = { folderEdit = it }, delete = vm::deleteFolder,
+        pickFolderPlace = { placingFolder = it }, pickProjectPlace = { placingProject = it },
+        removeFromFolder = { vm.moveProject(it, null) },
+        toggleFolderPin = vm::toggleFolderPin,
+        toggleProjectPin = { p -> shortcuts.refresh(); shortcuts.togglePin(ShortcutRef(p.id, p.name, p.icon, p.color)) },
+        toggleOpen = vm::toggleOpen,
+    )
+    val q = s.query.trim()
+    val matched = if (q.isEmpty()) s.projects else s.projects.filter { it.name.contains(q, true) || it.description.orEmpty().contains(q, true) }
+
+    Column(Modifier.fillMaxSize().background(c.background)) {
+    id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.projects_title), subtitle = stringResource(R.string.sub_projects)) {
+        Box {
+            id.znetworks.nexus.ui.components.HeaderIconButton(Icons.Filled.Add, stringResource(R.string.projects_new), { menu = true }, primary = true)
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text(stringResource(R.string.projects_new)) }, leadingIcon = { Icon(Icons.Filled.ViewKanban, null) },
+                    onClick = { menu = false; creating = true })
+                DropdownMenuItem(text = { Text(stringResource(R.string.folder_new)) }, leadingIcon = { Icon(Icons.Filled.CreateNewFolder, null) },
+                    onClick = { menu = false; folderCreate = true })
+            }
+        }
+    }
+    PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() },
+        modifier = Modifier.weight(1f).fillMaxWidth().background(c.background).onGloballyPositioned { origin = it.positionInRoot() }) {
+        LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
+            item {
+                OutlinedTextField(s.query, vm::setQuery, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) },
+                    placeholder = { Text(stringResource(R.string.projects_search)) }, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth())
+            }
+            s.savedAt?.let { item { Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.mutedFg) } }
+            when {
+                s.loading && s.projects.isEmpty() -> item { Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
+                s.error != null && s.projects.isEmpty() -> item {
+                    EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.projects_load_failed), s.error!!, stringResource(R.string.try_again), { vm.load() })
+                }
+                s.projects.isEmpty() && s.folders.isEmpty() -> item {
+                    EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.projects_empty), stringResource(R.string.projects_empty_sub),
+                        stringResource(R.string.projects_new), { creating = true })
+                }
+                q.isNotEmpty() -> {
+                    if (matched.isEmpty() && s.taskHits.isEmpty() && !s.searching) item {
+                        Text(stringResource(R.string.projects_nothing_matches), color = c.mutedFg, modifier = Modifier.padding(8.dp))
+                    }
+                    if (matched.isNotEmpty()) item { Section(stringResource(R.string.projects_section_missions)) }
+                    items(matched, key = { "p-" + it.id }) { p -> ProjectRow(p, actions) }
+                    if (s.searching) item { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
+                    if (s.taskHits.isNotEmpty()) item { Section(stringResource(R.string.projects_section_tasks)) }
+                    items(s.taskHits, key = { "t-" + it.id }) { t -> TaskHitRow(t) { onOpenTask(t.id) } }
+                }
+                else -> {
+                    // Pinned (Berlin 29 Sep, iOS 286cada; folders FOLDERS-DND): the person's pins, synced with the web and
+                    // the other devices, in the server's order. A pinned folder is the whole folder, openable here.
+                    val pinnedFolders = s.pinnedFolders.mapNotNull { id -> s.folders.firstOrNull { it.id == id } }
+                    val pinned = pinnedIds.mapNotNull { id -> s.projects.firstOrNull { it.id == id } }
+                    if (pinnedFolders.isNotEmpty() || pinned.isNotEmpty()) {
+                        item { Section(stringResource(R.string.home_pinned)) }
+                        items(pinnedFolders, key = { "pf-" + it.id }) { f -> FolderNode(f, 0, "pin", actions) }
+                        items(pinned, key = { "pin-" + it.id }) { p -> ProjectRow(p, actions) }
+                    }
+                    val roots = tree.roots().filter { s.canManage || tree.hasProjects(it.id) }
+                    if (roots.isNotEmpty()) {
+                        item { Section(stringResource(R.string.tree_folders)) }
+                        items(roots, key = { "f-" + it.id }) { f -> FolderNode(f, 0, "tree", actions) }
+                    }
+                    val loose = tree.loose()
+                    if (loose.isNotEmpty() || s.canManage) item { Section(stringResource(R.string.folder_none)) }
+                    if (s.canManage && s.folders.isNotEmpty()) item { NoFolderStrip(actions) }
+                    items(loose, key = { "p-" + it.id }) { p -> ProjectRow(p, actions) }
+                }
+            }
+        }
+        DragGhost(drag, origin)
+        androidx.compose.material3.SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
+    }
+    }
+
+    // Who may make a Pipeline board (company workspace, §16): read once from the viewer.
+    val viewer = (LocalContext.current.applicationContext as NexusApplication).container.viewer
+    var pipelineAccess by remember { mutableStateOf(false) }
+    LaunchedEffect(creating) { if (creating) { vm.loadRoster(); viewer.load(); pipelineAccess = viewer.canAccessPipeline } }
+    val meId = (LocalContext.current.applicationContext as NexusApplication).container.sessionStore.current?.userId
+    if (creating) CreateProjectDialog(s.folders, busy = s.busy, pipelineAccess = pipelineAccess, initialFolder = createIn,
+        roster = s.roster.filter { ProjectSetupLogic.id(it).let { id -> id != null && id != meId } }, meId = meId,
+        onDismiss = { creating = false; createIn = null }) { name, folder, type, setup ->
+        vm.createProject(name, folder, type, setup) { id -> creating = false; createIn = null; onOpenProject(id) }
+    }
+    if (folderCreate || folderEdit != null || subfolderOf != null) FolderDialog(folderEdit, parent = subfolderOf, busy = s.busy,
+        onDismiss = { folderCreate = false; folderEdit = null; subfolderOf = null }) { name, icon, color, photo ->
+        vm.saveFolder(folderEdit, subfolderOf?.id, name, icon, color, photo) { folderCreate = false; folderEdit = null; subfolderOf = null }
+    }
+    placingFolder?.let { f ->
+        MovePlaceDialog(stringResource(R.string.fm_move), f.parentFolderId, stringResource(R.string.tree_top_level), showTop = tree.canMoveFolder(f.id, null),
+            places = tree.folderTargets(f.id), tree = tree, onDismiss = { placingFolder = null }) { target -> placingFolder = null; vm.moveFolder(f, target) }
+    }
+    placingProject?.let { p ->
+        MovePlaceDialog(stringResource(R.string.pm_move), p.folderId, stringResource(R.string.folder_none), showTop = tree.canMoveProject(p, null),
+            places = tree.projectTargets(p), tree = tree, onDismiss = { placingProject = null }) { target -> placingProject = null; vm.moveProject(p, target) }
+    }
+    s.message?.let { AlertDialog(onDismissRequest = vm::dismissMessage, text = { Text(it) }, confirmButton = { TextButton(onClick = vm::dismissMessage) { Text("OK") } }) }
+}
+
+@Composable
+private fun Section(text: String) = Text(text.uppercase(Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.Bold,
+    color = Nx.colors.mutedFg, letterSpacing = 1.sp, modifier = Modifier.padding(top = 4.dp))
+
+/** Port of the iOS/web ProjectCard: icon, brief, status, Cards/Done/Lanes, progress, members, next due. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ProjectCard(p: Project, tally: Tally?, talliesLoaded: Boolean, onClick: () -> Unit, onLongClick: (() -> Unit)? = null,
+                /** After the status chip: the drag grip on the Projects tree. */ trailing: (@Composable () -> Unit)? = null) {
+    val c = Nx.colors
+    val accent = parseColor(p.color, c.violet)
+    val total = tally?.total ?: p.taskCount
+    val done = tally?.done
+    val progress = if (tally != null && tally.total > 0) (tally.done.toFloat() / tally.total).coerceIn(0f, 1f) else 0f
+    Box(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(28.dp))
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+    ) {
+        Box(Modifier.align(Alignment.TopEnd).offset(36.dp, (-36).dp).size(110.dp).background(accent.copy(alpha = 0.10f), CircleShape))
+        Column(Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
+                ProjectMark(p.icon, 44.dp)
+                Spacer(Modifier.size(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(p.name, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(p.description?.takeIf { it.isNotBlank() } ?: stringResource(R.string.project_no_brief), fontSize = 12.sp, color = c.mutedFg, maxLines = 2)
+                }
+                StatusChip(p.status)
+                trailing?.invoke()
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Metric(stringResource(R.string.project_cards), "$total", Modifier.weight(1f))
+                Metric(stringResource(R.string.project_done), done?.toString() ?: "—", Modifier.weight(1f))
+                Metric(stringResource(R.string.project_lanes), "${p.laneCount}", Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(16.dp))
+            Row {
+                Text(if (done == null) stringResource(if (talliesLoaded) R.string.project_no_progress else R.string.project_calculating)
+                else stringResource(R.string.project_energy, (progress * 100).toInt()), fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
+                if (done != null) Text(stringResource(R.string.project_left, maxOf(0, total - done)), fontSize = 11.sp, color = c.mutedFg)
+            }
+            Spacer(Modifier.height(6.dp))
+            LinearProgressIndicator(progress = { progress }, color = c.success, trackColor = c.muted,
+                modifier = Modifier.fillMaxWidth().height(7.dp).clip(CircleShape))
+            Spacer(Modifier.height(16.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (p.memberCount > 0) AvatarStack(p.members.map { it.user?.name to it.user?.avatar }, size = 24.dp, max = 4)
+                else Text(stringResource(R.string.project_solo), fontSize = 11.sp, color = c.mutedFg)
+                Spacer(Modifier.weight(1f))
+                Icon(Icons.Filled.Schedule, null, tint = c.mutedFg, modifier = Modifier.size(12.dp))
+                Spacer(Modifier.size(4.dp))
+                Text(tally?.nextDue?.let { stringResource(R.string.project_next_due, DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(it)) }
+                    ?: stringResource(R.string.project_no_deadline), fontSize = 11.sp, color = c.mutedFg)
+            }
+        }
+    }
+}
+
+@Composable
+fun StatusChip(status: String?) {
+    val c = Nx.colors
+    val (label, tone) = when (status.orEmpty().uppercase()) {
+        "AT_RISK" -> R.string.pstatus_at_risk to c.warning
+        "OFF_TRACK" -> R.string.pstatus_off_track to c.danger
+        "COMPLETED", "DONE" -> R.string.pstatus_completed to c.success
+        "ARCHIVED" -> R.string.pstatus_archived to c.mutedFg
+        "ON_HOLD", "PAUSED" -> R.string.pstatus_on_hold to c.mutedFg
+        else -> R.string.pstatus_active to c.accentFg
+    }
+    Text(stringResource(label), color = tone, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+        modifier = Modifier.background(tone.copy(alpha = 0.15f), CircleShape).padding(horizontal = 8.dp, vertical = 3.dp))
+}
+
+@Composable
+private fun Metric(label: String, value: String, modifier: Modifier) {
+    val c = Nx.colors
+    Column(modifier.background(c.muted.copy(alpha = 0.5f), RoundedCornerShape(12.dp)).padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)
+        Text(label, fontSize = 10.sp, color = c.mutedFg)
+    }
+}
+
+@Composable
+private fun TaskHitRow(t: BoardTask, onClick: () -> Unit) {
+    val c = Nx.colors
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(t.title, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(listOfNotNull(t.taskList?.project?.name, t.taskList?.name).joinToString(" · "), fontSize = 11.sp, color = c.mutedFg)
+        }
+        TaskStatusChip(t.status)
+    }
+}
+
+@Composable
+private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pipelineAccess: Boolean = false, initialFolder: String? = null,
+                                roster: List<RosterMember> = emptyList(), meId: String? = null,
+                                onDismiss: () -> Unit, onCreate: (String, String?, ProjectType, ProjectSetup) -> Unit) {
+    var name by rememberSaveable { mutableStateOf("") }
+    var folder by rememberSaveable { mutableStateOf(initialFolder) }
+    // PROJECT-SETUP-MEMBERS A: starting tabs (Task Project; all on but Automations) and members (any type).
+    var hidden by rememberSaveable { mutableStateOf(ProjectSetupLogic.DEFAULT_HIDDEN.toList()) }
+    var members by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    var memberLevel by rememberSaveable { mutableStateOf(AccessLevel.EDIT) }
+    var picking by remember { mutableStateOf(false) }
+    // First: what the project is for, from the template gallery (DEV-REDESIGN §1): blank, a template or a dashboard type.
+    var pick by remember { mutableStateOf<GalleryPick?>(null) }
+    var starter by rememberSaveable { mutableStateOf(true) }
+    val lang = templateLang()
+    val c = Nx.colors
+    val chosen = pick
+    if (chosen == null) {
+        TemplateGalleryDialog(pipelineAccess, onDismiss = onDismiss) { p ->
+            pick = p
+            // A template starts from its own tabs; blank from the usual default (Automations off).
+            hidden = ((p as? GalleryPick.Template)?.template?.hiddenTabs ?: ProjectSetupLogic.DEFAULT_HIDDEN.toList())
+            starter = true
+        }
+        return
+    }
+    val type = (chosen as? GalleryPick.Dashboard)?.type ?: ProjectType.TASK
+    val template = (chosen as? GalleryPick.Template)?.template
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text(stringResource(R.string.projects_new)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                TemplateChosen(chosen, enabled = !busy) { pick = null }
+                OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.project_name)) }, modifier = Modifier.fillMaxWidth())
+                // No icon or colour choice (PROJECT-ICON): every project shows the task icon; a photo is added in Settings.
+                if (folders.isNotEmpty()) {
+                    var open by remember { mutableStateOf(false) }
+                    Box {
+                        TextButton(onClick = { open = true }) { Text(folders.firstOrNull { it.id == folder }?.name ?: stringResource(R.string.folder_none)) }
+                        DropdownMenu(open, { open = false }) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.folder_none)) }, onClick = { folder = null; open = false })
+                            folders.forEach { f -> DropdownMenuItem(text = { Text(f.name) }, onClick = { folder = f.id; open = false }) }
+                        }
+                    }
+                }
+                if (type == ProjectType.TASK) StartingTabs(hidden.toSet(), enabled = !busy) { hidden = ProjectTabsLogic.KEYS.filter { k -> k in it } }
+                if (template != null && TemplateLogic.hasStarter(template)) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).border(1.dp, c.border, RoundedCornerShape(12.dp))
+                    .clickable(enabled = !busy) { starter = !starter }.padding(end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.Checkbox(starter, { starter = it }, enabled = !busy)
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.tg_starter), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+                        Text(template.starterDocs.joinToString(", ") { TemplateLogic.say(it.title, lang) }.ifEmpty { stringResource(R.string.tg_starter_tasks) },
+                            fontSize = 11.sp, color = c.mutedFg)
+                    }
+                }
+                StartingMembers(members.toSet(), roster, enabled = !busy, onEdit = { picking = true }) { uid -> members = members - uid }
+                // The level the picked people get (13 Oct).
+                if (members.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.acc_they_get), fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
+                    var open by remember { mutableStateOf(false) }
+                    Box {
+                        TextButton(onClick = { open = true }, enabled = !busy) { Text(accessLabel(memberLevel)) }
+                        DropdownMenu(open, { open = false }) {
+                            AccessText.LEVELS.filter { it != AccessLevel.FULL }.forEach { l -> DropdownMenuItem(text = { Text(accessLabel(l)) }, onClick = { memberLevel = l; open = false }) }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onCreate(name, folder, type, ProjectSetup(ProjectSetupLogic.hiddenToSend(hidden.toSet()), ProjectSetupLogic.membersToSend(members.toSet(), meId), template, lang, starter, memberLevel)) }, enabled = name.isNotBlank() && !busy) {
+                if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                else Text(stringResource(if (type == ProjectType.OUTLET_SALES) R.string.pt_outlet_create else R.string.project_launch))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.cancel)) } },
+    )
+    if (picking) {
+        val ctx = LocalContext.current
+        PeoplePickerDialog(roster, members.toSet(), stringResource(R.string.setup_members), { n -> if (n == 0) ctx.getString(R.string.setup_done) else ctx.getString(R.string.setup_pick_n, n) },
+            stringResource(R.string.setup_nobody), stringResource(R.string.setup_nobody_hint), allowNone = true, onDismiss = { picking = false }) { picked ->
+            members = picked.toList(); picking = false
+        }
+    }
+}
+
+@Composable
+private fun FolderDialog(editing: ProjectFolder?, parent: ProjectFolder? = null, busy: Boolean, onDismiss: () -> Unit, onSave: (String, String, String, ByteArray?) -> Unit) {
+    var photo by remember { mutableStateOf<ByteArray?>(null) }
+    var unreadable by remember { mutableStateOf(false) }
+    val pick = id.znetworks.nexus.feature.auth.rememberAvatarPicker { jpeg -> unreadable = jpeg == null; if (jpeg != null) photo = jpeg }
+    var name by rememberSaveable(editing?.id) { mutableStateOf(editing?.name.orEmpty()) }
+    var icon by rememberSaveable(editing?.id) { mutableStateOf(editing?.icon?.takeIf { !it.startsWith("/") } ?: FOLDER_ICONS.first()) }
+    var color by rememberSaveable(editing?.id) { mutableStateOf(editing?.color ?: PROJECT_COLORS.first()) }
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text(stringResource(if (editing != null) R.string.folder_edit else if (parent != null) R.string.fm_new_sub else R.string.folder_new)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (editing == null && parent != null) Text(stringResource(R.string.folder_inside, parent.name), fontSize = 12.sp, color = Nx.colors.mutedFg)
+                OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.folder_name)) }, modifier = Modifier.fillMaxWidth())
+                EmojiRow(FOLDER_ICONS, if (photo == null) icon else "") { icon = it; photo = null }
+                TextButton(onClick = pick) { Text(stringResource(if (photo != null) R.string.folder_photo_chosen else R.string.folder_photo)) }
+                if (unreadable) Text(stringResource(R.string.chat_photo_unreadable), fontSize = 12.sp, color = Nx.colors.danger)
+                ColorRow(color) { color = it }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(name, icon, color, photo) }, enabled = name.isNotBlank() && !busy) {
+                if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                else Text(stringResource(if (editing == null) R.string.folder_create else R.string.save))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.cancel)) } },
+    )
+}
+
+@Composable
+internal fun EmojiRow(options: List<String>, selected: String, onPick: (String) -> Unit) {
+    val c = Nx.colors
+    // The stored value may be a name ("briefcase") or an emoji not offered here: it shows as its emoji, first,
+    // and tapping what is already chosen changes nothing (the stored value goes back as it was).
+    fun norm(e: String?) = e?.replace("\uFE0F", "")
+    val current = ProjectIcon.emoji(selected)
+    val all = if (current != null && options.none { norm(it) == norm(current) }) listOf(current) + options else options
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        all.forEach { e ->
+            val on = norm(e) == norm(current)
+            Box(Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(if (on) c.accentBg else c.muted)
+                .border(if (on) 2.dp else 0.dp, if (on) c.violet else Color.Transparent, RoundedCornerShape(10.dp))
+                .clickable { if (!on) onPick(e) }, contentAlignment = Alignment.Center) { Text(e, fontSize = 18.sp) }
+        }
+    }
+}
+
+@Composable
+internal fun ColorRow(selected: String, onPick: (String) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        PROJECT_COLORS.forEach { hex ->
+            val col = parseColor(hex, Color.Gray)
+            Box(Modifier.size(28.dp).clip(CircleShape).background(col)
+                .border(if (hex.equals(selected, true)) 3.dp else 0.dp, Nx.colors.foreground, CircleShape).clickable { onPick(hex) })
+        }
+    }
+}
+
+

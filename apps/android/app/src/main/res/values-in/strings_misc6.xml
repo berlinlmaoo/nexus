@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scope 6: Threads, Tickets, Leaderboard, Calendar (13 Oct 2026). -->
+<resources>
+    <string name="th_tab_all">Semua</string>
+    <string name="th_tab_mentions">Sebutan</string>
+    <string name="th_no_mentions">Belum ada mention</string>
+    <string name="th_no_mentions_sub">Kalau ada yang menandai kamu, muncul di sini.</string>
+    <string name="tq_inbox">Kotak masuk</string>
+    <string name="tq_review">Ditinjau</string>
+    <string name="tq_inbox_clear">Inbox sudah bersih</string>
+    <string name="tq_inbox_clear_sub">Semua tiket baru sudah ditangani. Tiket baru dari staf masuk ke sini dulu.</string>
+    <string name="tq_review_none">Tidak ada yang ditinjau</string>
+    <string name="tq_review_none_sub">Tiket yang kamu ambil, dan yang sudah dijawab GIDEON, menunggu keputusan di sini.</string>
+    <string name="tq_show_all">Lihat semua tiket</string>
+    <string name="tq_none">Belum ada tiket</string>
+    <string name="tq_none_bod_sub">Tiket dari staf masuk ke sini: keluhan, pertanyaan, catatan absensi yang kelihatan salah. GIDEON cek datanya dulu; keputusannya di kamu.</string>
+    <string name="tq_gone">Tiket ini tidak ada</string>
+    <string name="tq_gone_sub">Mungkin sudah dihapus, atau tautannya salah. Tiketmu sendiri ada di daftar.</string>
+    <string name="tq_not_yours">Tiket ini bukan milikmu</string>
+    <string name="tq_not_yours_sub">Tiket hanya bisa dibaca oleh pembuatnya dan BoD.</string>
+    <string name="tq_back">Kembali ke tiket</string>
+    <string name="lb_current_period">Periode berjalan</string>
+    <string name="lb_search_people">Cari orang</string>
+    <string name="lb_no_match">Tidak ada yang cocok dengan pencarian.</string>
+    <string name="cal_no_division">Tanpa divisi</string>
+</resources>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Month-grid mark "all done / no status" (rule 10.31, Berlin 8 Oct 2026), tinted with the division colour.
+  A stroked check (1.5 dp at 10 dp, round caps) inside a padded box, so it reads at dot size (audit 3 #3).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="10dp" android:height="10dp" android:viewportWidth="10" android:viewportHeight="10">
+    <path android:pathData="M2.2,5.3 L4.2,7.3 L7.9,2.9"
+        android:strokeColor="#FFFFFFFF" android:strokeWidth="1.5"
+        android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

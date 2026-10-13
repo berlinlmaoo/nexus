@@ -1,0 +1,261 @@
+{
+ "cell": {
+  "day": "2026-09-18",
+  "count": 4,
+  "dots": [
+   {
+    "unitId": "oud586f38af44e4329821ef21",
+    "filled": true,
+    "count": 1
+   },
+   {
+    "unitId": "ou396ea68f26c1bb98b84087c",
+    "filled": true,
+    "count": 1
+   },
+   {
+    "unitId": "cmuqqed05001z01mrlii7qx3u",
+    "filled": false,
+    "count": 3
+   }
+  ],
+  "overdue": false
+ },
+ "legend": [
+  {
+   "unitId": "oud586f38af44e4329821ef21",
+   "count": 1
+  },
+  {
+   "unitId": "ou396ea68f26c1bb98b84087c",
+   "count": 1
+  },
+  {
+   "unitId": "cmuqqed05001z01mrlii7qx3u",
+   "count": 3
+  }
+ ],
+ "tree": {
+  "total": 4,
+  "people": 5,
+  "unplaced": [
+   {
+    "userId": "cmnr9lfd3000701rq5ev4pkfv",
+    "items": [
+     "cmspx6d97018i01t76z55z69c"
+    ]
+   }
+  ],
+  "root": {
+   "unit": "Framework Agency",
+   "count": 4,
+   "items": [],
+   "loose": [],
+   "people": [],
+   "children": [
+    {
+     "unit": "Project Management",
+     "count": 1,
+     "items": [
+      "cmspx6d97018i01t76z55z69c"
+     ],
+     "loose": [],
+     "people": [
+      {
+       "userId": "cmq4yiwsc009w01mw62fq4bhw",
+       "items": [
+        "cmspx6d97018i01t76z55z69c"
+       ]
+      }
+     ],
+     "children": []
+    },
+    {
+     "unit": "Creative",
+     "count": 1,
+     "items": [],
+     "loose": [],
+     "people": [],
+     "children": [
+      {
+       "unit": "Event",
+       "count": 1,
+       "items": [
+        "cmspx6d97018i01t76z55z69c"
+       ],
+       "loose": [],
+       "people": [
+        {
+         "userId": "cmspw8dhf012601t7jxzpohs2",
+         "items": [
+          "cmspx6d97018i01t76z55z69c"
+         ]
+        }
+       ],
+       "children": []
+      }
+     ]
+    },
+    {
+     "unit": "Multimedia",
+     "count": 3,
+     "items": [
+      "cmtliz7jv015701vump6zhitz",
+      "cmtlk52pz01cy01vulzspofmi",
+      "cmu17knaa0akc01ke87uc247i"
+     ],
+     "loose": [],
+     "people": [
+      {
+       "userId": "cmnrb0skr000u01o7aln3jkp6",
+       "items": [
+        "cmtliz7jv015701vump6zhitz"
+       ]
+      },
+      {
+       "userId": "cmotv4wdi000f08o5evtzwh3n",
+       "items": [
+        "cmtlk52pz01cy01vulzspofmi",
+        "cmu17knaa0akc01ke87uc247i"
+       ]
+      }
+     ],
+     "children": []
+    }
+   ]
+  }
+ },
+ "week": [
+  {
+   "kind": "unit",
+   "unit": "Framework Agency",
+   "depth": 0,
+   "count": 4
+  },
+  {
+   "kind": "unit",
+   "unit": "Project Management",
+   "depth": 1,
+   "count": 1
+  },
+  {
+   "kind": "person",
+   "unitId": "oud586f38af44e4329821ef21",
+   "userId": "cmq4yiwsc009w01mw62fq4bhw",
+   "depth": 2,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [
+     "cmspx6d97018i01t76z55z69c"
+    ],
+    [],
+    []
+   ]
+  },
+  {
+   "kind": "unit",
+   "unit": "Creative",
+   "depth": 1,
+   "count": 1
+  },
+  {
+   "kind": "unit",
+   "unit": "Event",
+   "depth": 2,
+   "count": 1
+  },
+  {
+   "kind": "person",
+   "unitId": "cmuqq9u4e001l01mrn26adgjl",
+   "userId": "cmspw8dhf012601t7jxzpohs2",
+   "depth": 3,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [
+     "cmspx6d97018i01t76z55z69c"
+    ],
+    [],
+    []
+   ]
+  },
+  {
+   "kind": "unit",
+   "unit": "Multimedia",
+   "depth": 1,
+   "count": 3
+  },
+  {
+   "kind": "person",
+   "unitId": "cmuqqed05001z01mrlii7qx3u",
+   "userId": "cmnrb0skr000u01o7aln3jkp6",
+   "depth": 2,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [
+     "cmtliz7jv015701vump6zhitz"
+    ],
+    [],
+    []
+   ]
+  },
+  {
+   "kind": "person",
+   "unitId": "cmuqqed05001z01mrlii7qx3u",
+   "userId": "cmotv4wdi000f08o5evtzwh3n",
+   "depth": 2,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [
+     "cmtlk52pz01cy01vulzspofmi",
+     "cmu17knaa0akc01ke87uc247i"
+    ],
+    [],
+    []
+   ]
+  },
+  {
+   "kind": "unplaced",
+   "depth": 0,
+   "count": 1
+  },
+  {
+   "kind": "person",
+   "unitId": null,
+   "userId": "cmnr9lfd3000701rq5ev4pkfv",
+   "depth": 1,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [
+     "cmspx6d97018i01t76z55z69c"
+    ],
+    [],
+    []
+   ]
+  }
+ ],
+ "overdue": {
+  "cmspx6d97018i01t76z55z69c": "stale",
+  "cmu1gl5ku0bb701keng4gtea0": "stale",
+  "cmu1gkltm0bat01ke34pjchj1": "stale",
+  "cmtlk52pz01cy01vulzspofmi": "none",
+  "cmu1gk8420bak01ke2wmxsbxl": "stale",
+  "cmtliz7jv015701vump6zhitz": "none",
+  "cmtx491h405g701ke61hoowmd": "none",
+  "cmu17knaa0akc01ke87uc247i": "none"
+ }
+}

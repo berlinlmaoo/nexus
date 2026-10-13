@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Z Vault + Notifications redesign (13 Oct 2026, HANDOFF scope 6). -->
+<resources>
+    <string name="vault_trash_note">Files in the trash still count against the quota. Emptying it frees the space; for 90 days an admin can still bring them back from Control Room → Audit.</string>
+    <string name="vault_trash_empty_sub">Deleted files and folders wait here before they go for good. Nothing is here right now.</string>
+    <string name="vault_empty_title">Nothing in this folder yet</string>
+    <string name="vault_no_match_sub">Nothing in the vault has that name. Try another word, or clear the search.</string>
+    <string name="vault_clear_search">Clear search</string>
+    <string name="inbox_delete">Delete notification</string>
+    <string name="inbox_deleted">Notification deleted</string>
+    <string name="inbox_delete_failed">Couldn\'t delete it.</string>
+    <string name="inbox_mark_read">Mark as read</string>
+    <string name="inbox_new">New notification</string>
+    <string name="inbox_none">No notifications</string>
+    <string name="inbox_kind_none">Nothing of this kind</string>
+    <string name="inbox_kind_none_sub">This filter only shows one type of notification. Everything else is still in All.</string>
+</resources>

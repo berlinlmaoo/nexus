@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scope 6: Threads, Tickets, Leaderboard, Calendar (13 Oct 2026). -->
+<resources>
+    <string name="th_tab_all">All</string>
+    <string name="th_tab_mentions">Mentions</string>
+    <string name="th_no_mentions">No mentions yet</string>
+    <string name="th_no_mentions_sub">When someone tags you, it shows up here.</string>
+    <string name="tq_inbox">Inbox</string>
+    <string name="tq_review">In review</string>
+    <string name="tq_inbox_clear">Inbox is clear</string>
+    <string name="tq_inbox_clear_sub">Every new ticket has been picked up. New ones from staff land here first.</string>
+    <string name="tq_review_none">Nothing in review</string>
+    <string name="tq_review_none_sub">Tickets you take on, and the ones GIDEON has answered, wait here for a decision.</string>
+    <string name="tq_show_all">Show all tickets</string>
+    <string name="tq_none">No tickets yet</string>
+    <string name="tq_none_bod_sub">Tickets from staff land here: complaints, questions, attendance records that look wrong. GIDEON checks the data first; the decision is yours.</string>
+    <string name="tq_gone">This ticket doesn\'t exist</string>
+    <string name="tq_gone_sub">It may have been deleted, or the link is wrong. Your own tickets are in the list.</string>
+    <string name="tq_not_yours">This ticket isn\'t yours</string>
+    <string name="tq_not_yours_sub">Only the person who filed it and the BoD can read a ticket.</string>
+    <string name="tq_back">Back to tickets</string>
+    <string name="lb_current_period">Current period</string>
+    <string name="lb_search_people">Search people</string>
+    <string name="lb_no_match">No one matches the search.</string>
+    <string name="cal_no_division">No division</string>
+</resources>
