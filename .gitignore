@@ -73,3 +73,5 @@ cron/cron-secret.txt
 apps/nexus-lovable-ui/dist-new/
 cron/cron.log
 __pycache__/
+deploy/bluegreen/RUNBOOK.md
+apps/android/docs/HANDOFF-ANDROID.md
