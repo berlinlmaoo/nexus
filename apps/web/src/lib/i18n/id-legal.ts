@@ -135,6 +135,7 @@ export const ID_LEGAL: Record<string, string> = {
   "Not a number": "Bukan angka",
   "Pick one of the choices": "Pilih salah satu pilihan",
   "Add at least one row": "Tambahkan minimal satu baris",
+  "At most 200 rows": "Maksimal 200 baris",
   "Used in the document number": "Dipakai di nomor dokumen",
 
   // Settings
