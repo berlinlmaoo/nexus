@@ -1,5 +1,8 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.PageHeader
+import id.znetworks.nexus.ui.components.PageTab
+import id.znetworks.nexus.ui.components.PageTabs
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -91,24 +94,15 @@ fun ControlRoomScreen(onBack: () -> Unit, nav: AdminNav, tabContent: @Composable
     LaunchedEffect(Unit) { viewer.load(); ready = true }
     var tab by rememberSaveable { mutableStateOf("users") }
     Column(Modifier.fillMaxSize().background(c.background).dismissKeyboardOnTapOrDrag()) {
-        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Text("Control Room", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)
-        }
+        val config by (LocalContext.current.applicationContext as NexusApplication).container.remoteConfig.body.collectAsState()
+        val open = ready && viewer.canAdminister
+        val tabs = ControlRoomTabs.forRole(viewer.isBoD, config.fakeGpsReview)
+        // The sections as the web's underline tabs (scroll sideways when they don't fit), only once access is known.
+        PageHeader(stringResource(R.string.mt_control), subtitle = stringResource(R.string.sub_admin), onBack = onBack,
+            tabs = if (open) { { PageTabs(tabs.map { PageTab(it, tabLabel(it)) }, tab, { tab = it }) } } else null)
         if (!ready) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return@Column }
         // Manager and above only, as the web: anybody else gets a door they can see is locked.
         if (!viewer.canAdminister) { TabEmpty(Icons.Filled.AdminPanelSettings, stringResource(R.string.ad_no_access)); return@Column }
-        val config by (LocalContext.current.applicationContext as NexusApplication).container.remoteConfig.body.collectAsState()
-        val tabs = ControlRoomTabs.forRole(viewer.isBoD, config.fakeGpsReview)
-        // Pills that size to their text and scroll, not a segmented control that truncates.
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            tabs.forEach { id ->
-                val on = id == tab
-                Text(tabLabel(id), fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.SemiBold, color = if (on) Color.White else c.mutedFg,
-                    modifier = Modifier.clip(CircleShape).background(if (on) c.violet else c.muted.copy(alpha = 0.6f)).clickable { tab = id }.padding(horizontal = 14.dp, vertical = 8.dp))
-            }
-        }
-        HorizontalDivider(color = c.border)
         Box(Modifier.weight(1f)) {
             when (tab) {
                 "users" -> UsersTab(viewer.isBoD, nav.openUser, nav.openChart, nav.openOrgChart)

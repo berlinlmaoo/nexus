@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dev-web redesign port (13 Oct 2026, HANDOFF-ANDROID.md). Indonesian twin in values-in/strings_redesign.xml. -->
+<resources>
+    <!-- Shell: navigation groups and entries (web AppSidebar / MobileTabBar) -->
+    <string name="nav_group_home">Home</string>
+    <string name="nav_group_work">Work</string>
+    <string name="nav_group_team">Team</string>
+    <string name="nav_group_system">System</string>
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_gideon">GIDEON</string>
+    <string name="nav_notifications">Notifications</string>
+    <string name="nav_my_tasks">My Tasks</string>
+    <string name="nav_projects">Projects</string>
+    <string name="nav_tickets">Tickets</string>
+    <string name="nav_settings">Settings</string>
+    <string name="nav_search">Search tasks, projects, docs, people…</string>
+    <string name="nav_light_mode">Light mode</string>
+    <string name="nav_dark_mode">Dark mode</string>
+    <string name="nav_language">Language</string>
+    <string name="nav_language_value">English</string>
+    <string name="nav_log_out">Log out</string>
+    <string name="nav_more_subtitle">Everything else in NEXUS</string>
+    <string name="nav_collapse">Collapse sidebar</string>
+    <string name="nav_expand">Expand sidebar</string>
+    <!-- Page subtitles (dev web PageHeader) -->
+    <string name="sub_admin">Everyone in the workspace and their roles.</string>
+    <string name="sub_attendance">Check in, ask for leave or a permission, and see your attendance history.</string>
+    <string name="sub_attendance_board">Who\'s in, on leave or working from home, and everyone\'s attendance history.</string>
+    <string name="sub_tickets">A direct line to the BoD for work or HR issues. Only the BoD can read it.</string>
+    <string name="sub_docs">SOPs, meeting notes, briefs and reference pages from every project you\'re in.</string>
+    <string name="sub_forms">Forms that create a task each time someone submits them.</string>
+    <string name="sub_inbox">Mentions, assignments, approvals and replies that need you.</string>
+    <string name="sub_leaderboard">Everyone\'s XP this month. It resets on the 1st.</string>
+    <string name="sub_messages">Chat with your team and in project rooms.</string>
+    <string name="sub_my_tasks">Tasks assigned to you, the most urgent first.</string>
+    <string name="sub_reports_all">How everyone is doing this period.</string>
+    <string name="sub_reports_team">How your direct reports are doing this period.</string>
+    <string name="sub_reports_me">Your work, attendance and XP for the period.</string>
+    <string name="sub_rooms">Book a meeting room and see who has it when.</string>
+    <string name="sub_settings">Your profile, security, notifications and workspace preferences.</string>
+    <string name="sub_submissions">Requests you sent through a form. The team that handles them moves them along; this board follows.</string>
+    <string name="sub_threads">Short updates from the team. Tag someone with @ and they get notified.</string>
+    <string name="sub_vault">The whole office\'s shared shelf — logos, decks, assets.</string>
+    <string name="sub_projects">Every project you\'re part of.</string>
+    <string name="nav_pages">Pages</string>
+</resources>

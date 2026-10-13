@@ -182,10 +182,7 @@ fun AttendanceScreen(
 
     Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
     if (onBack != null) {
-        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Text(stringResource(R.string.home_attendance), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)
-        }
+        id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.home_attendance), subtitle = stringResource(R.string.sub_attendance), onBack = onBack)
     }
     // While typing the reflection the Check out button stays in sight above the keyboard.
     var reflectionFocused by remember { mutableStateOf(false) }

@@ -24,7 +24,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import id.znetworks.nexus.ui.theme.DisplayFont
 import id.znetworks.nexus.ui.theme.Nx
 import id.znetworks.nexus.ui.theme.TextFont
 
@@ -43,26 +42,21 @@ fun EmptyState(
     modifier: Modifier = Modifier,
 ) {
     val c = Nx.colors
+    // Calm, as the dev web's EmptyState (12 Oct 2026): one muted glyph in a soft circle, a plain title, the
+    // reason, and the next step as the page's primary button (near-black, rounded 8).
     Column(
         modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Box(Modifier.size(64.dp).background(c.accentBg, CircleShape), contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = null, tint = c.accentFg, modifier = Modifier.size(28.dp))
+        Box(Modifier.size(44.dp).background(c.muted, CircleShape), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = null, tint = c.mutedFg, modifier = Modifier.size(20.dp))
         }
-        Spacer(Modifier.height(18.dp))
-        Text(title, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(12.dp))
+        Text(title, fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = c.foreground, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(4.dp))
         Text(message, fontFamily = TextFont, fontSize = 14.sp, color = c.mutedFg, textAlign = TextAlign.Center, lineHeight = 20.sp)
-        Spacer(Modifier.height(20.dp))
-        Button(
-            onClick = onAction,
-            shape = RoundedCornerShape(14.dp),
-            // The M3 primary role (violetText + its on-colour): AA in both themes, unlike the violet fill (audit 2 #2).
-            colors = ButtonDefaults.buttonColors(),
-        ) {
-            Text(actionLabel, fontFamily = DisplayFont, fontWeight = FontWeight.Bold)
-        }
+        Spacer(Modifier.height(16.dp))
+        NxButton(actionLabel, onAction, kind = NxButtonKind.PRIMARY)
     }
 }

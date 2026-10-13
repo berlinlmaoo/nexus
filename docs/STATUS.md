@@ -6,7 +6,7 @@
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
 **Branch `dev` (12 Oct, DEV-REDESIGN.md):** the Notion-like redesign is built on branch `dev` against the
 DEV server, never on `master`. Settings › Server switches Production / Dev (Tailscale); see "12 Oct, DEV".
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (576 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (586 JVM tests, all green, 13 Oct).
 Version 0.1.6 (versionCode 13 in the tree), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 **Build 13 PUBLISHED** (5 Oct: `nexus-prod:~/nexus-data/android/nexus-0.1.6-13.apk` + `current.json` (previous kept as `current.json.prev-12`), sha256 `a6e09f68cae704162865a633dff4293b4fcdcb0dea865f113f315c959ceea98a`, from 0885fa0, 342 tests; versionCode 13, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 13): build 12 + the org chart in English and Indonesian. Emulator smoke: 3 cold launches drawn, no crash from this install.
 **Build 12 PUBLISHED** (5 Oct 07:44 UTC: `nexus-prod:~/nexus-data/android/nexus-0.1.6-12.apk` + `current.json` (previous kept as `current.json.prev-11`), sha256 `6c660b44318a0872b44a2ba56bc9410373b5fd4da2b5f357e34e4a7957164a1b`, from e7924c4, 341 tests; versionCode 12, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 12): build 11 + Bagan IP & Divisi. Emulator smoke: 3 cold launches drawn, no crash from this install; the fixture and the debug preview are not in the release APK.
@@ -21,6 +21,19 @@ from b122e0f, 300 JVM tests at that commit): security + parity audit 266af90 = *
 out for Berlin to test. The fixes for that audit's RENDAH findings (R1, R3, R4, R6, R7) are in the code
 after it and ride in the next build, which is made only when the main session says so.
 Phases 1–5 done; Wear OS not built (Berlin: not a Play Store priority).
+
+## 13 Oct, redesign port for the big release (docs/HANDOFF-ANDROID.md; branch `dev`)
+
+Target: parity with the dev web desktop (master reference) and iOS dev, adapted to a phone.
+
+| Scope | What | State |
+|---|---|---|
+| 1 Shell | `ShellNav` (one list for More + sidebar, web order Home · Work · Team · System, company/role/calendar gates, route → entry); More = web More sheet as a page (search row, groups as plain outline-icon rows with counts, profile card → Settings, light/dark, EN/ID, Log out); ≥ 840 dp the web sidebar (logo, search, groups with the current page marked, footer avatar/theme/EN-ID/log out), 600–839 dp rail, phones the bottom bar (Home · Chat · Calendar · Projects · More, outline icons, ink on a muted pill, hairline). `PageChrome.kt`: `PageHeader` (22 sp semibold left title + 2-line muted subtitle + right actions + optional underline tabs + hairline), `NxButton` (primary near-black / bordered / ghost / destructive), `HeaderIconButton`, `PageTabs` (underline, counts), `Segmented`. M3 primary = web `--primary` ink (was violet); body 15–16 sp; calm `EmptyState` (muted glyph circle, primary button). PageHeader + web subtitles (EN/ID) on My Tasks, Messages, Tickets (status filter → PageTabs with counts), Forms, My Submissions, Pages (was "Knowledge Library"), Room Booking, Notifications, Projects, Reports (Me/Team → PageTabs, subtitle per scope), Leaderboard, Threads, Z Vault, Settings (was "Tuning Room"), Control Room (sections → PageTabs), GIDEON, Attendance (title row only). Strings: `res/values*/strings_redesign.xml`, parity test. | done |
+| 7 Notification language | `X-Nexus-Lang: en|id` on every request (in-app language, never the phone's), `PATCH /api/user/profile {uiLanguage}` on launch, sign-in and every picker change; Inbox shows `texts[lang]` when the server sent both, else the stored pair. Pushes are written by the server in the person's language. | done |
+| 2–6 | Projects/project page, access levels, Spreadsheet, Forms builder/Responses, GIDEON/Vault/Settings/Notifications/Calendar/Threads/Tickets/Leaderboard/Login | open |
+
+Not seen on a device signed in yet (QA needs an account on the dev server): the shell was checked in the debug
+preview on the Orca emulator (More, Settings header).
 
 ## Done (Phase 1, attendance MVP)
 

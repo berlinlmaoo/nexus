@@ -110,8 +110,9 @@ fun NexusLightTheme(content: @Composable () -> Unit) = NexusThemeOf(NxLight, dar
 private fun NexusThemeOf(nx: NxColors, dark: Boolean, content: @Composable () -> Unit) {
     val scheme = if (dark) {
         darkColorScheme(
-            // Text-bearing roles get the text tokens (audit 2 #2): TextButton labels, filled buttons, badges pass AA.
-            primary = nx.violetText, onPrimary = nx.background, background = nx.background, onBackground = nx.foreground,
+            // The dev web's --primary (13 Oct 2026 redesign): buttons, checks and switches in the light ink, never
+            // violet; violet stays the brand accent ([NxColors.violetText] / accent roles).
+            primary = nx.onyx, onPrimary = nx.background, background = nx.background, onBackground = nx.foreground,
             surface = nx.card, onSurface = nx.foreground, surfaceVariant = nx.muted, onSurfaceVariant = nx.mutedFg,
             outline = nx.boundary, error = nx.dangerText, onError = nx.onDanger, secondaryContainer = nx.accentBg, onSecondaryContainer = nx.accentFg,
             // The tiers M3 components draw on (dialogs, menus, the pull-to-refresh disc, switch tracks):
@@ -122,7 +123,7 @@ private fun NexusThemeOf(nx: NxColors, dark: Boolean, content: @Composable () ->
         )
     } else {
         lightColorScheme(
-            primary = nx.violetText, onPrimary = Color.White, background = nx.background, onBackground = nx.foreground,
+            primary = nx.onyx, onPrimary = Color.White, background = nx.background, onBackground = nx.foreground,
             surface = nx.card, onSurface = nx.foreground, surfaceVariant = nx.muted, onSurfaceVariant = nx.mutedFg,
             outline = nx.boundary, error = nx.dangerText, onError = nx.onDanger, secondaryContainer = nx.accentBg, onSecondaryContainer = nx.accentFg,
             primaryContainer = nx.accentBg, onPrimaryContainer = nx.accentFg, inverseSurface = nx.onyx, inverseOnSurface = nx.card,

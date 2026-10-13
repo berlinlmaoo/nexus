@@ -380,24 +380,21 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
     val q = s.query.trim()
     val matched = if (q.isEmpty()) s.projects else s.projects.filter { it.name.contains(q, true) || it.description.orEmpty().contains(q, true) }
 
-    PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() },
-        modifier = Modifier.fillMaxSize().background(c.background).onGloballyPositioned { origin = it.positionInRoot() }) {
-        LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.projects_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 24.sp,
-                        color = c.foreground, modifier = Modifier.weight(1f))
-                    Box {
-                        IconButton(onClick = { menu = true }) { Icon(Icons.Filled.Add, stringResource(R.string.projects_new)) }
-                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(text = { Text(stringResource(R.string.projects_new)) }, leadingIcon = { Icon(Icons.Filled.ViewKanban, null) },
-                                onClick = { menu = false; creating = true })
-                            DropdownMenuItem(text = { Text(stringResource(R.string.folder_new)) }, leadingIcon = { Icon(Icons.Filled.CreateNewFolder, null) },
-                                onClick = { menu = false; folderCreate = true })
-                        }
-                    }
-                }
+    Column(Modifier.fillMaxSize().background(c.background)) {
+    id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.projects_title), subtitle = stringResource(R.string.sub_projects)) {
+        Box {
+            id.znetworks.nexus.ui.components.HeaderIconButton(Icons.Filled.Add, stringResource(R.string.projects_new), { menu = true }, primary = true)
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text(stringResource(R.string.projects_new)) }, leadingIcon = { Icon(Icons.Filled.ViewKanban, null) },
+                    onClick = { menu = false; creating = true })
+                DropdownMenuItem(text = { Text(stringResource(R.string.folder_new)) }, leadingIcon = { Icon(Icons.Filled.CreateNewFolder, null) },
+                    onClick = { menu = false; folderCreate = true })
             }
+        }
+    }
+    PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() },
+        modifier = Modifier.weight(1f).fillMaxWidth().background(c.background).onGloballyPositioned { origin = it.positionInRoot() }) {
+        LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
             item {
                 OutlinedTextField(s.query, vm::setQuery, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) },
                     placeholder = { Text(stringResource(R.string.projects_search)) }, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth())
@@ -446,6 +443,7 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
         }
         DragGhost(drag, origin)
         androidx.compose.material3.SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
+    }
     }
 
     // Who may make a Pipeline board (company workspace, §16): read once from the viewer.

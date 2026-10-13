@@ -35,8 +35,9 @@ val NexusTypography = Typography().run {
         titleLarge = titleLarge.copy(fontFamily = DisplayFont, fontWeight = FontWeight.Bold),
         titleMedium = titleMedium.copy(fontFamily = DisplayFont, fontWeight = FontWeight.Bold),
         titleSmall = titleSmall.copy(fontFamily = DisplayFont, fontWeight = FontWeight.Bold),
-        bodyLarge = bodyLarge.copy(fontFamily = TextFont),
-        bodyMedium = bodyMedium.copy(fontFamily = TextFont),
+        // Body ~15–16 sp like the dev web's 16 px root (redesign, 13 Oct 2026); Material's 14 sp read small.
+        bodyLarge = bodyLarge.copy(fontFamily = TextFont, fontSize = 16.sp, lineHeight = 23.sp),
+        bodyMedium = bodyMedium.copy(fontFamily = TextFont, fontSize = 15.sp, lineHeight = 21.sp),
         bodySmall = bodySmall.copy(fontFamily = TextFont),
         labelLarge = labelLarge.copy(fontFamily = TextFont, fontWeight = FontWeight.SemiBold),
         labelMedium = labelMedium.copy(fontFamily = TextFont, fontWeight = FontWeight.SemiBold),

@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.threads
 
+import id.znetworks.nexus.ui.components.PageHeader
 import android.app.Application
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -262,10 +263,7 @@ fun ThreadsScreen(onBack: () -> Unit, focusPostId: String? = null, vm: ThreadsVi
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(FeedRules.MAX_IMAGES)) { if (it.isNotEmpty()) vm.addPhotos(it) }
 
     Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
-        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Text(stringResource(R.string.th_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)
-        }
+        PageHeader(stringResource(R.string.th_title), subtitle = stringResource(R.string.sub_threads), onBack = onBack)
         PullToRefreshBox(isRefreshing = false, onRefresh = { vm.refresh() }, modifier = Modifier.weight(1f)) {
             LazyColumn(state = list, contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 item(key = "composer") {

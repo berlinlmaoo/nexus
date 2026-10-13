@@ -129,7 +129,7 @@ class UiPreviewActivity : ComponentActivity() {
                             }
                         }
                         "pdf" -> id.znetworks.nexus.ui.components.PdfPages(samplePdf()) {}
-                        else -> MoreScreen(Session("t", "c", "u", "Berlin Preview", "preview@example.com"), onLogout = {}, open = {}, onOpenWhatsNew = {})
+                        else -> MoreScreen(Session("t", "c", "u", "Berlin Preview", "preview@example.com"), onLogout = {}, onItem = {}, onSearch = {}, tabs = emptySet())
                     }
                 }
             }
@@ -223,7 +223,7 @@ private fun Nav8Preview() {
         Box(Modifier.padding(12.dp).background(Nx.colors.card, androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).padding(12.dp)) {
             androidx.compose.material3.Text(id.znetworks.nexus.feature.chat.highlight("@Dimas cek brief di https://nexus.znetworks.id/calendar ya", Nx.colors.violetText, Nx.colors.foreground), color = Nx.colors.foreground)
         }
-        Box(Modifier.weight(1f)) { MoreScreen(Session("t", "c", "u", "Staff Preview", "preview@example.com"), onLogout = {}, open = {}, onOpenWhatsNew = {}) }
+        Box(Modifier.weight(1f)) { MoreScreen(Session("t", "c", "u", "Staff Preview", "preview@example.com"), onLogout = {}, onItem = {}, onSearch = {}, tabs = emptySet()) }
     }
 }
 

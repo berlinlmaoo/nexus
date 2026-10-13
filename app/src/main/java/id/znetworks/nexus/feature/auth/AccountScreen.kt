@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.auth
 
+import id.znetworks.nexus.ui.components.PageHeader
 import android.app.Application
 import android.content.Context
 import android.os.Build
@@ -159,14 +160,8 @@ fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, onLo
     val c = Nx.colors
     val context = LocalContext.current
     Column(Modifier.fillMaxSize().background(c.background)) {
-        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Text(stringResource(R.string.mt_tuning), fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = c.foreground,
-                textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
-            // Same width as the back button, so the title stays centred (iOS inline title).
-            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                if (s.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-            }
+        PageHeader(stringResource(R.string.nav_settings), subtitle = stringResource(R.string.sub_settings), onBack = onBack) {
+            if (s.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             UpdateRow()

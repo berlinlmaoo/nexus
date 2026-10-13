@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.people
 
+import id.znetworks.nexus.ui.components.PageHeader
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.HorizontalDivider
@@ -101,10 +102,7 @@ fun LeaderboardScreen(onBack: () -> Unit, onOpenPerson: (String) -> Unit) {
     var tick by remember { mutableStateOf(0) }
     LaunchedEffect(tick) { try { board = api.leaderboard().value; error = null } catch (e: ApiError) { error = e.describe(context.resources) } }
     Column(Modifier.fillMaxSize().background(c.background)) {
-        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Text(stringResource(R.string.home_q_leaderboard), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)
-        }
+        PageHeader(stringResource(R.string.home_q_leaderboard), subtitle = stringResource(R.string.sub_leaderboard), onBack = onBack)
         val b = board
         when {
             b == null && error == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }

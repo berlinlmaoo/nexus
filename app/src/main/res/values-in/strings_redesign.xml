@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nav_group_home">Beranda</string>
+    <string name="nav_group_work">Kerja</string>
+    <string name="nav_group_team">Tim</string>
+    <string name="nav_group_system">Sistem</string>
+    <string name="nav_dashboard">Dasbor</string>
+    <string name="nav_gideon">GIDEON</string>
+    <string name="nav_notifications">Notifikasi</string>
+    <string name="nav_my_tasks">Task Saya</string>
+    <string name="nav_projects">Project</string>
+    <string name="nav_tickets">Tiket</string>
+    <string name="nav_settings">Pengaturan</string>
+    <string name="nav_search">Cari task, project, dokumen, orang…</string>
+    <string name="nav_light_mode">Mode terang</string>
+    <string name="nav_dark_mode">Mode gelap</string>
+    <string name="nav_language">Bahasa</string>
+    <string name="nav_language_value">Bahasa Indonesia</string>
+    <string name="nav_log_out">Keluar</string>
+    <string name="nav_more_subtitle">Semua yang lain di NEXUS</string>
+    <string name="nav_collapse">Ciutkan sidebar</string>
+    <string name="nav_expand">Lebarkan sidebar</string>
+    <!-- Page subtitles (dev web PageHeader) -->
+    <string name="sub_admin">Semua orang di workspace dan perannya.</string>
+    <string name="sub_attendance">Absen, ajukan cuti atau izin, dan lihat riwayat absensimu.</string>
+    <string name="sub_attendance_board">Siapa yang masuk, cuti, atau WFH, dan riwayat absensi semua orang.</string>
+    <string name="sub_tickets">Jalur langsung ke BoD untuk urusan kerja atau HR. Hanya BoD yang bisa membacanya.</string>
+    <string name="sub_docs">SOP, notulen, brief, dan halaman referensi dari semua project yang kamu ikuti.</string>
+    <string name="sub_forms">Form yang membuat task setiap kali ada yang mengirim.</string>
+    <string name="sub_inbox">Mention, penugasan, persetujuan, dan balasan yang butuh kamu.</string>
+    <string name="sub_leaderboard">XP semua orang bulan ini. Direset setiap tanggal 1.</string>
+    <string name="sub_messages">Ngobrol dengan tim dan di ruang project.</string>
+    <string name="sub_my_tasks">Task yang ditugaskan ke kamu, yang paling mendesak duluan.</string>
+    <string name="sub_reports_all">Kinerja semua orang di periode ini.</string>
+    <string name="sub_reports_team">Kinerja bawahan langsungmu di periode ini.</string>
+    <string name="sub_reports_me">Pekerjaan, absensi, dan XP-mu untuk periode ini.</string>
+    <string name="sub_rooms">Booking ruang meeting dan lihat siapa yang memakainya kapan.</string>
+    <string name="sub_settings">Profil, keamanan, notifikasi, dan preferensi workspace kamu.</string>
+    <string name="sub_submissions">Pengajuan yang kamu kirim lewat form. Tim yang menangani memindahkannya; papan ini ikut berubah.</string>
+    <string name="sub_threads">Kabar singkat dari tim. Tag seseorang pakai @ biar dia dapat notifikasi.</string>
+    <string name="sub_vault">Rak berkas bersama satu kantor — logo, deck, aset.</string>
+    <string name="sub_projects">Semua project yang kamu ikuti.</string>
+    <string name="nav_pages">Halaman</string>
+</resources>

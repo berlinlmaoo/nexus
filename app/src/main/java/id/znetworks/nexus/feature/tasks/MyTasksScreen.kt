@@ -111,12 +111,7 @@ fun MyTasksScreen(onOpenTask: (String) -> Unit, onBrowseProjects: () -> Unit, on
     LaunchedEffect(Unit) { vm.load() }
     Column(Modifier.fillMaxSize().background(c.background)) {
         // Opened from More (no longer a tab): a back arrow beside the title.
-        androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            if (onBack != null) androidx.compose.material3.IconButton(onClick = onBack, modifier = Modifier.padding(top = 12.dp)) {
-                androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Text(stringResource(R.string.mytasks_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 24.sp,
-                color = c.foreground, modifier = Modifier.padding(start = if (onBack != null) 0.dp else 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp))
-        }
+        id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.mytasks_title), subtitle = stringResource(R.string.sub_my_tasks), onBack = onBack)
         s.savedAt?.let { Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(horizontal = 16.dp)) }
         Box(Modifier.weight(1f)) {
             when {

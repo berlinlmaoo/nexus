@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.gideon
 
+import id.znetworks.nexus.ui.components.PageHeader
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -93,10 +94,7 @@ fun GideonScreen(onBack: () -> Unit) {
     }
 
     Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
-        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Icon(Icons.Filled.AutoAwesome, null, tint = c.violetText); Spacer(Modifier.width(6.dp))
-            Text("GIDEON", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, modifier = Modifier.weight(1f))
+        PageHeader("GIDEON", onBack = onBack, leading = { Icon(Icons.Filled.AutoAwesome, null, tint = c.violetText) }) {
             Box {
                 TextButton(onClick = { menu = true }) { Text(s.tier.label) }
                 DropdownMenu(menu, { menu = false }) {

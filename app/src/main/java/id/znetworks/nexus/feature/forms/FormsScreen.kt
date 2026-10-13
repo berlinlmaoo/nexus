@@ -75,10 +75,7 @@ fun FormsScreen(onBack: () -> Unit, onOpenForm: (String) -> Unit) {
         }
     }
     Column(Modifier.fillMaxSize().background(c.background)) {
-        Box(Modifier.fillMaxWidth().padding(4.dp), contentAlignment = Alignment.Center) {
-            IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Text(stringResource(R.string.mt_forms), fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = c.foreground)
-        }
+        id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.mt_forms), subtitle = stringResource(R.string.sub_forms), onBack = onBack)
         val l = forms
         when {
             error != null -> EmptyState(Icons.Filled.Description, stringResource(R.string.fm_load_error), error!!, stringResource(R.string.try_again), { reload++ })

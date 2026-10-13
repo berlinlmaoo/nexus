@@ -143,8 +143,7 @@ fun RoomBookingScreen(onBack: () -> Unit) {
         catch (e: ApiError) { error = e.describe(res) }
     }
     Column(Modifier.fillMaxSize().background(c.background)) {
-        Header(stringResource(R.string.home_q_rooms), onBack)
-        Text(stringResource(R.string.ag_rooms_sub), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(horizontal = 16.dp))
+        id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.home_q_rooms), subtitle = stringResource(R.string.sub_rooms), onBack = onBack)
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(!past, { past = false }, { Text(stringResource(R.string.ag_upcoming)) })
             FilterChip(past, { past = true }, { Text(stringResource(R.string.ag_history)) })

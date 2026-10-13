@@ -187,17 +187,12 @@ fun TicketsScreen(onBack: () -> Unit, onOpenTicket: (String) -> Unit, vm: Ticket
     LaunchedEffect(Unit) { vm.load() }
     Box(Modifier.fillMaxSize().background(c.background)) {
         Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-                Text(stringResource(R.string.tk_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)
-            }
             val all = s.list?.complaints.orEmpty()
-            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("ALL", "OPEN", "IN_REVIEW", "RESOLVED", "CLOSED").forEach { f ->
-                    val n = all.count { TicketRules.inFilter(it, f) }
-                    FilterChip(filter == f, { filter = f }, { Text(ticketStatusLabel(f) + if (n > 0) " · $n" else "", fontSize = 12.sp) })
-                }
+            val filterTabs = listOf("ALL", "OPEN", "IN_REVIEW", "RESOLVED", "CLOSED").map { f ->
+                id.znetworks.nexus.ui.components.PageTab(f, ticketStatusLabel(f), count = all.count { TicketRules.inFilter(it, f) })
             }
+            id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.tk_title), subtitle = stringResource(R.string.sub_tickets), onBack = onBack,
+                tabs = { id.znetworks.nexus.ui.components.PageTabs(filterTabs, filter, { filter = it }) })
             s.savedAt?.let { Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(horizontal = 16.dp)) }
             Box(Modifier.weight(1f)) {
                 val shown = all.filter { TicketRules.inFilter(it, filter) }

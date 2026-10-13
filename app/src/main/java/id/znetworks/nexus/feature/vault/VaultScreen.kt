@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.vault
 
+import id.znetworks.nexus.ui.components.PageHeader
+import id.znetworks.nexus.ui.components.HeaderIconButton
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.ui.graphics.Color
 import id.znetworks.nexus.ui.components.PendingConfirm
@@ -213,16 +215,15 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
     LaunchedEffect(q) { if (q != s.query) { kotlinx.coroutines.delay(300); vm.search(q) } }
     val l = s.list
     Column(Modifier.fillMaxSize().background(c.background)) {
-        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Text(if (vm.trash) stringResource(R.string.vault_trash) else l?.breadcrumb?.lastOrNull()?.name ?: "Z Vault", fontFamily = DisplayFont,
-                fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // The shelf's subtitle at the root only; a folder or the trash is named by its title.
+        PageHeader(if (vm.trash) stringResource(R.string.vault_trash) else l?.breadcrumb?.lastOrNull()?.name ?: "Z Vault",
+            subtitle = if (!vm.trash && vm.folder == null) stringResource(R.string.sub_vault) else null, onBack = onBack) {
             if (s.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            if (!vm.trash && vm.folder == null) HeaderIconButton(Icons.Filled.Delete, stringResource(R.string.vault_trash), onOpenTrash)
             if (!vm.trash && l?.canWrite == true) {
-                IconButton(onClick = { creating = true }) { Icon(Icons.Filled.CreateNewFolder, stringResource(R.string.vault_new_folder), tint = c.violetText) }
-                IconButton(onClick = { pick.launch(arrayOf("*/*")) }, enabled = s.upload == null) { Icon(Icons.Filled.Upload, stringResource(R.string.td_upload), tint = c.violetText) }
+                HeaderIconButton(Icons.Filled.CreateNewFolder, stringResource(R.string.vault_new_folder), { creating = true })
+                HeaderIconButton(Icons.Filled.Upload, stringResource(R.string.td_upload), { pick.launch(arrayOf("*/*")) }, primary = true, enabled = s.upload == null)
             }
-            if (!vm.trash && vm.folder == null) IconButton(onClick = onOpenTrash) { Icon(Icons.Filled.Delete, stringResource(R.string.vault_trash), tint = c.mutedFg) }
             if (vm.trash && l?.items?.isNotEmpty() == true) TextButton(onClick = { confirmEmpty = true }) { Text(stringResource(R.string.vault_empty_trash), color = c.danger) }
         }
         if (!vm.trash) {

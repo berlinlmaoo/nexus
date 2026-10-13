@@ -1,6 +1,11 @@
 package id.znetworks.nexus.ui.shell
 
-import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.outlined.Chat
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.CheckBox
 import id.znetworks.nexus.feature.forms.FormBuilderScreen
 import id.znetworks.nexus.feature.chat.ChatSearchScreen
 import id.znetworks.nexus.feature.chat.ChatMediaScreen
@@ -176,13 +181,13 @@ import id.znetworks.nexus.feature.update.startUpdate
 import kotlinx.coroutines.launch
 
 internal enum class Tab(val route: String, val label: Int, val icon: ImageVector, val webPath: String) {
-    HOME("home", R.string.tab_home, Icons.Filled.Home, "/dashboard"),
-    TASKS("tasks", R.string.tab_tasks, Icons.Filled.Checklist, "/my-tasks"),
+    HOME("home", R.string.tab_home, Icons.Outlined.Home, "/dashboard"),
+    TASKS("tasks", R.string.tab_tasks, Icons.Outlined.CheckBox, "/my-tasks"),
     /** The chat list (9 Oct, NAV-HOME-GROUP): a tab with its own back stack, in the slot Tasks had. */
-    CHAT("messages", R.string.tab_chat, Icons.AutoMirrored.Filled.Chat, "/messages"),
-    INBOX("inbox", R.string.tab_inbox, Icons.Filled.Inbox, "/inbox"),
-    CALENDAR("calendar", R.string.tab_calendar, Icons.Filled.CalendarMonth, "/calendar"),
-    PROJECTS("projects", R.string.tab_projects, Icons.Filled.Folder, "/projects"),
+    CHAT("messages", R.string.tab_chat, Icons.AutoMirrored.Outlined.Chat, "/messages"),
+    INBOX("inbox", R.string.tab_inbox, Icons.Outlined.Inbox, "/inbox"),
+    CALENDAR("calendar", R.string.tab_calendar, Icons.Outlined.CalendarMonth, "/calendar"),
+    PROJECTS("projects", R.string.tab_projects, Icons.Outlined.Folder, "/projects"),
     MORE("more", R.string.tab_more, Icons.Filled.Menu, ""),
 }
 
@@ -293,8 +298,11 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
     var whatsNew by rememberSaveable { mutableStateOf(WhatsNew.due(context, version)) }
     if (whatsNew) WhatsNewSheet(version) { WhatsNew.seen(context, version); whatsNew = false }
 
-    // Tablets and unfolded phones: the same five tabs as a rail on the left (PRD Phase 5).
-    val rail = ShellLayout.useRail(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp)
+    // Tablets and unfolded phones: the same five tabs as a rail on the left (PRD Phase 5); from 840 dp the
+    // web's sidebar with every destination instead (dev web AppSidebar).
+    val width = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+    val sidebar = ShellLayout.useSidebar(width)
+    val rail = ShellLayout.useRail(width) && !sidebar
     val calendarOn = container.remoteConfig.body.collectAsStateWithLifecycle().value.calendar
     val tabs = ShellTabs.routes(calendarOn).mapNotNull { r -> Tab.entries.firstOrNull { it.route == r } }
     val current = tabs.firstOrNull { it.route == ShellTabs.tabOf(route) }
@@ -308,16 +316,28 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
         t == Tab.INBOX || (t == Tab.MORE && Tab.INBOX !in tabs) -> Badges.label(inboxUnread)
         else -> null
     } }
+    /** A menu entry (More page, sidebar): tabs are switched to, Inbox goes where it lives, the rest pushed. */
+    fun openItem(item: ShellNav.Item) {
+        val tab = tabs.firstOrNull { it.route == item.route }
+        when {
+            item == ShellNav.Item.WHATS_NEW -> whatsNew = true
+            item == ShellNav.Item.NOTIFICATIONS -> openInbox()
+            tab != null -> goTab(tab)
+            item.route.isNotEmpty() -> nav.navigate(item.route) { launchSingleTop = true }
+        }
+    }
+    val shellLogout = rememberLogout(onSignOut) { nav.navigate("attendance") { launchSingleTop = true } }
     Scaffold(
         containerColor = Nx.colors.background,
         bottomBar = {
-            if (!rail) ShellBar(tabs, current, badgeOn, rail = false) { goTab(it) }
+            if (!rail && !sidebar) ShellBar(tabs, current, badgeOn, rail = false) { goTab(it) }
         },
     ) { padding ->
       // The bars' padding is consumed here: a screen's imePadding then adds only what the keyboard
       // covers beyond the bottom bar, not the bar again (the gap above the keyboard, point 6).
       androidx.compose.foundation.layout.Row(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
         if (rail) ShellBar(tabs, current, badgeOn, rail = true) { goTab(it) }
+        if (sidebar) ShellSidebar(session, ShellNav.itemOf(route), onItem = ::openItem, onSearch = { nav.navigate("search") { launchSingleTop = true } }, onLogout = shellLogout)
         // iOS push/pop (Berlin, 29 Sep, point 7): a screen slides in from the right and, on back, out to
         // the right while the one below comes back from the left; never a scale/zoom. The predictive
         // back gesture drives the same pop transition. Switching tabs has no animation, as the iOS tab bar.
@@ -476,8 +496,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onOpenSettings = { nav.navigate("project/$it/settings") })
             }
             composable(Tab.MORE.route) {
-                val logout = rememberLogout(onSignOut) { nav.navigate("attendance") { launchSingleTop = true } }
-                MoreScreen(session, logout, open = { r -> nav.navigate(r) { launchSingleTop = true } }, onOpenWhatsNew = { whatsNew = true })
+                MoreScreen(session, shellLogout, onItem = ::openItem, onSearch = { nav.navigate("search") { launchSingleTop = true } },
+                    tabs = if (sidebar) emptySet() else tabs.map { it.route }.toSet())
             }
             composable("project/{id}") { entry ->
                 ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
@@ -520,18 +540,32 @@ internal fun ShellBar(tabs: List<Tab>, current: Tab?, badge: (Tab) -> String?, r
                 selected = t == current, onClick = { onTab(t) },
                 icon = { TabIcon(t.icon, badge(t)) },
                 label = { TabLabel(stringResource(t.label)) },
+                colors = androidx.compose.material3.NavigationRailItemDefaults.colors(
+                    selectedIconColor = Nx.colors.foreground, selectedTextColor = Nx.colors.foreground, indicatorColor = Nx.colors.muted,
+                    unselectedIconColor = Nx.colors.mutedFg, unselectedTextColor = Nx.colors.mutedFg),
             )
         }
-    } else NavigationBar(containerColor = Nx.colors.card) {
-        tabs.forEach { t ->
-            NavigationBarItem(
-                selected = t == current, onClick = { onTab(t) },
-                icon = { TabIcon(t.icon, badge(t)) },
-                label = { TabLabel(stringResource(t.label)) },
-            )
+    } else Column {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Nx.colors.border))
+        NavigationBar(containerColor = Nx.colors.card, tonalElevation = 0.dp) {
+            tabs.forEach { t ->
+                NavigationBarItem(
+                    selected = t == current, onClick = { onTab(t) },
+                    icon = { TabIcon(t.icon, badge(t)) },
+                    label = { TabLabel(stringResource(t.label)) },
+                    colors = shellItemColors(),
+                )
+            }
         }
     }
 }
+
+/** The web tab bar's colours: the current tab in the foreground (web text-primary) on a soft muted pill. */
+@Composable
+private fun shellItemColors() = androidx.compose.material3.NavigationBarItemDefaults.colors(
+    selectedIconColor = Nx.colors.foreground, selectedTextColor = Nx.colors.foreground, indicatorColor = Nx.colors.muted,
+    unselectedIconColor = Nx.colors.mutedFg, unselectedTextColor = Nx.colors.mutedFg,
+)
 
 /** A tab's icon with its unread badge (TalkBack reads the count with the label). */
 @Composable
@@ -556,9 +590,13 @@ object ShellMotion {
     val popOut: ExitTransition = slideOutHorizontally(tween(MS)) { it }
 }
 
-/** Where the tabs go: a bottom bar on phones, a rail from 600 dp wide (Material's medium width). */
+/**
+ * Where the navigation goes: a bottom bar on phones, a rail from 600 dp wide (Material's medium width), the
+ * web's full sidebar from 840 dp (Material's expanded width).
+ */
 object ShellLayout {
     fun useRail(widthDp: Int) = widthDp >= 600
+    fun useSidebar(widthDp: Int) = widthDp >= 840
 }
 
 /**
@@ -578,119 +616,6 @@ private fun NotYet(tab: Tab) {
         onAction = { openWeb(context, tab.webPath) },
         modifier = Modifier.fillMaxSize(),
     )
-}
-
-/**
- * More (Berlin 29 Sep, UI point 2; iOS RootView MoreView): a launcher grid in sections, two columns,
- * each tile a tinted icon square over its title; the account card and Logout underneath. Settings
- * (language, appearance, offline, update, delete account) live in Tuning Room, as on iOS.
- */
-@Composable
-internal fun MoreScreen(session: Session, onLogout: () -> Unit, open: (String) -> Unit, onOpenWhatsNew: () -> Unit) {
-    val c = Nx.colors
-    val container = (LocalContext.current.applicationContext as NexusApplication).container
-    // Company only (iOS 14b086f): hidden until known, and outside Z Networks.
-    val company = rememberIsCompany() == true
-    val calendarOn = container.remoteConfig.body.collectAsStateWithLifecycle().value.calendar
-    val inboxUnread by container.badges.inboxUnread.collectAsStateWithLifecycle()
-    // Control Room is drawn for MANAGER and above only (the server re-checks every call).
-    val canAdmin by androidx.compose.runtime.produceState(container.viewer.canAdminister) { container.viewer.load(); value = container.viewer.canAdminister }
-    Column(Modifier.fillMaxSize().background(c.background)) {
-        Text(stringResource(R.string.more_title), fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = c.foreground,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp))
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(22.dp)) {
-            MoreSection(stringResource(R.string.more_sec_home), listOfNotNull(
-                // Inbox lives here when the Calendar holds its tab (Berlin, 8 Oct), with its unread.
-                if (calendarOn) MoreItem(R.string.tab_inbox, Icons.Filled.Notifications, c.danger, badge = Badges.label(inboxUnread)) { open("inbox") } else null,
-                // Tasks took Messages' place here; Messages is the Chat tab now (NAV-HOME-GROUP).
-                MoreItem(R.string.tab_tasks, Icons.Filled.Checklist, c.blue) { open("tasks") },
-                if (company) MoreItem(R.string.mt_threads, Icons.Filled.ChatBubble, c.violetText) { open("threads") } else null,
-                MoreItem(R.string.mt_submissions, Icons.Filled.Inbox, c.warning) { open("submissions") },
-                MoreItem(R.string.mt_rooms, Icons.Filled.MeetingRoom, c.coral) { open("rooms") },
-            ))
-            MoreSection(stringResource(R.string.more_sec_missions), listOfNotNull(
-                MoreItem(R.string.mt_leaderboard, Icons.Filled.EmojiEvents, c.warning) { open("leaderboard") },
-                MoreItem(R.string.mt_reports, Icons.Filled.BarChart, c.success) { open("reports") },
-            ))
-            MoreSection(stringResource(R.string.more_sec_knowledge), listOfNotNull(
-                if (company) MoreItem(R.string.mt_vault, Icons.Filled.Storage, c.violetText) { open("vault?folder=&trash=") } else null,
-                MoreItem(R.string.mt_forms, Icons.Filled.Description, c.blue) { open("forms") },
-            ))
-            MoreSection(stringResource(R.string.more_sec_pulse), listOf(
-                MoreItem(R.string.mt_attendance, Icons.Filled.WatchLater, c.success) { open("attendance") },
-            ))
-            MoreSection(stringResource(R.string.more_sec_system), listOfNotNull(
-                MoreItem(R.string.mt_ticket, Icons.Filled.ConfirmationNumber, c.blue) { open("tickets") },
-                MoreItem(R.string.mt_whats_new, Icons.Filled.AutoAwesome, c.violetText, onClick = onOpenWhatsNew),
-                MoreItem(R.string.mt_tuning, Icons.Filled.Settings, c.mutedFg) { open("account") },
-                if (canAdmin) MoreItem(R.string.mt_control, Icons.Filled.Shield, c.danger) { open("admin") } else null,
-            ))
-            AccountFooter(session, onOpenProfile = { open("account") }, onLogout = onLogout)
-        }
-    }
-}
-
-private class MoreItem(val title: Int, val icon: androidx.compose.ui.graphics.vector.ImageVector, val tint: androidx.compose.ui.graphics.Color, val badge: String? = null, val onClick: () -> Unit)
-
-/** Section label + a two-column grid of tiles (iOS MoreSection + LazyVGrid). */
-@Composable
-private fun MoreSection(title: String, items: List<MoreItem>) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(title, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, color = Nx.colors.mutedFg, modifier = Modifier.padding(start = 4.dp))
-        items.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Max)) {
-                row.forEach { MoreTile(it, Modifier.weight(1f).fillMaxHeight()) }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-/** iOS MoreTile: 46dp tinted square (14% fill, radius 14) and a semibold title, on a white card (radius 18). */
-@Composable
-private fun MoreTile(item: MoreItem, modifier: Modifier) {
-    val c = Nx.colors
-    val shape = RoundedCornerShape(18.dp)
-    Column(modifier.shadow(3.dp, shape, ambientColor = c.foreground.copy(alpha = 0.08f), spotColor = c.foreground.copy(alpha = 0.08f))
-        .clip(shape).background(c.card).border(1.dp, c.border, shape).clickable(onClick = item.onClick)
-        .defaultMinSize(minHeight = 110.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(Modifier.size(46.dp).background(item.tint.copy(alpha = 0.14f), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
-            if (item.badge == null) Icon(item.icon, null, tint = item.tint, modifier = Modifier.size(22.dp))
-            else BadgedBox(badge = { Badge { Text(item.badge) } }) { Icon(item.icon, null, tint = item.tint, modifier = Modifier.size(22.dp)) }
-        }
-        Text(stringResource(item.title), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 2)
-    }
-}
-
-/** iOS AccountFooter: avatar + name + email (opens Tuning Room), then Logout. */
-@Composable
-private fun AccountFooter(session: Session, onOpenProfile: () -> Unit, onLogout: () -> Unit) {
-    val c = Nx.colors
-    val container = (LocalContext.current.applicationContext as NexusApplication).container
-    // The session stores no photo: the profile has it.
-    val avatar by androidx.compose.runtime.produceState<String?>(null) {
-        value = runCatching { id.znetworks.nexus.feature.auth.ProfileApi(container.api).profile().avatar }.getOrNull()
-    }
-    val name = session.userName.ifBlank { session.userEmail }
-    val shape = RoundedCornerShape(18.dp)
-    Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.fillMaxWidth().clip(shape).background(c.card).border(1.dp, c.border, shape).clickable(onClick = onOpenProfile).padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            id.znetworks.nexus.ui.components.Avatar(name, avatar, size = 46.dp)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1)
-                Text(session.userEmail, fontSize = 12.sp, color = c.mutedFg, maxLines = 1)
-            }
-        }
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.danger.copy(alpha = 0.1f)).clickable(onClick = onLogout).padding(vertical = 13.dp),
-            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.AutoMirrored.Filled.Logout, null, tint = c.danger, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.logout), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.danger)
-        }
-    }
 }
 
 /**

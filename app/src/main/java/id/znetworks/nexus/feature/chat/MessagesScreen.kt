@@ -162,11 +162,9 @@ fun MessagesScreen(onBack: (() -> Unit)?, onOpenChat: (String) -> Unit, vm: Mess
         }
     }
     Column(Modifier.fillMaxSize().background(c.background)) {
-        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            // A tab now: no back arrow there (null); kept for a pushed copy.
-            if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Text(stringResource(R.string.chat_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, modifier = Modifier.weight(1f))
-            IconButton(onClick = { vm.loadRoster(); composing = true }) { Icon(Icons.Filled.Edit, stringResource(R.string.chat_new), tint = c.violetText) }
+        // A tab now: no back arrow there (null); kept for a pushed copy.
+        id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.chat_title), subtitle = stringResource(R.string.sub_messages), onBack = onBack) {
+            id.znetworks.nexus.ui.components.HeaderIconButton(Icons.Filled.Edit, stringResource(R.string.chat_new), { vm.loadRoster(); composing = true }, primary = true)
         }
         s.savedAt?.let { Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(horizontal = 16.dp)) }
         Box(Modifier.weight(1f)) {

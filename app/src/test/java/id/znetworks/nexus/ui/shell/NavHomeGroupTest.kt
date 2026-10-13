@@ -16,10 +16,11 @@ class NavHomeGroupTest {
     @Test fun chatTakesTheTasksSlot() {
         assertEquals("messages", ShellTabs.routes(true)[1]); assertFalse("tasks" in ShellTabs.routes(true))
         assertTrue(ShellMotion.betweenTabs("messages", "home")); assertFalse(ShellMotion.betweenTabs("tasks", "home")) // Tasks is pushed now
-        // Its badge is the chat total; More's is Inbox's only; Tasks sits in More where Messages was.
+        // Its badge is the chat total; More's is Inbox's only; My Tasks sits in More (redesign: ShellNav), and
+        // Messages, a tab, is left out of the More page (tabs are filtered there).
         assertTrue(shell.contains("t == Tab.CHAT -> Badges.label(chatUnread)"))
-        assertTrue(shell.contains("MoreItem(R.string.tab_tasks, Icons.Filled.Checklist, c.blue) { open(\"tasks\") }"))
-        assertFalse(shell.contains("MoreItem(R.string.mt_messages"))
+        assertTrue(ShellNav.Item.MY_TASKS in ShellNav.groups(true, false, true).flatMap { it.second } && !ShellNav.Item.MY_TASKS.tab)
+        assertTrue(ShellNav.Item.MESSAGES.tab)
         // A chat push opens the Chat tab, then the chat.
         assertTrue(shell.contains("goTab(Tab.CHAT); t.conversationId?.let { nav.navigate(\"chat/"))
     }

@@ -94,10 +94,7 @@ fun SubmissionsScreen(onBack: () -> Unit, onOpen: (String) -> Unit, onOpenForms:
         try { data = api.mySubmissions().value; error = null } catch (e: ApiError) { error = e.describe(res) }
     }
     Column(Modifier.fillMaxSize().background(c.background)) {
-        Box(Modifier.fillMaxWidth().padding(4.dp), contentAlignment = Alignment.Center) {
-            IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Text(stringResource(R.string.mt_submissions), fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = c.foreground)
-        }
+        id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.mt_submissions), subtitle = stringResource(R.string.sub_submissions), onBack = onBack)
         val d = data
         when {
             d == null && error == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }

@@ -152,10 +152,7 @@ fun DocsScreen(onBack: () -> Unit, onOpenDoc: (String) -> Unit) {
     var tick by remember { mutableStateOf(0) }
     LaunchedEffect(tick) { try { docs = api.all(); error = null } catch (e: ApiError) { error = e.describe(res) } }
     Column(Modifier.fillMaxSize().background(c.background)) {
-        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Text("Knowledge Library", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)
-        }
+        id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.nav_pages), subtitle = stringResource(R.string.sub_docs), onBack = onBack)
         OutlinedTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(stringResource(R.string.docs_search)) },
             shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp))
         val all = docs

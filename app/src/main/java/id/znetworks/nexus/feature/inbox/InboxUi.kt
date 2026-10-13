@@ -157,13 +157,10 @@ fun InboxScreen(vm: InboxViewModel = viewModel()) {
     val shown = remember(s.items, s.group) { if (s.group == InboxGroup.ALL) s.items else s.items.filter { InboxGroup.of(it.type) == s.group } }
     PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }, modifier = Modifier.fillMaxSize().background(c.background)) {
         Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.inbox_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = c.foreground)
-                    Text(stringResource(R.string.inbox_unread, s.unread), fontSize = 12.sp, color = c.mutedFg)
-                }
-                if (s.unread > 0) TextButton(onClick = vm::markAll) { Text(stringResource(R.string.inbox_mark_all)) }
+            id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.inbox_title), subtitle = stringResource(R.string.sub_inbox)) {
+                if (s.unread > 0) id.znetworks.nexus.ui.components.NxButton(stringResource(R.string.inbox_mark_all), vm::markAll, compact = true)
             }
+            Text(stringResource(R.string.inbox_unread, s.unread), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 InboxGroup.entries.forEach { g -> FilterChip(s.group == g, { vm.setGroup(g) }, { Text(stringResource(g.label), fontSize = 12.sp) }) }
             }

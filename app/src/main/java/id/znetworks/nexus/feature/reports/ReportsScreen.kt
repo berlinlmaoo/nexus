@@ -61,6 +61,9 @@ import id.znetworks.nexus.feature.projects.Pill
 import id.znetworks.nexus.feature.projects.TabEmpty
 import id.znetworks.nexus.feature.projects.dueDate
 import id.znetworks.nexus.ui.components.Avatar
+import id.znetworks.nexus.ui.components.PageHeader
+import id.znetworks.nexus.ui.components.PageTab
+import id.znetworks.nexus.ui.components.PageTabs
 import id.znetworks.nexus.ui.components.describe
 import id.znetworks.nexus.ui.theme.DisplayFont
 import id.znetworks.nexus.ui.theme.Nx
@@ -114,15 +117,17 @@ fun ReportsScreen(onBack: () -> Unit, onOpenPerson: (String, Int) -> Unit, onOpe
         }
     }
     Column(Modifier.fillMaxSize().background(c.background)) {
-        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Text(stringResource(R.string.rp_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)
-        }
         val showTeam = !selfOnly && roster?.scope != "SELF"
-        if (showTeam) TabRow(selectedTabIndex = tab, containerColor = c.background) {
-            Tab(tab == 0, { tab = 0 }, text = { Text(stringResource(R.string.rp_me)) })
-            Tab(tab == 1, { tab = 1 }, text = { Text(stringResource(R.string.rp_team)) })
-        }
+        // Dev web reports page: the subtitle follows the tab (me / direct reports / everyone).
+        val subtitle = stringResource(when {
+            tab == 0 || !showTeam -> R.string.sub_reports_me
+            roster?.scope == "ALL" -> R.string.sub_reports_all
+            else -> R.string.sub_reports_team
+        })
+        PageHeader(stringResource(R.string.rp_title), subtitle = subtitle, onBack = onBack,
+            tabs = if (showTeam) { {
+                PageTabs(listOf(PageTab(0, stringResource(R.string.rp_me)), PageTab(1, stringResource(R.string.rp_team))), tab, { tab = it })
+            } } else null)
         PeriodBar(offset, roster?.period, { offset = it })
         rosterSavedAt?.let { Text(stringResource(R.string.saved_copy_from, id.znetworks.nexus.feature.attendance.LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.warning, modifier = Modifier.padding(horizontal = 16.dp)) }
         if (tab == 0 || !showTeam) PersonReportBody("me", periodKey(offset), onOpenTask)
