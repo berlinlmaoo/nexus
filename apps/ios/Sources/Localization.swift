@@ -2647,6 +2647,19 @@ final class AppLanguage {
         "Make it a group": "Jadikan grup",
         "Two or more people always make a group.": "Dua orang atau lebih otomatis jadi grup.",
         "Start a group with just one other person, and add more later.": "Mulai grup berdua dulu, tambah orang lain nanti.",
+        // Pipeline real cost & margin (Control Tower v4/v5, 14 Oct 2026). Same Indonesian as the web.
+        "Real cost & margin": "Real Cost & Margin",
+        "Add cost": "Tambah biaya",
+        "Cost description": "Keterangan biaya",
+        "Cost amount": "Nominal biaya",
+        "Delete cost": "Hapus biaya",
+        "e.g. Sound vendor": "mis. Vendor sound",
+        "No costs yet. Add what this deal really costs (vendors, talent, production) to see its margin.": "Belum ada biaya. Tambahkan biaya riil deal ini (vendor, talent, produksi) untuk melihat margin-nya.",
+        "No costs recorded yet.": "Belum ada biaya yang dicatat.",
+        "Fill in the net project value to see the margin.": "Isi nilai bersih project untuk melihat margin.",
+        "Margin = net project value − total real cost.": "Margin = nilai bersih project − total real cost.",
+        "%@ real cost · %d with costs": "Real cost %@ · %d deal berbiaya",
+        "%d cost lines · %@": "%d baris biaya · %@",
         // Pipeline Dashboard (owner, 9 Oct 2026). Same Indonesian as the web's id-pipeline.ts; the GM's own
         // terms (stage keys except three, status values, Board, Pipeline, PM, BD, SPK…) read the same in both.
         "Negotiation": "Negosiasi",

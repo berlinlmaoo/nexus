@@ -322,6 +322,13 @@ struct PipelineDealView: View {
                               onDelete: { termToDelete = $0 })
         }
 
+        // Real cost & margin (Control Tower v4, 14 Oct 2026), after billing and its terms.
+        PipelineSection(title: T("Real cost & margin"), owner: "Finance", columns: 1) {
+            PipelineRealCost(deal: deal, canEdit: store.canEdit) { costs in
+                patch(["costs": costs.map(\.json)])
+            }
+        }
+
         PipelineSection(title: T("Closing"), owner: "PM") {
             PipelineFieldBox(T("Closing status")) {
                 PipelineMenuInput(label: T("Closing status"), value: deal.closingStatus, options: v.closingStatuses) { patch(["closingStatus": $0]) }
@@ -622,6 +629,14 @@ struct PipelineDealView: View {
                 let names = a.compactMap { item -> String? in if case .string(let s) = item { return s }; return nil }
                 return names.isEmpty ? T("empty") : names.joined(separator: ", ")
             }
+            if field == "costs" {
+                guard !a.isEmpty else { return T("empty") }
+                let total = a.reduce(0.0) { sum, item in
+                    if case .object(let o) = item, case .number(let n)? = o["amount"] { return sum + n }
+                    return sum
+                }
+                return String(format: T("%d cost lines · %@"), a.count, PipelineFormat.idrFull(total))
+            }
             return field == "links" ? String(format: T("%d links"), a.count) : value.pretty
         case .bool(let b): return b ? "✓" : "–"
         case .object: return value.pretty
@@ -711,6 +726,98 @@ struct PipelineNewDealSheet: View {
             // Shown here rather than on the board underneath, which cannot show it while this is up.
             err = store.actionError ?? T("The deal wasn't created. Try again.")
             store.actionError = nil
+        }
+    }
+}
+
+// MARK: - Real cost & margin
+
+/// Real cost & margin (Control Tower v4, 14 Oct 2026; web DealDrawer RealCost): the deal's real cost as open
+/// lines, and the margin on its NET value — live, never stored. The whole list goes back in one PATCH, like
+/// documents; each line saves when its field is left. Full / Can edit edit; Can comment / Can view read
+/// (the server refuses anyone else's write anyway). Delete needs no question: History keeps the line.
+struct PipelineRealCost: View {
+    let deal: PipelineDeal
+    let canEdit: Bool
+    let onSave: ([PipelineCost]) -> Void
+
+    private var tone: Color {
+        guard let m = deal.margin, m != 0 else { return NX.foreground }
+        return m < 0 ? ChipTone.danger.fg : ChipTone.success.fg
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                figure(T("Total real cost"), PipelineFormat.idrFull(deal.costTotal), NX.foreground)
+                figure(T("Margin"), deal.margin.map { PipelineFormat.idrFull($0) } ?? "–", tone)
+                figure(T("Margin %"), deal.marginPct.map { PipelineFormat.pct($0) } ?? "–", tone)
+            }
+            Text(deal.margin == nil ? T("Fill in the net project value to see the margin.") : T("Margin = net project value − total real cost."))
+                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if deal.costs.isEmpty {
+                Text(canEdit ? T("No costs yet. Add what this deal really costs (vendors, talent, production) to see its margin.")
+                             : T("No costs recorded yet."))
+                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(deal.costs) { cost in row(cost) }
+                }
+            }
+
+            if canEdit {
+                Button {
+                    onSave(deal.costs + [PipelineCost(id: PipelineCost.newId(), label: "", amount: 0)])
+                } label: {
+                    Label(T("Add cost"), systemImage: "plus").font(NXFont.text(14, .semibold))
+                }
+                .buttonStyle(.bordered)
+                .disabled(deal.costs.count >= 100)
+            }
+        }
+    }
+
+    private func figure(_ label: String, _ value: String, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            Text(value).font(NXFont.text(14, .bold)).foregroundStyle(color).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(NX.background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder private func row(_ cost: PipelineCost) -> some View {
+        if canEdit {
+            HStack(spacing: 8) {
+                PipelineTextInput(label: T("Cost description"), value: cost.label, placeholder: T("e.g. Sound vendor")) { text in
+                    onSave(deal.costs.map { $0.id == cost.id ? PipelineCost(id: $0.id, label: text, amount: $0.amount) : $0 })
+                }
+                PipelineMoneyInput(label: T("Cost amount"), value: cost.amount) { amount in
+                    onSave(deal.costs.map { $0.id == cost.id ? PipelineCost(id: $0.id, label: $0.label, amount: amount) : $0 })
+                }
+                .frame(width: 150)
+                Button(role: .destructive) {
+                    onSave(deal.costs.filter { $0.id != cost.id })
+                } label: {
+                    Image(systemName: "trash").frame(width: 36, height: 40)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(T("Delete cost"))
+            }
+        } else {
+            HStack(spacing: 8) {
+                Text(cost.label.isEmpty ? "–" : cost.label).font(NXFont.text(14)).foregroundStyle(NX.foreground)
+                Spacer(minLength: 8)
+                Text(PipelineFormat.idrFull(cost.amount)).font(NXFont.text(14)).foregroundStyle(NX.foreground).monospacedDigit()
+            }
+            .frame(minHeight: 32)
+            .accessibilityElement(children: .combine)
         }
     }
 }
