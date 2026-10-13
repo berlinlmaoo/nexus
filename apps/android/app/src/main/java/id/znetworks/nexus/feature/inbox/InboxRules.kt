@@ -11,7 +11,8 @@ object InboxRules {
     fun mark(type: String?): Mark {
         val t = type.orEmpty().lowercase()
         return when {
-            t == "attendance_outside_approver" -> Mark.OUTSIDE // a staff member outside the office (Berlin, 8 Oct)
+            // Someone outside the office (attendance_outside_approver) is an attendance signal like the web and iOS
+            // (teal calendar check, run 5, 14 Oct 2026); it had its own walking-person mark.
             "mention" in t -> Mark.MENTION
             t == "task_assigned" || t == "project_invite" || t == "members_added" -> Mark.ASSIGNED
             t == "task_completed" -> Mark.COMPLETED
@@ -47,6 +48,16 @@ object InboxRules {
         val counts = types.groupingBy { group(it) }.eachCount()
         return InboxGroup.entries.filter { it == InboxGroup.ALL || (counts[it] ?: 0) > 0 }
             .map { it to if (it == InboxGroup.ALL) types.size else counts[it] ?: 0 }
+    }
+
+    /**
+     * What the inbox lists (web `activeNotifications`): every unread one, and read ones from the last [maxDays] days
+     * (createdAt stands in for the read time). The dev server held 50 rows; the web listed 19.
+     */
+    fun active(items: List<InboxItem>, now: java.time.Instant = java.time.Instant.now(), maxDays: Long = 7): List<InboxItem> = items.filter { n ->
+        if (!n.read) return@filter true
+        val at = n.createdAt?.let { runCatching { java.time.OffsetDateTime.parse(it).toInstant() }.getOrNull() } ?: return@filter false
+        java.time.Duration.between(at, now) <= java.time.Duration.ofDays(maxDays)
     }
 
     fun filter(items: List<InboxItem>, g: InboxGroup) = if (g == InboxGroup.ALL) items else items.filter { group(it.type) == g }

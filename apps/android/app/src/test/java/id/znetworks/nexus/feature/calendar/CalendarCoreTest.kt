@@ -171,4 +171,14 @@ class CalendarCoreTest {
         val rail = CalendarCore.overdueRail(listOf(stale, recent), listOf(todayPassed, recent), today, now, window)
         assertEquals(listOf("t1", "r1"), rail.map { it.key })
     }
+
+    @Test fun itemsInNoDivisionCountAtTheTop() {
+        // Dev server 14 Oct: two tasks of QA people outside the Bagan made the web say 7 tasks and Android 5 (web core.ts `nowhere`).
+        val base = items("2026-09-18", "bod")
+        val nowhere = base.first().copy(key = "nowhere-1", placements = emptyList())
+        val withIt = base + nowhere
+        assertEquals(CalendarCore.dayTree(base, ix, ix.top!!.id, today, now, window).total + 1, CalendarCore.dayTree(withIt, ix, ix.top!!.id, today, now, window).total)
+        val fa = unit("Framework Agency").id
+        assertEquals(CalendarCore.dayTree(base, ix, fa, today, now, window).total, CalendarCore.dayTree(withIt, ix, fa, today, now, window).total)
+    }
 }

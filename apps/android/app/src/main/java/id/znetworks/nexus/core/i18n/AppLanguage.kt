@@ -27,6 +27,16 @@ object AppLanguage {
     @Volatile var current: String = ENGLISH
         internal set
 
+    /**
+     * Dates and numbers in the app's language, not the phone's (owner, 14 Oct 2026; iOS AppDateLocale): an English app
+     * on an Indonesian phone says "Wed, 14 Oct", an Indonesian one "Rab, 14 Okt". Rupiah amounts keep id-ID on purpose.
+     */
+    fun locale(tag: String = current): java.util.Locale =
+        if (tag == INDONESIAN) java.util.Locale.forLanguageTag("id-ID") else java.util.Locale.UK
+
+    /** Makes every formatter that reads Locale.getDefault() follow the app's language too. */
+    private fun useForFormats(tag: String) = java.util.Locale.setDefault(locale(tag))
+
     /** Told when the person picks another language (the container sends it to the server). */
     @Volatile var onChosen: ((String) -> Unit)? = null
 
@@ -36,6 +46,7 @@ object AppLanguage {
     /** Reads the stored choice without touching the UI locale (process start, before any request). */
     fun load(context: Context) {
         current = resolve(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null), null)
+        useForFormats(current)
     }
 
     /** Called before the activity draws: makes the app follow [resolve], never the system language. */
@@ -44,6 +55,7 @@ object AppLanguage {
         val current = AppCompatDelegate.getApplicationLocales().toLanguageTags().takeIf { it.isNotEmpty() }
         val tag = resolve(prefs.getString(KEY, null), current)
         this.current = tag
+        useForFormats(tag)
         prefs.edit().putString(KEY, tag).apply()
         if (current == null || current.substringBefore('-') != tag) AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tag))
     }
@@ -51,6 +63,7 @@ object AppLanguage {
     fun choose(context: Context, tag: String) {
         val changed = tag != current
         current = tag
+        useForFormats(tag)
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, tag).apply()
         if (changed) onChosen?.invoke(tag)
         AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tag))

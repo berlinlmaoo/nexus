@@ -188,6 +188,18 @@ final class RealtimeClient {
             for key in [RealtimeKey.kind, RealtimeKey.projectId, RealtimeKey.folderId] {
                 if let value = payload?[key]?.string { info[key] = value }
             }
+            // A changed project icon rides along (server since 14 Oct 2026): a photo URL, or null when it
+            // was removed. Patch every mark and the stored shortcuts now; the screens still refetch.
+            if payload?[RealtimeKey.kind]?.string == RealtimeKind.projects,
+               let pid = payload?[RealtimeKey.projectId]?.string, let raw = payload?["icon"] {
+                let icon: String? = raw.string
+                if icon != nil || raw == .null {
+                    Task { @MainActor in
+                        ProjectIconStore.shared.set(pid, icon)
+                        ProjectShortcuts.shared.updateIcon(pid, icon)
+                    }
+                }
+            }
             center.post(name: .nexusWorkspaceChanged, object: nil, userInfo: info)
         case "audit-changed":
             center.post(name: .nexusAuditChanged, object: nil)

@@ -5,6 +5,7 @@ import { useLang, type Lang } from "@/lib/lang";
 import {
   daysOverdueOf,
   healthOf,
+  marginOf,
   phasesOf,
   stageGroupOf,
   type HealthKey,
@@ -66,6 +67,17 @@ export function sentenceCase(s: string): string {
 
 export function fmtPct(p: number): string {
   return `${Math.round((p || 0) * 100)}%`;
+}
+
+/** Margin colour: red below zero, green above (the KPI strip's tones). */
+export function marginTone(margin: number | null | undefined): string {
+  if (margin === null || margin === undefined || margin === 0) return "";
+  return margin < 0 ? "text-red-700 dark:text-red-300" : "text-emerald-700 dark:text-emerald-300";
+}
+
+/** "25%" / "-12%"; "–" without a net value. */
+export function fmtMarginPct(p: number | null | undefined): string {
+  return p === null || p === undefined || !Number.isFinite(p) ? "–" : `${Math.round(p * 100)}%`;
 }
 
 /** "4 Okt 2026" / "4 Oct 2026"; "–" for none. */
@@ -386,6 +398,11 @@ export function applyLocal(deal: PipelineDeal, patch: PipelineDealPatch, today: 
   next.daysOverdue = daysOverdueOf(next, today);
   next.health = healthOf(next, today);
   next.phases = phasesOf(next, today);
+  // Real cost & margin (14 Oct 2026): follow the lines and the net value at once, as the server will.
+  const m = marginOf(next);
+  next.costTotal = m.totalCost;
+  next.margin = m.margin;
+  next.marginPct = m.marginPct;
   return next;
 }
 

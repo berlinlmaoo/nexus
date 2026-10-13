@@ -14,4 +14,13 @@ class AppLanguageTest {
         assertEquals("en", AppLanguage.resolve(stored = null, current = "fr"))            // anything else: English
         assertEquals("en", AppLanguage.resolve(stored = "xx", current = null))
     }
+
+    @Test fun datesAndNumbersFollowTheAppLanguage() {
+        val d = java.time.LocalDate.of(2026, 10, 14)
+        val f = { tag: String -> java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM", AppLanguage.locale(tag)).format(d) }
+        org.junit.Assert.assertEquals("Wed, 14 Oct", f(AppLanguage.ENGLISH))
+        org.junit.Assert.assertEquals("Rab, 14 Okt", f(AppLanguage.INDONESIAN))
+        org.junit.Assert.assertEquals("1,000", java.text.NumberFormat.getNumberInstance(AppLanguage.locale(AppLanguage.ENGLISH)).format(1000))
+        org.junit.Assert.assertEquals("1.000", java.text.NumberFormat.getNumberInstance(AppLanguage.locale(AppLanguage.INDONESIAN)).format(1000))
+    }
 }

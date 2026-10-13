@@ -299,7 +299,9 @@ private fun NavRow(item: ShellNav.Item, selected: Boolean, badge: String?, dense
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(if (selected) c.accentBg else c.background.copy(alpha = 0f))
         .clickable(role = Role.Button, onClick = onClick).semantics { this.selected = selected }
         .defaultMinSize(minHeight = if (dense) 40.dp else 48.dp).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(item.icon(), null, tint = if (selected) c.accentFg else c.mutedFg, modifier = Modifier.size(if (dense) 18.dp else 20.dp))
+        val tint = if (selected) c.accentFg else c.mutedFg
+        val sz = if (dense) 18.dp else 20.dp
+        if (item == ShellNav.Item.GIDEON) id.znetworks.nexus.ui.components.GideonMark(sz, tint) else Icon(item.icon(), null, tint = tint, modifier = Modifier.size(sz))
         Spacer(Modifier.width(12.dp))
         Text(stringResource(item.label), fontFamily = TextFont, fontSize = if (dense) 14.sp else 15.sp,
             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal, color = fg, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -6,7 +6,7 @@ import SwiftUI
 // root (AdaptiveRoot) and from Settings › Appearance.
 //
 // Lists only what this app actually binds — keep it in step with the `.keyboardShortcut` /
-// `UIKeyCommand` handlers it names: AdaptiveRoot (⌘1…⌘7, ⌘K, ⌘S, ⌘/), GideonPanel (⌘O), SearchView,
+// `UIKeyCommand` handlers it names: AdaptiveRoot (⌘1…⌘7, ⌘K, ⌘\, ⌘/), GideonPanel (⌘O), SearchView,
 // ProjectBoardView (⌘N, ⌘[ ⌘], ⌘F, ⌘,), BoardRedesign (⌘Z, quick add ⌘↩ / Esc), TaskBatchDuplicate
 // (⌘A, ⌘D), BlockEditorView / TaskDetailView (⌘K link), DocsView (⌘E, ⌘↩), CalendarView, MessagesView,
 // VaultMediaViewer and Sheets/SheetGrid.swift keyCommands.
@@ -33,7 +33,7 @@ enum AppShortcutList {
     static func sections() -> [ShortcutHelpSection] {
         var anywhere: [ShortcutHelpRow] = [
             ShortcutHelpRow(label: T("Search NEXUS"), keys: ["⌘ K"]),
-            ShortcutHelpRow(label: T("Show or hide the sidebar"), keys: ["⌘ S"]),
+            ShortcutHelpRow(label: T("Show or hide the sidebar"), keys: ["⌘ \\"]),
         ]
         for (i, screen) in SidebarRoot.shortcutScreens.enumerated() {
             anywhere.append(ShortcutHelpRow(label: String(format: T("Go to %@"), screen.title), keys: ["⌘ \(i + 1)"]))

@@ -695,11 +695,18 @@ struct APIClient {
         _ = try await run(req, decode: ProjectPinReply.self)
     }
     func projects() async throws -> [Project] {
-        try await run(makeRequest("/api/projects"), decode: [Project].self, cache: "projects")
+        let list = try await run(makeRequest("/api/projects"), decode: [Project].self, cache: "projects")
+        // Every mark that knows a project's id draws the icon from here (ProjectIconStore).
+        let pairs = list.map { ($0.id, $0.icon) }
+        await MainActor.run { ProjectIconStore.shared.record(pairs) }
+        return list
     }
 
     func project(_ id: String) async throws -> ProjectDetail {
-        try await run(makeRequest("/api/projects/\(id)"), decode: ProjectDetail.self, cache: "project-\(id)")
+        let d = try await run(makeRequest("/api/projects/\(id)"), decode: ProjectDetail.self, cache: "project-\(id)")
+        let icon = d.icon
+        await MainActor.run { ProjectIconStore.shared.set(id, icon) }
+        return d
     }
 
     /// All of a project's tasks INCLUDING subtasks (the project payload is parentId-only). Carries
@@ -716,7 +723,7 @@ struct APIClient {
     /// `type`: "TASK" or "PIPELINE" (owner, 9 Oct 2026); FINANCE and CONTENT answer 400 TYPE_COMING_SOON.
     /// `folderId`: made straight inside that folder (folder → New project here); nil = no folder.
     /// No `icon` and no `color` (owner, 11 Oct 2026): the server gives a new project its defaults and
-    /// the app draws the Tasks icon (ProjectMark) until someone adds a photo in Project settings.
+    /// the app draws the default page icon (ProjectMark) until someone adds a photo in Project settings.
     /// `hiddenTabs` (Task Project only) is sent whenever it is given, even empty: with no hiddenTabs the
     /// server hides Automations by default (owner, 11 Oct 2026), so an empty list is how "every tab on"
     /// is said. `memberIds` is sent only when there is something in it.
@@ -2266,6 +2273,14 @@ struct APIClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: fields)
         _ = try await run(req, decode: SuccessResponse.self)
+        // This device's own photo change or removal shows on every mark now, not when the ping returns.
+        if fields.keys.contains("icon") {
+            let icon = fields["icon"] as? String
+            await MainActor.run {
+                ProjectIconStore.shared.set(id, icon)
+                ProjectShortcuts.shared.updateIcon(id, icon)
+            }
+        }
         return true
     }
     @discardableResult

@@ -75,6 +75,8 @@ export type PipelineDealFacts = {
   blocker: string
   /** Payments per term (owner, 9 Oct 2026). When there are any, they decide the payment fields above. */
   terms?: readonly PaymentTermFacts[] | null
+  /** Real cost lines (Control Tower v4, 14 Oct 2026). Absent or [] = no cost data yet. */
+  costs?: readonly PipelineCostItem[] | null
 }
 
 export function stageGroupOf(stage: string): StageGroup {
@@ -94,6 +96,43 @@ export function isWonStage(stage: string): boolean {
 /** The value a deal is counted at: its net value, or the contract value while net is not filled in (GM). */
 export function dealValue(d: Pick<PipelineDealFacts, "netValue" | "contractValue">): number {
   return d.netValue > 0 ? d.netValue : d.contractValue || 0
+}
+
+// ── Real cost & margin (Control Tower v4/v5, 14 Oct 2026) ─────────────────────────────────────────────
+// What a deal really cost, as an open list of lines ("Vendor sound: 12.000.000"), next to what it brings in.
+// Margin is counted on the NET value (after deductions and tax: the money actually earned), never stored:
+// change a line or the net value and the margin follows. Who sees and edits the lines is the project's
+// access, like every other field of the deal (owner, 14 Oct 2026).
+
+/** One real-cost line of a deal. `id` is the client's, kept so a list can be edited line by line. */
+export type PipelineCostItem = { id: string; label: string; amount: number }
+
+export type DealMargin = {
+  /** Σ amount of the cost lines. */
+  totalCost: number
+  /** How many cost lines the deal has (0 = no cost data). */
+  costCount: number
+  /** netValue − totalCost; null while the deal has no net value (no misleading 100% or 0). */
+  margin: number | null
+  /** margin ÷ netValue (0.25 = 25%); null with margin. */
+  marginPct: number | null
+}
+
+/** Σ of the cost lines; a line that is not a finite number counts 0. */
+export function costTotalOf(costs: readonly PipelineCostItem[] | null | undefined): number {
+  let total = 0
+  for (const c of costs ?? []) total += Number.isFinite(c?.amount) ? c.amount : 0
+  return total
+}
+
+/** The deal's real cost, margin and margin % — on its net value. */
+export function marginOf(d: { netValue: number; costs?: readonly PipelineCostItem[] | null }): DealMargin {
+  const totalCost = costTotalOf(d.costs)
+  const costCount = d.costs?.length ?? 0
+  const net = d.netValue || 0
+  if (net <= 0) return { totalCost, costCount, margin: null, marginPct: null }
+  const margin = net - totalCost
+  return { totalCost, costCount, margin, marginPct: margin / net }
 }
 
 /** Today in Jakarta as "YYYY-MM-DD" — the company's day, whatever the server's clock zone. */
@@ -348,6 +387,21 @@ export type PipelineSummary = {
   /** Deliverable risk "Aman" outside the open pipeline and not yet completed — the GM's "Deliverable Aman". */
   deliverablesOnTrack: number
   deliverablesDone: number
+  /**
+   * "Real Profit" (Control Tower v6, owner + Gerro 14 Oct 2026; refined 14 Oct 2026): only deals that are
+   * NOT Lost / Cancelled, have at least one cost line AND have a net value (> 0) count.
+   * realProfit = Σ (net value − real cost) over them; realCost = Σ real cost over the same deals. A deal
+   * with costs but no net value is left out of both and counted in costNoNetCount instead (a warning on
+   * the tile), so a missing net value never shows up as a loss.
+   */
+  realCost: number
+  realProfit: number
+  /** N of "N of M deals have costs": deals not Lost / Cancelled with at least one cost line. */
+  costDealCount: number
+  /** M: every deal that is not Lost / Cancelled. */
+  costEligibleCount: number
+  /** Of those N, the deals with no net value: left out of Real Profit ("2 deals have costs but no net value"). */
+  costNoNetCount: number
 }
 
 /** The KPI strip, over every deal of the project (never the filtered view). The GM's renderInstruments. */
@@ -356,6 +410,7 @@ export function summarize(deals: PipelineDealFacts[], today: string): PipelineSu
     total: deals.length, openCount: 0, openValue: 0, weightedValue: 0, wonCount: 0, wonValue: 0, activeCount: 0,
     lostCount: 0, lostValue: 0, readyCount: 0, blockedCount: 0, receivable: 0, receivableOverdue: 0,
     criticalCount: 0, attentionCount: 0, deliverablesOnTrack: 0, deliverablesDone: 0,
+    realCost: 0, realProfit: 0, costDealCount: 0, costEligibleCount: 0, costNoNetCount: 0,
   }
   for (const d0 of deals) {
     const terms = termSummaryOf(d0.terms, today)
@@ -385,6 +440,18 @@ export function summarize(deals: PipelineDealFacts[], today: string): PipelineSu
     if (h === "ATTENTION") s.attentionCount++
     if (d.deliverableStatus === "Completed" || d.deliverableStatus === "Approved") s.deliverablesDone++
     else if (d.deliverableRisk === "Aman" && group !== "Pipeline") s.deliverablesOnTrack++
+    if (group !== "Lost") {
+      s.costEligibleCount++
+      const m = marginOf(d0)
+      if (m.costCount > 0) {
+        s.costDealCount++
+        if (m.margin === null) s.costNoNetCount++
+        else {
+          s.realCost += m.totalCost
+          s.realProfit += m.margin
+        }
+      }
+    }
   }
   return s
 }

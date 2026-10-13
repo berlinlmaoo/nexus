@@ -67,3 +67,40 @@ export function invalidateAuditViews(qc: QueryClient) {
     predicate: ({ queryKey }) => queryKey[0] === "nexus" && (queryKey[1] === "audit" || queryKey[1] === "audit-entry"),
   });
 }
+
+/**
+ * A project's icon changed (workspace-changed { kind: "projects", projectId, icon }, server since 14 Oct
+ * 2026): swap it in every cached copy at once — the project lists, the open header, folder pages, pickers,
+ * search hits, task payloads that embed the project, the Master Calendar's `projectIcon` — before the
+ * refetch lands. Walks a few levels deep only; a project id is a cuid, so an id match is that project.
+ * Sheet caches are never touched (see NEVER_BLANKET_INVALIDATE in realtime.tsx).
+ */
+export function patchProjectIcon(qc: QueryClient, projectId: string, icon: string | null) {
+  const walk = (v: unknown, depth: number): unknown => {
+    if (depth > 5 || v === null || typeof v !== "object") return v;
+    if (Array.isArray(v)) {
+      let changed = false;
+      const out = v.map((x) => { const y = walk(x, depth + 1); if (y !== x) changed = true; return y; });
+      return changed ? out : v;
+    }
+    const o = v as Record<string, unknown>;
+    let next: Record<string, unknown> | null = null;
+    if (o.id === projectId && "icon" in o && o.icon !== icon) next = { ...o, icon };
+    if (o.projectId === projectId && "projectIcon" in o && o.projectIcon !== icon) next = { ...(next ?? o), projectIcon: icon };
+    for (const k of Object.keys(o)) {
+      const c = o[k];
+      if (c && typeof c === "object") {
+        const y = walk(c, depth + 1);
+        if (y !== c) { next = next ?? { ...o }; next[k] = y; }
+      }
+    }
+    return next ?? v;
+  };
+  for (const q of qc.getQueryCache().getAll()) {
+    if (q.queryKey.some((k) => typeof k === "string" && k.toLowerCase().includes("sheet"))) continue;
+    const data = q.state.data;
+    if (data === undefined) continue;
+    const next = walk(data, 0);
+    if (next !== data) qc.setQueryData(q.queryKey, next);
+  }
+}

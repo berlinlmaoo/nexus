@@ -1,4 +1,5 @@
 import { useRealtimeRoom } from "@/lib/realtime";
+import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { activityText } from "@/lib/server-text";
 import { DateField } from "@/components/DateField";
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -536,7 +537,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
           <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-muted-foreground">
             {t?.taskList?.project && (
               <>
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: t.taskList.project.color ?? "#7b68ee" }} />
+                <ProjectMarkFor projectId={t.taskList.project.id} icon={(t.taskList.project as { icon?: string | null }).icon} size={14} />
                 <span className="truncate">{t.taskList.project.name}</span>
                 <span className="text-muted-foreground/50">/</span>
                 <span className="truncate">{t.taskList?.name}</span>
@@ -838,7 +839,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     <div className="absolute right-0 z-20 mt-1 max-h-64 w-64 overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-pop">
                       {candidateProjects.isLoading && <div className="px-3 py-2 text-xs text-muted-foreground">{tr("Loading…")}</div>}
                       {(candidateProjects.data ?? []).filter((p) => p.id !== projectId && !(t.taskProjects ?? []).some((tp) => tp.project?.id === p.id)).map((p) => (
-                        <button key={p.id} onClick={() => linkProjectMut.mutate(p.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"><span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color ?? "#7b68ee" }} /><span className="truncate">{p.name}</span></button>
+                        <button key={p.id} onClick={() => linkProjectMut.mutate(p.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"><ProjectMarkFor projectId={p.id} icon={(p as { icon?: string | null }).icon} size={16} /><span className="truncate">{p.name}</span></button>
                       ))}
                     </div>
                   )}
@@ -849,7 +850,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               <div className="flex flex-wrap gap-2">
                 {(t.taskProjects ?? []).map((tp) => (
                   <span key={tp.id} className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold">
-                    <span className="h-2 w-2 rounded-full" style={{ background: tp.project?.color ?? "#7b68ee" }} /> {tp.project?.name}
+                    <ProjectMarkFor projectId={tp.project?.id} icon={tp.project ? (tp.project as { icon?: string | null }).icon : null} size={14} /> {tp.project?.name}
                     <button aria-label={tr("Unlink {name}", { name: tp.project?.name ?? tr("project") })} onClick={() => tp.project?.id && unlinkProjectMut.mutate(tp.project.id)} className="rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
                   </span>
                 ))}

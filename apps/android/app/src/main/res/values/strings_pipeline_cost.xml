@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pipeline real cost & margin (Control Tower v4–v6, owner 14 Oct 2026). EN copy as iOS / web. -->
+<resources>
+    <string name="pc_title">Real cost &amp; margin</string>
+    <string name="pc_real_cost">Real cost</string>
+    <string name="pc_total">Total real cost</string>
+    <string name="pc_margin">Margin</string>
+    <string name="pc_margin_pct" formatted="false">Margin %</string>
+    <string name="pc_hint">Margin = net project value − total real cost.</string>
+    <string name="pc_hint_no_net">Fill in the net project value to see the margin.</string>
+    <string name="pc_empty">No costs yet. Add what this deal really costs (vendors, talent, production) to see its margin.</string>
+    <string name="pc_empty_read">No costs recorded yet.</string>
+    <string name="pc_description">Cost description</string>
+    <string name="pc_description_hint">e.g. Sound vendor</string>
+    <string name="pc_amount">Cost amount</string>
+    <string name="pc_delete">Delete cost</string>
+    <string name="pc_add">Add cost</string>
+    <string name="pc_invalid">Real cost wasn\'t saved: at most 100 lines, amounts in whole rupiah of 0 or more, and each description at most 120 characters.</string>
+    <string name="pc_k_real_profit">Real profit</string>
+    <string name="pc_k_real_cost">Real cost %1$s</string>
+    <plurals name="pc_k_have_costs">
+        <item quantity="one">%1$d of %2$d deal has costs</item>
+        <item quantity="other">%1$d of %2$d deals have costs</item>
+    </plurals>
+    <plurals name="pc_k_no_net">
+        <item quantity="one">%d deal has costs but no net value</item>
+        <item quantity="other">%d deals have costs but no net value</item>
+    </plurals>
+    <plurals name="pc_h_lines">
+        <item quantity="one">%1$d cost line · %2$s</item>
+        <item quantity="other">%1$d cost lines · %2$s</item>
+    </plurals>
+</resources>

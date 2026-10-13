@@ -177,7 +177,7 @@ struct PipelineDocumentsEditor: View {
     private func fileLine(_ l: PipelineLink) -> String {
         var parts: [String] = []
         if !l.label.isEmpty, let f = l.fileName { parts.append(f) }
-        if let s = l.size { parts.append(ByteCountFormatter.string(fromByteCount: Int64(s), countStyle: .file)) }
+        if let s = l.size { parts.append(AppNumber.bytes(Double(s))) }
         return parts.joined(separator: " · ")
     }
 

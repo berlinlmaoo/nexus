@@ -54,7 +54,7 @@ function FeedPage() {
   const tab: Tab = tabParam ?? "all";
   const setTab = (next: Tab) => { void navigate({ to: "/threads", search: { post: focusId, tab: next === "mentions" ? "mentions" : undefined }, replace: true }); };
   const key = useMemo(() => ["feed", tab] as const, [tab]);
-  // Height of the (md+ sticky) page header, so the new-posts pill sticks right under it.
+  // Height of the (sticky) page header, so the new-posts pill sticks right under it.
   const headRef = useRef<HTMLDivElement>(null);
   const [headH, setHeadH] = useState(0);
   useLayoutEffect(() => {
@@ -204,9 +204,9 @@ function FeedPage() {
     <div>
       {/* The app's standard header (title, subtitle, the All / Mentions switch in its tabs row) at full
           width, like every other page; it was a centred 600px column with its own slim bar (audit 12 Oct
-          2026). The wrapper carries the header's md+ stickiness so its height can be measured for the
+          2026). The wrapper carries the header's stickiness so its height can be measured for the
           new-posts pill, which sits just under it. */}
-      <div ref={headRef} className="md:sticky md:top-0 md:z-40">
+      <div ref={headRef} className="sticky top-0 z-30 md:z-40">
         <PageHeader
           title={t("Threads")}
           subtitle={t("Short updates from the team. Tag someone with @ and they get notified.")}
@@ -239,7 +239,7 @@ function FeedPage() {
       {tab === "all" && me && <Composer me={{ id: me.id, name: me.name, avatar: me.avatar }} members={members} onPost={onPost} />}
 
       {/* new-posts pill */}
-      <div className="pointer-events-none sticky top-2 z-10 flex justify-center md:top-[calc(var(--threads-head,0px)+0.5rem)]" style={{ "--threads-head": `${headH}px` } as CSSProperties}>
+      <div className="pointer-events-none sticky top-[calc(var(--threads-head,0px)+0.5rem)] z-10 flex justify-center" style={{ "--threads-head": `${headH}px` } as CSSProperties}>
         <AnimatePresence>
           {newPosts.length > 0 && (
             <motion.button

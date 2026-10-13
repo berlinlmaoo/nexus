@@ -2,7 +2,7 @@
 <resources>
     <string name="login_email_label">ACCESS ID (EMAIL)</string>
     <string name="login_password_label">KUNCI ENKRIPSI</string>
-    <string name="login_cta">Masuk Mission Control</string>
+    <string name="login_cta">Masuk</string>
     <string name="login_busy">Membuka uplink…</string>
     <string name="login_fill_both">Isi Access ID dan Encryption Key dulu ya.</string>
     <string name="login_failed">Login gagal. Cek email/password.</string>
@@ -54,7 +54,7 @@
     <string name="status_done">Selesai hari ini 🎉</string>
     <string name="status_finish_yesterday">Selesaikan absen kemarin</string>
     <string name="my_schedule">Jadwal Kerjaku</string>
-    <string name="location_free">📍 Bebas lokasi — absen dari mana saja</string>
+    <string name="location_free">📍 Lokasi bebas · Bisa absen dari mana saja</string>
     <string name="reflection_title">Refleksi harian</string>
     <string name="reflection_help">Wajib sebelum absen pulang. Ceritakan apa yang kamu kerjakan hari ini.</string>
     <string name="reflection_placeholder">Hari ini aku mengerjakan…</string>
@@ -94,7 +94,7 @@
     <string name="metric_today">Status hari ini</string>
     <string name="metric_office">Titik kantor</string>
     <string name="metric_where">Posisimu</string>
-    <string name="metric_dayoff">Token day-off</string>
+    <string name="metric_dayoff">Sisa jatah day off</string>
     <string name="metric_dayoff_help">Jatah day-off periode ini</string>
     <string name="metric_holidays">Tanggal merah</string>
     <string name="metric_holidays_help">Jatah tanggal merah bulan ini</string>
@@ -174,9 +174,9 @@
     <string name="req_pending">Menunggu</string>
     <string name="req_all">Semua</string>
     <string name="submissions_title">Pengajuan</string>
-    <string name="submissions_sub_review">Tinjau pengajuan dan absen pulang di luar kantor dari tim, dan ajukan milikmu sendiri.</string>
+    <string name="submissions_sub_review">Tinjau pengajuan tim dan check-out di luar kantor, dan ajukan milikmu.</string>
     <string name="submissions_sub_staff">Ajukan cuti, izin, sakit, atau day-off.</string>
-    <string name="req_new">Ajukan</string>
+    <string name="req_new">Baru</string>
     <string name="req_new_title">Pengajuan baru</string>
     <string name="window_recent">3 hari terakhir</string>
     <string name="window_period">Periode ini</string>
@@ -271,7 +271,7 @@
     <string name="battery_huawei">Huawei / Honor: di Peluncuran aplikasi, kelola NEXUS secara manual dan izinkan ketiga tombolnya.</string>
 
     <!-- Papan -->
-    <string name="board_title">Papan streak kru</string>
+    <string name="board_title">Papan absensi</string>
     <string name="board_title_me">Riwayat absenmu</string>
     <string name="board_full">Layar penuh</string>
     <string name="board_export">Ekspor periode ini (xlsx)</string>
@@ -401,15 +401,15 @@
     <string name="updater_install_failed">Update tidak terpasang.</string>
     <string name="updater_signed_out">Login dulu, atau unduh update dari website NEXUS.</string>
     <string name="metric_dayoff_help_bonus">Periode ini: %1$d + %2$d ekstra</string>
-    <string name="projects_title">Mission Control</string>
-    <string name="projects_new">Mission baru</string>
+    <string name="projects_title">Project</string>
+    <string name="projects_new">Proyek baru</string>
     <string name="folder_new">Folder baru</string>
-    <string name="projects_search">Cari mission dan task…</string>
-    <string name="projects_load_failed">Mission tidak bisa dimuat</string>
-    <string name="projects_empty">Belum ada mission</string>
-    <string name="projects_empty_sub">A mission is a project board: its tasks, people and deadlines in one place. You\'ll see every mission you\'re part of here. Create one to get started.</string>
+    <string name="projects_search">Cari proyek dan task…</string>
+    <string name="projects_load_failed">Project gagal dimuat</string>
+    <string name="projects_empty">Belum ada project</string>
+    <string name="projects_empty_sub">Proyek adalah satu board untuk satu pekerjaan: task, orang, dan tenggatnya di satu tempat. Semua proyek yang kamu ikuti muncul di sini — buat yang pertama untuk mulai.</string>
     <string name="projects_nothing_matches">Nggak ada yang cocok.</string>
-    <string name="projects_section_missions">Mission</string>
+    <string name="projects_section_missions">Project</string>
     <string name="projects_section_tasks">Tugas</string>
     <string name="folder_edit">Edit folder</string>
     <string name="folder_delete">Hapus folder</string>
@@ -452,15 +452,15 @@
     <string name="folder_name">Nama folder</string>
     <string name="folder_create">Buat folder</string>
     <string name="save">Simpan</string>
-    <string name="project_name">Nama mission</string>
-    <string name="project_launch">Luncurkan mission</string>
-    <string name="project_no_brief">Belum ada ringkasan — tambahkan supaya mission-nya lebih jelas.</string>
+    <string name="project_name">Nama project</string>
+    <string name="project_launch">Buat proyek</string>
+    <string name="project_no_brief">Belum ada deskripsi.</string>
     <string name="project_cards">Kartu</string>
     <string name="project_done">Selesai</string>
-    <string name="project_lanes">Lajur</string>
+    <string name="project_lanes">Bagian</string>
     <string name="project_calculating">Menghitung…</string>
     <string name="project_no_progress">Belum ada data progres</string>
-    <string name="project_energy">%1$d%% energi mission</string>
+    <string name="project_energy">%1$d%% selesai</string>
     <string name="project_left">sisa %1$d</string>
     <string name="project_solo">Solo quest</string>
     <string name="project_no_deadline">Tanpa deadline</string>
@@ -491,8 +491,8 @@
     <string name="project_locked">Proyek terkunci</string>
     <string name="project_locked_sub">Kamu bukan anggota proyek ini. Minta lead-nya untuk menambahkanmu.</string>
     <string name="project_load_failed">Gagal memuat project.</string>
-    <string name="board_no_lanes">Project ini belum punya lane.</string>
-    <string name="board_no_lanes_sub">Lane adalah kolom yang dilalui sebuah tugas. Buat lane-nya di board web, lalu tambahkan tugas di sini.</string>
+    <string name="board_no_lanes">Project ini belum punya bagian.</string>
+    <string name="board_no_lanes_sub">Bagian adalah kolom yang dilalui task. Atur di board web, lalu tambah task di sini.</string>
     <string name="board_empty_lane">Kosong</string>
     <string name="board_add_task">Tambah task</string>
     <string name="board_task_title">Judul task…</string>
@@ -574,20 +574,18 @@
     <string name="outside_auto_at">Auto check-out %1$s</string>
     <string name="outside_remind">Ajukan izin atau balik ke kantor · Auto check-out %1$s</string>
     <string name="outside_warn">Peringatan terakhir: auto check-out offsite jam %1$s kalau belum balik atau ajukan izin</string>
-    <string name="mytasks_title">Catatan Quest Saya</string>
-    <string name="mytasks_hot">Panas hari ini</string>
-    <string name="mytasks_motion">Sedang jalan</string>
-    <string name="mytasks_done">Baru ditaklukkan</string>
-    <string name="mytasks_empty">Belum ada quest</string>
-    <string name="mytasks_empty_sub">Task yang ditugaskan ke kamu muncul di sini, dari papan mission atau form. Belum ada yang menunggu kamu — ambil dari salah satu mission.</string>
-    <string name="mytasks_browse">Lihat mission</string>
+    <string name="mytasks_title">Task Saya</string>
+    <string name="mytasks_done">Baru selesai</string>
+    <string name="mytasks_empty">Belum ada task</string>
+    <string name="mytasks_empty_sub">Task yang ditugaskan ke kamu muncul di sini, dari project atau form. Belum ada yang menunggumu — ambil pekerjaan dari salah satu project.</string>
+    <string name="mytasks_browse">Lihat project</string>
     <string name="mytasks_load_failed">Gagal memuat.</string>
     <string name="home_morning">Selamat Pagi,</string>
     <string name="home_afternoon">Selamat Siang,</string>
     <string name="home_evening">Selamat Malam,</string>
     <string name="home_commander">Komandan</string>
     <string name="home_attendance">Absensi</string>
-    <string name="more_attendance_sub">Check in, check out, pengajuan dan papan crew</string>
+    <string name="more_attendance_sub">Check in, check out, pengajuan, dan papan absensi</string>
     <string name="home_att_loading">Memuat hari ini…</string>
     <string name="home_att_pending_checkout">Hari sebelumnya masih terbuka: check out dulu</string>
     <string name="home_att_done">Selesai hari ini · %1$s–%2$s</string>
@@ -807,8 +805,8 @@
     <string name="wn016_trail_b">Antara check in dan check out, NEXUS mengecek sekitar sejam sekali bahwa kamu di kantor. Keluar kantor, rutemu diikuti dan notifikasi Sesi kerja menghitung mundur ke auto check-out, lengkap dengan tombol Ajukan izin. Tidak ada yang direkam sebelum check in atau setelah check out.</string>
     <string name="wn016_offline_t">Tak ada sinyal? Tetap tercatat</string>
     <string name="wn016_offline_b">Check in atau check out yang ditekan saat NEXUS tak terjangkau disimpan di HP ini dengan jam kamu menekan, lalu terkirim sendiri saat NEXUS kembali.</string>
-    <string name="wn016_projects_t">Mission-mu, di aplikasi</string>
-    <string name="wn016_projects_b">Home, Catatan Quest, board, detail task dengan file dan komentar, sprint, kalender, timeline dan pencarian sekarang jalan di HP.</string>
+    <string name="wn016_projects_t">Project kamu, di aplikasi</string>
+    <string name="wn016_projects_b">Beranda, Task Saya, board, detail task dengan file dan komentar, sprint, kalender, timeline, dan pencarian sekarang jalan di HP.</string>
     <string name="wn016_account_t">Daftar, reset dan passkey</string>
     <string name="wn016_account_b">Buat akun dengan kode workspace kantormu, reset password yang lupa, atau tambahkan passkey dan masuk pakai kunci layar HP.</string>
     <string name="wn016_update_t">Update datang lewat NEXUS</string>
@@ -1006,7 +1004,7 @@
     <string name="rp_team">Tim saya</string>
     <string name="rp_this_period">Periode ini</string>
     <string name="rp_period">Periode</string>
-    <string name="rp_search_crew">Cari kru</string>
+    <string name="rp_search_crew">Cari orang</string>
     <string name="rp_no_reports">Orang muncul di sini setelah Bagan Approval mencatat kamu sebagai manager mereka.</string>
     <string name="rp_no_one">Orang masuk daftar ini setelah jadi anggota workspace.</string>
     <string name="rp_your_reports">Bawahan langsung kamu</string>
@@ -1514,10 +1512,10 @@
     <string name="company_only">Hanya untuk Z Networks. Ini bagian dari workspace perusahaan.</string>
     <string name="hero_recenter">Tampilkan lokasiku</string>
     <string name="more_title">Lainnya</string>
-    <string name="more_sec_home">MARKAS</string>
-    <string name="more_sec_missions">MISI</string>
+    <string name="more_sec_home">BERANDA</string>
+    <string name="more_sec_missions">KERJA</string>
     <string name="more_sec_knowledge">PENGETAHUAN</string>
-    <string name="more_sec_pulse">CEK DENYUT</string>
+    <string name="more_sec_pulse">TIM</string>
     <string name="more_sec_system">SISTEM</string>
     <string name="mt_messages">Pesan</string>
     <string name="mt_threads">Utas</string>
@@ -1530,7 +1528,7 @@
     <string name="mt_attendance">Absensi</string>
     <string name="mt_ticket">Tiket</string>
     <string name="mt_whats_new">Apa yang baru</string>
-    <string name="mt_tuning">Ruang Setelan</string>
+    <string name="mt_tuning">Pengaturan</string>
     <string name="mt_control">Ruang Kendali</string>
     <string name="fm_empty_title">Belum ada form</string>
     <string name="fm_empty_body">Form itu halaman pengajuan — permintaan, reimbursement, laporan — yang otomatis jadi task begitu dikirim. BoD membuatnya di web; begitu terbit, form tampil di sini untuk diisi.</string>
@@ -3172,4 +3170,10 @@
     <string name="au_ran_nothing">Tidak ada yang jalan: task-nya tidak memenuhi kondisi.</string>
     <string name="au_run_failed_to">Gagal menjalankan.</string>
     <string name="au_actor_name">Otomasi</string>
+    <string name="mytasks_overdue">Lewat tenggat</string>
+    <string name="mytasks_soon">Segera jatuh tempo</string>
+    <string name="mytasks_later">Nanti</string>
+    <string name="mytasks_show_all">Lihat semua %1$d</string>
+    <string name="mytasks_show_fewer">Tampilkan lebih sedikit</string>
+    <string name="chat_direct_message">Pesan pribadi</string>
 </resources>

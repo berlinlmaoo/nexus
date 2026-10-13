@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { openGlobalSearch } from "@/lib/search-event";
 import { modKey } from "@/lib/keyboard";
 import { AndroidAppBanner } from "@/components/attendance/IosAppCheckInCard";
@@ -377,7 +378,7 @@ function StatRow(_: { data: NexusDashboardResponse }) {
 
   const cards: StatCard[] = [
     {
-      value: projectList.length, label: "Projects", Icon: FolderKanban,
+      value: projectList.length, label: "Projects", Icon: ProjectPageIcon as unknown as typeof FolderKanban,
       from: "#c4b5fd", to: "#7c3aed", glow: "#a78bfa",
       retry: projectsQ.isError && !projectsQ.data ? () => void projectsQ.refetch() : undefined,
       detail: <ProjectsDetail projects={projectList} />,

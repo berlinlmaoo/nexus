@@ -466,7 +466,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
             val infoHint = stringResource(R.string.ci_open_info)
             Column(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(enabled = conv != null && !s.deleted, onClickLabel = infoHint, onClick = onOpenInfo)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(conv?.title(vm.meId) ?: "", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = c.foreground, maxLines = 1,
+                    Text(conv?.title(vm.meId, stringResource(R.string.chat_direct_message)) ?: "", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = c.foreground, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (conv?.muted() == true) Icon(Icons.Filled.NotificationsOff, stringResource(R.string.chat_muted), tint = c.mutedFg, modifier = Modifier.padding(start = 6.dp).size(16.dp))
                 }

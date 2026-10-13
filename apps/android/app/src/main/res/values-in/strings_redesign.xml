@@ -237,4 +237,83 @@
     <plurals name="cp_files">
         <item quantity="other">%d file</item>
     </plurals>
+    <string name="pt_cal_no_date">Tanpa tanggal · %1$d</string>
+    <string name="lb_ranking_everyone">Peringkat XP semua orang</string>
+    <!-- Room booking composer (web BookingComposer), 14 Oct 2026 -->
+    <string name="rb_new">Booking baru</string>
+    <string name="rb_edit">Ubah booking</string>
+    <string name="rb_room">Ruangan</string>
+    <string name="rb_title">Judul</string>
+    <string name="rb_title_hint">mis. Meeting klien</string>
+    <string name="rb_date">Tanggal</string>
+    <string name="rb_start">Mulai</string>
+    <string name="rb_end">Selesai</string>
+    <string name="rb_notes">Catatan (opsional)</string>
+    <string name="rb_book">Booking ruangan</string>
+    <string name="rb_update">Ubah</string>
+    <string name="rb_delete">Hapus booking</string>
+    <string name="rb_delete_q">Hapus booking ini?</string>
+    <string name="rb_end_before_start">Jam selesai harus setelah jam mulai.</string>
+    <string name="rb_in_past">Jam itu sudah lewat. Pilih jam yang lebih siang hari ini atau hari lain.</string>
+    <string name="rb_need_title">Isi judul untuk membooking ruangan.</string>
+    <string name="rb_save_failed">Booking gagal disimpan.</string>
+    <string name="rb_delete_failed">Booking gagal dihapus.</string>
+    <string name="rb_taken_by">%1$s sudah dibooking pada jam itu (%2$s).</string>
+    <string name="rb_taken">%1$s sudah dibooking pada jam itu.</string>
+    <string name="rb_not_yours">Hanya pembuat booking atau manager yang bisa mengubah booking ini.</string>
+    <string name="rb_bad_times">Cek tanggal dan jamnya, lalu coba lagi.</string>
+    <string name="rb_room_vip">Ruang Meeting VIP</string>
+    <string name="rb_room_meeting">Ruang Meeting</string>
+    <string name="rb_room_studio">Studio</string>
+    <string name="rb_empty_sub">Booking ruang meeting di sini supaya dua tim tidak datang ke ruangan yang sama. Pilih ruangan, tanggal, dan jam.</string>
+    <!-- My Submissions filters (web), 14 Oct 2026 -->
+    <string name="sub_f_all">Semua</string>
+    <string name="sub_f_finance">Finance</string>
+    <string name="sub_f_multimedia">Multimedia</string>
+    <string name="sub_f_all_projects">Semua project</string>
+    <string name="sub_f_needs_me">Perlu tindakanku</string>
+    <string name="sub_read_only_web">Hanya baca. Tim yang memindahkan kartunya.</string>
+    <string name="sub_nothing_here">Kosong</string>
+    <string name="sub_needs_reply">Perlu balasanmu</string>
+    <string name="sub_proof">Bukti</string>
+    <string name="sub_none_needs_me">Tidak ada yang perlu kamu tindak</string>
+    <string name="sub_none_needs_me_sub">Kalau tim minta revisi atau membalas kamu, pengajuannya muncul di sini.</string>
+    <string name="sub_none_here">Tidak ada pengajuan di sini</string>
+    <string name="sub_try_filter">Coba filter lain.</string>
+    <!-- Settings › Notifications and Claude (MCP), 14 Oct 2026 -->
+    <string name="st_tab_notifications">Notifikasi</string>
+    <string name="st_tab_mcp">Claude (MCP)</string>
+    <string name="st_notif_loading">Memuat pengaturan…</string>
+    <string name="st_notif_load_failed">Pengaturan notifikasi gagal dimuat.</string>
+    <string name="st_notif_automation">Notifikasi otomasi</string>
+    <string name="st_notif_automation_sub">Push saat otomasi project mengabarimu. Mati: tetap masuk kotak notifikasi, tanpa bunyi.</string>
+    <string name="st_notif_failed">Pengaturan gagal disimpan.</string>
+    <string name="st_mcp_url">URL server untuk Claude</string>
+    <string name="st_copy">Salin</string>
+    <string name="st_copied">Tersalin</string>
+    <string name="st_mcp_body">Hubungkan Claude (aplikasi, Claude Code, atau Claude Desktop) ke NEXUS agar bisa membaca dan mengubah task dan halamanmu dengan aksesmu. Token koneksinya dibuat di web, di Pengaturan › Claude (MCP), dan hanya ditampilkan sekali.</string>
+    <!-- Projects summary card (iOS ProjectsSummaryCard), 14 Oct 2026 -->
+    <string name="psum_avg_progress">Rata-rata progres</string>
+    <string name="psum_tasks_done">Task selesai</string>
+    <string name="psum_members">Member</string>
+    <string name="psum_filters">Filter</string>
+    <string name="psum_all">Semua project</string>
+    <string name="psum_active">Aktif</string>
+    <string name="psum_planning">Perencanaan</string>
+    <string name="psum_on_hold">Ditunda</string>
+    <string name="psum_completed">Selesai</string>
+    <string name="psum_archived">Diarsipkan</string>
+    <string name="psum_sort_progress">Urutkan menurut progres</string>
+    <string name="psum_sort_tasks">Urutkan menurut jumlah task</string>
+    <string name="psum_sort_name">Urutkan menurut nama</string>
+    <plurals name="psum_n_of_m">
+        <item quantity="other">%1$d dari %2$d project</item>
+    </plurals>
+    <!-- Offices card on Attendance (iOS OfficesCard), 14 Oct 2026 -->
+    <string name="of_title">Kantor &amp; geofence</string>
+    <string name="of_sub">Titik kantor + radius check-in.</string>
+    <string name="of_add_short">Office</string>
+    <string name="of_add">Tambah office</string>
+    <string name="of_none">Belum ada office</string>
+    <string name="of_none_sub">Office itu titik di peta dengan radius di sekelilingnya. Staff hanya bisa check-in di dalam radius itu, jadi belum ada yang bisa tercatat sebelum office pertama dibuat.</string>
 </resources>

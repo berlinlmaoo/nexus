@@ -65,6 +65,16 @@ class CardPropsTest {
         assertNull(CardProps.item(BoardTask("b", priority = "NONE"), "priority", fields, emptyList(), emptyMap(), today))
     }
 
+    @Test fun timestampsAreReadInOfficeTime() {
+        // SPECIAL EVENT's "Tanggal Penggunaan" on the dev server: 21:47Z on 23 May is 24 May in WIB (the web shows 24 May).
+        assertEquals(LocalDate.of(2026, 5, 24), dueDate("2026-05-23T21:47:00.000Z"))
+        assertEquals(LocalDate.of(2026, 5, 26), dueDate("2026-05-26T00:00:00.000Z"))
+        assertEquals(LocalDate.of(2026, 5, 23), dueDate("2026-05-23"))
+        assertEquals(LocalDate.of(2026, 10, 15), dueDate("2026-10-14T17:00:00Z"))
+        assertNull(dueDate("ryan ceo pats"))
+        assertNull(dueDate(null))
+    }
+
     @Test fun assigneesAndTheStatusOption() {
         val lanes = listOf(Lane("l1", "On Progress", taskStatus = "IN_PROGRESS"))
         val t = BoardTask("a", taskListId = "l1", assignees = listOf(Assignee("u1", UserRef("u1", "Geraldo Valentino"))))

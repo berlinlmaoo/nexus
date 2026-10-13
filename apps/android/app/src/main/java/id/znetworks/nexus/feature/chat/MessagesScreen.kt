@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.chat
 
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
@@ -113,6 +115,9 @@ class MessagesViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val r = api.conversations()
             _state.update { it.copy(conversations = r.value.conversations, savedAt = r.savedAtMillis, loading = false, error = null) }
+            // Project rooms draw their project's mark (iOS): read the project list once if nobody has yet.
+            if (id.znetworks.nexus.feature.projects.ProjectIcons.icons.value.isEmpty() && r.value.conversations.any { it.projectId != null })
+                runCatching { id.znetworks.nexus.feature.projects.ProjectsApi(c.api).projects() }
             if (r.savedAtMillis == null) c.badges.setChat(r.value.unread())
         } catch (e: ApiError) {
             _state.update { it.copy(loading = false, error = if (it.conversations.isEmpty()) e.describe(res) else null) }
@@ -198,9 +203,18 @@ fun MessagesScreen(onBack: (() -> Unit)?, onOpenChat: (String) -> Unit, vm: Mess
 @Composable
 internal fun ConversationRow(conv: Conversation, meId: String?, typing: Boolean = false, onClick: () -> Unit) {
     val c = Nx.colors
+    val dmFallback = stringResource(R.string.chat_direct_message)
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         when (conv.type) {
-            "DM" -> Avatar(conv.other(meId)?.name, conv.other(meId)?.avatar, 44.dp)
+            // The other person's photo, else the web's two-letter initials of the title ("BZ", "DM"), never "?".
+            "DM" -> Avatar(conv.title(meId, dmFallback), conv.other(meId)?.avatar, 44.dp, initials = conv.initials(meId, dmFallback))
+            // A project room shows its project's mark (photo or the page icon), like iOS; a group keeps the group icon.
+            "PROJECT" -> {
+                val icons by id.znetworks.nexus.feature.projects.ProjectIcons.icons.collectAsState()
+                Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(c.muted.copy(alpha = 0.6f)), contentAlignment = Alignment.Center) {
+                    id.znetworks.nexus.feature.projects.ProjectMark(conv.projectId?.let { icons[it] }, 30.dp)
+                }
+            }
             else -> Box(Modifier.size(44.dp).background(c.violet.copy(alpha = 0.14f), CircleShape), contentAlignment = Alignment.Center) {
                 Icon(if (conv.type == "PROJECT") Icons.Filled.ViewKanban else Icons.Filled.Groups, null, tint = c.violetText)
             }
@@ -210,7 +224,7 @@ internal fun ConversationRow(conv: Conversation, meId: String?, typing: Boolean 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // Title (+ bell-off) takes the room; the time stays at the end of the row.
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    Text(conv.title(meId), fontSize = 15.sp, fontWeight = if (conv.unreadCount > 0) FontWeight.Bold else FontWeight.SemiBold,
+                    Text(conv.title(meId, dmFallback), fontSize = 15.sp, fontWeight = if (conv.unreadCount > 0) FontWeight.Bold else FontWeight.SemiBold,
                         color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (conv.muted()) Icon(Icons.Filled.NotificationsOff, stringResource(R.string.chat_muted), tint = c.mutedFg, modifier = Modifier.padding(start = 4.dp).size(14.dp))
                 }

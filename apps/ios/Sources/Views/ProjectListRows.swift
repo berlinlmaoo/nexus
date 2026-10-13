@@ -208,19 +208,36 @@ struct ListTaskRow: View {
 
     @ViewBuilder private var content: some View {
         if wide {
-            HStack(spacing: 10) {
-                leading
-                titleLine
-                Spacer(minLength: 8)
-                ListPropLine(task: task, status: status, fieldColumns: fieldColumns)
+            // The property columns are fixed widths (up to ~830 pt with three fields). On a portrait iPad
+            // with the sidebar open that left the title NO width at all — rows of amounts and pills with
+            // no names (UI tour run 5). Keep at least 220 pt for the title: drop field columns one by one,
+            // then fall back to the two-line row. Every row sees the same width and the title's ideal is
+            // fixed, so all rows of a List pick the same layout.
+            ViewThatFits(in: .horizontal) {
+                ForEach(0...fieldColumns.count, id: \.self) { dropped in
+                    wideRow(Array(fieldColumns.dropLast(dropped)))
+                }
+                compactRow
             }
         } else {
-            HStack(alignment: .top, spacing: 10) {
-                leading.padding(.top, 1)
-                VStack(alignment: .leading, spacing: 5) {
-                    titleLine
-                    ListPropLine(task: task, status: status, wrap: true)
-                }
+            compactRow
+        }
+    }
+
+    private func wideRow(_ fields: [String]) -> some View {
+        HStack(spacing: 10) {
+            leading
+            titleLine.frame(minWidth: 220, idealWidth: 220, maxWidth: .infinity, alignment: .leading)
+            ListPropLine(task: task, status: status, fieldColumns: fields)
+        }
+    }
+
+    private var compactRow: some View {
+        HStack(alignment: .top, spacing: 10) {
+            leading.padding(.top, 1)
+            VStack(alignment: .leading, spacing: 5) {
+                titleLine
+                ListPropLine(task: task, status: status, wrap: true)
             }
         }
     }

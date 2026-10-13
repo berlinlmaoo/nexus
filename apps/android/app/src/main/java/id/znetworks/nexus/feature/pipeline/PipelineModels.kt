@@ -129,6 +129,15 @@ data class PipelineDeal(val raw: JsonObject) {
     val receivable get() = termSummary?.outstanding ?: outstandingReceivable
     val paymentStatusShown get() = termSummary?.paymentStatus ?: text("paymentStatus")
     val paymentDueShown get() = termSummary.let { if (it != null) it.nextDueDate else date("paymentDueDate") }
+    /** Real cost lines (Control Tower v4, 14 Oct 2026); none on a deal without them and from an older server. */
+    val costs: List<PipelineCost> get() = PipelineCosts.of(raw["costs"])
+    /**
+     * Σ cost lines, the margin on the net value (null without one) and margin ÷ net value. The server sends the same
+     * (costTotal, margin, marginPct); worked out here from the lines so an edit shows at once, before it answers.
+     */
+    val costTotal get() = PipelineCosts.total(costs)
+    val margin get() = PipelineCosts.margin(netValue, costTotal)
+    val marginPct get() = PipelineCosts.marginPct(netValue, costTotal)
     /** What the terms are checked against: the invoice value, else the contract value (as the web). */
     val termsReference get() = if (invoiceValue > 0) invoiceValue else contractValue
 
@@ -245,7 +254,11 @@ data class PipelineChange(val id: String, val field: String, val before: JsonEle
 }
 
 /** GET …/pipeline: everything the tab draws. */
-data class PipelineData(val deals: List<PipelineDeal>, val summary: PipelineSummary, val vocab: PipelineVocab, val today: String, val workspaceId: String?) {
+data class PipelineData(val deals: List<PipelineDeal>, val summary: PipelineSummary, val vocab: PipelineVocab, val today: String, val workspaceId: String?,
+                        /** FULL | EDIT | COMMENT | VIEW; null from an older server. */
+                        val viewerAccessLevel: String? = null,
+                        /** Full / Can edit = true; Can comment / Can view read only. An older server says nothing: true. */
+                        val canEdit: Boolean = true) {
     companion object {
         fun of(o: JsonObject) = PipelineData(
             deals = (o["deals"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.let(::PipelineDeal) },
@@ -253,6 +266,8 @@ data class PipelineData(val deals: List<PipelineDeal>, val summary: PipelineSumm
             vocab = PipelineVocab(o["vocab"] as? JsonObject ?: JsonObject(emptyMap())),
             today = o["today"].str()?.take(10) ?: java.time.LocalDate.now(id.znetworks.nexus.core.time.OfficeTime.ZONE).toString(),
             workspaceId = (o["project"] as? JsonObject)?.get("workspaceId").str(),
+            viewerAccessLevel = o["viewerAccessLevel"].str(),
+            canEdit = (o["canEdit"] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content?.toBooleanStrictOrNull() ?: true,
         )
     }
 }
@@ -426,7 +441,7 @@ object PipelineText {
         "outstandingReceivable" -> R.string.pl_f_receivable; "paymentDueDate" -> R.string.pl_f_due_date; "maxDaysOverdue" -> R.string.pl_f_days_typed
         "netCash" -> R.string.pl_f_net_cash; "closingStatus" -> R.string.pl_f_closing_status; "mainDate" -> R.string.pl_f_main_date
         "nextAction" -> R.string.pl_f_next_action; "nextActionDate" -> R.string.pl_f_next_date; "blocker" -> R.string.pl_f_blocker
-        "notes" -> R.string.pl_f_notes; "links" -> R.string.pl_f_links; "services" -> R.string.pl_f_services
+        "notes" -> R.string.pl_f_notes; "links" -> R.string.pl_f_links; "services" -> R.string.pl_f_services; "costs" -> R.string.pc_real_cost
         else -> null
     }
 }

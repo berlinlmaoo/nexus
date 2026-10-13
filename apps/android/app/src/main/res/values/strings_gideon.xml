@@ -28,7 +28,7 @@
     <string name="gx_delete">Delete this chat</string>
     <string name="gx_open_failed">Couldn\'t load this chat</string>
     <string name="gx_chats_failed">Couldn\'t load your chats</string>
-    <string name="gx_empty_title">Ask GIDEON anything</string>
+    <string name="gx_empty_title">What can %1$s do for you?</string>
     <string name="gx_empty_sub">It searches and reads your projects, tasks, docs and chats with your access only, and shows what it read.</string>
     <string name="gx_chip_overdue">What\'s overdue for me?</string>
     <string name="gx_chip_week">Summarize my week across projects</string>

@@ -40,6 +40,9 @@ final class NEXUSUITour: XCTestCase {
         var pages = 1
         let settled: Bool
         let seconds: Double
+        /// Mac: false when the NEXUS window could not be brought to the front before a shot, so the
+        /// picture may show another app's window (run 5: a Claude / editor window in the Mac shots).
+        var frontmost: Bool? = nil
     }
 
     private let env = ProcessInfo.processInfo.environment
@@ -125,13 +128,18 @@ final class NEXUSUITour: XCTestCase {
                 let settled = waitForSpinnersToStop(timeout: 25)
                 pause(1.5)
                 dismissSystemAlerts()
+                windowBehind = false
                 let first = snap(screen.id)
                 let more = snapMorePages(screen.id, prefix: "tour-", first: first, in: app, web: false)
                 let ok = status == "ready:\(screen.id)"
-                outcomes.append(Outcome(id: screen.id,
-                                        status: ok ? (settled ? "ok" : "ok, spinner still visible after 25 s") : status,
-                                        pages: 1 + more,
-                                        settled: settled, seconds: Date().timeIntervalSince(started)))
+                var line = ok ? (settled ? "ok" : "ok, spinner still visible after 25 s") : status
+                if windowBehind { line += "; NEXUS window was not frontmost for a shot (another window may show)" }
+                var outcome = Outcome(id: screen.id, status: line, pages: 1 + more,
+                                      settled: settled, seconds: Date().timeIntervalSince(started))
+                #if targetEnvironment(macCatalyst)
+                outcome.frontmost = !windowBehind
+                #endif
+                outcomes.append(outcome)
             }
         }
 
@@ -448,15 +456,40 @@ final class NEXUSUITour: XCTestCase {
         return shot
     }
 
+    /// Set when a Mac shot was taken although the NEXUS window would not come to the front.
+    private var windowBehind = false
+
     @MainActor
     private func takeShot(_ root: XCUIApplication) -> XCUIScreenshot {
         #if targetEnvironment(macCatalyst)
-        // The app's window only, not the whole desktop around it.
+        // The app's window only, not the whole desktop around it. An element screenshot is still a
+        // picture of that part of the SCREEN: with another window (Claude, an editor, Xcode) on top,
+        // that window was in the shot (run 5). So the app is brought to the front first, every time.
+        if !bringToFront(root) { windowBehind = true }
         return root.windows.firstMatch.screenshot()
         #else
         return XCUIScreen.main.screenshot()
         #endif
     }
+
+    #if targetEnvironment(macCatalyst)
+    /// Activates the app and waits until it is the foreground app AND its window is hit-testable at its
+    /// centre (a window of another app over it fails that test). Up to four tries; false if it never was.
+    @MainActor
+    private func bringToFront(_ root: XCUIApplication) -> Bool {
+        for _ in 0..<4 {
+            root.activate()
+            _ = root.wait(for: .runningForeground, timeout: 5)
+            let window = root.windows.firstMatch
+            if root.state == .runningForeground, window.exists, window.isHittable {
+                pause(0.4)   // the window server finishes the reorder before the pixels are read
+                return true
+            }
+            pause(0.8)
+        }
+        return false
+    }
+    #endif
 
     private func attachShot(_ shot: XCUIScreenshot, _ name: String) {
         let attachment = XCTAttachment(screenshot: shot)
@@ -487,9 +520,20 @@ final class NEXUSUITour: XCTestCase {
         guard maxPages > 1, let target = scrollTarget(in: root, web: web) else { return 0 }
         var page = 1
         var last = first.pngRepresentation
+        // A drag that lands on a row can still be read as a tap and push a screen (run 5: the
+        // leaderboard opened a profile). Pushed screen = stop paging and go back.
+        let backs = { () -> Int in web ? 0 : root.navigationBars.buttons.matching(identifier: "BackButton").count }
+        let backsBefore = backs()
+        let navigatedAway = { () -> Bool in
+            guard !web, backs() > backsBefore else { return false }
+            let back = root.navigationBars.buttons.matching(identifier: "BackButton").firstMatch
+            if back.exists && back.isHittable { back.tap(); self.pause(1.0) }
+            return true
+        }
         if id.hasSuffix("board") || id.hasSuffix("table") || id.hasSuffix("timeline") {
             drag(target, dx: -0.5, dy: 0)
             let shot = takeShot(root)
+            if navigatedAway() { return page - 1 }
             if shot.pngRepresentation != last {
                 page += 1
                 attachShot(shot, "\(prefix)\(id)-\(page)")
@@ -502,6 +546,7 @@ final class NEXUSUITour: XCTestCase {
         #endif
         while page < maxPages {
             drag(target, dx: 0, dy: -0.5)
+            if navigatedAway() { break }
             if !web { _ = waitForSpinnersToStop(timeout: 4) }
             let shot = takeShot(root)
             let data = shot.pngRepresentation
@@ -521,21 +566,37 @@ final class NEXUSUITour: XCTestCase {
         return page - 1
     }
 
-    /// The page in Safari; in the app the largest scroll view, collection view or table on screen.
+    /// Where the drags go: an element, and the part of it that is actually on screen.
+    private struct ScrollTarget {
+        let element: XCUIElement
+        let visible: CGRect
+    }
+
+    /// The page in Safari; in the app the scroll view, collection view or table with the most area
+    /// ON SCREEN. Measured by the whole frame, the Timeline's inner horizontal scroll view (as tall as
+    /// all its rows) beat the vertical one around it; the drags went to its off-screen middle and
+    /// pages 1–3 of the iPhone timeline were the same picture (run 5).
     @MainActor
-    private func scrollTarget(in root: XCUIApplication, web: Bool) -> XCUIElement? {
+    private func scrollTarget(in root: XCUIApplication, web: Bool) -> ScrollTarget? {
+        let window = root.windows.firstMatch.frame
         if web {
             let page = root.webViews.firstMatch
-            return page.exists ? page : nil
+            guard page.exists else { return nil }
+            return ScrollTarget(element: page, visible: page.frame.intersection(window))
         }
-        var best: XCUIElement?
+        var best: ScrollTarget?
         var bestArea: CGFloat = 0
         for query in [root.collectionViews, root.tables, root.scrollViews] {
-            for i in 0..<min(query.count, 6) {
+            for i in 0..<min(query.count, 8) {
                 let element = query.element(boundBy: i)
                 guard element.exists else { continue }
-                let area = element.frame.width * element.frame.height
-                if area > bestArea { best = element; bestArea = area }
+                let visible = element.frame.intersection(window)
+                guard !visible.isNull, visible.width > 40, visible.height > 80 else { continue }
+                // A frame much taller or wider than what shows of it is content, not a viewport: it is
+                // scrolled by something around it.
+                let isViewport = element.frame.height <= visible.height * 1.05 && element.frame.width <= visible.width * 1.05
+                let area = visible.width * visible.height * (isViewport ? 1 : 0.5)
+                if area > bestArea { best = ScrollTarget(element: element, visible: visible); bestArea = area }
             }
         }
         return best
@@ -545,19 +606,30 @@ final class NEXUSUITour: XCTestCase {
     /// nothing; snapMorePages flips it once (run 3, 13 Oct 2026).
     private var macWheelSign: CGFloat = -1
 
-    /// dy < 0 scrolls the content up (finger moves up), dx < 0 scrolls it left.
+    /// dy < 0 scrolls the content up (finger moves up), dx < 0 scrolls it left. Distances are fractions
+    /// of the VISIBLE part of the target, and every point is inside it.
     @MainActor
-    private func drag(_ element: XCUIElement, dx: CGFloat, dy: CGFloat) {
+    private func drag(_ target: ScrollTarget, dx: CGFloat, dy: CGFloat) {
+        let frame = target.element.frame
+        let rect = target.visible
+        // Absolute screen points, expressed from the element's own origin (XCUICoordinate's way).
+        let origin = target.element.coordinate(withNormalizedOffset: .zero)
+        func at(_ x: CGFloat, _ y: CGFloat) -> XCUICoordinate {
+            origin.withOffset(CGVector(dx: x - frame.minX, dy: y - frame.minY))
+        }
         #if targetEnvironment(macCatalyst)
         // A scroll-wheel event at a point, not swipeUp(): a swipe needs the element's hit point, and a
         // scroll view half covered by its neighbour (Messages: list beside the chat) has none — the
         // failed swipe ended the whole Mac run after 7 screens (run 3, 13 Oct 2026).
-        let frame = element.frame
-        let point = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        point.scroll(byDeltaX: macWheelSign * dx * frame.width, deltaY: macWheelSign * dy * frame.height)
+        at(rect.midX, rect.midY).scroll(byDeltaX: macWheelSign * dx * rect.width,
+                                        deltaY: macWheelSign * dy * rect.height)
         #else
-        let start = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5 - dx / 2, dy: 0.5 - dy / 2))
-        let end = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5 + dx / 2, dy: 0.5 + dy / 2))
+        // Vertical drags run down the left gutter (6 pt in), beside the cards and rows rather than on
+        // them: a drag starting on a row could open it (run 5, leaderboard → a profile).
+        let x0: CGFloat = dx == 0 ? rect.minX + 6 : rect.midX - dx * rect.width / 2
+        let x1: CGFloat = dx == 0 ? rect.minX + 6 : rect.midX + dx * rect.width / 2
+        let start = at(x0, rect.midY - dy * rect.height / 2)
+        let end = at(x1, rect.midY + dy * rect.height / 2)
         start.press(forDuration: 0.05, thenDragTo: end,
                     withVelocity: XCUIGestureVelocity(rawValue: 700), thenHoldForDuration: 0.3)
         #endif

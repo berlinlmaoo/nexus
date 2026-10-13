@@ -256,7 +256,8 @@ export async function PATCH(
     // a guest added from outside the workspace is not in the workspace room.
     emitWorkspaceChanged(
       existing.workspaceId,
-      { kind: "projects", projectId: project.id, actorId: session.user.id! },
+      // The new icon rides along when it changed, so every open client swaps the photo at once.
+      { kind: "projects", projectId: project.id, actorId: session.user.id!, ...(icon !== undefined && { icon: project.icon ?? null }) },
       existing.members.map((m) => m.userId),
     )
 

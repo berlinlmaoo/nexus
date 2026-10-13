@@ -667,7 +667,7 @@ export function initializeSocketServer(
   })
 
   // Projects/folders of a workspace changed (lib/socket-emitter.ts emitWorkspaceChanged). The payload is
-  // ids only and already stripped to its four fields there. One emit to the union of rooms, so a socket
+  // ids only (plus a changed project icon) and already stripped to its allowed fields there. One emit to the union of rooms, so a socket
   // in several of them (its workspace and its own user room) gets it once.
   eventBus.on(BUS_EVENTS.WORKSPACE_CHANGED, (data: { workspaceId: string | null; userIds?: string[]; payload: unknown }) => {
     const rooms = (data.userIds ?? []).map((id) => `user:${id}`)

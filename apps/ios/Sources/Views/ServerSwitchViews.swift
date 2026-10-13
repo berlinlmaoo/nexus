@@ -59,8 +59,11 @@ struct ServerSwitchCard: View {
     }
 }
 
-/// A small "DEV" mark over the whole app while it talks to the DEV server, so a screenshot or a test
-/// can never be mistaken for production. Not interactive.
+/// The mark over the whole app while it talks to the DEV server, so a screenshot or a test can never be
+/// mistaken for production: an orange edge along the very top of the window, in the status bar's row.
+/// It was the "DEV" pill floating under the status bar, and on every iPhone screen it sat on the
+/// navigation title ("Ca[DEV]dar", UI tour run 5). The pill stays where there is room for it: the login
+/// screen and Settings' server card. Not interactive.
 struct DevServerBadge: View {
     static var pill: some View {
         Text("DEV")
@@ -73,9 +76,13 @@ struct DevServerBadge: View {
 
     var body: some View {
         if ServerEnvironment.isDev {
-            Self.pill
-                .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
+            Rectangle()
+                .fill(Color.orange)
+                .frame(maxWidth: .infinity)
+                .frame(height: 3)
+                .ignoresSafeArea(edges: .top)
                 .allowsHitTesting(false)
+                .accessibilityLabel(T("Dev server"))
         }
     }
 }

@@ -183,10 +183,25 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
                 replace(dealId) { d }; onDone(d); load() // KPIs come from the server
             } catch (e: ApiError) {
                 before?.let { b -> replace(dealId) { b } }
-                _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.pl_save_failed)) }
+                val h = e as? ApiError.Http
+                // A refused cost list (too many lines, a bad amount or description) gets our sentence, in the app's language.
+                _state.update { it.copy(notice = if (h?.code == "INVALID_FIELD" && fields.containsKey("costs")) res.getString(R.string.pc_invalid)
+                    else h?.serverMessage ?: res.getString(R.string.pl_save_failed)) }
                 onDone(null)
             }
         }
+    }
+
+    /**
+     * Real cost lines (§ Control Tower v4): [edit] runs on the deal as it is NOW (a line saved a moment ago may not have
+     * been drawn yet), and the whole list goes in one PATCH like any other field. Nothing is sent when nothing changed.
+     */
+    fun editCosts(dealId: String, edit: (List<PipelineCost>) -> List<PipelineCost>?) {
+        val now = _state.value.data?.deals?.firstOrNull { it.id == dealId } ?: return
+        val next = edit(now.costs) ?: return
+        if (next == now.costs) return
+        if (!PipelineCosts.valid(next)) { _state.update { it.copy(notice = res.getString(R.string.pc_invalid)) }; return }
+        update(dealId, PipelineCosts.patch(next))
     }
 
     /** Make (or find) the won deal's execution folder (§15), then open it; an answer without a folder opens the project. */
@@ -465,22 +480,32 @@ private data class Quad<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
 @Composable
 private fun Kpis(sm: PipelineSummary) {
     val c = Nx.colors
-    data class Tile(val label: String, val value: String, val sub: String, val zero: Boolean)
+    data class Tile(val label: String, val value: String, val sub: String, val zero: Boolean, val tone: Color? = null, val detail: String? = null, val warn: String? = null)
     val overdue = sm.n("receivableOverdue")
+    val profit = sm.n("realProfit")
+    val noNet = sm.i("costNoNetCount")
     val tiles = listOf(
         Tile(stringResource(R.string.pl_k_open), PipelineFormat.idr(sm.n("openValue")), pluralStringResource(R.plurals.pl_k_in_play, sm.i("openCount"), sm.i("openCount")), sm.n("openValue") == 0.0),
         Tile(stringResource(R.string.pl_k_weighted), PipelineFormat.idr(sm.n("weightedValue")), stringResource(R.string.pl_k_weighted_sub), sm.n("weightedValue") == 0.0),
         Tile(stringResource(R.string.pl_k_won), PipelineFormat.idr(sm.n("wonValue")), stringResource(R.string.pl_k_won_sub, sm.i("activeCount"), sm.i("lostCount")), sm.n("wonValue") == 0.0),
         Tile(stringResource(R.string.pl_k_receivable), PipelineFormat.idr(sm.n("receivable")),
             if (overdue > 0) stringResource(R.string.pl_k_overdue, PipelineFormat.idr(overdue)) else stringResource(R.string.pl_k_nothing_overdue), sm.n("receivable") == 0.0),
+        // Control Tower v6 (14 Oct 2026): Σ (net value − real cost) of the deals not Lost with costs and a net value, red
+        // below zero; under it the real cost of the same deals. Deals with costs but no net value are left out, named in amber.
+        Tile(stringResource(R.string.pc_k_real_profit), PipelineFormat.idr(profit),
+            pluralStringResource(R.plurals.pc_k_have_costs, sm.i("costEligibleCount"), sm.i("costDealCount"), sm.i("costEligibleCount")), profit == 0.0,
+            tone = if (profit < 0) c.danger else null, detail = stringResource(R.string.pc_k_real_cost, PipelineFormat.idr(sm.n("realCost"))),
+            warn = if (noNet > 0) pluralStringResource(R.plurals.pc_k_no_net, noNet, noNet) else null),
         Tile(stringResource(R.string.pl_critical), "${sm.i("criticalCount")}", stringResource(R.string.pl_k_attention, sm.i("attentionCount")), sm.i("criticalCount") == 0),
         Tile(stringResource(R.string.pl_k_ready), "${sm.i("readyCount")}", stringResource(R.string.pl_k_blocked, sm.i("blockedCount")), sm.i("readyCount") == 0),
         Tile(stringResource(R.string.pl_k_on_track), "${sm.i("deliverablesOnTrack")}", stringResource(R.string.pl_k_completed, sm.i("deliverablesDone")), sm.i("deliverablesOnTrack") == 0),
     )
     @Composable fun TileBody(t: Tile, modifier: Modifier) = Column(modifier) {
         Text(t.label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(t.value, fontSize = 17.sp, fontWeight = if (t.zero) FontWeight.Normal else FontWeight.Bold, color = if (t.zero) c.mutedFg else c.foreground, maxLines = 1)
+        Text(t.value, fontSize = 17.sp, fontWeight = if (t.zero) FontWeight.Normal else FontWeight.Bold, color = if (t.zero) c.mutedFg else t.tone ?: c.foreground, maxLines = 1)
         Text(t.sub, fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        t.detail?.let { Text(it, fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        t.warn?.let { Text(it, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.warningFg, maxLines = 2, overflow = TextOverflow.Ellipsis) }
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         if (maxWidth < 600.dp) LazyRow(Modifier.fillMaxWidth().wrapContentHeight(), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
@@ -523,6 +548,13 @@ private fun DealCard(d: PipelineDeal, data: PipelineData, vm: PipelineViewModel)
             if (d.brand.isNotBlank() || d.value > 0) Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(d.brand, fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 if (d.value > 0) Text(PipelineFormat.idr(d.value), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.foreground)
+            }
+            // The margin on the net value (Control Tower v6): only with at least one cost line and a net value.
+            PipelineCosts.cardMargin(d)?.let { (m, pct) ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.pc_margin) + ": ", fontSize = 12.sp, color = c.mutedFg, maxLines = 1)
+                    Text("${PipelineFormat.idr(m)} (${PipelineFormat.pct(pct)})", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = marginColor(m), maxLines = 1)
+                }
             }
             PhaseTrack(d.progressPhases, Modifier.fillMaxWidth().padding(vertical = 2.dp))
             val blocker = d.blockerText

@@ -279,9 +279,11 @@ struct SecurityCard: View {
             // Near-black like the web's primary, not the old violet fill.
             Button { Task { await change() } } label: {
                 HStack(spacing: 6) { if busy { ProgressView().scaleEffect(0.7).tint(NX.background) }; Text(T("Change password")) }
-                    .font(NXFont.text(14, .semibold)).foregroundStyle(valid ? NX.background : Color.white)
+                    .font(NXFont.text(14, .semibold)).foregroundStyle(NX.background)
                     .frame(maxWidth: .infinity).padding(.vertical, 11)
-                    .background(valid ? NX.onyx : NX.mutedFg.opacity(0.4), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    // Near-black always; the disabled plain button dims it (web: 50 %). It was white text on
+                    // a pale grey fill, dimmed once more by the disabled button: unreadable (UI tour run 5).
+                    .background(NX.onyx, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }.buttonStyle(.plain).disabled(busy || !valid)
         }
         .nexusCard()
@@ -307,9 +309,9 @@ struct SecurityCard: View {
                             Text(T("Change password"))
                         }
                     }
+                    // The style dims a disabled button to 50 % itself; another .opacity(0.5) made it 25 %.
                     .buttonStyle(.nxPrimary)
                     .disabled(busy || !valid)
-                    .opacity(valid ? 1 : 0.5)
                 }
             }
         }

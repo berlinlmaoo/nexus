@@ -171,7 +171,7 @@ struct SearchView: View {
         var out: [ResultGroup] = []
         let projects = (r.projects ?? []).prefix(6).map { p in
             SearchRow(id: "p:\(p.id)", icon: "rectangle.stack.fill", tint: .clear, title: p.name, sub: nil,
-                      mark: AnyView(ProjectMark(icon: p.icon, color: p.color, size: 34))) { target = .project(id: p.id, name: p.name) }
+                      mark: AnyView(ProjectMark(icon: p.icon, color: p.color, size: 34, projectId: p.id))) { target = .project(id: p.id, name: p.name) }
         }
         if !projects.isEmpty { out.append(ResultGroup(label: "PROJECTS", rows: projects)) }
         let tasks = (r.tasks ?? []).prefix(6).map { t in

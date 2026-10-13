@@ -251,8 +251,12 @@ fun HomeScreen(
         }
     }
     // GIDEON's launcher lives on Home only (iOS floating button).
-    androidx.compose.material3.FloatingActionButton(onClick = onOpenGideon, containerColor = c.violet, contentColor = Color.White,
-        modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)) { Icon(Icons.Filled.AutoAwesome, "GIDEON") }
+    // The round GIDEON launcher with its mark (iOS / web), not a violet sparkle square.
+    androidx.compose.material3.FloatingActionButton(onClick = onOpenGideon, containerColor = c.card, contentColor = c.foreground,
+        shape = androidx.compose.foundation.shape.CircleShape,
+        modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp).border(1.dp, c.border, androidx.compose.foundation.shape.CircleShape)) {
+        id.znetworks.nexus.ui.components.GideonMark(24.dp, contentDescription = "GIDEON")
+    }
     }
     // Grows from the tapped card, one gradient, no scrim (iOS MorphFlip; Berlin, 29 Sep, point 5).
     stat?.let { i -> StatMorph(i, statRects[i], s, vm, onOpenProject, onOpenTask) { stat = null } }

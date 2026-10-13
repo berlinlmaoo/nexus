@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.admin
 
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Add
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -324,9 +328,26 @@ private fun DayShiftDialog(current: ShiftDay?, onDismiss: () -> Unit, onSave: (S
     }
 }
 
-/** Offices: list, active toggle, edit, add at my position, archive. */
+/** Offices: list, active toggle, edit, add at my position, archive (Control Room › Offices). */
 @Composable
 fun OfficesScreen(onBack: () -> Unit) {
+    val c = Nx.colors
+    Column(Modifier.fillMaxSize().background(c.background).dismissKeyboardOnTapOrDrag()) {
+        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+            Text(stringResource(R.string.aa_offices), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, modifier = Modifier.weight(1f))
+        }
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) { OfficesCard() }
+    }
+}
+
+/**
+ * The offices and their check-in radius as one card (iOS OfficesCard): on the Attendance page for whoever
+ * manages attendance, and as Control Room › Offices. "+ Office", a row opens the editor, the switch turns
+ * an office on or off; no office yet says why that matters and offers to add one.
+ */
+@Composable
+fun OfficesCard() {
     val api = attApi()
     val c = Nx.colors
     val context = LocalContext.current
@@ -339,25 +360,33 @@ fun OfficesScreen(onBack: () -> Unit) {
     var tick by remember { mutableIntStateOf(0) }
     LaunchedEffect(tick) { data = runCatching { api.offices() }.getOrNull() }
     fun run(block: suspend () -> Unit) = scope.launch { try { block(); tick++ } catch (e: ApiError) { notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) } }
-    Column(Modifier.fillMaxSize().background(c.background).dismissKeyboardOnTapOrDrag()) {
-        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Text(stringResource(R.string.aa_offices), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, modifier = Modifier.weight(1f))
-            if (data?.canManage == true) TextButton(onClick = { creating = true }) { Text(stringResource(R.string.add)) }
+    val d = data
+    Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(24.dp)).border(1.dp, c.border, RoundedCornerShape(24.dp)).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.of_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground)
+                Text(stringResource(R.string.of_sub), fontSize = 11.sp, color = c.mutedFg)
+            }
+            if (d?.canManage == true) id.znetworks.nexus.ui.components.NxButton(stringResource(R.string.of_add_short), { creating = true }, compact = true,
+                kind = id.znetworks.nexus.ui.components.NxButtonKind.PRIMARY, icon = Icons.Filled.Add)
         }
-        val d = data
-        if (d == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return@Column }
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (d.offices.isEmpty()) Text(stringResource(R.string.aa_no_offices), fontSize = 13.sp, color = c.mutedFg)
-            d.offices.forEach { o ->
-                AdminCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f).clickable(enabled = d.canManage) { editing = o }) {
-                            Text(o.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.foreground)
-                            Text(listOfNotNull(o.address, "${o.radiusMeters} m", stringResource(R.string.aa_grace, o.lateGraceMinutes)).joinToString(" · "), fontSize = 11.sp, color = c.mutedFg)
-                        }
-                        if (d.canManage) Switch(o.isActive, { on -> run { api.updateOffice(o.id, mapOf("isActive" to JsonPrimitive(on))) } })
+        when {
+            d == null -> Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
+            d.offices.isEmpty() && d.canManage -> id.znetworks.nexus.ui.components.EmptyState(Icons.Filled.Place, stringResource(R.string.of_none), stringResource(R.string.of_none_sub),
+                stringResource(R.string.of_add), { creating = true })
+            d.offices.isEmpty() -> Text(stringResource(R.string.of_none_sub), fontSize = 13.sp, color = c.mutedFg)
+            else -> d.offices.forEach { o ->
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(enabled = d.canManage) { editing = o }.padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Place, null, tint = if (o.isActive) c.violetText else c.mutedFg, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(o.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1)
+                        Text(listOfNotNull(o.address ?: "—", "${o.radiusMeters} m", stringResource(R.string.aa_grace, o.lateGraceMinutes)).joinToString(" · "),
+                            fontSize = 11.sp, color = c.mutedFg, maxLines = 1)
                     }
+                    if (d.canManage) Switch(o.isActive, { on -> run { api.updateOffice(o.id, mapOf("isActive" to JsonPrimitive(on))) } })
                 }
             }
         }

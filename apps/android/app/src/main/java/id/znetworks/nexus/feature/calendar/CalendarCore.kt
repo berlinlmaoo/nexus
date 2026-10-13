@@ -281,7 +281,10 @@ object CalendarCore {
                 if (p.userIds.isEmpty()) s.loose[i.key] = i
                 for (u in p.userIds) { s.people.getOrPut(u) { LinkedHashMap() }[i.key] = i; who += u }
             }
-            if (!inside) continue
+            // No placement at all (none of its PICs is in the Bagan): only at the top, where its "other" dot is
+            // (web core.ts `nowhere`; without it the day said 5 tasks where the web said 7, QA 14 Oct 2026).
+            val nowhere = i.placements.isEmpty() && ix.top?.id == focusId
+            if (!inside && !nowhere) continue
             shown += i.key
             if (i.placement == PlacedBy.PIC) for (u in i.unplacedIds) { unplaced.getOrPut(u) { LinkedHashMap() }[i.key] = i; who += u }
         }

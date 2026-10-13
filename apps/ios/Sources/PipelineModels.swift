@@ -167,6 +167,9 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
     var terms: [PipelineTerm]
     /// The deal's payment from its terms; nil when it has none — then the manual fields count.
     var termSummary: PipelineTermSummary?
+    /// Real cost lines (Control Tower v4, 14 Oct 2026). Empty on a deal without cost data and on a server
+    /// from before them. The margin is worked out below on the net value, as the server does.
+    var costs: [PipelineCost]
 
     private enum CodingKeys: String, CodingKey {
         case id, code, position, name, brand, service, services, bdUserId, bdName, bd, pmUserId, pmName, pm, stage, probability
@@ -176,7 +179,7 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
         case updatedAt, updatedBy, stageGroup, daysOverdue, health, phases
         case executionProjectId, executionProject
         case executionCalendarProjectId, executionCalendarProject, executionFolderId, executionFolder
-        case terms, termSummary
+        case terms, termSummary, costs
     }
 
     init(from decoder: Decoder) throws {
@@ -220,7 +223,16 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
         let rawTerms = (try? c.decodeIfPresent([PipelineFailable<PipelineTerm>].self, forKey: .terms)) ?? []
         terms = rawTerms.compactMap(\.value)
         termSummary = (try? c.decodeIfPresent(PipelineTermSummary.self, forKey: .termSummary)) ?? nil
+        let rawCosts = (try? c.decodeIfPresent([PipelineFailable<PipelineCost>].self, forKey: .costs)) ?? []
+        costs = rawCosts.compactMap(\.value)
     }
+
+    /// Σ of the cost lines (server: costTotalOf).
+    var costTotal: Double { costs.reduce(0) { $0 + $1.amount } }
+    /// Net value − real cost; nil while the deal has no net value (no misleading 100% or 0). Server: marginOf.
+    var margin: Double? { netValue > 0 ? netValue - costTotal : nil }
+    /// margin ÷ net value (0.25 = 25%); nil with margin.
+    var marginPct: Double? { margin.map { $0 / netValue } }
 
     /// With terms, the receivable, payment status and next due date are the terms' (owner, 9 Oct 2026);
     /// the manual fields stay for deals without terms. Every place that shows them reads these.
@@ -291,6 +303,14 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
             case "nextActionDate": nextActionDate = str
             case "bdName": bdName = str
             case "pmName": pmName = str
+            case "costs":
+                if let list = value as? [[String: Any]] {
+                    costs = list.compactMap { item in
+                        guard let id = item["id"] as? String else { return nil }
+                        return PipelineCost(id: id, label: item["label"] as? String ?? "",
+                                            amount: (item["amount"] as? NSNumber)?.doubleValue ?? 0)
+                    }
+                }
             case "bdUserId": bdUserId = str; if str == nil { bd = nil }
             case "pmUserId": pmUserId = str; if str == nil { pm = nil }
             default: break
@@ -388,6 +408,36 @@ struct PipelineTermResponse: Decodable, Sendable {
     }
 }
 
+/// One real-cost line of a deal (Control Tower v4, 14 Oct 2026): "Vendor sound", Rp12.000.000. The id is
+/// made by the client that adds it and kept by the server, so a row stays the same row while it saves.
+struct PipelineCost: Decodable, Hashable, Identifiable, Sendable {
+    let id: String
+    var label: String
+    var amount: Double
+
+    init(id: String, label: String, amount: Double) {
+        self.id = id
+        self.label = label
+        self.amount = amount
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, label, amount }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        label = (try? c.decodeIfPresent(String.self, forKey: .label)) ?? ""
+        amount = (try? c.decodeIfPresent(Double.self, forKey: .amount)) ?? 0
+    }
+
+    /// What a PATCH of `costs` sends back for this line.
+    var json: [String: Any] { ["id": id, "label": label, "amount": amount] }
+
+    /// A new line's id, in the shape the server keeps ("c_" + 16 hex).
+    static func newId() -> String {
+        "c_" + String(UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased().prefix(16))
+    }
+}
+
 /// The KPI strip, over EVERY deal of the project (never the filtered view), as the server sums it.
 struct PipelineSummary: Decodable, Sendable {
     var total = 0
@@ -407,13 +457,24 @@ struct PipelineSummary: Decodable, Sendable {
     var attentionCount = 0
     var deliverablesOnTrack = 0
     var deliverablesDone = 0
+    /// Real cost & margin (Control Tower v6, 14 Oct 2026): over the deals that are not Lost, have cost lines
+    /// and a net value — Σ real cost and Σ (net value − real cost) ("Real profit"). costDealCount = deals not
+    /// Lost with cost lines (net value or not). 0 from an older server.
+    var realCost: Double = 0
+    var realProfit: Double = 0
+    var costDealCount = 0
+    /// Every deal that is not Lost / Cancelled: the M of "N of M deals have costs" (Control Tower v6).
+    var costEligibleCount = 0
+    /// Of the N deals with costs, those without a net value: left out of Real profit, shown as a warning.
+    var costNoNetCount = 0
 
     init() {}
 
     private enum CodingKeys: String, CodingKey {
         case total, openCount, openValue, weightedValue, wonCount, wonValue, activeCount, lostCount, lostValue
         case readyCount, blockedCount, receivable, receivableOverdue, criticalCount, attentionCount
-        case deliverablesOnTrack, deliverablesDone
+        case deliverablesOnTrack, deliverablesDone, realCost, realProfit, costDealCount, costEligibleCount
+        case costNoNetCount
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -424,6 +485,8 @@ struct PipelineSummary: Decodable, Sendable {
         lostValue = n(.lostValue); readyCount = i(.readyCount); blockedCount = i(.blockedCount)
         receivable = n(.receivable); receivableOverdue = n(.receivableOverdue); criticalCount = i(.criticalCount)
         attentionCount = i(.attentionCount); deliverablesOnTrack = i(.deliverablesOnTrack); deliverablesDone = i(.deliverablesDone)
+        realCost = n(.realCost); realProfit = n(.realProfit); costDealCount = i(.costDealCount); costEligibleCount = i(.costEligibleCount)
+        costNoNetCount = i(.costNoNetCount)
     }
 }
 
@@ -542,8 +605,11 @@ struct PipelineResponse: Decodable, Sendable {
     let summary: PipelineSummary
     let vocab: PipelineVocab
     let today: String?
+    /// May the viewer change deals (14 Oct 2026)? Full / Can edit yes, Can comment / Can view no. A server
+    /// from before it says nothing: true, as before.
+    let canEdit: Bool
 
-    private enum CodingKeys: String, CodingKey { case project, deals, summary, vocab, today }
+    private enum CodingKeys: String, CodingKey { case project, deals, summary, vocab, today, canEdit }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         project = try? c.decodeIfPresent(PipelineProjectRef.self, forKey: .project)
@@ -553,6 +619,7 @@ struct PipelineResponse: Decodable, Sendable {
         summary = (try? c.decodeIfPresent(PipelineSummary.self, forKey: .summary)) ?? PipelineSummary()
         vocab = (try? c.decodeIfPresent(PipelineVocab.self, forKey: .vocab)) ?? .fallback
         today = try? c.decodeIfPresent(String.self, forKey: .today)
+        canEdit = ((try? c.decodeIfPresent(Bool.self, forKey: .canEdit)) ?? nil) ?? true
     }
 }
 
@@ -753,6 +820,7 @@ enum PipelineText {
         case "blocker": en = "Blocker / issue"
         case "notes": en = "Notes"
         case "links": en = "Documents & links"
+        case "costs": en = "Real cost"
         default: return key
         }
         return T(en)

@@ -1,7 +1,9 @@
 // Resolves a NEXUS project `icon` value to something renderable.
 // Backend stores either an uploaded path ("/..."), an inline emoji, or a
 // named icon ("folder", "rocket", ...). We map names → emoji.
+import { useQuery } from "@tanstack/react-query";
 import { useLogoTone } from "@/lib/calendar/tone";
+import { nexusApi } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 import { thumbUrl } from "@/lib/thumb";
 
@@ -49,35 +51,59 @@ function UploadedMark({ src, className }: { src: string; className?: string }) {
 }
 
 /**
- * A PROJECT's mark (owner, 11 Oct 2026): one default for every project — a full-colour task icon (a
- * clipboard with a checklist: amber board, white sheet, slate clip, green ticks) — unless the project
- * has an uploaded photo. The owner turned down a colour square, a grey outline icon and a check on a
- * blue tile. Emoji, named icons and the project colour are ignored on purpose. Sized in em, so it
- * follows the font size of the slot it sits in. iOS and Android draw the same shapes (24×24 grid).
+ * A PROJECT's mark: its uploaded photo, else the one default every project shares. Owner, 14 Oct 2026
+ * (option A): a calm Notion-style page, a thin grey outline document with a folded corner and two text
+ * lines, monochrome, no fill, no per-project colour. It replaced the full-colour clipboard-checklist of
+ * 11 Oct. Emoji, named icons and the project colour stay ignored on purpose. Sized in em, so it follows
+ * the font size of the slot it sits in. iOS and Android draw the same paths (24x24 grid).
  */
 export function ProjectMark({ icon, className }: { icon?: string | null; color?: string | null; className?: string }) {
   if (isProjectPhoto(icon)) {
     return <UploadedMark src={icon} className={className} />;
   }
-  return <TaskTile />;
+  return <ProjectPageIcon />;
 }
 
-/** The default project icon; `size` in px, or omitted to follow the font size (1em). */
-export function TaskTile({ size, className }: { size?: number; className?: string }) {
+/**
+ * The default project icon. `size` in px, or omitted to follow the font size (1em); the stroke is the
+ * theme's muted Notion grey (--st-gray-dot: #91918e light, #9b9a97 dark).
+ * Passed where a lucide icon component is expected (className only, no size: a stat tile, a card title,
+ * the slash menu) it behaves like one: sized by the class, drawn in the text colour around it.
+ */
+export function ProjectPageIcon({ size, className }: { size?: number; className?: string }) {
+  const lucideLike = !size && !!className;
   const side = size ? `${size}px` : "1em";
   return (
-    <svg aria-hidden viewBox="0 0 24 24" className={"max-h-full max-w-full shrink-0" + (className ? " " + className : "")} style={{ width: side, height: side }}>
-      <rect x="3" y="3" width="18" height="20" rx="3.5" fill="#F59E0B" />
-      <rect x="5.5" y="5.5" width="13" height="15.5" rx="1.8" fill="#FFFFFF" />
-      <rect x="8.5" y="1.5" width="7" height="4" rx="1.4" fill="#475569" />
-      <rect x="7.2" y="8.2" width="3.4" height="3.4" rx="0.8" fill="#22C55E" />
-      <path d="M7.9 9.9l0.9 0.9 1.4-1.6" fill="none" stroke="#FFFFFF" strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round" />
-      <rect x="11.8" y="9.2" width="5.2" height="1.4" rx="0.7" fill="#CBD5E1" />
-      <rect x="7.2" y="12.6" width="3.4" height="3.4" rx="0.8" fill="#22C55E" />
-      <path d="M7.9 14.3l0.9 0.9 1.4-1.6" fill="none" stroke="#FFFFFF" strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round" />
-      <rect x="11.8" y="13.6" width="5.2" height="1.4" rx="0.7" fill="#CBD5E1" />
-      <rect x="7.2" y="17" width="3.4" height="3.4" rx="0.8" fill="#E2E8F0" />
-      <rect x="11.8" y="18" width="3.6" height="1.4" rx="0.7" fill="#CBD5E1" />
+    <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke={lucideLike ? "currentColor" : "var(--st-gray-dot, #91918e)"} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={"max-h-full max-w-full shrink-0" + (className ? " " + className : "")} style={lucideLike ? undefined : { width: side, height: side }}>
+      <path d="M6 3h8l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+      <path d="M14 3v4h4" />
+      <path d="M8.5 12h7M8.5 15.5h5" />
     </svg>
+  );
+}
+
+/**
+ * A project's icon as it is NOW (owner, 14 Oct 2026): read from the one project list every screen shares
+ * (["nexus","projects"], the sidebar's), which realtime patches the moment someone changes or removes the
+ * photo. `known` is what the caller's own payload said (a search hit, a task's project), used only when the
+ * project is not in that list (one the viewer is not a member of).
+ */
+export function useLiveProjectIcon(projectId?: string | null, known?: string | null): string | null {
+  const q = useQuery({ queryKey: ["nexus", "projects"], queryFn: nexusApi.projects, retry: false, staleTime: 60_000, enabled: !!projectId });
+  const hit = projectId ? q.data?.find((p) => p.id === projectId) : undefined;
+  return hit ? (hit.icon ?? null) : (known ?? null);
+}
+
+/**
+ * THE project mark for any place that knows a project's id: its current photo, else the default page icon,
+ * in a `size` px slot. Search, mentions, GIDEON chips, pickers and breadcrumbs all draw through this, so
+ * a photo change shows everywhere at once and no screen can drift.
+ */
+export function ProjectMarkFor({ projectId, icon, size = 16, className }: { projectId?: string | null; icon?: string | null; size?: number; className?: string }) {
+  const live = useLiveProjectIcon(projectId, icon);
+  return (
+    <span aria-hidden className={cn("inline-grid shrink-0 place-items-center overflow-hidden rounded leading-none", className)} style={{ width: size, height: size, fontSize: size }}>
+      <ProjectMark icon={live} className="h-full w-full rounded object-cover" />
+    </span>
   );
 }

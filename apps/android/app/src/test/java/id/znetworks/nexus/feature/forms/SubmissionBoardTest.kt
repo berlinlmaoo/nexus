@@ -25,4 +25,27 @@ class SubmissionBoardTest {
         assertEquals(SubmissionBoard.Tone.DANGER, SubmissionBoard.tone("Ditolak"))
         assertEquals(SubmissionBoard.Tone.MUTED, SubmissionBoard.tone("New"))
     }
+
+    @Test fun boardLikeTheWeb() {
+        val todo = SubmissionColumn("todo:to do", "To Do", "gray", "todo", projectIds = listOf("fm"))
+        val prog = SubmissionColumn("in_progress:on progress", "On Progress", "yellow", "in_progress", projectIds = listOf("fm"))
+        val done = SubmissionColumn("complete:done", "Done", "green", "complete", projectIds = listOf("fm"))
+        val mm = SubmissionColumn("todo:brief", "Brief", null, "todo", projectIds = listOf("mm"))
+        fun sub(id: String, col: SubmissionColumn, kind: String, project: String, needs: Boolean = false) =
+            Submission(id, projectId = project, projectName = project.uppercase(), column = col, kind = kind, needsAction = needs)
+        val d = Submissions(listOf(sub("a", prog, "finance", "fm"), sub("b", done, "finance", "fm", needs = true), sub("c", mm, "multimedia", "mm")),
+            columns = listOf(todo, prog, done, mm))
+        val all = SubmissionBoard.board(d, null, null, false, "New")
+        assertEquals(listOf("To Do", "On Progress", "Done", "Brief"), all.columns.map { it.first.name })
+        assertEquals(setOf("finance", "multimedia"), all.kinds)
+        assertEquals(1, all.needCount)
+        // Finance only: no multimedia columns; empty To Do of the finance project stays.
+        val fin = SubmissionBoard.board(d, "finance", null, false, "New")
+        assertEquals(listOf("To Do", "On Progress", "Done"), fin.columns.map { it.first.name })
+        assertEquals(listOf("b"), SubmissionBoard.board(d, null, null, true, "New").columns.flatMap { it.second }.map { it.id })
+        // A remembered project that has nothing any more is ignored.
+        assertEquals(null, SubmissionBoard.board(d, null, "gone", false, "New").project)
+        assertEquals(listOf("c"), SubmissionBoard.board(d, null, "mm", false, "New").columns.flatMap { it.second }.map { it.id })
+        assertEquals("yellow", SubmissionBoard.colorKey(prog)); assertEquals("gray", SubmissionBoard.colorKey(mm))
+    }
 }

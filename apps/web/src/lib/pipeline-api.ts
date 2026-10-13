@@ -1,5 +1,5 @@
 import { apiFetch, downloadFile, uploadChunked, type UploadControl } from "@/lib/nexus-api";
-import type { DealHealth, DealPhase, PipelineSummary, StageGroup, TermStatus, TermSummary } from "@/lib/pipeline";
+import type { DealHealth, DealPhase, PipelineCostItem, PipelineSummary, StageGroup, TermStatus, TermSummary } from "@/lib/pipeline";
 
 /**
  * The Pipeline Dashboard API (owner, 9 Oct 2026): GET/POST /api/projects/:id/pipeline,
@@ -110,17 +110,27 @@ export type PipelineDeal = {
    *  deal's and the manual payment fields above are only a fallback. Older servers omit both. */
   terms?: PipelineTerm[];
   termSummary?: TermSummary | null;
+  /** Real cost lines (Control Tower v4, 14 Oct 2026); a PATCH sends the whole list. Older servers omit them.
+   *  costTotal / margin / marginPct are derived on the net value; margin is null without a net value. */
+  costs?: PipelineCostItem[];
+  costTotal?: number;
+  margin?: number | null;
+  marginPct?: number | null;
 };
 
 /** The fields a PATCH may carry (and `position`). */
 export type PipelineDealPatch = Partial<Omit<PipelineDeal,
-  "id" | "projectId" | "code" | "bd" | "pm" | "executionProjectId" | "executionProject" | "executionCalendarProjectId" | "executionCalendarProject" | "executionFolderId" | "executionFolder" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy" | "stageGroup" | "daysOverdue" | "health" | "phases" | "terms" | "termSummary">>;
+  "id" | "projectId" | "code" | "bd" | "pm" | "executionProjectId" | "executionProject" | "executionCalendarProjectId" | "executionCalendarProject" | "executionFolderId" | "executionFolder" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy" | "stageGroup" | "daysOverdue" | "health" | "phases" | "terms" | "termSummary" | "costTotal" | "margin" | "marginPct">>;
 
 export type PipelineResponse = {
   project: { id: string; name: string; type: string; workspaceId: string };
   deals: PipelineDeal[];
   summary: PipelineSummary;
   today: string;
+  /** The viewer's level in the board (14 Oct 2026): FULL / EDIT may change deals, COMMENT / VIEW only read.
+   *  Older servers omit both (then everyone who reads may write, as before). */
+  viewerAccessLevel?: "FULL" | "EDIT" | "COMMENT" | "VIEW";
+  canEdit?: boolean;
 };
 
 export type PipelineChange = {

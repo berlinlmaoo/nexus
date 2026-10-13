@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, ArrowRight, CalendarDays, ChevronDown, CircleCheck, Folder, FolderKanban, History, ListChecks, Loader2, Plus, Trash2, X } from "lucide-react";
@@ -14,7 +15,7 @@ import {
 import {
   CLOSING_STATUS_OPTIONS, CONTRACT_STATUS_OPTIONS, DELIVERABLE_RISK_OPTIONS, DELIVERABLE_STATUS_OPTIONS,
   PAYMENT_STATUS_OPTIONS, PIPELINE_STAGES, PROBABILITY_OPTIONS, READINESS_OPTIONS, VREG_STATUS_OPTIONS,
-  pipelineToday, summarize,
+  marginOf, pipelineToday, summarize, type PipelineCostItem,
 } from "@/lib/pipeline";
 import {
   dealKey, pipelineApi, pipelineKey, servicesOf, type PipelineChange, type PipelineDeal, type PipelineDealPatch, type PipelineResponse,
@@ -24,7 +25,7 @@ import { DealDocuments } from "./DealDocuments";
 import { ServicesField } from "./ServicesField";
 import { DateField, MoneyField, NumberField, PersonField, SelectField, TextField, type PersonOption } from "./fields";
 import {
-  BlockerBanner, HealthPill, PhaseStepper, StagePill, TERM_TONE, fmtDay, fmtIdrFull, fmtPct, useReasonText, useVocabLabels,
+  BlockerBanner, HealthPill, PhaseStepper, StagePill, TERM_TONE, fmtDay, fmtIdr, fmtIdrFull, fmtMarginPct, fmtPct, marginTone, useReasonText, useVocabLabels,
 } from "./pipeline-ui";
 
 /** English names of the fields, for the history ("Bagas changed Stage …"). Translated with t(). */
@@ -36,7 +37,7 @@ const FIELD_LABEL: Record<string, string> = {
   deliverableRisk: "Deliverable risk", paymentStatus: "Payment status", outstandingReceivable: "Outstanding receivable",
   paymentDueDate: "Payment due date", maxDaysOverdue: "Days overdue (typed)", netCash: "Net cash position",
   closingStatus: "Closing status", mainDate: "Event / main date", nextAction: "Next action", nextActionDate: "Next action date",
-  blocker: "Blocker / issue", notes: "Notes", links: "Documents & links",
+  blocker: "Blocker / issue", notes: "Notes", links: "Documents & links", costs: "Real cost",
 };
 /** A payment term's fields, for history rows "term.<field>" (owner, 9 Oct 2026). */
 const TERM_FIELD_LABEL: Record<string, string> = {
@@ -221,7 +222,7 @@ function ExecutionProject({ deal, projectId, canEdit }: { deal: PipelineDeal; pr
         </>
       ) : tasks || calendar ? (
         <Link to="/projects/$projectId" params={{ projectId: (tasks ?? calendar)!.id }} className={primary}>
-          <FolderKanban className="h-4 w-4 shrink-0" />
+          <ProjectMarkFor projectId={(tasks ?? calendar)!.id} icon={((tasks ?? calendar)! as { icon?: string | null }).icon} size={16} />
           <span className="truncate">{t("Open execution project")}</span>
           <ArrowRight className="h-3.5 w-3.5 shrink-0" />
         </Link>
@@ -371,6 +372,8 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
             <div className="sm:col-span-2"><PaymentTerms deal={deal} projectId={projectId} canEdit={canEdit} /></div>
           </Section>
 
+          <RealCost deal={deal} canEdit={canEdit} onPatch={onPatch} />
+
           <Section title={t("Closing")} owner="PM">
             <Field label={L("Closing status")} wide><SelectField label={L("Closing status")} value={deal.closingStatus} options={CLOSING_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ closingStatus: v })} /></Field>
           </Section>
@@ -425,6 +428,8 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
           <div className="sm:col-span-2"><PaymentTerms deal={deal} projectId={projectId} canEdit={canEdit} /></div>
         </Section>
 
+        <RealCost deal={deal} canEdit={canEdit} onPatch={onPatch} />
+
         <Section title={t("Closing")} owner="PM">
           <Field label={L("Closing status")} wide><SelectField label={L("Closing status")} value={deal.closingStatus} options={CLOSING_STATUS_OPTIONS} labelOf={labels.status} disabled={off} onCommit={(v) => onPatch({ closingStatus: v })} /></Field>
         </Section>
@@ -462,6 +467,11 @@ function HistoryList({ projectId, deal, people }: { projectId: string; deal: Pip
     if (STATUS_FIELDS.has(field) && typeof v === "string") return labels.status(v);
     if (field === "links" && Array.isArray(v)) return t("{n} links", { n: v.length });
     if (field === "services" && Array.isArray(v)) return v.length ? v.join(", ") : t("empty");
+    if (field === "costs" && Array.isArray(v)) {
+      if (!v.length) return t("empty");
+      const total = v.reduce((sum: number, c) => sum + (typeof c?.amount === "number" ? c.amount : 0), 0);
+      return t("{n} cost lines · {amount}", { n: v.length, amount: fmtIdrFull(total, lang) });
+    }
     return String(v);
   };
   if (q.isLoading) {
@@ -528,6 +538,113 @@ function HistoryList({ projectId, deal, people }: { projectId: string; deal: Pip
         </span>
       </li>
     </ol>
+  );
+}
+
+/** A new cost line's id: the server keeps a well-formed one, so the row stays the same row while it saves. */
+function newCostId(): string {
+  const rnd = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID().replace(/-/g, "") : Math.random().toString(36).slice(2) + Date.now().toString(36);
+  return `c_${rnd.slice(0, 16)}`;
+}
+
+/**
+ * Real cost & margin (Control Tower v4, 14 Oct 2026), right after Billing & payment: what the deal really
+ * costs, as open lines (vendor, talent, production …), and the margin on its NET value. Totals are live —
+ * computed, never stored (lib/pipeline.ts marginOf). The whole list goes back in one PATCH, like documents;
+ * each line saves when its field is left. Who sees and edits it is the board's access: Full / Can edit edit,
+ * Can comment / Can view read (the server enforces it).
+ */
+function RealCost({ deal, canEdit, onPatch }: { deal: PipelineDeal; canEdit: boolean; onPatch: (p: PipelineDealPatch) => void }) {
+  const { t, lang } = useLang();
+  const costs: PipelineCostItem[] = deal.costs ?? [];
+  const m = marginOf({ netValue: deal.netValue, costs });
+  const off = !canEdit;
+  const save = (next: PipelineCostItem[]) => onPatch({ costs: next });
+  const edit = (id: string, p: Partial<PipelineCostItem>) => save(costs.map((c) => (c.id === id ? { ...c, ...p } : c)));
+  return (
+    <Section title={t("Real cost & margin")} owner="Finance">
+      <dl className="grid grid-cols-3 gap-2 sm:col-span-2">
+        <div className="min-w-0 rounded-lg bg-muted/60 px-3 py-2">
+          <dt className="truncate text-xs font-medium text-muted-foreground">{t("Total real cost")}</dt>
+          <dd className="mt-0.5 truncate text-sm font-semibold tabular-nums" title={fmtIdrFull(m.totalCost, lang)}>
+            {/* Compact on a phone, where three full amounts do not fit side by side. */}
+            <span className="sm:hidden">{fmtIdr(m.totalCost, lang)}</span>
+            <span className="hidden sm:inline">{fmtIdrFull(m.totalCost, lang)}</span>
+          </dd>
+        </div>
+        <div className="min-w-0 rounded-lg bg-muted/60 px-3 py-2">
+          <dt className="truncate text-xs font-medium text-muted-foreground">{t("Margin")}</dt>
+          <dd className={cn("mt-0.5 truncate text-sm font-semibold tabular-nums", marginTone(m.margin))} title={m.margin === null ? undefined : fmtIdrFull(m.margin, lang)}>
+            {m.margin === null ? "–" : (
+              <>
+                <span className="sm:hidden">{fmtIdr(m.margin, lang)}</span>
+                <span className="hidden sm:inline">{fmtIdrFull(m.margin, lang)}</span>
+              </>
+            )}
+          </dd>
+        </div>
+        <div className="min-w-0 rounded-lg bg-muted/60 px-3 py-2">
+          <dt className="truncate text-xs font-medium text-muted-foreground">{t("Margin %")}</dt>
+          <dd className={cn("mt-0.5 truncate text-sm font-semibold tabular-nums", marginTone(m.margin))}>{fmtMarginPct(m.marginPct)}</dd>
+        </div>
+      </dl>
+      <p className="text-xs text-muted-foreground sm:col-span-2">
+        {m.margin === null ? t("Fill in the net project value to see the margin.") : t("Margin = net project value − total real cost.")}
+      </p>
+
+      <div className="space-y-2 sm:col-span-2">
+        {costs.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {canEdit
+              ? t("No costs yet. Add what this deal really costs (vendors, talent, production) to see its margin.")
+              : t("No costs recorded yet.")}
+          </p>
+        ) : (
+          <ul className="space-y-1.5" aria-label={t("Cost lines")}>
+            {costs.map((c, i) => (
+              <li key={c.id} className="flex items-center gap-2">
+                <TextField
+                  label={t("Cost {n} description", { n: i + 1 })}
+                  placeholder={t("e.g. Sound vendor")}
+                  value={c.label}
+                  maxLength={120}
+                  disabled={off}
+                  onCommit={(v) => edit(c.id, { label: v })}
+                  className="min-w-0 flex-1"
+                />
+                <MoneyField
+                  label={t("Cost {n} amount", { n: i + 1 })}
+                  value={c.amount}
+                  disabled={off}
+                  onCommit={(v) => edit(c.id, { amount: v })}
+                  className="w-36 shrink-0 sm:w-44"
+                />
+                {canEdit && (
+                  <button
+                    type="button"
+                    aria-label={t("Delete cost {n}", { n: i + 1 })}
+                    onClick={() => save(costs.filter((x) => x.id !== c.id))}
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-ring dark:hover:text-red-300 pointer-coarse:size-[44px]"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => save([...costs, { id: newCostId(), label: "", amount: 0 }])}
+            disabled={costs.length >= 100}
+            className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60 pointer-coarse:min-h-[44px]"
+          >
+            <Plus className="h-3.5 w-3.5" /> {t("Add cost")}
+          </button>
+        )}
+      </div>
+    </Section>
   );
 }
 

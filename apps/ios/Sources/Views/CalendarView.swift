@@ -664,6 +664,7 @@ struct CalendarView: View {
     /// The calendar mark on its dark tile and the page's name.
     private var webTitle: some View {
         HStack(spacing: 10) {
+            SidebarReopenButton()
             Image(systemName: "calendar")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(NX.background)

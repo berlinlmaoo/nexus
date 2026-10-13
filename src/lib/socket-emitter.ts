@@ -131,13 +131,19 @@ export type WorkspaceChangedKind = "projects" | "folders" | "audit" | "vault" | 
  * `workspace-changed` (owner, 8 Oct 2026): WHICH collection of a workspace moved, never what it now
  * holds. Everyone in the workspace receives it, including people who may not see a given project, so
  * it is only an invalidation ping: the receiver refetches through the normal API, which applies the
- * normal access rules. Ids only, no names, no fields.
+ * normal access rules. Ids only, no names, no fields — with one exception: `icon`.
+ *
+ * `icon` (owner, 14 Oct 2026): set only when a project's icon changed — the new photo URL, or null/"folder"
+ * when the photo was removed. Clients patch every cached copy of that project at once (sidebar, cards,
+ * header, pickers, search, mentions), before the refetch lands. It is no secret: the photo is served to any
+ * signed-in user at /api/files/project-icons/<projectId>.<ext>. Older clients ignore the field.
  */
 export type WorkspaceChangedPayload = {
   kind: WorkspaceChangedKind
   projectId?: string
   folderId?: string
   actorId?: string
+  icon?: string | null
 }
 
 /**
@@ -148,7 +154,7 @@ export type WorkspaceChangedPayload = {
  * adds those users' own `user:<id>` rooms: for someone the change concerns who may not be in the
  * workspace (a guest added to a project), or for a per-user change such as a pin (workspaceId null).
  *
- * The payload is rebuilt from the four allowed fields, so a caller can never put data on the wire by
+ * The payload is rebuilt from the allowed fields, so a caller can never put data on the wire by
  * passing a bigger object.
  */
 export function emitWorkspaceChanged(
@@ -162,6 +168,9 @@ export function emitWorkspaceChanged(
   if (payload.projectId) ping.projectId = payload.projectId
   if (payload.folderId) ping.folderId = payload.folderId
   if (payload.actorId) ping.actorId = payload.actorId
+  if (payload.icon !== undefined && payload.kind === "projects" && payload.projectId) {
+    ping.icon = typeof payload.icon === "string" ? payload.icon.slice(0, 512) : null
+  }
   publishSafely(BUS_EVENTS.WORKSPACE_CHANGED, { workspaceId: workspaceId || null, userIds, payload: ping })
 }
 

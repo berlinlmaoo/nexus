@@ -2,6 +2,7 @@
 // Used by /reports (the viewer's own "Me" tab) and /reports/$userId (a report the viewer may see).
 // Sections, labels and every figure mirror the iOS PersonReportSections (identity, KPIs, completed
 // per week, overdue tasks, by project, attendance, XP) so the two never disagree.
+import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import type { ComponentType, ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarCheck, CheckCircle2, ChevronRight, Clock, Flame, FolderKanban, RefreshCw, Sparkles, Target, TrendingUp } from "lucide-react";
@@ -248,10 +249,10 @@ function OverdueCard({ work }: { work: PersonReportResponse["work"] }) {
 
 function ProjectsCard({ rows, asOf }: { rows: PersonReportResponse["work"]["perProject"]; asOf: string | null }) {
   return (
-    <Card title={t("By project")} icon={FolderKanban}>
+    <Card title={t("By project")} icon={ProjectPageIcon as unknown as typeof FolderKanban}>
       <AsOfNote day={asOf} />
       {rows.length === 0 ? (
-        <EmptyState compact tone="muted" icon={FolderKanban} title={t("No project activity")} message={t("Tasks assigned in this period show up here, grouped by project.")} />
+        <EmptyState compact tone="muted" icon={ProjectPageIcon as unknown as typeof FolderKanban} title={t("No project activity")} message={t("Tasks assigned in this period show up here, grouped by project.")} />
       ) : (
         <div className="-mx-4 overflow-x-auto px-4 md:-mx-5 md:px-5">
           <table className="w-full min-w-[340px] text-sm">

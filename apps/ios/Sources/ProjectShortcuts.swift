@@ -84,6 +84,29 @@ final class ProjectShortcuts {
             pinned = synced
             Self.save(pinned, Self.pinnedKey)
         }
+        // Recents are this device's, but their names and icons are the server's: refresh them too, or a
+        // photo changed elsewhere would stay stale in "Recent" until the project was opened again.
+        let fresh = recent.map { r -> ProjectRef in
+            guard let k = known[r.id] else { return r }
+            return ProjectRef(id: r.id, name: k.name, icon: k.icon ?? r.icon, color: k.color ?? r.color)
+        }
+        if fresh != recent {
+            recent = fresh
+            Self.save(recent, Self.recentKey)
+        }
+    }
+
+    /// A project's icon changed (realtime ping, or this device's own PATCH): the stored rows follow.
+    func updateIcon(_ id: String, _ icon: String?) {
+        let v = icon ?? "folder"
+        if let i = pinned.firstIndex(where: { $0.id == id }), pinned[i].icon != v {
+            pinned[i].icon = v
+            Self.save(pinned, Self.pinnedKey)
+        }
+        if let i = recent.firstIndex(where: { $0.id == id }), recent[i].icon != v {
+            recent[i].icon = v
+            Self.save(recent, Self.recentKey)
+        }
     }
     private static let pinsUploadedKey = "nexus.projects.pinsUploaded"
 

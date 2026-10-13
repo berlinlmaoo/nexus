@@ -147,7 +147,8 @@ extension ProjectDetail.Lane {
 
     /// The same section with another set of cards (search, filters, subtask merge) — every other field kept.
     func with(tasks: [BoardTask]) -> ProjectDetail.Lane {
-        ProjectDetail.Lane(id: id, name: name, tasks: tasks, taskStatus: taskStatus, color: color, position: position)
+        ProjectDetail.Lane(id: id, name: name, tasks: tasks, taskStatus: taskStatus, color: color, position: position,
+                           taskProjects: taskProjects)
     }
 }
 

@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from "react";
+import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { NodeViewContent, NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { Link } from "@tanstack/react-router";
 import { Bell, CalendarDays, CheckSquare, ExternalLink, FileText, FolderKanban, Globe, Image as ImageIcon, Link2, Loader2, Paperclip, Trash2, Upload } from "lucide-react";
@@ -266,7 +267,7 @@ export function MentionView(props: NodeViewProps) {
       </Link>
     );
   } else if (k === "doc") inner = <Link to="/docs/$docId" params={{ docId: id }} className="nx-mention is-doc"><FileText className="h-3.5 w-3.5" />{text}</Link>;
-  else if (k === "project") inner = <Link to="/projects/$projectId" params={{ projectId: id }} className="nx-mention is-project"><FolderKanban className="h-3.5 w-3.5" />{text}</Link>;
+  else if (k === "project") inner = <Link to="/projects/$projectId" params={{ projectId: id }} className="nx-mention is-project"><ProjectMarkFor projectId={id} size={14} />{text}</Link>;
   else inner = <span className="nx-mention">{text}</span>;
   return <NodeViewWrapper as="span" className={cn("nx-mention-wrap", props.selected && "is-selected")} contentEditable={false}>{inner}</NodeViewWrapper>;
 }

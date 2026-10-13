@@ -249,7 +249,7 @@ private fun TicketRow(t: Ticket, onClick: () -> Unit) {
         Text(t.subject.ifBlank { stringResource(R.string.tk_no_subject) }, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(t.reporter?.name ?: stringResource(R.string.tk_someone), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
-            if (t.gideonReplied) { Icon(Icons.Filled.AutoAwesome, null, tint = c.violetText, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(4.dp)) }
+            if (t.gideonReplied) { id.znetworks.nexus.ui.components.GideonMark(14.dp, c.violetText); Spacer(Modifier.width(4.dp)) }
             if (t.pendingCorrection) { Pill(stringResource(R.string.tk_decision_waiting), c.warning); Spacer(Modifier.width(6.dp)) }
             Text("💬 ${t.messageCount}", fontSize = 12.sp, color = c.mutedFg)
         }

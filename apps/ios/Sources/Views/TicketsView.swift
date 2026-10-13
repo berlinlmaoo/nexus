@@ -411,12 +411,14 @@ struct TicketsView: View {
 
     // MARK: table (iPad / Mac page)
 
+    /// Fixed columns; Subject takes the rest. Narrower than they were: on the Mac the subject column was
+    /// left ~130 pt and every subject read "Day Off terpot…" (UI tour run 5).
     private enum Col {
-        static let from: CGFloat = 190
-        static let category: CGFloat = 130
-        static let status: CGFloat = 150
-        static let replies: CGFloat = 64
-        static let activity: CGFloat = 120
+        static let from: CGFloat = 160
+        static let category: CGFloat = 112
+        static let status: CGFloat = 132
+        static let replies: CGFloat = 56
+        static let activity: CGFloat = 112
     }
 
     private func ticketTable(wide: Bool) -> some View {

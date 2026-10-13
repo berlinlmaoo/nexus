@@ -127,7 +127,7 @@ private fun FieldRow(f: CustomFieldDef, onCommit: (JsonElement) -> Unit) {
             f.kind == "CREATED" -> Text(valueText(f.value) ?: "—", fontSize = 14.sp, color = c.mutedFg)
             f.kind == "DATE" -> {
                 var picking by remember { mutableStateOf(false) }
-                val current = FieldValues.text(f.value).take(10).let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                val current = id.znetworks.nexus.feature.projects.dueDate(FieldValues.text(f.value))
                 Box(Modifier.fillMaxWidth().background(c.muted.copy(alpha = 0.5f), RoundedCornerShape(10.dp)).clickable { picking = true }.padding(10.dp)) {
                     Text(current?.toString() ?: "—", fontSize = 15.sp, color = if (current == null) c.mutedFg else c.foreground)
                 }
