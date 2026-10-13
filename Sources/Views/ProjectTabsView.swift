@@ -179,6 +179,8 @@ struct TabEmpty: View {
 
 struct ListTab: View {
     let lanes: [ProjectDetail.Lane]   // subtasks already merged in (nested under their parent)
+    /// The project's custom fields (their order decides the wide List's columns).
+    var fields: [CustomField] = []
     let onOpen: (String) -> Void
     var selection: TaskSelection? = nil
     /// Status options (or a grouped view): each group's header is its coloured pill.
@@ -193,18 +195,20 @@ struct ListTab: View {
     @State private var collapsed: Set<String> = []
 
     var body: some View {
-        ScrollView {
+        // Computed once per render: every row of the List draws the same columns.
+        let columns = hSize == .regular ? ListColumns.fieldIds(fields: fields, lanes: lanes) : []
+        return ScrollView {
             LazyVStack(alignment: .leading, spacing: 14) {
                 ForEach(lanes) { lane in
-                    group(lane)
+                    group(lane, columns: columns)
                 }
             }
-            .padding(.horizontal, hSize == .regular ? 24 : 14)
+            .padding(.horizontal, hSize == .regular ? 32 : 14)
             .padding(.vertical, 12)
         }
     }
 
-    private func group(_ lane: ProjectDetail.Lane) -> some View {
+    private func group(_ lane: ProjectDetail.Lane, columns: [String]) -> some View {
         let isCollapsed = collapsed.contains(lane.id)
         return VStack(alignment: .leading, spacing: 0) {
             ListGroupHeader(lane: lane, statusStyle: statusStyle, collapsed: isCollapsed) {
@@ -215,12 +219,12 @@ struct ListTab: View {
             .overlay(alignment: .bottom) { Rectangle().fill(NX.border.opacity(0.7)).frame(height: 0.5) }
             if !isCollapsed {
                 if (lane.tasks ?? []).isEmpty {
-                    Text(T("No tasks")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg.opacity(0.7))
+                    Text(T("No tasks")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg.opacity(0.7))
                         .padding(.horizontal, 8).padding(.vertical, 8)
                 } else {
                     let order = { (lane.tasks ?? []).map(\.id) }
                     ForEach(lane.tasks ?? []) { t in
-                        row(t, laneId: lane.id, order: order)
+                        row(t, laneId: lane.id, columns: columns, order: order)
                     }
                 }
             }
@@ -234,9 +238,9 @@ struct ListTab: View {
         }
     }
 
-    @ViewBuilder private func row(_ t: BoardTask, laneId: String, order: @escaping () -> [String]) -> some View {
+    @ViewBuilder private func row(_ t: BoardTask, laneId: String, columns: [String], order: @escaping () -> [String]) -> some View {
         let base = ListTaskRow(task: t, status: statusOf(t) ?? RowStatus.plain(t), wide: hSize == .regular,
-                               onOpen: onOpen, selection: selection, order: order)
+                               fieldColumns: columns, onOpen: onOpen, selection: selection, order: order)
         if onDrop == nil {
             // Read-only (Can view / Can comment): rows open, nothing drags.
             base
@@ -258,185 +262,440 @@ struct ListTab: View {
 }
 
 // MARK: - Timeline (Gantt: start→due windows per section)
+//
+// The dev web's TimelineView ($projectId.tsx, owner screenshot 271, Mac parity 13 Oct 2026): a bordered
+// card; on the left a frozen table Name | Duration | Progress (bar + %), collapsible group rows with the
+// group's duration and progress; on the right a two-level header (months, then weekday letter + date) with
+// today in a filled circle and a line down the chart, opening scrolled to around today and filling the
+// width. A task without dates has no bar ("No date" in its Duration). Tap a bar or a name to open the task.
+//
+// Structure: ONE vertical ScrollView holding the frozen left column and a horizontal ScrollView beside it
+// (one axis each, non-lazy rows, at most 40 + 25·n per group like the web's Incremental). The first
+// position comes from a ScrollViewReader, not from offsets.
 
 struct TimelineTab: View {
     let lanes: [ProjectDetail.Lane]   // merged (incl. subtasks)
     let onOpen: (String) -> Void
 
-    private let dayW: CGFloat = 38
-    private let leftW: CGFloat = 122
-    private let rowH: CGFloat = 44
-    private let groupH: CGFloat = 32
-    private let headerH: CGFloat = 50
+    @Environment(\.horizontalSizeClass) private var hSize
+    @State private var collapsed: Set<String> = []
+    @State private var shown: [String: Int] = [:]
+
+    private let dayW: CGFloat = 40
+    private let rowH: CGFloat = 48
+    private let monthH: CGFloat = 32
+    private let dayH: CGFloat = 42
+    private let durationW: CGFloat = 90
+    private let progressW: CGFloat = 150
     private static let DAY: TimeInterval = 86400
 
+    private var compact: Bool { hSize != .regular }
     private var cal: Calendar { ProjDate.cal }
     private func sod(_ d: Date) -> Date { cal.startOfDay(for: d) }
     private func days(_ a: Date, _ b: Date) -> Int { cal.dateComponents([.day], from: sod(a), to: sod(b)).day ?? 0 }
+    private func addDays(_ d: Date, _ n: Int) -> Date { cal.date(byAdding: .day, value: n, to: d) ?? d.addingTimeInterval(Double(n) * Self.DAY) }
 
     struct Win { let start: Date; let end: Date }
-    /// Port of web taskWindow: start=startDate, end=dueDate, ±3-day fallback when one is missing.
-    private func window(_ t: BoardTask) -> Win {
+    /// Port of the web's taskWindow: start → due; one date = a one-day bar on it; no date = no bar
+    /// (bughunt C-BUG-17: an undated task drawn from today looked scheduled).
+    private func window(_ t: BoardTask) -> Win? {
         var s = ProjDate.parse(t.startDate)
         var e = ProjDate.parse(t.dueDate)
-        if let s0 = s, e == nil { e = s0.addingTimeInterval(3 * Self.DAY) }
-        if s == nil, let e0 = e { s = e0.addingTimeInterval(-3 * Self.DAY) }
-        if s == nil || e == nil { let t0 = sod(Date()); s = t0; e = t0.addingTimeInterval(3 * Self.DAY) }
-        let ss = sod(s!); let ee = sod(e!)
+        if s == nil && e == nil { return nil }
+        if s == nil { s = e }
+        if e == nil { e = s }
+        let ss = sod(s!), ee = sod(e!)
         return Win(start: ss, end: ee < ss ? ss : ee)
     }
 
+    struct Row: Identifiable { let id: String; let task: BoardTask; let win: Win? }
     struct Group: Identifiable { let id: String; let name: String; let rows: [Row] }
-    struct Row: Identifiable { let id: String; let task: BoardTask; let win: Win; let dated: Bool }
+
+    /// One line of the chart, the same on both sides so the frozen column and the bars line up.
+    enum Line: Identifiable {
+        case group(Group)
+        case task(Row)
+        case more(groupId: String, count: Int)
+        var id: String {
+            switch self {
+            case .group(let g): return "g:\(g.id)"
+            case .task(let r): return "t:\(r.id)"
+            case .more(let g, _): return "m:\(g)"
+            }
+        }
+    }
 
     private var groups: [Group] {
         lanes.map { lane in
-            // A task with neither a start nor a due date gets a row that says "No date" instead of a bar
-            // (bughunt C-BUG-17: it was drawn as a 4-day bar from today and looked scheduled). Dated rows
-            // first, by start.
-            let all = (lane.tasks ?? []).map { t in
-                Row(id: t.id, task: t, win: window(t), dated: t.startDate != nil || t.dueDate != nil)
-            }
-            let dated = all.filter(\.dated).sorted { $0.win.start < $1.win.start }
-            return Group(id: lane.id, name: lane.name, rows: dated + all.filter { !$0.dated })
-        }.filter { !$0.rows.isEmpty }
+            let all = (lane.tasks ?? []).map { Row(id: $0.id, task: $0, win: window($0)) }
+            // Bars by start date, undated tasks after them (web).
+            let dated = all.filter { $0.win != nil }.sorted { $0.win!.start < $1.win!.start }
+            return Group(id: lane.id, name: lane.name, rows: dated + all.filter { $0.win == nil })
+        }
     }
-    private var allWins: [Win] { groups.flatMap { $0.rows.filter(\.dated).map(\.win) } }
+
+    private func lines(_ gs: [Group]) -> [Line] {
+        var out: [Line] = []
+        for g in gs {
+            out.append(.group(g))
+            guard !collapsed.contains(g.id) else { continue }
+            let limit = shown[g.id] ?? 40
+            out.append(contentsOf: g.rows.prefix(limit).map { Line.task($0) })
+            if g.rows.count > limit { out.append(.more(groupId: g.id, count: min(25, g.rows.count - limit))) }
+        }
+        return out
+    }
 
     var body: some View {
-        if groups.isEmpty {
-            TabEmpty(icon: "chart.bar.xaxis", text: T("No tasks to put on the timeline yet."))
+        let gs = groups
+        if gs.allSatisfy({ $0.rows.isEmpty }) {
+            EmptyState(icon: "chart.bar.xaxis", title: T("Nothing on the timeline"),
+                       subtitle: T("Tasks show here as bars from their start date to their due date."))
         } else {
-            gantt
+            GeometryReader { geo in
+                let pad: CGFloat = compact ? 12 : 24
+                chart(gs, width: geo.size.width - pad * 2)
+                    .padding(.horizontal, pad).padding(.vertical, 12)
+            }
         }
     }
 
-    private var gantt: some View {
-        // Only undated tasks: two weeks from today, so the rows still have somewhere to say "No date".
-        let minD = sod((allWins.map(\.start).min() ?? Date()).addingTimeInterval(-2 * Self.DAY))
-        let maxD = sod((allWins.map(\.end).max() ?? Date().addingTimeInterval(11 * Self.DAY)).addingTimeInterval(3 * Self.DAY))
-        let dayCount = days(minD, maxD) + 1
-        let timelineW = CGFloat(dayCount) * dayW
-        let dayList = (0..<dayCount).map { minD.addingTimeInterval(Double($0) * Self.DAY) }
-        let today = sod(Date())
-        let todayX: CGFloat? = (today >= minD && today <= maxD) ? CGFloat(days(minD, today)) * dayW + dayW / 2 : nil
+    // MARK: the chart
 
+    private struct Axis {
+        let start: Date
+        let days: [Date]
+        let todayIndex: Int?
+        let months: [(label: String, span: Int)]
+    }
+
+    private func axis(_ gs: [Group], chartWidth: CGFloat) -> Axis {
+        let today = sod(Date())
+        let wins = gs.flatMap { $0.rows.compactMap(\.win) }
+        var lo = wins.map(\.start).min() ?? today
+        var hi = wins.map(\.end).max() ?? addDays(today, 14)
+        if today < lo { lo = today }
+        if today > hi { hi = today }
+        let start = addDays(lo, -2)
+        var count = days(start, addDays(hi, 3)) + 1
+        // Full width: a short project still fills the card (more days after the last bar).
+        count = max(count, Int((chartWidth / dayW).rounded(.up)))
+        let list = (0..<count).map { addDays(start, $0) }
         var months: [(label: String, span: Int)] = []
-        for d in dayList {
-            let label = ProjDate.fmt("MMMM yyyy").string(from: d).capitalized
+        let mf = ProjLocaleDate.fmt("MMMM yyyy")
+        for d in list {
+            let label = mf.string(from: d)
             if months.last?.label == label { months[months.count - 1].span += 1 } else { months.append((label, 1)) }
         }
-        func xOf(_ d: Date) -> CGFloat { CGFloat(days(minD, d)) * dayW }
-        func barW(_ w: Win) -> CGFloat { CGFloat(days(w.start, w.end) + 1) * dayW }
+        let ti = days(start, today)
+        return Axis(start: start, days: list, todayIndex: (0..<count).contains(ti) ? ti : nil, months: months)
+    }
 
-        return ScrollView {
+    private func leftWidth(_ width: CGFloat) -> CGFloat {
+        compact ? min(200, max(120, width * 0.4)) : 460
+    }
+
+    private func chart(_ gs: [Group], width: CGFloat) -> some View {
+        let leftW = leftWidth(width)
+        let ax = axis(gs, chartWidth: max(0, width - leftW))
+        let ls = lines(gs)
+        return ScrollView(.vertical, showsIndicators: true) {
             HStack(alignment: .top, spacing: 0) {
-                // LEFT — fixed title column
+                leftColumn(ls, width: leftW)
+                    .frame(width: leftW)
+                    .overlay(alignment: .trailing) { Rectangle().fill(NX.border).frame(width: 1) }
+                rightPane(ls, ax: ax)
+            }
+        }
+        .background(NX.card)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
+    }
+
+    // MARK: left: Name | Duration | Progress
+
+    private func leftColumn(_ ls: [Line], width: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 0) {
+                headLabel(T("Name")).padding(.leading, compact ? 12 : 16).frame(maxWidth: .infinity, alignment: .bottomLeading)
+                if !compact {
+                    headLabel(T("Duration")).padding(.horizontal, 8).frame(width: durationW, alignment: .bottomLeading)
+                    headLabel(T("Progress")).padding(.horizontal, 12).frame(width: progressW, alignment: .bottomLeading)
+                        .overlay(alignment: .leading) { Rectangle().fill(NX.border).frame(width: 1) }
+                }
+            }
+            .frame(height: monthH + dayH)
+            .overlay(alignment: .bottom) { TableHairline() }
+            ForEach(ls) { line in leftLine(line) }
+        }
+    }
+
+    private func headLabel(_ s: String) -> some View {
+        Text(s).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1).padding(.bottom, 9)
+            .frame(maxHeight: .infinity, alignment: .bottom)
+    }
+
+    @ViewBuilder private func leftLine(_ line: Line) -> some View {
+        switch line {
+        case .group(let g): leftGroup(g)
+        case .task(let r): leftTask(r)
+        case .more(let gid, let n): moreButton(gid, n)
+        }
+    }
+
+    private func leftGroup(_ g: Group) -> some View {
+        let isCollapsed = collapsed.contains(g.id)
+        let wins = g.rows.compactMap(\.win)
+        let gDur: Int = {
+            guard let s = wins.map(\.start).min(), let e = wins.map(\.end).max() else { return 0 }
+            return days(s, e) + 1
+        }()
+        let sum: Int = g.rows.reduce(0) { $0 + Self.progress($1.task.status) }
+        let pct: Int = g.rows.isEmpty ? 0 : Int((Double(sum) / Double(g.rows.count)).rounded())
+        return HStack(spacing: 0) {
+            Button {
+                withAnimation(.snappy(duration: 0.2)) {
+                    if isCollapsed { collapsed.remove(g.id) } else { collapsed.insert(g.id) }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                        .rotationEffect(.degrees(isCollapsed ? -90 : 0))
+                    Text(g.name).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .padding(.leading, 12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(isCollapsed ? T("Collapsed") : T("Expanded"))
+            if !compact {
+                Text(gDur > 0 ? Self.dayCount(gDur) : "—").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    .padding(.horizontal, 8).frame(width: durationW, alignment: .leading)
+                progressCell(pct, tint: Color(hex: "#3b82f6"))
+            }
+        }
+        .frame(height: rowH)
+        .background(NX.muted)
+        .overlay(alignment: .bottom) { TableHairline() }
+    }
+
+    private func leftTask(_ r: Row) -> some View {
+        let t = r.task
+        let pct = Self.progress(t.status)
+        return HStack(spacing: 0) {
+            Button { onOpen(t.id) } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: t.isDone ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 16)).foregroundStyle(t.isDone ? NX.onyx : NX.mutedFg.opacity(0.45))
+                    if t.isSubtask {
+                        Image(systemName: "arrow.turn.down.right").font(.system(size: 11)).foregroundStyle(NX.mutedFg)
+                    }
+                    Text(t.title).font(NXFont.text(15, .medium))
+                        .foregroundStyle(t.isDone ? NX.mutedFg : NX.foreground)
+                        .strikethrough(t.isDone).lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .padding(.leading, compact ? 12 : 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            if !compact {
+                Text(r.win.map { Self.dayCount(days($0.start, $0.end) + 1) } ?? T("No date"))
+                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    .padding(.horizontal, 8).frame(width: durationW, alignment: .leading)
+                progressCell(pct, tint: Self.progressTint(pct))
+            }
+        }
+        .frame(height: rowH)
+        .overlay(alignment: .bottom) { Rectangle().fill(NX.border.opacity(0.6)).frame(height: 0.5) }
+    }
+
+    private func progressCell(_ pct: Int, tint: Color) -> some View {
+        HStack(spacing: 8) {
+            Capsule().fill(NX.muted)
+                .frame(height: 6)
+                .overlay(alignment: .leading) {
+                    // A fraction of the track, by layout (no measured offsets).
+                    GeometryReader { g in Capsule().fill(tint).frame(width: g.size.width * CGFloat(pct) / 100) }
+                }
+            Text("\(pct)%").font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).monospacedDigit()
+                .frame(width: 40, alignment: .trailing)
+        }
+        .padding(.horizontal, 12)
+        .frame(width: progressW)
+        .frame(maxHeight: .infinity)
+        .overlay(alignment: .leading) { Rectangle().fill(NX.border).frame(width: 1) }
+    }
+
+    private func moreButton(_ gid: String, _ n: Int) -> some View {
+        Button { shown[gid] = (shown[gid] ?? 40) + 25 } label: {
+            Text(String(format: T("Show %d more"), n)).font(NXFont.text(14, .medium)).foregroundStyle(NX.mutedFg)
+                .padding(.leading, 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(height: 40)
+        .overlay(alignment: .bottom) { Rectangle().fill(NX.border.opacity(0.6)).frame(height: 0.5) }
+    }
+
+    // MARK: right: the axis and the bars
+
+    private func rightPane(_ ls: [Line], ax: Axis) -> some View {
+        let timelineW = CGFloat(ax.days.count) * dayW
+        let todayX: CGFloat? = ax.todayIndex.map { CGFloat($0) * dayW + dayW / 2 }
+        let landing = max(0, (ax.todayIndex ?? 0) - (compact ? 1 : 3))
+        return ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("TITLE").font(NXFont.text(10, .bold)).foregroundStyle(NX.mutedFg)
-                        .padding(.leading, 12).padding(.bottom, 8)
-                        .frame(width: leftW, height: headerH, alignment: .bottomLeading)
-                    ForEach(groups) { g in
-                        Text(g.name).font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-                            .padding(.leading, 12).frame(width: leftW, height: groupH, alignment: .leading)
-                            .background(NX.muted.opacity(0.4))
-                        ForEach(g.rows) { r in
-                            // The gantt bar opens the task; so should the name, which is what the
-                            // finger reaches for when the bar is scrolled weeks off to the right.
-                            Button { onOpen(r.task.id) } label: {
-                                Text(r.task.isSubtask ? "↳ \(r.task.title)" : r.task.title).font(NXFont.text(12)).foregroundStyle(r.task.isDone ? NX.mutedFg : NX.foreground)
-                                    .strikethrough(r.task.isDone).lineLimit(1)
-                                    .padding(.leading, r.task.isSubtask ? 20 : 12).frame(width: leftW, height: rowH, alignment: .leading)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
+                    monthRow(ax)
+                    dayRow(ax)
+                    ForEach(ls) { line in rightLine(line, ax: ax, todayX: todayX) }
                 }
-                .background(NX.card)
-                .overlay(alignment: .trailing) { Rectangle().fill(NX.border).frame(width: 1) }
-
-                // RIGHT — horizontally-scrollable timeline
-                ScrollView(.horizontal, showsIndicators: true) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        // axis header (months + days)
-                        VStack(spacing: 0) {
-                            HStack(spacing: 0) {
-                                ForEach(Array(months.enumerated()), id: \.offset) { _, m in
-                                    Text(m.label).font(NXFont.text(11, .bold)).foregroundStyle(NX.foreground.opacity(0.7))
-                                        .padding(.leading, 6).frame(width: CGFloat(m.span) * dayW, height: 22, alignment: .leading)
-                                        .overlay(alignment: .leading) { Rectangle().fill(NX.border.opacity(0.5)).frame(width: 1) }
-                                }
-                            }
-                            HStack(spacing: 0) {
-                                ForEach(Array(dayList.enumerated()), id: \.offset) { _, d in
-                                    let wd = cal.component(.weekday, from: d)
-                                    let isToday = d == today
-                                    Text("\(cal.component(.day, from: d))").font(NXFont.text(10, isToday ? .bold : .regular))
-                                        .foregroundStyle(isToday ? .white : NX.mutedFg)
-                                        .frame(width: dayW, height: 28)
-                                        .background(isToday ? NX.violet : ((wd == 1 || wd == 7) ? NX.muted.opacity(0.4) : Color.clear))
-                                        .overlay(alignment: .leading) { Rectangle().fill(NX.border.opacity(0.4)).frame(width: 1) }
-                                }
-                            }
-                        }
-                        // body rows
-                        ForEach(groups) { g in
-                            let datedRows = g.rows.filter(\.dated)
-                            ZStack(alignment: .leading) {
-                                Rectangle().fill(NX.muted.opacity(0.4))
-                                if let gStart = datedRows.map(\.win.start).min(), let gEnd = datedRows.map(\.win.end).max() {
-                                    Capsule().fill(NX.mutedFg.opacity(0.3))
-                                        .frame(width: max(barW(Win(start: gStart, end: gEnd)) - 6, 4), height: 6)
-                                        .offset(x: xOf(gStart) + 3)
-                                }
-                            }
-                            .frame(width: timelineW, height: groupH)
-                            ForEach(g.rows) { r in
-                                ZStack(alignment: .leading) {
-                                    Color.clear
-                                    if r.dated {
-                                        Button { onOpen(r.task.id) } label: {
-                                            ganttBar(r).frame(width: max(barW(r.win) - 6, 16), height: 22).offset(x: xOf(r.win.start) + 3)
-                                        }.buttonStyle(.plain)
-                                    } else {
-                                        Text(T("No date")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-                                            .offset(x: (todayX ?? 0) + 6)
-                                    }
-                                }
-                                .frame(width: timelineW, height: rowH)
-                            }
-                        }
-                    }
-                    .frame(width: timelineW, alignment: .leading)
-                    .overlay(alignment: .topLeading) {
-                        if let tx = todayX {
-                            Rectangle().fill(NX.violet.opacity(0.55)).frame(width: 1).padding(.top, headerH).offset(x: tx)
-                        }
+                .frame(width: timelineW, alignment: .leading)
+                .overlay(alignment: .topLeading) {
+                    if let todayX {
+                        Rectangle().fill(NX.onyx.opacity(0.55)).frame(width: 1)
+                            .frame(maxHeight: .infinity)
+                            .padding(.top, monthH + dayH)
+                            .padding(.leading, todayX)
+                            .allowsHitTesting(false)
                     }
                 }
             }
+            // Opens around today (web: today minus three days at the left edge).
+            .onAppear { DispatchQueue.main.async { proxy.scrollTo("day-\(landing)", anchor: .leading) } }
         }
     }
 
-    private func ganttBar(_ r: Row) -> some View {
-        RoundedRectangle(cornerRadius: 6, style: .continuous).fill(ganttColor(r.task.priority).gradient)
-            .overlay(alignment: .leading) {
-                if r.task.isDone {
-                    Image(systemName: "checkmark").font(.system(size: 9, weight: .black)).foregroundStyle(.white).padding(.leading, 5)
+    private func monthRow(_ ax: Axis) -> some View {
+        HStack(spacing: 0) {
+            ForEach(Array(ax.months.enumerated()), id: \.offset) { _, m in
+                Text(m.label).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground.opacity(0.75)).lineLimit(1)
+                    .padding(.leading, 8)
+                    .frame(width: CGFloat(m.span) * dayW, height: monthH, alignment: .leading)
+                    .clipped()
+                    .overlay(alignment: .leading) { Rectangle().fill(NX.border.opacity(0.6)).frame(width: 1) }
+            }
+        }
+        .overlay(alignment: .bottom) { Rectangle().fill(NX.border.opacity(0.6)).frame(height: 0.5) }
+    }
+
+    private func dayRow(_ ax: Axis) -> some View {
+        let wf = ProjLocaleDate.fmt(AppLanguage.shared.lang == .id ? "EEE" : "EEEEE")
+        return HStack(spacing: 0) {
+            ForEach(Array(ax.days.enumerated()), id: \.offset) { i, d in
+                let isToday = i == ax.todayIndex
+                let wd = cal.component(.weekday, from: d)
+                VStack(spacing: 3) {
+                    Text(wf.string(from: d)).font(NXFont.text(10, .semibold))
+                        .foregroundStyle(isToday ? NX.foreground : NX.mutedFg.opacity(0.8)).lineLimit(1)
+                    Text("\(cal.component(.day, from: d))").font(NXFont.text(isToday ? 11 : 12, .bold))
+                        .foregroundStyle(isToday ? NX.background : NX.foreground.opacity(0.8))
+                        .frame(width: 22, height: 22)
+                        .background(isToday ? NX.onyx : Color.clear, in: Circle())
+                }
+                .frame(width: dayW, height: dayH)
+                .background((wd == 1 || wd == 7) ? NX.muted.opacity(0.5) : Color.clear)
+                .overlay(alignment: .leading) { Rectangle().fill(NX.border.opacity(0.5)).frame(width: 1) }
+                .id("day-\(i)")
+            }
+        }
+        .overlay(alignment: .bottom) { TableHairline() }
+    }
+
+    @ViewBuilder private func rightLine(_ line: Line, ax: Axis, todayX: CGFloat?) -> some View {
+        switch line {
+        case .group(let g):
+            let wins = g.rows.compactMap(\.win)
+            ZStack(alignment: .leading) {
+                NX.muted.opacity(0.5)
+                if let s = wins.map(\.start).min() {
+                    Text(g.name).font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                        .fixedSize()
+                        .padding(.leading, CGFloat(days(ax.start, s)) * dayW + 6)
                 }
             }
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.25)))
+            .frame(height: rowH)
+            .overlay(alignment: .bottom) { TableHairline() }
+        case .task(let r):
+            ZStack(alignment: .leading) {
+                Color.clear
+                if let w = r.win {
+                    bar(r, w, ax: ax)
+                } else if compact {
+                    // Wide screens say "No date" in the Duration column; the phone has none, so here.
+                    Text(T("No date")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        .padding(.leading, (todayX ?? 0) + 8)
+                }
+            }
+            .frame(height: rowH)
+            .overlay(alignment: .bottom) { Rectangle().fill(NX.border.opacity(0.6)).frame(height: 0.5) }
+        case .more:
+            Color.clear.frame(height: 40)
+                .overlay(alignment: .bottom) { Rectangle().fill(NX.border.opacity(0.6)).frame(height: 0.5) }
+        }
     }
-    private func ganttColor(_ p: String?) -> Color {
+
+    private func bar(_ r: Row, _ w: Win, ax: Axis) -> some View {
+        let x = CGFloat(days(ax.start, w.start)) * dayW
+        let span = CGFloat(days(w.start, w.end) + 1) * dayW
+        let fmt = ProjLocaleDate.fmt("d MMM")
+        return Button { onOpen(r.task.id) } label: {
+            HStack(spacing: 5) {
+                if r.task.isDone { Image(systemName: "checkmark").font(.system(size: 10, weight: .black)) }
+                Text(r.task.title).font(NXFont.text(12, .semibold)).lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .frame(width: max(span - 4, dayW * 0.8), height: 32, alignment: .leading)
+            .background(Self.barColor(r.task.priority), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(.lift)
+        .help("\(r.task.title) · \(fmt.string(from: w.start)) → \(fmt.string(from: w.end))")
+        .padding(.leading, x + 2)
+    }
+
+    // MARK: web rules
+
+    /// tlProgress: how far a status is (an empty bar for not started, not a red sliver).
+    static func progress(_ status: String?) -> Int {
+        switch (status ?? "").uppercased() {
+        case "DONE": return 100
+        case "IN_REVIEW": return 75
+        case "IN_PROGRESS": return 50
+        default: return 0
+        }
+    }
+
+    /// pctTone.
+    static func progressTint(_ pct: Int) -> Color {
+        if pct >= 100 { return Color(hex: "#10b981") }
+        if pct >= 70 { return Color(hex: "#14b8a6") }
+        if pct >= 40 { return Color(hex: "#f59e0b") }
+        if pct > 0 { return Color(hex: "#f43f5e") }
+        return NX.mutedFg.opacity(0.3)
+    }
+
+    /// GANTT_BAR: the bar's colour by priority.
+    static func barColor(_ p: String?) -> Color {
         switch (p ?? "NONE").uppercased() {
-        case "URGENT": return Color(hex: "#fb7185")
-        case "HIGH":   return Color(hex: "#f59e0b")
-        case "MEDIUM": return Color(hex: "#38bdf8")
-        case "LOW":    return Color(hex: "#a78bfa")
-        default:       return Color(hex: "#2dd4bf")
+        case "URGENT": return Color(hex: "#f43f5e")
+        case "HIGH":   return Color(hex: "#ef4444")
+        case "MEDIUM": return Color(hex: "#0ea5e9")
+        case "LOW":    return Color(hex: "#8b5cf6")
+        default:       return Color(hex: "#14b8a6")
         }
     }
+
+    static func dayCount(_ n: Int) -> String { n == 1 ? T("1 day") : String(format: T("%d days"), n) }
 }
 
 // MARK: - Calendar
@@ -679,9 +938,13 @@ struct CreateTaskSheet: View {
 
     private let priorities = ["NONE", "LOW", "MEDIUM", "HIGH", "URGENT"]
 
-    init(projectId: String, lanes: [ProjectDetail.Lane], prefillDue: Date? = nil, onCreated: @escaping () async -> Void) {
+    /// `initialLaneId`: the section the composer starts in ("Add task ▾" → a section; the first to-do
+    /// section for plain Add task, web addTask()). nil or unknown = the first section.
+    init(projectId: String, lanes: [ProjectDetail.Lane], prefillDue: Date? = nil, initialLaneId: String? = nil,
+         onCreated: @escaping () async -> Void) {
         self.projectId = projectId; self.lanes = lanes; self.onCreated = onCreated
-        _laneId = State(initialValue: lanes.first?.id ?? "")
+        let start = initialLaneId.flatMap { id in lanes.first { $0.id == id }?.id } ?? lanes.first?.id ?? ""
+        _laneId = State(initialValue: start)
         _hasDue = State(initialValue: prefillDue != nil)
         _due = State(initialValue: prefillDue ?? Date())
     }

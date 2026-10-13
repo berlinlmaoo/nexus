@@ -73,6 +73,14 @@ struct ProjectDetailView: View {
     @State private var sheetTask: TaskSheetRef?
     @Environment(\.horizontalSizeClass) private var hSize
     @FocusState private var searchFocused: Bool
+    /// iPad / Mac: the tab row's search is a magnifier that opens into a field (web ToolbarSearch).
+    @State private var searchOpen = false
+    /// The ✨ tool on the tab row: GIDEON with this project as context (the web's AI Autofill has no app
+    /// counterpart yet).
+    @State private var gideonOpen = false
+    /// "Add task ▾" → a section: the composer starts there. nil = the first to-do section.
+    @State private var createLaneId: String?
+    @Environment(AppRouter.self) private var router
 
     private var meId: String? { auth.session?.userId }
 
@@ -274,7 +282,7 @@ struct ProjectDetailView: View {
     }
 
     /// The task tabs with multi-select + Duplicate. Not an outlet's Board, which shows its events.
-    private var selectionApplies: Bool { !isOutlet && !isPipeline && canEdit && (tab == .board || tab == .list) }
+    private var selectionApplies: Bool { !isOutlet && !isPipeline && canEdit && (tab == .board || tab == .list || tab == .table) }
 
     /// The selected tasks in board order (lanes, then position), skipping any that vanished meanwhile.
     private func tasksFor(_ ids: [String]) -> [BoardTask] {
@@ -371,8 +379,14 @@ struct ProjectDetailView: View {
                 boardAlertActions(a)
             } message: { a in Text(a.message) }
             .background {
+                // Its own anchor: this view already presents three sheets (one presentation per view).
+                Color.clear.sheet(isPresented: $gideonOpen) {
+                    GideonPanel(openContext: GideonContext(projectId: projectId, projectName: displayName)).environment(auth).environment(router)
+                }
+            }
+            .background {
                 // Keyboard: ⌘N = new task (iPad keyboard, Mac).
-                Button("") { if !isPipeline && !isOutlet && canCreate && tab != .forms && !cover.isCovered { prefillDue = nil; showCreate = true } }
+                Button("") { if !isPipeline && !isOutlet && canCreate && tab != .forms && !cover.isCovered { newTask(in: nil) } }
                     .keyboardShortcut("n", modifiers: .command)
                     .opacity(0).accessibilityHidden(true)
             }
@@ -397,7 +411,8 @@ struct ProjectDetailView: View {
             tabBar
             Divider().overlay(NX.border)
             if let cachedFrom { OfflineNotice(savedAt: cachedFrom).padding(.vertical, 4) }
-            if searchApplies && !isOutlet && !loading && error == nil && !lanes.isEmpty { searchBar }
+            // iPad / Mac: the search is the magnifier on the tab row, not a full-width bar.
+            if searchApplies && !isOutlet && !loading && error == nil && !lanes.isEmpty && !wideBar { searchBar }
             if drill != nil && searchApplies && !isOutlet { drillBar }
             if let mine = myViewName, searchApplies && !isOutlet && !isPipeline { myViewBar(mine) }
             content
@@ -433,7 +448,8 @@ struct ProjectDetailView: View {
         .navigationBarBackButtonHidden(true)
         .navigationBarHidden(true)
         .sheet(isPresented: $showCreate) {
-            CreateTaskSheet(projectId: projectId, lanes: detail?.taskLists ?? [], prefillDue: prefillDue) { await load() }
+            CreateTaskSheet(projectId: projectId, lanes: detail?.taskLists ?? [], prefillDue: prefillDue,
+                            initialLaneId: createLaneId ?? StatusOptions.defaultOption(detail?.taskLists ?? [])?.id) { await load() }
         }
         .sheet(isPresented: $showSettings) {
             if let detail {
@@ -516,6 +532,17 @@ struct ProjectDetailView: View {
     // MARK: page header (dev web: the project's icon and a large title, actions on the right)
 
     private var wide: Bool { hSize == .regular }
+    /// The web's one tab row (views as tabs, modules as icons, tools at the right): a task project on a
+    /// wide screen. An outlet or a pipeline keeps its own short row.
+    private var wideBar: Bool { wide && !isOutlet && !isPipeline }
+
+    /// The task composer, starting in `laneId` (nil = the first to-do section, web addTask()).
+    private func newTask(in laneId: String?) {
+        guard !cover.isCovered else { return }
+        prefillDue = nil
+        createLaneId = laneId
+        showCreate = true
+    }
 
     private var projectHeader: some View {
         HStack(spacing: 10) {
@@ -532,16 +559,19 @@ struct ProjectDetailView: View {
             if let d = detail {
                 ProjectMark(icon: d.icon, color: d.color, size: wide ? 34 : 28)
             }
-            Text(displayName).font(NXFont.display(wide ? 26 : 20, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+            Text(displayName).font(NXFont.display(wide ? 26 : 20, wide ? .semibold : .bold)).foregroundStyle(NX.foreground).lineLimit(1)
             if let chip = detail?.readOnlyLevelChip { ProjectLevelChip(text: chip) }
             Spacer(minLength: 6)
-            if detail != nil {
+            if let d = detail {
+                // iPad / Mac (web header): the members' faces, then Ask GIDEON and Project settings.
+                if wide { ProjectMemberStack(members: d.members ?? []) { if !cover.isCovered { showSettings = true } }.padding(.trailing, 4) }
                 // Ask GIDEON about this project: a new chat scoped to it (web header, 12 Oct 2026).
                 AskGideonButton(context: GideonContext(projectId: projectId, projectName: displayName), labelled: wide)
                 ProjectHeaderButton(title: T("Project settings"), icon: "slider.horizontal.3", labelled: wide) { if !cover.isCovered { showSettings = true } }
                     .keyboardShortcut(",", modifiers: .command)
             }
-            addButton
+            // iPad / Mac: Add task lives on the tab row (split button), not in the header (web 267).
+            if !wideBar { addButton }
         }
         .padding(.leading, isPresented ? 6 : (wide ? 24 : 14))
         .padding(.trailing, wide ? 24 : 14)
@@ -558,7 +588,7 @@ struct ProjectDetailView: View {
             // Can view / Can comment: no Add task / New form (access levels round 2).
             ProjectHeaderButton(title: tab == .forms ? T("New form") : T("Add task"), icon: "plus", labelled: wide,
                                 prominent: true, enabled: tab == .forms || canCreate) {
-                if tab == .forms { newFormOpen = true } else { prefillDue = nil; showCreate = true }
+                if tab == .forms { newFormOpen = true } else { newTask(in: nil) }
             }
         }
     }
@@ -597,6 +627,28 @@ struct ProjectDetailView: View {
     }
 
     private var tabBar: some View {
+        Group {
+            if wideBar { wideTabBar } else { chipTabBar }
+        }
+        .padding(.vertical, 4)
+        // Keyboard (iPad keyboard, Mac): ⌘[ / ⌘] previous / next tab, ⌘F search the project.
+        .background {
+            Group {
+                Button("") { if !cover.isCovered { stepTab(-1) } }.keyboardShortcut("[", modifiers: .command)
+                Button("") { if !cover.isCovered { stepTab(1) } }.keyboardShortcut("]", modifiers: .command)
+                Button("") {
+                    guard searchApplies && !cover.isCovered else { return }
+                    if wideBar { searchOpen = true }
+                    searchFocused = true
+                }.keyboardShortcut("f", modifiers: .command)
+                SheetCover.Anchor(cover: cover).frame(width: 0, height: 0)
+            }
+            .opacity(0).accessibilityHidden(true)
+        }
+    }
+
+    /// The phone's row (and an outlet's / a pipeline's anywhere): every tab as an icon + label chip.
+    private var chipTabBar: some View {
         HStack(spacing: 4) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 2) {
@@ -630,16 +682,140 @@ struct ProjectDetailView: View {
                 .accessibilityLabel(T("Filter and sort…"))
             }
         }
-        .padding(.vertical, 4)
-        // Keyboard (iPad keyboard, Mac): ⌘[ / ⌘] previous / next tab, ⌘F search the project.
-        .background {
-            Group {
-                Button("") { if !cover.isCovered { stepTab(-1) } }.keyboardShortcut("[", modifiers: .command)
-                Button("") { if !cover.isCovered { stepTab(1) } }.keyboardShortcut("]", modifiers: .command)
-                Button("") { if searchApplies && !cover.isCovered { searchFocused = true } }.keyboardShortcut("f", modifiers: .command)
-                SheetCover.Anchor(cover: cover).frame(width: 0, height: 0)
+    }
+
+    // MARK: wide tab row (dev web 267: Overview · the views · + | module icons … tools · Add task ▾)
+
+    /// A view tab on the wide row: a built-in task tab, or a saved view of Board / List.
+    private enum ViewTabItem: Identifiable {
+        case tab(ProjectTab)
+        case view(ProjectViewFull, ProjectTab)
+        var id: String {
+            switch self {
+            case .tab(let t): return "tab:\(t.rawValue)"
+            case .view(let v, _): return "view:\(v.id)"
             }
-            .opacity(0).accessibilityHidden(true)
+        }
+    }
+
+    private static let viewTabOrder: [ProjectTab] = [.board, .list, .table, .calendar, .timeline]
+    private static let moduleTabOrder: [ProjectTab] = [.sheet, .pages, .forms, .chat]
+
+    /// The views in the project's own order (web: by the view's position), the saved views of a layout
+    /// among them; before the views load, the app's order.
+    private var viewTabItems: [ViewTabItem] {
+        let shown = visibleTabs.filter { Self.viewTabOrder.contains($0) }
+        var ranked: [(pos: Int, seq: Int, item: ViewTabItem)] = []
+        var seq = 0
+        for (i, t) in shown.enumerated() {
+            let builtinPos = views.first { $0.builtin == t.key }?.position
+            ranked.append((pos: builtinPos ?? i, seq: seq, item: ViewTabItem.tab(t))); seq += 1
+            for v in extraViews(t) {
+                ranked.append((pos: v.position ?? (builtinPos ?? i), seq: seq, item: ViewTabItem.view(v, t))); seq += 1
+            }
+        }
+        return ranked.sorted { $0.pos != $1.pos ? $0.pos < $1.pos : $0.seq < $1.seq }.map(\.item)
+    }
+
+    private var wideTabBar: some View {
+        HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 2) {
+                    if visibleTabs.contains(.overview) { wideViewTab(.tab(.overview)) }
+                    ForEach(viewTabItems) { item in wideViewTab(item) }
+                    if canEdit {
+                        Button { alertText = ""; boardAlert = .newView(layout: layoutOf(tab) ?? "board") } label: {
+                            Image(systemName: "plus").font(.system(size: 14, weight: .regular)).foregroundStyle(NX.mutedFg)
+                                .frame(width: 34, height: 34).frame(minHeight: 44).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .hoverEffect(.highlight)
+                        .help(T("New view"))
+                        .accessibilityLabel(T("New view"))
+                    }
+                    let modules = Self.moduleTabOrder.filter { visibleTabs.contains($0) }
+                    if !modules.isEmpty {
+                        ProjectTabDivider()
+                        ForEach(modules) { t in
+                            ProjectIconTab(title: t.label, icon: t.macIcon, on: tab == t) { pickTab(t) }
+                        }
+                    }
+                }
+                .padding(.leading, 18)
+            }
+            wideTools
+                .fixedSize()
+                .padding(.trailing, 24)
+        }
+    }
+
+    @ViewBuilder private func wideViewTab(_ item: ViewTabItem) -> some View {
+        switch item {
+        case .tab(let t):
+            let builtin = layoutOf(t).flatMap { l in viewsFor(l).first { $0.builtin == l } }
+            ProjectViewTab(title: t.label, icon: t.macIcon, on: tabIsOn(t),
+                           filtered: builtin.map { configOf($0).isFiltered } ?? false,
+                           hasMenu: builtin != nil, action: { pickTab(t) }) {
+                if let builtin { viewMenuItems(builtin) }
+            }
+            .contextMenu { if let builtin { viewMenuItems(builtin) } }
+        case .view(let v, let t):
+            let layout = layoutOf(t) ?? "board"
+            ProjectViewTab(title: viewTitle(v), icon: t.macIcon, on: tab == t && activeView(layout)?.id == v.id,
+                           filtered: configOf(v).isFiltered, hasMenu: true,
+                           action: { tab = t; pickView(layout, v.id) }) {
+                viewMenuItems(v)
+            }
+            .contextMenu { viewMenuItems(v) }
+        }
+    }
+
+    /// The tools at the right of the wide row. Filter / sort / group / view settings act on the Board or
+    /// List view on screen (they are one sheet in the app); search on every task tab.
+    private var wideTools: some View {
+        HStack(spacing: 2) {
+            if let layout = layoutOf(tab), let v = activeView(layout) {
+                let c = configOf(v)
+                ProjectToolIcon(icon: "line.3.horizontal.decrease", label: T("Filter"), active: c.isFiltered) { filterView = v }
+                ProjectToolIcon(icon: "arrow.up.arrow.down", label: T("Sort"), active: !c.sort.isEmpty) { filterView = v }
+                ProjectToolIcon(icon: "rectangle.grid.1x2", label: T("Group"), active: (c.groupBy ?? "section") != "section") { filterView = v }
+            }
+            if visibleTabs.contains(.automations) {
+                ProjectToolIcon(icon: "bolt", label: T("Automations"), active: tab == .automations) { tab = .automations }
+            }
+            if detail != nil {
+                ProjectToolIcon(icon: "sparkles", label: T("Ask GIDEON")) { if !cover.isCovered { gideonOpen = true } }
+            }
+            if searchApplies && !lanes.isEmpty {
+                ProjectToolbarSearch(query: $query, open: $searchOpen, focused: $searchFocused,
+                                     count: "\(matchCount)/\(totalCount)")
+            }
+            if let layout = layoutOf(tab), let v = activeView(layout) {
+                Menu { viewMenuItems(v) } label: {
+                    Image(systemName: "slider.horizontal.3").font(.system(size: 15, weight: .regular)).foregroundStyle(NX.mutedFg)
+                        .frame(width: 34, height: 34).frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .help(T("View settings"))
+                .accessibilityLabel(T("View settings"))
+            }
+            wideAddButton.padding(.leading, 8)
+        }
+    }
+
+    /// Add task ▾ on the task tabs; New form on Forms (web Forms tab). Nothing below Can edit.
+    @ViewBuilder private var wideAddButton: some View {
+        if canEdit {
+            if tab == .forms {
+                Button { newFormOpen = true } label: { Label(T("New form"), systemImage: "plus") }
+                    .buttonStyle(.nxPrimary)
+            } else {
+                AddTaskSplitButton(sections: StatusOptions.ordered(detail?.taskLists ?? []), enabled: canCreate) { laneId in
+                    newTask(in: laneId)
+                }
+            }
         }
     }
 
@@ -747,15 +923,14 @@ struct ProjectDetailView: View {
                         onDrill: drillTab.map { target -> (OverviewDrill) -> Void in { (d: OverviewDrill) in drill = d; tab = target } },
                         onOpenTask: { open($0) },
                         onEditBrief: { showSettings = true },
-                        onAddTask: canCreate ? { () -> Void in prefillDue = nil; showCreate = true } : nil,
+                        onAddTask: canCreate ? { () -> Void in newTask(in: nil) } : nil,
                         onOpenMember: { openProfile = $0 }
                     )
                 case .board:    boardTab(detail)
                 case .list:     listTab()
-                case .table:    SpreadsheetTab(projectId: projectId, lanes: filteredLanes, onOpen: { open($0) },
-                                               onDrop: tableDrop)
+                case .table:    tableTab()
                 case .calendar: CalendarTab(tasks: filteredLanes.flatMap { $0.tasks ?? [] }, onOpen: { open($0) },
-                                            onCreate: { date in if canCreate { prefillDue = date; showCreate = true } },
+                                            onCreate: { date in if canCreate { prefillDue = date; createLaneId = nil; showCreate = true } },
                                             canCreate: canCreate,
                                             dateFieldId: plotBy, plotChoices: plotChoices, onPlotBy: { choosePlot($0) })
                 case .timeline: TimelineTab(lanes: filteredLanes, onOpen: { open($0) })
@@ -821,7 +996,51 @@ struct ProjectDetailView: View {
     }
 
     private var visibleTaskIds: [String] {
-        displayLanes(tab == .list ? "list" : "board").flatMap { ($0.tasks ?? []).map(\.id) }
+        if tab == .table { return filteredLanes.flatMap { ($0.tasks ?? []).map(\.id) } }
+        return displayLanes(tab == .list ? "list" : "board").flatMap { ($0.tasks ?? []).map(\.id) }
+    }
+
+    /// The Table (web ProjectTableView): every task grouped by its status / section, edited in place.
+    private func tableTab() -> ProjectTableTab {
+        let statusOptions = StatusOptions.inUse(lanes)
+        let editable = canEdit
+        return ProjectTableTab(
+            projectId: projectId,
+            lanes: filteredLanes,
+            allLanes: lanes,
+            members: detail?.members ?? [],
+            statusOptions: statusOptions,
+            selection: editable ? selection : nil,
+            onOpen: { open($0) },
+            onDrop: tableDrop,
+            onMoveTo: editable ? { (id: String, laneId: String) -> Void in moveLater([id], to: laneId) } : nil,
+            onSetStatus: editable ? { (id: String, status: String) -> Void in setTaskStatus(id, status) } : nil,
+            onSetPriority: editable ? { (id: String, p: String) -> Void in bulkPriority([id], p) } : nil,
+            onToggleAssignee: editable ? { (id: String, uid: String, has: Bool) -> Void in toggleAssignee(id, uid, has) } : nil,
+            onAddTask: (editable && canCreate) ? { (laneId: String, title: String) async -> String? in
+                await addTask(laneId: laneId, title: title)
+            } : nil
+        )
+    }
+
+    /// The Table's status menu on a project without status options: the task's own status.
+    private func setTaskStatus(_ id: String, _ status: String) {
+        Task {
+            do { _ = try await APIClient.shared.updateTask(id, ["status": status]) }
+            catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save the change.") }
+            await reloadQuietly()
+        }
+    }
+
+    /// The Table's assignee menu: adds or removes one person (web AssigneeCell).
+    private func toggleAssignee(_ id: String, _ userId: String, _ has: Bool) {
+        Task {
+            do {
+                if has { try await APIClient.shared.removeTaskAssignee(id, userId: userId) }
+                else { try await APIClient.shared.addTaskAssignee(id, userId: userId) }
+            } catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save the change.") }
+            await reloadQuietly()
+        }
     }
 
     @ViewBuilder private func boardTab(_ detail: ProjectDetail) -> some View {
@@ -938,7 +1157,7 @@ struct ProjectDetailView: View {
             let drop: (([String], String, String?) -> Void)? = canEdit
                 ? { (ids: [String], laneId: String, before: String?) -> Void in dropped(ids, on: laneId, before: before, visible: shown) }
                 : nil
-            ListTab(lanes: shown, onOpen: { open($0) }, selection: canEdit ? selection : nil,
+            ListTab(lanes: shown, fields: allFields, onOpen: { open($0) }, selection: canEdit ? selection : nil,
                     statusStyle: StatusOptions.inUse(lanes) || shown.contains { $0.id.hasPrefix("grp:") },
                     onDrop: drop,
                     statusOf: rowStatusLookup())
@@ -1077,7 +1296,8 @@ struct ProjectDetailView: View {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return nil }
         let layout = tab == .list ? "list" : "board"
-        let config = activeView(layout).map { configOf($0) }
+        // The Table draws the real sections without a view: no view filter fills in values there.
+        let config = (tab == .board || tab == .list) ? activeView(layout).map { configOf($0) } : nil
         var section = laneId
         var priority: String?
         var assignMe = false

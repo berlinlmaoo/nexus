@@ -4,6 +4,10 @@ import SwiftUI
 // flat rows on hairlines, the task's properties on the right (custom fields, due, priority, status,
 // people), group headers with a chevron, the option's coloured pill and "done/total". Small typed views,
 // each one plain, so the type checker never sees a long expression.
+//
+// Mac parity (owner screenshot 275, 13 Oct 2026): on a wide screen the properties are COLUMNS — the same
+// order and the same width on every row, an empty slot where a task has no value — so a date never swaps
+// places with an amount from one row to the next; text is 15pt, the properties 13–14pt.
 
 /// A task's status as its row shows it: the status option (section) when the project has options,
 /// else the plain status in its default colour.
@@ -31,17 +35,17 @@ struct ListGroupHeader: View {
         Button(action: onToggle) {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(NX.mutedFg)
                     .rotationEffect(.degrees(collapsed ? 0 : 90))
                 label
                 Text("\(doneCount)/\(tasks.count)")
-                    .font(NXFont.text(12))
+                    .font(NXFont.text(13))
                     .foregroundStyle(statusStyle ? StatusColor.swatch(lane.colorKey).fg : NX.mutedFg)
                     .monospacedDigit()
                 Spacer(minLength: 0)
             }
-            .padding(.vertical, 6)
+            .padding(.vertical, 8)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -51,9 +55,9 @@ struct ListGroupHeader: View {
 
     @ViewBuilder private var label: some View {
         if statusStyle {
-            StatusPill(name: lane.name, colorKey: lane.colorKey, size: 13)
+            StatusPill(name: lane.name, colorKey: lane.colorKey, size: 14)
         } else {
-            Text(lane.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+            Text(lane.name).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
         }
     }
 }
@@ -64,6 +68,8 @@ struct ListPropLine: View {
     let status: RowStatus?
     /// Compact width: the properties wrap under the title instead of running off the edge.
     var wrap = false
+    /// Wide: the custom fields shown as columns, in this order (ListColumns). nil = chips as they come.
+    var fieldColumns: [String]? = nil
 
     private var customChips: [CFChip] { Array((task.customFieldValues ?? []).compactMap(customFieldChip).prefix(3)) }
 
@@ -73,8 +79,57 @@ struct ListPropLine: View {
     }
 
     var body: some View {
+        if let fieldColumns {
+            columns(fieldColumns)
+        } else {
+            chips
+        }
+    }
+
+    /// Fixed slots, always in this order: the fields, due date, priority, status, people.
+    private func columns(_ ids: [String]) -> some View {
+        HStack(spacing: 12) {
+            ForEach(ids, id: \.self) { id in
+                fieldSlot(id).frame(width: ListColumns.fieldW, alignment: .leading)
+            }
+            dueSlot.frame(width: ListColumns.dueW, alignment: .leading)
+            prioritySlot.frame(width: ListColumns.priorityW, alignment: .leading)
+            statusSlot.frame(width: ListColumns.statusW, alignment: .leading)
+            people.frame(width: ListColumns.peopleW, alignment: .trailing)
+        }
+    }
+
+    @ViewBuilder private func fieldSlot(_ id: String) -> some View {
+        if let cfv = (task.customFieldValues ?? []).first(where: { $0.customFieldId == id }), let chip = customFieldChip(cfv) {
+            if chip.colorKey != nil {
+                CFChipView(chip: chip).fixedSize()
+            } else {
+                Text(chip.label).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).monospacedDigit().lineLimit(1)
+            }
+        }
+    }
+
+    @ViewBuilder private var dueSlot: some View {
+        if let due = ProjDate.parse(task.dueDate) {
+            Label(ProjDate.dayLabel(due), systemImage: "clock")
+                .labelStyle(.titleAndIcon)
+                .font(NXFont.text(13, overdue ? .semibold : .regular))
+                .foregroundStyle(overdue ? NX.danger : NX.mutedFg)
+                .lineLimit(1)
+        }
+    }
+
+    @ViewBuilder private var prioritySlot: some View {
+        if let p = task.priority, p.uppercased() != "NONE" { TablePill(text: TaskPriorityName.label(p), tone: prioTone(p)) }
+    }
+
+    @ViewBuilder private var statusSlot: some View {
+        if let status { StatusPill(name: status.name, colorKey: status.colorKey, size: 13).fixedSize() }
+    }
+
+    private var chips: some View {
         let layout = wrap ? AnyLayout(FlowLayout(spacing: 6)) : AnyLayout(HStackLayout(spacing: 8))
-        layout {
+        return layout {
             ForEach(customChips) { chip in customValue(chip) }
             if let due = ProjDate.parse(task.dueDate) {
                 Label(ProjDate.dayLabel(due), systemImage: "clock")
@@ -116,6 +171,8 @@ struct ListTaskRow: View {
     let task: BoardTask
     let status: RowStatus?
     let wide: Bool
+    /// Wide: the custom-field columns every row of this List draws (same order, same width).
+    var fieldColumns: [String] = []
     let onOpen: (String) -> Void
     var selection: TaskSelection? = nil
     var order: () -> [String] = { [] }
@@ -136,9 +193,9 @@ struct ListTaskRow: View {
             if selecting, let selection { selection.toggle(task.id) } else { onOpen(task.id) }
         } label: {
             content
-                .padding(.horizontal, 8).padding(.vertical, 8)
+                .padding(.horizontal, 8).padding(.vertical, wide ? 10 : 8)
                 .padding(.leading, task.isSubtask ? 20 : 0)
-                .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: wide ? 46 : 38, alignment: .leading)
                 .background(selecting && selected ? NX.violet.opacity(0.10) : Color.clear)
                 .overlay(alignment: .bottom) { Rectangle().fill(NX.border.opacity(0.7)).frame(height: 0.5) }
                 .contentShape(Rectangle())
@@ -155,7 +212,7 @@ struct ListTaskRow: View {
                 leading
                 titleLine
                 Spacer(minLength: 8)
-                ListPropLine(task: task, status: status)
+                ListPropLine(task: task, status: status, fieldColumns: fieldColumns)
             }
         } else {
             HStack(alignment: .top, spacing: 10) {
@@ -171,7 +228,7 @@ struct ListTaskRow: View {
     @ViewBuilder private var leading: some View {
         if selecting { TaskSelectionMark(selected: selected) }
         Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
-            .font(.system(size: 15))
+            .font(.system(size: wide ? 17 : 15))
             .foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.55))
     }
 
@@ -181,16 +238,41 @@ struct ListTaskRow: View {
                 Image(systemName: "arrow.turn.down.right").font(.system(size: 11)).foregroundStyle(NX.mutedFg)
             }
             Text(task.title)
-                .font(NXFont.text(14))
+                .font(NXFont.text(15))
                 .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
                 .strikethrough(task.isDone)
                 .lineLimit(wide ? 1 : 2)
                 .multilineTextAlignment(.leading)
             if task.isSubtask, wide, let parent = task.parent?.title, !parent.isEmpty {
-                Text("· \(parent)").font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                Text("· \(parent)").font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
             }
             if task.hasQuest { QuestXPChip(xp: task.questXP) }
         }
+    }
+}
+
+/// The wide List's property columns: their widths, and which custom fields get one (the project's fields
+/// in their own order that hold a value on any task shown, at most three — the rest are in the task).
+enum ListColumns {
+    static let fieldW: CGFloat = 120
+    static let dueW: CGFloat = 84
+    static let priorityW: CGFloat = 92
+    static let statusW: CGFloat = 140
+    static let peopleW: CGFloat = 64
+
+    static func fieldIds(fields: [CustomField], lanes: [ProjectDetail.Lane], max: Int = 3) -> [String] {
+        var used = Set<String>()
+        var seen: [String] = []
+        for lane in lanes {
+            for t in lane.tasks ?? [] {
+                for v in t.customFieldValues ?? [] where customFieldChip(v) != nil {
+                    if used.insert(v.customFieldId).inserted { seen.append(v.customFieldId) }
+                }
+            }
+        }
+        // The project's order when the fields are known; else the order they first appear in.
+        let ordered = fields.isEmpty ? seen : fields.map(\.id).filter { used.contains($0) }
+        return Array(ordered.prefix(max))
     }
 }
 
