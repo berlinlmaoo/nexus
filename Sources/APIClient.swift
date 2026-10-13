@@ -93,6 +93,9 @@ enum APIError: LocalizedError {
         if error is CancellationError || (error as? URLError)?.code == .cancelled {
             return .transport(error.localizedDescription)
         }
+        // "Can't reach NEXUS" says nothing about WHY; the real error (URLError domain and code, the
+        // TLS or DNS failure under it) is kept for the UI tour's report and the dev console.
+        NetDiagnostics.record(error)
         return .transport(unreachableText)
     }
 

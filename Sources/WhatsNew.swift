@@ -613,6 +613,8 @@ struct WhatsNewGate: ViewModifier {
             .task(id: auth?.session?.userId) {
                 guard auth?.session?.userId != nil else { return }
                 guard !current.isEmpty else { return }
+                // The UI screenshot tour must photograph the screen, not the release notes over it.
+                guard !TourMode.isActive else { return }
                 let firstEver = firstRun.isEmpty
                 if firstEver { firstRun = current }
                 // A fresh install of THIS version, proven rather than assumed: the device had no

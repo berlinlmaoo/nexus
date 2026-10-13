@@ -223,6 +223,25 @@ targets:
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "4"
 
+  # The UI screenshot tour (docs/UI-TOUR.md): XCUITest that photographs a fixed list of screens on
+  # iPhone, iPad and Mac Catalyst. Run with scripts/ui-tour.sh, which supplies the QA account and the
+  # screen list through the environment. Debug-only machinery; nothing of it ships in the app.
+  NEXUSUITour:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests/NEXUSUITour
+    dependencies:
+      - target: NEXUS
+    settings:
+      base:
+        TEST_TARGET_NAME: NEXUS
+        PRODUCT_BUNDLE_IDENTIFIER: id.znetworks.nexus.uitour
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: YES
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
+
 # Default scheme runs RELEASE so a plain ⌘R is the optimized, smooth-on-device build
 # (Debug SwiftUI is dramatically slower on device — the usual cause of on-device lag).
 #   • NEXUS       → Release (-O; default ⌘R — the build to actually use on the phone)
@@ -244,3 +263,15 @@ schemes:
       config: Debug
     archive:
       config: Release
+  # scripts/ui-tour.sh runs this one (`xcodebuild test -scheme NEXUSUITour`). Debug, because the tour's
+  # launch arguments (TourMode) exist only in Debug / NEXUS_DEV_SERVER builds.
+  NEXUSUITour:
+    build:
+      targets:
+        NEXUS: all
+        NEXUSUITour: [test]
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - NEXUSUITour

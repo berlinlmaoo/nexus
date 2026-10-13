@@ -1,0 +1,10 @@
+{
+  "name": "nexus-ui-tour-web",
+  "private": true,
+  "description": "Web half of the NEXUS UI screenshot tour (../ui-tour.sh, docs/UI-TOUR.md).",
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "playwright": "1.56.1"
+  }
+}

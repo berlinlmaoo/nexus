@@ -75,6 +75,8 @@ struct NXProjectLink: Equatable {
     let view: String?
     let event: String?
     let date: String?
+    /// `&form=<id>`: the form builder open on top of the project, as the web's `?form=` does.
+    let form: String?
 
     /// nil when the link names no project, or carries none of the three (a plain project link).
     init?(path: String) {
@@ -88,11 +90,12 @@ struct NXProjectLink: Equatable {
         let value = { (k: String) -> String? in
             query.first { $0.name == k }?.value.flatMap { $0.isEmpty ? nil : $0 }
         }
-        let view = value("view")?.lowercased(), event = value("event"), date = value("date")
-        guard view != nil || event != nil || date != nil else { return nil }
+        let view = value("view")?.lowercased(), event = value("event"), date = value("date"), form = value("form")
+        guard view != nil || event != nil || date != nil || form != nil else { return nil }
         self.projectId = projectId
         self.view = view
         self.event = event
+        self.form = form
         self.date = date.flatMap { OutletFormat.parts($0) != nil && $0.count == 10 ? $0 : nil }
     }
 }
@@ -200,6 +203,20 @@ final class AppRouter {
     /// The tab, event and day a project link asked for (`NXProjectLink`), waiting for that project's
     /// screen. Held rather than fired, like `focus`.
     var projectLink: NXProjectLink?
+
+    /// A project to open as a PAGE — pushed on the Projects tab, or selected in the iPad / Mac sidebar —
+    /// rather than as the sheet `detail` draws. Claimed (and cleared) by ProjectsView on the phone and
+    /// by the sidebar. The UI screenshot tour opens projects this way, so they look like they do
+    /// when somebody taps one.
+    var projectRequest: ProjectRef?
+
+    func openProjectPage(_ ref: ProjectRef) {
+        // Not `go(.projects)`: that also asks the sidebar for the Projects list, and the sidebar would
+        // then land on the list instead of the project.
+        tab = .projects
+        morePush = nil
+        projectRequest = ref
+    }
 
     /// The WIB day ("YYYY-MM-DD") a link asked the Calendar to open on: `/calendar?date=…` from a
     /// notification, or `nexus://calendar?date=…`. CalendarView reads it, jumps to that day and

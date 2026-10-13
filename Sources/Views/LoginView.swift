@@ -135,6 +135,7 @@ struct LoginView: View {
 
                 if let err = auth.loginError {
                     Text(err)
+                        .accessibilityIdentifier("login.error")
                         .font(NXFont.text(13, .semibold))
                         .foregroundStyle(NX.danger)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -166,6 +167,8 @@ struct LoginView: View {
                 .disabled(auth.isBusy)
                 .opacity(auth.isBusy ? 0.7 : 1)
                 .padding(.top, 26)
+                // Found by the UI screenshot tour (UITests/NEXUSUITour).
+                .accessibilityIdentifier("login.signIn")
 
                 // Passkey is an ADDITION, so nothing above this line moves: the two fields and the
                 // onyx CTA stay exactly where they were and keep working on their own.

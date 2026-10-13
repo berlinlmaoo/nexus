@@ -63,7 +63,12 @@ struct NexusApp: App {
                         .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                             if let url = activity.webpageURL { router.open(url) }
                         }
+                        // The UI screenshot tour (Sources/TourDriver.swift); draws and does nothing otherwise.
+                        .modifier(TourDriver(auth: auth, router: router))
                         .task(id: auth.session?.userId) {
+                            // The tour's QA account must not register this device for pushes, start the
+                            // work-hours trail or send queued check-ins: it is only here to be photographed.
+                            if TourMode.isActive { return }
                             if let userId = auth.session?.userId {
                                 await NotificationManager.shared.activate(userId: userId)
                                 await APIClient.shared.sendUiLanguage(AppLanguage.shared.lang)
@@ -101,7 +106,7 @@ struct NexusApp: App {
                         }
                         // The "why NEXUS wants Always location" sheet, on a host of its own so it
                         // never shares a view with another `.sheet`.
-                        .background { WorkLocationPromptHost() }
+                        .background { if !TourMode.isActive { WorkLocationPromptHost() } }
                 }
             }
             .animation(.easeInOut(duration: 0.25), value: versionGate.required)

@@ -83,6 +83,9 @@ enum ServerEnvironment: String, CaseIterable, Identifiable {
     /// Read once at launch and changed only by `set`, so every request of a session agrees on the host.
     private static var stored: ServerEnvironment = {
         guard isAvailable else { return .production }
+        // `-nexusServer dev` (the UI screenshot tour, scripts/ui-tour.sh): this launch only. Never
+        // written to UserDefaults, so the next ordinary launch is back on whatever was chosen by hand.
+        if let forced = TourMode.argument("nexusServer").flatMap(ServerEnvironment.init(rawValue:)) { return forced }
         return ServerEnvironment(rawValue: UserDefaults.standard.string(forKey: key) ?? "") ?? .production
     }()
 
@@ -94,5 +97,29 @@ enum ServerEnvironment: String, CaseIterable, Identifiable {
         guard isAvailable else { return }
         stored = env
         UserDefaults.standard.set(env.rawValue, forKey: key)
+    }
+}
+
+/// The UI screenshot tour (docs/UI-TOUR.md): UITests/NEXUSUITour launches the app with launch arguments
+/// such as `-nexusTour 1 -nexusServer dev -nexusTourStep screen -nexusTourRoute nexus://teamCalendar`,
+/// and TourDriver (Sources/TourDriver.swift) acts on them.
+///
+/// Debug and branch-`dev` builds only: in an App Store build every argument reads as absent, so no
+/// launch argument can steer a shipped app. Foundation-only on purpose, because Keychain.swift reads
+/// `isActive` and this file is compiled into the watch app as well.
+enum TourMode {
+    /// The app was launched by the tour. Its session then lives under its own Keychain account
+    /// (Keychain.swift), so a tour run on somebody's Mac never signs them out or in as somebody else.
+    static let isActive: Bool = argument("nexusTour") != nil
+
+    /// The value after `-<name>` on the command line, or nil.
+    static func argument(_ name: String) -> String? {
+        #if DEBUG || NEXUS_DEV_SERVER
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-" + name), i + 1 < args.count else { return nil }
+        return args[i + 1]
+        #else
+        return nil
+        #endif
     }
 }

@@ -17,7 +17,8 @@ struct Session: Codable, Sendable {
 
 /// Minimal Keychain wrapper for the single session blob. Thread-safe (Security framework).
 enum Keychain {
-    private static let account = "nexus.session"
+    /// The UI screenshot tour keeps its QA session apart from the person's own (TourMode).
+    private static let account = TourMode.isActive ? "nexus.session.tour" : "nexus.session"
     private static let service = "id.znetworks.nexus"
     /// A session saved by an earlier build (backup-able class) was moved to ThisDeviceOnly.
     private static let migratedKey = "nexus.keychain.this-device-only"

@@ -63,6 +63,12 @@ struct ProjectsView: View {
         )
     }
 
+    private func takeProjectRequest() {
+        guard let ref = router.projectRequest else { return }
+        router.projectRequest = nil
+        openBoard = ref
+    }
+
     /// The sidebar's Projects page on an iPad or Mac: the web's page header instead of the nav bar.
     private var isRoot: Bool { NXSidebarPage.isRoot(.projects, hSize: hSize, router: router) }
 
@@ -86,6 +92,10 @@ struct ProjectsView: View {
             } message: { Text(actionError ?? "") }
             .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
             .navigationDestination(item: $openBoard) { ref in ProjectDetailView(projectId: ref.id, projectName: ref.name) }
+            // A project asked for from outside this screen (AppRouter.openProjectPage): pushed here like a
+            // tapped row. onAppear covers a request made before the tab existed, onChange a later one.
+            .onAppear { takeProjectRequest() }
+            .onChange(of: router.projectRequest) { _, _ in takeProjectRequest() }
             .navigationDestination(item: $openFolder) { route in
                 if let f = folders.first(where: { $0.id == route.id }) {
                     FolderAggregateView(folder: f, allFolders: folders, allProjects: projects.filter { $0.folderId != nil })

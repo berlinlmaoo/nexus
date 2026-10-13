@@ -9,3 +9,6 @@ xcuserdata/
 
 # Team ID Apple (per-mesin, jangan di-commit)
 .team
+
+# UI screenshot tour (scripts/ui-tour.sh): results go to ~/nexus-ui-tour, the web part installs its own packages
+scripts/ui-tour-web/node_modules/

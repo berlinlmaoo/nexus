@@ -663,6 +663,10 @@ struct SidebarRoot: View {
                 router.sidebarRequest = nil
                 router.morePush = nil
             }
+            if let requested = router.projectRequest {
+                selection = .project(requested)
+                router.projectRequest = nil
+            }
         }
         // `go` also leaves a push for the phone's More tab, which is not mounted here: cleared with the
         // request, or the tab bar would open on it the next time the window narrows.
@@ -671,6 +675,12 @@ struct SidebarRoot: View {
             selection = .screen(requested)
             router.sidebarRequest = nil
             router.morePush = nil
+        }
+        // A project asked for as a page (AppRouter.openProjectPage): selected like a pinned shortcut.
+        .onChange(of: router.projectRequest) { _, requested in
+            guard let requested else { return }
+            selection = .project(requested)
+            router.projectRequest = nil
         }
         // Publish where the sidebar is standing, so the floating GIDEON launcher — drawn above the
         // whole app, outside this layout — can tell Home from everything else. A project shortcut

@@ -34,6 +34,10 @@ struct ProjectDetailView: View {
     @State private var outletStore: OutletSalesStore?
     /// An outlet opens on Overview once (later reloads leave the tab alone).
     @State private var outletLanded = false
+    /// A link chose the tab (`?view=`), so the template's default tab must not replace it.
+    @State private var tabFromLink = false
+    /// A link asked for this form's builder (`?form=<id>`, the web's open form builder).
+    @State private var linkedFormId: String?
     /// Multi-select for Duplicate on Board and List (always on since 11 Oct 2026, TaskBatchDuplicate.swift).
     @State private var selection = TaskSelection()
     @Environment(\.dismiss) private var dismiss
@@ -238,7 +242,7 @@ struct ProjectDetailView: View {
         extrasLoaded = true
         template = await ProjectTemplateStore.find(d.templateId)
         // A project built from a template opens on the template's tab (web: defaultTab).
-        if let t = template?.defaultProjectTab, visibleTabs.contains(t), AppRouter.shared.projectLink == nil {
+        if let t = template?.defaultProjectTab, visibleTabs.contains(t), AppRouter.shared.projectLink == nil, !tabFromLink {
             tab = t
         }
         savedViews = (try? await APIClient.shared.projectViews(projectId)) ?? []
@@ -510,6 +514,9 @@ struct ProjectDetailView: View {
 
         .navigationDestination(isPresented: $newFormOpen) {
             FormBuilderView(projectId: projectId, projectName: displayName, formId: nil)
+        }
+        .navigationDestination(item: $linkedFormId) { formId in
+            FormBuilderView(projectId: projectId, projectName: displayName, formId: formId)
         }
         .navigationDestination(item: $openProfile) { MemberProfileView(target: $0) }
     }
@@ -940,6 +947,21 @@ struct ProjectDetailView: View {
         }
     }
 
+    /// A link into a task project: `?view=` names a tab by the web's key (board, list, table, calendar,
+    /// timeline, overview, sheet, pages, forms, chat, automations), `?form=` opens that form's builder.
+    /// Claimed once, and only for this project; a tab this project hides is ignored.
+    private func claimLink() {
+        guard let link = AppRouter.shared.projectLink, link.projectId == projectId else { return }
+        AppRouter.shared.projectLink = nil
+        if let key = link.view,
+           let t = ProjectTab.allCases.first(where: { $0.rawValue.lowercased() == key || ($0 == .sheet && key == "sheet") }),
+           visibleTabs.contains(t) {
+            tab = t
+            tabFromLink = true
+        }
+        if let form = link.form { linkedFormId = form }
+    }
+
     /// The first load of an outlet: its store, Overview, and whatever a link asked for — `view`, `event`
     /// (the form on it, or the calendar on its day) and `date` (the calendar's day / a new event's day).
     private func landOutlet() {
@@ -1207,6 +1229,7 @@ struct ProjectDetailView: View {
             lanes = Self.mergeSubtasks(into: d.taskLists ?? [], all: all)
             // If the selected tab just became hidden (e.g. the flag was turned off), fall back.
             if !visibleTabs.contains(tab) { tab = fallbackTab }
+            if d.type != "OUTLET_SALES" { claimLink() }
             cachedFrom = nil
             Task { await loadTemplateExtras(d) }
         }

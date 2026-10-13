@@ -42,7 +42,9 @@ struct RootView: View {
                     _ = await floor
                     withAnimation(.easeOut(duration: 0.3)) { showSplash = false }
                     // The files carry on behind the app, and stop themselves on mobile data.
-                    sync.syncMedia(userId: userId)
+                    // Not for the UI screenshot tour: its QA account sits in ~95 projects, and their
+                    // files have no business filling the disk of the Mac the tour runs on.
+                    if !TourMode.isActive { sync.syncMedia(userId: userId) }
                     // Page / description edits made offline go out now (a conflict waits for its page).
                     await BlockEditOutbox.shared.flush()
                 }
@@ -55,7 +57,8 @@ struct RootView: View {
                 .overlay { VaultUploadOverlay() }
                 // Above the whole app rather than inside a tab: an announcement is not a screen you
                 // navigate to, and it must reach somebody wherever they happen to be standing.
-                .overlay { AnnouncementModal() }
+                // Not during the UI screenshot tour, which photographs the screens underneath.
+                .overlay { if !TourMode.isActive { AnnouncementModal() } }
                 // The splash LAST, because the overlay added last draws on top. It used to sit first,
                 // and the GIDEON button floated over the logo while the warm-up ran — an
                 // announcement would have done the same.
