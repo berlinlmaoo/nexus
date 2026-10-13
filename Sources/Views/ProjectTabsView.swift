@@ -59,15 +59,9 @@ enum ProjDate {
     static func dayLabel(_ d: Date) -> String { fmt("d MMM").string(from: d) }
     static func longLabel(_ d: Date) -> String { fmt("EEEE, d MMM yyyy").string(from: d) }
 
-    private static let fmtLock = NSLock()
-    private static var fmtCache: [String: DateFormatter] = [:]
-    static func fmt(_ p: String) -> DateFormatter {
-        fmtLock.lock(); defer { fmtLock.unlock() }
-        if let f = fmtCache[p] { return f }
-        let f = DateFormatter(); f.dateFormat = p; f.locale = Locale(identifier: "id_ID"); f.timeZone = cal.timeZone
-        fmtCache[p] = f
-        return f
-    }
+    /// In the UI language (AppDateLocale): this was always id_ID, so an English app read "13 Okt" in
+    /// Notifications, Threads and the project screens (UI tour 13 Oct 2026).
+    static func fmt(_ p: String) -> DateFormatter { AppDateLocale.formatter(p, timeZone: cal.timeZone) }
 }
 
 func humanizeEnum(_ raw: String) -> String {

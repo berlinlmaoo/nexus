@@ -391,7 +391,7 @@ struct ConvoRow: View {
     /// used to leave the row with a blank second line. A system line ("Bagas Putro added Mey")
     /// reads the way the thread draws it, in the app's language.
     private var preview: String {
-        guard let last = convo.lastMessage else { return T("No message yet") }
+        guard let last = convo.lastMessage else { return T("No messages yet") }
         if last.isSystem { return last.systemSentence(meId: meId) }
         if last.content.isEmpty, let path = last.attachmentUrl, !path.isEmpty { return T("📷 Photo") }
         return last.content

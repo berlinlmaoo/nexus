@@ -54,11 +54,12 @@ struct RoomBookingView: View {
     }
 
     var body: some View {
-        AgendaScaffold(title: T("Room Booking"), subtitle: T("Room bookings — VIP, Meeting, Studio."),
+        AgendaScaffold(title: T("Room Booking"), subtitle: T("Book a meeting room and see who has it when."),
                        loading: loading, error: error, isEmpty: shown.isEmpty,
                        emptyIcon: "calendar.badge.clock", emptyText: scope.empty,
                        retry: { await load() },
-                       toolbar: pageRoot ? nil : AnyView(scopePicker),
+                       toolbar: pageRoot ? nil : AnyView(newBookingButton),
+                       header: pageRoot ? nil : AnyView(scopeSwitch),
                        pageRoot: pageRoot) {
             ForEach(byDay, id: \.key) { day in
                 AgendaDay(label: AgendaRange.dayLabel(day.key)) {
@@ -115,16 +116,20 @@ struct RoomBookingView: View {
         .accessibilityLabel(T("Room"))
     }
 
-    private var scopePicker: some View {
-        // Not .pickerStyle(.segmented): since iOS 26 the system style renders as Liquid Glass,
-        // which is translucent and reflective over a light background - the control nearly
-        // disappears and reads as foreign next to the solid cards on this screen. Ours is a solid
-        // capsule with one moving pill, painted from the app's own palette.
-        HStack(spacing: 8) {
-            NXSegmented(selection: $scope, options: Scope.allCases, label: { $0.label }).frame(width: 190)
-            Button { composing = ComposerTarget(booking: nil) } label: { Image(systemName: "plus") }
-                .accessibilityLabel(T("New booking"))
-        }
+    /// Upcoming | History under the title, full width. It used to sit in the navigation bar beside "+",
+    /// which squeezed the title to "Room Boo…" on the iPhone (UI tour 13 Oct 2026).
+    /// Not .pickerStyle(.segmented): since iOS 26 the system style renders as Liquid Glass,
+    /// which is translucent and reflective over a light background - the control nearly
+    /// disappears and reads as foreign next to the solid cards on this screen. Ours is a solid
+    /// capsule with one moving pill, painted from the app's own palette.
+    private var scopeSwitch: some View {
+        NXSegmented(selection: $scope, options: Scope.allCases, label: { $0.label })
+            .frame(maxWidth: .infinity)
+    }
+
+    private var newBookingButton: some View {
+        Button { composing = ComposerTarget(booking: nil) } label: { Image(systemName: "plus") }
+            .accessibilityLabel(T("New booking"))
     }
 
     private func load() async {
@@ -150,12 +155,30 @@ struct AgendaScaffold<Content: View>: View {
     let emptyText: String
     let retry: () async -> Void
     var toolbar: AnyView? = nil
+    /// A control row under the navigation bar, above every state (loading, empty, list), so a choice
+    /// like Upcoming | History stays reachable when the list it picks is empty.
+    var header: AnyView? = nil
     /// Under the web's page header (regular width, sidebar root): the header carries the subtitle,
     /// and the page takes the web's 32 pt gutters.
     var pageRoot: Bool = false
     @ViewBuilder let content: () -> Content
 
     var body: some View {
+        VStack(spacing: 0) {
+            if let header {
+                header
+                    .padding(.horizontal, NXSidebarPage.gutter(pageRoot))
+                    .padding(.top, 8)
+            }
+            states
+        }
+        .background(NX.background.ignoresSafeArea())
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { if let toolbar { ToolbarItem(placement: .topBarTrailing) { toolbar } } }
+    }
+
+    private var states: some View {
         ZStack {
             NX.background.ignoresSafeArea()
             if loading {
@@ -179,9 +202,6 @@ struct AgendaScaffold<Content: View>: View {
                 }
             }
         }
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar { if let toolbar { ToolbarItem(placement: .topBarTrailing) { toolbar } } }
     }
 }
 

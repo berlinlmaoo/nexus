@@ -56,7 +56,8 @@ struct Conversation: Decodable, Identifiable, Sendable {
 
     func title(meId: String?) -> String {
         if type == "DM" {
-            return otherMember(meId: meId)?.user?.name ?? name ?? "Direct"
+            // A DM whose other side is unknown reads as the web names it (UI tour 13 Oct 2026: "Direct").
+            return otherMember(meId: meId)?.user?.name ?? name ?? T("Direct message")
         }
         return name ?? (type == "PROJECT" ? "Project chat" : "Group")
     }

@@ -124,14 +124,9 @@ enum MyTaskGrouping {
         guard let d = parse(due) else { return nil }
         return (isDateOnly(d) ? dayFmt : timeFmt).string(from: d)
     }
-    private static let dayFmt: DateFormatter = {
-        let f = DateFormatter(); f.dateFormat = "d MMM"; f.locale = Locale(identifier: "id_ID")
-        f.timeZone = TimeZone(identifier: "Asia/Jakarta"); return f
-    }()
-    private static let timeFmt: DateFormatter = {
-        let f = DateFormatter(); f.dateFormat = "d MMM HH:mm"; f.locale = Locale(identifier: "id_ID")
-        f.timeZone = TimeZone(identifier: "Asia/Jakarta"); return f
-    }()
+    // In the UI language (AppDateLocale), not always Indonesian.
+    private static var dayFmt: DateFormatter { AppDateLocale.formatter("d MMM", timeZone: TimeZone(identifier: "Asia/Jakarta")) }
+    private static var timeFmt: DateFormatter { AppDateLocale.formatter("d MMM HH:mm", timeZone: TimeZone(identifier: "Asia/Jakarta")) }
 }
 
 /// My Tasks → "+": pick the project and the section it goes in; the task is assigned to you (web

@@ -133,7 +133,7 @@ enum AgendaRange {
     static func dayLabel(_ key: String) -> String {
         let inF = DateFormatter(); inF.dateFormat = "yyyy-MM-dd"
         guard let d = inF.date(from: key) else { return key }
-        let out = DateFormatter(); out.dateFormat = "EEEE, d MMM"; out.locale = Locale(identifier: "id_ID"); return out.string(from: d)
+        return AppDateLocale.formatter("EEEE, d MMM").string(from: d)
     }
     /// Called per row by lists that can run to hundreds (Submissions, tickets, agenda), so the
     /// formatters are built once instead of three per call. `ProjDate.parse` is the same

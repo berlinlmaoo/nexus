@@ -82,8 +82,8 @@ struct DashboardView: View {
     private var statData: [StatDatum] {
         [
             .init(value: projectCount, total: nil, label: T("Projects"), icon: "rectangle.stack.fill", from: "#c4b5fd", to: "#7c3aed", glow: "#a78bfa"),
-            .init(value: mission.done, total: mission.total, label: T("Task"), icon: "checklist", from: "#6ee7b7", to: "#059669", glow: "#34d399"),
-            .init(value: game?.questsDone ?? 0, total: game?.questList.count ?? 0, label: T("Quest"), icon: "sparkles", from: "#fcd34d", to: "#ea580c", glow: "#fbbf24"),
+            .init(value: mission.done, total: mission.total, label: T("Tasks"), icon: "checklist", from: "#6ee7b7", to: "#059669", glow: "#34d399"),
+            .init(value: game?.questsDone ?? 0, total: game?.questList.count ?? 0, label: T("Quests"), icon: "sparkles", from: "#fcd34d", to: "#ea580c", glow: "#fbbf24"),
         ]
     }
     // Crisp transform-FLIP morph ported from the web's framer layout-spring — smoothness comes from the
@@ -320,9 +320,10 @@ struct DashboardView: View {
     /// Time-of-day greeting in Asia/Jakarta (this was hard-coded to "Good Morning," at any hour).
     private var greetingText: String {
         switch ProjDate.cal.component(.hour, from: Date()) {
-        case 4..<11:  return T("Good Morning,")
-        case 11..<18: return T("Good Afternoon,")
-        default:      return T("Good Evening,")
+        // Sentence case, as the web dashboard writes it (UI tour 13 Oct 2026).
+        case 4..<11:  return T("Good morning,")
+        case 11..<18: return T("Good afternoon,")
+        default:      return T("Good evening,")
         }
     }
 
@@ -469,7 +470,7 @@ struct DashboardView: View {
             NavigationLink { SearchView() } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
-                    Text(T("Search..")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                    Text(T("Search…")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
                     Spacer()
                 }
                 .padding(.horizontal, 18).frame(height: 48)
@@ -893,8 +894,9 @@ struct DashboardView: View {
                     Image(systemName: "gift.fill").font(.system(size: 16)).foregroundStyle(NX.foreground)
                         .frame(width: 40, height: 40).background(NX.muted, in: Circle())
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(T("XP / Points Rules")).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground)
-                        Text(T("Deductions, bonuses & monthly reward tiers")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        // The web card's title and line (UI tour 13 Oct 2026).
+                        Text(T("XP rules")).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground)
+                        Text(T("What takes XP away and what adds it")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                     }
                     Spacer()
                     Image(systemName: "chevron.down").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.mutedFg)
@@ -903,7 +905,7 @@ struct DashboardView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(T("XP / Points Rules"))
+            .accessibilityLabel(T("XP rules"))
             .accessibilityValue(xpRulesOpen ? T("Expanded") : T("Collapsed"))
 
             if xpRulesOpen {

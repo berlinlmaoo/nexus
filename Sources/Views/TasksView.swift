@@ -91,25 +91,20 @@ struct TasksView: View {
         } else if let error {
             errorState(error)
         } else if groups.isEmpty {
-            if wide {
-                // Upper middle, as on the web (py-16 under the header), with the dark primary button.
-                ScrollView {
-                    VStack(spacing: 4) {
-                        EmptyState(icon: "checklist", title: T("No tasks yet"),
-                                   subtitle: T("Tasks assigned to you show up here, from a project or a form. Nothing is waiting on you right now — pick something up from a project."), compact: true)
-                        Button { router.go(.projects) } label: { Text(T("Browse projects")) }
-                            .buttonStyle(.nxPrimary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 56)
-                    .padding(.horizontal, 32)
+            // Upper middle, as on the web (py-16 under the header), with the dark primary button — on the
+            // iPhone too (UI tour 13 Oct 2026: there it sat mid-screen with an outlined button).
+            ScrollView {
+                VStack(spacing: 4) {
+                    EmptyState(icon: "checklist", title: T("No tasks yet"),
+                               subtitle: T("Tasks assigned to you show up here, from a project or a form. Nothing is waiting on you right now — pick something up from a project."), compact: true)
+                    Button { router.go(.projects) } label: { Text(T("Browse projects")) }
+                        .buttonStyle(.nxPrimary)
                 }
-                .refreshable { await load() }
-            } else {
-                EmptyState(icon: "checklist", title: T("No tasks yet"),
-                           subtitle: T("Tasks assigned to you show up here, from a project or a form. Nothing is waiting on you right now — pick something up from a project."),
-                           actionTitle: T("Browse projects"), actionIcon: nil) { router.go(.projects) }
+                .frame(maxWidth: .infinity)
+                .padding(.top, wide ? 56 : 40)
+                .padding(.horizontal, wide ? 32 : 16)
             }
+            .refreshable { await load() }
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: wide ? 24 : 18) {

@@ -186,18 +186,36 @@ struct ThreadsView: View {
     /// thing to do on one accidental tap.
     @State private var confirmingDelete: FeedPost?
     @State private var viewingPhoto: PhotoRef?
+    /// All | Mentions, as on the web (UI tour 13 Oct 2026: the app had no way to see only the posts
+    /// that tag you). Mentions asks the server for `&mentions=me`.
+    @State private var tab: FeedTab = .all
+    enum FeedTab: Hashable { case all, mentions }
+    private var tabItems: [NXTabItem<FeedTab>] {
+        [NXTabItem(id: .all, label: T("All")), NXTabItem(id: .mentions, label: T("Mentions"))]
+    }
 
     /// The sidebar's Threads page on an iPad or Mac: the web's page header instead of the nav bar.
     private var isRoot: Bool { NXSidebarPage.isRoot(.threads, hSize: hSize, router: router) }
 
     var body: some View {
-        ZStack {
-            NX.background.ignoresSafeArea()
-            content
+        VStack(spacing: 0) {
+            // On the iPad / Mac page the tabs sit in the header.
+            if !isRoot {
+                NXUnderlineTabs(items: tabItems, selection: $tab, accessibilityName: T("Threads"))
+            }
+            ZStack {
+                NX.background.ignoresSafeArea()
+                content
+            }
         }
+        .background(NX.background.ignoresSafeArea())
         .nxSidebarPageChrome(isRoot) {
-            NXPageHeader(title: T("Threads"), subtitle: T("Short updates from the team. Tag someone with @ and they get notified."))
+            VStack(spacing: 0) {
+                NXPageHeader(title: T("Threads"), subtitle: T("Short updates from the team. Tag someone with @ and they get notified."))
+                NXPageTabsRow(items: tabItems, selection: $tab, accessibilityName: T("Threads"))
+            }
         }
+        .onChange(of: tab) { _, _ in Task { await load() } }
         .navigationTitle(T("Threads"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load(); claimFocus(); await loadRoster() }
@@ -225,8 +243,11 @@ struct ThreadsView: View {
         } else {
             ScrollView {
                 LazyVStack(spacing: 12) {
-                    composer
-                    if posts.isEmpty {
+                    if tab == .all { composer }
+                    if posts.isEmpty, tab == .mentions {
+                        EmptyState(icon: "at", title: T("No mentions yet"),
+                                   subtitle: T("When someone tags you, it shows up here."), compact: true)
+                    } else if posts.isEmpty {
                         EmptyState(icon: "bubble.left.and.text.bubble.right", title: T("Nothing on the feed yet"),
                                    subtitle: T("Threads is the company feed: wins, photos, questions for everyone. Write the first post in the box above and it appears here for the whole office."),
                                    compact: true)
@@ -421,7 +442,13 @@ struct ThreadsView: View {
 
     private func load() async {
         error = nil
-        do { posts = try await APIClient.shared.feedPosts() }
+        let asked = tab
+        do {
+            let fresh = try await APIClient.shared.feedPosts(mentionsMe: asked == .mentions)
+            // A tab switched while this was loading: the newer load owns the list.
+            guard asked == tab else { return }
+            posts = fresh
+        }
         catch APIError.unauthorized { auth.logout() }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load the feed.") }
         loading = false

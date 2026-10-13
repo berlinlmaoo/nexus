@@ -1284,8 +1284,10 @@ struct APIClient {
 
     // MARK: - Threads (the web's company feed — /api/feed/posts)
 
-    func feedPosts(limit: Int = 30) async throws -> [FeedPost] {
-        (try await run(makeRequest("/api/feed/posts?limit=\(limit)"), decode: FeedPostsResponse.self)).all
+    /// `mentionsMe`: only posts that tag the signed-in person (web Threads → Mentions, `&mentions=me`).
+    func feedPosts(limit: Int = 30, mentionsMe: Bool = false) async throws -> [FeedPost] {
+        let path = "/api/feed/posts?limit=\(limit)" + (mentionsMe ? "&mentions=me" : "")
+        return (try await run(makeRequest(path), decode: FeedPostsResponse.self)).all
     }
     func postComments(_ postId: String) async throws -> [FeedComment] {
         (try await run(makeRequest("/api/feed/posts/\(postId)/comments"), decode: FeedCommentsResponse.self)).all

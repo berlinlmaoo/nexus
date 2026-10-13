@@ -291,7 +291,12 @@ struct AttendanceView: View {
             // Framed on the person's own GPS fix, close enough to read the streets.
             #if !targetEnvironment(macCatalyst)
             Task {
-                guard let fix = try? await loc.currentFix() else { return }
+                guard let fix = try? await loc.currentFix() else {
+                    // No fix (location off, indoors, the simulator): the offices, as the web frames them,
+                    // instead of the system's fallback that showed half of Southeast Asia (UI tour 13 Oct 2026).
+                    if let region = Self.officesRegion(offices) { camera = .region(region) }
+                    return
+                }
                 camera = .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: fix.latitude, longitude: fix.longitude),
                                                     latitudinalMeters: 400, longitudinalMeters: 400))
             }
@@ -302,6 +307,24 @@ struct AttendanceView: View {
         let span = max(o.radius * 7, 300)
         camera = .region(MKCoordinateRegion(center: o.center, latitudinalMeters: span, longitudinalMeters: span))
     }
+    /// Every active office with coordinates in one frame, with a margin; nil when none has any.
+    private static func officesRegion(_ offices: [Office]) -> MKCoordinateRegion? {
+        let points: [CLLocationCoordinate2D] = offices.compactMap { o in
+            guard o.isActive != false, let la = o.latitude, let lo = o.longitude else { return nil }
+            return CLLocationCoordinate2D(latitude: la, longitude: lo)
+        }
+        guard let first = points.first else { return nil }
+        var minLat = first.latitude, maxLat = first.latitude, minLon = first.longitude, maxLon = first.longitude
+        for p in points {
+            minLat = min(minLat, p.latitude); maxLat = max(maxLat, p.latitude)
+            minLon = min(minLon, p.longitude); maxLon = max(maxLon, p.longitude)
+        }
+        let center = CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2)
+        let span = MKCoordinateSpan(latitudeDelta: max((maxLat - minLat) * 1.6, 0.02),
+                                    longitudeDelta: max((maxLon - minLon) * 1.6, 0.02))
+        return MKCoordinateRegion(center: center, span: span)
+    }
+
     private var mapOfficeKey: String {
         if locationFree { return "free" }
         guard let o = mapOffice else { return "" }
@@ -1304,7 +1327,7 @@ struct AttendanceView: View {
         let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; f.timeZone = TimeZone(identifier: "Asia/Jakarta"); return f
     }()
     static func dateLabel(_ d: Date) -> String {
-        let f = DateFormatter(); f.dateFormat = "EEE, d MMM"; f.timeZone = TimeZone(identifier: "Asia/Jakarta"); f.locale = Locale(identifier: "id_ID"); return f.string(from: d)
+        AppDateLocale.formatter("EEE, d MMM", timeZone: TimeZone(identifier: "Asia/Jakarta")).string(from: d)
     }
     static func parseISO(_ iso: String) -> Date? {
         let p = ISO8601DateFormatter(); p.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
