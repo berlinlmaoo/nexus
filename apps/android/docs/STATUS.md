@@ -3,10 +3,10 @@
 **Active again since 28 Sep 2026** (hold lifted by Berlin). Parity with iOS per
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
-Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
+Repo: monorepo `github.com/berlinlmaoo/nexus` branch `dev`, folder `apps/android` (since 14 Oct; `~/nexus-android` is frozen). Every change is committed.
 **Branch `dev` (12 Oct, DEV-REDESIGN.md):** the Notion-like redesign is built on branch `dev` against the
 DEV server, never on `master`. Settings › Server switches Production / Dev (Tailscale); see "12 Oct, DEV".
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (632 JVM tests, all green, 13 Oct).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (686 JVM tests, all green, 14 Oct).
 Version 0.1.6 (versionCode 13 in the tree), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 **Build 13 PUBLISHED** (5 Oct: `nexus-prod:~/nexus-data/android/nexus-0.1.6-13.apk` + `current.json` (previous kept as `current.json.prev-12`), sha256 `a6e09f68cae704162865a633dff4293b4fcdcb0dea865f113f315c959ceea98a`, from 0885fa0, 342 tests; versionCode 13, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 13): build 12 + the org chart in English and Indonesian. Emulator smoke: 3 cold launches drawn, no crash from this install.
 **Build 12 PUBLISHED** (5 Oct 07:44 UTC: `nexus-prod:~/nexus-data/android/nexus-0.1.6-12.apk` + `current.json` (previous kept as `current.json.prev-11`), sha256 `6c660b44318a0872b44a2ba56bc9410373b5fd4da2b5f357e34e4a7957164a1b`, from e7924c4, 341 tests; versionCode 12, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 12): build 11 + Bagan IP & Divisi. Emulator smoke: 3 cold launches drawn, no crash from this install; the fixture and the debug preview are not in the release APK.
@@ -21,6 +21,34 @@ from b122e0f, 300 JVM tests at that commit): security + parity audit 266af90 = *
 out for Berlin to test. The fixes for that audit's RENDAH findings (R1, R3, R4, R6, R7) are in the code
 after it and ride in the next build, which is made only when the main session says so.
 Phases 1–5 done; Wear OS not built (Berlin: not a Play Store priority).
+
+## 14 Oct, UI tour rounds 1–3 (Android vs iPhone first, then web; monorepo `dev`)
+
+Done (each pushed to `dev`, author Berlin):
+- Board cards / Table columns / List rows draw the view's properties like the web PropLine and iOS ListPropLine
+  (`CardProps.kt`); Linked lanes (taskProjects); phone header + Add task in the tab row; floating tab bar; tab
+  scrolled into view; compact search; project Calendar Today + "No date"; Timeline groups collapsible.
+- Data like the web: dates with a time read in WIB (`dueDate`), My Tasks grouping (lib/my-tasks.ts), Notifications
+  hide read ones older than 7 days, calendar counts tasks with no Bagan placement at the top, Tickets "In review"
+  from the server's counts (incl. closed tickets with a fix waiting).
+- Screens: Projects page (summary card, filters, sort, folders as rows, no game copy), Room Booking (month view,
+  new / edit / delete — tested for real on DEV: create, 409 conflict message, delete, server clean),
+  Submissions (status-option columns, filters), Leaderboard podium, Settings tabs (Notifications, Claude (MCP)),
+  Attendance (offices card, copy, subtitle), Home attendance card + XP bar, GIDEON mark everywhere + empty chat,
+  Messages (initials, "Direct message", project marks), Z Vault header, Tickets colours / categories.
+- Form builder = the iOS/web studio (`FormStudio*.kt`, `FormQuestionSettings.kt`): Questions | Settings | Share |
+  Responses, canvas, question cards, autosave.
+- Pipeline real cost & margin + Real profit KPI (`PipelineCosts.kt`, `PipelineRealCost.kt`).
+- Project mark = option A page icon; one icon store (`ProjectIcons`) fed by reads and the realtime ping (live).
+- Dates and numbers follow the app's language (`AppLanguage.locale()`, Locale.setDefault); Rupiah stays id-ID.
+
+Not done / not verified yet:
+- Not seen on the emulator yet (the Mac was overloaded): form builder studio, pipeline cost section, the new
+  Room Booking month view, List rows, Z Vault header. The next full tour covers them.
+- GIDEON: @ page mentions in the composer and "Review before writing" are not built (the placeholder says
+  "Ask anything" so it promises nothing). Form share QR code (no QR library). Form preview opens the real form.
+- Login passkey is hidden on DEV on purpose (RP id is production).
+- The QA matrix (Staff / Manager / BoD × access levels, flows, realtime, old APK) is still to run.
 
 ## 13 Oct, redesign port for the big release (docs/HANDOFF-ANDROID.md; branch `dev`)
 
