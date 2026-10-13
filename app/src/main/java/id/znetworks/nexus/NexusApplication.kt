@@ -18,13 +18,16 @@ class NexusApplication : Application() {
         super.onCreate()
         // Production or the DEV server (DEV-REDESIGN.md): before anything builds a client.
         id.znetworks.nexus.core.net.ServerEnvStore.load(this)
+        // The stored language before any request is built (X-Nexus-Lang).
+        id.znetworks.nexus.core.i18n.AppLanguage.load(this)
         container = AppContainer(this)
+        id.znetworks.nexus.core.i18n.AppLanguage.onChosen = { container.sendUiLanguage() }
         id.znetworks.nexus.core.offline.DiskFiles.init(cacheDir)
         LocalNotifier.ensureChannels(this)
         WorkTrailService.ensureChannel(this)
         PushManager.ensureChannels(this)
         // Every launch re-registers, as iOS does on every activation: tokens rotate.
-        if (container.sessionStore.current != null) { container.push.register(); container.offline.schedule(); id.znetworks.nexus.feature.calendar.widget.CalendarWidgetWork.schedulePeriodic(this) }
+        if (container.sessionStore.current != null) { container.sendUiLanguage(); container.push.register(); container.offline.schedule(); id.znetworks.nexus.feature.calendar.widget.CalendarWidgetWork.schedulePeriodic(this) }
         // Queued taps go out on app start after sign-in, and on every foreground (REQ-ATT-13).
         container.flushQueueSoon()
         // Version policy: forced at launch, then at most every 30 min on foreground (REQ-ATT-41).

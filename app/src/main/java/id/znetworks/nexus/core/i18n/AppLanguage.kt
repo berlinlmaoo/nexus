@@ -20,17 +20,39 @@ object AppLanguage {
             ?: current?.substringBefore('-')?.let { if (it == "in" || it == "id") INDONESIAN else if (it == "en") ENGLISH else null }
             ?: ENGLISH
 
+    /**
+     * The chosen tag, readable from any thread (request headers): notifications and pushes follow the in-app
+     * language, never the phone's (13 Oct 2026). English until [apply] / [load] ran.
+     */
+    @Volatile var current: String = ENGLISH
+        internal set
+
+    /** Told when the person picks another language (the container sends it to the server). */
+    @Volatile var onChosen: ((String) -> Unit)? = null
+
+    /** The server's code for a tag: `id` for Indonesian, `en` otherwise (X-Nexus-Lang, User.uiLanguage). */
+    fun serverCode(tag: String): String = if (tag == INDONESIAN) "id" else "en"
+
+    /** Reads the stored choice without touching the UI locale (process start, before any request). */
+    fun load(context: Context) {
+        current = resolve(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null), null)
+    }
+
     /** Called before the activity draws: makes the app follow [resolve], never the system language. */
     fun apply(context: Context) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val current = AppCompatDelegate.getApplicationLocales().toLanguageTags().takeIf { it.isNotEmpty() }
         val tag = resolve(prefs.getString(KEY, null), current)
+        this.current = tag
         prefs.edit().putString(KEY, tag).apply()
         if (current == null || current.substringBefore('-') != tag) AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tag))
     }
 
     fun choose(context: Context, tag: String) {
+        val changed = tag != current
+        current = tag
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, tag).apply()
+        if (changed) onChosen?.invoke(tag)
         AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tag))
         // The calendar widgets speak the app's language, not the phone's.
         id.znetworks.nexus.feature.calendar.widget.CalendarWidgetWork.redrawNow(context)

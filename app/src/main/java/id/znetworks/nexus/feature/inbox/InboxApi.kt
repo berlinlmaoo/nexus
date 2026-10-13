@@ -1,23 +1,39 @@
 package id.znetworks.nexus.feature.inbox
 
+import id.znetworks.nexus.core.i18n.AppLanguage
 import id.znetworks.nexus.core.net.ApiClient
 import id.znetworks.nexus.core.net.ApiClient.Companion.toJsonBody
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import okhttp3.Request
 
+/** One language's wording of a notification (`Notification.texts`, 13 Oct 2026). */
+@Serializable
+data class InboxText(val title: String? = null, val message: String? = null)
+
 @Serializable
 data class InboxItem(
     val id: String,
     val type: String? = null,
-    val title: String? = null,
-    val message: String? = null,
+    /** The server's single pair: the recipient's chosen language, else English. */
+    @kotlinx.serialization.SerialName("title") val rawTitle: String? = null,
+    @kotlinx.serialization.SerialName("message") val rawMessage: String? = null,
+    /** Both languages when the notifier wrote both (keyed `en` / `id`); older rows have none. */
+    val texts: Map<String, InboxText>? = null,
     val read: Boolean = false,
     val link: String? = null,
     val createdAt: String? = null,
     val taskId: String? = null,
     val projectId: String? = null,
-)
+) {
+    /** Shown in the app's language when the server sent both, else as stored. */
+    fun title(lang: String = AppLanguage.serverCode(AppLanguage.current)): String? =
+        texts?.get(lang)?.title?.takeIf { it.isNotBlank() } ?: rawTitle
+    fun message(lang: String = AppLanguage.serverCode(AppLanguage.current)): String? =
+        texts?.get(lang)?.message?.takeIf { it.isNotBlank() } ?: rawMessage
+    val title: String? get() = title()
+    val message: String? get() = message()
+}
 
 @Serializable
 data class InboxResponse(val notifications: List<InboxItem> = emptyList(), val unreadCount: Int = 0)

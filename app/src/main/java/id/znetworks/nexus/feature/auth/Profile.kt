@@ -67,6 +67,8 @@ object AvatarUpload {
 
 class ProfileApi(private val api: ApiClient) {
     suspend fun profile() = api.get("/api/user/profile", ProfileResponse.serializer()).user
+    /** The in-app language for notifications and pushes (server User.uiLanguage, 13 Oct 2026). */
+    suspend fun sendUiLanguage(code: String) = api.send(Request.Builder().url(api.url("/api/user/profile")).patch(buildJsonObject { put("uiLanguage", code) }.toString().toJsonBody()).build(), JsonObject.serializer())
     suspend fun rename(name: String) = api.send(Request.Builder().url(api.url("/api/user/profile")).patch(buildJsonObject { put("name", name.trim()) }.toString().toJsonBody()).build(), JsonObject.serializer())
     /** `user.avatar` comes back with a `?t=` cache-buster, so the new picture shows at once. */
     suspend fun uploadAvatar(jpeg: ByteArray) = api.send(Request.Builder().url(api.url("/api/upload/avatar")).post(AvatarUpload.part(jpeg)).build(), ProfileResponse.serializer()).user.avatar

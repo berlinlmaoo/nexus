@@ -189,6 +189,16 @@ class AppContainer(private val context: Context) {
         onCheckInLanded = { reconcileTrail() },
     )
 
+    /**
+     * Notifications and pushes in the app's language (13 Oct 2026, iOS 5aaa3fb): sent on launch, on sign-in and
+     * whenever the picker changes. Best effort: every request carries X-Nexus-Lang as well.
+     */
+    fun sendUiLanguage() {
+        if (sessionStore.current == null) return
+        val code = id.znetworks.nexus.core.i18n.AppLanguage.serverCode(id.znetworks.nexus.core.i18n.AppLanguage.current)
+        appScope.launch { runCatching { id.znetworks.nexus.feature.auth.ProfileApi(api).sendUiLanguage(code) } }
+    }
+
     init {
         // Everything the widget shows moves with today, the queue, or the office the person is in.
         workTrail.onToday = { presence.refresh(it) }
@@ -207,6 +217,7 @@ class AppContainer(private val context: Context) {
                 offline.syncAll()
                 // Pins made on the web or another device, and this phone's old local ones sent up once.
                 appScope.launch { shortcuts.syncPins() }
+                sendUiLanguage()
                 badges.refresh()
                 // A new session may connect (a refused one is forgotten); only while the app is in front.
                 realtime.reset()

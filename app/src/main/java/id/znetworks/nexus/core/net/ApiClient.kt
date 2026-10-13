@@ -306,6 +306,9 @@ class ApiClient(
         override fun intercept(chain: Interceptor.Chain): Response {
             val req = chain.request().newBuilder()
                 .header("X-Nexus-Client", identity.clientTag)
+                // The in-app language (never the phone's): the server stores and pushes notifications in it
+                // (13 Oct 2026: English unless the person chose Indonesian; iOS 5aaa3fb).
+                .header("X-Nexus-Lang", id.znetworks.nexus.core.i18n.AppLanguage.serverCode(id.znetworks.nexus.core.i18n.AppLanguage.current))
                 .header("User-Agent", identity.userAgent)
                 .apply { if (chain.request().header("Accept") == null) header("Accept", "application/json") }
                 .build()
