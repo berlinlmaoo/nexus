@@ -39,6 +39,7 @@ vi.mock('@/lib/prisma', () => {
     },
     pipelineDealChange: { createMany: vi.fn(async () => ({ count: 0 })), findMany: vi.fn(async () => []) },
     workspaceMember: { findFirst: vi.fn(async () => ({ id: 'm' })) },
+    user: { findUnique: vi.fn(async () => ({ name: 'Rina Finance', email: 'rina@x' })) },
     $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
   }
   return { default: prisma }
@@ -46,7 +47,8 @@ vi.mock('@/lib/prisma', () => {
 
 import prisma from '@/lib/prisma'
 import { costTotalOf, marginOf, summarize, type PipelineDealFacts } from '@/lib/pipeline'
-import { costLines, costsOf, normalizeCosts, parseDealFields, serializeDeal } from '@/lib/pipeline-server'
+import { costsOf, normalizeCosts, parseDealFields, serializeDeal } from '@/lib/pipeline-server'
+import { MASTER_COLUMNS, contentDisposition, costLines, exportFileName } from '@/lib/pipeline-export'
 import { GET as listGET } from '@/app/api/projects/[projectId]/pipeline/route'
 import { GET as dealGET, PATCH as dealPATCH } from '@/app/api/projects/[projectId]/pipeline/[dealId]/route'
 import { GET as exportGET } from '@/app/api/projects/[projectId]/pipeline/export/route'
@@ -101,16 +103,19 @@ describe('margin rules', () => {
   it('a deal from before the column (no costs) is 100% margin on its net value', () => {
     expect(marginOf({ netValue: 50 })).toEqual({ totalCost: 0, costCount: 0, margin: 50, marginPct: 1 })
   })
-  it('Real Profit = Σ margins of deals with a net value; real cost and cost-deal count over all deals', () => {
+  it('Real Profit counts only deals not Lost that have cost lines (Control Tower v6)', () => {
     const s = summarize([
       facts({ netValue: 100, costs: [{ id: 'a', label: '', amount: 30 }] }),
       facts({ netValue: 200, costs: [{ id: 'b', label: '', amount: 250 }] }),
       facts({ netValue: 0, costs: [{ id: 'c', label: '', amount: 5 }] }),
       facts({ netValue: 40 }),
+      facts({ stage: 'Incoming', netValue: 500 }),
+      facts({ stage: 'Lost / Cancelled', netValue: 900, costs: [{ id: 'd', label: '', amount: 10 }] }),
     ], TODAY)
     expect(s.realCost).toBe(285)
-    expect(s.realProfit).toBe(70 + -50 + 40)
+    expect(s.realProfit).toBe(70 + -50 + -5)
     expect(s.costDealCount).toBe(3)
+    expect(s.costEligibleCount).toBe(5)
   })
 })
 
@@ -192,6 +197,7 @@ describe('who receives the numbers (project access, server side)', () => {
     expect(body.deals[0].margin).toBe(60_000_000)
     expect(body.summary.realProfit).toBe(60_000_000)
     expect(body.summary.costDealCount).toBe(1)
+    expect(body.summary.costEligibleCount).toBe(1)
 
     const patch = await dealPATCH(req('/api/projects/p1/pipeline/d1', { method: 'PATCH', body: JSON.stringify({ costs: [] }) }), dealCtx)
     expect(patch.status).toBe(403)
@@ -215,25 +221,74 @@ describe('who receives the numbers (project access, server side)', () => {
     expect(call.data.costs).toEqual([{ id: 'c1', label: 'Vendor sound', amount: 35_000_000 }])
   })
 
-  it('the export carries the four cost columns for a reader', async () => {
+  it("the export is Gerro's 33 columns in his order, with real numbers, dates and formats", async () => {
     h.level = 'VIEW'
-    h.deals = [row(), row({ id: 'd2', code: 'TZN-26002', netValue: 0, costs: [] })]
-    const res = await exportGET(req('/api/projects/p1/pipeline/export?lang=en'), ctx)
+    h.deals = [
+      row({ mainDate: new Date('2026-11-02T00:00:00Z'), nextAction: 'Kirim invoice', terms: [] }),
+      row({ id: 'd2', code: 'TZN-26002', netValue: 0, costs: [] }),
+      row({ id: 'd3', code: 'TZN-26003', netValue: 10_000_000, costs: [{ id: 'x', label: 'Over', amount: 15_000_000 }] }),
+    ]
+    const res = await exportGET(req('/api/projects/p1/pipeline/export'), ctx)
     expect(res.status).toBe(200)
+    const cd = res.headers.get('content-disposition')!
+    expect(cd).toContain("filename*=UTF-8''Board%20%E2%80%94%20Pipeline%20")
     const wb = new ExcelJS.Workbook()
     await wb.xlsx.load(await res.arrayBuffer())
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['Master Project', 'Termin Pembayaran', 'Info'])
     const ws = wb.getWorksheet('Master Project')!
     const header = (ws.getRow(1).values as unknown[]).slice(1)
+    expect(header).toEqual([
+      'Project ID', 'Nama Project', 'Brand/Client', 'Service', 'BD', 'PM', 'Fase Pipeline', 'Probabilitas', 'Nilai Kontrak',
+      'Nilai Bersih Project', 'Nilai Invoice', 'Status Kontrak', 'Status Vendor Registration', 'Execution Readiness',
+      'Status Deliverable', 'Risiko Deliverable', 'Status Pembayaran', 'Piutang Outstanding', 'Hari Overdue Maks',
+      'Posisi Kas Bersih', 'Status Closing', 'Total Real Cost', 'Margin (Rp)', 'Margin (%)', 'Project Health', 'Tanggal Event',
+      'Next Action', 'Tanggal Next Action', 'Blocker / Issue', 'Catatan', 'Dokumen & Link', 'Rincian Real Cost', 'Terakhir Diperbarui',
+    ])
     const at = (name: string) => header.indexOf(name) + 1
-    for (const name of ['Total Real Cost', 'Margin (Rp)', 'Margin (%)', 'Rincian Real Cost']) expect(at(name)).toBeGreaterThan(0)
     const r2 = ws.getRow(2)
+    expect(r2.getCell(at('Nilai Kontrak')).value).toBe(120_000_000)
+    expect(r2.getCell(at('Nilai Kontrak')).numFmt).toBe('"Rp"#,##0;-"Rp"#,##0')
+    expect(r2.getCell(at('Probabilitas')).value).toBe(1)
     expect(r2.getCell(at('Total Real Cost')).value).toBe(40_000_000)
     expect(r2.getCell(at('Margin (Rp)')).value).toBe(60_000_000)
+    expect(r2.getCell(at('Margin (Rp)')).numFmt).toContain('[Red]')
     expect(r2.getCell(at('Margin (%)')).value).toBeCloseTo(0.6)
+    expect(r2.getCell(at('Margin (%)')).numFmt).toBe('0.0%;[Red]-0.0%')
+    expect(r2.getCell(at('Tanggal Event')).value).toBeInstanceOf(Date)
+    expect(r2.getCell(at('Tanggal Event')).numFmt).toBe('dd mmm yyyy')
+    expect(r2.getCell(at('Next Action')).alignment?.wrapText).toBe(true)
+    expect(r2.getCell(at('Project Health')).value).toBe('Sehat')
     expect(r2.getCell(at('Rincian Real Cost')).value).toBe('Vendor sound: 30.000.000\nTalent: 10.000.000')
-    // No net value → margin cells blank, not 0 or 100%.
-    const r3 = ws.getRow(3)
-    expect(r3.getCell(at('Margin (Rp)')).value ?? '').toBe('')
-    expect(r3.getCell(at('Margin (%)')).value ?? '').toBe('')
+    expect(r2.getCell(at('Terakhir Diperbarui')).value).toBeInstanceOf(Date)
+    // No net value → margin cells empty, not 0 or 100%.
+    expect(ws.getRow(3).getCell(at('Margin (Rp)')).value).toBeNull()
+    expect(ws.getRow(3).getCell(at('Margin (%)')).value).toBeNull()
+    expect(ws.getRow(4).getCell(at('Margin (Rp)')).value).toBe(-5_000_000)
+    expect(ws.getRow(1).getCell(1).font?.bold).toBe(true)
+    expect(ws.views[0]).toMatchObject({ state: 'frozen', xSplit: 2, ySplit: 1 })
+    expect(ws.autoFilter).toBeTruthy()
+    const info = wb.getWorksheet('Info')!
+    const infoText = JSON.stringify(info.getSheetValues())
+    expect(infoText).toContain('Rina Finance')
+    expect(infoText).toContain('Board')
   })
+
+  it('English headers keep the order', async () => {
+    h.level = 'VIEW'
+    const res = await exportGET(req('/api/projects/p1/pipeline/export?lang=en'), ctx)
+    const wb = new ExcelJS.Workbook()
+    await wb.xlsx.load(await res.arrayBuffer())
+    const header = (wb.getWorksheet('Master Project')!.getRow(1).values as unknown[]).slice(1)
+    expect(header).toEqual(MASTER_COLUMNS.map((c) => c.en))
+    expect(header).toHaveLength(33)
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['Master Project', 'Payment Terms', 'Info'])
+  })
+
+  it('file name: "<Board> — Pipeline <date>.xlsx", unsafe characters out, ASCII fallback', () => {
+    expect(exportFileName('Pipeline Z/Networks', '2026-10-14')).toBe('Pipeline Z-Networks — Pipeline 2026-10-14.xlsx')
+    expect(contentDisposition('A — Pipeline 2026-10-14.xlsx')).toBe(
+      "attachment; filename*=UTF-8''A%20%E2%80%94%20Pipeline%202026-10-14.xlsx; filename=\"A - Pipeline 2026-10-14.xlsx\"",
+    )
+  })
+
 })

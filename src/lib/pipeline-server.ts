@@ -255,11 +255,6 @@ export function normalizeCosts(v: unknown): PipelineCostItem[] | undefined {
 
 export type SerializedDeal = ReturnType<typeof serializeDeal>
 
-/** The cost lines of a deal for the "Rincian Real Cost" cell: "label: amount", one per line. */
-export function costLines(costs: readonly { label: string; amount: number }[]): string {
-  return costs.map((c) => `${c.label || "-"}: ${Math.round(c.amount).toLocaleString("id-ID")}`).join("\n")
-}
-
 // ── Validation ────────────────────────────────────────────────────────────────────────────────────────
 
 type FieldKind =
