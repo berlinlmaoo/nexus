@@ -2675,13 +2675,6 @@ export const nexusApi = {
   postComments: (id: string) => apiFetch<{ comments: FeedComment[] }>(`/api/feed/posts/${id}/comments`),
   addPostComment: (id: string, payload: { text: string; mentions: string[] }) => apiFetch<FeedComment>(`/api/feed/posts/${id}/comments`, { method: "POST", body: JSON.stringify(payload) }),
 
-  // --- Legal document generation (invoice / PKS) ---
-  generateLegalDocument: (taskId: string) =>
-    apiFetch<{
-      number: string; series: string; seriesLabel: string; documentId: string; webViewLink: string;
-      attachments: { id: string; filename: string; url: string }[];
-    }>("/api/legal/documents/generate", { method: "POST", body: JSON.stringify({ taskId }) }),
-
   // --- Complaint & Escalation channel ---
   complaints: (status?: string) => apiFetch<ComplaintList>(`/api/complaints${status && status !== "ALL" ? `?status=${status}` : ""}`),
   complaint: (id: string) => apiFetch<ComplaintDetail>(`/api/complaints/${id}`),

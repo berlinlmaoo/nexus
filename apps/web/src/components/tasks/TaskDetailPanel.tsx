@@ -14,7 +14,6 @@ import {
   Circle,
   Download,
   Eye,
-  FileSignature,
   FolderPlus,
   Heart,
   Link2,
@@ -434,19 +433,6 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
     onSettled: () => setUploadPct(null),
     onError: (e: unknown) => toast.error(tr("Couldn't upload the file."), { description: friendlyError(e) }),
   });
-  // "Generate dokumen" only shows on a document-request task — detected by the presence of the
-  // "Jenis Dokumen" field rather than a hardcoded project id, so it also works if the Legal field set
-  // is copied to another project later.
-  const docTypeField = customFields.data?.fields?.find((f) => f.name?.trim().toLowerCase() === "jenis dokumen");
-  const docNumberField = customFields.data?.fields?.find((f) => f.name?.trim().toLowerCase() === "nomor dokumen");
-  const issuedNumber = typeof docNumberField?.value === "string" ? docNumberField.value.trim() : "";
-  const genDoc = useMutation({
-    mutationFn: () => nexusApi.generateLegalDocument(taskId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["task-attachments", taskId] });
-      qc.invalidateQueries({ queryKey: ["task-cf", taskId] });
-    },
-  });
 
   const delAttachment = useMutation({
     mutationFn: (id: string) => nexusApi.deleteAttachment(id),
@@ -838,39 +824,6 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 ) : !cfAdding ? (
                   <p className="text-xs text-muted-foreground">{tr("No fields yet. Add one with New field.")}</p>
                 ) : null}
-              </SecCard>
-            )}
-
-            {/* Legal: issue the number + generate the invoice/PKS from the Google Docs master. */}
-            {docTypeField && (
-              <SecCard icon={FileSignature} label={tr("Official document")}>
-                {issuedNumber ? (
-                  <p className="text-xs">
-                    {tr("Issued number:")} <span className="font-mono font-bold">{issuedNumber}</span>
-                    <span className="text-muted-foreground"> — {tr("the PDF and DOCX files are in Attachments.")}</span>
-                  </p>
-                ) : (
-                  <p className="mb-2 text-xs text-muted-foreground">
-                    {tr("The document number and content are generated from the fields above. Check the data first: an issued number can't be reused.")}
-                  </p>
-                )}
-                <button
-                  onClick={() => genDoc.mutate()}
-                  disabled={genDoc.isPending}
-                  className="mt-1 inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition active:scale-[0.97] disabled:opacity-40"
-                >
-                  {genDoc.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSignature className="h-3.5 w-3.5" />}
-                  {issuedNumber ? tr("Generate again (new number)") : tr("Generate document")}
-                </button>
-                {genDoc.isError && (
-                  <p className="mt-2 text-xs font-semibold text-rose-600 dark:text-rose-400">{(genDoc.error as Error)?.message}</p>
-                )}
-                {genDoc.isSuccess && genDoc.data?.webViewLink && (
-                  <a href={genDoc.data.webViewLink} target="_blank" rel="noreferrer"
-                     className="mt-2 block text-xs font-semibold text-primary underline">
-                    {tr("Open in Google Docs")}
-                  </a>
-                )}
               </SecCard>
             )}
 
