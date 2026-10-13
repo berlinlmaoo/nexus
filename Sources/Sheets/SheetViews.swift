@@ -54,7 +54,10 @@ private struct SheetScreen: View {
 
     private var wide: Bool { hSize == .regular }
 
-    var body: some View {
+    // Split in three so the type checker finishes (one chain of ~25 modifiers timed out).
+    var body: some View { withAlerts(withSheets(base)) }
+
+    private var base: some View {
         VStack(spacing: 0) {
             formulaBar
             Divider().overlay(NX.border)
@@ -86,8 +89,11 @@ private struct SheetScreen: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             SheetOutbox.shared.flushAll()
         }
+    }
+
+    private func withSheets<V: View>(_ v: V) -> some View {
         // One .sheet per host view (two on the same view leave buttons dead): each on its own background.
-        .background { Color.clear.sheet(isPresented: $picking) { dropdownSheet } }
+        v.background { Color.clear.sheet(isPresented: $picking) { dropdownSheet } }
         .background { Color.clear.sheet(isPresented: Binding(get: { filterColumn != nil }, set: { if !$0 { filterColumn = nil } })) { filterSheet } }
         .background { Color.clear.sheet(isPresented: Binding(get: { slicerMenu != nil }, set: { if !$0 { slicerMenu = nil } })) { slicerSheet } }
         .background { Color.clear.sheet(isPresented: $formatting) { SheetGridFormatSheet(store: store) } }
@@ -95,8 +101,11 @@ private struct SheetScreen: View {
         .task(id: store.sheetId) { await comments.load(store.sheetId) }
         // New / resolved comments redraw the corner markers.
         .onChange(of: comments.version) { _, _ in store.version += 1 }
+    }
+
+    private func withAlerts<V: View>(_ v: V) -> some View {
         // Alerts each on their own background: one presentation per view (two on one view leave one dead).
-        .background { Color.clear.alert(T("Rename column"), isPresented: Binding(get: { renameColumn != nil }, set: { if !$0 { renameColumn = nil } })) {
+        v.background { Color.clear.alert(T("Rename column"), isPresented: Binding(get: { renameColumn != nil }, set: { if !$0 { renameColumn = nil } })) {
             TextField(T("Column name"), text: $nameText)
             Button(T("Save")) { if let c = renameColumn { let n = nameText; Task { await store.renameColumn(c, to: n) } } }
             Button(T("Cancel"), role: .cancel) {}

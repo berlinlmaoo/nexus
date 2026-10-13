@@ -837,7 +837,7 @@ struct ProjectDetailView: View {
                         ForEach(Array(shown.enumerated()), id: \.element.id) { i, lane in
                             laneColumn(lane, at: i, in: shown, statusStyle: statusStyle, grouped: grouped)
                         }
-                        if statusStyle && (detail?.canManageProject ?? true) { addStatusColumn }
+                        if statusStyle && detail.canManageProject { addStatusColumn }
                     }
                     .padding(14)
                     .frame(maxHeight: .infinity, alignment: .top)

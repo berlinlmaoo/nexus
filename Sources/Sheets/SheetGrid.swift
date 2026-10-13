@@ -1462,7 +1462,7 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         add("\u{8}", [], #selector(keyDelete))
         add(UIKeyCommand.inputDelete, [], #selector(keyDelete))
         add(UIKeyCommand.inputEscape, [], #selector(keyEscape))
-        add(UIKeyCommand.inputF2, [], #selector(keyEditCell))
+        add(UIKeyCommand.f2, [], #selector(keyEditCell))
         add("c", .command, #selector(keyCopy))
         add("x", .command, #selector(keyCut))
         add("v", .command, #selector(keyPaste))
