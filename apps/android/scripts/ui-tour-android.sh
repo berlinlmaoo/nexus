@@ -9,10 +9,12 @@
 #
 # The app's half is core/tour/TourMode.kt (DEBUG builds only): it is driven by intent extras and answers with
 # NEXUS_TOUR logcat lines. The QA password comes from the Mac's Keychain (the same item as the iOS tour:
-# service nexus-ui-tour, account $TOUR_EMAIL; set it once with ~/nexus-ios/scripts/ui-tour.sh --set-password).
+# service nexus-ui-tour, account $TOUR_EMAIL; set it once with apps/ios/scripts/ui-tour.sh --set-password).
 set -uo pipefail
 
 AGENTS="${AGENTS:-debian@100.66.244.85}"
+# The monorepo checkout on agents (14 Oct 2026; ~/nexus-android is frozen).
+REPO="${TOUR_REPO:-nexus/apps/android}"
 PKG="id.znetworks.nexus"
 ACT="$PKG/.MainActivity"
 TOUR_EMAIL="${TOUR_EMAIL:-qa5@dev.invalid}"
@@ -59,10 +61,10 @@ say() { echo "$*"; echo "$*" >> "$REPORT"; }
 
 # 1. Build on agents (the Mac has no Android SDK on PATH), copy the APK, install.
 if [ "$BUILD" = 1 ]; then
-  say "build: agents ~/nexus-android (git pull + assembleDebug)"
-  ssh "$AGENTS" 'cd ~/nexus-android && git pull -q --ff-only && ./gradlew -q assembleDebug' >"$OUT/logs/build.log" 2>&1 || die "build failed (see $OUT/logs/build.log)"
+  say "build: agents ~/$REPO (git pull + assembleDebug)"
+  ssh "$AGENTS" "cd ~/$REPO && git pull -q --ff-only && ./gradlew -q assembleDebug" >"$OUT/logs/build.log" 2>&1 || die "build failed (see $OUT/logs/build.log)"
 fi
-scp -q "$AGENTS:nexus-android/app/build/outputs/apk/debug/app-debug.apk" "$APK" || die "could not copy the APK"
+scp -q "$AGENTS:$REPO/app/build/outputs/apk/debug/app-debug.apk" "$APK" || die "could not copy the APK"
 "$ADB" install -r "$APK" >"$OUT/logs/install.log" 2>&1 || die "install failed (see $OUT/logs/install.log)"
 # No system permission prompt may cover a screen mid-tour (location, notifications, camera).
 for perm in ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION POST_NOTIFICATIONS CAMERA; do

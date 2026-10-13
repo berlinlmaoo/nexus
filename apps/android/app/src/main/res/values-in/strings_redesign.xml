@@ -227,4 +227,14 @@
     <string name="color_purple">Ungu</string>
     <string name="color_pink">Merah muda</string>
     <string name="color_red">Merah</string>
+    <!-- Card properties (web PropLine) and linked lanes, 14 Oct 2026 -->
+    <string name="cp_tags">Tag</string>
+    <string name="cp_created">Dibuat</string>
+    <string name="cp_updated">Terakhir diubah</string>
+    <string name="cp_linked">Tertaut</string>
+    <string name="cp_another_project">Project lain</string>
+    <string name="cp_from">Dari %1$s</string>
+    <plurals name="cp_files">
+        <item quantity="other">%d file</item>
+    </plurals>
 </resources>

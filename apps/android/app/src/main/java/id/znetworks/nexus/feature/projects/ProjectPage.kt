@@ -75,6 +75,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.alpha
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -121,18 +126,21 @@ fun accessLabel(l: AccessLevel): String = stringResource(when (l) {
 fun ProjectPageHeader(
     detail: ProjectDetail?, onBack: () -> Unit, onMembers: () -> Unit, onGideon: () -> Unit, onSettings: () -> Unit,
     onAdd: (() -> Unit)?,
+    addInTabs: Boolean = false,
 ) {
     val c = Nx.colors
     val access = ProjectAccess.of(detail)
     Column(Modifier.fillMaxWidth().background(c.background)) {
-        Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        // Phone header (owner, 14 Oct 2026: "kegedean di HP"): back, mark, the name, faces, GIDEON and settings like the
+        // web phone; "Add task" sits at the end of the tab row (ProjectTabRow), so the name keeps its room.
+        Row(Modifier.fillMaxWidth().padding(start = 0.dp, end = 12.dp, top = 4.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             androidx.compose.material3.IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = c.foreground)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = c.foreground, modifier = Modifier.size(22.dp))
             }
-            detail?.let { ProjectMark(it.icon, 28.dp) }
+            detail?.let { ProjectMark(it.icon, 22.dp) }
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
-                Text(detail?.name.orEmpty(), fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = c.foreground,
+                Text(detail?.name.orEmpty(), fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = c.foreground,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 access.readOnlyChip?.let { l ->
                     val hint = stringResource(R.string.acc_hint)
@@ -144,12 +152,13 @@ fun ProjectPageHeader(
             if (detail != null) {
                 MemberFaces(detail.members, onMembers)
                 Spacer(Modifier.width(6.dp))
-                HeaderIconButton(Icons.Outlined.AutoAwesome, stringResource(R.string.pp_ask_gideon), onGideon)
+                HeaderIconButton(Icons.Outlined.AutoAwesome, stringResource(R.string.pp_ask_gideon), onGideon, size = 36.dp)
                 Spacer(Modifier.width(6.dp))
-                HeaderIconButton(Icons.Outlined.Settings, stringResource(R.string.pp_settings), onSettings)
-                if (onAdd != null) {
+                HeaderIconButton(Icons.Outlined.Settings, stringResource(R.string.pp_settings), onSettings, size = 36.dp)
+                // Without tabs (no access, still loading) "Add task" has no row to sit in: it stays here.
+                if (onAdd != null && !addInTabs) {
                     Spacer(Modifier.width(6.dp))
-                    HeaderIconButton(Icons.Filled.Add, stringResource(R.string.pp_add_task), onAdd, primary = true)
+                    HeaderIconButton(Icons.Filled.Add, stringResource(R.string.pp_add_task), onAdd, primary = true, size = 36.dp)
                 }
             }
         }
@@ -234,15 +243,17 @@ fun viewLabel(v: ProjectView): String = ViewsLogic.name(v) ?: when {
  * Pages, Forms, Chat, Automations. A long-press on a view opens its menu; a personal view carries a lock.
  */
 @Composable
-fun ProjectTabRow(items: List<PageTabItem>, selected: PageTabItem?, canAddView: Boolean, onSelect: (PageTabItem) -> Unit, onViewMenu: (ProjectView) -> Unit, onAddView: () -> Unit) {
+fun ProjectTabRow(items: List<PageTabItem>, selected: PageTabItem?, canAddView: Boolean, onSelect: (PageTabItem) -> Unit, onViewMenu: (ProjectView) -> Unit, onAddView: () -> Unit,
+                  onAdd: (() -> Unit)? = null) {
     val c = Nx.colors
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(end = if (onAdd != null) 12.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
         var dividerDrawn = false
         items.forEach { item ->
             if (item is PageTabItem.Module && !dividerDrawn) {
                 if (canAddView) TabChip(Icons.Filled.Add, null, on = false, onClick = onAddView, description = stringResource(R.string.view_add))
-                Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(20.dp).background(c.border))
+                Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(18.dp).background(c.border))
                 dividerDrawn = true
             }
             val on = item == selected
@@ -257,6 +268,9 @@ fun ProjectTabRow(items: List<PageTabItem>, selected: PageTabItem?, canAddView: 
         }
         if (!dividerDrawn && canAddView) TabChip(Icons.Filled.Add, null, on = false, onClick = onAddView, description = stringResource(R.string.view_add))
     }
+    // "Add task" at the end of the tabs, always in reach (web phone).
+    if (onAdd != null) { Spacer(Modifier.width(6.dp)); HeaderIconButton(Icons.Filled.Add, stringResource(R.string.pp_add_task), onAdd, primary = true, size = 36.dp) }
+    }
 }
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -267,9 +281,9 @@ private fun TabChip(icon: ImageVector, label: String?, on: Boolean, onClick: () 
     Row(Modifier.clip(RoundedCornerShape(8.dp)).background(if (on) c.muted else Color.Transparent)
         .combinedClickable(role = Role.Tab, onClick = onClick, onLongClick = onLong)
         .semantics { if (description != null) contentDescription = description }
-        .defaultMinSize(minHeight = 40.dp, minWidth = 40.dp).padding(horizontal = 10.dp),
+        .defaultMinSize(minHeight = 36.dp, minWidth = 36.dp).padding(horizontal = 9.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-        Icon(icon, null, tint = if (on) c.foreground else c.mutedFg, modifier = Modifier.size(16.dp))
+        Icon(icon, null, tint = if (on) c.foreground else c.mutedFg, modifier = Modifier.size(15.dp))
         if (label != null) {
             Spacer(Modifier.width(6.dp))
             Text(label, fontFamily = TextFont, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = if (on) c.foreground else c.mutedFg, maxLines = 1)
@@ -327,24 +341,56 @@ fun groupCreate(g: TaskGroup, groupBy: String?, vm: ProjectDetailViewModel): ((S
     else -> null
 }
 
-/** The board: one column per group, the pill header with its count, "+ New task" at the top. */
+/**
+ * The board: tasks linked in from other projects first (read-only, dashed, "Linked"; web linkedLanes), then one
+ * column per group, the pill header with its count, "+ New task" at the top.
+ */
 @Composable
 fun BoardView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, access: ProjectAccess, vm: ProjectDetailViewModel, selected: Set<String>,
-              onOpenTask: (String) -> Unit, onDuplicateDate: (List<String>) -> Unit) {
+              props: PropCtx, linked: List<BoardLogic.LinkedLane>, onOpenTask: (String) -> Unit, onDuplicateDate: (List<String>) -> Unit) {
     val c = Nx.colors
     val dark = c.background.luminance() < 0.3f
     LazyRow(contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
+        items(linked.size, key = { "linked-" + linked[it].sourceId }) { i -> LinkedColumn(linked[i], props, access, vm, onOpenTask) }
         items(groups.size, key = { groups[it].key }) { i ->
             val g = groups[i]
             // The status group's name above the first column of each group only (iOS).
-            BoardColumn(g, cfg, lanes, access, vm, selected, onOpenTask, onDuplicateDate, dark, firstOfGroup = i == 0 || groups[i - 1].statusGroup != g.statusGroup)
+            BoardColumn(g, cfg, lanes, access, vm, selected, props, onOpenTask, onDuplicateDate, dark, firstOfGroup = i == 0 || groups[i - 1].statusGroup != g.statusGroup)
         }
         if (access.canManage && cfg.groupBy == "section" && StatusOptions.inUse(lanes)) item(key = "+status") { AddStatusColumn(vm) }
     }
 }
 
+/** A read-only lane of tasks another project linked in: dashed outline, its project's name, "Linked", the count. */
 @Composable
-private fun BoardColumn(g: TaskGroup, cfg: ViewConfig, lanes: List<Lane>, access: ProjectAccess, vm: ProjectDetailViewModel, selected: Set<String>,
+private fun LinkedColumn(l: BoardLogic.LinkedLane, props: PropCtx, access: ProjectAccess, vm: ProjectDetailViewModel, onOpenTask: (String) -> Unit) {
+    val c = Nx.colors
+    val outline = c.border
+    Column(Modifier.width(284.dp).fillMaxHeight().drawBehind {
+        drawRoundRect(outline, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx()))
+    }.padding(8.dp)) {
+        // Lines up with the status-group label above the other columns.
+        Text(" ", fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+        Row(Modifier.padding(horizontal = 4.dp, vertical = 2.dp).heightIn(min = 32.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(l.name ?: stringResource(R.string.cp_another_project), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.cp_linked), fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(c.muted).padding(horizontal = 6.dp))
+            Spacer(Modifier.weight(1f))
+            Text("${l.tasks.size}", fontSize = 12.sp, color = c.mutedFg)
+        }
+        Spacer(Modifier.height(6.dp))
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f, fill = false)) {
+            items(l.tasks, key = { it.id }) { t ->
+                BoardCard(t, props, onClick = { onOpenTask(t.id) }, onToggleDone = if (access.canEdit) ({ vm.toggleDone(t) }) else null)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoardColumn(g: TaskGroup, cfg: ViewConfig, lanes: List<Lane>, access: ProjectAccess, vm: ProjectDetailViewModel, selected: Set<String>, props: PropCtx,
                         onOpenTask: (String) -> Unit, onDuplicateDate: (List<String>) -> Unit, dark: Boolean, firstOfGroup: Boolean) {
     val c = Nx.colors
     run {
@@ -360,7 +406,7 @@ private fun BoardColumn(g: TaskGroup, cfg: ViewConfig, lanes: List<Lane>, access
                 val create = if (access.canEdit) groupCreate(g, cfg.groupBy, vm) else null
                 if (create != null) { InlineNewTask(create); Spacer(Modifier.height(6.dp)) }
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f, fill = false)) {
-                    items(g.tasks, key = { it.id }) { t -> MovableTask(t, lanes, onOpenTask, vm, selected, access, onDuplicateDate) }
+                    items(g.tasks, key = { it.id }) { t -> MovableTask(t, lanes, onOpenTask, vm, selected, access, onDuplicateDate, props) }
                 }
             }
     }
@@ -539,14 +585,51 @@ fun TaskMenu(open: Boolean, onDismiss: () -> Unit, t: BoardTask, lanes: List<Lan
 /** A card with its menu; while selecting, a tap (or long-press) toggles it. */
 @Composable
 fun MovableTask(t: BoardTask, lanes: List<Lane>, onOpenTask: (String) -> Unit, vm: ProjectDetailViewModel, selected: Set<String>, access: ProjectAccess,
-                onDuplicateDate: (List<String>) -> Unit) {
+                onDuplicateDate: (List<String>) -> Unit, props: PropCtx) {
     var menu by remember { mutableStateOf(false) }
     val selecting = selected.isNotEmpty()
     Box {
-        TaskCard(t, onClick = { if (selecting) vm.toggleSelect(t.id) else onOpenTask(t.id) },
+        BoardCard(t, props, onClick = { if (selecting) vm.toggleSelect(t.id) else onOpenTask(t.id) },
             onToggleDone = if (selecting || !access.canEdit) null else ({ vm.toggleDone(t) }),
             onLongClick = { if (selecting) vm.toggleSelect(t.id) else menu = true }, selected = if (selecting) t.id in selected else null)
         TaskMenu(menu, { menu = false }, t, lanes, vm, access, onDuplicateDate)
+    }
+}
+
+/**
+ * A board card like the web's (owner, 14 Oct 2026): "From {project}" on a linked task, the subtask's parent, the done
+ * circle beside the title, then the view's properties in one wrapping line under the title (web TaskCard + PropLine).
+ * A done card is dimmed.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun BoardCard(t: BoardTask, props: PropCtx, onClick: () -> Unit, onToggleDone: (() -> Unit)? = null, onLongClick: (() -> Unit)? = null, selected: Boolean? = null) {
+    val c = Nx.colors
+    val shape = RoundedCornerShape(10.dp)
+    val linkedFrom = t.projectId?.takeIf { props.projectId != null && it != props.projectId }?.let { t.taskList?.project?.name ?: stringResource(R.string.cp_another_project) }
+    Column(Modifier.fillMaxWidth().alpha(if (t.isDone && selected != true) 0.6f else 1f).clip(shape).background(if (selected == true) c.accentBg else c.card)
+        .border(if (selected == true) 2.dp else 1.dp, if (selected == true) c.violet else c.border, shape)
+        .combinedClickable(onClick = onClick, onLongClick = onLongClick).padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (linkedFrom != null) Text(stringResource(R.string.cp_from, linkedFrom), fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (t.isSubtask) Text("↳ " + (t.parentTitle ?: stringResource(R.string.td_subtasks)), fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(verticalAlignment = Alignment.Top) {
+            if (selected != null) {
+                Icon(if (selected) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank, null, Modifier.size(20.dp), tint = if (selected) c.violet else c.mutedFg)
+                Spacer(Modifier.width(8.dp))
+            }
+            val circle = if (t.isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked
+            val tint = if (t.isDone) c.success else c.mutedFg.copy(alpha = 0.6f)
+            Box(Modifier.padding(top = 1.dp).size(20.dp).clip(CircleShape).then(if (onToggleDone != null) Modifier.clickable(onClick = onToggleDone) else Modifier),
+                contentAlignment = Alignment.Center) {
+                Icon(circle, stringResource(R.string.task_toggle_done), Modifier.size(18.dp), tint = tint)
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(t.title.ifBlank { "—" }, fontSize = 15.sp, fontWeight = FontWeight.Medium, lineHeight = 20.sp, color = if (t.isDone) c.mutedFg else c.foreground,
+                textDecoration = if (t.isDone) TextDecoration.LineThrough else null, maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (t.questXp > 0) { Spacer(Modifier.width(6.dp)); Pill("+${t.questXp} XP", c.violetText) }
+        }
+        PropLine(props.items(t), Modifier.padding(start = 28.dp))
     }
 }
 
@@ -587,45 +670,48 @@ fun InlineNewTask(onAdd: (String) -> Unit, flat: Boolean = false) {
 private const val PAGE = 40
 
 /**
- * The Table (task grid): Name + Status, Assignee, Due date, Priority and the custom fields; rows grouped like
- * the List, 40 per group then "Show more". Status, priority and due date are edited in place (Can edit).
+ * The Table (task grid): Name, then the view's properties in its order (web default: Assignee, Due date, Priority,
+ * Status, Tags), drawn like the cards (PropValue); rows grouped like the List, 40 per group then "Show more". Status,
+ * assignee, priority and due date are edited in place (Can edit). The group header stays at the left edge while the
+ * grid scrolls sideways (web sticky header).
  */
 @Composable
-fun TableView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, fields: List<CustomFieldDef>, members: List<ProjectMemberRef>, access: ProjectAccess,
+fun TableView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, props: PropCtx, members: List<ProjectMemberRef>, access: ProjectAccess,
               vm: ProjectDetailViewModel, selected: Set<String>, onOpenTask: (String) -> Unit, onPickDue: (BoardTask) -> Unit) {
     val c = Nx.colors
     val h = rememberScrollState()
-    val nameW = 200.dp; val colW = 124.dp
+    val nameW = 200.dp; val colW = 132.dp
     val usesStatus = StatusOptions.inUse(lanes)
+    val cols = props.keys
+    val totalW = nameW + colW * cols.size
     val shown = remember(groups) { mutableStateOf(mapOf<String, Int>()) }
     @Composable
     fun headerCell(text: String, w: Dp) = Box(Modifier.width(w).height(36.dp).padding(horizontal = 10.dp), contentAlignment = Alignment.CenterStart) {
         Text(text, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
+    val stick = Modifier.offset { androidx.compose.ui.unit.IntOffset(h.value, 0) }
     Column(Modifier.fillMaxSize().horizontalScroll(h)) {
         Row(Modifier.background(c.background)) {
             headerCell(stringResource(R.string.pp_col_name), nameW)
-            headerCell(stringResource(R.string.filter_status), colW); headerCell(stringResource(R.string.filter_assignee), colW)
-            headerCell(stringResource(R.string.filter_due), colW); headerCell(stringResource(R.string.filter_priority), colW)
-            fields.forEach { headerCell(it.name, colW) }
+            cols.forEach { headerCell(propLabel(it, props.fields, usesStatus), colW) }
         }
-        HorizontalDivider(Modifier.width(nameW + colW * (4 + fields.size)), color = c.border)
-        LazyColumn(Modifier.weight(1f).width(nameW + colW * (4 + fields.size)), contentPadding = PaddingValues(bottom = 96.dp)) {
+        HorizontalDivider(Modifier.width(totalW), color = c.border)
+        LazyColumn(Modifier.weight(1f).width(totalW), contentPadding = PaddingValues(bottom = 96.dp)) {
             groups.forEach { g ->
                 item(key = "h-" + g.key) {
-                    Box(Modifier.padding(start = 10.dp, top = 12.dp, bottom = 6.dp)) { GroupPill(g, groupLabel(g, cfg.groupBy), "${g.tasks.size}") }
+                    Box(stick.padding(start = 10.dp, top = 12.dp, bottom = 6.dp)) { GroupPill(g, groupLabel(g, cfg.groupBy), "${g.tasks.size}") }
                 }
                 val limit = shown.value[g.key] ?: PAGE
                 items(g.tasks.take(limit), key = { g.key + "/" + it.id }) { t ->
-                    TableRow(t, lanes, fields, members, usesStatus, access, vm, t.id in selected, selected.isNotEmpty(), nameW, colW, onOpenTask, onPickDue)
+                    TableRow(t, lanes, cols, props, members, usesStatus, access, vm, t.id in selected, selected.isNotEmpty(), nameW, colW, onOpenTask, onPickDue)
                 }
                 if (g.tasks.size > limit) item(key = "m-" + g.key) {
-                    TextButton(onClick = { shown.value = shown.value + (g.key to limit + 25) }) {
+                    TextButton(onClick = { shown.value = shown.value + (g.key to limit + 25) }, modifier = stick) {
                         Text(stringResource(R.string.pp_show_more, minOf(25, g.tasks.size - limit)))
                     }
                 }
                 val create = if (access.canEdit) groupCreate(g, cfg.groupBy, vm) else null
-                if (create != null) item(key = "n-" + g.key) { Box(Modifier.width(nameW + colW).padding(start = 6.dp)) { InlineNewTask(create, flat = true) } }
+                if (create != null) item(key = "n-" + g.key) { Box(stick.width(nameW + colW).padding(start = 6.dp)) { InlineNewTask(create, flat = true) } }
             }
         }
     }
@@ -633,7 +719,7 @@ fun TableView(groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, field
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun TableRow(t: BoardTask, lanes: List<Lane>, fields: List<CustomFieldDef>, members: List<ProjectMemberRef>, usesStatus: Boolean, access: ProjectAccess,
+private fun TableRow(t: BoardTask, lanes: List<Lane>, cols: List<String>, props: PropCtx, members: List<ProjectMemberRef>, usesStatus: Boolean, access: ProjectAccess,
                      vm: ProjectDetailViewModel, isSelected: Boolean, selecting: Boolean, nameW: Dp, colW: Dp, onOpenTask: (String) -> Unit, onPickDue: (BoardTask) -> Unit) {
     val c = Nx.colors
     val edit = access.canEdit && !selecting
@@ -646,51 +732,45 @@ private fun TableRow(t: BoardTask, lanes: List<Lane>, fields: List<CustomFieldDe
             Text((if (t.isSubtask) "↳ " else "") + t.title, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 color = if (t.isDone) c.mutedFg else c.foreground, textDecoration = if (t.isDone) TextDecoration.LineThrough else null)
         }
-        // Status: the project's options (its sections), or the five statuses on a legacy project.
-        var statusMenu by remember { mutableStateOf(false) }
-        Cell(colW, edit, { statusMenu = true }) {
-            val lane = lanes.firstOrNull { it.id == t.taskListId }
-            if (usesStatus && lane != null) GroupPill(TaskGroup(lane.id, lane.name, StatusOptions.colorKey(lane.color, lane.taskStatus)), lane.name, null)
-            else Text(taskStatusLabel(t.status), fontSize = 13.sp, color = c.foreground, maxLines = 1)
-            DropdownMenu(statusMenu, { statusMenu = false }) {
-                StatusOptions.ordered(lanes).forEach { l -> DropdownMenuItem(text = { Text(l.name) }, onClick = { statusMenu = false; if (l.id != t.taskListId) vm.setStatusOption(t.id, l.id) }) }
+        cols.forEach { key ->
+            val value = CardProps.item(t, key, props.fields, lanes, props.people, props.today)
+            var menu by remember { mutableStateOf(false) }
+            val onEdit: (() -> Unit)? = when (key) {
+                "section", "status", "priority" -> ({ menu = true })
+                "assignee" -> if (members.isNotEmpty()) ({ menu = true }) else null
+                "due" -> ({ onPickDue(t) })
+                else -> null
             }
-        }
-        var peopleMenu by remember { mutableStateOf(false) }
-        Cell(colW, edit && members.isNotEmpty(), { peopleMenu = true }) {
-            if (t.assignees.isEmpty()) Text("—", fontSize = 13.sp, color = c.mutedFg)
-            else Row(verticalAlignment = Alignment.CenterVertically) {
-                id.znetworks.nexus.ui.components.AvatarStack(t.assignees.map { it.user?.name to it.user?.avatar }, size = 20.dp)
-                Spacer(Modifier.width(4.dp))
-                Text(t.assignees.mapNotNull { it.user?.name?.substringBefore(' ') }.joinToString(", "), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = c.foreground)
-            }
-            DropdownMenu(peopleMenu, { peopleMenu = false }) {
-                members.forEach { m ->
-                    val on = t.assignees.any { (it.user?.id ?: it.userId) == m.uid }
-                    DropdownMenuItem(text = { Text(m.user?.name ?: m.uid) }, leadingIcon = { if (on) Icon(Icons.Filled.Check, null) },
-                        onClick = { peopleMenu = false; vm.toggleAssignee(t, m.uid) })
+            Cell(colW, edit && onEdit != null, onEdit ?: {}) {
+                when {
+                    value == null -> Text("—", fontSize = 13.sp, color = c.mutedFg)
+                    // Assignee: the faces and first names (one line).
+                    value is CardProps.Item.People -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        id.znetworks.nexus.ui.components.AvatarStack(value.people, size = 20.dp)
+                        Spacer(Modifier.width(4.dp))
+                        Text(value.people.mapNotNull { it.first?.substringBefore(' ') }.joinToString(", "), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = c.foreground)
+                    }
+                    else -> PropValue(value)
+                }
+                when (key) {
+                    "section", "status" -> DropdownMenu(menu, { menu = false }) {
+                        StatusOptions.ordered(lanes).forEach { l -> DropdownMenuItem(text = { Text(l.name) }, onClick = { menu = false; if (l.id != t.taskListId) vm.setStatusOption(t.id, l.id) }) }
+                    }
+                    "priority" -> DropdownMenu(menu, { menu = false }) {
+                        TaskEnums.PRIORITIES.forEach { p -> DropdownMenuItem(text = { Text(priorityLabel(p)) }, onClick = { menu = false; vm.setTaskPriority(t.id, p) }) }
+                    }
+                    "assignee" -> DropdownMenu(menu, { menu = false }) {
+                        members.forEach { m ->
+                            val on = t.assignees.any { (it.user?.id ?: it.userId) == m.uid }
+                            DropdownMenuItem(text = { Text(m.user?.name ?: m.uid) }, leadingIcon = { if (on) Icon(Icons.Filled.Check, null) },
+                                onClick = { menu = false; vm.toggleAssignee(t, m.uid) })
+                        }
+                    }
                 }
             }
         }
-        Cell(colW, edit, { onPickDue(t) }) { if (t.dueDate != null) DueLabel(t.dueDate, t.isDone) else Text("—", fontSize = 13.sp, color = c.mutedFg) }
-        var prioMenu by remember { mutableStateOf(false) }
-        Cell(colW, edit, { prioMenu = true }) {
-            if (t.priority.isNullOrBlank() || t.priority.equals("NONE", true)) Text("—", fontSize = 13.sp, color = c.mutedFg) else PriorityChip(t.priority)
-            DropdownMenu(prioMenu, { prioMenu = false }) {
-                TaskEnums.PRIORITIES.forEach { p -> DropdownMenuItem(text = { Text(priorityLabel(p)) }, onClick = { prioMenu = false; vm.setTaskPriority(t.id, p) }) }
-            }
-        }
-        fields.forEach { f ->
-            val v = t.customFieldValues.firstOrNull { it.customFieldId == f.id }?.value
-            Cell(colW, false, {}) {
-                val text = valueText(v)
-                if (text == null) Text("—", fontSize = 13.sp, color = c.mutedFg)
-                else if (f.kind == "SELECT") GroupPill(TaskGroup(text, text, StatusOptions.optionColor(f, text)), text, null)
-                else Text(text, fontSize = 13.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
     }
-    HorizontalDivider(Modifier.width(nameW + colW * (4 + fields.size)), color = c.border.copy(alpha = 0.6f))
+    HorizontalDivider(Modifier.width(nameW + colW * cols.size), color = c.border.copy(alpha = 0.6f))
 }
 
 @Composable

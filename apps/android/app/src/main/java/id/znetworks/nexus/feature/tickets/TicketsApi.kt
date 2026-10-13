@@ -94,15 +94,26 @@ object TicketRules {
 
     /**
      * The BoD's queues (web complaints.tsx, 13 Oct): Inbox = unclaimed (OPEN), In review = taken on or answered by
-     * GIDEON (IN_REVIEW, AWAITING_DECISION), All.
+     * GIDEON (IN_REVIEW, AWAITING_DECISION) plus a closed or resolved ticket whose attendance fix still waits for a
+     * decision (the server's REVIEW queue: it "stays under In review until someone approves or rejects it"), All.
      */
     enum class Queue { INBOX, REVIEW, ALL }
 
     fun inQueue(t: Ticket, q: Queue) = when (q) {
         Queue.INBOX -> t.status == "OPEN"
-        Queue.REVIEW -> t.status == "IN_REVIEW" || t.status == "AWAITING_DECISION"
+        Queue.REVIEW -> t.status == "IN_REVIEW" || t.status == "AWAITING_DECISION" || (t.pendingCorrection && t.status != "OPEN")
         Queue.ALL -> true
     }
+
+    /**
+     * A queue's badge: the server's own count (GET /api/complaints `counts.INBOX` / `counts.REVIEW`, the same numbers
+     * the web shows) when it sends one, else counted here. All = the literal statuses summed, like the web.
+     */
+    fun queueCount(counts: Map<String, Int>, tickets: List<Ticket>, q: Queue): Int = when (q) {
+        Queue.INBOX -> counts["INBOX"] ?: counts["OPEN"]
+        Queue.REVIEW -> counts["REVIEW"]
+        Queue.ALL -> counts.filterKeys { it != "INBOX" && it != "REVIEW" }.values.sum().takeIf { counts.isNotEmpty() }
+    } ?: tickets.count { inQueue(it, q) }
 
     /** Lands on the first queue with something in it (Inbox → In review → All), never an empty Inbox while tickets wait. */
     fun landing(tickets: List<Ticket>): Queue = when {

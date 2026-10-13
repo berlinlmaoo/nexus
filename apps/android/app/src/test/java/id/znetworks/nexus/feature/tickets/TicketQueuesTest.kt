@@ -18,6 +18,25 @@ class TicketQueuesTest {
         assertTrue(TicketRules.inQueue(t("c", "CLOSED"), TicketRules.Queue.ALL))
     }
 
+    @Test fun closedTicketWithAFixWaitingStaysInReview() {
+        // Dev server 14 Oct: two CLOSED tickets with a pending correction made the web say 10, Android 8.
+        assertTrue(TicketRules.inQueue(t("d", "CLOSED", pending = true), TicketRules.Queue.REVIEW))
+        assertTrue(TicketRules.inQueue(t("e", "RESOLVED", pending = true), TicketRules.Queue.REVIEW))
+        assertFalse(TicketRules.inQueue(t("f", "CLOSED"), TicketRules.Queue.REVIEW))
+        assertFalse(TicketRules.inQueue(t("g", "OPEN", pending = true), TicketRules.Queue.REVIEW))
+    }
+
+    @Test fun badgesUseTheServerCounts() {
+        val counts = mapOf("RESOLVED" to 10, "AWAITING_DECISION" to 2, "IN_REVIEW" to 6, "CLOSED" to 19, "INBOX" to 0, "REVIEW" to 10)
+        val list = listOf(t("a", "IN_REVIEW"))
+        assertEquals(0, TicketRules.queueCount(counts, list, TicketRules.Queue.INBOX))
+        assertEquals(10, TicketRules.queueCount(counts, list, TicketRules.Queue.REVIEW))
+        assertEquals(37, TicketRules.queueCount(counts, list, TicketRules.Queue.ALL))
+        // An older server without counts: counted from the list.
+        assertEquals(1, TicketRules.queueCount(emptyMap(), list, TicketRules.Queue.REVIEW))
+        assertEquals(1, TicketRules.queueCount(emptyMap(), list, TicketRules.Queue.ALL))
+    }
+
     @Test fun landsOnTheFirstNonEmptyQueue() {
         assertEquals(TicketRules.Queue.INBOX, TicketRules.landing(listOf(t("a", "OPEN"), t("b", "IN_REVIEW"))))
         assertEquals(TicketRules.Queue.REVIEW, TicketRules.landing(listOf(t("b", "IN_REVIEW"), t("c", "RESOLVED"))))

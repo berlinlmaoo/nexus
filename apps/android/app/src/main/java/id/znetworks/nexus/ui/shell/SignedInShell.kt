@@ -27,6 +27,13 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -182,10 +189,10 @@ import id.znetworks.nexus.feature.update.startUpdate
 import kotlinx.coroutines.launch
 
 internal enum class Tab(val route: String, val label: Int, val icon: ImageVector, val webPath: String) {
-    HOME("home", R.string.tab_home, Icons.Outlined.Home, "/dashboard"),
+    HOME("home", R.string.tab_home, Icons.Outlined.GridView, "/dashboard"),
     TASKS("tasks", R.string.tab_tasks, Icons.Outlined.CheckBox, "/my-tasks"),
     /** The chat list (9 Oct, NAV-HOME-GROUP): a tab with its own back stack, in the slot Tasks had. */
-    CHAT("messages", R.string.tab_chat, Icons.AutoMirrored.Outlined.Chat, "/messages"),
+    CHAT("messages", R.string.tab_chat, Icons.Outlined.ChatBubbleOutline, "/messages"),
     INBOX("inbox", R.string.tab_inbox, Icons.Outlined.Inbox, "/inbox"),
     CALENDAR("calendar", R.string.tab_calendar, Icons.Outlined.CalendarMonth, "/calendar"),
     PROJECTS("projects", R.string.tab_projects, Icons.Outlined.Folder, "/projects"),
@@ -201,6 +208,22 @@ internal object ShellTabs {
         if (calendarOn) listOf("home", "messages", "calendar", "projects", "more") else listOf("home", "messages", "inbox", "projects", "more")
     /** The tab a destination belongs to: "calendar?date={date}…" is the Calendar tab. */
     fun tabOf(route: String?): String? = route?.substringBefore('?')
+
+    /**
+     * The tab a pushed screen lives under, so the bar keeps it lit (web phone / iPhone: a project page still shows
+     * Projects): projects, folders, tasks and forms → Projects; a chat's info, media and search → Chat; the
+     * calendar's lists → Calendar. Null = the tab the person came from.
+     */
+    fun ownerOf(route: String?): String? {
+        val r = route ?: return null
+        return when {
+            r.startsWith("project/") || r.startsWith("folder/") || r.startsWith("task/") || r.startsWith("task-preview/") ||
+                r.startsWith("form-builder/") || r.startsWith("form-responses/") -> "projects"
+            r.startsWith("chat") -> "messages"
+            r.startsWith("team-calendar") || r.startsWith("calendar-list") -> "calendar"
+            else -> null
+        }
+    }
 }
 
 /**
@@ -306,8 +329,15 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
     val rail = ShellLayout.useRail(width) && !sidebar
     val calendarOn = container.remoteConfig.body.collectAsStateWithLifecycle().value.calendar
     val tabs = ShellTabs.routes(calendarOn).mapNotNull { r -> Tab.entries.firstOrNull { it.route == r } }
+    // The last tab screen shown: a screen pushed over it (Tickets from More, a profile from Home) keeps it lit.
+    var lastTab by remember { mutableStateOf<Tab?>(null) }
     val current = tabs.firstOrNull { it.route == ShellTabs.tabOf(route) }
         ?: tabs.firstOrNull { t -> backStack?.destination?.hierarchy?.any { ShellTabs.tabOf(it.route) == t.route } == true }
+        ?: tabs.firstOrNull { it.route == ShellTabs.ownerOf(route) }
+        ?: lastTab
+        // Opened straight from a link or a push (no tab seen yet): every other screen is reached from More.
+        ?: tabs.firstOrNull { it == Tab.MORE }.takeIf { route != null }
+    LaunchedEffect(current) { if (current != null) lastTab = current }
     // Inbox's unread on whichever entry holds Inbox now: its own tab, or More (Berlin, 8 Oct).
     val inboxUnread by container.badges.inboxUnread.collectAsStateWithLifecycle()
     // Chat carries the chat total (muted rooms left out); More only Inbox's, when Inbox has no tab (NAV-HOME-GROUP).
@@ -568,16 +598,35 @@ internal fun ShellBar(tabs: List<Tab>, current: Tab?, badge: (Tab) -> String?, r
                     unselectedIconColor = Nx.colors.mutedFg, unselectedTextColor = Nx.colors.mutedFg),
             )
         }
-    } else Column {
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Nx.colors.border))
-        NavigationBar(containerColor = Nx.colors.card, tonalElevation = 0.dp) {
+    } else FloatingTabBar(tabs, current, badge, onTab)
+}
+
+/**
+ * The phone tab bar like the web phone and the iPhone (owner, 14 Oct 2026): a floating rounded bar with a border and
+ * a soft shadow, inset from the edges; the current tab on a muted pill in the foreground colour (web), the others muted.
+ */
+@Composable
+private fun FloatingTabBar(tabs: List<Tab>, current: Tab?, badge: (Tab) -> String?, onTab: (Tab) -> Unit) {
+    val c = Nx.colors
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(26.dp)
+    Box(Modifier.fillMaxWidth().background(c.background).navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp)) {
+        Row(Modifier.fillMaxWidth()
+            .shadow(10.dp, shape, ambientColor = Color.Black.copy(alpha = 0.10f), spotColor = Color.Black.copy(alpha = 0.14f))
+            .clip(shape).background(c.card).border(1.dp, c.border, shape).padding(5.dp)
+            .selectableGroup(),
+            verticalAlignment = Alignment.CenterVertically) {
             tabs.forEach { t ->
-                NavigationBarItem(
-                    selected = t == current, onClick = { onTab(t) },
-                    icon = { TabIcon(t.icon, badge(t)) },
-                    label = { TabLabel(stringResource(t.label)) },
-                    colors = shellItemColors(),
-                )
+                val on = t == current
+                val tint = if (on) c.foreground else c.mutedFg
+                Column(Modifier.weight(1f).clip(androidx.compose.foundation.shape.RoundedCornerShape(21.dp)).background(if (on) c.muted else Color.Transparent)
+                    .selectable(selected = on, role = Role.Tab, onClick = { onTab(t) }).padding(top = 7.dp, bottom = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally) {
+                    val b = badge(t)
+                    if (b == null) Icon(t.icon, null, tint = tint, modifier = Modifier.size(22.dp))
+                    else BadgedBox(badge = { Badge { Text(b) } }) { Icon(t.icon, null, tint = tint, modifier = Modifier.size(22.dp)) }
+                    Spacer(Modifier.height(3.dp))
+                    Text(stringResource(t.label), fontSize = 11.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium, color = tint, maxLines = 1)
+                }
             }
         }
     }

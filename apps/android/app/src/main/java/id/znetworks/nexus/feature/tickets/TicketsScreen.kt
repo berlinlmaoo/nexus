@@ -193,11 +193,13 @@ fun TicketsScreen(onBack: () -> Unit, onOpenTicket: (String) -> Unit, vm: Ticket
             val bod = s.list?.viewerIsBod == true
             LaunchedEffect(s.list, bod) { if (bod && queue == null && s.list != null) queue = TicketRules.landing(all) }
             val q = queue ?: TicketRules.Queue.INBOX
+            // "New ticket" as the header's primary (near-black) action, like the web; it was a violet FAB.
             id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.tk_title), subtitle = stringResource(R.string.sub_tickets), onBack = onBack,
+                actions = { id.znetworks.nexus.ui.components.HeaderIconButton(Icons.Filled.Add, stringResource(R.string.tk_new), { vm.resetForm(); composing = true }, primary = true) },
                 tabs = {
                     if (bod) {
                         val tabs = listOf(TicketRules.Queue.INBOX to R.string.tq_inbox, TicketRules.Queue.REVIEW to R.string.tq_review, TicketRules.Queue.ALL to R.string.th_tab_all).map { (k, l) ->
-                            id.znetworks.nexus.ui.components.PageTab(k, stringResource(l), count = all.count { TicketRules.inQueue(it, k) }, attention = k == TicketRules.Queue.INBOX)
+                            id.znetworks.nexus.ui.components.PageTab(k, stringResource(l), count = TicketRules.queueCount(s.list?.counts.orEmpty(), all, k), attention = k == TicketRules.Queue.INBOX)
                         }
                         id.znetworks.nexus.ui.components.PageTabs(tabs, q, { queue = it })
                     } else {
@@ -229,8 +231,6 @@ fun TicketsScreen(onBack: () -> Unit, onOpenTicket: (String) -> Unit, vm: Ticket
                 }
             }
         }
-        FloatingActionButton(onClick = { vm.resetForm(); composing = true }, containerColor = c.violet, contentColor = Color.White,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)) { Icon(Icons.Filled.Add, stringResource(R.string.tk_new)) }
     }
     if (composing) NewTicketDialog(s, vm, onDismiss = { composing = false }) { id -> composing = false; onOpenTicket(id) }
 }

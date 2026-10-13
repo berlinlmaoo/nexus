@@ -582,15 +582,24 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
         .filter { it.key !in cfg.hiddenGroups }
         .let { gs -> if (cfg.hideEmptyGroups && tab == ProjectTab.LIST) gs.filter { it.tasks.isNotEmpty() } else gs }
     LaunchedEffect(visibleTasks.map { it.id }) { vm.prune(visibleTasks.map { it.id }.toSet()) }
+    // The view's card / column properties (web visibleProps) and the tasks other projects linked in (board, by section).
+    val propCtx = PropCtx(CardProps.visible(cfg.visibleProps, view?.let { ViewsLogic.layoutOf(it) } ?: "board", fields, StatusOptions.inUse(s.lanes)),
+        fields, s.lanes, s.detail?.members.orEmpty().associate { it.uid to (it.user?.name ?: it.uid) }, today, vm.projectId)
+    val linkedLanes = if (tab != ProjectTab.BOARD || cfg.groupBy != "section") emptyList() else {
+        val tokens = BoardLogic.tokens(s.query)
+        BoardLogic.linkedLanes(s.lanes, vm.projectId) { t -> BoardLogic.matches(t, "", tokens) && ViewsLogic.filter(listOf(t), cfg, meId, today).isNotEmpty() }
+    }
     val canAddTask = access.canEdit && s.taskProject && s.lanes.isNotEmpty() && s.detail != null
 
     Box(Modifier.fillMaxSize().background(c.background)) {
         Column(Modifier.fillMaxSize()) {
+            val onAdd = if (canAddTask && tab != ProjectTab.FORMS) ({ createDue = null; creating = true }) else if (tab == ProjectTab.FORMS && access.canEdit) ({ onBuildForm(null) }) else null
+            val tabsShown = s.detail != null && !s.locked
             ProjectPageHeader(s.detail, onBack, onMembers = { membersOpen = true }, onGideon = { onOpenGideon(s.detail?.name.orEmpty()) }, onSettings = onOpenSettings,
-                onAdd = if (canAddTask && tab != ProjectTab.FORMS) ({ createDue = null; creating = true }) else if (tab == ProjectTab.FORMS && access.canEdit) ({ onBuildForm(null) }) else null)
-            if (s.detail != null && !s.locked) {
+                onAdd = onAdd, addInTabs = tabsShown)
+            if (tabsShown) {
                 ProjectTabRow(items, selectedItem, canAddView = s.taskProject && access.canEdit && s.views != null, onSelect = ::select,
-                    onViewMenu = { menuFor = it }, onAddView = { newView = true })
+                    onViewMenu = { menuFor = it }, onAddView = { newView = true }, onAdd = onAdd)
             }
             androidx.compose.material3.HorizontalDivider(color = c.border)
             // The template's "My …" preset (Notion's "My meetings"): assignee = me, on its tab.
@@ -603,24 +612,17 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
             }
             if (tab.searches && !s.locked && s.detail != null) {
                 Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        s.query, vm::setQuery, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) },
-                        trailingIcon = {
-                            if (s.query.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically) {
-                                // "0/84" is an answer, not a failure: an empty board otherwise reads as one that failed.
-                                Text("$shown/$total", fontSize = 11.sp, color = c.mutedFg)
-                                IconButton(onClick = { vm.setQuery("") }) { Icon(Icons.Filled.Close, stringResource(R.string.clear_search)) }
-                            }
-                        },
-                        placeholder = { Text(stringResource(R.string.board_search)) }, shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.weight(1f),
-                    )
+                    id.znetworks.nexus.ui.components.CompactSearchField(s.query, vm::setQuery, stringResource(R.string.board_search), Modifier.weight(1f)) {
+                        // "0/84" is an answer, not a failure: an empty board otherwise reads as one that failed.
+                        Text("$shown/$total", fontSize = 11.sp, color = c.mutedFg)
+                        IconButton(onClick = { vm.setQuery("") }, modifier = Modifier.size(36.dp)) { Icon(Icons.Filled.Close, stringResource(R.string.clear_search), modifier = Modifier.size(18.dp)) }
+                    }
                     if (view != null && s.taskProject) {
                         Spacer(Modifier.width(8.dp))
                         // The filter button: filled ink with the rule count when the view filters something.
                         Box {
                             id.znetworks.nexus.ui.components.HeaderIconButton(Icons.Filled.FilterList, stringResource(R.string.view_filter), { filterFor = view },
-                                primary = cfg.filtered, badge = cfg.rules.size.takeIf { it > 0 }?.toString())
+                                primary = cfg.filtered, badge = cfg.rules.size.takeIf { it > 0 }?.toString(), size = 44.dp)
                         }
                     }
                 }
@@ -656,9 +658,9 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                                     onDrill = { d -> vm.setDrill(d); views.firstOrNull { it.layout == "board" || it.layout == "list" }?.let { select(PageTabItem.View(it)) } },
                                     onEditBrief = onOpenSettings,
                                     onAddTask = { if (s.lanes.isNotEmpty() && access.canEdit) { createDue = null; creating = true } })
-                                ProjectTab.BOARD -> BoardView(groups, cfg, s.lanes, access, vm, s.selected, onOpenTask) { dupDateFor = it }
+                                ProjectTab.BOARD -> BoardView(groups, cfg, s.lanes, access, vm, s.selected, propCtx, linkedLanes, onOpenTask) { dupDateFor = it }
                                 ProjectTab.LIST -> ListView(view?.id ?: "list", groups, cfg, s.lanes, access, vm, s.selected, onOpenTask) { dupDateFor = it }
-                                ProjectTab.TABLE -> TableView(groups, cfg, s.lanes, fields, members, access, vm, s.selected, onOpenTask) { t -> dueFor = listOf(t.id) }
+                                ProjectTab.TABLE -> TableView(groups, cfg, s.lanes, propCtx, members, access, vm, s.selected, onOpenTask) { t -> dueFor = listOf(t.id) }
                                 ProjectTab.SHEET -> ProjectSpreadsheetTab(vm.projectId, web)
                                 ProjectTab.CALENDAR -> CalendarTab(visibleTasks, onOpenTask,
                                     plot = CalendarPlot(s.dateFields.orEmpty(), s.plotBy, vm::setPlotBy)) { d -> if (canAddTask) { createDue = d; creating = true } }

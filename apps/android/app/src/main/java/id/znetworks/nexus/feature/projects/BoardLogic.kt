@@ -43,6 +43,25 @@ object BoardLogic {
         return lanes.map { l -> l.copy(tasks = l.tasks.filter { matches(it, l.name, tk) }) }
     }
 
+    /** A read-only board lane of tasks linked in from another project (web `linkedLanes`). [name] null = unknown project. */
+    data class LinkedLane(val sourceId: String, val name: String?, val tasks: List<BoardTask>)
+
+    /**
+     * Tasks other projects linked into this one (`taskLists[].taskProjects`), one lane per source project, each task
+     * once, open before done (web $projectId.tsx linkedLanes). [keep] is the view's filter and the search.
+     */
+    fun linkedLanes(lanes: List<Lane>, projectId: String, keep: (BoardTask) -> Boolean = { true }): List<LinkedLane> {
+        val bySource = linkedMapOf<String, Pair<String?, MutableList<BoardTask>>>()
+        for (lane in lanes) for (link in lane.taskProjects) {
+            val t = link.task ?: continue
+            val source = t.projectId ?: "linked"
+            if (source == projectId || !keep(t)) continue
+            val g = bySource.getOrPut(source) { t.taskList?.project?.name to mutableListOf() }
+            if (g.second.none { it.id == t.id }) g.second += t
+        }
+        return bySource.map { (id, g) -> LinkedLane(id, g.first, g.second.sortedBy { if (it.isDone) 1 else 0 }) }
+    }
+
     /** Moves a card to another lane locally, before the server confirms (it reloads after). */
     fun move(lanes: List<Lane>, taskId: String, toLane: String): List<Lane> {
         val task = lanes.flatMap { it.tasks }.firstOrNull { it.id == taskId } ?: return lanes

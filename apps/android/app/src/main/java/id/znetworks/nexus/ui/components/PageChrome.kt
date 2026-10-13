@@ -1,5 +1,7 @@
 package id.znetworks.nexus.ui.components
 
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -158,12 +160,13 @@ fun HeaderIconButton(
     primary: Boolean = false,
     badge: String? = null,
     enabled: Boolean = true,
+    size: androidx.compose.ui.unit.Dp = 40.dp,
 ) {
     val c = Nx.colors
     val shape = RoundedCornerShape(8.dp)
     Box {
         Box(
-            Modifier.size(40.dp).clip(shape)
+            Modifier.size(size).clip(shape)
                 .background(if (primary) c.onyx else c.card)
                 .then(if (primary) Modifier else Modifier.border(1.dp, c.border, shape))
                 .clickable(enabled = enabled, role = Role.Button, onClickLabel = contentDescription, onClick = onClick)
@@ -240,4 +243,38 @@ fun <K> Segmented(options: List<Pair<K, String>>, value: K, onChange: (K) -> Uni
             }
         }
     }
+}
+
+/**
+ * A compact search box like the web's input (44 dp, card fill, thin border, a search glyph), for filter rows where a
+ * 56 dp Material field takes too much of a phone (owner, 14 Oct 2026). [trailing] shows while there is text.
+ */
+@Composable
+fun CompactSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    trailing: (@Composable RowScope.() -> Unit)? = null,
+) {
+    val c = Nx.colors
+    val shape = RoundedCornerShape(10.dp)
+    androidx.compose.foundation.text.BasicTextField(
+        value, onValueChange, singleLine = true,
+        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, color = c.foreground),
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(c.foreground),
+        modifier = modifier.height(44.dp),
+        decorationBox = { inner ->
+            Row(Modifier.fillMaxSize().clip(shape).background(c.card).border(1.dp, c.border, shape).padding(start = 12.dp, end = 4.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Icon(androidx.compose.material.icons.Icons.Filled.Search, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                    if (value.isEmpty()) Text(placeholder, fontSize = 15.sp, color = c.mutedFg, maxLines = 1)
+                    inner()
+                }
+                if (value.isNotEmpty() && trailing != null) trailing()
+            }
+        },
+    )
 }

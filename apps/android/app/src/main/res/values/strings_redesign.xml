@@ -243,4 +243,15 @@
     <string name="color_purple">Purple</string>
     <string name="color_pink">Pink</string>
     <string name="color_red">Red</string>
+    <!-- Card properties (web PropLine) and linked lanes, 14 Oct 2026 -->
+    <string name="cp_tags">Tags</string>
+    <string name="cp_created">Created</string>
+    <string name="cp_updated">Last edited</string>
+    <string name="cp_linked">Linked</string>
+    <string name="cp_another_project">Another project</string>
+    <string name="cp_from">From %1$s</string>
+    <plurals name="cp_files">
+        <item quantity="one">%d file</item>
+        <item quantity="other">%d files</item>
+    </plurals>
 </resources>

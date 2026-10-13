@@ -104,6 +104,7 @@ data class BoardTask(
     /** Who marked it done (project Overview's "Recently completed"). */
     val completedById: String? = null,
     val updatedAt: String? = null,
+    val createdAt: String? = null,
     val status: String? = null,
     val priority: String? = null,
     val startDate: String? = null,
@@ -118,6 +119,8 @@ data class BoardTask(
     val quests: List<QuestRef> = emptyList(),
     val taskList: TaskListRef? = null,
     val parentTitle: String? = null,
+    /** Free tags (web "Tags" property); read leniently, the server sends a string array. */
+    val tags: List<String> = emptyList(),
 ) {
     val isDone: Boolean get() = status.equals("DONE", true)
     val isSubtask: Boolean get() = !parentId.isNullOrBlank()
@@ -133,7 +136,13 @@ data class Lane(
     val taskStatus: String? = null,
     /** The status option's colour key (gray, blue, …; StatusOptions.palette); null = by its status. */
     val color: String? = null,
+    /** Tasks of other projects linked into this section (TaskProject rows): read-only "Linked" lanes on the board. */
+    val taskProjects: List<TaskLink> = emptyList(),
 )
+
+/** A task of another project linked into a section (`taskLists[].taskProjects[]`). */
+@Serializable
+data class TaskLink(val id: String? = null, val position: Int? = null, val task: BoardTask? = null)
 
 /** `GET /api/projects/{id}`. */
 @Serializable
