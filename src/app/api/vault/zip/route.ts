@@ -25,7 +25,7 @@ type Row = {
   name: string
   kind: string
   storageKey: string | null
-  size: number | null
+  size: bigint | null // BIGINT column (13 Oct 2026)
   minReadRole: string | null
   updatedAt: Date
 }
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
     const addFile = (row: Row, name: string): boolean => {
       if (!row.storageKey) return true
       files += 1
-      bytes += row.size ?? 0
+      bytes += Number(row.size ?? 0)
       if (files > VAULT_ZIP_MAX_FILES || bytes > VAULT_ZIP_MAX_BYTES) return false
       entries.push({ kind: "file", name, path: storagePath(row.storageKey), modified: row.updatedAt })
       return true

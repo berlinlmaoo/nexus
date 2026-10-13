@@ -3299,7 +3299,9 @@ model VaultItem {
   // traversal path mustahil secara struktural, bukan sekadar dijaga.
   storageKey String?
   mimeType   String?
-  size       Int?
+  // BIGINT since 13 Oct 2026: the 5 GB cap passes int4 (2 147 483 647). Prisma reads it back as a JS
+  // bigint; bytesNumber() in src/lib/vault.ts turns it into a number before JSON or an app sees it.
+  size       BigInt?
   // Dari PostImage: dimensi disimpan supaya pratinjau bisa memesan kotak rasio yang benar dan
   // tata letak tidak melompat saat gambar selesai dimuat. Dikirim klien; server tidak punya sharp.
   width      Int?

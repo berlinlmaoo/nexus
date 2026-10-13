@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { stat } from "fs/promises"
-import { createReadStream, existsSync } from "fs"
-import { Readable } from "stream"
+import { open, stat, type FileHandle } from "fs/promises"
+import { existsSync } from "fs"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Serving bytes off disk, in one place.
@@ -121,10 +120,58 @@ export function previewKindOf(filePath: string, storedMime?: string | null): Pre
   return null
 }
 
+const READ_BLOCK = 256 * 1024
+
 /** Stream a byte range straight off disk (constant memory) instead of buffering the whole file.
- *  `end` is inclusive for createReadStream. Returned as a web ReadableStream so NextResponse pipes it. */
-function fileStream(filePath: string, start: number, end: number): ReadableStream {
-  return Readable.toWeb(createReadStream(filePath, { start, end })) as unknown as ReadableStream
+ *  `end` is inclusive. Returned as a web ReadableStream so NextResponse pipes it.
+ *
+ *  PULL-based on a file handle, not Readable.toWeb(createReadStream()) (13 Oct 2026). toWeb pushes
+ *  from the fs stream's 'data' events; when a <video> drops a Range request (every seek, every
+ *  scroll-away) the web side is cancelled while a read is still landing, and Node 20 enqueues it on a
+ *  closed controller: "uncaughtException: Invalid state: Controller is already closed" in prod's log.
+ *  Here nothing is read unless the response asks for it, and a cancel only closes the handle. */
+function fileStream(filePath: string, start: number, end: number): ReadableStream<Uint8Array> {
+  let handle: FileHandle | null = null
+  let pos = start
+  let finished = false
+  const release = async () => {
+    finished = true
+    const h = handle
+    handle = null
+    await h?.close().catch(() => {})
+  }
+  return new ReadableStream<Uint8Array>(
+    {
+      async pull(controller) {
+        try {
+          if (finished) return
+          if (!handle) handle = await open(filePath, "r")
+          const want = Math.min(READ_BLOCK, end - pos + 1)
+          const buf = Buffer.allocUnsafe(Math.max(want, 0))
+          const { bytesRead } = want > 0 ? await handle.read(buf, 0, want, pos) : { bytesRead: 0 }
+          if (finished) return // cancelled while the read was in flight
+          if (bytesRead > 0) {
+            pos += bytesRead
+            controller.enqueue(new Uint8Array(buf.buffer, buf.byteOffset, bytesRead))
+          }
+          // bytesRead 0 before `end`: the file shrank under us; end the body (Content-Length will
+          // disagree and the client will see a short read, the same as with the old stream).
+          if (pos > end || bytesRead === 0) {
+            await release()
+            controller.close()
+          }
+        } catch (error) {
+          const wasFinished = finished
+          await release()
+          if (!wasFinished) controller.error(error)
+        }
+      },
+      async cancel() {
+        await release()
+      },
+    },
+    { highWaterMark: 1 },
+  )
 }
 
 export interface ServeFileOptions {

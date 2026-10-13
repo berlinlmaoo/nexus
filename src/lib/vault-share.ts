@@ -8,6 +8,7 @@ import {
   roleMeets,
   canThumbnail,
   fileVersion,
+  bytesNumber,
   type VaultActor,
 } from "@/lib/vault"
 
@@ -193,7 +194,7 @@ export async function resolveShare(slug: string): Promise<ShareResolution> {
       expiresAt: share.expiresAt,
       createdById: share.createdById,
       sharedBy: share.createdBy?.name ? { name: share.createdBy.name } : null,
-      item,
+      item: { ...item, size: bytesNumber(item.size) },
     },
   }
 }
@@ -268,8 +269,9 @@ export async function itemInShare(access: ShareAccess, itemId: string | null | u
   let inside = false
   let read: string | null = null
   for (let depth = 0; cursor && depth < 40; depth++) {
-    const row: ShareItem | null = await prisma.vaultItem.findUnique({ where: { id: cursor }, select: ITEM_SELECT })
-    if (!row) return null
+    const found = await prisma.vaultItem.findUnique({ where: { id: cursor }, select: ITEM_SELECT })
+    if (!found) return null
+    const row: ShareItem = { ...found, size: bytesNumber(found.size) }
     if (depth === 0) item = row
     if (!inside) {
       // Below the root: every step must be live and in the same vault.
@@ -316,7 +318,7 @@ export async function childrenInShare(access: ShareAccess, folder: ShareItem): P
   // A child's own lock wins; otherwise it has its folder's.
   return rows
     .filter((r) => roleMeets(access.role, r.minReadRole ?? folderRead))
-    .map(({ _count, ...r }) => ({ ...r, childCount: _count.children }))
+    .map(({ _count, ...r }) => ({ ...r, size: bytesNumber(r.size), childCount: _count.children }))
 }
 
 /** Where the bytes, the thumbnail and the zip of something inside a link are fetched. */

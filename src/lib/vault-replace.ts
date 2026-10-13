@@ -9,6 +9,7 @@ import {
   canModifyItem,
   uniqueNameInFolder,
   vaultUsedBytes,
+  bytesNumber,
   VAULT_QUOTA_BYTES,
   VAULT_ITEM_INCLUDE,
   type VaultActor,
@@ -72,7 +73,8 @@ export async function replaceTargetFor(actor: VaultActor, itemId: string, incomi
   // The old bytes stop counting once replaced (the quota sums live rows), so only the difference
   // has to fit.
   const used = await vaultUsedBytes(actor.workspaceId)
-  if (used - (item.size ?? 0) + incomingBytes > VAULT_QUOTA_BYTES) {
+  const oldBytes = bytesNumber(item.size) ?? 0
+  if (used - oldBytes + incomingBytes > VAULT_QUOTA_BYTES) {
     const freeGb = Math.max(0, (VAULT_QUOTA_BYTES - used) / 1024 ** 3)
     return {
       ok: false,
@@ -81,7 +83,7 @@ export async function replaceTargetFor(actor: VaultActor, itemId: string, incomi
       code: "QUOTA",
     }
   }
-  return { ok: true, item }
+  return { ok: true, item: { ...item, size: bytesNumber(item.size) } }
 }
 
 /**

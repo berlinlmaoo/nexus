@@ -8,8 +8,6 @@ import { logAudit } from "@/lib/audit"
 import { emitVaultChanged } from "@/lib/socket-emitter"
 import { mkdir, writeFile, readFile, rm, stat, readdir, rename, unlink } from "fs/promises"
 import { createReadStream, createWriteStream } from "fs"
-import { Readable, Transform } from "stream"
-import { pipeline } from "stream/promises"
 import { tmpdir } from "os"
 import path from "path"
 import { resolveMime } from "@/lib/mime"
@@ -52,6 +50,13 @@ const MAX_SESSIONS_PER_USER = 4 // caps concurrent in-flight uploads per user (d
 // finishes on the new slot instead of losing its parts with the old container's /tmp.
 const CHUNK_ROOT = process.env.NEXUS_CHUNK_DIR || path.join(tmpdir(), "nexus-chunk-uploads")
 const SWEEP_AGE_MS = 60 * 60 * 1000 // reap sessions idle >1h
+// At the session cap (13 Oct 2026): an unfinished session idle this long is abandoned — the web and
+// iOS clients send a chunk every few seconds, and give up after three tries — so it stops holding a slot.
+const STALE_SESSION_MS = 10 * 60 * 1000
+// A new session for the SAME file (same target, name, size and destination) means the client gave up
+// on the old one and started over (a new uploadId each attempt); its parts are dead weight on disk.
+const SAME_FILE_IDLE_MS = 60 * 1000
+const META_FILE = ".meta"
 const UPLOAD_ID_RE = /^[A-Za-z0-9_-]{8,64}$/
 
 // userId comes from the session (trusted); uploadId is regex-validated. Confine the dir to exactly
@@ -102,16 +107,95 @@ if (!_g.__nexusChunkSweep) {
   _g.__nexusChunkSweep.unref?.()
 }
 
-// Hard byte cap while streaming a chunk to disk (defense-in-depth vs a lying Content-Length).
-function byteLimiter(maxBytes: number): Transform {
+// The request body straight to `partPath`, at most `maxBytes` (defense-in-depth vs a lying
+// Content-Length). Returns false when the body went over budget or the write failed.
+//
+// Why not pipeline(Readable.fromWeb(request.body), …): on any failure pipeline CANCELS the web body,
+// while Next keeps feeding it from the socket ('data' → controller.enqueue on a closed controller),
+// which is an uncaughtException ("Invalid state: Controller is already closed") in the server log.
+// So the body is always read to its end, the surplus discarded, and the file write fails on its own.
+async function writeBody(body: ReadableStream<Uint8Array>, partPath: string, maxBytes: number): Promise<boolean> {
+  const out = createWriteStream(partPath)
+  let failed = false
   let seen = 0
-  return new Transform({
-    transform(chunk, _enc, cb) {
-      seen += chunk.length
-      if (seen > maxBytes) cb(new Error("chunk exceeds size budget"))
-      else cb(null, chunk)
-    },
+  out.on("error", () => {
+    failed = true
   })
+  const reader = body.getReader()
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (failed) continue
+      seen += value.byteLength
+      if (seen > maxBytes) {
+        failed = true
+        continue
+      }
+      if (!out.write(value)) {
+        await new Promise<void>((resolve) => {
+          const go = () => {
+            out.off("drain", go)
+            out.off("error", go)
+            resolve()
+          }
+          out.on("drain", go)
+          out.on("error", go)
+        })
+      }
+    }
+  } catch {
+    failed = true // the client went away mid-chunk: the stream errored on its own, nothing to cancel
+  } finally {
+    reader.releaseLock()
+  }
+  if (failed) {
+    out.destroy()
+    return false
+  }
+  return new Promise<boolean>((resolve) => {
+    out.end(() => resolve(!failed))
+    out.on("error", () => resolve(false))
+  })
+}
+
+type SessionInfo = { dir: string; done: boolean; idleMs: number; key: string | null }
+
+/** Every session of one user: finished or not, how long since anything was written, and which file. */
+async function userSessions(userDir: string): Promise<SessionInfo[]> {
+  let names: string[] = []
+  try {
+    names = await readdir(userDir)
+  } catch {
+    return []
+  }
+  const now = Date.now()
+  const out: SessionInfo[] = []
+  for (const name of names) {
+    const dir = path.join(userDir, name)
+    try {
+      let last = (await stat(dir)).mtimeMs
+      let done = false
+      let key: string | null = null
+      for (const f of await readdir(dir)) {
+        if (f === ".done") done = true
+        try {
+          last = Math.max(last, (await stat(path.join(dir, f))).mtimeMs)
+        } catch {
+          /* removed meanwhile */
+        }
+      }
+      try {
+        key = (JSON.parse(await readFile(path.join(dir, META_FILE), "utf8")) as { key?: string }).key ?? null
+      } catch {
+        /* sessions from before 13 Oct 2026 carry no meta */
+      }
+      out.push({ dir, done, idleMs: now - last, key })
+    } catch {
+      /* vanished */
+    }
+  }
+  return out
 }
 
 // Sum on-disk part sizes, optionally excluding one index (so an idempotent re-upload of the same index
@@ -227,6 +311,8 @@ export async function POST(request: NextRequest) {
 
     const sdir = sessionDir(userId, uploadId)
     const donePath = path.join(sdir, ".done")
+    // Which file this session carries, so a retry of the same file can retire its abandoned session.
+    const fileKey = JSON.stringify([target, filename, totalSize, replaceItemId ?? vaultParentId ?? taskId ?? "", pipelineDealId])
 
     // Idempotent short-circuit: a retried request after a successful finalize returns the stored row
     // (fixes lost-finalize-response → false failure + duplicate).
@@ -291,22 +377,27 @@ export async function POST(request: NextRequest) {
       isNewSession = true
     }
     if (isNewSession) {
+      // Only UNFINISHED sessions count (13 Oct 2026). A finished one keeps its .done marker for an hour
+      // so a lost response can be retried, but it holds no parts — counting it made a fifth upload
+      // within the hour fail with 429 even when nothing else was running.
       const userDir = path.join(CHUNK_ROOT, userId)
-      const count = async () => {
-        try {
-          return (await readdir(userDir)).length
-        } catch {
-          return 0
-        }
+      const retire = async (s: SessionInfo) => {
+        await rm(s.dir, { recursive: true, force: true }).catch(() => {})
       }
-      if ((await count()) >= MAX_SESSIONS_PER_USER) {
-        await sweepOld()
-        if ((await count()) >= MAX_SESSIONS_PER_USER)
+      let open = (await userSessions(userDir)).filter((s) => !s.done)
+      // The same file started over: the old attempt is dead (a new uploadId every attempt), reclaim it.
+      for (const s of open) if (s.key === fileKey && s.idleMs > SAME_FILE_IDLE_MS) await retire(s)
+      open = open.filter((s) => !(s.key === fileKey && s.idleMs > SAME_FILE_IDLE_MS))
+      if (open.length >= MAX_SESSIONS_PER_USER) {
+        for (const s of open) if (s.idleMs > STALE_SESSION_MS) await retire(s)
+        open = open.filter((s) => s.idleMs <= STALE_SESSION_MS)
+        if (open.length >= MAX_SESSIONS_PER_USER)
           return NextResponse.json({ error: "Terlalu banyak upload berjalan. Coba lagi sebentar." }, { status: 429 })
       }
     }
 
     await mkdir(sdir, { recursive: true })
+    if (isNewSession) await writeFile(path.join(sdir, META_FILE), JSON.stringify({ key: fileKey })).catch(() => {})
 
     // Running cumulative cap: existing parts (excluding this index for idempotent retry) + this chunk
     // must not exceed the declared size. Makes the 250MB ceiling real DURING upload, not just at finalize.
@@ -317,13 +408,7 @@ export async function POST(request: NextRequest) {
 
     // Stream the chunk straight to disk (constant memory), capped at the remaining budget.
     const partPath = path.join(sdir, `${chunkIndex}.part`)
-    try {
-      await pipeline(
-        Readable.fromWeb(request.body as Parameters<typeof Readable.fromWeb>[0]),
-        byteLimiter(Math.min(MAX_CHUNK, remaining)),
-        createWriteStream(partPath)
-      )
-    } catch {
+    if (!(await writeBody(request.body, partPath, Math.min(MAX_CHUNK, remaining)))) {
       await unlink(partPath).catch(() => {})
       return NextResponse.json({ error: "Chunk write failed" }, { status: 400 })
     }
@@ -386,7 +471,6 @@ export async function POST(request: NextRequest) {
           chunked: true,
         })
         committed = true
-      void pingSubmitter(taskId, userId) // Bukti Pencairan shows up on the submitter's board live
 
         const payload = serializeVaultItem((await replacedRow(replaceTarget.id)) as unknown as VaultItemRow, vaultActor)
         await writeFile(donePath, JSON.stringify(payload)).catch(() => {})
@@ -516,6 +600,7 @@ export async function POST(request: NextRequest) {
         },
       })
       committed = true
+      void pingSubmitter(taskId, userId) // Bukti Pencairan shows up on the submitter's board live
 
       // Mark done (so a lost-response retry is idempotent) BEFORE reclaiming the big temp parts.
       await writeFile(donePath, JSON.stringify(attachment)).catch(() => {})

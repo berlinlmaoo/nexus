@@ -272,12 +272,22 @@ export async function uniqueNameInFolder(
 
 /** Bytes currently held by files. Trashed files still occupy disk, and they are counted too —
  *  otherwise "empty the trash" would be optional and the quota a suggestion. */
+/**
+ * VaultItem.size is BIGINT since 13 Oct 2026 (the 5 GB cap put files past int4's 2 147 483 647), so
+ * Prisma hands it back as a JS bigint. Everything outside the database speaks plain numbers: JSON
+ * cannot carry a bigint (JSON.stringify throws), and the released iOS/Android apps decode `size` as a
+ * number. 5 GB and the 60 GB quota are far below 2^53, so Number() is exact. Convert at the boundary.
+ */
+export function bytesNumber(value: bigint | number | null | undefined): number | null {
+  return value == null ? null : Number(value)
+}
+
 export async function vaultUsedBytes(workspaceId: string): Promise<number> {
   const agg = await prisma.vaultItem.aggregate({
     where: { workspaceId, kind: "FILE" },
     _sum: { size: true },
   })
-  return agg._sum.size ?? 0
+  return bytesNumber(agg._sum.size) ?? 0
 }
 
 export async function assertQuota(workspaceId: string, incomingBytes: number): Promise<string | null> {
@@ -309,7 +319,7 @@ export interface VaultItemRow {
   icon: string | null
   color: string | null
   mimeType: string | null
-  size: number | null
+  size: bigint | number | null
   width: number | null
   height: number | null
   parentId: string | null
@@ -339,7 +349,7 @@ export function serializeVaultItem(row: VaultItemRow, actor: VaultActor) {
     icon: row.icon,
     color: row.color,
     mimeType: row.mimeType,
-    size: row.size,
+    size: bytesNumber(row.size),
     width: row.width,
     height: row.height,
     parentId: row.parentId,
