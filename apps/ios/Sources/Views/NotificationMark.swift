@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// A notification's mark (symbol + colour) from its type — the web inbox's `notificationMark`
-/// (apps/nexus-lovable-ui/src/routes/_app/inbox.tsx), same order of rules, same hues.
+/// (apps/web/src/routes/_app/inbox.tsx), same order of rules, same hues.
 struct NotificationMark {
     let symbol: String
     let color: Color

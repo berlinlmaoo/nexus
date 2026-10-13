@@ -1,4 +1,4 @@
-// Port of apps/nexus-lovable-ui/src/lib/sheet-numfmt.test.mjs (same cases, same expected values).
+// Port of apps/web/src/lib/sheet-numfmt.test.mjs (same cases, same expected values).
 import Foundation
 
 func runNumFmtTests() {

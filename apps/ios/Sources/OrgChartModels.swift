@@ -3,7 +3,7 @@ import Foundation
 // ─────────────────────────────────────────────────────────────────────────────
 // Bagan IP & Divisi — GET /api/admin/org-chart and the tree the Control Room tab draws from it.
 //
-// The rules are the web chart's (apps/nexus-lovable-ui/src/components/OrgChart.tsx), which the
+// The rules are the web chart's (apps/web/src/components/OrgChart.tsx), which the
 // owner signed off on 5 Oct 2026:
 // - a GROUP only arranges cards: no logo, no people, no leader. A card inside a group belongs to the
 //   nearest card above the group(s), whose BoD/Manager lead it;

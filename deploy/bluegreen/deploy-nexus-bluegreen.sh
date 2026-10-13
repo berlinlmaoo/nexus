@@ -159,7 +159,21 @@ docker run --rm -v "$APNS_KEY_FILE:/k.p8:ro" --entrypoint sh "$IMG_REPO:$IDLE" -
 # ============================ SPA ============================
 if [ "$BAGIAN" = semua ] || [ "$BAGIAN" = frontend ]; then
   say "SPA build"
-  APP="$REPO/apps/nexus-lovable-ui"
+  # The SPA lives in apps/web (renamed on 14 Oct 2026). A checkout from before the rename still has it under
+  # another apps/* folder: take the one that holds vite.config.ts, so this script builds either version.
+  APP="$REPO/apps/web"
+  [ -f "$APP/vite.config.ts" ] || APP="$(dirname "$(ls -d "$REPO"/apps/*/vite.config.ts 2>/dev/null | head -1)")"
+  [ -f "$APP/vite.config.ts" ] || { merah "BATAL: SPA folder tidak ketemu di $REPO/apps"; exit 1; }
+  echo "   SPA folder: ${APP#$REPO/}"
+  # Dependencies follow package-lock.json (same stamp as the dev deploy): a new folder or a changed lock -> npm ci.
+  stamp="$APP/node_modules/.lock-sha"
+  want=$(sha256sum "$APP/package-lock.json" | cut -c1-64)
+  if [ ! -x "$APP/node_modules/.bin/vite" ] || [ "$(cat "$stamp" 2>/dev/null)" != "$want" ]; then
+    echo "   npm ci (package-lock changed or first run in this folder)"
+    docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/.npm -v "$APP":/app -w /app node:22-alpine \
+      npm ci --no-audit --no-fund --loglevel=error || { merah "BATAL: npm ci gagal"; exit 1; }
+    echo "$want" > "$stamp"
+  fi
   [ -d "$APP/dist-bg" ] && rm -r "${APP:?}/dist-bg"
   docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$APP":/app -w /app node:22-alpine \
     ./node_modules/.bin/vite build --outDir dist-bg --emptyOutDir 2>&1 | tail -3

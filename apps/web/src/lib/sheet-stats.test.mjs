@@ -1,4 +1,4 @@
-// node --experimental-strip-types src/lib/sheet-stats.test.mjs   (from apps/nexus-lovable-ui)
+// node --experimental-strip-types src/lib/sheet-stats.test.mjs   (from apps/web)
 //
 // Column stats: counts, frequency table order, numeric totals, ignored header rows, histogram.
 import assert from "node:assert/strict"

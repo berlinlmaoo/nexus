@@ -1,5 +1,5 @@
 // Spreadsheet formula engine, value parsing and display formatting — Swift port of the web/server
-// engine apps/nexus-lovable-ui/src/lib/sheet-formula.ts (dev branch, Oct 2026). Read the TS file for
+// engine apps/web/src/lib/sheet-formula.ts (dev branch, Oct 2026). Read the TS file for
 // the design notes; every exported TS name exists here with the same meaning:
 //
 //   TS free function `foo(...)`      -> `SheetFormula.foo(...)`

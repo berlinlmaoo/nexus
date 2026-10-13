@@ -2,7 +2,7 @@ import SwiftUI
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The form builder — a port of the web's FormBuilder and ProjectFormsView
-// (apps/nexus-lovable-ui/src/components/forms/form-kit.tsx).
+// (apps/web/src/components/forms/form-kit.tsx).
 //
 // Owner, 9 Oct 2026: on iPhone and on the Mac, "+" on a project's Forms tab
 // opened New task, and there was no way to build a form at all — the app could

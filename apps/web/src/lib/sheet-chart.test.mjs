@@ -1,4 +1,4 @@
-// node --experimental-strip-types src/lib/sheet-chart.test.mjs   (from apps/nexus-lovable-ui)
+// node --experimental-strip-types src/lib/sheet-chart.test.mjs   (from apps/web)
 //
 // Charts: ranges -> categories and series (headers, labels, switched rows/columns, aggregate,
 // several ranges), Insert ▸ Chart's pick, histogram buckets and waterfall steps, range editing.

@@ -1,5 +1,5 @@
 # Edge nginx for nexus.patsgroup.id → Phaëthon (production).
-# Serves the built SPA (apps/nexus-lovable-ui/dist) statically + proxies /api & /auth
+# Serves the built SPA (apps/web/dist) statically + proxies /api & /auth
 # to the Phaëthon backend on the host (:3002). Fronted by the main Cloudflare tunnel
 # (nexus-cloudflared-1 → host :3000). Replaces the old maintenance page.
 #
@@ -15,7 +15,7 @@ services:
       - "127.0.0.1:3000:3000"
     volumes:
       - ./maintenance/phaethon.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./apps/nexus-lovable-ui/dist:/usr/share/nginx/html:ro
+      - ./apps/web/dist:/usr/share/nginx/html:ro
       # Keep the maintenance page available to swap back if needed:
       #   docker compose -f docker-compose.web.yml down
       #   docker run ... maintenance/default.conf  (rollback)

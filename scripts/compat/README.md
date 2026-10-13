@@ -79,7 +79,7 @@ Once per pass (`--min-version`, default `0.1.4` then `0.1.6`):
 | `ios-0.1.4` | UA `NEXUS/8 …`, no `X-Nexus-Client` | `nexus-ios` @ `5bb9f5b` |
 | `ios-0.1.5` | UA `NEXUS/11 …`, no header | `nexus-ios` @ `02eabab` |
 | `ios-0.1.6` | UA `NEXUS/12 …`, `X-Nexus-Client: ios/0.1.6/12` | `nexus-ios` @ HEAD (build 12) |
-| `web` | browser UA, `X-Nexus-Client: web/1`, session cookie | `apps/nexus-lovable-ui/src/lib/nexus-api.ts` |
+| `web` | browser UA, `X-Nexus-Client: web/1`, session cookie | `apps/web/src/lib/nexus-api.ts` |
 
 iOS login is `POST /api/auth/app-login` → `Cookie: <cookieName>=<token>` on every request, as the app
 does. Web login is `POST /api/auth/direct-login` with a same-origin `Origin`, and the `Set-Cookie`

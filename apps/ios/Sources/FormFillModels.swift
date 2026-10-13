@@ -2,7 +2,7 @@ import Foundation
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The public intake form — GET /api/forms/{id}/public — and the rules the web
-// renderer (apps/nexus-lovable-ui/src/routes/f.$formId.tsx) applies to it.
+// renderer (apps/web/src/routes/f.$formId.tsx) applies to it.
 //
 // Those rules are PORTED here rather than approximated, because both ends act on
 // them. The client decides what is shown and what is sent; the submit route

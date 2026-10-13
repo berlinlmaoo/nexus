@@ -3,7 +3,7 @@ import Foundation
 // ─────────────────────────────────────────────────────────────────────────────
 // Indonesian for the UI-tour parity fixes (13 Oct 2026): copy aligned with the dev web (dashboard greeting
 // and XP rules card, Messages, Tickets categories, Threads Mentions). Wording follows the web's
-// apps/nexus-lovable-ui/src/lib/i18n. Keys must not appear in any other Localization*.swift
+// apps/web/src/lib/i18n. Keys must not appear in any other Localization*.swift
 // (scripts/check-localization.sh).
 // ─────────────────────────────────────────────────────────────────────────────
 

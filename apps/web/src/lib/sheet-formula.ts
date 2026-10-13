@@ -4,7 +4,7 @@
 // The SPA is a separate Vite package and can't import from src/lib, so this exists twice, the same
 // way src/lib/gamification.ts is mirrored by the SPA's lib/levels.ts. The client evaluates for
 // display; the server needs the identical result for export and for GET /api/sheets/:id?computed=1.
-// apps/nexus-lovable-ui/src/lib/sheet-formula.test.mjs fails when the two copies differ.
+// apps/web/src/lib/sheet-formula.test.mjs fails when the two copies differ.
 //
 // ── Decisions that keep formulas from wrecking the data model ────────────────────────────────────
 //

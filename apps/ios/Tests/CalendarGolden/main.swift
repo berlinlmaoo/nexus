@@ -1,7 +1,7 @@
 // swiftc -O Sources/Shared/CalendarCore.swift Tests/CalendarGolden/main.swift -o /tmp/calgolden && /tmp/calgolden Tests/CalendarGolden
 //
 // Runs CalendarCore on the server's golden output of 18 Sep and 3 Oct 2026 at a fixed "now" and compares
-// every value with the web's golden-client files (apps/nexus-lovable-ui/src/lib/calendar/core.test.mjs
+// every value with the web's golden-client files (apps/web/src/lib/calendar/core.test.mjs
 // builds them). Exit 1 on the first difference. Linux: swift:5.10-jammy in Docker.
 import Foundation
 

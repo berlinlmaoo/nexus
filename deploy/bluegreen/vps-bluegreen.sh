@@ -192,7 +192,9 @@ case "$MODE" in
       docker tag "$(docker inspect -f '{{.Image}}' "$(bg_c "$live")")" "nexus-app:$idle"
     fi
     if [ "$part" != backend ]; then
-      APP="$SRC/apps/nexus-lovable-ui"
+      APP="$SRC/apps/web"   # renamed 14 Oct 2026; an older checkout: the apps/* folder that holds vite.config.ts
+      [ -f "$APP/vite.config.ts" ] || APP="$(dirname "$(ls -d "$SRC"/apps/*/vite.config.ts 2>/dev/null | head -1)")"
+      [ -f "$APP/vite.config.ts" ] || { red "SPA folder not found under $SRC/apps"; exit 1; }
       docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$APP":/app -w /app node:22-alpine sh -c 'npm ci --no-audit --no-fund --loglevel=error && ./node_modules/.bin/vite build --outDir dist-bg --emptyOutDir' | tail -2
       [ -f "$APP/dist-bg/index.html" ] || { red "SPA build failed"; exit 1; }
       [ -d "$APP/dist-bg/.well-known" ] && rm -r "${APP:?}/dist-bg/.well-known"

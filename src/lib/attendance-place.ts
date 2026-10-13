@@ -8,7 +8,7 @@
  *   - inside the radius (or unknown)                 → the office name, as before
  *
  * Pure (no prisma) so the unit test can load it directly: node src/lib/attendance-place.test.mjs.
- * The same rule is mirrored in the web (apps/nexus-lovable-ui/src/lib/attendance-place.ts) and iOS
+ * The same rule is mirrored in the web (apps/web/src/lib/attendance-place.ts) and iOS
  * (AttendanceRecord.placeLabel); change one, change the others.
  */
 

@@ -1,6 +1,6 @@
 // Live test of POST /api/collab/edit with a web Yjs client in the same page (12 Oct 2026, iOS editing).
 // Run on nexus-prod: put a session cookie (name=value) in /tmp/ct/token, then
-//   docker run --rm --network host -v /tmp/ct:/t -v $PWD/scripts/collab-edit-test.mjs:/t/test.mjs:ro -v ~/nexus-dev/apps/nexus-lovable-ui/node_modules:/t/node_modules:ro -w /t node:22-alpine node test.mjs <projectId>
+//   docker run --rm --network host -v /tmp/ct:/t -v $PWD/scripts/collab-edit-test.mjs:/t/test.mjs:ro -v ~/nexus-dev/apps/web/node_modules:/t/node_modules:ro -w /t node:22-alpine node test.mjs <projectId>
 // It creates a page in that project, checks live relay, conflict, keepBoth and persistence, then deletes it.
 // Two clients on one page: a "web" Yjs client in the live room, and the app's REST edit (POST /api/collab/edit).
 import { io } from "socket.io-client"

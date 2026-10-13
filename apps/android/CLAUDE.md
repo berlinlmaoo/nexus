@@ -32,7 +32,7 @@ Read these before writing code:
 | This repo | VM `agents`, `~/nexus-android` (`ssh agents`, user `debian`) |
 | iOS app (reference, read-only for you) | VM `agents`, `~/nexus-ios` |
 | Server (Next.js 15 + Prisma + Postgres) | VM `nexus-prod`, `~/nexus` |
-| Web SPA (Phaëthon, React/TanStack) | `nexus-prod:~/nexus/apps/nexus-lovable-ui` |
+| Web SPA (Phaëthon, React/TanStack) | `nexus-prod:~/nexus/apps/web` |
 | Production | `https://nexus.znetworks.id` (Cloudflare → nginx → container `nexus-app`) |
 | Office LAN shortcut | `https://lan.nexus.znetworks.id` (see API.md) |
 | Standby | VPS Sumopod, automatic failover after 10 min; runbook `/srv/RUNBOOK.md` there |

@@ -1,7 +1,7 @@
 import Foundation
 
 // Indonesian for the Mac / iPad page headers of the sidebar's root screens (13 Oct 2026): the web's own
-// titles and subtitles (apps/nexus-lovable-ui/src/lib/i18n/id-copy.ts), so both read the same.
+// titles and subtitles (apps/web/src/lib/i18n/id-copy.ts), so both read the same.
 // Keys must not appear in any other Sources/Localization*.swift table (duplicate keys trap at runtime).
 
 extension AppLanguage {

@@ -2,7 +2,7 @@
 # Deploy the LATEST code to STAGING (nexusdev.patsgroup.id). Prod is NOT touched.
 #   1. build the staging backend image (nexus-app:staging) from current src/
 #   2. (re)create the nexus-app-staging container on :3004 (shared prod DB)
-#   3. build the staging frontend -> apps/nexus-lovable-ui/dist-staging
+#   3. build the staging frontend -> apps/web/dist-staging
 #   4. restart the vite-preview launchd service (:4178 -> dist-staging -> :3004)
 #
 # After testing on nexusdev, run scripts/promote-to-prod.sh to ship the same build to prod.
@@ -10,7 +10,7 @@
 set -eu
 
 REPO="/Users/jagainmacmini1/Documents/nexus"
-APP="$REPO/apps/nexus-lovable-ui"
+APP="$REPO/apps/web"
 SERVICE="com.nexus.phaethon-preview"
 
 echo "==> [1/4] Building staging backend image (nexus-app:staging)…"

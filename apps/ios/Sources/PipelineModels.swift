@@ -5,7 +5,7 @@ import Foundation
 // Berlin: "GM gw udh kirim contoh pipeline dashboard yg dia pengen … tinggal diubah ke design NEXUS".
 // The GM's "Control Tower TZN" board lives inside a NEXUS project: one deal per client job, from first
 // contact to closed and paid. Spec: agents:~/handoff/chat/PIPELINE-DASHBOARD.md. Server: src/lib/pipeline.ts
-// and pipeline-server.ts; web: apps/nexus-lovable-ui/src/components/pipeline.
+// and pipeline-server.ts; web: apps/web/src/components/pipeline.
 //
 // Health, phases, days overdue and the KPI summary are computed by the SERVER on every read, so this app
 // does not port the GM's formulas: a phone that drifted from them would quote different numbers from the

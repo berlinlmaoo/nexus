@@ -1,4 +1,4 @@
-// node --experimental-strip-types src/lib/sheet-filter.test.mjs   (from apps/nexus-lovable-ui)
+// node --experimental-strip-types src/lib/sheet-filter.test.mjs   (from apps/web)
 //
 // Basic filter: header row stays, values / condition / colour criteria, slicers AND-ed, sorting.
 import assert from "node:assert/strict"

@@ -31,7 +31,7 @@ export async function GET() {
       automation: true,
     }
     // Flat fields for the older callers, plus the same object under `preferences`, which is what
-    // the SPA (apps/nexus-lovable-ui settings -> NotificationsSection) reads (method-fix 2026-09-24).
+    // the SPA (apps/web settings -> NotificationsSection) reads (method-fix 2026-09-24).
     return NextResponse.json({ ...preferences, preferences })
   } catch (error) {
     console.error("Error fetching notification preferences:", error)

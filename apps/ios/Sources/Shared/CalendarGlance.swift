@@ -8,7 +8,7 @@ import Foundation
 // works the picture out of it against "now" — bars, "+N", "Coming up", the four lists, the rings,
 // overdue — so it moves at WIB midnight and when a task's time passes without the app running.
 //
-// A port of the web's apps/nexus-lovable-ui/src/lib/calendar/glance.ts, held to the same golden
+// A port of the web's apps/web/src/lib/calendar/glance.ts, held to the same golden
 // files (Tests/CalendarGolden/glance, from fixtures/golden-glance). Change the rules there first.
 //
 // Foundation only: compiled into the app, the widget extension, the watch app and its complication.

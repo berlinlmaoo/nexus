@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// Bagan Approval di HP — pohon yang sama dengan web (`apps/nexus-lovable-ui/src/components/
+/// Bagan Approval di HP — pohon yang sama dengan web (`apps/web/src/components/
 /// ApprovalChart.tsx`), bukan daftar bertingkat.
 ///
 /// Daftar bertingkat yang dulu dipakai di sini menjawab "siapa di bawah siapa" satu bagian per

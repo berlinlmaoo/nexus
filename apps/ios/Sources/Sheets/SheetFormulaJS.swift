@@ -1,6 +1,6 @@
 // JavaScript-compatible primitives for the spreadsheet engine port.
 //
-// The web/server engine (apps/nexus-lovable-ui/src/lib/sheet-formula.ts) is JavaScript, and its
+// The web/server engine (apps/web/src/lib/sheet-formula.ts) is JavaScript, and its
 // results depend on JS semantics: Number#toString (shortest round-trip), toFixed / toPrecision,
 // Math.round (half up), Number(string), parseFloat, UTF-16 string lengths, Intl.NumberFormat
 // (shortest decimal + half-expand rounding) and String#localeCompare("id"). This file reproduces

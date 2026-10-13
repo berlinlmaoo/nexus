@@ -1,4 +1,4 @@
-// node --experimental-strip-types src/lib/project-views.test.mjs   (from apps/nexus-lovable-ui)
+// node --experimental-strip-types src/lib/project-views.test.mjs   (from apps/web)
 //
 // Saved views: filter (simple + advanced AND/OR), sort, group, header calculations, URL round trip,
 // the Overview drill, colours, config defaults.

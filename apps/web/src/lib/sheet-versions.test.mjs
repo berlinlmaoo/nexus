@@ -1,4 +1,4 @@
-// node --experimental-strip-types src/lib/sheet-versions.test.mjs   (from apps/nexus-lovable-ui)
+// node --experimental-strip-types src/lib/sheet-versions.test.mjs   (from apps/web)
 //
 // Version history: bursts of edits → versions grouped by day, named versions, the sheet at a version.
 import assert from "node:assert/strict"

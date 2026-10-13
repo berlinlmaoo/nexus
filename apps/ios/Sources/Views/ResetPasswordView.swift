@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Native port of the web's /forgot-password (apps/nexus-lovable-ui/src/routes/forgot-password.tsx):
+/// Native port of the web's /forgot-password (apps/web/src/routes/forgot-password.tsx):
 /// email, then the 6-digit code from the email together with the new password, then straight into
 /// the app with it.
 ///

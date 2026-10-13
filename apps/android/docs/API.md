@@ -508,7 +508,7 @@ Server: `@simplewebauthn/server`, `src/lib/passkey.ts`: `RP_ID = env PASSKEY_RP_
 
 ⚠ **SERVER CHANGE REQUIRED (Android passkeys cannot work today):**
 1. Credential Manager puts `origin: "android:apk-key-hash:<base64url(SHA-256 of the signing cert)>"` in `clientDataJSON`. `EXPECTED_ORIGINS` accepts only `https://nexus.znetworks.id`, so both `verifyRegistrationResponse` and `verifyAuthenticationResponse` throw. The user sees 400 "Could not verify that passkey" or 401 CredentialsSignin. The fix is to add the release (and debug, if wanted) `android:apk-key-hash:…` origins to `EXPECTED_ORIGINS`, e.g. a comma-separated `PASSKEY_ANDROID_ORIGINS` env. `rpID` stays `nexus.znetworks.id`.
-2. Credential Manager requires Digital Asset Links at `https://nexus.znetworks.id/.well-known/assetlinks.json` with `delegate_permission/common.get_login_creds` (and `handle_all_urls` if app links for `/f/*`, `/v/*` are wanted) for package + SHA-256. **Nothing serves it today.** `~/nexus/public/.well-known` does not exist. `apps/nexus-lovable-ui/public/.well-known/` holds only `apple-app-site-association`. In `maintenance/phaethon.conf`, nginx has `location = /.well-known/apple-app-site-association { try_files … }` followed by `location /.well-known/ { return 404; }`. So the fix needs the file in the SPA's `public/.well-known/` **plus** an explicit `location = /.well-known/assetlinks.json { default_type application/json; try_files $uri =404; }` before the catch-all 404. `scripts/deploy-phaethon.sh` protects `.well-known` (`LINDUNGI=".well-known"`), so check that the deploy copies the new file.
+2. Credential Manager requires Digital Asset Links at `https://nexus.znetworks.id/.well-known/assetlinks.json` with `delegate_permission/common.get_login_creds` (and `handle_all_urls` if app links for `/f/*`, `/v/*` are wanted) for package + SHA-256. **Nothing serves it today.** `~/nexus/public/.well-known` does not exist. `apps/web/public/.well-known/` holds only `apple-app-site-association`. In `maintenance/phaethon.conf`, nginx has `location = /.well-known/apple-app-site-association { try_files … }` followed by `location /.well-known/ { return 404; }`. So the fix needs the file in the SPA's `public/.well-known/` **plus** an explicit `location = /.well-known/assetlinks.json { default_type application/json; try_files $uri =404; }` before the catch-all 404. `scripts/deploy-phaethon.sh` protects `.well-known` (`LINDUNGI=".well-known"`), so check that the deploy copies the new file.
 
 #### `GET /api/auth/passkey`
 - **Auth:** session. **iOS:** `APIClient.swift:642` `passkeyList`.
@@ -2322,7 +2322,7 @@ positively recognises.
 - [ ] **C2 Serve `https://nexus.znetworks.id/.well-known/assetlinks.json`** (`application/json`, no
       redirect). Today `maintenance/phaethon.conf` serves only the Apple association file and answers
       404 for the rest of `/.well-known/`, and `deploy-phaethon.sh` protects that directory. So:
-      put the file in `apps/nexus-lovable-ui/public/.well-known/`, add an explicit nginx `location`, and
+      put the file in `apps/web/public/.well-known/`, add an explicit nginx `location`, and
       have the deploy copy it. Relations: `delegate_permission/common.get_login_creds` (passkeys and
       password autofill) and `delegate_permission/common.handle_all_urls` (App Links), with
       `package_name` + `sha256_cert_fingerprints` (Play signing key).

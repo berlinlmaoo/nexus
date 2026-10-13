@@ -12,7 +12,7 @@
 // fraction. One or two digits after the last separator ("150.000,50") are cents and are rounded.
 //
 // Self-contained on purpose (no imports): this exact file is also
-// apps/nexus-lovable-ui/src/lib/custom-field-number.ts — keep the two copies identical
+// apps/web/src/lib/custom-field-number.ts — keep the two copies identical
 // (src/lib/custom-field-number.test.mjs checks).
 
 export type NumberFieldFormat = "plain" | "currency-idr"

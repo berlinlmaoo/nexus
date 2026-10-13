@@ -16,6 +16,9 @@ WEBROOT="$DATA/web/html"; CONFD="$DATA/web/conf.d"; CHUNKS="$DATA/chunk-uploads"
 BASE="$REPO/var/uploads"; ANDROID_DIR="$DATA/android"; APNS="/etc/nexus/secrets/AuthKey_9PTCKVB26P.p8"
 NET=nexus_internal; OLDWEB=nexus-web; BETA=nexus-app-beta; BLUE=nexus-app-blue
 LAN_IP=192.168.223.111
+# SPA build output to seed html/blue: apps/web/dist since the 14 Oct 2026 rename; before it, another apps/* folder.
+SPA_DIST="$REPO/apps/web/dist"
+[ -f "$SPA_DIST/index.html" ] || { d=$(ls -d "$REPO"/apps/*/dist/index.html 2>/dev/null | head -1); [ -n "$d" ] && SPA_DIST="${d%/index.html}"; }
 red() { printf '\033[31m%s\033[0m\n' "$*"; }; green() { printf '\033[32m%s\033[0m\n' "$*"; }; say() { printf '\033[1m== %s\033[0m\n' "$*"; }
 die() { red "STOP: $*"; exit 1; }
 hjson() { docker exec "$1" node -e 'fetch("http://127.0.0.1:3000/api/health").then(r=>r.text()).then(console.log).catch(()=>console.log("down"))' 2>/dev/null; }
@@ -48,7 +51,7 @@ preflight)
   for p in 3012; do ss -ltn | grep -q ":$p " && { red "  port $p already in use"; ok=0; }; done
   docker inspect nexus-web-next nexus-app-blue >/dev/null 2>&1 && { red "  leftovers: nexus-web-next / nexus-app-blue exist"; ok=0; }
   echo "  disk: $(df -h / | tail -1)"
-  [ -f "$REPO/apps/nexus-lovable-ui/dist/index.html" ] || { red "  no SPA dist to seed html/blue"; ok=0; }
+  [ -f "$SPA_DIST/index.html" ] || { red "  no SPA dist to seed html/blue"; ok=0; }
   [ "$ok" = 1 ] && green "preflight OK" || die "preflight failed" ;;
 
 start-blue)
@@ -58,8 +61,8 @@ start-blue)
   cp -a "$REPO/maintenance/phaethon.conf" "$MIG/phaethon.conf.at-migration"
   rsync -a --delete "$REPO/deploy/bluegreen/" "$BG/bin/"; chmod +x "$BG/bin"/*.sh "$BG/bin"/*.py
   say "html/blue = the live dist (incl. .well-known), archive seeded with its assets"
-  rsync -a --delete "$REPO/apps/nexus-lovable-ui/dist/" "$WEBROOT/blue/"
-  rsync -a "$REPO/apps/nexus-lovable-ui/dist/assets/" "$WEBROOT/_archive/assets/"; chmod -R a+rX "$WEBROOT"
+  rsync -a --delete "$SPA_DIST/" "$WEBROOT/blue/"
+  rsync -a "$SPA_DIST/assets/" "$WEBROOT/_archive/assets/"; chmod -R a+rX "$WEBROOT"
   say "env + image of $BETA -> $BLUE"
   IMG=$(docker inspect -f '{{.Image}}' $BETA); docker tag "$IMG" nexus-app:blue
   ENVF=$(umask 077; mktemp); trap 'rm -f "$ENVF"' EXIT

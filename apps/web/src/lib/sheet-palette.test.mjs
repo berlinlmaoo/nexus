@@ -1,4 +1,4 @@
-// node --experimental-strip-types src/lib/sheet-palette.test.mjs   (from apps/nexus-lovable-ui)
+// node --experimental-strip-types src/lib/sheet-palette.test.mjs   (from apps/web)
 //
 // The Sheets colour palette, legacy colour mapping, font sizes, and the cell-style helpers that paint
 // them (hex colours, fonts, wrap, rotation, borders with style + colour).

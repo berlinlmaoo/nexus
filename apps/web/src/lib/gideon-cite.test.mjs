@@ -1,4 +1,4 @@
-// node --experimental-strip-types src/lib/gideon-cite.test.mjs   (from apps/nexus-lovable-ui)
+// node --experimental-strip-types src/lib/gideon-cite.test.mjs   (from apps/web)
 //
 // GIDEON reply safety net: ids → links or nothing, enums → labels, Sources = only what the answer names.
 import assert from "node:assert/strict"

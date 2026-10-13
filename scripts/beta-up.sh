@@ -34,7 +34,7 @@ cat <<'NEXT'
 BETA backend is up at http://127.0.0.1:3002 (isolated DB clone).
 Next:
   1) Point Phaëthon at beta + restart:
-       cd apps/nexus-lovable-ui && VITE_API_TARGET=http://127.0.0.1:3002 npm run dev
+       cd apps/web && VITE_API_TARGET=http://127.0.0.1:3002 npm run dev
   2) Public link for testers (Cloudflare quick tunnel to the frontend):
        cloudflared tunnel --url http://127.0.0.1:4178
      -> share the printed *.trycloudflare.com URL.

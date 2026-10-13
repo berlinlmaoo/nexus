@@ -7,7 +7,7 @@
 //   ios-0.1.6  nexus-ios @ HEAD     (build 12, UA "NEXUS/12 …", X-Nexus-Client: ios/0.1.6/12)
 //   ios-0.1.3  legacy build 7 (UA "NEXUS/7 …", no header). Source not pinned here; bodies modelled on
 //              0.1.4. It exists to exercise the minimum-version gate, not to certify 0.1.3 itself.
-//   web        apps/nexus-lovable-ui/src/lib/nexus-api.ts (X-Nexus-Client: web/1, FormData bodies,
+//   web        apps/web/src/lib/nexus-api.ts (X-Nexus-Client: web/1, FormData bodies,
 //              session cookie from /api/auth/direct-login)
 //   android-0.1.0  nexus-android docs/API.md (the contract the Android app is being built to; no Android
 //              build has shipped yet — re-pin to the app's own ApiClient once it exists).

@@ -532,7 +532,7 @@ struct APIClient {
 
     // MARK: - Password reset (signed out)
     //
-    // Same bodies as the web's forgot-password page (apps/nexus-lovable-ui/src/lib/nexus-api.ts,
+    // Same bodies as the web's forgot-password page (apps/web/src/lib/nexus-api.ts,
     // passwordReset*), against src/app/api/auth/password/reset/{request,verify,resend}. They go
     // through `runSignup` because they fail the same two ways sign-up does: a 429 that names how
     // long to wait, and "Validation failed" with the useful sentence tucked into `details`.

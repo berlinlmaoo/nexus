@@ -2,7 +2,7 @@ import Foundation
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The form builder's data — a port of the web's FormBuilder state
-// (apps/nexus-lovable-ui/src/components/forms/form-kit.tsx).
+// (apps/web/src/components/forms/form-kit.tsx).
 //
 // `Form.fields` and `Form.accessSchedule` are untyped JSON columns, and the web
 // edits a field as `{ ...f, ...patch }`: every key it does not know about rides

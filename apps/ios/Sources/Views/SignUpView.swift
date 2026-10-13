@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Native port of the web's /register (apps/nexus-lovable-ui/src/routes/register.tsx): details,
+/// Native port of the web's /register (apps/web/src/routes/register.tsx): details,
 /// then the 6-digit code from the email, then straight into the app.
 ///
 /// Drawn by LoginView in place of its sign-in card, on the same cream and glow, so it reuses the

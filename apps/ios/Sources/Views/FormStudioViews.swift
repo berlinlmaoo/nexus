@@ -3,7 +3,7 @@ import CoreImage.CIFilterBuiltins
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The pieces of the form studio — a port of the dev web's FormStudio
-// (apps/nexus-lovable-ui/src/components/forms/FormStudio.tsx, owner 12–13 Oct 2026: "copy Notion's").
+// (apps/web/src/components/forms/FormStudio.tsx, owner 12–13 Oct 2026: "copy Notion's").
 // A page-like canvas that looks like the form people fill in (cover, emoji, big title, description,
 // then each question as a card with its real input), tabs Questions · Settings · Share · Responses,
 // and an autosave state instead of a Save button. FormBuilderView (same folder) owns the state and

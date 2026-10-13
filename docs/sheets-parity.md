@@ -7,12 +7,12 @@ maps every inventory item to NEXUS.
 - **Before** = state at `1114d84` (12 Oct 2026, morning). **After** = state after the parity waves (see
   the commit list at the bottom). `have` / `partial` / `missing` / `n/a` (impossible or meaningless for an
   internal web app: Apps Script, add-ons, macros, data connectors, Forms, Drive-level file actions).
-- Code lives in `apps/nexus-lovable-ui/src/components/sheets/` (web) and `apps/nexus-lovable-ui/src/lib/sheet-*.ts`
+- Code lives in `apps/web/src/components/sheets/` (web) and `apps/web/src/lib/sheet-*.ts`
   (pure logic + tests); server in `src/lib/project-sheets.ts`, `src/app/api/sheets/**`.
 - Data model: everything new lives in the existing JSON columns — `ProjectSheet.settings` (sheet-level:
   CF rules, bandings, filter, filter views, slicers, named/protected ranges, groups, tables, charts, pivot,
   theme, locale, versions…) and `SheetRow.styles` (per cell: fonts, hex colours, borders, rotation, wrap,
-  number patterns, notes). No new table or column. Types: `apps/nexus-lovable-ui/src/lib/sheet-model.ts`;
+  number patterns, notes). No new table or column. Types: `apps/web/src/lib/sheet-model.ts`;
   server narrowing: `readSheetSettings` / `normalizeCellStyle`.
 
 | # | Inventory item (EN — ID) | Before | Before ref | After |

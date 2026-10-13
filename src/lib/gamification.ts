@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma"
 import { attendanceWallClockToUtc, formatAttendanceDateKey } from "@/lib/attendance"
 import type { Prisma } from "@/generated/prisma/client"
 
-// ===== Levels (mirror apps/nexus-lovable-ui/src/lib/levels.ts) =====
+// ===== Levels (mirror apps/web/src/lib/levels.ts) =====
 // Period-based scoring: every user starts each period at PERIOD_BASELINE_XP (1000 =
 // Diamond) and quests move them up (toward Anak Kesayangan AA = 1500) or down
 // (penalty quests → Gold/Silver/Iron, can go negative). Tiers rescaled to top out at 1500.

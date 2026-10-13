@@ -23,7 +23,7 @@
 # ============================================================================
 set -euo pipefail
 
-APP="/home/debian/nexus/apps/nexus-lovable-ui"
+APP="/home/debian/nexus/apps/web"
 DIST="$APP/dist"
 NEW="$APP/dist-new"
 DRY=0

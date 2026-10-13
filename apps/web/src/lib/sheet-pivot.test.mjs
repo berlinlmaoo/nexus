@@ -1,4 +1,4 @@
-// node --experimental-strip-types src/lib/sheet-pivot.test.mjs   (from apps/nexus-lovable-ui)
+// node --experimental-strip-types src/lib/sheet-pivot.test.mjs   (from apps/web)
 //
 // Pivot tables: grouping (multi-level, ordering), subtotals and grand totals, every summarise
 // function, "show as" percentages, filters, suggestions and the distinct values of a field.

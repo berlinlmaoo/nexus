@@ -1325,7 +1325,7 @@ struct StatCardView: View {
     }
 }
 
-/// The XP policy as shown on the web dashboard (apps/nexus-lovable-ui/src/components/XpRulesCard.tsx).
+/// The XP policy as shown on the web dashboard (apps/web/src/components/XpRulesCard.tsx).
 /// Keep the two in step by hand: there is no rules endpoint, and the numbers are policy, not config.
 enum XpRules {
     struct Row { let xp: String; let rule: String; let note: String; let auto: Bool }

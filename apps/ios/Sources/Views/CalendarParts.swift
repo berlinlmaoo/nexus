@@ -4,7 +4,7 @@ import UIKit
 // ─────────────────────────────────────────────────────────────────────────────
 // Calendar — the pieces CalendarView is built from: the month grid, the day panel's sections and
 // rows, the week "People" view, the filters and the read-only task preview. Same look and rules as
-// the web (apps/nexus-lovable-ui/src/components/calendar); the rules themselves are in
+// the web (apps/web/src/components/calendar); the rules themselves are in
 // Shared/CalendarCore.swift.
 //
 // Layout follows what is proven on device here: plain VStack/HStack (no lazy grid inside a two-way

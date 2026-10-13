@@ -71,7 +71,7 @@ export async function POST(
 }
 
 // DELETE = explicit, idempotent unlike (method-fix 2026-09-24).
-// The web task panel (apps/nexus-lovable-ui toggleTaskLike) sends POST to like and DELETE to
+// The web task panel (apps/web toggleTaskLike) sends POST to like and DELETE to
 // unlike; before this handler existed the DELETE answered 405 and a like could never be removed
 // from the web. Unlike POST this never toggles: removing a like that is not there is a no-op.
 // Same checks as POST (signed in + task exists). `likeCount` mirrors `count` because that is the

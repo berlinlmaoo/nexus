@@ -147,7 +147,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// The web Automations view (apps/nexus-lovable-ui automationSuggestions) calls this with
+// The web Automations view (apps/web automationSuggestions) calls this with
 // POST ?projectId=... and no body; GET reads only the query string and writes nothing, so POST
 // is served by the same handler instead of answering 405 (method-fix 2026-09-24).
 export const POST = GET

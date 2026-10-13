@@ -7,7 +7,7 @@
  * Stored values are his English keys (the dash in "Won – …" is an EN DASH); clients translate labels.
  *
  * Pure — no database, no imports. The web app keeps a byte-for-byte copy in
- * apps/nexus-lovable-ui/src/lib/pipeline.ts so an optimistic edit shows the same health the server will
+ * apps/web/src/lib/pipeline.ts so an optimistic edit shows the same health the server will
  * send back. Change both. The spec, with the formulas in a table: ~/handoff/chat/PIPELINE-DASHBOARD.md.
  */
 

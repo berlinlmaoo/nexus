@@ -5,7 +5,7 @@ NEXUS is the internal platform built for **PATS Group**. It started as an Asana-
 The repository is a monorepo with **two frontends sharing one Next.js API + PostgreSQL database**:
 
 - **`src/`** — the Next.js 15 application: all REST API routes, auth, real-time, scheduled jobs, **and** the original server-rendered web UI.
-- **`apps/nexus-lovable-ui/`** — **"Phaëthon"**, a Vite + React 19 single-page client (TanStack Router/Query) that talks to the same API.
+- **`apps/web/`** — **"Phaëthon"**, a Vite + React 19 single-page client (TanStack Router/Query) that talks to the same API.
 
 ## Tech Stack
 
@@ -95,7 +95,7 @@ npm install
 The Phaëthon SPA client is a separate package:
 
 ```bash
-cd apps/nexus-lovable-ui
+cd apps/web
 npm install
 ```
 
@@ -145,7 +145,7 @@ npm run build        # production build
 pm2 start npm --name nexus -- start
 ```
 
-**Phaëthon SPA client** (`apps/nexus-lovable-ui`):
+**Phaëthon SPA client** (`apps/web`):
 ```bash
 npm run dev          # Vite dev server, proxies /api → the Next.js backend
 npm run build        # static dist/ — serve behind nginx with /api proxied to the backend
@@ -208,7 +208,7 @@ src/                          # Next.js 15 — API, auth, real-time, crons + leg
 │   └── webhook-dispatcher.ts # Outbound webhooks
 └── generated/prisma/         # Generated Prisma client
 
-apps/nexus-lovable-ui/        # "Phaëthon" — Vite + React 19 SPA (TanStack Router/Query)
+apps/web/        # "Phaëthon" — Vite + React 19 SPA (TanStack Router/Query)
 ├── src/routes/_app/          # File-based routes (projects, attendance, feed, leaderboard, …)
 ├── src/components/           # Board, table view, task panel, motion toolkit, …
 └── src/lib/nexus-api.ts      # Typed API client against the Next.js backend

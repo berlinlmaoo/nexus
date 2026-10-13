@@ -59,7 +59,12 @@ NET_EDGE=nexus_dev_edge
 DEV_HOST=nexus-prod.tail765d02.ts.net
 DEV_PORT=8443
 DEV_URL="https://$DEV_HOST:$DEV_PORT"
-PROD_C=nexus-app-beta                      # read-only: env keys are copied from it
+# read-only: env keys are copied from the running prod app. Prod moved to blue-green on 12 Oct
+# (nexus-app-blue/green, no more nexus-app-beta): take whichever of them is running.
+PROD_C=nexus-app-beta
+for c in nexus-app-beta nexus-app-blue nexus-app-green; do
+  if [ "$(docker inspect -f "{{.State.Running}}" "$c" 2>/dev/null)" = true ]; then PROD_C=$c; break; fi
+done
 WEBROOT="$DATA/web"                        # blue/ green/ _archive/ (mounted at /usr/share/nginx/html)
 BG_STATE="$DATA/bluegreen"
 BGBIN="$BG_STATE/bin"                      # tooling copied from the deployed commit (rollback never needs the repo)
@@ -417,7 +422,9 @@ if [ "$BAGIAN" != "web" ]; then
   # ---- SPA into html/<idle>
   if [ "$BAGIAN" = all ] || [ "$BAGIAN" = frontend ]; then
     say "SPA build (VITE_NEXUS_ENV=dev)"
-    APP="$REPO/apps/nexus-lovable-ui"
+    APP="$REPO/apps/web"   # renamed 14 Oct 2026; an older checkout: the apps/* folder that holds vite.config.ts
+    [ -f "$APP/vite.config.ts" ] || APP="$(dirname "$(ls -d "$REPO"/apps/*/vite.config.ts 2>/dev/null | head -1)")"
+    [ -f "$APP/vite.config.ts" ] || { red "SPA folder not found under $REPO/apps"; exit 1; }
     stamp="$APP/node_modules/.lock-sha"
     want=$(sha256sum "$APP/package-lock.json" | cut -c1-64)
     if [ "$(cat "$stamp" 2>/dev/null)" != "$want" ]; then

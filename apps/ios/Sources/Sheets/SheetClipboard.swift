@@ -1,5 +1,5 @@
 // Spreadsheet clipboard, interoperable with Google Sheets and Excel — the pure parts of
-// apps/nexus-lovable-ui/src/components/sheets/sheet-clipboard.ts. OUT: TSV of display strings
+// apps/web/src/components/sheets/sheet-clipboard.ts. OUT: TSV of display strings
 // (text/plain), an HTML <table> (text/html) and our own JSON (NEXUS_MIME) with raw values, formats
 // and formulas. IN: our JSON when present, else an HTML table (colspan/rowspan expanded, <br> as a
 // newline), else TSV. Reading/writing UIPasteboard is the UI's job; it passes strings in and out.

@@ -1,19 +1,19 @@
-# NEXUS — Migration Plan: Full Feature Parity (lovable-ui)
+# NEXUS — Migration Plan: Full Feature Parity (web SPA)
 
-> Goal: bring **every feature** of the running NEXUS app into the new frontend (`apps/nexus-lovable-ui`).
+> Goal: bring **every feature** of the running NEXUS app into the new frontend (`apps/web`).
 > Status legend: ✅ done · 🟡 partial/mock · ⬜ not started
 
 ## 0. The key realization — this is a FRONTEND rebuild, not a backend migration
 
-The new app (`nexus-lovable-ui`, Vite + TanStack Start, :4178) **already talks to the same backend** as the running Next.js app (`Documents/nexus`, :3020) — `vite.config.ts` proxies `/api/*` and `/auth/*` → `127.0.0.1:3020`, and `nexusApi.apiFetch` sends session cookies (`credentials: "include"`).
+The new app (`apps/web`, Vite + TanStack Start, :4178) **already talks to the same backend** as the running Next.js app (`Documents/nexus`, :3020) — `vite.config.ts` proxies `/api/*` and `/auth/*` → `127.0.0.1:3020`, and `nexusApi.apiFetch` sends session cookies (`credentials: "include"`).
 
-**Implication:** the backend stays put — 129 API routes, Prisma (~50 models), NextAuth, AI, automations, webhooks, socket.io. We do **not** re-implement any of it. "Move all features" = **build every screen/flow in lovable-ui and wire it to the existing API**, plus grow the `nexusApi` client (currently ~25 methods → needs the full surface).
+**Implication:** the backend stays put — 129 API routes, Prisma (~50 models), NextAuth, AI, automations, webhooks, socket.io. We do **not** re-implement any of it. "Move all features" = **build every screen/flow in the SPA and wire it to the existing API**, plus grow the `nexusApi` client (currently ~25 methods → needs the full surface).
 
 This makes the work large but mechanical and low-risk: no data-model or auth rewrite, just UI + client methods, page by page, against a known API.
 
 ---
 
-## 1. Current state of lovable-ui
+## 1. Current state of the SPA
 
 **Wired to live API:** login, `_app` auth guard, my-tasks, projects (list), projects/:id (board+sprints+docs tabs), goals (list), docs, inbox.
 **Partial (live + mock fallback):** dashboard, attendance.
@@ -25,7 +25,7 @@ This makes the work large but mechanical and low-risk: no data-model or auth rew
 
 ## 2. Gap inventory (what the backend has that the frontend lacks)
 
-| Area | Backend has | lovable-ui status |
+| Area | Backend has | SPA status |
 |---|---|---|
 | Task depth | comments+reactions, attachments, dependencies/relations, followers, likes, subtasks, custom fields, time entries, activity, duplicate | ⬜ none (only status toggle) |
 | Task detail page `/tasks/[id]` | full page | ⬜ |
@@ -56,7 +56,7 @@ This makes the work large but mechanical and low-risk: no data-model or auth rew
 ---
 
 ## 2b. Decisions (locked 2026-06-01)
-- **End goal: REPLACE** the Next.js frontend entirely → lovable-ui must reach **100% parity** (all features, incl. niche ones). Backend :3020 stays as the API.
+- **End goal: REPLACE** the Next.js frontend entirely → the SPA must reach **100% parity** (all features, incl. niche ones). Backend :3020 stays as the API.
 - **Execution: PER-MODULE, complete each domain to 100%** before moving on (vertical slices), not horizontal phase sweeps.
 - **Real-time in foundation**: wire `socket.io-client` (via proxy ws) → TanStack Query invalidation up front, so every module built after is live by default.
 
@@ -135,7 +135,7 @@ This makes the work large but mechanical and low-risk: no data-model or auth rew
 - Mobile responsiveness + a11y (focus rings already themed).
 
 ## 5. Risks / open questions (need answers to finalize order)
-1. **Production integration**: in dev we proxy to :3020. In prod, how does lovable-ui reach the backend (reverse-proxy same-origin vs `VITE_API_BASE`)? Affects auth-cookie domain. **Blocking for deploy, not for building.**
-2. **End goal**: fully **replace** the Next.js frontend (lovable-ui must hit 100% parity) or run both in parallel?
+1. **Production integration**: in dev we proxy to :3020. In prod, how does the SPA reach the backend (reverse-proxy same-origin vs `VITE_API_BASE`)? Affects auth-cookie domain. **Blocking for deploy, not for building.**
+2. **End goal**: fully **replace** the Next.js frontend (the SPA must hit 100% parity) or run both in parallel?
 3. **Scope priority**: build the full 25+ capability set, or ship the core daily-use set first (tasks/projects/docs/goals/attendance/calendar) and treat heavy/niche items (Gideon AI, NAS/Drive, SCIM/SSO, import) as a later tranche?
 4. **Real-time**: required at parity, or acceptable to add after core screens?

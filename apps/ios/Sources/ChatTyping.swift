@@ -16,7 +16,7 @@ import Observation
 ///   receiving  someone stays shown `expireAfter` after their last "typing", unless "stopped" or their
 ///              message comes first. Everything clears when the connection drops.
 ///
-/// Same timings as the web (apps/nexus-lovable-ui/src/lib/chat-typing.ts).
+/// Same timings as the web (apps/web/src/lib/chat-typing.ts).
 @MainActor
 @Observable
 final class ChatTyping {

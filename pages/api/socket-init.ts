@@ -1,7 +1,7 @@
 /**
  * Alias for ./realtime-init. Do not delete without checking BOTH front ends.
  *
- * The production web app is Phaethon (apps/nexus-lovable-ui), not the Next.js pages - nginx serves
+ * The production web app is Phaethon (apps/web), not the Next.js pages - nginx serves
  * the SPA statically and only proxies /api and /auth here. Phaethon boots the Socket.IO server with
  * `fetch("/api/socket-init")` (src/lib/socket.ts), so renaming this route away left nothing in
  * production calling the bootstrap at all: after every container restart the engine never attached

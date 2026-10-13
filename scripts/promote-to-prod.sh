@@ -10,7 +10,7 @@
 set -eu
 
 REPO="/Users/jagainmacmini1/Documents/nexus"
-APP="$REPO/apps/nexus-lovable-ui"
+APP="$REPO/apps/web"
 cd "$REPO"
 
 if ! docker image inspect nexus-app:staging >/dev/null 2>&1; then

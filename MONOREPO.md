@@ -5,7 +5,7 @@ One repo, `github.com/berlinlmaoo/nexus`, branch **dev** for all redesign work:
 | Path | What | Built where |
 |---|---|---|
 | `src/`, `pages/`, `prisma/`, `deploy/` | server (Next.js API, realtime, cron) | nexus-prod (`~/deploy-nexus-dev.sh`, prod blue-green) |
-| `apps/nexus-lovable-ui` | web SPA | nexus-prod (same deploy) |
+| `apps/web` | web SPA | nexus-prod (same deploy) |
 | `apps/ios` | iOS / iPadOS / macOS app (was `nexus-ios`, history kept) | owner's Mac: `cd apps/ios && xcodegen generate`, Xcode |
 | `apps/android` | Android app (was `nexus-android`, history kept) | VM agents: `cd apps/android && ./gradlew …` |
 

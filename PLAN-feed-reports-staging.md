@@ -18,7 +18,7 @@ Tiga hal yang dikerjain, dalam urutan ini:
 
 **Prinsip lintas-fitur (dari UX critique, paling penting):** **cocokkan motion ke bobot emosi momennya.** `celebrate()` confetti = benar untuk like-milestone di feed (jarang, positif, low-stakes); **salah total untuk verdict cepu** (konsekuensial, ada pihak yang dirugikan). Motion = insentif. Salah nada di cepu = no amount of backend rate-limiting nyelametin.
 
-**Backend:** semua di `nexus-app-beta` (:3002 → prod DB). Frontend `apps/nexus-lovable-ui` di-build ke `dist`. Migration additive, **lo yang apply ke prod DB** (harness diblokir dari DB writes/migrations).
+**Backend:** semua di `nexus-app-beta` (:3002 → prod DB). Frontend `apps/web` di-build ke `dist`. Migration additive, **lo yang apply ke prod DB** (harness diblokir dari DB writes/migrations).
 
 ---
 
@@ -73,7 +73,7 @@ Semua **workspace-scoped** (IDOR canon — workspace dari session membership, **
 
 ### 2.3 UI/UX + animations
 
-**Files baru di `apps/nexus-lovable-ui/src/`:** `routes/_app/feed.tsx` (FeedPage, `useInfiniteQuery(['feed',tab])`, IntersectionObserver sentinel), `components/feed/{Composer,PostCard,ImageGrid,ImageLightbox,PostDetailModal}.tsx`.
+**Files baru di `apps/web/src/`:** `routes/_app/feed.tsx` (FeedPage, `useInfiniteQuery(['feed',tab])`, IntersectionObserver sentinel), `components/feed/{Composer,PostCard,ImageGrid,ImageLightbox,PostDetailModal}.tsx`.
 
 **Reuse yang sudah ada (jangan bikin baru):**
 - `@mention autocomplete` → **extract jadi shared `useMentionAutocomplete` hook** dari `TaskDetailPanel.tsx:1067-1144` (regex `(?:^|\s)@(\S*)$`, popover `members.slice(0,6)`, arrow/Enter/Tab/Esc, submit-filter "only keep mentions still in text"). Feed + task comments berhenti duplikat.
@@ -310,7 +310,7 @@ docker compose -p nexus-staging ... run --rm migrate-staging      # USER — app
 ### 4.4 Deploy flow
 
 ```
-edit src/ + apps/nexus-lovable-ui/
+edit src/ + apps/web/
   → sh scripts/deploy-staging.sh        # build nexus-app:staging, recreate :3004, vite build→dist-staging, kick :4178
     (separate-DB: re-seed + migrate-staging)
   → verify https://nexusdev.patsgroup.id   # feed posts, cepu, XP, attendance, login
@@ -414,4 +414,4 @@ Critical path: Staging → Feed (ship+promote) → Cepu P1 → [Governance gate]
 
 ---
 
-**File-file load-bearing:** `prisma/schema.prisma` + `prisma/manual-migrations/{2026-06-XX-feed,2026-06-19-peer-reports}.sql` · `src/lib/gamification.ts` (`verifyPeerReport`, advisory-lock) · `src/lib/notification-service.ts` (`notifyMention` reuse + 2 cepu fns) · `src/lib/peer-reports.ts` (event/audit) · `src/app/api/{feed,peer-reports}/` · `apps/nexus-lovable-ui/src/routes/_app/{feed,peer-reports}.tsx` + `components/feed/*` + `components/motion/*` + `Celebration.tsx` + `TaskDetailPanel.tsx:1067-1144` (mention source) + `AppSidebar.tsx`/`MobileTabBar.tsx` + `lib/nexus-api.ts` · `docker-compose.staging.yml` + `scripts/{deploy-staging,promote-to-prod}.sh` + `backup_postgres.sh` + `.env.production` + the `:4178` launchd preview. **Cloudflare `nexusdev` route = dashboard/token-tunnel, BUKAN `~/.cloudflared/nexus-dashboard.yml`.**
+**File-file load-bearing:** `prisma/schema.prisma` + `prisma/manual-migrations/{2026-06-XX-feed,2026-06-19-peer-reports}.sql` · `src/lib/gamification.ts` (`verifyPeerReport`, advisory-lock) · `src/lib/notification-service.ts` (`notifyMention` reuse + 2 cepu fns) · `src/lib/peer-reports.ts` (event/audit) · `src/app/api/{feed,peer-reports}/` · `apps/web/src/routes/_app/{feed,peer-reports}.tsx` + `components/feed/*` + `components/motion/*` + `Celebration.tsx` + `TaskDetailPanel.tsx:1067-1144` (mention source) + `AppSidebar.tsx`/`MobileTabBar.tsx` + `lib/nexus-api.ts` · `docker-compose.staging.yml` + `scripts/{deploy-staging,promote-to-prod}.sh` + `backup_postgres.sh` + `.env.production` + the `:4178` launchd preview. **Cloudflare `nexusdev` route = dashboard/token-tunnel, BUKAN `~/.cloudflared/nexus-dashboard.yml`.**

@@ -1,4 +1,4 @@
-// node --experimental-strip-types src/lib/sheet-cf.test.mjs   (from apps/nexus-lovable-ui)
+// node --experimental-strip-types src/lib/sheet-cf.test.mjs   (from apps/web)
 //
 // Conditional formatting: conditions (shared with the filter), rule priority, colour scales.
 import assert from "node:assert/strict"

@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - API
 //
 // Mirrors src/app/api/user/email/{request,verify}/route.ts and the web's EmailChangeField in
-// apps/nexus-lovable-ui/src/routes/_app/settings.tsx. Kept in this file, as an extension, so the
+// apps/web/src/routes/_app/settings.tsx. Kept in this file, as an extension, so the
 // change-email flow does not have to thread through APIClient.swift's own request helpers.
 
 /// `POST /api/user/email/request` → `{ ok, resendInSeconds }`.

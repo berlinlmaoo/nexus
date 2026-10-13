@@ -3,7 +3,7 @@ import Foundation
 // ─────────────────────────────────────────────────────────────────────────────
 // Calendar (master calendar) — the data the server sends and the rules every client applies to it.
 //
-// A line-by-line port of the web reference apps/nexus-lovable-ui/src/lib/calendar/core.ts. Pure
+// A line-by-line port of the web reference apps/web/src/lib/calendar/core.ts. Pure
 // Foundation, no UIKit/SwiftUI, so it builds for the app, the widgets and the watch, and its golden
 // test runs on Linux (Tests/CalendarGolden, swift:5.10 in Docker) against the same golden files as the
 // web and Android. Change the rules in all three together.

@@ -10,7 +10,7 @@
  * deleted, and are shown or hidden by Project.hiddenTabs exactly as the tabs were — released iOS / Android
  * apps only know hiddenTabs and keep working unchanged. Hide a built-in view = add its key to hiddenTabs.
  *
- * `config` is stored as JSON and read by the web (apps/nexus-lovable-ui/src/lib/project-views.ts, which
+ * `config` is stored as JSON and read by the web (apps/web/src/lib/project-views.ts, which
  * evaluates it). The server does not evaluate it; it only checks its SHAPE here so a client cannot store
  * junk or something huge. Unknown keys are dropped, so a newer client's extra keys need a server update.
  *

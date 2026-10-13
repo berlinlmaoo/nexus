@@ -63,7 +63,7 @@ export async function POST(
 }
 
 // DELETE = explicit, idempotent removal of the caller's own reaction (method-fix 2026-09-24).
-// The web task panel (apps/nexus-lovable-ui removeCommentReaction) sends DELETE with a JSON body
+// The web task panel (apps/web removeCommentReaction) sends DELETE with a JSON body
 // { emoji }; before this handler existed it answered 405. Unlike POST this never toggles:
 // removing a reaction that is not there is a no-op. Same checks as POST (signed in + emoji given);
 // it can only ever delete rows owned by the caller.

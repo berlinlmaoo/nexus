@@ -2,7 +2,7 @@
 //   Tests/CalendarGlanceGolden/main.swift -o /tmp/glgolden && /tmp/glgolden Tests/CalendarGlanceGolden
 //
 // Runs CalendarGlance (the widget rules) on the web's glance fixtures at four moments and compares every
-// value with the web's golden files (apps/nexus-lovable-ui/src/lib/calendar/glance.test.mjs builds both:
+// value with the web's golden files (apps/web/src/lib/calendar/glance.test.mjs builds both:
 // input/ = fixtures/glance, golden/ = fixtures/golden-glance). Exit 1 on any difference.
 // Linux: swift:5.10-jammy in Docker.
 import Foundation

@@ -1,4 +1,4 @@
-// node --experimental-strip-types src/lib/sheet-numfmt.test.mjs   (from apps/nexus-lovable-ui)
+// node --experimental-strip-types src/lib/sheet-numfmt.test.mjs   (from apps/web)
 //
 // Number formats: Sheets custom pattern syntax (sections, colours, conditions, digits, scaling,
 // scientific, fractions, text, dates/times/durations) in both display locales, the explicit

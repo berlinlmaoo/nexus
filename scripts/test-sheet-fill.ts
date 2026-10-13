@@ -1,5 +1,5 @@
 /** fillValues checks. `npx tsx scripts/test-sheet-fill.ts` */
-import { fillValues } from "../apps/nexus-lovable-ui/src/components/sheets/sheet-types"
+import { fillValues } from "../apps/web/src/components/sheets/sheet-types"
 
 let pass = 0, fail = 0
 const check = (n: string, a: unknown, b: unknown) => {

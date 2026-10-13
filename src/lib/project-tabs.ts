@@ -14,7 +14,7 @@
  * Finance and P&L are not in this list: both were retired on 11 Oct 2026 (lib/project-retired-flags.ts),
  * and financeEnabled / enablePnlDashboard always read false.
  *
- * The same keys are used by web (apps/nexus-lovable-ui) and iOS (ProjectTab.key). A client must ignore
+ * The same keys are used by web (apps/web) and iOS (ProjectTab.key). A client must ignore
  * a key it does not know, so this list can grow without breaking an older app.
  */
 

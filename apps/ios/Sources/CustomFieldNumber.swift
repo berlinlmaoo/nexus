@@ -2,7 +2,7 @@ import Foundation
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NUMBER custom fields as people in Indonesia type them — a line-by-line port of the web's
-// apps/nexus-lovable-ui/src/lib/custom-field-number.ts (identical to the server's src/lib copy).
+// apps/web/src/lib/custom-field-number.ts (identical to the server's src/lib copy).
 //
 // Owner bug (12 Oct 2026): "369.000" typed into a Rupiah field was stored as the text "369.000" and read
 // back as 369 → "Rp 369". The server now normalises every NUMBER write; the app does the same before it

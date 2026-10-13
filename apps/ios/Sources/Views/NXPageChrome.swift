@@ -1,6 +1,6 @@
 import SwiftUI
 
-// The dev web's page chrome (apps/nexus-lovable-ui/src/components/PageHeader.tsx + components/ui/button.tsx),
+// The dev web's page chrome (apps/web/src/components/PageHeader.tsx + components/ui/button.tsx),
 // for the regular width (iPad landscape, Mac): a left-aligned title (text-2xl semibold) with a one-line muted
 // subtitle, actions at the right as bordered buttons (h-9, rounded-md, text-sm medium), the primary action
 // near-black (web --primary #202023) — not violet — and a hairline under the header. On the phone screens

@@ -1,4 +1,4 @@
-// node --experimental-strip-types src/lib/sheet-validation.test.mjs   (from apps/nexus-lovable-ui)
+// node --experimental-strip-types src/lib/sheet-validation.test.mjs   (from apps/web)
 //
 // Data validation: ranges typed the Sheets way <-> stored id-space ranges, which rule covers a cell,
 // and whether a value passes each kind of criteria.

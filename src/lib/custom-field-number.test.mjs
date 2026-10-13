@@ -10,7 +10,7 @@ import assert from "node:assert/strict"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const tsPath = path.join(here, "custom-field-number.ts")
-const webPath = path.join(here, "..", "..", "apps", "nexus-lovable-ui", "src", "lib", "custom-field-number.ts")
+const webPath = path.join(here, "..", "..", "apps", "web", "src", "lib", "custom-field-number.ts")
 
 async function load() {
   try {
@@ -136,8 +136,8 @@ check("display helpers", () => {
 })
 
 const [a, b] = await Promise.all([readFile(tsPath, "utf8"), readFile(webPath, "utf8").catch(() => null)])
-if (b === null) console.log("skip web copy check (apps/nexus-lovable-ui not present)")
-else check("web copy matches", () => assert.equal(b, a, "apps/nexus-lovable-ui/src/lib/custom-field-number.ts differs from src/lib/custom-field-number.ts"))
+if (b === null) console.log("skip web copy check (apps/web not present)")
+else check("web copy matches", () => assert.equal(b, a, "apps/web/src/lib/custom-field-number.ts differs from src/lib/custom-field-number.ts"))
 
 console.log(`\n${passed} passed, ${failed} failed`)
 if (failed) process.exit(1)

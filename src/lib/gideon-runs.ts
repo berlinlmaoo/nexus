@@ -380,7 +380,7 @@ const normText = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim()
 /**
  * The sources an answer actually cites (audit 12 Oct 2026): named in the reply by its title (first 60
  * characters, at least 3) or by its id. Everything else a tool merely read is left off the Sources row.
- * The web has the same rule (apps/nexus-lovable-ui/src/lib/gideon-cite.ts citedSources).
+ * The web has the same rule (apps/web/src/lib/gideon-cite.ts citedSources).
  */
 export function citedRefs(reply: string, refs: GideonRef[]): GideonRef[] {
   const said = normText(reply || "")

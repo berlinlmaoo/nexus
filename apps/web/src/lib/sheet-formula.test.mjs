@@ -1,4 +1,4 @@
-// node --experimental-strip-types src/lib/sheet-formula.test.mjs   (from apps/nexus-lovable-ui)
+// node --experimental-strip-types src/lib/sheet-formula.test.mjs   (from apps/web)
 //
 // The spreadsheet engine: Indonesian number/date parsing, A1 <-> stored translation, reference
 // shifting for copy/paste/fill, range shrinking on delete, formula evaluation (own core + formulajs),

@@ -1,4 +1,4 @@
-// Pure helpers of the web grid (apps/nexus-lovable-ui/src/components/sheets/sheet-types.ts): column
+// Pure helpers of the web grid (apps/web/src/components/sheets/sheet-types.ts): column
 // labels, column rules, SheetData building, cell display / edit text, typed input -> stored value,
 // TSV, aggregates and the fill handle's series logic. Tailwind class tables are not ported (the web's
 // optionColor returns classes; `optionColor` here returns the colour NAME).

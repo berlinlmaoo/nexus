@@ -1,7 +1,7 @@
 # CalendarGlance golden test (Linux, no Xcode)
 
 Runs `Sources/Shared/CalendarGlance.swift` (what the calendar widgets and watch complications draw) on
-the web fixtures (`input/`, copied from nexus `apps/nexus-lovable-ui/src/lib/calendar/fixtures/glance`) at
+the web fixtures (`input/`, copied from nexus `apps/web/src/lib/calendar/fixtures/glance`) at
 four moments around a WIB midnight and a month end, and compares with the web golden (`golden/`, from
 `fixtures/golden-glance`, built by `glance.test.mjs`). Same files as Android.
 

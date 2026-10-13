@@ -1,4 +1,4 @@
-// node --experimental-strip-types src/lib/sheet-datatools.test.mjs   (from apps/nexus-lovable-ui)
+// node --experimental-strip-types src/lib/sheet-datatools.test.mjs   (from apps/web)
 //
 // Data tools: split text, remove duplicates, trim whitespace, sort range, randomise, find & replace.
 import assert from "node:assert/strict"
