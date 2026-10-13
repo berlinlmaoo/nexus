@@ -818,7 +818,7 @@ struct ProjectRefIcon: View {
     var size: CGFloat = 26
 
     var body: some View {
-        ProjectMark(icon: ref.icon, color: ref.color, size: size)
+        ProjectMark(icon: ref.icon, color: ref.color, size: size, projectId: ref.id)
     }
 }
 

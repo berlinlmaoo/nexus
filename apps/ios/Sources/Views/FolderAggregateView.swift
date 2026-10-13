@@ -346,7 +346,7 @@ private struct FolderTaskRow: View {
                         .strikethrough(task.isDone).lineLimit(2).multilineTextAlignment(.leading)
                     HStack(spacing: 5) {
                         if let p = project {
-                            ProjectMark(icon: p.icon, color: p.color, size: 14)
+                            ProjectMark(icon: p.icon, color: p.color, size: 14, projectId: p.id)
                             Text(p.name).font(NXFont.text(11, .semibold)).foregroundStyle(Color(hex: color)).lineLimit(1)
                         }
                         if let due = ProjDate.parse(task.dueDate) {
@@ -407,7 +407,7 @@ private struct FolderProjectPicker: View {
                                 HStack(spacing: 10) {
                                     Image(systemName: picked.contains(p.id) ? "checkmark.circle.fill" : "circle")
                                         .foregroundStyle(picked.contains(p.id) ? NX.violetText : NX.mutedFg.opacity(0.5))
-                                    ProjectMark(icon: p.icon, color: p.color, size: 20)
+                                    ProjectMark(icon: p.icon, color: p.color, size: 20, projectId: p.id)
                                     Text(p.name).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
                                     Spacer()
                                 }

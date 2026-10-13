@@ -730,7 +730,8 @@ struct GideonPanel: View {
     private func refChip(_ ref: GideonRef) -> some View {
         Button { openRef = ref } label: {
             HStack(spacing: 4) {
-                Image(systemName: Self.icon(ref.kind)).font(.system(size: 10, weight: .semibold))
+                if ref.kind == "project" { ProjectMark(icon: nil, color: nil, size: 12, projectId: ref.id) }
+                else { Image(systemName: Self.icon(ref.kind)).font(.system(size: 10, weight: .semibold)) }
                 Text(ref.title ?? "").lineLimit(1)
             }
             .font(NXFont.text(12, .medium)).foregroundStyle(NX.foreground)
@@ -810,11 +811,12 @@ struct GideonPanel: View {
             FlowLayout(spacing: 6) {
                 if ctx.hasPage {
                     contextChip(icon: ctx.docId != nil ? "doc.text" : (ctx.taskId != nil ? "checklist" : "folder"),
+                                projectId: ctx.docId == nil && ctx.taskId == nil ? ctx.projectId : nil,
                                 label: ctx.pageLabel ?? T("This project")) { chat.dismissPage() }
                         .help(T("The page you're on"))
                 }
                 ForEach(ctx.refs, id: \.self) { r in
-                    contextChip(icon: Self.icon(r.kind), label: r.title ?? "") {
+                    contextChip(icon: Self.icon(r.kind), projectId: r.kind == "project" ? r.id : nil, label: r.title ?? "") {
                         chat.context.refs.removeAll { $0 == r }
                     }
                 }
@@ -823,9 +825,11 @@ struct GideonPanel: View {
         }
     }
 
-    private func contextChip(icon: String, label: String, remove: @escaping () -> Void) -> some View {
+    private func contextChip(icon: String, projectId: String? = nil, label: String, remove: @escaping () -> Void) -> some View {
         HStack(spacing: 5) {
-            Image(systemName: icon).font(.system(size: 10, weight: .semibold))
+            // A project is drawn with its own mark (photo or page icon), as everywhere else.
+            if let projectId { ProjectMark(icon: nil, color: nil, size: 12, projectId: projectId) }
+            else { Image(systemName: icon).font(.system(size: 10, weight: .semibold)) }
             Text(label).lineLimit(1).frame(maxWidth: 260, alignment: .leading).fixedSize(horizontal: true, vertical: false)
             Button(action: remove) {
                 Image(systemName: "xmark").font(.system(size: 8, weight: .bold))

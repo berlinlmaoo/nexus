@@ -1278,7 +1278,7 @@ struct ProjectCard: View {
         VStack(alignment: .leading, spacing: 0) {
             // header row
             HStack(alignment: .top, spacing: 12) {
-                ProjectMark(icon: project.icon, color: project.color, size: 44)
+                ProjectMark(icon: project.icon, color: project.color, size: 44, projectId: project.id)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(project.name).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
@@ -1426,7 +1426,7 @@ struct ProjectsPageListRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ProjectMark(icon: project.icon, color: project.color, size: 32)
+            ProjectMark(icon: project.icon, color: project.color, size: 32, projectId: project.id)
             VStack(alignment: .leading, spacing: 2) {
                 Text(project.name).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                 if let d = project.description, !d.isEmpty {

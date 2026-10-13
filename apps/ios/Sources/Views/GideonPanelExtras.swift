@@ -56,8 +56,12 @@ struct GideonMentionPicker: View {
     private func row(_ h: GideonRef) -> some View {
         Button { onPick(h) } label: {
             HStack(spacing: 8) {
-                Image(systemName: h.kind == "project" ? "folder" : (h.kind == "task" ? "checklist" : "doc.text"))
-                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(NX.mutedFg).frame(width: 18)
+                if h.kind == "project" {
+                    ProjectMark(icon: nil, color: nil, size: 16, projectId: h.id).frame(width: 18)
+                } else {
+                    Image(systemName: h.kind == "task" ? "checklist" : "doc.text")
+                        .font(.system(size: 12, weight: .semibold)).foregroundStyle(NX.mutedFg).frame(width: 18)
+                }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(h.title ?? "").font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                     if let sub = subtitles[h.kind + h.id] {

@@ -17,6 +17,17 @@ struct ProjectMark: View {
     /// Draw the default icon at this side instead of `size` (centred in the slot), for a slot where a
     /// photo should fill a larger area than the icon.
     var glyph: CGFloat? = nil
+    /// The project, when known: the mark then draws the icon it has NOW (ProjectIconStore, patched live
+    /// by realtime and every project fetch) instead of whatever the caller's payload carried, so a photo
+    /// changed or removed on another device shows here at once. Leave nil only where the screen edits
+    /// the icon itself (Project settings' preview).
+    var projectId: String? = nil
+
+    /// What is drawn: the live icon when the store knows this project, else the caller's.
+    private var shown: String? {
+        if let projectId, let live = ProjectIconStore.shared.icons[projectId] { return live }
+        return icon
+    }
 
     /// True when the stored icon is an uploaded picture ("/api/files/…" or an absolute URL).
     static func isPhoto(_ icon: String?) -> Bool {
@@ -32,7 +43,7 @@ struct ProjectMark: View {
 
     var body: some View {
         Group {
-            if let url = Self.photoURL(icon) {
+            if let url = Self.photoURL(shown) {
                 CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { defaultMark }
                     .frame(width: size, height: size)
                     .clipShape(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
@@ -41,6 +52,10 @@ struct ProjectMark: View {
             }
         }
         .accessibilityHidden(true)
+        // A project this device has not listed yet (a search hit, a GIDEON source): fetch the list once.
+        .task(id: projectId) {
+            if let projectId, ProjectIconStore.shared.icons[projectId] == nil { await ProjectIconStore.shared.loadOnce() }
+        }
     }
 
     private var defaultMark: some View {
@@ -85,5 +100,34 @@ struct ProjectPageShape: Shape {
         p.move(to: pt(8.5, 15.5))
         p.addLine(to: pt(13.5, 15.5))
         return p
+    }
+}
+
+/// Every project's icon as last heard (owner, 14 Oct 2026): from GET /api/projects, a project's detail,
+/// this device's own PATCH, and the realtime `workspace-changed { kind: "projects", projectId, icon }`
+/// ping. ProjectMark(projectId:) reads it, so the sidebar, shortcuts, lists, search, pickers and GIDEON
+/// chips all swap a photo the moment it changes, with no screen keeping a stale copy. Photo URLs carry
+/// `?v=<upload time>`, so CachedImage (keyed by URL) never serves the old picture for the new one.
+/// An empty string means "no photo" (removed, or the server sent null).
+@Observable
+final class ProjectIconStore {
+    static let shared = ProjectIconStore()
+    private(set) var icons: [String: String] = [:]
+    @ObservationIgnored private var loaded = false
+
+    func set(_ id: String, _ icon: String?) {
+        let v = icon ?? ""
+        if icons[id] != v { icons[id] = v }
+    }
+
+    func record(_ pairs: [(String, String?)]) {
+        for (id, icon) in pairs { set(id, icon) }
+    }
+
+    /// One GET /api/projects per launch, for marks of projects no screen has listed yet.
+    func loadOnce() async {
+        if loaded { return }
+        loaded = true
+        _ = try? await APIClient.shared.projects()
     }
 }

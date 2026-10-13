@@ -569,9 +569,7 @@ struct ProjectDetailView: View {
                 .hoverEffect(.highlight)
                 .accessibilityLabel(T("Back"))
             }
-            if let d = detail {
-                ProjectMark(icon: d.icon, color: d.color, size: wide ? 34 : 28)
-            }
+            ProjectMark(icon: detail?.icon, color: nil, size: wide ? 34 : 28, projectId: projectId)
             Text(displayName).font(NXFont.display(wide ? 26 : 20, wide ? .semibold : .bold)).foregroundStyle(NX.foreground).lineLimit(1)
                 // The name before the buttons: a portrait iPad cut it to "Finance P…" (UI tour run 5).
                 .layoutPriority(1)

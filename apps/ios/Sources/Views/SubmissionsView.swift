@@ -323,7 +323,7 @@ struct SubmissionsView: View {
                         }
                     } label: {
                         chipLabel(HStack(spacing: 4) {
-                            Image(systemName: "folder").font(.system(size: 11, weight: .semibold))
+                            ProjectMark(icon: nil, color: nil, size: 13, projectId: activeProject)
                             Text(projectOptions.first { $0.id == activeProject }?.name ?? T("All projects")).lineLimit(1)
                             Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
                         }, on: activeProject != nil)

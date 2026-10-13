@@ -695,11 +695,18 @@ struct APIClient {
         _ = try await run(req, decode: ProjectPinReply.self)
     }
     func projects() async throws -> [Project] {
-        try await run(makeRequest("/api/projects"), decode: [Project].self, cache: "projects")
+        let list = try await run(makeRequest("/api/projects"), decode: [Project].self, cache: "projects")
+        // Every mark that knows a project's id draws the icon from here (ProjectIconStore).
+        let pairs = list.map { ($0.id, $0.icon) }
+        await MainActor.run { ProjectIconStore.shared.record(pairs) }
+        return list
     }
 
     func project(_ id: String) async throws -> ProjectDetail {
-        try await run(makeRequest("/api/projects/\(id)"), decode: ProjectDetail.self, cache: "project-\(id)")
+        let d = try await run(makeRequest("/api/projects/\(id)"), decode: ProjectDetail.self, cache: "project-\(id)")
+        let icon = d.icon
+        await MainActor.run { ProjectIconStore.shared.set(id, icon) }
+        return d
     }
 
     /// All of a project's tasks INCLUDING subtasks (the project payload is parentId-only). Carries
@@ -2266,6 +2273,14 @@ struct APIClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: fields)
         _ = try await run(req, decode: SuccessResponse.self)
+        // This device's own photo change or removal shows on every mark now, not when the ping returns.
+        if fields.keys.contains("icon") {
+            let icon = fields["icon"] as? String
+            await MainActor.run {
+                ProjectIconStore.shared.set(id, icon)
+                ProjectShortcuts.shared.updateIcon(id, icon)
+            }
+        }
         return true
     }
     @discardableResult
@@ -2813,6 +2828,14 @@ struct APIClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: fields)
         _ = try await run(req, decode: SuccessResponse.self)
+        // This device's own photo change or removal shows on every mark now, not when the ping returns.
+        if fields.keys.contains("icon") {
+            let icon = fields["icon"] as? String
+            await MainActor.run {
+                ProjectIconStore.shared.set(id, icon)
+                ProjectShortcuts.shared.updateIcon(id, icon)
+            }
+        }
         return true
     }
     @discardableResult
@@ -2827,6 +2850,14 @@ struct APIClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: fields)
         _ = try await run(req, decode: SuccessResponse.self)
+        // This device's own photo change or removal shows on every mark now, not when the ping returns.
+        if fields.keys.contains("icon") {
+            let icon = fields["icon"] as? String
+            await MainActor.run {
+                ProjectIconStore.shared.set(id, icon)
+                ProjectShortcuts.shared.updateIcon(id, icon)
+            }
+        }
         return true
     }
 
