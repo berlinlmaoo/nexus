@@ -558,7 +558,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             }
             composable("form-builder/{projectId}?form={form}", arguments = listOf(androidx.navigation.navArgument("form") { nullable = true; defaultValue = null })) {
                 FormBuilderScreen(onBack = { nav.popBackStack() }, onOpenForm = { nav.navigate("form/${android.net.Uri.encode(it)}") },
-                    onOpenResponses = { pid, fid -> nav.navigate("form-responses/${enc(pid)}/${enc(fid)}") })
+                    onOpenTask = { nav.navigate("task/${enc(it)}") { launchSingleTop = true } })
             }
             composable("form-responses/{projectId}/{formId}") { e ->
                 FormResponsesScreen(e.arguments?.getString("projectId").orEmpty(), e.arguments?.getString("formId").orEmpty(),

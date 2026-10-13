@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The form studio (web FormStudio.tsx, iOS FormBuilderView / FormStudioViews): iOS's Indonesian. -->
+<resources>
+    <!-- Top bar and tabs -->
+    <string name="fs_tab_questions">Pertanyaan</string>
+    <string name="fs_tab_settings">Pengaturan</string>
+    <string name="fs_tab_share">Bagikan</string>
+    <string name="fs_saving">Menyimpan…</string>
+    <string name="fs_unsaved">Belum tersimpan</string>
+    <string name="fs_save_failed">Gagal menyimpan</string>
+    <string name="fs_saved">Tersimpan</string>
+    <string name="fs_draft">Draf</string>
+    <string name="fs_retry">Coba lagi</string>
+    <string name="fs_open_page">Buka halaman form</string>
+    <string name="fs_discard_draft">Buang draf</string>
+    <string name="fs_more">Lainnya</string>
+    <string name="fs_untitled_form">Form tanpa judul</string>
+    <string name="fs_try_moment">Coba lagi sebentar lagi.</string>
+    <string name="fs_load_failed">Gagal muat form ini.</string>
+
+    <!-- Canvas head -->
+    <string name="fs_add_icon">Tambah ikon</string>
+    <string name="fs_change_icon">Ganti ikon</string>
+    <string name="fs_add_cover">Tambah sampul</string>
+    <string name="fs_change_cover">Ganti sampul</string>
+    <string name="fs_icon">Ikon</string>
+    <string name="fs_cover">Sampul</string>
+    <string name="fs_remove">Hapus</string>
+    <string name="fs_form_title">Judul form</string>
+    <string name="fs_add_description">Tambahkan deskripsi</string>
+    <string name="fs_form_description">Deskripsi form</string>
+    <string name="fs_access_public">Siapa pun di NEXUS yang punya link bisa mengisi ini, setelah masuk.</string>
+    <string name="fs_access_members">Hanya anggota project ini yang bisa mengisi ini.</string>
+    <string name="fs_change">Ganti</string>
+    <string name="fs_cover_paper">Kertas</string>
+    <string name="fs_cover_mist">Kabut</string>
+    <string name="fs_cover_lilac">Lila</string>
+    <string name="fs_cover_mint">Mint</string>
+    <string name="fs_cover_peach">Persik</string>
+    <string name="fs_cover_sky">Langit</string>
+    <string name="fs_cover_dusk">Senja</string>
+    <string name="fs_cover_forest">Hutan</string>
+    <string name="fs_cover_ink">Tinta</string>
+
+    <!-- Question cards -->
+    <string name="fs_untitled_question">Pertanyaan tanpa judul</string>
+    <string name="fs_question_n">Pertanyaan %1$d</string>
+    <string name="fs_question_settings">Pengaturan pertanyaan</string>
+    <string name="fs_duplicate_question">Duplikat pertanyaan</string>
+    <string name="fs_delete_question">Hapus pertanyaan</string>
+    <string name="fs_options_follow">Opsi mengikuti section project: %1$s</string>
+    <string name="fs_checkbox">Kotak centang</string>
+    <string name="fs_logic_unset">Logika belum lengkap: pilih nilainya. Sampai itu, pertanyaan selalu tampil.</string>
+    <string name="fs_logic_stale">“%1$s” sudah bukan opsi “%2$s”, jadi pertanyaan ini tidak pernah tampil</string>
+    <string name="fs_shown_when">Tampil saat “%1$s” %2$s %3$s</string>
+    <string name="fs_rule_stale">Ada aturan routing yang membaca opsi yang sudah tidak ada</string>
+    <plurals name="fs_rules_n">
+        <item quantity="other">%d aturan routing</item>
+    </plurals>
+    <string name="fs_auto_email">Terisi otomatis: email</string>
+    <string name="fs_auto_name">Terisi otomatis: nama</string>
+    <string name="fs_project_field">Field project</string>
+    <string name="fs_delete_option">Hapus opsi</string>
+    <string name="fs_your_answer">Jawabanmu</string>
+    <string name="fs_attach_optional">Lampirkan file (opsional)</string>
+    <string name="fs_basic">Dasar</string>
+    <string name="fs_specific">Khusus</string>
+    <string name="fs_add_question">Tambah pertanyaan</string>
+    <string name="fs_no_questions">Belum ada pertanyaan. Tambahkan yang pertama di bawah.</string>
+    <string name="fs_question_deleted">Pertanyaan dihapus</string>
+    <plurals name="fs_dependents">
+        <item quantity="other">%d pertanyaan hanya tampil setelahnya; sekarang selalu tampil.</item>
+    </plurals>
+    <string name="fs_undo">Urungkan</string>
+    <string name="fs_what_need">Apa yang kamu butuhkan?</string>
+
+    <!-- Question kinds (the type menu) -->
+    <string name="fs_k_text">Jawaban singkat</string>
+    <string name="fs_k_textarea">Jawaban panjang</string>
+    <string name="fs_k_dropdown">Pilihan tunggal</string>
+    <string name="fs_k_multi">Pilihan ganda</string>
+    <string name="fs_k_number">Angka</string>
+    <string name="fs_k_rupiah">Nominal rupiah</string>
+    <string name="fs_k_date">Tanggal</string>
+    <string name="fs_k_email">Email</string>
+    <string name="fs_k_phone">Telepon</string>
+    <string name="fs_k_url">Tautan</string>
+    <string name="fs_k_file">Unggah file</string>
+    <string name="fs_kh_text">Satu baris teks</string>
+    <string name="fs_kh_textarea">Beberapa baris</string>
+    <string name="fs_kh_dropdown">Pilih satu opsi</string>
+    <string name="fs_kh_multi">Pilih opsi sebanyak apa pun</string>
+    <string name="fs_kh_checkbox">Satu centang ya / tidak</string>
+    <string name="fs_kh_number">Hanya angka</string>
+    <string name="fs_kh_date">Satu hari dari kalender</string>
+    <string name="fs_kh_phone">Nomor telepon</string>
+    <string name="fs_kh_url">Alamat web</string>
+    <string name="fs_kh_file">Satu file atau lebih</string>
+
+    <!-- Question settings -->
+    <string name="fs_question">Pertanyaan</string>
+    <string name="fs_description">Deskripsi</string>
+    <string name="fs_description_sub">Teks bantuan di bawah pertanyaan</string>
+    <string name="fs_description_opt">Deskripsi (opsional)</string>
+    <string name="fs_as_list">Tampilkan opsi sebagai daftar</string>
+    <string name="fs_as_list_sub">Di form web. Aplikasi menampilkan menu.</string>
+    <string name="fs_autofill">Isi dari akun pengirim</string>
+    <string name="fs_off">Mati</string>
+    <string name="fs_name">Nama</string>
+    <string name="fs_allow_file">Izinkan file bersama jawaban</string>
+    <string name="fs_options">Pilihan</string>
+    <string name="fs_autofill_note">Tidak perlu diketik — diisi dari akunnya dan dikunci.</string>
+    <string name="fs_answer_options">Opsi jawaban</string>
+    <string name="fs_blank_dropped">Opsi kosong dibuang saat form tersimpan.</string>
+    <string name="fs_show_when">Tampilkan hanya jika…</string>
+    <string name="fs_no_other_questions">Tidak ada pertanyaan lain</string>
+    <string name="fs_choose_question">Pilih pertanyaan</string>
+    <string name="fs_condition">Syarat</string>
+    <string name="fs_logic">Logika</string>
+    <string name="fs_add_other_first">Tambahkan pertanyaan lain dulu.</string>
+    <string name="fs_logic_footer">Selama syaratnya belum terpenuhi, pertanyaan disembunyikan dan tidak wajib.</string>
+    <string name="fs_pick_value">Pilih nilainya. Sampai itu, pertanyaan selalu tampil.</string>
+    <string name="fs_cond_stale">“%1$s” sudah bukan opsi, jadi pertanyaan ini tidak pernah tampil. Pilih nilainya lagi.</string>
+    <string name="fs_cond_loop">“%1$s” sendiri hanya tampil setelah pertanyaan ini, jadi keduanya tidak akan pernah tampil. Pilih pertanyaan lain.</string>
+    <string name="fs_routing_empty">Saat jawaban ini cocok, tugaskan seseorang, isi sebuah field, atau pindahkan task ke section.</string>
+    <string name="fs_rule_value_stale">“%1$s” sudah bukan opsi, jadi aturan ini tidak pernah jalan. Pilih nilainya lagi.</string>
+    <string name="fs_section">Section</string>
+    <string name="fs_field">Isian</string>
+    <string name="fs_member">Anggota</string>
+    <string name="fs_answer_goes">Jawaban masuk ke</string>
+    <string name="fs_answer_footer">Setiap jawaban menjadi task di project ini. Jawaban yang tidak dipetakan dicantumkan di deskripsi task.</string>
+    <string name="fs_move_up">Pindah ke atas</string>
+    <string name="fs_move_down">Pindah ke bawah</string>
+    <string name="fs_duplicate">Duplikat</string>
+    <string name="fs_saves_itself">Perubahan tersimpan otomatis.</string>
+    <string name="fs_op_is">adalah</string>
+    <string name="fs_op_is_not">bukan</string>
+    <string name="fs_map_none">Tidak ke mana-mana (jawaban tetap di deskripsi)</string>
+    <string name="fs_map_section">Section</string>
+    <string name="fs_act_assign">Tugaskan ke</string>
+    <string name="fs_act_set_field">Isi field</string>
+
+    <!-- Settings tab -->
+    <string name="fs_who">Siapa yang bisa mengisi</string>
+    <string name="fs_anyone">Siapa saja yang punya tautan</string>
+    <string name="fs_anyone_sub">Siapa pun di NEXUS yang punya link, termasuk di luar project ini.</string>
+    <string name="fs_members_only">Hanya anggota project</string>
+    <string name="fs_members_only_sub">Hanya anggota %1$s yang bisa membuka link-nya.</string>
+    <string name="fs_this_project">project ini</string>
+    <string name="fs_require_note">Orang selalu masuk dengan akun NEXUS untuk mengirim, jadi setiap pengajuan punya nama dan muncul di My Submissions mereka.</string>
+    <string name="fs_when">Kapan dibuka</string>
+    <string name="fs_times_in">Waktu dalam %1$s.</string>
+    <string name="fs_hint_open">Dibuka: selalu menerima jawaban, jadwal diabaikan.</string>
+    <string name="fs_hint_closed">Ditutup: tidak menerima jawaban untuk sementara.</string>
+    <string name="fs_hint_auto">Mengikuti tanggal dan jam di bawah. Kalau tidak diisi, form selalu terbuka.</string>
+    <string name="fs_opens">Dibuka</string>
+    <string name="fs_closes">Ditutup</string>
+    <string name="fs_right_away">Langsung</string>
+    <string name="fs_never">Tidak pernah</string>
+    <string name="fs_certain_days">Hanya pada hari dan jam tertentu</string>
+    <string name="fs_ignored_forced">(diabaikan selama form dipaksa buka atau tutup)</string>
+    <string name="fs_from">Dari</string>
+    <string name="fs_until">Sampai</string>
+    <string name="fs_clear">Hapus</string>
+    <string name="fs_limit">Batasi jumlah jawaban</string>
+    <string name="fs_so_far">%1$d sejauh ini</string>
+    <string name="fs_max">Jawaban maksimum</string>
+    <string name="fs_then_closes">lalu form tertutup sendiri</string>
+    <string name="fs_after">Setelah mengirim</string>
+    <string name="fs_after_hint">Yang dilihat orang setelah mengirim. Kosongkan untuk bawaan.</string>
+    <string name="fs_button_text">Teks tombol</string>
+    <string name="fs_send">Kirim</string>
+    <string name="fs_conf_title">Judul konfirmasi</string>
+    <string name="fs_conf_title_ph">Terkirim. Terima kasih!</string>
+    <string name="fs_conf_msg">Pesan konfirmasi</string>
+    <string name="fs_conf_msg_ph">mis. Finance membalas dalam 2 hari kerja. Pantau di My Submissions.</string>
+    <string name="fs_notify">Beri tahu orang</string>
+    <string name="fs_notify_hint">Mereka dapat notifikasi di aplikasi dan push untuk setiap jawaban baru.</string>
+    <string name="fs_search_members">Cari anggota project</string>
+    <string name="fs_no_members_match">Tidak ada anggota yang cocok.</string>
+    <string name="fs_more_search">%1$d lagi — cari untuk menemukannya</string>
+    <string name="fs_former_member">Mantan anggota</string>
+    <string name="fs_remove_person">Hapus %1$s</string>
+
+    <!-- Share tab -->
+    <string name="fs_no_link">Belum ada link</string>
+    <string name="fs_no_link_sub">Beri judul form atau ubah pertanyaan dulu. Link muncul setelah tersimpan.</string>
+    <string name="fs_go_questions">Ke Pertanyaan</string>
+    <string name="fs_form_link">Link form</string>
+    <string name="fs_copied">Disalin</string>
+    <string name="fs_open">Buka</string>
+    <string name="fs_link_public">Siapa pun di NEXUS yang punya link bisa mengisinya.</string>
+    <string name="fs_link_members">Hanya anggota project yang bisa membuka link ini.</string>
+
+    <!-- Responses tab -->
+    <string name="fs_no_responses_sub">Bagikan link dari tab Bagikan. Setiap jawaban masuk ke sini dan ke board project sebagai task.</string>
+    <string name="fs_go_share">Ke Bagikan</string>
+
+    <!-- Delete -->
+    <string name="fs_delete_plain">Link-nya berhenti berfungsi. Control Room → Audit bisa memulihkannya.</string>
+    <plurals name="fs_form_has">
+        <item quantity="other">Form ini punya %d jawaban.</item>
+    </plurals>
+    <string name="fs_delete_tail">Task-nya tetap di board, tapi jawabannya hilang dari My Submissions pengirim. Link-nya berhenti berfungsi. Control Room → Audit bisa memulihkan form beserta jawabannya.</string>
+    <string name="fs_new_responses">Ada jawaban baru masuk selama kamu di sini.</string>
+</resources>

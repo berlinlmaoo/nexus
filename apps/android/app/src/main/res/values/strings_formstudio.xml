@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The form studio (web FormStudio.tsx, iOS FormBuilderView / FormStudioViews): copy as iOS words it. -->
+<resources>
+    <!-- Top bar and tabs -->
+    <string name="fs_tab_questions">Questions</string>
+    <string name="fs_tab_settings">Settings</string>
+    <string name="fs_tab_share">Share</string>
+    <string name="fs_saving">Saving…</string>
+    <string name="fs_unsaved">Unsaved changes</string>
+    <string name="fs_save_failed">Couldn\'t save</string>
+    <string name="fs_saved">Saved</string>
+    <string name="fs_draft">Draft</string>
+    <string name="fs_retry">Retry</string>
+    <string name="fs_open_page">Open the form page</string>
+    <string name="fs_discard_draft">Discard draft</string>
+    <string name="fs_more">More</string>
+    <string name="fs_untitled_form">Untitled form</string>
+    <string name="fs_try_moment">Try again in a moment.</string>
+    <string name="fs_load_failed">Couldn\'t load this form.</string>
+
+    <!-- Canvas head -->
+    <string name="fs_add_icon">Add icon</string>
+    <string name="fs_change_icon">Change icon</string>
+    <string name="fs_add_cover">Add cover</string>
+    <string name="fs_change_cover">Change cover</string>
+    <string name="fs_icon">Icon</string>
+    <string name="fs_cover">Cover</string>
+    <string name="fs_remove">Remove</string>
+    <string name="fs_form_title">Form title</string>
+    <string name="fs_add_description">Add a description</string>
+    <string name="fs_form_description">Form description</string>
+    <string name="fs_access_public">Anyone in NEXUS with the link can fill this in, after signing in.</string>
+    <string name="fs_access_members">Only members of this project can fill this in.</string>
+    <string name="fs_change">Change</string>
+    <string name="fs_cover_paper">Paper</string>
+    <string name="fs_cover_mist">Mist</string>
+    <string name="fs_cover_lilac">Lilac</string>
+    <string name="fs_cover_mint">Mint</string>
+    <string name="fs_cover_peach">Peach</string>
+    <string name="fs_cover_sky">Sky</string>
+    <string name="fs_cover_dusk">Dusk</string>
+    <string name="fs_cover_forest">Forest</string>
+    <string name="fs_cover_ink">Ink</string>
+
+    <!-- Question cards -->
+    <string name="fs_untitled_question">Untitled question</string>
+    <string name="fs_question_n">Question %1$d</string>
+    <string name="fs_question_settings">Question settings</string>
+    <string name="fs_duplicate_question">Duplicate question</string>
+    <string name="fs_delete_question">Delete question</string>
+    <string name="fs_options_follow">Options follow the project\'s sections: %1$s</string>
+    <string name="fs_checkbox">Checkbox</string>
+    <string name="fs_logic_unset">Logic not set yet: pick a value. Until then it always shows.</string>
+    <string name="fs_logic_stale">“%1$s” is no longer an option of “%2$s”, so this question never shows</string>
+    <string name="fs_shown_when">Shown when “%1$s” %2$s %3$s</string>
+    <string name="fs_rule_stale">A routing rule reads an option that no longer exists</string>
+    <plurals name="fs_rules_n">
+        <item quantity="one">1 routing rule</item>
+        <item quantity="other">%d routing rules</item>
+    </plurals>
+    <string name="fs_auto_email">Auto-filled: email</string>
+    <string name="fs_auto_name">Auto-filled: name</string>
+    <string name="fs_project_field">A project field</string>
+    <string name="fs_delete_option">Delete option</string>
+    <string name="fs_your_answer">Your answer</string>
+    <string name="fs_attach_optional">Attach a file (optional)</string>
+    <string name="fs_basic">Basic</string>
+    <string name="fs_specific">Specific</string>
+    <string name="fs_add_question">Add question</string>
+    <string name="fs_no_questions">No questions yet. Add the first one below.</string>
+    <string name="fs_question_deleted">Question deleted</string>
+    <plurals name="fs_dependents">
+        <item quantity="one">1 question was shown only after it; it now always shows.</item>
+        <item quantity="other">%d questions were shown only after it; they now always show.</item>
+    </plurals>
+    <string name="fs_undo">Undo</string>
+    <string name="fs_what_need">What do you need?</string>
+
+    <!-- Question kinds (the type menu) -->
+    <string name="fs_k_text">Short answer</string>
+    <string name="fs_k_textarea">Long answer</string>
+    <string name="fs_k_dropdown">Single choice</string>
+    <string name="fs_k_multi">Multiple choice</string>
+    <string name="fs_k_number">Number</string>
+    <string name="fs_k_rupiah">Rupiah amount</string>
+    <string name="fs_k_date">Date</string>
+    <string name="fs_k_email">Email</string>
+    <string name="fs_k_phone">Phone</string>
+    <string name="fs_k_url">Link</string>
+    <string name="fs_k_file">File upload</string>
+    <string name="fs_kh_text">One line of text</string>
+    <string name="fs_kh_textarea">Several lines</string>
+    <string name="fs_kh_dropdown">Pick one option</string>
+    <string name="fs_kh_multi">Pick any number of options</string>
+    <string name="fs_kh_checkbox">A single yes / no tick</string>
+    <string name="fs_kh_number">Digits only</string>
+    <string name="fs_kh_date">A day from a calendar</string>
+    <string name="fs_kh_phone">A phone number</string>
+    <string name="fs_kh_url">A web address</string>
+    <string name="fs_kh_file">One or more files</string>
+
+    <!-- Question settings -->
+    <string name="fs_question">Question</string>
+    <string name="fs_description">Description</string>
+    <string name="fs_description_sub">Helper text under the question</string>
+    <string name="fs_description_opt">Description (optional)</string>
+    <string name="fs_as_list">Show options as a list</string>
+    <string name="fs_as_list_sub">On the web form. The apps show a menu.</string>
+    <string name="fs_autofill">Fill from the sender\'s account</string>
+    <string name="fs_off">Off</string>
+    <string name="fs_name">Name</string>
+    <string name="fs_allow_file">Allow a file with the answer</string>
+    <string name="fs_options">Options</string>
+    <string name="fs_autofill_note">The person doesn\'t type it — it\'s filled from their account and locked.</string>
+    <string name="fs_answer_options">Answer options</string>
+    <string name="fs_blank_dropped">Blank options are dropped when the form saves.</string>
+    <string name="fs_show_when">Show only when…</string>
+    <string name="fs_no_other_questions">No other questions</string>
+    <string name="fs_choose_question">Choose a question</string>
+    <string name="fs_condition">Condition</string>
+    <string name="fs_logic">Logic</string>
+    <string name="fs_add_other_first">Add another question first.</string>
+    <string name="fs_logic_footer">While the condition isn\'t met, the question is hidden and isn\'t required.</string>
+    <string name="fs_pick_value">Pick a value. Until then the question always shows.</string>
+    <string name="fs_cond_stale">“%1$s” is no longer an option, so this question never shows. Pick a value again.</string>
+    <string name="fs_cond_loop">“%1$s” is itself shown only after this question, so neither can ever show. Pick another question.</string>
+    <string name="fs_routing_empty">When this answer matches, assign someone, set a field or move the task to a section.</string>
+    <string name="fs_rule_value_stale">“%1$s” is no longer an option, so this rule never runs. Pick a value again.</string>
+    <string name="fs_section">Section</string>
+    <string name="fs_field">Field</string>
+    <string name="fs_member">Member</string>
+    <string name="fs_answer_goes">Answer goes to</string>
+    <string name="fs_answer_footer">Every response becomes a task in this project. Answers that go nowhere are listed in the task\'s description.</string>
+    <string name="fs_move_up">Move up</string>
+    <string name="fs_move_down">Move down</string>
+    <string name="fs_duplicate">Duplicate</string>
+    <string name="fs_saves_itself">Changes save by themselves.</string>
+    <string name="fs_op_is">is</string>
+    <string name="fs_op_is_not">is not</string>
+    <string name="fs_map_none">Nothing (answer stays in the description)</string>
+    <string name="fs_map_section">Section</string>
+    <string name="fs_act_assign">Assign to</string>
+    <string name="fs_act_set_field">Set field</string>
+
+    <!-- Settings tab -->
+    <string name="fs_who">Who can fill it in</string>
+    <string name="fs_anyone">Anyone with the link</string>
+    <string name="fs_anyone_sub">Anyone in NEXUS who has the link, even outside this project.</string>
+    <string name="fs_members_only">Project members only</string>
+    <string name="fs_members_only_sub">Only members of %1$s can open the link.</string>
+    <string name="fs_this_project">this project</string>
+    <string name="fs_require_note">People always sign in with their NEXUS account to send, so every request has a name and shows up in their My Submissions.</string>
+    <string name="fs_when">When it\'s open</string>
+    <string name="fs_times_in">Times are in %1$s.</string>
+    <string name="fs_hint_open">Open: always accepting answers, the schedule is ignored.</string>
+    <string name="fs_hint_closed">Closed: not accepting answers for now.</string>
+    <string name="fs_hint_auto">Follows the dates and hours below. With none set, the form is always open.</string>
+    <string name="fs_opens">Opens</string>
+    <string name="fs_closes">Closes</string>
+    <string name="fs_right_away">Right away</string>
+    <string name="fs_never">Never</string>
+    <string name="fs_certain_days">Only on certain days and hours</string>
+    <string name="fs_ignored_forced">(ignored while the form is forced open or closed)</string>
+    <string name="fs_from">From</string>
+    <string name="fs_until">Until</string>
+    <string name="fs_clear">Clear</string>
+    <string name="fs_limit">Limit the number of responses</string>
+    <string name="fs_so_far">%1$d so far</string>
+    <string name="fs_max">Maximum responses</string>
+    <string name="fs_then_closes">then the form closes by itself</string>
+    <string name="fs_after">After sending</string>
+    <string name="fs_after_hint">What people see once they send. Leave empty for the default.</string>
+    <string name="fs_button_text">Button text</string>
+    <string name="fs_send">Send</string>
+    <string name="fs_conf_title">Confirmation title</string>
+    <string name="fs_conf_title_ph">Sent. Thank you!</string>
+    <string name="fs_conf_msg">Confirmation message</string>
+    <string name="fs_conf_msg_ph">e.g. Finance replies within 2 working days. Follow it in My Submissions.</string>
+    <string name="fs_notify">Notify people</string>
+    <string name="fs_notify_hint">They get an in-app notification and a push for every new response.</string>
+    <string name="fs_search_members">Search project members</string>
+    <string name="fs_no_members_match">No members match.</string>
+    <string name="fs_more_search">%1$d more — search to find them</string>
+    <string name="fs_former_member">Former member</string>
+    <string name="fs_remove_person">Remove %1$s</string>
+
+    <!-- Share tab -->
+    <string name="fs_no_link">No link yet</string>
+    <string name="fs_no_link_sub">Give the form a title or edit a question first. The link appears once it\'s saved.</string>
+    <string name="fs_go_questions">Go to Questions</string>
+    <string name="fs_form_link">Form link</string>
+    <string name="fs_copied">Copied</string>
+    <string name="fs_open">Open</string>
+    <string name="fs_link_public">Anyone in NEXUS with the link can fill it in.</string>
+    <string name="fs_link_members">Only project members can open this link.</string>
+
+    <!-- Responses tab -->
+    <string name="fs_no_responses_sub">Share the link from the Share tab. Each answer arrives here and on the project board as a task.</string>
+    <string name="fs_go_share">Go to Share</string>
+
+    <!-- Delete -->
+    <string name="fs_delete_plain">The link stops working. Control Room → Audit can restore it.</string>
+    <plurals name="fs_form_has">
+        <item quantity="one">This form has 1 submission.</item>
+        <item quantity="other">This form has %d submissions.</item>
+    </plurals>
+    <string name="fs_delete_tail">Their tasks stay on the board, but the responses leave their senders\' My Submissions. The link stops working. Control Room → Audit can restore the form with its responses.</string>
+    <string name="fs_new_responses">New responses came in while you were here.</string>
+</resources>

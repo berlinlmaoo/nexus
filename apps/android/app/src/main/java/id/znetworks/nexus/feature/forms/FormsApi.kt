@@ -28,9 +28,13 @@ class FormsApi(private val context: Context, private val api: ApiClient, private
     suspend fun createForm(body: JsonObject) = BuilderForm(builderSend("POST", "/api/forms", body))
     /** Only the keys sent are written: `{ isPublic: false }` alone unpublishes. */
     suspend fun updateForm(id: String, body: JsonObject) = BuilderForm(builderSend("PATCH", "/api/forms/$id", body))
-    /** 409 `{ submissionCount }` when it has submissions: ask again with the count, then [force]. */
-    suspend fun deleteForm(id: String, force: Boolean) =
-        api.send(Request.Builder().url(api.url("/api/forms/$id" + if (force) "?force=1" else "")).delete().build(), JsonObject.serializer())
+    /**
+     * 409 `{ submissionCount }` when it has submissions: ask again with the count, then [force]. [expect] = the count the
+     * person saw: when more came in since, the server answers 409 again instead of deleting them unseen.
+     */
+    suspend fun deleteForm(id: String, force: Boolean, expect: Int? = null) =
+        api.send(Request.Builder().url(api.url("/api/forms/$id" + (if (force) "?force=1" else "") + (if (force && expect != null) "&expect=$expect" else "")))
+            .delete().build(), JsonObject.serializer())
     private suspend fun builderSend(method: String, path: String, body: JsonObject): JsonObject =
         api.send(Request.Builder().url(api.url(path)).method(method, with(ApiClient) { body.toString().toJsonBody() }).build(), JsonObject.serializer())
 

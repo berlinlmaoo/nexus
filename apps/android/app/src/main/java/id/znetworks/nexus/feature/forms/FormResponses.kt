@@ -74,6 +74,25 @@ data class FormResponseRow(val id: String, val createdAt: String? = null, val su
 @Composable
 fun FormResponsesScreen(projectId: String, formId: String, onBack: () -> Unit, onOpenTask: (String) -> Unit) {
     val c = Nx.colors
+    var count by remember { mutableStateOf<Int?>(null) }
+    Column(Modifier.fillMaxSize().background(c.background)) {
+        PageHeader(stringResource(R.string.fr_title), subtitle = count?.let { pluralStringResource(R.plurals.fr_count, it, it) }, onBack = onBack)
+        FormResponsesList(projectId, formId, onOpenTask, emptyActionLabel = stringResource(R.string.back), onEmptyAction = onBack,
+            onCount = { count = it }, modifier = Modifier.weight(1f))
+    }
+}
+
+/**
+ * The list itself, also the form studio's Responses tab (iOS FormResponsesView embedded): [onCount] reports the total
+ * once loaded; the empty state's button is the caller's next step.
+ */
+@Composable
+fun FormResponsesList(
+    projectId: String, formId: String, onOpenTask: (String) -> Unit,
+    emptyActionLabel: String, onEmptyAction: () -> Unit,
+    modifier: Modifier = Modifier, emptyMessage: String = stringResource(R.string.fr_empty_sub), onCount: (Int) -> Unit = {},
+) {
+    val c = Nx.colors
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
     var data by remember { mutableStateOf<FormResponses?>(null) }
@@ -93,19 +112,16 @@ fun FormResponsesScreen(projectId: String, formId: String, onBack: () -> Unit, o
         container.realtime.events.collect { e -> if (RealtimeEvents.formResponses(e, formId)) tick++ }
     }
     val rows = data?.responses.orEmpty()
-    Column(Modifier.fillMaxSize().background(c.background)) {
-        val n = data?.total ?: rows.size
-        PageHeader(stringResource(R.string.fr_title), subtitle = data?.let { pluralStringResource(R.plurals.fr_count, n, n) }, onBack = onBack)
-        Box(Modifier.weight(1f)) {
-            when {
-                data == null && error == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                data == null -> EmptyState(Icons.Outlined.Inbox, stringResource(R.string.fr_load_failed), error.orEmpty(), stringResource(R.string.try_again), { tick++ }, Modifier.fillMaxSize())
-                rows.isEmpty() -> EmptyState(Icons.Outlined.Inbox, stringResource(R.string.fr_empty), stringResource(R.string.fr_empty_sub), stringResource(R.string.back), onBack, Modifier.fillMaxSize())
-                else -> PullToRefreshBox(isRefreshing = false, onRefresh = { tick++ }) {
-                    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
-                        items(rows, key = { it.id }) { r -> ResponseRow(r) { r.task?.id?.let(onOpenTask) }; HorizontalDivider(color = c.border.copy(alpha = 0.6f)) }
-                        item { Text(stringResource(R.string.fr_footer), fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.padding(16.dp)) }
-                    }
+    LaunchedEffect(data) { data?.let { onCount(it.total ?: it.responses.size) } }
+    Box(modifier.fillMaxSize().background(c.background)) {
+        when {
+            data == null && error == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            data == null -> EmptyState(Icons.Outlined.Inbox, stringResource(R.string.fr_load_failed), error.orEmpty(), stringResource(R.string.try_again), { tick++ }, Modifier.fillMaxSize())
+            rows.isEmpty() -> EmptyState(Icons.Outlined.Inbox, stringResource(R.string.fr_empty), emptyMessage, emptyActionLabel, onEmptyAction, Modifier.fillMaxSize())
+            else -> PullToRefreshBox(isRefreshing = false, onRefresh = { tick++ }) {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
+                    items(rows, key = { it.id }) { r -> ResponseRow(r) { r.task?.id?.let(onOpenTask) }; HorizontalDivider(color = c.border.copy(alpha = 0.6f)) }
+                    item { Text(stringResource(R.string.fr_footer), fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.padding(16.dp)) }
                 }
             }
         }

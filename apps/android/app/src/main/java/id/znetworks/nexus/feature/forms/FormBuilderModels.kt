@@ -33,6 +33,10 @@ data class BuilderForm(val raw: JsonObject) {
     val submissions: Int get() = (raw["_count"].obj()?.get("submissions") as? JsonPrimitive)?.intOrNull ?: 0
     val fields: List<JsonObject> get() = raw["fields"].arr()?.mapNotNull { it.obj() }.orEmpty()
     val schedule: JsonElement? get() = raw["accessSchedule"]
+    /** `{ icon, cover }` — the studio's emoji and cover band (web 12 Oct). */
+    val branding: JsonElement? get() = raw["branding"]
+    /** `{ submitLabel, confirmationTitle, confirmationMessage, responseLimit, notifyUserIds }`. */
+    val settings: JsonElement? get() = raw["settings"]
     /** Always the public host (the link is for someone else's phone), slug first like the web's card. */
     val link: String get() = FormLink.url(slug, id)
 }
@@ -46,6 +50,8 @@ data class BuilderCondition(val fieldId: String, val op: String, val value: Stri
 data class BuilderRule(
     val id: String, val op: String, val value: String, val action: String,
     val targetTaskListId: String, val targetUserId: String,
+    /** "set_field": the project field and the value it gets. */
+    val targetCustomFieldId: String = "", val targetValue: String = "",
     /** As stored: `targetUserIds` (older builds) lives here untouched. */
     val raw: JsonObject,
 ) {
@@ -53,11 +59,14 @@ data class BuilderRule(
         put("id", JsonPrimitive(id)); put("operator", JsonPrimitive(op)); put("value", JsonPrimitive(value)); put("action", JsonPrimitive(action))
         if (targetTaskListId.isEmpty()) remove("targetTaskListId") else put("targetTaskListId", JsonPrimitive(targetTaskListId))
         if (targetUserId.isEmpty()) remove("targetUserId") else put("targetUserId", JsonPrimitive(targetUserId))
+        if (targetCustomFieldId.isEmpty()) remove("targetCustomFieldId") else put("targetCustomFieldId", JsonPrimitive(targetCustomFieldId))
+        if (targetValue.isEmpty()) remove("targetValue") else put("targetValue", JsonPrimitive(targetValue))
     })
 
     companion object {
         fun of(raw: JsonObject) = BuilderRule(raw["id"].text() ?: newId(), raw["operator"].str() ?: "equals", raw["value"].text().orEmpty(),
-            raw["action"].str() ?: "assign_user", raw["targetTaskListId"].str().orEmpty(), raw["targetUserId"].str().orEmpty(), raw)
+            raw["action"].str() ?: "assign_user", raw["targetTaskListId"].str().orEmpty(), raw["targetUserId"].str().orEmpty(),
+            raw["targetCustomFieldId"].str().orEmpty(), raw["targetValue"].text().orEmpty(), raw)
         /** The web's new rule: equals / "" / assign_user. */
         fun fresh() = of(JsonObject(mapOf("id" to JsonPrimitive(newId()), "operator" to JsonPrimitive("equals"), "value" to JsonPrimitive(""), "action" to JsonPrimitive("assign_user"))))
         fun newId() = "r_${System.currentTimeMillis()}_${(0 until 1_000_000).random()}"
@@ -79,6 +88,10 @@ data class BuilderField(
     val mappingTarget: String, val mappingCustomFieldId: String,
     /** The field as stored; empty for a new one. */
     val raw: JsonObject,
+    /** Helper text under the question; null = no description row (the web deletes the key). */
+    val description: String? = null,
+    /** "" | "list": a dropdown shown as a list of options on the web form. */
+    val display: String = "",
 ) {
     val hasOptions get() = type == "dropdown" || type == "multi_select" || type == "select"
     val displayName get() = name.trim()
@@ -108,6 +121,8 @@ data class BuilderField(
             }) } ?: JsonNull
         }
         if (rules != before.rules) out["routingRules"] = JsonArray(rules.map { it.json() })
+        if (description != before.description) { if (description == null) out.remove("description") else out["description"] = JsonPrimitive(description) }
+        if (display != before.display) { if (display.isEmpty()) out.remove("display") else out["display"] = JsonPrimitive(display) }
         if (mappingTarget != before.mappingTarget || mappingCustomFieldId != before.mappingCustomFieldId) {
             out["mapping"] = JsonObject((raw["mapping"].obj() ?: JsonObject(emptyMap())).toMutableMap().apply {
                 put("target", JsonPrimitive(mappingTarget))
@@ -117,13 +132,48 @@ data class BuilderField(
         return JsonObject(out)
     }
 
+    /** The web's `cleanFields`: a "Show only when" with no value picked yet isn't live and isn't saved. */
+    fun cleanJson(): JsonObject {
+        val c = showIf
+        if (c == null || !FormVocab.needsValue(c.op) || c.value.isNotBlank()) return json()
+        return JsonObject(json().toMutableMap().apply { put("showIf", JsonNull) })
+    }
+
     /** "Duplicate to another project": routing rules go (section and member ids), the mapping keeps only its target. */
-    fun duplicateJson(): JsonObject = JsonObject(json().toMutableMap().apply {
+    fun duplicateJson(): JsonObject = JsonObject(cleanJson().toMutableMap().apply {
         put("mapping", if (mappingTarget != "none") JsonObject(mapOf("target" to JsonPrimitive(mappingTarget))) else JsonNull)
         remove("routingRules")
     })
 
+    /** The web's question kind: a view over `type` + `numberFormat`. */
+    val questionKind: FormQuestionKind get() = when {
+        type == "number" && numberFormat == "currency-idr" -> FormQuestionKind.RUPIAH
+        type == "select" -> FormQuestionKind.DROPDOWN
+        else -> FormQuestionKind.of(type) ?: FormQuestionKind.TEXT
+    }
+
+    /** The web's `withKind`: turns the question into another kind, keeping what still applies. */
+    fun withKind(k: FormQuestionKind): BuilderField {
+        var f = copy(type = k.storedType, numberFormat = if (k == FormQuestionKind.RUPIAH) "currency-idr" else "")
+        if (f.hasOptions && f.options.isEmpty()) f = f.copy(options = listOf(""))
+        if (f.type != "dropdown") f = f.copy(display = "")
+        if (f.type != "text" && f.type != "email") f = f.copy(autofill = "")
+        if (f.type == "file") f = f.copy(attachmentEnabled = false)
+        return f
+    }
+
+    /** A copy with a new id. A copy never inherits "this names the task": two titles would fight. */
+    fun duplicated(): BuilderField {
+        val nid = newId()
+        val c = copy(id = nid, raw = JsonObject(raw.toMutableMap().apply { put("id", JsonPrimitive(nid)) }))
+        return if (c.mappingTarget == "task_title") c.copy(mappingTarget = "none", mappingCustomFieldId = "") else c
+    }
+
     companion object {
+        /** The web's `newQuestion(kind)`. */
+        fun fresh(kind: FormQuestionKind) = of(JsonObject(mapOf("id" to JsonPrimitive(newId()), "name" to JsonPrimitive(""), "label" to JsonPrimitive(""),
+            "type" to JsonPrimitive("text"), "required" to JsonPrimitive(false)))).withKind(kind)
+
         /** A stored field as the web's builder loads it: name ↔ label from each other, "select" shown as "dropdown". */
         fun of(raw: JsonObject): BuilderField {
             val n = raw["name"].text().orEmpty(); val l = raw["label"].text().orEmpty()
@@ -140,7 +190,7 @@ data class BuilderField(
                 showIf = c?.let { BuilderCondition(it["fieldId"].text().orEmpty(), it["operator"].str() ?: "equals", it["value"].text().orEmpty()) },
                 rules = raw["routingRules"].arr()?.mapNotNull { it.obj()?.let(BuilderRule::of) }.orEmpty(),
                 mappingTarget = mapping?.get("target").str() ?: "none", mappingCustomFieldId = mapping?.get("customFieldId").str().orEmpty(),
-                raw = raw,
+                raw = raw, description = raw["description"].text(), display = raw["display"].str().orEmpty(),
             )
         }
         /** The web's newField(): `{ id: field_<ms>_<rand>, label: "", type: "text", required: false }`. */
@@ -151,11 +201,15 @@ data class BuilderField(
 
 /** `accessSchedule`, read as the server normalises it (src/lib/form-access-schedule.ts); sent whole, never half. */
 data class BuilderSchedule(val enabled: Boolean, val days: List<Int>, val start: String, val end: String, val timezone: String,
-                           /** "" follow the schedule, "open" forced open, "closed" forced closed. */ val override: String) {
+                           /** "" follow the schedule, "open" forced open, "closed" forced closed. */ val override: String,
+                           /** A one-off window on top of the weekly one: ISO instants, "" = none (kept, never dropped by a save). */
+                           val opensAt: String = "", val closesAt: String = "") {
     fun json(): JsonObject = JsonObject(buildMap {
         put("enabled", JsonPrimitive(enabled)); put("daysOfWeek", JsonArray(days.sorted().map(::JsonPrimitive)))
         put("startTime", JsonPrimitive(start)); put("endTime", JsonPrimitive(end)); put("timezone", JsonPrimitive(timezone))
         if (override.isNotEmpty()) put("override", JsonPrimitive(override))
+        if (opensAt.isNotEmpty()) put("opensAt", JsonPrimitive(opensAt))
+        if (closesAt.isNotEmpty()) put("closesAt", JsonPrimitive(closesAt))
     })
 
     /** Turning the schedule on with no days picks Mon–Fri. */
@@ -170,7 +224,8 @@ data class BuilderSchedule(val enabled: Boolean, val days: List<Int>, val start:
                 ?.filter { it in 0..6 }?.distinct()?.sorted().orEmpty()
             val ov = o["override"].str().orEmpty()
             return BuilderSchedule(o["enabled"].bool() ?: false, days, validTime(o["startTime"].str()) ?: "00:00", validTime(o["endTime"].str()) ?: "23:59",
-                o["timezone"].str()?.trim()?.ifEmpty { null } ?: "Asia/Jakarta", if (ov == "open" || ov == "closed") ov else "")
+                o["timezone"].str()?.trim()?.ifEmpty { null } ?: "Asia/Jakarta", if (ov == "open" || ov == "closed") ov else "",
+                o["opensAt"].str().orEmpty(), o["closesAt"].str().orEmpty())
         }
     }
 }
@@ -179,13 +234,18 @@ data class BuilderSchedule(val enabled: Boolean, val days: List<Int>, val start:
 object FormVocab {
     val TYPES = listOf("text" to R.string.fb_t_text, "textarea" to R.string.fb_t_textarea, "email" to R.string.fb_t_email, "number" to R.string.fb_t_number,
         "date" to R.string.fb_t_date, "dropdown" to R.string.fb_t_dropdown, "multi_select" to R.string.fb_t_multi, "checkbox" to R.string.fb_t_checkbox, "file" to R.string.fb_t_file)
-    val OPERATORS = listOf("equals" to R.string.fb_op_equals, "not_equals" to R.string.fb_op_not_equals, "contains" to R.string.fb_op_contains,
+    /** OPERATORS (form-model.ts): "is", "is not", … as the studio words them. */
+    val OPERATORS = listOf("equals" to R.string.fs_op_is, "not_equals" to R.string.fs_op_is_not, "contains" to R.string.fb_op_contains,
         "is_empty" to R.string.fb_op_empty, "is_not_empty" to R.string.fb_op_not_empty)
     fun needsValue(op: String) = op != "is_empty" && op != "is_not_empty"
-    val MAPPING = listOf("none" to R.string.fb_map_none, "task_title" to R.string.fb_map_title, "task_description" to R.string.fb_map_description,
+    /** MAPPING_TARGETS. */
+    val MAPPING = listOf("none" to R.string.fs_map_none, "task_title" to R.string.fb_map_title, "task_description" to R.string.fb_map_description,
         "task_due_date" to R.string.fb_map_due, "task_status" to R.string.fb_map_status, "task_priority" to R.string.fb_map_priority,
-        "task_list" to R.string.fb_map_list, "custom_field" to R.string.fb_map_custom)
-    val ACTIONS = listOf("set_task_list" to R.string.fb_act_section, "assign_user" to R.string.fb_act_assign)
+        "task_list" to R.string.fs_map_section, "custom_field" to R.string.fs_project_field)
+    /** ROUTING_ACTIONS. */
+    val ACTIONS = listOf("assign_user" to R.string.fs_act_assign, "set_field" to R.string.fs_act_set_field, "set_task_list" to R.string.fb_act_section)
+    /** Project fields a routing rule may set (web SETTABLE_FIELD_TYPES). */
+    val SETTABLE_FIELD_TYPES = setOf("SELECT", "MULTI_SELECT", "STATUS", "TEXT")
     /** Index = JS getDay(): 0 Sunday … 6 Saturday. */
     val DAYS = listOf(java.time.DayOfWeek.SUNDAY, java.time.DayOfWeek.MONDAY, java.time.DayOfWeek.TUESDAY, java.time.DayOfWeek.WEDNESDAY,
         java.time.DayOfWeek.THURSDAY, java.time.DayOfWeek.FRIDAY, java.time.DayOfWeek.SATURDAY)
