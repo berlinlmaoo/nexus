@@ -89,7 +89,7 @@ eq(bySection.map((g) => [g.label, ids(g.tasks)]), [["To do", ["a", "d"]], ["Doin
 eq(V.groupCalcValue(T, { kind: "count" }, defs).value, "4")
 eq(V.groupCalcValue(T, { kind: "done" }, defs).value, "1/4")
 eq(V.groupCalcValue(T, { kind: "percent_done" }, defs).value, "25%")
-eq(V.groupCalcValue(T, { kind: "sum", prop: "cf:f2" }, defs).value, "2.000.000")
+eq(V.groupCalcValue(T, { kind: "sum", prop: "cf:f2" }, defs).value, "Rp 2.000.000", "a Rupiah field sums as Rupiah")
 
 // URL round trip
 const f = { simple: [rule("status", "none_of", ["DONE"])], advanced: adv }
@@ -130,7 +130,7 @@ console.log(`project-views: ${n} checks passed`)
   const d2 = V.propDefs(c2)
   assert.equal(d2.find((d) => d.key === "section").label, "Status")
   assert.equal(d2.find((d) => d.key === "status").hidden, true)
-  assert.deepEqual(V.visibleProps({ ...V.resolveConfig({ layout: "table", config: {} }) }, "table", d2), ["assignee", "due", "priority", "section", "tags"], "status column = the option")
+  assert.deepEqual(V.visibleProps({ ...V.resolveConfig({ layout: "table", config: {} }) }, "table", d2), ["assignee", "due", "cf:f1", "cf:f2", "cf:f3", "priority", "section", "tags"], "status column = the option; every custom field")
   assert.equal(V.optionColor("section", "p", d2), "blue", "group colour when the option has none")
   console.log("status options: ok")
 }

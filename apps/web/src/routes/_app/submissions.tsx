@@ -15,6 +15,7 @@ import { COLOR_PRESETS, normalizeColor } from "@/lib/project-views";
 import { fmtTime, nexusApi, type NexusMySubmission, type NexusSubmissionColumn } from "@/lib/nexus-api";
 import { thumbUrl } from "@/lib/thumb";
 import { Incremental } from "@/components/projects/views/incremental";
+import { rupiah } from "@/lib/custom-field-number";
 
 export const Route = createFileRoute("/_app/submissions")({ component: MySubmissions });
 
@@ -35,9 +36,8 @@ function preset(c: { color?: string | null; group?: string } | null | undefined)
   return COLOR_PRESETS[normalizeColor(c?.color) ?? GROUP_COLOR[c?.group ?? "todo"] ?? "gray"];
 }
 
-const idr = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
 function money(n?: number | null) {
-  return n == null ? null : idr.format(n);
+  return n == null ? null : rupiah(n);
 }
 
 function useDate() {
@@ -173,7 +173,7 @@ function SubmissionDetail({ id, onClose }: { id: string; onClose: () => void }) 
                     {answers.map((a) => (
                       <div key={a.id} className="grid gap-1 px-3 py-2 sm:grid-cols-[40%_1fr]">
                         <dt className="text-xs text-muted-foreground">{a.label}</dt>
-                        <dd className="whitespace-pre-wrap break-words text-sm">{/(harga|nominal|amount|biaya|total|jumlah)/i.test(String(a.label)) && /^-?\d+$/.test(String(a.value ?? "").trim()) ? idr.format(Number(a.value)) : fmtVal(a.value, t("Yes"), t("No"))}</dd>
+                        <dd className="whitespace-pre-wrap break-words text-sm">{/(harga|nominal|amount|biaya|total|jumlah)/i.test(String(a.label)) && /^-?\d+$/.test(String(a.value ?? "").trim()) ? rupiah(Number(a.value)) : fmtVal(a.value, t("Yes"), t("No"))}</dd>
                       </div>
                     ))}
                   </dl>
@@ -361,13 +361,16 @@ function MySubmissions() {
                 message={mine ? t("When the team asks for a revision or replies to you, the request shows up here.") : t("Try another filter.")}
                 action={<EmptyAction onClick={() => { setFilter("all"); setMine(false); setProjectFilter(null); }}>{t("Show all")}</EmptyAction>} />
             ) : (
-              <div className="flex gap-3 overflow-x-auto pb-4">
+              <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-4 sm:snap-none">
                 {visibleCols.map((col, i) => {
                   const items = shown.filter((s) => keyOf(s) === col.key);
                   const p = preset(col);
                   const firstOfGroup = i === 0 || visibleCols[i - 1].group !== col.group;
                   return (
-                    <div key={col.key} className="flex w-72 shrink-0 flex-col">
+                    // Phone (UI tour run 7, 14 Oct 2026): a column with cards takes ~85% of the screen, so its
+                    // cards read whole and the next column peeks in; an empty one shrinks to a narrow lane
+                    // that says why it is empty, instead of a 288 px blank pushing the work off screen.
+                    <div key={col.key} className={cn("flex shrink-0 snap-start flex-col sm:w-72", items.length ? "w-[85vw] max-w-[22rem]" : "w-40")}>
                       <div className="mb-1 h-4 text-[11px] font-semibold text-muted-foreground">{firstOfGroup ? t(GROUP_LABEL[col.group]) : ""}</div>
                       <div className="flex flex-1 flex-col rounded-xl" style={{ background: p.lane }}>
                         <div className="flex items-center gap-2 px-3 py-2.5">
@@ -379,7 +382,7 @@ function MySubmissions() {
                         <div className="flex-1 space-y-2 px-2 pb-2">
                           {/* Long columns render in slices as they scroll into view (perf pass, 12 Oct 2026). */}
                           <Incremental items={items} first={25} step={30} keyOf={(s) => s.id} render={(s) => <Card s={s} onOpen={() => setOpenId(s.id)} />} />
-                          {items.length === 0 && <div className="py-6 text-center text-[11px] text-muted-foreground">{t("Nothing here")}</div>}
+                          {items.length === 0 && <div className="px-2 py-6 text-center text-[11px] leading-snug text-muted-foreground">{t("None of your submissions are at this stage right now. The team moves a card here when its work reaches it.")}</div>}
                         </div>
                       </div>
                     </div>

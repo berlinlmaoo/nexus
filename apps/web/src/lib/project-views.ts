@@ -14,7 +14,7 @@
  */
 import type { NexusCustomField, NexusProjectView, NexusTask } from "./nexus-api";
 import { groupIndex, orderedOptions, usesStatusOptions } from "./status-options.ts";
-import { normalizeNumberFieldValue, numberFieldFormat } from "./custom-field-number.ts";
+import { normalizeNumberFieldValue, numberFieldFormat, rupiah } from "./custom-field-number.ts";
 
 export type ViewLayout = NexusProjectView["layout"];
 export const VIEW_LAYOUTS: ViewLayout[] = ["board", "list", "table", "calendar", "timeline", "gallery"];
@@ -169,7 +169,7 @@ export function propDefs(ctx: ViewCtx): PropDef[] {
 
 /** A number property for display: Rupiah fields as "Rp 1.500.000", other numbers grouped in the UI locale. */
 export function formatNumberProp(n: number, format: PropDef["numberFormat"], maxFractionDigits = 2, locale = "id-ID"): string {
-  if (format === "currency-idr") return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n);
+  if (format === "currency-idr") return rupiah(n);
   return new Intl.NumberFormat(locale, { maximumFractionDigits: maxFractionDigits }).format(n);
 }
 
@@ -625,10 +625,13 @@ export function defaultVisibleProps(layout: ViewLayout, defs: PropDef[]): string
   switch (layout) {
     case "board":
       return ["priority", "tags", ...cfs, "due", "subtasks", "comments", "assignee"];
+    // List and Table show every custom field, like the Board (UI tour run 7, 14 Oct 2026: the List kept
+    // only the first three, so a 4th "Kategori" select showed on the Board and not in the List, and the
+    // Table showed none, so a project whose dates live in a custom field read as "no due dates").
     case "list":
-      return ["due", ...cfs.slice(0, 3), "priority", "status", "assignee"];
+      return ["due", ...cfs, "priority", "status", "assignee"];
     case "table":
-      return ["assignee", "due", "priority", "status", "tags"];
+      return ["assignee", "due", ...cfs, "priority", "status", "tags"];
     case "gallery":
       return ["status", "due", "assignee"];
     case "calendar":

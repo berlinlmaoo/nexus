@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, CircleCheck, Clock, ImageOff, ListChecks, MessageSquare, Plus } from "lucide-react";
+import { ChevronRight, CircleCheck, Clock, ImageOff, ListChecks, MessageSquare, Plus, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
 import { Avatar } from "@/components/Avatar";
 import { StatusPill } from "@/components/tasks/StatusPicker";
@@ -96,8 +96,13 @@ export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; c
   }
   if (vals.length === 0) return null;
   if (def.kind === "date") {
+    // A date field holding a name, not a date: Notion imports filled "Request by" (a Created-time field) with
+    // who asked. It reads as that person, with a person icon, not as a date with a clock (UI tour run 7).
+    if (Number.isNaN(new Date(vals[0]).getTime())) {
+      return <span className={cn(pill, "bg-muted text-muted-foreground")} title={def.label}><UserRound className="h-3 w-3 shrink-0" />{vals[0]}</span>;
+    }
     const overdue = def.key === "due" && !isDoneStatus(task.status) && new Date(vals[0]).getTime() < new Date().setHours(0, 0, 0, 0);
-    return <span className={cn("inline-flex shrink-0 items-center gap-1 text-[11px]", overdue ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}><Clock className="h-3 w-3" />{fmt(vals[0])}</span>;
+    return <span title={def.label} className={cn("inline-flex shrink-0 items-center gap-1 text-[11px]", overdue ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}><Clock className="h-3 w-3" />{fmt(vals[0])}</span>;
   }
   if (def.kind === "number") {
     const n = Number(vals[0]);

@@ -159,7 +159,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
     ? <DragHandle onDragStart={(e) => mover.startDrag(e, task, gKey, subKey)} onDragEnd={mover.endDrag} className="group-hover:opacity-100" />
     : null);
   const row = (task: NexusTask, handle: ReactNode = null) => (
-    <div key={task.id} {...bulk.bindRow(task)} className={cn("group grid items-stretch border-b border-border text-sm hover:bg-muted/40 [contain-intrinsic-size:auto_37px] [content-visibility:auto]", bulk.isSelected(task.id) && "bg-accent")} style={{ gridTemplateColumns: gridTemplate }}>
+    <div key={task.id} {...bulk.bindRow(task)} className={cn("group grid items-stretch border-b border-border text-sm hover:bg-muted/40", bulk.isSelected(task.id) && "bg-accent")} style={{ gridTemplateColumns: gridTemplate }}>
       <NameCell key={task.title} task={task} handle={handle} onRename={(title) => patchTask(task.id, { title })} onOpen={() => onOpen(task)} />
       {columns.map((key) => (
         <div key={key} className="relative flex min-w-0 items-center border-l border-border px-1.5 py-1 [&>*]:min-w-0 [&>*]:flex-1">
@@ -192,7 +192,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
               return (
                 <div key={key} className="group flex items-center justify-between gap-1 border-l border-border px-3 py-2">
                   <span className="flex min-w-0 items-center gap-1.5"><PropIcon def={def} /><span className="truncate">{propLabel(def)}</span>{key.startsWith("cf:") && ai.aiFields.has(key.slice(3)) && <Sparkles aria-label={t("AI Autofill")} className="h-3 w-3 shrink-0 text-primary" />}</span>
-                  {canEditColumns && <button type="button" onClick={() => setColumns(columns.filter((c) => c !== key))} title={t("Hide column")} aria-label={t("Hide column")} className="tap-area opacity-0 pointer-coarse:opacity-100! transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"><X className="h-3 w-3" /></button>}
+                  {canEditColumns && <button type="button" onClick={() => setColumns(columns.filter((c) => c !== key))} title={t("Hide column")} aria-label={t("Hide column")} className="tap-area opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:hidden"><X className="h-3 w-3" /></button>}
                 </div>
               );
             })}
@@ -266,7 +266,9 @@ function NameCell({ task, handle, onRename, onOpen }: { task: NexusTask; handle?
         onChange={(e) => setTitle(e.target.value)}
         onBlur={() => { const t = title.trim(); if (t && t !== task.title) onRename(t); else if (!t) setTitle(task.title); }}
         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-        className={cn("min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium outline-none hover:border-border focus:border-primary focus:bg-background", done && "text-muted-foreground line-through")}
+        title={task.title}
+        // An ellipsis where the name is cut (UI tour run 7: phone names stopped mid-word with no sign).
+        className={cn("min-w-0 flex-1 truncate rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium outline-none hover:border-border focus:border-primary focus:bg-background", done && "text-muted-foreground line-through")}
       />
       {filteredOut && <FilterHint />}
       {xp > 0 && <span title={t("Quest XP")} className="shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">+{xp} XP</span>}
