@@ -216,3 +216,45 @@ export function answerProblem(field: Pick<RichField, "type" | "autofill">, value
   if (field.type === "url" && !looksLikeUrl(v)) return "url";
   return null;
 }
+
+/* ------------------------------------------------------------------ categories (13 Oct 2026) */
+
+type SelectLike = { id: string; name: string; type?: string; options?: unknown };
+const lc = (s: unknown) => String(s ?? "").trim().toLowerCase();
+const CATEGORY_NAME = /^(kategori|category)( \d+)?$/i;
+/** A select custom field's options, whatever shape they were saved in. */
+export function selectChoices(f: Pick<SelectLike, "options">): string[] {
+  const o = f.options as unknown;
+  if (!o) return [];
+  if (Array.isArray(o)) return o.map(String);
+  const obj = o as { options?: unknown[]; choices?: unknown[] };
+  if (Array.isArray(obj.options)) return obj.options.map(String);
+  if (Array.isArray(obj.choices)) return obj.choices.map(String);
+  return [];
+}
+const isSelect = (f: SelectLike) => (f.type ?? "").toUpperCase() === "SELECT";
+/** The project's category field: the select named Kategori / Category (made from the old category sections). */
+export function projectCategoryField<T extends SelectLike>(customFields: T[]): T | null {
+  return customFields.find((c) => isSelect(c) && CATEGORY_NAME.test(c.name)) ?? null;
+}
+/**
+ * A one-answer question still sending its answer to "Section" whose options are categories, not the
+ * project's sections (sections became statuses on 12 Oct 2026): the select field those options belong to.
+ * Mirrors the server (src/lib/form-category.ts), which keeps these options on the live form and files the
+ * answer in that field.
+ */
+export function categoryFieldForSectionQuestion<T extends SelectLike>(field: RichField, customFields: T[], taskLists: { name: string }[]): T | null {
+  if (field.mapping?.target !== "task_list" || !(field.type === "dropdown" || field.type === "select")) return null;
+  const opts = optionsOf(field).map((o) => o.trim()).filter(Boolean);
+  const sections = new Set(taskLists.map((s) => lc(s.name)));
+  if (opts.some((o) => sections.has(lc(o)))) return null;
+  const selects = customFields.filter(isSelect).sort((a, b) => Number(CATEGORY_NAME.test(b.name)) - Number(CATEGORY_NAME.test(a.name)));
+  if (!opts.length) return selects.find((c) => CATEGORY_NAME.test(c.name)) ?? null;
+  return selects.find((c) => { const ch = new Set(selectChoices(c).map(lc)); return opts.every((o) => ch.has(lc(o))); }) ?? null;
+}
+/** True when every option of the question is a section name (what "Use these sections as options" writes). */
+export function optionsAreSections(field: RichField, taskLists: { name: string }[]): boolean {
+  const opts = optionsOf(field).map((o) => o.trim()).filter(Boolean);
+  const sections = new Set(taskLists.map((s) => lc(s.name)));
+  return opts.length > 0 && opts.every((o) => sections.has(lc(o)));
+}

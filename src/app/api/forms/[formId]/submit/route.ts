@@ -19,6 +19,7 @@ import { emitFormResponsesChanged, emitTaskCreated } from "@/lib/socket-emitter"
 import { formResponseLimit, normalizeFormSettings, RESPONSE_LIMIT_MESSAGE } from "@/lib/form-settings"
 import { createInAppNotification } from "@/lib/notification-service"
 import { pickStatusSection } from "@/lib/status-sections"
+import { categoryValueForAnswer } from "@/lib/form-category"
 import { parseClientTag } from "@/lib/client-version"
 import { mkdir, writeFile } from "fs/promises"
 import path from "path"
@@ -480,6 +481,12 @@ export async function POST(
         form.project.taskLists.find((list) => list.name.toLowerCase() === mappedTaskListValue.toLowerCase())
       : undefined
     const taskList = answeredTaskList ?? form.project.taskLists[0]
+    // A category answer to a question still mapped to "Section" (sections became statuses, 12 Oct 2026;
+    // lib/form-category.ts): it names no section, so the task takes the first section (the default
+    // status) as before, and the answer goes into the select field that lists it ("Kategori").
+    const categoryFromSection = mappedTaskListValue && !answeredTaskList
+      ? categoryValueForAnswer(mappedTaskListValue, form.project.taskLists, form.project.customFields)
+      : null
     // An answer or a routing rule picked the section: that choice wins over a mapped status (below).
     let sectionChosen = !!answeredTaskList
 
@@ -605,6 +612,9 @@ export async function POST(
         .filter((value): value is { customFieldId: string; taskId: string; value: string } => Boolean(value))
         // A routing rule's field value wins over a mapped answer for the same field.
         .filter((value) => !routedFieldValues.has(value.customFieldId))
+      if (categoryFromSection && !routedFieldValues.has(categoryFromSection.fieldId) && !customFieldValues.some((v) => v.customFieldId === categoryFromSection.fieldId)) {
+        customFieldValues.push({ customFieldId: categoryFromSection.fieldId, taskId: task.id, value: categoryFromSection.value })
+      }
       for (const [customFieldId, value] of routedFieldValues) {
         const customField = form.project.customFields.find((item) => item.id === customFieldId)
         const type = normalizeCustomFieldType(customField?.type)

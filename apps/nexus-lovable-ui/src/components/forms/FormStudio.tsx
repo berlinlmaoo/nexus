@@ -22,6 +22,7 @@ import { FormHead, FormRenderer, QuestionControl } from "./FormRenderer";
 import {
   cleanFields, condIncomplete, COVER_PRESETS, fieldTitle, hasOptions, ICON_CHOICES, kindMeta, kindOf, logicParents, MAPPING_TARGETS, needsValue, newFieldId, newQuestion,
   OPERATORS, optionsOf, QUESTION_KINDS, ROUTING_ACTIONS, staleOption, withKind, type FormDraft, type FRule, type QuestionKind, type RichField,
+  categoryFieldForSectionQuestion, optionsAreSections, projectCategoryField, selectChoices,
 } from "./form-model";
 
 /**
@@ -296,10 +297,13 @@ function QuestionCard({ field, index, total, selected, others, customFields, tas
   const kind = kindOf(field);
   const meta = kindMeta(kind);
   const mapping = field.mapping?.target && field.mapping.target !== "none" ? field.mapping : null;
+  // A "Section" question whose options are categories: its answers land in the category field (server,
+  // lib/form-category.ts), so the chip names that field and the options stay editable.
+  const sectionCategory = categoryFieldForSectionQuestion(field, customFields, taskLists);
   const mappingLabel = mapping
     ? mapping.target === "custom_field"
       ? (customFields.find((c) => c.id === mapping.customFieldId)?.name ?? t("A project field"))
-      : t(MAPPING_TARGETS.find((m) => m.value === mapping.target)?.label ?? "")
+      : sectionCategory ? sectionCategory.name : t(MAPPING_TARGETS.find((m) => m.value === mapping.target)?.label ?? "")
     : null;
   const parent = field.showIf ? others.find((o) => o.id === field.showIf?.fieldId) : null;
   const opLabel = field.showIf ? t(OPERATORS.find((o) => o.value === field.showIf?.operator)?.label ?? "") : "";
@@ -308,7 +312,7 @@ function QuestionCard({ field, index, total, selected, others, customFields, tas
   const condUnfinished = !!parent && condIncomplete(field.showIf);
   const condStale = !!parent && staleOption(parent, field.showIf?.operator, field.showIf?.value);
   const staleRules = (field.routingRules ?? []).filter((r) => staleOption(field, r.operator, r.value)).length;
-  const syncedSections = mapping?.target === "task_list" && hasOptions(field);
+  const syncedSections = mapping?.target === "task_list" && hasOptions(field) && !sectionCategory;
 
   return (
     <div
@@ -431,6 +435,8 @@ function QuestionPanel({ field, index, total, others, customFields, taskLists, m
   const rules = field.routingRules ?? [];
   const settable = customFields.filter((c) => SETTABLE_FIELD_TYPES.includes((c.type ?? "").toUpperCase()));
   const titleOf = (f: RichField) => fieldTitle(f) || t("Untitled question");
+  const sectionCategory = categoryFieldForSectionQuestion(field, customFields, taskLists);
+  const projectCategory = projectCategoryField(customFields);
 
   return (
     <div className="pb-6">
@@ -485,11 +491,55 @@ function QuestionPanel({ field, index, total, others, customFields, taskLists, m
         <div className="space-y-1.5 px-2">
           <SelectPicker variant="field" size="sm" className={cn(pick, "w-full")} ariaLabel={t("Answer goes to")} value={mapping.target ?? "none"} onChange={(v) => onChange({ mapping: v === "custom_field" ? { target: v, customFieldId: mapping.customFieldId } : { target: v } })} options={MAPPING_TARGETS.map((m) => ({ value: m.value, label: t(m.label) }))} />
           {mapping.target === "custom_field" && (
-            <SelectPicker variant="field" size="sm" className={cn(pick, "w-full")} ariaLabel={t("Field")} value={mapping.customFieldId ?? ""} onChange={(v) => onChange({ mapping: { target: "custom_field", customFieldId: v } })} placeholder={t("choose custom field")} options={customFields.map((c) => ({ value: c.id, label: c.name }))} />
+            <SelectPicker variant="field" size="sm" className={cn(pick, "w-full")} ariaLabel={t("Field")} value={mapping.customFieldId ?? ""} onChange={(v) => onChange((f) => {
+              // A choice question pointed at a select field whose options are still the section (status)
+              // names, or none: it takes the field's options (e.g. "Kategori": AI & Tech / Management…).
+              const target = customFields.find((c) => c.id === v);
+              const choices = target && (target.type ?? "").toUpperCase() === "SELECT" ? selectChoices(target) : [];
+              const adopt = hasOptions(f) && choices.length > 0 && (optionsAreSections(f, taskLists) || optionsOf(f).filter((o) => o.trim()).length === 0);
+              return { ...f, mapping: { target: "custom_field", customFieldId: v }, ...(adopt ? { options: choices } : {}) };
+            })} placeholder={t("choose custom field")} options={customFields.map((c) => ({ value: c.id, label: c.name }))} />
           )}
-          {mapping.target === "task_list" && (
+          {mapping.target === "custom_field" && (() => {
+            const target = customFields.find((c) => c.id === mapping.customFieldId);
+            if (!target || (target.type ?? "").toUpperCase() !== "SELECT" || !hasOptions(field)) return null;
+            const choices = selectChoices(target).map((o) => o.trim()).filter(Boolean);
+            if (!choices.length) return null;
+            const have = new Set(ownOpts.map((o) => o.trim().toLowerCase()));
+            const known = new Set(choices.map((o) => o.toLowerCase()));
+            const extra = ownOpts.filter((o) => !known.has(o.trim().toLowerCase()));
+            const same = extra.length === 0 && choices.every((o) => have.has(o.toLowerCase()));
+            return (
+              <div className="rounded-lg bg-muted/40 p-2.5 text-[11px] leading-relaxed text-muted-foreground">
+                <p>{t("Options of “{field}”: {list}", { field: target.name, list: choices.join(", ") })}</p>
+                {extra.length > 0 && <p className="mt-1 font-medium text-amber-700 dark:text-amber-400">{t("Not an option of “{field}”: {list}. These answers are saved as typed.", { field: target.name, list: extra.join(", ") })}</p>}
+                {!same && field.type !== "multi_select" && (
+                  <button type="button" onClick={() => onChange({ options: choices })} className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-background px-2 py-1 font-semibold text-foreground ring-1 ring-border transition hover:bg-muted">
+                    <Copy className="h-3 w-3" /> {tn(choices.length, "Use this {n} option", "Use these {n} options")}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+          {mapping.target === "task_list" && sectionCategory && (
+            <div className="rounded-lg bg-amber-500/10 p-2.5 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300">
+              <p>{t("These options are categories, and sections are now the project's statuses. Answers go into “{field}” and the task starts in the first status.", { field: sectionCategory.name })}</p>
+              <button type="button" onClick={() => onChange({ mapping: { target: "custom_field", customFieldId: sectionCategory.id } })} className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-background px-2 py-1 font-semibold text-foreground ring-1 ring-border transition hover:bg-muted">
+                <ArrowRight className="h-3 w-3" /> {t("Send answers to “{field}”", { field: sectionCategory.name })}
+              </button>
+            </div>
+          )}
+          {mapping.target === "task_list" && !sectionCategory && (
             <div className="rounded-lg bg-muted/40 p-2.5 text-[11px] leading-relaxed text-muted-foreground">
               <p>{t("This field's answer decides which section the task goes into, by matching the section name. So the options need to match the project's section names exactly. With no match, the task goes into the first section.")}</p>
+              {projectCategory && hasOptions(field) && field.type !== "multi_select" && (
+                <div className="mt-2">
+                  <p>{t("Sections are the project's statuses. To sort answers by category, send them to “{field}”.", { field: projectCategory.name })}</p>
+                  <button type="button" onClick={() => onChange((f) => ({ ...f, mapping: { target: "custom_field", customFieldId: projectCategory.id }, ...(optionsAreSections(f, taskLists) || optionsOf(f).filter((o) => o.trim()).length === 0 ? { options: selectChoices(projectCategory) } : {}) }))} className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-background px-2 py-1 font-semibold text-foreground ring-1 ring-border transition hover:bg-muted">
+                    <ArrowRight className="h-3 w-3" /> {t("Send answers to “{field}”", { field: projectCategory.name })}
+                  </button>
+                </div>
+              )}
               {taskLists.length > 0 ? (
                 hasOptions(field) && field.type !== "multi_select" && (
                   <button type="button" onClick={() => onChange({ options: taskLists.map((tl) => tl.name) })} className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-background px-2 py-1 font-semibold text-foreground ring-1 ring-border transition hover:bg-muted">

@@ -34,6 +34,9 @@
 // section X" become "Set field = X", conditions / field triggers on the section become conditions on the
 // field; saved-view filters on those sections become filters on the field. In a "single" project they are
 // dropped (the answer stays in the task description). Task.status is never changed.
+// Forms safety net after --apply (and the DEV repair): prisma/sql/2026-10-13-formcat-form-kategori-mapping.sql,
+// re-run at the release after this script (deploy/bluegreen/RUNBOOK.md §I). The server also keeps a leftover
+// category question working (src/lib/form-category.ts).
 //
 // DRY RUN by default, inside a READ ONLY transaction: prints the plan and writes nothing. --apply writes
 // everything in ONE transaction and first writes a JSON backup of every row it touches (sections, tasks,

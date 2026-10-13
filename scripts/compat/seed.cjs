@@ -138,6 +138,11 @@ async function main() {
 
   // A public form with Email / Link questions (12 Oct 2026): released apps send malformed answers and
   // must keep getting them accepted; only the web (X-Nexus-Client web/*) gets INVALID_EMAIL / INVALID_URL.
+  // A category field (13 Oct 2026): sections became statuses and old category sections became a select
+  // field "Kategori"; a released app may still send a category answer to a question mapped to the section.
+  const kategori = await prisma.customField.create({
+    data: { name: "Kategori", type: "SELECT", options: { options: ["AI & Tech", "Management"] }, projectId: project.id },
+  })
   const form = typeof prisma.form?.create === "function"
     ? await prisma.form.create({
         data: {
@@ -149,6 +154,7 @@ async function main() {
             { id: "q_title", name: "Title", label: "Title", type: "text", required: true, mapping: { target: "task_title" } },
             { id: "q_mail", name: "Email", label: "Email", type: "email", required: false },
             { id: "q_url", name: "Link", label: "Link", type: "url", required: false },
+            { id: "q_div", name: "Divisi", label: "Divisi", type: "dropdown", required: false, options: ["AI & Tech", "Management"], mapping: { target: "task_list" } },
           ],
         },
       })
@@ -169,6 +175,7 @@ async function main() {
     staff,
     calendar,
     formId: form?.id ?? null,
+    kategoriFieldId: kategori.id,
   }
   process.stdout.write("\n" + JSON.stringify(world) + "\n")
 }

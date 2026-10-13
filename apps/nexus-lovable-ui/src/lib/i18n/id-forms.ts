@@ -160,4 +160,12 @@ export const ID_FORMS: Record<string, string> = {
   "{n} new response came in while you were here.": "{n} jawaban baru masuk selama kamu di sini.",
   "{n} new responses came in while you were here.": "{n} jawaban baru masuk selama kamu di sini.",
   "Their tasks stay on the board, but the responses leave their senders' My Submissions. The link stops working. Control Room → Audit can restore the form with its responses.": "Task-nya tetap ada di board, tapi jawabannya hilang dari Pengajuan Saya para pengirim. Link-nya berhenti berfungsi. Control Room → Audit bisa memulihkan form beserta jawabannya.",
+  // Category questions (13 Oct 2026, sections became statuses)
+  "Options of “{field}”: {list}": "Opsi “{field}”: {list}",
+  "Not an option of “{field}”: {list}. These answers are saved as typed.": "Bukan opsi “{field}”: {list}. Jawaban ini disimpan apa adanya.",
+  "Use this {n} option": "Pakai {n} opsi ini",
+  "Use these {n} options": "Pakai {n} opsi ini",
+  "These options are categories, and sections are now the project's statuses. Answers go into “{field}” and the task starts in the first status.": "Opsi ini kategori, sedangkan bagian sekarang jadi status project. Jawabannya masuk ke “{field}” dan task mulai di status pertama.",
+  "Send answers to “{field}”": "Kirim jawaban ke “{field}”",
+  "Sections are the project's statuses. To sort answers by category, send them to “{field}”.": "Bagian adalah status project. Untuk mengelompokkan jawaban per kategori, kirim ke “{field}”.",
 };

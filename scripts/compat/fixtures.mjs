@@ -1187,6 +1187,22 @@ export function buildFixtures(profile, world, media) {
       request: () => ({ method: "POST", path: formPath(), json: { data: { q_title: `compat ${p.id} ok`, q_mail: "a@b.co", q_url: "nexus.id/x" } } }),
       expect: { status: "2xx", check: (j) => need(isStr(j?.task?.id), "task.id missing") },
     })
+    // A category answer to a question still mapped to "Section" (13 Oct 2026, lib/form-category.ts): the live
+    // form keeps the category options (not the section names), the answer is accepted, the task starts in
+    // the first section and the category lands in the "Kategori" field.
+    add({
+      id: "form-public-category-options", title: "GET /api/forms/:id/public keeps category options on a Section question", as: "a", kind: "compat", needs: noForm,
+      request: () => ({ method: "GET", path: `/api/forms/${world.formId}/public` }),
+      expect: { status: 200, check: (j) => {
+        const q = (j?.form?.fields ?? j?.fields ?? []).find((f) => f?.id === "q_div")
+        return need(q && JSON.stringify(q.options) === JSON.stringify(["AI & Tech", "Management"]), `q_div options ${JSON.stringify(q?.options)}`)
+      } },
+    })
+    add({
+      id: "form-submit-category", title: "POST …/submit with a category answer to a Section question → 2xx, first section", as: "a", kind: "compat", needs: noForm,
+      request: () => ({ method: "POST", path: formPath(), json: { data: { q_title: `compat ${p.id} category`, q_div: "AI & Tech" } } }),
+      expect: { status: "2xx", check: (j) => need(isStr(j?.task?.id), "task.id missing") || need(j?.task?.taskListId === world.taskListId, `taskListId ${j?.task?.taskListId}`) },
+    })
     if (ios) {
       add({
         id: "form-submit-lenient", title: "POST …/submit with 'not an email' / 'lol' → still 2xx (released apps)", as: "a", kind: "compat", needs: noForm,

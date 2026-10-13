@@ -7,6 +7,7 @@ import { numberFieldFormat } from "@/lib/custom-field-number"
 import { auth } from "@/lib/auth"
 import { checkProjectAccess } from "@/lib/rbac"
 import { formResponseLimit, publicFormSettings, RESPONSE_LIMIT_MESSAGE } from "@/lib/form-settings"
+import { categoryFieldForQuestion, isChoiceQuestion, questionOptions, selectFieldChoices } from "@/lib/form-category"
 
 export async function GET(
   _request: NextRequest,
@@ -39,7 +40,7 @@ export async function GET(
               orderBy: { position: "asc" },
               select: { id: true, name: true },
             },
-            customFields: { where: { type: "NUMBER" }, select: { id: true, options: true } },
+            customFields: { where: { type: { in: ["NUMBER", "SELECT"] } }, select: { id: true, name: true, type: true, options: true } },
           },
         },
       },
@@ -83,12 +84,19 @@ export async function GET(
     // it "Plain" (the finance forms' "Harga": people typed "369.000" into a bare number box and the board
     // showed Rp 369). Web, iOS and Android all render numberFormat "currency-idr" as an Rp input.
     const rupiahFieldIds = new Set(
-      form.project.customFields.filter((cf) => numberFieldFormat(cf.options) === "currency-idr").map((cf) => cf.id),
+      form.project.customFields.filter((cf) => cf.type === "NUMBER" && numberFieldFormat(cf.options) === "currency-idr").map((cf) => cf.id),
     )
     const fields = Array.isArray(form.fields)
       ? (form.fields as Array<Record<string, unknown>>).map((f) => {
           const mapping = f?.mapping as { target?: string; customFieldId?: string } | undefined
-          if (mapping?.target === "task_list") return { ...f, options: liveSectionNames }
+          // Except a question whose options are categories, not sections (sections became statuses, 12 Oct
+          // 2026): it keeps its own options and submit/route.ts files the answer in the category field
+          // (lib/form-category.ts). Without this the sender saw "To Do / On Progress / Done".
+          if (mapping?.target === "task_list") {
+            const categoryField = isChoiceQuestion(f.type) ? categoryFieldForQuestion(f.options, form.project.taskLists, form.project.customFields) : null
+            if (!categoryField) return { ...f, options: liveSectionNames }
+            return questionOptions(f.options).length ? f : { ...f, options: selectFieldChoices(categoryField.options) }
+          }
           if (
             f?.type === "number" &&
             !f.numberFormat &&
