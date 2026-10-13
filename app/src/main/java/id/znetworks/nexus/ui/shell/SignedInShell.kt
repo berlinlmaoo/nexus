@@ -7,6 +7,7 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.CheckBox
 import id.znetworks.nexus.feature.forms.FormBuilderScreen
+import id.znetworks.nexus.feature.forms.FormResponsesScreen
 import id.znetworks.nexus.feature.chat.ChatSearchScreen
 import id.znetworks.nexus.feature.chat.ChatMediaScreen
 import id.znetworks.nexus.feature.chat.ChatInfoScreen
@@ -510,7 +511,12 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onOpenGideon = { nav.navigate("gideon") { launchSingleTop = true } }, onOpenProjects = { nav.popBackStack(); goTab(Tab.PROJECTS) })
             }
             composable("form-builder/{projectId}?form={form}", arguments = listOf(androidx.navigation.navArgument("form") { nullable = true; defaultValue = null })) {
-                FormBuilderScreen(onBack = { nav.popBackStack() }, onOpenForm = { nav.navigate("form/${android.net.Uri.encode(it)}") })
+                FormBuilderScreen(onBack = { nav.popBackStack() }, onOpenForm = { nav.navigate("form/${android.net.Uri.encode(it)}") },
+                    onOpenResponses = { pid, fid -> nav.navigate("form-responses/${enc(pid)}/${enc(fid)}") })
+            }
+            composable("form-responses/{projectId}/{formId}") { e ->
+                FormResponsesScreen(e.arguments?.getString("projectId").orEmpty(), e.arguments?.getString("formId").orEmpty(),
+                    onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/${enc(it)}") { launchSingleTop = true } })
             }
             composable("project/{id}/settings") {
                 ProjectSettingsScreen(

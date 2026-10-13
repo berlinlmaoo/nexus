@@ -199,4 +199,25 @@
     <string name="acc_invite">Invite by email</string>
     <string name="acc_change_failed">Couldn\'t change the access</string>
     <string name="chat_view_only">View only: you can read this project\'s chat but not post in it. Ask its Project Owner for Can comment access.</string>
+    <!-- Forms: Kategori (scope 5) -->
+    <string name="fc_options_of">Options of “%1$s”: %2$s</string>
+    <string name="fc_not_option">Not an option of “%1$s”: %2$s. These answers are saved as typed.</string>
+    <string name="fc_are_categories">These options are categories, and sections are now the project\'s statuses. Answers go into “%1$s” and the task starts in the first status.</string>
+    <string name="fc_send_to">Send answers to “%1$s”</string>
+    <string name="fc_sections_are_statuses">Sections are the project\'s statuses. To sort answers by category, send them to “%1$s”.</string>
+    <plurals name="fc_use_options">
+        <item quantity="one">Use this option</item>
+        <item quantity="other">Use these %d options</item>
+    </plurals>
+    <string name="fr_title">Responses</string>
+    <string name="fr_empty">No responses yet</string>
+    <string name="fr_empty_sub">Share the form\'s link. Each answer arrives here and on the project board as a task.</string>
+    <string name="fr_footer">Each response is a task in this project. Open one to work on it.</string>
+    <string name="fr_unknown">Unknown sender</string>
+    <string name="fr_task_deleted">Task deleted</string>
+    <string name="fr_load_failed">Couldn\'t load the responses</string>
+    <plurals name="fr_count">
+        <item quantity="one">1 response</item>
+        <item quantity="other">%d responses</item>
+    </plurals>
 </resources>

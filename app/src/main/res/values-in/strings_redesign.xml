@@ -185,4 +185,23 @@
     <string name="acc_invite">Undang lewat email</string>
     <string name="acc_change_failed">Akses gagal diubah</string>
     <string name="chat_view_only">Hanya lihat: kamu bisa membaca chat project ini tapi tidak bisa mengirim pesan. Minta Pemilik Project akses Bisa komentar.</string>
+    <!-- Forms: Kategori (scope 5) -->
+    <string name="fc_options_of">Opsi “%1$s”: %2$s</string>
+    <string name="fc_not_option">Bukan opsi “%1$s”: %2$s. Jawaban ini disimpan apa adanya.</string>
+    <string name="fc_are_categories">Opsi ini kategori, sedangkan bagian sekarang jadi status project. Jawabannya masuk ke “%1$s” dan task mulai di status pertama.</string>
+    <string name="fc_send_to">Kirim jawaban ke “%1$s”</string>
+    <string name="fc_sections_are_statuses">Bagian adalah status project. Untuk mengelompokkan jawaban per kategori, kirim ke “%1$s”.</string>
+    <plurals name="fc_use_options">
+        <item quantity="other">Pakai %d opsi ini</item>
+    </plurals>
+    <string name="fr_title">Jawaban</string>
+    <string name="fr_empty">Belum ada jawaban</string>
+    <string name="fr_empty_sub">Bagikan link form-nya. Tiap jawaban masuk ke sini dan ke board project sebagai task.</string>
+    <string name="fr_footer">Tiap jawaban adalah task di project ini. Buka untuk mengerjakannya.</string>
+    <string name="fr_unknown">Pengirim tidak diketahui</string>
+    <string name="fr_task_deleted">Task dihapus</string>
+    <string name="fr_load_failed">Jawaban tidak bisa dimuat</string>
+    <plurals name="fr_count">
+        <item quantity="other">%d jawaban</item>
+    </plurals>
 </resources>

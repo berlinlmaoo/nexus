@@ -114,7 +114,7 @@ data class BuilderState(
     val notice: String? = null,
     val sections: List<Named> = emptyList(),
     val members: List<Named> = emptyList(),
-    val customFields: List<Named> = emptyList(),
+    val customFields: List<id.znetworks.nexus.feature.projects.CustomFieldDef> = emptyList(),
     /** A DELETE refused for its submissions: their count, for the second question. */
     val deleteCount: Int? = null,
     /** Saved an existing form, or deleted it: the screen goes back. */
@@ -147,7 +147,7 @@ class FormBuilderViewModel(app: Application, handle: SavedStateHandle) : Android
             _state.update { s -> s.copy(sections = d.taskLists.sortedBy { it.position ?: Int.MAX_VALUE }.map { Named(it.id, it.name) },
                 members = d.members.mapNotNull { m -> (m.userId ?: m.user?.id)?.let { Named(it, m.user?.name ?: "—") } }) }
         }
-        runCatching { projects.customFields(projectId) }.getOrNull()?.let { l -> _state.update { it.copy(customFields = l.map { f -> Named(f.id, f.name) }) } }
+        runCatching { projects.customFields(projectId) }.getOrNull()?.let { l -> _state.update { it.copy(customFields = l) } }
     }
 
     private fun fill(f: BuilderForm) = _state.update { s ->
@@ -230,7 +230,7 @@ class FormBuilderViewModel(app: Application, handle: SavedStateHandle) : Android
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun FormBuilderScreen(onBack: () -> Unit, onOpenForm: (String) -> Unit, vm: FormBuilderViewModel = viewModel()) {
+fun FormBuilderScreen(onBack: () -> Unit, onOpenForm: (String) -> Unit, onOpenResponses: (projectId: String, formId: String) -> Unit = { _, _ -> }, vm: FormBuilderViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     val context = LocalContext.current
@@ -320,7 +320,9 @@ fun FormBuilderScreen(onBack: () -> Unit, onOpenForm: (String) -> Unit, vm: Form
                                 Text(listOfNotNull(FormVocab.TYPES.firstOrNull { it.first == f.type }?.let { stringResource(it.second) } ?: f.type,
                                     f.showIf?.let { stringResource(R.string.fb_conditional) },
                                     f.rules.takeIf { it.isNotEmpty() }?.let { pluralStringResource(R.plurals.fb_rules_n, it.size, it.size) },
-                                    f.mappingTarget.takeIf { it != "none" }?.let { t -> FormVocab.MAPPING.firstOrNull { it.first == t }?.let { stringResource(it.second) } })
+                                    // A Section question whose options are categories: its answers go to that field (web "Kategori" chip).
+                                    FormCategory.fieldForSectionQuestion(f.type, f.mappingTarget, f.options, s.customFields, s.sections.map { it.name })?.let { "→ " + it.name }
+                                        ?: f.mappingTarget.takeIf { it != "none" }?.let { t -> FormVocab.MAPPING.firstOrNull { it.first == t }?.let { stringResource(it.second) } })
                                     .joinToString(" · "), fontSize = 11.sp, color = c.mutedFg)
                             }
                             IconButton(onClick = { vm.moveField(i, -1) }, enabled = i > 0) { Icon(Icons.Filled.KeyboardArrowUp, null) }
@@ -335,6 +337,8 @@ fun FormBuilderScreen(onBack: () -> Unit, onOpenForm: (String) -> Unit, vm: Form
                 val id = s.formId
                 if (id != null) Block(stringResource(R.string.fb_manage)) {
                     Text(pluralStringResource(R.plurals.fb_submissions_n, s.submissions, s.submissions), fontSize = 13.sp, color = c.foreground)
+                    // Every response, as the task it made (web FormStudio Responses, 13 Oct).
+                    TextButton(onClick = { onOpenResponses(vm.projectId, id) }) { Text(stringResource(R.string.fr_title) + " (${s.submissions})") }
                     TextButton(onClick = { onOpenForm(s.slug ?: id) }) { Text(stringResource(R.string.fb_open_form)) }
                     TextButton(onClick = { duplicating = true }) { Text(stringResource(R.string.fb_duplicate_to)) }
                     TextButton(onClick = { confirmDelete = true }) { Text(stringResource(R.string.fb_delete_form), color = c.dangerText) }
@@ -447,7 +451,7 @@ private fun DuplicateDialog(name: String, load: suspend () -> List<Named>, onDis
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FieldEditor(field: BuilderField, others: List<BuilderField>, sections: List<Named>, members: List<Named>, customFields: List<Named>,
+private fun FieldEditor(field: BuilderField, others: List<BuilderField>, sections: List<Named>, members: List<Named>, customFields: List<id.znetworks.nexus.feature.projects.CustomFieldDef>,
                         onDone: (BuilderField) -> Unit, onDelete: () -> Unit) {
     val c = Nx.colors
     var f by remember(field.id) { mutableStateOf(field) }
@@ -497,7 +501,7 @@ private fun FieldEditor(field: BuilderField, others: List<BuilderField>, section
                         }
                     }
                     TextButton(onClick = { f = f.copy(options = f.options + "") }) { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Text(stringResource(R.string.fb_add_option)) }
-                    if (f.mappingTarget == "task_list" && sections.isNotEmpty())
+                    if (f.mappingTarget == "task_list" && sections.isNotEmpty() && FormCategory.projectField(customFields) == null)
                         TextButton(onClick = { f = f.copy(options = sections.map { it.name }) }) { Text(stringResource(R.string.fb_use_sections, sections.size)) }
                     Text(stringResource(R.string.fb_blank_dropped), fontSize = 11.sp, color = c.mutedFg)
                 }
@@ -555,15 +559,49 @@ private fun FieldEditor(field: BuilderField, others: List<BuilderField>, section
                 Block(stringResource(R.string.fb_mapping)) {
                     Pick(stringResource(FormVocab.MAPPING.firstOrNull { it.first == f.mappingTarget }?.second ?: R.string.fb_map_none), FormVocab.MAPPING.map { it.first to stringResource(it.second) }) { t ->
                         f = f.copy(mappingTarget = t, mappingCustomFieldId = if (t == "custom_field") f.mappingCustomFieldId else "") }
+                    val sectionNames = sections.map { it.name }
+                    // Answers go to the category field; its options replace section names (or nothing).
+                    fun sendTo(cat: id.znetworks.nexus.feature.projects.CustomFieldDef) {
+                        f = f.copy(mappingTarget = "custom_field", mappingCustomFieldId = cat.id,
+                            options = if (FormCategory.shouldAdopt(f.options, sectionNames, cat.choices)) cat.choices else f.options)
+                    }
                     when (f.mappingTarget) {
                         "custom_field" -> {
                             Pick(customFields.firstOrNull { it.id == f.mappingCustomFieldId }?.name
                                 ?: if (f.mappingCustomFieldId.isNotEmpty()) stringResource(R.string.fb_gone_custom) else stringResource(R.string.fb_choose_custom),
-                                customFields.map { it.id to it.name }) { f = f.copy(mappingCustomFieldId = it) }
+                                customFields.map { it.id to it.name }) { id ->
+                                // Choosing a SELECT field adopts its options when the question only had section names or none.
+                                val target = customFields.firstOrNull { it.id == id }
+                                f = f.copy(mappingCustomFieldId = id, options = if (f.hasOptions && target != null && FormCategory.isSelect(target) &&
+                                    FormCategory.shouldAdopt(f.options, sectionNames, target.choices)) target.choices else f.options)
+                            }
                             Text(stringResource(R.string.fb_map_custom_sub), fontSize = 11.sp, color = c.mutedFg)
+                            // A select field: its options, answers that aren't among them, and "Use these N options".
+                            val target = customFields.firstOrNull { it.id == f.mappingCustomFieldId }
+                            val choices = target?.choices?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+                            if (target != null && FormCategory.isSelect(target) && f.hasOptions && choices.isNotEmpty()) {
+                                Text(stringResource(R.string.fc_options_of, target.name, choices.joinToString(", ")), fontSize = 13.sp, color = c.mutedFg)
+                                val extra = FormCategory.extraOptions(f.options, choices)
+                                if (extra.isNotEmpty()) Text(stringResource(R.string.fc_not_option, target.name, extra.joinToString(", ")), fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium, color = c.warningFg)
+                                if (!FormCategory.sameOptions(f.options, choices) && f.type != "multi_select")
+                                    TextButton(onClick = { f = f.copy(options = choices) }) {
+                                        Text(androidx.compose.ui.res.pluralStringResource(R.plurals.fc_use_options, choices.size, choices.size))
+                                    }
+                            }
                         }
                         "task_list" -> {
                             Text(stringResource(R.string.fb_map_list_sub), fontSize = 11.sp, color = c.mutedFg)
+                            // Options that are categories, while sections are statuses now (web 13 Oct): one tap moves it.
+                            val cat = FormCategory.fieldForSectionQuestion(f.type, f.mappingTarget, f.options, customFields, sectionNames)
+                            val projectCat = FormCategory.projectField(customFields)
+                            if (cat != null) {
+                                Text(stringResource(R.string.fc_are_categories, cat.name), fontSize = 13.sp, color = c.warningFg)
+                                TextButton(onClick = { sendTo(cat) }) { Text(stringResource(R.string.fc_send_to, cat.name)) }
+                            } else if (projectCat != null && f.type == "dropdown") {
+                                Text(stringResource(R.string.fc_sections_are_statuses, projectCat.name), fontSize = 13.sp, color = c.mutedFg)
+                                TextButton(onClick = { sendTo(projectCat) }) { Text(stringResource(R.string.fc_send_to, projectCat.name)) }
+                            }
                             if (sections.isEmpty()) Text(stringResource(R.string.fb_no_sections), fontSize = 11.sp, color = c.warning)
                             else Text(stringResource(R.string.fb_sections) + ": " + sections.joinToString(", ") { it.name }, fontSize = 12.sp, color = c.foreground)
                         }
