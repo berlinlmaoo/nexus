@@ -16,10 +16,16 @@ final class Viewer {
     private(set) var role: String?
     /// See WorkspaceRoster.isCompany. Unknown until loaded: company-only screens stay hidden till then.
     private(set) var isCompany: Bool?
+    /// See WorkspaceRoster.canAccessLegal. Unknown (nil) until loaded, and false unless the server says true.
+    private(set) var legalAccess: Bool?
     private var loading = false
 
     /// Z Vault and Threads are drawn only for the company's own people. The server refuses the rest.
     var isCompanyMember: Bool { isCompany == true }
+
+    /// Legal is drawn only for the people invited to it (owner, 14 Oct 2026). The server refuses every
+    /// /api/legal call for everyone else, so this decides what is drawn, nothing more.
+    var canAccessLegal: Bool { legalAccess == true }
 
     private init() {}
 
@@ -58,8 +64,9 @@ final class Viewer {
     private func apply(_ roster: WorkspaceRoster?) {
         role = roster?.role
         isCompany = roster?.isCompany
+        legalAccess = roster?.canAccessLegal
     }
 
     /// A new session must not inherit the last person's role.
-    func reset() { role = nil; isCompany = nil }
+    func reset() { role = nil; isCompany = nil; legalAccess = nil }
 }

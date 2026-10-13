@@ -36,6 +36,9 @@ struct WorkspaceRoster: Decodable, Sendable {
     // any number of Pipeline boards, offered in New project to the company's people (isCompany).
     let workspaceId: String?
     let workspaceName: String?
+    /// Legal is by invitation only (owner, 14 Oct 2026): true only for the owner and the people invited.
+    /// Older servers send nothing, which reads as no access (docs/legal-api.md).
+    let canAccessLegal: Bool?
     let members: [Member]?
     /// Akun yang mendaftar sendiri tanpa kode workspace — terdaftar, tapi tidak di mana pun.
     /// Hanya dikirim server untuk Manager ke atas dan hanya kalau diminta (`includeRegistered=1`).
