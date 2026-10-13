@@ -329,14 +329,16 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
     }
     val shellLogout = rememberLogout(onSignOut) { nav.navigate("attendance") { launchSingleTop = true } }
     // The UI tour (DEBUG): open the asked screen by its route, then say "settled" once it has had time to load.
-    val tourGo by id.znetworks.nexus.core.tour.TourMode.go.collectAsStateWithLifecycle()
-    LaunchedEffect(tourGo) {
-        val g = tourGo ?: return@LaunchedEffect
-        id.znetworks.nexus.core.tour.TourMode.consumed()
-        val tab = tabs.firstOrNull { it.route == g.route }
-        if (tab != null) goTab(tab) else nav.navigate(g.route) { launchSingleTop = true }
-        kotlinx.coroutines.delay(4500)
-        id.znetworks.nexus.core.tour.TourMode.status("settled ${g.id}")
+    // (Collected, not keyed on the value: clearing it must not cancel the wait before "settled" is said.)
+    LaunchedEffect(Unit) {
+        id.znetworks.nexus.core.tour.TourMode.go.collect { g ->
+            if (g == null) return@collect
+            id.znetworks.nexus.core.tour.TourMode.consumed()
+            val tab = tabs.firstOrNull { it.route == g.route }
+            if (tab != null) goTab(tab) else nav.navigate(g.route) { launchSingleTop = true }
+            kotlinx.coroutines.delay(4500)
+            id.znetworks.nexus.core.tour.TourMode.status("settled ${g.id}")
+        }
     }
     Scaffold(
         containerColor = Nx.colors.background,

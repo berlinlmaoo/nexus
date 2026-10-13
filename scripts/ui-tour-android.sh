@@ -64,6 +64,11 @@ if [ "$BUILD" = 1 ]; then
 fi
 scp -q "$AGENTS:nexus-android/app/build/outputs/apk/debug/app-debug.apk" "$APK" || die "could not copy the APK"
 "$ADB" install -r "$APK" >"$OUT/logs/install.log" 2>&1 || die "install failed (see $OUT/logs/install.log)"
+# No system permission prompt may cover a screen mid-tour (location, notifications, camera).
+for perm in ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION POST_NOTIFICATIONS CAMERA; do
+  "$ADB" shell pm grant "$PKG" "android.permission.$perm" >/dev/null 2>&1 || true
+done
+"$ADB" shell input keyevent KEYCODE_BACK >/dev/null 2>&1 || true
 
 W=$("$ADB" shell wm size | awk -F'[ x]' '/Physical/{print $3}'); H=$("$ADB" shell wm size | awk -F'[ x]' '/Physical/{print $4}')
 W=${W:-1080}; H=${H:-2400}
