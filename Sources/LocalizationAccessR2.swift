@@ -108,5 +108,13 @@ extension AppLanguage {
         "You're not in this project — view only": "Kamu bukan anggota project ini — hanya lihat",
         "Your access to this project changed": "Akses kamu ke project ini berubah",
         "Ask its Project Owner if you still need it.": "Minta ke Project Owner-nya kalau kamu masih butuh.",
+        "Responses": "Jawaban",
+        "No responses yet": "Belum ada jawaban",
+        "Share the form's link. Each answer arrives here and on the project board as a task.": "Bagikan link form-nya. Tiap jawaban masuk ke sini dan ke board project sebagai task.",
+        "Each response is a task in this project. Open one to work on it.": "Tiap jawaban adalah task di project ini. Buka untuk mengerjakannya.",
+        "1 response": "1 jawaban",
+        "%d responses": "%d jawaban",
+        "Unknown sender": "Pengirim tidak diketahui",
+        "the responses": "jawabannya",
 ]
 }

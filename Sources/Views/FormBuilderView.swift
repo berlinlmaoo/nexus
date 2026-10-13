@@ -575,8 +575,13 @@ struct FormBuilderView: View {
 
     private var manageSection: some View {
         Section {
-            if let saved {
-                LabeledContent(T("Submissions"), value: "\(saved.submissionCount)")
+            if let saved, let id = currentId {
+                // The web's Responses tab: every submission, as the task it created.
+                NavigationLink {
+                    FormResponsesView(formId: id, projectId: projectId)
+                } label: {
+                    LabeledContent(T("Responses"), value: "\(saved.submissionCount)")
+                }
             }
             Button { showFill = true } label: {
                 Label(T("Open the form"), systemImage: "square.and.pencil")

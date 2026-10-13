@@ -61,6 +61,8 @@ extension Notification.Name {
     /// `join-denied` with reason "revoked": the socket was taken out of a room (RealtimeKey.room) because
     /// access to that project ended.
     static let nexusRoomRevoked = Notification.Name("nexus.room.revoked")
+    /// `form-responses-changed` { projectId, formId }: a form got (or lost) a response.
+    static let nexusFormResponsesChanged = Notification.Name("nexus.form.responses.changed")
 }
 
 /// The userInfo keys of the notifications above.
@@ -81,6 +83,8 @@ enum RealtimeKey {
     static let json = "json"
     /// On `.nexusRoomRevoked`: "project:<id>" or "sheet:<id>".
     static let room = "room"
+    /// On `.nexusFormResponsesChanged`: the form.
+    static let formId = "formId"
 }
 
 /// The values of `RealtimeKey.kind`.

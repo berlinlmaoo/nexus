@@ -171,6 +171,7 @@ final class RealtimeClient {
         center.post(name: .nexusAutomationsChanged, object: nil)
         center.post(name: .nexusDocChanged, object: nil)
         center.post(name: .nexusSheetStructure, object: nil, userInfo: [RealtimeKey.json: "{}"])
+        center.post(name: .nexusFormResponsesChanged, object: nil)
         SheetOutbox.shared.flushAll()
         chatMoved(nil)
         Task { await InboxBadge.shared.refresh(force: true) }
@@ -243,6 +244,12 @@ final class RealtimeClient {
             var info: [String: String] = [:]
             if let projectId = payload?["projectId"]?.string { info[RealtimeKey.projectId] = projectId }
             center.post(name: .nexusDocChanged, object: nil, userInfo: info)
+        case "form-responses-changed":
+            // A form got or lost a response (ids only, to the project's room): an open Responses list reloads.
+            var info: [String: String] = [:]
+            if let projectId = payload?["projectId"]?.string { info[RealtimeKey.projectId] = projectId }
+            if let formId = payload?["formId"]?.string { info[RealtimeKey.formId] = formId }
+            center.post(name: .nexusFormResponsesChanged, object: nil, userInfo: info)
         case "sheet-cells", "sheet-structure":
             // The open spreadsheet's room (13 Oct 2026). Rows travel with `sheet-cells` (what the server
             // saved, never what another device claims); the screen applies them, skipping its own echo.

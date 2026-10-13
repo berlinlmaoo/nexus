@@ -368,7 +368,14 @@ Realtime parity with web f661bfb (13 Oct):
 - Spreadsheet same-cell race: a save's answer older than the row already on screen (someone else saved after
   us; the server's updatedAt strictly increases) no longer puts our value back over the newer row. Queued
   (unsent) edits still stay on screen until sent.
-- `form-responses-changed`: the app has no form-responses screen yet (web only), so nothing listens.
+- `form-responses-changed` { projectId, formId }: the form's Responses list (below) reloads live.
+
+Form Responses (13 Oct, web FormStudio ResponsesTab): Forms › a form › Manage › Responses (count) lists every
+submission newest first — sender avatar + name (or email), time (WIB), the created task's title and its section
+(or status); a row opens the task (the answers live on it); "Task deleted" rows are inert. Same API and
+permission as the web (`GET /api/forms/:id/responses`, project members). Live via the project room; also
+reloads on reconnect and when coming back from a task. No delete here: the web's Responses tab has none (a
+submitter deletes their own from My Submissions, already in the app).
 - Task/comment user payloads without email/phone: no app decoder requires them (checked). `task-created`
   customFieldValues / reorder listOrder are additive; the app refetches by id.
 
@@ -452,6 +459,8 @@ Detail for each item is in its section above; this is the order to go through th
 19. My Tasks (Overdue / Show all / "+" assigns to me), date-only dues show no time, Reports past period,
     room booking (24h, taken slot, ended slot), leaderboard ties (podium), quest "For" division tree, MCP URL
     shows the dev host, Active sessions (sign out one / others).
+19b. Form Responses: open a form's Responses, submit the form from the web (or another device) → the row
+    appears live; tap → the task; delete the task → "Task deleted"; empty form → empty state; Bahasa.
 20. Notifications: Bahasa ↔ English text, sender avatars, search a person → DM; chat drafts survive, Reply /
     Copy, Enter sends.
 
