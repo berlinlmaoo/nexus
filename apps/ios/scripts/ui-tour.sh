@@ -111,6 +111,26 @@ if [ "$DO_PULL" = 1 ]; then
     fi
   else say "git pull failed (local changes?) — continuing with what is checked out; see logs/git.log"; fi
 fi
+# Build from a frozen copy of this commit, not from the live checkout: the Orca agents work in ~/nexus too,
+# and a pull halfway through the hour-long run made the iPad and Mac builds compile different (broken) code
+# than the iPhone build (owner's Mac, 14 Oct 2026). The copy is a git worktree that stays put between runs,
+# so Xcode's incremental build keeps working; uncommitted edits in ~/nexus are not part of the tour.
+if [ -z "${UI_TOUR_SNAPSHOT:-}" ] && [ -z "${UI_TOUR_NO_SNAPSHOT:-}" ]; then
+  ROOT=$(git rev-parse --show-toplevel)
+  SNAP="${UI_TOUR_SNAPSHOT_DIR:-$HOME/nexus-tour-src}"
+  HEAD_SHA=$(git rev-parse HEAD)
+  if [ -d "$SNAP/.git" ] || [ -f "$SNAP/.git" ]; then
+    git -C "$SNAP" checkout -q --force --detach "$HEAD_SHA" && git -C "$SNAP" clean -qfd -e build -e DerivedData
+  else
+    git -C "$ROOT" worktree prune
+    git -C "$ROOT" worktree add -q --detach "$SNAP" "$HEAD_SHA"
+  fi || { say "could not prepare the frozen copy at $SNAP"; exit 1; }
+  WEBNM="$ROOT/apps/ios/scripts/ui-tour-web/node_modules"
+  [ -d "$WEBNM" ] && [ ! -e "$SNAP/apps/ios/scripts/ui-tour-web/node_modules" ] && ln -s "$WEBNM" "$SNAP/apps/ios/scripts/ui-tour-web/node_modules"
+  say "building from a frozen copy of $(git log -1 --format='%h %s' | cut -c1-60)"
+  rm -rf "$OUT"
+  UI_TOUR_SNAPSHOT=1 UI_TOUR_OUT="${UI_TOUR_OUT:-$HOME/nexus-ui-tour}" exec "$SNAP/apps/ios/scripts/ui-tour.sh" "${ORIG_ARGS[@]+"${ORIG_ARGS[@]}"}" --no-pull
+fi
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "?")
 
 LOGIN_CHECK=$(node "$TOOLS" check-login 2>&1)
