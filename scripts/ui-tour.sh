@@ -158,6 +158,10 @@ run_app() {
   local result="$WORK/$platform.xcresult" log="$OUT/logs/$platform-xcodebuild.log" extra=()
   [ "$platform" = mac ] && extra=(-allowProvisioningUpdates)
   rm -rf "$result"
+  # The test also writes every screenshot straight to this folder (simulator and Mac runners share the
+  # Mac's disk), so a hung or killed xcodebuild whose result bundle never closes loses nothing.
+  local direct_dir="$WORK/$platform-direct"
+  rm -rf "$direct_dir"; mkdir -p "$direct_dir"
   say "$platform: building + running the tour [$what] (several minutes; log: logs/$platform-xcodebuild.log)"
   TEST_RUNNER_TOUR_EMAIL="$TOUR_EMAIL" \
   TEST_RUNNER_TOUR_PASSWORD="$TOUR_PASSWORD" \
@@ -166,6 +170,7 @@ run_app() {
   TEST_RUNNER_TOUR_PROJECT_ID="${TOUR_PROJECT_ID:-}" \
   TEST_RUNNER_TOUR_FORM_ID="${TOUR_FORM_ID:-}" \
   TEST_RUNNER_TOUR_MAC_WINDOW="${TOUR_MAC_WINDOW:-}" \
+  TEST_RUNNER_TOUR_OUT_DIR="$direct_dir" \
     xcodebuild test -project NEXUS.xcodeproj -scheme NEXUSUITour -destination "$dest" \
       -resultBundlePath "$result" "${tests[@]}" \
       -destination-timeout 180 ${extra[@]+"${extra[@]}"} >"$log" 2>&1 &
@@ -188,7 +193,7 @@ run_app() {
   wait "$xb" 2>/dev/null
   local rc=$?
 
-  if [ ! -d "$result" ]; then
+  if [ ! -d "$result" ] && [ -z "$(ls -A "$direct_dir" 2>/dev/null)" ]; then
     say "$platform: no test result (build failed?) — last errors:"
     grep -E "error:|\*\* .* FAILED" "$log" | tail -8
     SUMMARY+=("$platform: BUILD/RUN FAILED (exit $rc) — logs/$platform-xcodebuild.log")
@@ -196,12 +201,14 @@ run_app() {
   fi
   local export_dir="$WORK/$platform-attachments"
   rm -rf "$export_dir"; mkdir -p "$export_dir"
-  if ! xcrun xcresulttool export attachments --path "$result" --output-path "$export_dir" >>"$log" 2>&1; then
+  if [ -n "$(ls -A "$direct_dir" 2>/dev/null)" ]; then
+    export_dir="$direct_dir"   # written by the test itself; no result bundle needed
+  elif ! xcrun xcresulttool export attachments --path "$result" --output-path "$export_dir" >>"$log" 2>&1; then
     say "$platform: could not export attachments (xcresulttool) — kept $result"; KEEP_XCRESULT=1
   fi
   [ "$what" != safari ] && collect "$export_dir" tour- "$OUT/$platform" "$platform" $rc
   [ "$what" != app ] && collect "$export_dir" safari- "$OUT/web-mobile" "web mobile (Safari)" $rc
-  [ "$KEEP_XCRESULT" = 1 ] || rm -rf "$result" "$export_dir"
+  [ "$KEEP_XCRESULT" = 1 ] || rm -rf "$result" "$WORK/$platform-attachments" "$direct_dir"
 }
 
 # collect <exportDir> <prefix> <destDir> <label> <xcodebuild exit>: PNGs out of the result, one summary line.

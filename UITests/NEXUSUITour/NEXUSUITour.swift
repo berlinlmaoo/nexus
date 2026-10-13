@@ -87,6 +87,7 @@ final class NEXUSUITour: XCTestCase {
             note.name = "tour-login-error"
             note.lifetime = .keepAlways
             add(note)
+            persist(Data(login.utf8), "tour-login-error.txt")
             pause(1.0)
             snap("login-error")
             outcomes.append(Outcome(id: "login-error", status: login, settled: false, seconds: 0))
@@ -200,6 +201,7 @@ final class NEXUSUITour: XCTestCase {
             note.name = "safari-login-error"
             note.lifetime = .keepAlways
             add(note)
+            persist(Data((note.name ?? "").utf8) + Data(" — see screenshot".utf8), "safari-login-error.txt")
             snapScreen("safari-login-error")
             outcomes.append(Outcome(id: "login-error", status: "safari sign-in failed", settled: false, seconds: 0))
             attach(outcomes, name: "safari-results")
@@ -425,6 +427,16 @@ final class NEXUSUITour: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+        persist(shot.pngRepresentation, name + ".png")
+    }
+
+    /// Also writes the file straight into TOUR_OUT_DIR on the Mac (ui-tour.sh): Xcode 27 can hang
+    /// closing the result bundle after the tests finish, and a killed run must not lose the pictures.
+    private func persist(_ data: Data, _ fileName: String) {
+        guard let dir = env["TOUR_OUT_DIR"], !dir.isEmpty else { return }
+        let folder = URL(fileURLWithPath: dir, isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try? data.write(to: folder.appendingPathComponent(fileName), options: .atomic)
     }
 
     /// The rest of the screen below the first viewport (owner, 13 Oct 2026: one viewport hid most of it).
@@ -505,6 +517,7 @@ final class NEXUSUITour: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+        persist(data, name + ".json")
     }
 
     private func pause(_ seconds: TimeInterval) {
