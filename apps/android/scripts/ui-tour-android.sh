@@ -64,6 +64,11 @@ if [ "$BUILD" = 1 ]; then
 fi
 scp -q "$AGENTS:nexus-android/app/build/outputs/apk/debug/app-debug.apk" "$APK" || die "could not copy the APK"
 "$ADB" install -r "$APK" >"$OUT/logs/install.log" 2>&1 || die "install failed (see $OUT/logs/install.log)"
+# No system permission prompt may cover a screen mid-tour (location, notifications, camera).
+for perm in ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION POST_NOTIFICATIONS CAMERA; do
+  "$ADB" shell pm grant "$PKG" "android.permission.$perm" >/dev/null 2>&1 || true
+done
+"$ADB" shell input keyevent KEYCODE_BACK >/dev/null 2>&1 || true
 
 W=$("$ADB" shell wm size | awk -F'[ x]' '/Physical/{print $3}'); H=$("$ADB" shell wm size | awk -F'[ x]' '/Physical/{print $4}')
 W=${W:-1080}; H=${H:-2400}
@@ -73,7 +78,7 @@ launch() { "$ADB" logcat -c; "$ADB" shell am start -S -W -n "$ACT" --es nexusTou
 wait_for() {
   local pat="$1" secs="$2" i line
   for ((i = 0; i < secs * 2; i++)); do
-    line=$("$ADB" logcat -d -s NEXUS_TOUR:I 2>/dev/null | grep -o 'status=.*' | tail -1)
+    line=$("$ADB" logcat -d -s NEXUS_TOUR:I 2>/dev/null | grep -o 'status=.*' | tr -d '\r' | tail -1)
     if [ -n "$line" ] && echo "$line" | grep -Eq "$pat"; then echo "${line#status=}"; return 0; fi
     sleep 0.5
   done
@@ -127,7 +132,8 @@ for entry in "${SCREENS[@]}"; do
   id="${entry%%|*}"; [ "$id" = login ] && continue
   want "$id" || continue
   launch --es nexusTourStep screen --es nexusTourScreen "$id" --es nexusTourProject "$PROJECT" --es nexusTourForm "$FORM"
-  if st=$(wait_for "^(settled $id|unknown-screen|not-signed-in)" 40) && [ "$st" = "settled $id" ]; then
+  st=$(wait_for "^(settled $id|unknown-screen|not-signed-in)" 40)
+  if echo "$st" | grep -q "^settled $id"; then
     pages "$id"; say "ok: $id"
   else
     shot "$OUT/android/$id.png"; say "FAILED: $id — ${st:-no answer}"; FAILS=$((FAILS + 1))
