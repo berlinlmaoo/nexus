@@ -459,6 +459,11 @@ Detail for each item is in its section above; this is the order to go through th
 19. My Tasks (Overdue / Show all / "+" assigns to me), date-only dues show no time, Reports past period,
     room booking (24h, taken slot, ended slot), leaderboard ties (podium), quest "For" division tree, MCP URL
     shows the dev host, Active sessions (sign out one / others).
+19c. Forms › Kategori (web c1afb95), in a project with a SELECT field "Kategori": a dropdown question on
+    "Section" whose options are categories shows "→ Kategori" in the list and "Send answers to “Kategori”";
+    a Section question with section names offers the switch (no "Use these N sections" there); mapping to
+    Kategori lists its options, flags options not in it, "Use these N options"; picking Kategori fills its
+    options when the question had only section names / none. Save → the public form keeps category options.
 19b. Form Responses: open a form's Responses, submit the form from the web (or another device) → the row
     appears live; tap → the task; delete the task → "Task deleted"; empty form → empty state; Bahasa.
 20. Notifications: Bahasa ↔ English text, sender avatars, search a person → DM; chat drafts survive, Reply /

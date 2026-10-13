@@ -116,5 +116,12 @@ extension AppLanguage {
         "%d responses": "%d jawaban",
         "Unknown sender": "Pengirim tidak diketahui",
         "the responses": "jawabannya",
+        "These options are categories, and sections are now the project's statuses. Answers go into “%@” and the task starts in the first status.": "Opsi ini kategori, sedangkan bagian sekarang jadi status project. Jawabannya masuk ke “%@” dan task mulai di status pertama.",
+        "Send answers to “%@”": "Kirim jawaban ke “%@”",
+        "Sections are the project's statuses. To sort answers by category, send them to “%@”.": "Bagian adalah status project. Untuk mengelompokkan jawaban per kategori, kirim ke “%@”.",
+        "Options of “%@”: %@": "Opsi “%@”: %@",
+        "Not an option of “%@”: %@. These answers are saved as typed.": "Bukan opsi “%@”: %@. Jawaban ini disimpan apa adanya.",
+        "Use this option": "Pakai opsi ini",
+        "Use these %d options": "Pakai %d opsi ini",
 ]
 }

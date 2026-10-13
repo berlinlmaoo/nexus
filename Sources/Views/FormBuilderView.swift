@@ -552,7 +552,11 @@ struct FormBuilderView: View {
     private var fieldsSection: some View {
         Section {
             ForEach(fields) { f in
-                NavigationLink { fieldEditor(f.id) } label: { FormBuilderFieldRow(field: f) }
+                NavigationLink { fieldEditor(f.id) } label: {
+                    FormBuilderFieldRow(field: f, categoryName: FormCategory.fieldForSectionQuestion(
+                        type: f.type, target: f.mappingTarget, options: f.options,
+                        fields: customFields, sections: sections.map(\.name))?.name)
+                }
             }
             .onMove { fields.move(fromOffsets: $0, toOffset: $1) }
             .onDelete { fields.remove(atOffsets: $0) }
@@ -777,6 +781,8 @@ struct FormBuilderView: View {
 /// One field in the builder's list: its type, name, and what is set on it.
 private struct FormBuilderFieldRow: View {
     let field: BuilderField
+    /// A Section question whose options are categories: its answers go to this field (web "Kategori" chip).
+    var categoryName: String? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -804,7 +810,9 @@ private struct FormBuilderFieldRow: View {
         }
         if field.showIf != nil { parts.append(T("Conditional")) }
         if !field.rules.isEmpty { parts.append(field.rules.count == 1 ? T("1 rule") : String(format: T("%d rules"), field.rules.count)) }
-        if let m = FormBuilderVocab.mappingTargets.first(where: { $0.value == field.mappingTarget }), m.value != "none" {
+        if let categoryName {
+            parts.append("→ " + categoryName)
+        } else if let m = FormBuilderVocab.mappingTargets.first(where: { $0.value == field.mappingTarget }), m.value != "none" {
             parts.append("→ " + T(m.label))
         }
         return parts.joined(separator: " · ")
@@ -1104,7 +1112,7 @@ struct FormFieldEditorView: View {
                 }
             }
             if field.mappingTarget == "custom_field" {
-                Picker(T("Custom field"), selection: $field.mappingCustomFieldId) {
+                Picker(T("Custom field"), selection: customFieldBinding) {
                     Text(T("Choose a custom field")).tag("")
                     ForEach(customFields) { c in Text(c.name).tag(c.id) }
                     if !field.mappingCustomFieldId.isEmpty && !customFields.contains(where: { $0.id == field.mappingCustomFieldId }) {
@@ -1112,7 +1120,22 @@ struct FormFieldEditorView: View {
                     }
                 }
             }
-            if field.mappingTarget == "task_list" {
+            if field.mappingTarget == "custom_field" { selectOptionsNote }
+            if field.mappingTarget == "task_list", let cat = sectionCategory {
+                // Options that are categories, while sections are statuses now (web 13 Oct): one tap moves it.
+                Text(String(format: T("These options are categories, and sections are now the project's statuses. Answers go into “%@” and the task starts in the first status."), cat.name))
+                    .font(NXFont.text(13)).foregroundStyle(NX.warning)
+                Button { sendTo(cat) } label: {
+                    Label(String(format: T("Send answers to “%@”"), cat.name), systemImage: "arrow.right").foregroundStyle(NX.violetText)
+                }
+            } else if field.mappingTarget == "task_list" {
+                if let cat = FormCategory.projectField(customFields), field.type == "dropdown" {
+                    Text(String(format: T("Sections are the project's statuses. To sort answers by category, send them to “%@”."), cat.name))
+                        .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    Button { sendTo(cat) } label: {
+                        Label(String(format: T("Send answers to “%@”"), cat.name), systemImage: "arrow.right").foregroundStyle(NX.violetText)
+                    }
+                }
                 if sections.isEmpty {
                     Label(T("This project has no sections yet. Add a section on the board first, then this mapping works."),
                           systemImage: "exclamationmark.triangle.fill")
@@ -1122,7 +1145,7 @@ struct FormFieldEditorView: View {
                         Text(T("Sections in this project")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
                         Text(sections.map(\.name).joined(separator: " · ")).font(NXFont.text(13)).foregroundStyle(NX.foreground)
                     }
-                    if field.type == "dropdown" {
+                    if field.type == "dropdown" && FormCategory.projectField(customFields) == nil {
                         Button { field.options = sections.map(\.name) } label: {
                             Label(String(format: T("Use these %d sections as options"), sections.count), systemImage: "doc.on.doc")
                                 .foregroundStyle(NX.violetText)
@@ -1134,6 +1157,56 @@ struct FormFieldEditorView: View {
             Text(T("Task mapping"))
         } footer: {
             Text(mappingFooter)
+        }
+    }
+
+    private var sectionNames: [String] { sections.map(\.name) }
+
+    private var sectionCategory: CustomField? {
+        FormCategory.fieldForSectionQuestion(type: field.type, target: field.mappingTarget, options: field.options,
+                                             fields: customFields, sections: sectionNames)
+    }
+
+    /// Answers go to the category field; its options replace section names (or nothing).
+    private func sendTo(_ cat: CustomField) {
+        if FormCategory.shouldAdopt(field.options, sections: sectionNames, choices: cat.choices) { field.options = cat.choices }
+        field.mappingTarget = "custom_field"
+        field.mappingCustomFieldId = cat.id
+    }
+
+    /// Choosing a SELECT field adopts its options when the question only had section names or none.
+    private var customFieldBinding: Binding<String> {
+        Binding(get: { field.mappingCustomFieldId }, set: { id in
+            field.mappingCustomFieldId = id
+            guard field.hasOptions, let target = customFields.first(where: { $0.id == id }), FormCategory.isSelect(target) else { return }
+            if FormCategory.shouldAdopt(field.options, sections: sectionNames, choices: target.choices) { field.options = target.choices }
+        })
+    }
+
+    /// A question mapped to a select field: that field's options, answers that aren't among them, and a
+    /// one-tap "Use these N options".
+    @ViewBuilder private var selectOptionsNote: some View {
+        if let target = customFields.first(where: { $0.id == field.mappingCustomFieldId }), FormCategory.isSelect(target), field.hasOptions {
+            let choices = target.choices.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            if !choices.isEmpty {
+                let own = field.options.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                let known = Set(choices.map { $0.lowercased() })
+                let have = Set(own.map { $0.lowercased() })
+                let extra = own.filter { !known.contains($0.lowercased()) }
+                let same = extra.isEmpty && choices.allSatisfy { have.contains($0.lowercased()) }
+                Text(String(format: T("Options of “%@”: %@"), target.name, choices.joined(separator: ", ")))
+                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                if !extra.isEmpty {
+                    Text(String(format: T("Not an option of “%@”: %@. These answers are saved as typed."), target.name, extra.joined(separator: ", ")))
+                        .font(NXFont.text(13, .medium)).foregroundStyle(NX.warning)
+                }
+                if !same && field.type != "multi_select" {
+                    Button { field.options = choices } label: {
+                        Label(choices.count == 1 ? T("Use this option") : String(format: T("Use these %d options"), choices.count),
+                              systemImage: "doc.on.doc").foregroundStyle(NX.violetText)
+                    }
+                }
+            }
         }
     }
 
