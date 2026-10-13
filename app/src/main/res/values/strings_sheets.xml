@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Project Spreadsheet, phone v1 (HANDOFF scope 4). -->
+<resources>
+    <string name="sh_empty">No spreadsheet yet</string>
+    <string name="sh_empty_sub">A sheet for this project\'s numbers, lists and formulas. Add one to start.</string>
+    <string name="sh_add_sheet">Add a sheet</string>
+    <string name="sh_load_failed">Couldn\'t load the spreadsheet.</string>
+    <string name="sh_rename">Rename</string>
+    <string name="sh_duplicate">Duplicate</string>
+    <string name="sh_delete">Delete</string>
+    <string name="sh_view_only">view only</string>
+    <string name="sh_rename_title">Rename sheet</string>
+    <string name="sh_sheet_name">Sheet name</string>
+    <string name="sh_save">Save</string>
+    <string name="sh_delete_q">Delete this sheet?</string>
+    <string name="sh_delete_body">“%1$s” and everything in it is deleted. A BoD can restore it from Audit.</string>
+    <string name="sh_need_one">A spreadsheet needs at least one sheet. Add another sheet first.</string>
+    <string name="sh_main_sheet">This is the project\'s main sheet, so it can\'t be deleted. Move another sheet to the first position if you want to delete this one.</string>
+    <string name="sh_saving">Saving…</string>
+    <string name="sh_saved">All changes saved</string>
+    <string name="sh_offline">Offline: %1$d unsaved changes, retrying…</string>
+    <string name="sh_some_failed">Some changes couldn\'t be saved.</string>
+    <string name="sh_add_failed">Couldn\'t add a sheet.</string>
+    <string name="sh_dup_failed">Couldn\'t duplicate the sheet.</string>
+    <string name="sh_rename_failed">Couldn\'t rename the sheet.</string>
+    <string name="sh_delete_failed">Couldn\'t delete the sheet.</string>
+    <string name="sh_offline_structure">You\'re offline. Rows, columns and sheets can be changed once you\'re back online.</string>
+    <string name="sh_type_hint">Type a value or a formula…</string>
+    <string name="sh_choose">Choose…</string>
+    <string name="sh_clear">Clear</string>
+    <string name="sh_undo">Undo</string>
+    <string name="sh_redo">Redo</string>
+    <string name="sh_protected">This cell is protected. Ask its owner if you need to change it.</string>
+    <string name="sh_heads_up">Heads up!</string>
+    <string name="sh_heads_up_body">You are trying to edit a protected part of this sheet. Do this only if you are sure the change is needed.</string>
+    <string name="sh_row_above">Insert row above</string>
+    <string name="sh_row_below">Insert row below</string>
+    <string name="sh_row_delete">Delete row</string>
+    <string name="sh_col_left">Insert column left</string>
+    <string name="sh_col_right">Insert column right</string>
+    <string name="sh_col_delete">Delete column</string>
+    <string name="sh_col_add_failed">Couldn\'t add the column.</string>
+    <string name="sh_col_delete_failed">Couldn\'t delete the column.</string>
+    <string name="sh_need_column">A sheet needs at least one column.</string>
+</resources>

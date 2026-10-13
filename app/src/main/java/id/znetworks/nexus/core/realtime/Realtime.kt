@@ -49,6 +49,8 @@ data class RealtimeEvent(
     val personName: String? = null,
     val avatar: String? = null,
     val typing: Boolean? = null,
+    /** The payload as JSON text, for screens that read more than the ids (the Spreadsheet's `sheet-cells`). */
+    val raw: String? = null,
 )
 
 /** The wire: event names and how their payloads read (pages/api/socket.ts, lib/socket-emitter.ts). */
@@ -75,7 +77,7 @@ object RealtimeEvents {
     const val FORM_RESPONSES_CHANGED = "form-responses-changed"
 
     val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, TYPING, PIPELINE_CHANGED,
-        OUTLET_SALES_CHANGED, AUTOMATIONS_CHANGED, JOIN_DENIED, FORM_RESPONSES_CHANGED) + TASK
+        OUTLET_SALES_CHANGED, AUTOMATIONS_CHANGED, JOIN_DENIED, FORM_RESPONSES_CHANGED, "sheet-cells", "sheet-structure") + TASK
 
     /**
      * The handshake refusals that are about the session (deleted, offboarded, revoked, no cookie): stop, and
@@ -111,6 +113,8 @@ object RealtimeEvents {
             OUTLET_SALES_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("eventId"), userId = o.str("actorId"))
             // { projectId, automationId, actorId }
             AUTOMATIONS_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("automationId"), userId = o.str("actorId"))
+            // { sheetId, rows?, actorId, originTab? } (sheet room): the sheet's id rides in taskId, the whole payload in raw.
+            "sheet-cells", "sheet-structure" -> RealtimeEvent(name, taskId = o.str("sheetId"), userId = o.str("actorId"), raw = json)
             // { projectId, formId } (the form's id rides in taskId)
             FORM_RESPONSES_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("formId"))
             // { room: "project:<id>" | "sheet:<id>", reason }

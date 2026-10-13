@@ -700,10 +700,10 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
         text = { Text(it) }, confirmButton = { TextButton(onClick = vm::dismissError) { Text("OK") } }) }
 }
 
-/** The project Spreadsheet (key "sheet"); built natively in the Spreadsheet step, the web until then. */
+/** The project Spreadsheet (key "sheet", 13 Oct): native phone v1 (feature/sheets). */
 @Composable
 internal fun ProjectSpreadsheetTab(projectId: String, openWeb: () -> Unit) {
-    WebOnlyTab(Icons.Filled.ViewKanban, stringResource(R.string.ptab_spreadsheet), openWeb)
+    id.znetworks.nexus.feature.sheets.ProjectSheetTab(projectId, openWeb)
 }
 
 /** "Showing: Overdue · 4 tasks ×" over the Board / List after a tap on the Overview. */

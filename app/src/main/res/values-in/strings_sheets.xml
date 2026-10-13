@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Project Spreadsheet, phone v1 (HANDOFF scope 4). -->
+<resources>
+    <string name="sh_empty">Belum ada spreadsheet</string>
+    <string name="sh_empty_sub">Sheet untuk angka, daftar, dan rumus project ini. Tambahkan satu untuk mulai.</string>
+    <string name="sh_add_sheet">Tambah sheet</string>
+    <string name="sh_load_failed">Gagal memuat spreadsheet.</string>
+    <string name="sh_rename">Ganti nama</string>
+    <string name="sh_duplicate">Duplikat</string>
+    <string name="sh_delete">Hapus</string>
+    <string name="sh_view_only">cuma bisa lihat</string>
+    <string name="sh_rename_title">Ganti nama sheet</string>
+    <string name="sh_sheet_name">Nama sheet</string>
+    <string name="sh_save">Simpan</string>
+    <string name="sh_delete_q">Hapus sheet ini?</string>
+    <string name="sh_delete_body">“%1$s” beserta seluruh isinya dihapus. BoD bisa memulihkannya dari Audit.</string>
+    <string name="sh_need_one">Spreadsheet perlu minimal satu sheet. Tambahkan sheet lain dulu.</string>
+    <string name="sh_main_sheet">Ini sheet utama project, jadi tidak bisa dihapus. Pindahkan sheet lain ke posisi pertama kalau ingin menghapus sheet ini.</string>
+    <string name="sh_saving">Menyimpan…</string>
+    <string name="sh_saved">Semua perubahan disimpan</string>
+    <string name="sh_offline">Offline: %1$d perubahan belum tersimpan, mencoba lagi…</string>
+    <string name="sh_some_failed">Sebagian perubahan gagal disimpan.</string>
+    <string name="sh_add_failed">Gagal menambah sheet.</string>
+    <string name="sh_dup_failed">Gagal duplikat sheet.</string>
+    <string name="sh_rename_failed">Gagal mengganti nama sheet.</string>
+    <string name="sh_delete_failed">Gagal hapus sheet.</string>
+    <string name="sh_offline_structure">Kamu sedang offline. Baris, kolom, dan sheet bisa diubah setelah online lagi.</string>
+    <string name="sh_type_hint">Ketik isi sel atau rumus…</string>
+    <string name="sh_choose">Pilih…</string>
+    <string name="sh_clear">Kosongkan</string>
+    <string name="sh_undo">Urungkan</string>
+    <string name="sh_redo">Ulangi</string>
+    <string name="sh_protected">Sel ini dilindungi. Minta pemiliknya kalau perlu mengubahnya.</string>
+    <string name="sh_heads_up">Perhatian!</string>
+    <string name="sh_heads_up_body">Anda mencoba mengedit bagian sheet ini yang dilindungi. Lakukan hanya jika Anda yakin perubahan ini memang perlu.</string>
+    <string name="sh_row_above">Sisipkan baris di atas</string>
+    <string name="sh_row_below">Sisipkan baris di bawah</string>
+    <string name="sh_row_delete">Hapus baris</string>
+    <string name="sh_col_left">Sisipkan kolom di kiri</string>
+    <string name="sh_col_right">Sisipkan kolom di kanan</string>
+    <string name="sh_col_delete">Hapus kolom</string>
+    <string name="sh_col_add_failed">Gagal menambah kolom.</string>
+    <string name="sh_col_delete_failed">Gagal hapus kolom.</string>
+    <string name="sh_need_column">Sheet harus punya minimal satu kolom.</string>
+</resources>

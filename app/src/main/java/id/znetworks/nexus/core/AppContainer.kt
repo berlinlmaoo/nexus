@@ -249,6 +249,8 @@ class AppContainer(private val context: Context) {
                     // Logout: the phone may be handed over. Everything this person left goes.
                     attendanceQueue.clearAll()
                     QueueFlushWorker.cancel(context)
+                    // Unsent spreadsheet edits belong to this account; the next person must not send them.
+                    id.znetworks.nexus.feature.sheets.SheetOutbox.clearAll(context)
                 } else {
                     // Session expired: queued taps wait for the SAME person (REQ-ATT-16).
                     attendanceQueue.holdForSignIn(session?.userId)
