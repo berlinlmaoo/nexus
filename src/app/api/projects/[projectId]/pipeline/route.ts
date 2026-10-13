@@ -42,6 +42,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       summary: summarize(deals, today),
       vocab: PIPELINE_VOCAB,
       today,
+      // The viewer's level in the board (14 Oct 2026): Full / Can edit change deals (real cost lines
+      // included); Can comment / Can view only read. Clients draw read-only fields from canEdit.
+      viewerAccessLevel: gate.level,
+      canEdit: gate.canEdit,
     })
   } catch (error) {
     console.error("Error loading pipeline:", error)

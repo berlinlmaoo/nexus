@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma/client"
-import { checkProjectAccess } from "@/lib/rbac"
+import { checkProjectAccess, type AccessLevel } from "@/lib/rbac"
 import {
   CLOSING_STATUS_OPTIONS,
   CONTRACT_STATUS_OPTIONS,
@@ -15,6 +15,7 @@ import {
   daysOverdueOf,
   healthOf,
   isWonStage,
+  marginOf,
   phasesOf,
   pipelineToday,
   stageGroupOf,
@@ -22,6 +23,7 @@ import {
   termOutstanding,
   termStatusOf,
   termSummaryOf,
+  type PipelineCostItem,
 } from "@/lib/pipeline"
 import { documentsOut, mergeDocuments, storedDocs } from "@/lib/pipeline-documents"
 
@@ -78,15 +80,23 @@ export function serializeTerm(t: TermRow, today: string) {
 export type SerializedTerm = ReturnType<typeof serializeTerm>
 
 export type PipelineGate =
-  | { ok: true; project: { id: string; name: string; type: string; workspaceId: string } }
+  | {
+      ok: true
+      project: { id: string; name: string; type: string; workspaceId: string }
+      /** The viewer's level in the project (FULL / EDIT / COMMENT / VIEW) and whether it may change deals. */
+      level: AccessLevel
+      canEdit: boolean
+    }
   | { ok: false; response: NextResponse }
 
 /**
  * The project's access rule (checkProjectAccess), as for any project: read = VIEWER, write = MEMBER —
  * system admin, One Above All / BoD / Manager of the workspace, and staff who are members of the project
  * (owner, 9 Oct 2026, evening: the board's people are added as project members by its lead, like a task
- * project). The GM's board stays "editable antar divisi": no field is held back. Only a PIPELINE project
- * has deals: anything else answers 400 NOT_PIPELINE.
+ * project). The GM's board stays "editable antar divisi": no field is held back — the real cost lines and
+ * margin included (owner, 14 Oct 2026: everyone invited to the board sees them; Full / Can edit may change
+ * them, Can comment / Can view only read, anyone else gets nothing, live pings carry no data). Only a
+ * PIPELINE project has deals: anything else answers 400 NOT_PIPELINE.
  */
 export async function pipelineGate(userId: string, projectId: string, need: "read" | "write"): Promise<PipelineGate> {
   const project = await prisma.project.findUnique({
@@ -102,7 +112,8 @@ export async function pipelineGate(userId: string, projectId: string, need: "rea
       response: NextResponse.json({ error: "Project ini bukan Pipeline Dashboard.", code: "NOT_PIPELINE" }, { status: 400 }),
     }
   }
-  return { ok: true, project }
+  const level: AccessLevel = access.level ?? "VIEW"
+  return { ok: true, project, level, canEdit: level === "FULL" || level === "EDIT" }
 }
 
 function dateOut(d: Date | null | undefined): string | null {
@@ -130,7 +141,9 @@ export function serializeDeal(row: DealRow, today: string) {
     closingStatus: row.closingStatus,
     blocker: row.blocker,
     terms,
+    costs: costsOf(row.costs),
   }
+  const margin = marginOf(facts)
   return {
     id: row.id,
     projectId: row.projectId,
@@ -179,10 +192,73 @@ export function serializeDeal(row: DealRow, today: string) {
     // nextDueDate are the deal's — show them instead of the manual fields, which stay as stored (the
     // fallback for a deal without terms). daysOverdue, health and the KPIs already use them.
     termSummary: termSummaryOf(terms, today),
+    // Real cost & margin (Control Tower v4, 14 Oct 2026): the lines are in `costs` above; these are
+    // derived, on the net value. margin / marginPct are null while the deal has no net value.
+    costTotal: margin.totalCost,
+    margin: margin.margin,
+    marginPct: margin.marginPct,
   }
 }
 
+// ── Real cost lines (Control Tower v4, 14 Oct 2026) ───────────────────────────────────────────────────
+
+/** At most this many cost lines on a deal, each label at most COST_LABEL_MAX characters. Guards. */
+export const MAX_COSTS_PER_DEAL = 100
+const COST_LABEL_MAX = 120
+const COST_ID_RE = /^[A-Za-z0-9_-]{1,64}$/
+
+function newCostId(): string {
+  return `c_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`
+}
+
+/**
+ * The stored cost lines as every client receives them. A deal from before the column, or anything that is
+ * not a list, reads as [] — no migration of old rows needed.
+ */
+export function costsOf(raw: unknown): PipelineCostItem[] {
+  if (!Array.isArray(raw)) return []
+  const out: PipelineCostItem[] = []
+  for (const c of raw) {
+    if (!c || typeof c !== "object") continue
+    const { id, label, amount } = c as Record<string, unknown>
+    if (typeof id !== "string") continue
+    out.push({ id, label: typeof label === "string" ? label : "", amount: typeof amount === "number" && Number.isFinite(amount) ? amount : 0 })
+  }
+  return out
+}
+
+/**
+ * A cost list as sent → as stored: each line { id?, label, amount }; the label trimmed (it may be empty
+ * while someone is still typing), the amount whole rupiah ≥ 0. A missing, malformed or repeated id gets a
+ * new one. undefined = refused (not a list, too many lines, a wrong amount or label).
+ */
+export function normalizeCosts(v: unknown): PipelineCostItem[] | undefined {
+  if (!Array.isArray(v) || v.length > MAX_COSTS_PER_DEAL) return undefined
+  const seen = new Set<string>()
+  const out: PipelineCostItem[] = []
+  for (const raw of v) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined
+    const { id, label, amount } = raw as Record<string, unknown>
+    const text = label === undefined || label === null ? "" : label
+    if (typeof text !== "string") return undefined
+    const name = text.trim().replace(/\s+/g, " ")
+    if (name.length > COST_LABEL_MAX) return undefined
+    const n = typeof amount === "string" && amount.trim() !== "" ? Number(amount) : amount === undefined || amount === null ? 0 : amount
+    if (typeof n !== "number" || !Number.isFinite(n) || n < 0 || n > MONEY_MAX) return undefined
+    let key = typeof id === "string" && COST_ID_RE.test(id) ? id : newCostId()
+    if (seen.has(key)) key = newCostId()
+    seen.add(key)
+    out.push({ id: key, label: name, amount: Math.round(n) })
+  }
+  return out
+}
+
 export type SerializedDeal = ReturnType<typeof serializeDeal>
+
+/** The cost lines of a deal for the "Rincian Real Cost" cell: "label: amount", one per line. */
+export function costLines(costs: readonly { label: string; amount: number }[]): string {
+  return costs.map((c) => `${c.label || "-"}: ${Math.round(c.amount).toLocaleString("id-ID")}`).join("\n")
+}
 
 // ── Validation ────────────────────────────────────────────────────────────────────────────────────────
 
@@ -197,6 +273,7 @@ type FieldKind =
   | { kind: "user" }
   | { kind: "links" }
   | { kind: "services" }
+  | { kind: "costs" }
 
 /** At most this many services on a deal, each at most SERVICE_MAX characters. Guards, not rules. */
 const SERVICES_MAX = 20
@@ -236,6 +313,9 @@ export const DEAL_FIELDS: Record<string, FieldKind> = {
   blocker: { kind: "text", max: 500 },
   notes: { kind: "text", max: 5000 },
   links: { kind: "links" },
+  // Real cost lines (Control Tower v4, 14 Oct 2026): the whole list, as links. Same access as every
+  // other field: whoever may edit the deal (Full / Can edit) may edit them.
+  costs: { kind: "costs" },
 }
 
 /** The 1e15 rupiah ceiling only keeps a typo (or a paste of a whole row) out of the totals. */
@@ -325,6 +405,12 @@ export async function parseDealFields(
         const links = mergeDocuments(storedDocs(current?.links ?? []), v)
         if (!links) return bad(field, "Link harus diawali http:// atau https://.")
         data[field] = links
+        break
+      }
+      case "costs": {
+        const list = normalizeCosts(v)
+        if (!list) return bad(field, `Maksimal ${MAX_COSTS_PER_DEAL} baris biaya; nominal angka ≥ 0, keterangan maksimal ${COST_LABEL_MAX} karakter.`)
+        data[field] = list
         break
       }
       case "services": {

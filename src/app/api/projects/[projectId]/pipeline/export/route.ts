@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { pipelineToday, type HealthKey } from "@/lib/pipeline"
-import { dealInclude, pipelineGate, serializeDeal } from "@/lib/pipeline-server"
+import { costLines, dealInclude, pipelineGate, serializeDeal } from "@/lib/pipeline-server"
 
 /**
  * "Unduh Excel" of the GM's board (owner, 9 Oct 2026): one "Master Project" sheet, his columns in his
@@ -23,7 +23,7 @@ const HEALTH: Record<HealthKey, [string, string]> = {
   NONE: ["—", "—"],
 }
 
-type Col = { id: string; en: string; key: string; width: number; money?: boolean; pct?: boolean }
+type Col = { id: string; en: string; key: string; width: number; money?: boolean; pct?: boolean; pct1?: boolean; wrap?: boolean }
 
 const COLUMNS: Col[] = [
   { id: "Project ID", en: "Project ID", key: "code", width: 12 },
@@ -57,6 +57,13 @@ const COLUMNS: Col[] = [
   { id: "Termin Pembayaran", en: "Payment Terms", key: "termsText", width: 50 },
   { id: "Dokumen & Link", en: "Documents & Links", key: "linksText", width: 40 },
   { id: "Terakhir Diperbarui", en: "Last Updated", key: "updatedLabel", width: 24 },
+  // Real cost & margin (Control Tower v4, 14 Oct 2026): Gerro's four columns, named as in his export in
+  // both languages so the two reports merge column for column. Margin on the net value; blank while a deal
+  // has no net value. Same access as the board (anyone who may read it).
+  { id: "Total Real Cost", en: "Total Real Cost", key: "costTotal", width: 18, money: true },
+  { id: "Margin (Rp)", en: "Margin (Rp)", key: "marginRp", width: 18, money: true },
+  { id: "Margin (%)", en: "Margin (%)", key: "marginPctCell", width: 11, pct1: true },
+  { id: "Rincian Real Cost", en: "Rincian Real Cost", key: "costsText", width: 44, wrap: true },
 ]
 
 /** A text cell that starts like a formula is written as text, so a deal name cannot run in Excel. */
@@ -106,6 +113,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // An attached file is listed by its name (owner, 9 Oct 2026): its download route means nothing
         // outside NEXUS, a pasted link stays the link.
         linksText: d.links.map((l) => `${l.type}: ${l.kind === "file" ? (l.label ? `${l.label} (${l.fileName})` : l.fileName) : l.label ? `${l.label} (${l.url})` : l.url}`).join(" | "),
+        // One line per cost: "label: amount" (Gerro's format); the cell wraps.
+        costsText: costLines(d.costs),
+        marginRp: d.margin ?? "",
+        marginPctCell: d.marginPct ?? "",
         updatedLabel: `${d.updatedAt.slice(0, 16).replace("T", " ")} UTC${d.updatedBy?.name ? ` · ${d.updatedBy.name}` : ""}`,
       }
       const out: Record<string, unknown> = {}
@@ -115,6 +126,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     for (const c of COLUMNS) {
       if (c.money) ws.getColumn(c.key).numFmt = '"Rp"#,##0;-"Rp"#,##0'
       if (c.pct) ws.getColumn(c.key).numFmt = "0%"
+      if (c.pct1) ws.getColumn(c.key).numFmt = "0.0%"
+      if (c.wrap) ws.getColumn(c.key).alignment = { wrapText: true, vertical: "top" }
     }
 
     logAudit({
