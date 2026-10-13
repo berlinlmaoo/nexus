@@ -49,5 +49,15 @@ object InboxRules {
             .map { it to if (it == InboxGroup.ALL) types.size else counts[it] ?: 0 }
     }
 
+    /**
+     * What the inbox lists (web `activeNotifications`): every unread one, and read ones from the last [maxDays] days
+     * (createdAt stands in for the read time). The dev server held 50 rows; the web listed 19.
+     */
+    fun active(items: List<InboxItem>, now: java.time.Instant = java.time.Instant.now(), maxDays: Long = 7): List<InboxItem> = items.filter { n ->
+        if (!n.read) return@filter true
+        val at = n.createdAt?.let { runCatching { java.time.OffsetDateTime.parse(it).toInstant() }.getOrNull() } ?: return@filter false
+        java.time.Duration.between(at, now) <= java.time.Duration.ofDays(maxDays)
+    }
+
     fun filter(items: List<InboxItem>, g: InboxGroup) = if (g == InboxGroup.ALL) items else items.filter { group(it.type) == g }
 }

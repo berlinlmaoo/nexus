@@ -37,4 +37,15 @@ class InboxRulesTest {
         assertEquals("Budi", r.notifications[0].actor?.name); assertNull(r.notifications[1].actor)
         assertEquals(listOf("a"), InboxRules.filter(r.notifications, InboxGroup.TASKS).map { it.id })
     }
+
+    @Test fun readOnesOlderThanAWeekLeaveTheList() {
+        val now = java.time.Instant.parse("2026-10-14T03:00:00Z")
+        val items = listOf(
+            InboxItem("old-read", read = true, createdAt = "2026-09-21T14:00:11.914Z"),
+            InboxItem("old-unread", read = false, createdAt = "2026-09-21T14:00:11.914Z"),
+            InboxItem("new-read", read = true, createdAt = "2026-10-12T17:15:43.059Z"),
+            InboxItem("no-date-read", read = true),
+        )
+        org.junit.Assert.assertEquals(listOf("old-unread", "new-read"), InboxRules.active(items, now).map { it.id })
+    }
 }

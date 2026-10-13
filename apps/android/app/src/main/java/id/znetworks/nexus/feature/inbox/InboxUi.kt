@@ -172,22 +172,25 @@ fun InboxScreen(vm: InboxViewModel = viewModel()) {
     id.znetworks.nexus.core.realtime.LiveRefresh(Unit, liveMs = null, fallbackMs = 60_000, matches = { it.name == id.znetworks.nexus.core.realtime.RealtimeEvents.NEW_NOTIFICATION }) { vm.load().join() }
     val c = Nx.colors
     val context = LocalContext.current
-    val shown = remember(s.items, s.group) { InboxRules.filter(s.items, s.group) }
+    // Unread ones and what was read this week (web activeNotifications).
+    val active = remember(s.items) { InboxRules.active(s.items) }
+    val shown = remember(active, s.group) { InboxRules.filter(active, s.group) }
     // All + only the kinds that have something, each with its count; a single kind has nothing to choose (web).
-    val tabs = remember(s.items) { InboxRules.tabs(s.items.map { it.type }) }
+    val tabs = remember(active) { InboxRules.tabs(active.map { it.type }) }
     PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }, modifier = Modifier.fillMaxSize().background(c.background)) {
         Column(Modifier.fillMaxSize()) {
             id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.nav_notifications), subtitle = stringResource(R.string.sub_inbox),
-                tabs = if (tabs.size > 2 && s.items.isNotEmpty()) ({
+                tabs = if (tabs.size > 2 && active.isNotEmpty()) ({
                     id.znetworks.nexus.ui.components.PageTabs(tabs.map { (g, n) -> id.znetworks.nexus.ui.components.PageTab(g, stringResource(g.label), n) }, s.group, vm::setGroup)
                 }) else null) {
-                if (s.unread > 0) id.znetworks.nexus.ui.components.NxButton(stringResource(R.string.inbox_mark_all), vm::markAll, compact = true)
+                // Always there, like the web's "Mark all as read".
+                if (active.isNotEmpty()) id.znetworks.nexus.ui.components.NxButton(stringResource(R.string.inbox_mark_all), vm::markAll, compact = true)
             }
             when {
                 s.loading && s.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 s.error != null && s.items.isEmpty() -> EmptyState(Icons.Filled.Inbox, stringResource(R.string.inbox_load_failed), s.error!!,
                     stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
-                s.items.isEmpty() -> EmptyState(Icons.Filled.MarkEmailRead, stringResource(R.string.inbox_none), stringResource(R.string.inbox_clean_sub),
+                active.isEmpty() -> EmptyState(Icons.Filled.MarkEmailRead, stringResource(R.string.inbox_none), stringResource(R.string.inbox_clean_sub),
                     stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
                 shown.isEmpty() -> EmptyState(Icons.Filled.FilterList, stringResource(R.string.inbox_kind_none), stringResource(R.string.inbox_kind_none_sub),
                     stringResource(R.string.show_all), { vm.setGroup(InboxGroup.ALL) }, Modifier.fillMaxSize())

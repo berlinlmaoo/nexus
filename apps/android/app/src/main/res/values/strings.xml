@@ -580,13 +580,11 @@
     <string name="outside_auto_at">Auto check-out %1$s</string>
     <string name="outside_remind">File a permit or head back to the office · Auto check-out %1$s</string>
     <string name="outside_warn">Last warning: automatic offsite check-out at %1$s unless you\'re back or file a permit</string>
-    <string name="mytasks_title">My Quest Log</string>
-    <string name="mytasks_hot">Hot today</string>
-    <string name="mytasks_motion">In motion</string>
-    <string name="mytasks_done">Recently slayed</string>
-    <string name="mytasks_empty">No quests yet</string>
-    <string name="mytasks_empty_sub">Tasks assigned to you land here, from a mission board or a form. Nothing is waiting on you right now — pick something up from a mission.</string>
-    <string name="mytasks_browse">Browse missions</string>
+    <string name="mytasks_title">My Tasks</string>
+    <string name="mytasks_done">Done recently</string>
+    <string name="mytasks_empty">No tasks yet</string>
+    <string name="mytasks_empty_sub">Tasks assigned to you show up here, from a project or a form. Nothing is waiting on you right now — pick something up from a project.</string>
+    <string name="mytasks_browse">Browse projects</string>
     <string name="mytasks_load_failed">Couldn\'t load.</string>
     <string name="home_morning">Good Morning,</string>
     <string name="home_afternoon">Good Afternoon,</string>
@@ -3223,4 +3221,9 @@
     <string name="au_ran_nothing">Nothing ran: the task doesn\'t meet the conditions.</string>
     <string name="au_run_failed_to">Couldn\'t run it.</string>
     <string name="au_actor_name">Automation</string>
+    <string name="mytasks_overdue">Overdue</string>
+    <string name="mytasks_soon">Due soon</string>
+    <string name="mytasks_later">Later</string>
+    <string name="mytasks_show_all">Show all %1$d</string>
+    <string name="mytasks_show_fewer">Show fewer</string>
 </resources>

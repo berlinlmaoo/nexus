@@ -304,7 +304,19 @@ class ProjectsViewModel(app: Application) : AndroidViewModel(app) {
     }
 }
 
-fun dueDate(iso: String?): LocalDate? = iso?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+/**
+ * The calendar day of a task date. A plain "2026-05-24" is that day; a timestamp is read in office time (WIB), like
+ * the web's `new Date(iso)`: "2026-05-23T21:17:00Z" is 24 May (it was cut to 23 May, QA 14 Oct 2026).
+ */
+fun dueDate(iso: String?): LocalDate? {
+    val s = iso?.trim()?.takeIf { it.length >= 10 } ?: return null
+    if (s.length > 10 && (s[10] == 'T' || s[10] == ' ')) {
+        val t = s.replace(' ', 'T')
+        runCatching { return java.time.OffsetDateTime.parse(t).atZoneSameInstant(id.znetworks.nexus.core.time.OfficeTime.ZONE).toLocalDate() }
+        runCatching { return java.time.Instant.parse(t).atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE).toLocalDate() }
+    }
+    return runCatching { LocalDate.parse(s.take(10)) }.getOrNull()
+}
 
 fun parseColor(hex: String?, fallback: Color): Color = runCatching {
     val h = hex!!.trim().removePrefix("#").let { if (it.length == 3) it.map { ch -> "$ch$ch" }.joinToString("") else it }

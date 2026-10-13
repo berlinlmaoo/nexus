@@ -313,7 +313,7 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
         }
         if (failed > 0) _state.update { it.copy(actionError = plural(R.plurals.bulk_update_failed, failed)) }
         if (done.isNotEmpty()) offerUndo(plural(if (due == null) R.plurals.undo_due_cleared else R.plurals.undo_due_set, done.size)) {
-            done.forEach { t -> api.updateTask(t.id, buildJsonObject { put("dueDate", t.dueDate?.let { JsonPrimitive(it.take(10)) } ?: kotlinx.serialization.json.JsonNull) }) }
+            done.forEach { t -> api.updateTask(t.id, buildJsonObject { put("dueDate", t.dueDate?.let { JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull) }) }
         }
     }
 

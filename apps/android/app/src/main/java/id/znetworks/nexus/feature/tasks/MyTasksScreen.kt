@@ -21,6 +21,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -52,17 +53,72 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.time.LocalDate
 
-/** Web my-tasks / iOS TasksView ("My Quest Log"): Hot today, In motion, Recently slayed. */
+/**
+ * My Tasks grouping, a port of the web's lib/my-tasks.ts (QA S-04 / B01, 13 Oct 2026):
+ *   Overdue   open, past due: a date-only task once its WIB day is over, a timed task from its time.
+ *   Due soon  open, due from now up to the end of the WIB day 3 days ahead.
+ *   Later     open, due later, then open without a due date.
+ *   Done      done in the last 7 days (completedAt, else updatedAt), newest first.
+ * Inside a group the most urgent first: by due day, then priority, then the time, then the title. Cancelled tasks
+ * are left out. The screen shows the first [first] of a group and "Show all".
+ */
 object MyTaskGroups {
-    enum class Group { HOT, MOTION, DONE }
+    enum class Group(val first: Int) { OVERDUE(20), SOON(12), LATER(12), DONE(8) }
 
-    /** Open tasks due within two days (overdue included) are hot; the soonest first. */
-    fun group(tasks: List<BoardTask>, today: LocalDate): List<Pair<Group, List<BoardTask>>> {
-        val open = tasks.filterNot { it.isDone }
-        val hot = open.filter { t -> dueDate(t.dueDate)?.let { !it.isAfter(today.plusDays(1)) } == true }.sortedBy { dueDate(it.dueDate) }
-        val motion = open - hot.toSet()
-        val done = tasks.filter { it.isDone }
-        return listOf(Group.HOT to hot.take(8), Group.MOTION to motion.take(12), Group.DONE to done.take(8)).filter { it.second.isNotEmpty() }
+    private const val DAY_MS = 86_400_000L
+    private const val WIB_MS = 7 * 3_600_000L
+    private val RANK = mapOf("URGENT" to 0, "HIGH" to 1, "MEDIUM" to 2, "LOW" to 3, "NONE" to 4)
+
+    private fun ms(iso: String?): Long? = iso?.takeIf { it.isNotBlank() }?.let { s ->
+        runCatching { java.time.OffsetDateTime.parse(s).toInstant().toEpochMilli() }.getOrNull()
+            ?: runCatching { LocalDate.parse(s.take(10)).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli() }.getOrNull()
+    }
+    private fun wibDay(ms: Long) = java.time.Instant.ofEpochMilli(ms + WIB_MS).atZone(java.time.ZoneOffset.UTC).toLocalDate()
+
+    /** A due without a time: stored at 00:00 UTC (web/API date picks) or at 00:00 WIB (older clients). */
+    fun isDateOnly(ms: Long): Boolean = Math.floorMod(ms, DAY_MS) == 0L || Math.floorMod(ms + WIB_MS, DAY_MS) == 0L
+
+    fun isOverdueAt(due: String?, now: Long): Boolean {
+        val m = ms(due) ?: return false
+        return if (isDateOnly(m)) wibDay(m).isBefore(wibDay(now)) else m < now
+    }
+
+    private fun rank(p: String?) = RANK[(p ?: "NONE").uppercase()] ?: 4
+
+    private val byUrgency = Comparator<BoardTask> { a, b ->
+        val da = ms(a.dueDate); val db = ms(b.dueDate)
+        if ((da != null) != (db != null)) return@Comparator if (da != null) -1 else 1
+        if (da != null && db != null) {
+            val sa = wibDay(da); val sb = wibDay(db)
+            if (sa != sb) return@Comparator sa.compareTo(sb)
+            if (rank(a.priority) != rank(b.priority)) return@Comparator rank(a.priority) - rank(b.priority)
+            if (da != db) return@Comparator da.compareTo(db)
+        } else if (rank(a.priority) != rank(b.priority)) return@Comparator rank(a.priority) - rank(b.priority)
+        a.title.compareTo(b.title)
+    }
+
+    fun group(tasks: List<BoardTask>, now: Long = System.currentTimeMillis(), soonDays: Int = 3): List<Pair<Group, List<BoardTask>>> {
+        // The end of the WIB day [soonDays] ahead.
+        val soonEnd = wibDay(now + soonDays * DAY_MS).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli() - WIB_MS + DAY_MS
+        val overdue = mutableListOf<BoardTask>(); val soon = mutableListOf<BoardTask>(); val later = mutableListOf<BoardTask>(); val done = mutableListOf<BoardTask>()
+        for (t in tasks) {
+            val st = t.status.orEmpty().uppercase()
+            if (st == "DONE" || st == "COMPLETED" || st == "COMPLETE") {
+                val at = ms(t.completedAt ?: t.updatedAt)
+                if (at != null && now - at <= 7 * DAY_MS) done += t
+                continue
+            }
+            if (st == "CANCELLED") continue
+            val m = ms(t.dueDate)
+            when {
+                m == null -> later += t
+                isOverdueAt(t.dueDate, now) -> overdue += t
+                m < soonEnd -> soon += t
+                else -> later += t
+            }
+        }
+        return listOf(Group.OVERDUE to overdue.sortedWith(byUrgency), Group.SOON to soon.sortedWith(byUrgency), Group.LATER to later.sortedWith(byUrgency),
+            Group.DONE to done.sortedByDescending { ms(it.completedAt ?: it.updatedAt) ?: 0L }).filter { it.second.isNotEmpty() }
     }
 }
 
@@ -109,6 +165,7 @@ fun MyTasksScreen(onOpenTask: (String) -> Unit, onBrowseProjects: () -> Unit, on
     val c = Nx.colors
     // Every visit re-reads: a task finished on its own screen must not stay "hot" here.
     LaunchedEffect(Unit) { vm.load() }
+    var expanded by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(setOf<MyTaskGroups.Group>()) }
     Column(Modifier.fillMaxSize().background(c.background)) {
         // Opened from More (no longer a tab): a back arrow beside the title.
         id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.mytasks_title), subtitle = stringResource(R.string.sub_my_tasks), onBack = onBack)
@@ -121,22 +178,33 @@ fun MyTasksScreen(onOpenTask: (String) -> Unit, onBrowseProjects: () -> Unit, on
                 s.tasks.isEmpty() -> EmptyState(Icons.Filled.Checklist, stringResource(R.string.mytasks_empty), stringResource(R.string.mytasks_empty_sub),
                     stringResource(R.string.mytasks_browse), onBrowseProjects, Modifier.fillMaxSize())
                 else -> PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }) {
-                    val groups = MyTaskGroups.group(s.tasks, OfficeTime.today())
-                    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val groups = MyTaskGroups.group(s.tasks)
+                    // Nothing open and nothing done this week: the empty state, like the web (done tasks age out).
+                    if (groups.isEmpty()) EmptyState(Icons.Filled.Checklist, stringResource(R.string.mytasks_empty), stringResource(R.string.mytasks_empty_sub),
+                        stringResource(R.string.mytasks_browse), onBrowseProjects, Modifier.fillMaxSize())
+                    else LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         groups.forEach { (g, list) ->
                             item(key = "h-$g") {
                                 Text(
                                     stringResource(when (g) {
-                                        MyTaskGroups.Group.HOT -> R.string.mytasks_hot
-                                        MyTaskGroups.Group.MOTION -> R.string.mytasks_motion
+                                        MyTaskGroups.Group.OVERDUE -> R.string.mytasks_overdue
+                                        MyTaskGroups.Group.SOON -> R.string.mytasks_soon
+                                        MyTaskGroups.Group.LATER -> R.string.mytasks_later
                                         MyTaskGroups.Group.DONE -> R.string.mytasks_done
                                     }).uppercase() + " · ${list.size}",
-                                    fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, color = c.mutedFg,
+                                    fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp,
+                                    color = if (g == MyTaskGroups.Group.OVERDUE) c.danger else c.mutedFg,
                                     modifier = Modifier.padding(top = 8.dp),
                                 )
                             }
-                            items(list, key = { "${g}-${it.id}" }) { t ->
+                            val all = g in expanded
+                            items(if (all) list else list.take(g.first), key = { "${g}-${it.id}" }) { t ->
                                 TaskCard(t, onClick = { onOpenTask(t.id) }, onToggleDone = { vm.toggle(t) }, showProject = true)
+                            }
+                            if (list.size > g.first) item(key = "more-$g") {
+                                TextButton(onClick = { expanded = if (all) expanded - g else expanded + g }) {
+                                    Text(if (all) stringResource(R.string.mytasks_show_fewer) else stringResource(R.string.mytasks_show_all, list.size))
+                                }
                             }
                         }
                     }

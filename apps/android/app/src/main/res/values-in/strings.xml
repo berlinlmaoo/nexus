@@ -574,13 +574,11 @@
     <string name="outside_auto_at">Auto check-out %1$s</string>
     <string name="outside_remind">Ajukan izin atau balik ke kantor · Auto check-out %1$s</string>
     <string name="outside_warn">Peringatan terakhir: auto check-out offsite jam %1$s kalau belum balik atau ajukan izin</string>
-    <string name="mytasks_title">Catatan Quest Saya</string>
-    <string name="mytasks_hot">Panas hari ini</string>
-    <string name="mytasks_motion">Sedang jalan</string>
-    <string name="mytasks_done">Baru ditaklukkan</string>
-    <string name="mytasks_empty">Belum ada quest</string>
-    <string name="mytasks_empty_sub">Task yang ditugaskan ke kamu muncul di sini, dari papan mission atau form. Belum ada yang menunggu kamu — ambil dari salah satu mission.</string>
-    <string name="mytasks_browse">Lihat mission</string>
+    <string name="mytasks_title">Task Saya</string>
+    <string name="mytasks_done">Baru selesai</string>
+    <string name="mytasks_empty">Belum ada task</string>
+    <string name="mytasks_empty_sub">Task yang ditugaskan ke kamu muncul di sini, dari project atau form. Belum ada yang menunggumu — ambil pekerjaan dari salah satu project.</string>
+    <string name="mytasks_browse">Lihat project</string>
     <string name="mytasks_load_failed">Gagal memuat.</string>
     <string name="home_morning">Selamat Pagi,</string>
     <string name="home_afternoon">Selamat Siang,</string>
@@ -3172,4 +3170,9 @@
     <string name="au_ran_nothing">Tidak ada yang jalan: task-nya tidak memenuhi kondisi.</string>
     <string name="au_run_failed_to">Gagal menjalankan.</string>
     <string name="au_actor_name">Otomasi</string>
+    <string name="mytasks_overdue">Lewat tenggat</string>
+    <string name="mytasks_soon">Segera jatuh tempo</string>
+    <string name="mytasks_later">Nanti</string>
+    <string name="mytasks_show_all">Lihat semua %1$d</string>
+    <string name="mytasks_show_fewer">Tampilkan lebih sedikit</string>
 </resources>
