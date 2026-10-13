@@ -25,6 +25,8 @@ final class PipelineStore {
     private(set) var today = PipelineFormat.today
     private(set) var people: [PipelinePerson] = []
     private(set) var loaded = false
+    /// May the viewer change deals (Full / Can edit)? From the server's answer; true until it says.
+    private(set) var canEdit = true
     /// Bumped on every successful read, so an open deal's History refetches with it.
     private(set) var revision = 0
     var loadError: String?
@@ -50,6 +52,7 @@ final class PipelineStore {
             summary = r.summary
             vocab = r.vocab
             today = r.today ?? PipelineFormat.today
+            canEdit = r.canEdit
             loadError = nil
             forbidden = false
             loaded = true
@@ -760,7 +763,7 @@ struct PipelinePhaseStepper: View {
 ///
 /// Owner, 9 Oct 2026: it had become a card ~500pt tall with three numbers in it — a horizontal ScrollView
 /// takes every bit of height it is offered. Now: on a phone, small KPI chips (~64pt) in a row that scrolls
-/// sideways; on an iPad or a Mac, one card with all seven side by side when they fit, else the same chips.
+/// sideways; on an iPad or a Mac, one card with all eight side by side when they fit, else the same chips.
 /// Both are held to their content's height. A reading of zero is drawn quietly instead of in bold.
 struct PipelineKpiStrip: View {
     let summary: PipelineSummary
@@ -787,6 +790,10 @@ struct PipelineKpiStrip: View {
             Tile(id: "receivable", label: T("Receivable"), value: PipelineFormat.idr(s.receivable),
                  sub: s.receivableOverdue > 0 ? String(format: T("%@ overdue"), PipelineFormat.idr(s.receivableOverdue)) : T("Nothing overdue"),
                  zero: s.receivable == 0, tone: s.receivableOverdue > 0 ? ChipTone.danger.fg : nil),
+            // Control Tower v6 (14 Oct 2026): Σ (net value − real cost) of the deals not Lost that have costs; red below zero.
+            Tile(id: "realProfit", label: T("Real profit"), value: PipelineFormat.idr(s.realProfit),
+                 sub: String(format: T("%d of %d deals have costs"), s.costDealCount, s.costEligibleCount),
+                 zero: s.realProfit == 0, tone: s.realProfit < 0 ? ChipTone.danger.fg : nil),
             Tile(id: "critical", label: T("Critical"), value: "\(s.criticalCount)",
                  sub: String(format: T("%d need attention"), s.attentionCount),
                  zero: s.criticalCount == 0, tone: s.criticalCount > 0 ? ChipTone.danger.fg : nil),
@@ -830,7 +837,7 @@ struct PipelineKpiStrip: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// iPad / Mac: the seven readings in one card, hairlines between them.
+    /// iPad / Mac: the eight readings in one card, hairlines between them.
     private var joined: some View {
         HStack(spacing: 0) {
             ForEach(Array(tiles.enumerated()), id: \.element.id) { i, tile in
@@ -1089,6 +1096,16 @@ struct PipelineDealCard: View {
                             .monospacedDigit().lineLimit(1).layoutPriority(1)
                     }
                 }
+            }
+            // Margin on the net value (Control Tower v6, 14 Oct 2026); only on a deal with cost lines and a net value.
+            if !deal.costs.isEmpty, let margin = deal.margin {
+                HStack(spacing: 4) {
+                    Text("\(T("Margin")):").foregroundStyle(NX.mutedFg)
+                    Text("\(PipelineFormat.idr(margin)) (\(PipelineFormat.pct(deal.marginPct ?? 0)))")
+                        .fontWeight(.semibold)
+                        .foregroundStyle(margin < 0 ? ChipTone.danger.fg : (margin > 0 ? ChipTone.success.fg : NX.mutedFg))
+                }
+                .font(NXFont.text(12)).monospacedDigit().lineLimit(1)
             }
             if !deal.phases.isEmpty {
                 PipelinePhaseTrack(deal: deal).padding(.top, 2)

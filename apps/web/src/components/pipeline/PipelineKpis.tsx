@@ -11,9 +11,11 @@ type Tile = { label: string; value: string; full?: string; sub: string; zero: bo
  *
  * Compact on purpose (owner, 9 Oct 2026: "UI UX ini rapihin dong" — the strip had grown into a tall card
  * with the numbers floating in it). Every tile is the same three lines and the strip never stretches to its
- * parent: one row of seven on a wide screen, money above counts (4 + 3) on a narrower one, and a row that
+ * parent: one row of eight on a wide screen, money above counts (5 + 3) on a narrower one, and a row that
  * scrolls sideways on a phone. Hairline dividers come from the 1px gap over the border colour, so they stay
- * right in every arrangement. A reading of zero is drawn quietly instead of in bold.
+ * right in every arrangement. A reading of zero is drawn quietly instead of in bold. "Real profit" (Control
+ * Tower v6, 14 Oct 2026) = Σ (net value − real cost) over the deals not Lost that have cost lines; red
+ * below zero (lib/pipeline.ts summarize).
  */
 export function PipelineKpis({ s }: { s: PipelineSummary }) {
   const { t, lang } = useLang();
@@ -27,6 +29,12 @@ export function PipelineKpis({ s }: { s: PipelineSummary }) {
       sub: s.receivableOverdue > 0 ? t("{amount} overdue", { amount: fmtIdr(s.receivableOverdue, lang) }) : t("Nothing overdue"),
       tone: s.receivableOverdue > 0 ? "bad" : undefined,
     },
+    {
+      kind: "money", label: t("Real profit"), ...money(s.realProfit ?? 0),
+      full: `${fmtIdrFull(s.realProfit ?? 0, lang)} · ${t("Real cost")} ${fmtIdrFull(s.realCost ?? 0, lang)}`,
+      sub: t("{n} of {total} deals have costs", { n: s.costDealCount ?? 0, total: s.costEligibleCount ?? 0 }),
+      tone: (s.realProfit ?? 0) < 0 ? "bad" : undefined,
+    },
     { kind: "count", label: t("Critical"), value: String(s.criticalCount), zero: !s.criticalCount, sub: t("{n} need attention", { n: s.attentionCount }), tone: s.criticalCount > 0 ? "bad" : undefined },
     { kind: "count", label: t("Ready to execute"), value: String(s.readyCount), zero: !s.readyCount, sub: t("{n} blocked", { n: s.blockedCount }), tone: s.blockedCount > 0 ? "warn" : s.readyCount > 0 ? "good" : undefined },
     { kind: "count", label: t("Deliverables on track"), value: String(s.deliverablesOnTrack), zero: !s.deliverablesOnTrack, sub: t("{n} completed", { n: s.deliverablesDone }) },
@@ -34,13 +42,13 @@ export function PipelineKpis({ s }: { s: PipelineSummary }) {
   return (
     <section data-pl="kpis" aria-label={t("Pipeline at a glance")} className="relative overflow-hidden rounded-xl border border-border bg-border">
       <div className="overflow-x-auto overscroll-x-contain [scrollbar-width:none] sm:overflow-visible">
-        <dl className="flex w-max min-w-full items-stretch gap-px sm:grid sm:w-auto sm:grid-cols-12 xl:grid-cols-7">
+        <dl className="flex w-max min-w-full items-stretch gap-px sm:grid sm:w-auto sm:grid-cols-30 xl:grid-cols-8">
           {tiles.map((tile) => (
             <div
               key={tile.label}
               className={cn(
                 "min-w-[9.75rem] flex-1 bg-card px-4 py-3 sm:min-w-0",
-                tile.kind === "money" ? "sm:col-span-3" : "sm:col-span-4",
+                tile.kind === "money" ? "sm:col-span-6" : "sm:col-span-10",
                 "xl:col-span-1",
               )}
             >

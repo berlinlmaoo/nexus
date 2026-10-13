@@ -3573,6 +3573,9 @@ model PipelineDeal {
   /// { id, type, label, file: storageKey, fileName, mimeType, size, uploadedAt, uploadedById } — an attached
   /// file (lib/pipeline-documents.ts). No migration: same column.
   links          Json      @default("[]")
+  /// Real cost lines [{ id, label, amount }] (Control Tower v4, 14 Oct 2026). Margin = netValue − Σ amount,
+  /// derived, never stored (lib/pipeline.ts marginOf). Same access as the deal. SQL: 2026-10-14-pipeline-real-cost.sql.
+  costs          Json      @default("[]")
 
   createdById String?
   createdBy   User?    @relation("PipelineDealCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
