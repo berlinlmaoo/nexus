@@ -980,7 +980,7 @@
     <string name="vault_new_folder">New folder</string>
     <string name="vault_empty_trash">Empty trash</string>
     <string name="vault_empty_trash_q">Empty the trash?</string>
-    <string name="vault_search">Search the vault…</string>
+    <string name="vault_search">Search files…</string>
     <string name="vault_quota">%1$s of %2$s used</string>
     <string name="vault_load_failed">Couldn\'t open the vault.</string>
     <string name="vault_empty">Nothing here yet. Upload a file or make a folder.</string>

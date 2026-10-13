@@ -219,24 +219,31 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
         PageHeader(if (vm.trash) stringResource(R.string.vault_trash) else l?.breadcrumb?.lastOrNull()?.name ?: "Z Vault",
             subtitle = if (!vm.trash && vm.folder == null) stringResource(R.string.sub_vault) else null, onBack = onBack) {
             if (s.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-            if (!vm.trash && vm.folder == null) HeaderIconButton(Icons.Filled.Delete, stringResource(R.string.vault_trash), onOpenTrash)
-            if (!vm.trash && l?.canWrite == true) {
-                HeaderIconButton(Icons.Filled.CreateNewFolder, stringResource(R.string.vault_new_folder), { creating = true })
-                HeaderIconButton(Icons.Filled.Upload, stringResource(R.string.td_upload), { pick.launch(arrayOf("*/*")) }, primary = true, enabled = s.upload == null)
-            }
             if (vm.trash && l?.items?.isNotEmpty() == true) TextButton(onClick = { confirmEmpty = true }) { Text(stringResource(R.string.vault_empty_trash), color = c.danger) }
+        }
+        // iOS phoneHeader: Trash · Folder · Upload as labelled buttons (they were three bare icons); Upload is the primary.
+        if (!vm.trash && (vm.folder == null || l?.canWrite == true)) {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (vm.folder == null) id.znetworks.nexus.ui.components.NxButton(stringResource(R.string.vault_trash), onOpenTrash, compact = true, icon = Icons.Filled.Delete)
+                if (l?.canWrite == true) {
+                    id.znetworks.nexus.ui.components.NxButton(stringResource(R.string.vault_folder_short), { creating = true }, compact = true, icon = Icons.Filled.CreateNewFolder)
+                    id.znetworks.nexus.ui.components.NxButton(stringResource(R.string.td_upload), { pick.launch(arrayOf("*/*")) }, compact = true, icon = Icons.Filled.Upload,
+                        kind = id.znetworks.nexus.ui.components.NxButtonKind.PRIMARY, enabled = s.upload == null)
+                }
+            }
         }
         if (!vm.trash) {
             if (l != null && l.breadcrumb.size > 1) Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
                 Text(l.breadcrumb.joinToString(" › ") { it.name }, fontSize = 12.sp, color = c.mutedFg)
             }
-            OutlinedTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(stringResource(R.string.vault_search)) },
-                shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp))
+            id.znetworks.nexus.ui.components.CompactSearchField(q, { q = it }, stringResource(R.string.vault_search), Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp))
         }
         // The shelf's use against its 5 GB, in every mode (trash counts too); red past 90 % (web).
         VaultRules.usage(l?.quota)?.let { u ->
             Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 LinearProgressIndicator(progress = { u.percent / 100f }, color = if (u.nearlyFull) c.dangerText else c.onyx, trackColor = c.muted,
+                    // No Material stop dot at the far end: with a tiny share used it read as a lone dot (run 5).
+                    drawStopIndicator = {}, gapSize = 0.dp,
                     modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape))
                 Text(stringResource(R.string.vault_quota, VaultRules.humanSize(u.used), VaultRules.humanSize(u.total)), fontSize = 12.sp, color = c.mutedFg,
                     modifier = Modifier.padding(top = 4.dp))

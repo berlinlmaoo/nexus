@@ -974,7 +974,7 @@
     <string name="vault_new_folder">Folder baru</string>
     <string name="vault_empty_trash">Kosongkan</string>
     <string name="vault_empty_trash_q">Kosongkan tempat sampah?</string>
-    <string name="vault_search">Cari di vault…</string>
+    <string name="vault_search">Cari berkas…</string>
     <string name="vault_quota">%1$s dari %2$s terpakai</string>
     <string name="vault_load_failed">Vault gagal dibuka.</string>
     <string name="vault_empty">Belum ada apa-apa. Unggah file atau buat folder.</string>
