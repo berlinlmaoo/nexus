@@ -23,7 +23,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ProjectIcon, TaskTile } from "@/components/projects/ProjectIcon";
+import { ProjectIcon, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { nexusApi, type NexusProject, type NexusProjectFolder } from "@/lib/nexus-api";
 import { canMoveInto, folderPath } from "@/lib/folder-tree-client";
 import { canAddSubfolder } from "@/lib/project-tree-dnd";
@@ -65,8 +65,8 @@ function isNearBlack(color?: string | null): boolean {
 }
 
 /**
- * A project's mark: its photo, else the one default every project shares — the full-colour task icon
- * (owner, 11 Oct 2026: no per-project emoji or colour any more).
+ * A project's mark: its photo, else the one default every project shares — the grey Notion-style page
+ * icon (owner: no per-project emoji or colour since 11 Oct 2026; page icon = option A, 14 Oct).
  */
 export function ProjectGlyph({ project, size = 16, className }: { project: Pick<NexusProject, "icon" | "color">; size?: number; className?: string }) {
   if (isUploadedIcon(project.icon)) {
@@ -77,7 +77,7 @@ export function ProjectGlyph({ project, size = 16, className }: { project: Pick<
     );
   }
   return (
-    <TaskTile size={size} className={className} />
+    <ProjectPageIcon size={size} className={className} />
   );
 }
 
