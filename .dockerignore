@@ -29,3 +29,7 @@ docker-compose*.yml
 
 # nexus-face sidecar (built separately: docker build face/)
 face
+
+# Native apps live in the monorepo but never in the server image (13 Oct 2026)
+apps/ios
+apps/android
