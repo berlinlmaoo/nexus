@@ -138,7 +138,9 @@ async function main() {
   // On a Mac with Google Chrome installed, drive that Chrome: Playwright's own Chromium download can hang
   // while unpacking (owner's Mac, 13 Oct 2026). Elsewhere (Linux) use Playwright's Chromium as before.
   const useChrome = process.platform === "darwin" && existsSync("/Applications/Google Chrome.app");
-  const browser = await chromium.launch({ args: ["--disable-dev-shm-usage"], ...(useChrome ? { channel: "chrome" } : {}) });
+  const browser = await chromium.launch({ args: ["--disable-dev-shm-usage"], ...(useChrome ? { channel: "chrome" } : {}),
+    // TOUR_WATCH=1 (ui-tour.sh --watch): a visible Chrome window, so the owner can follow the web half.
+    headless: !process.env.TOUR_WATCH, ...(process.env.TOUR_WATCH ? { slowMo: 150 } : {}) });
   try {
     const state = await signIn(browser);
     for (const [name, variant] of Object.entries(VARIANTS)) {

@@ -34,6 +34,7 @@ while [ $# -gt 0 ]; do
     --no-upload) DO_UPLOAD=0 ;;
     --no-pull) DO_PULL=0 ;;
     --no-open) DO_OPEN=0 ;;
+    --watch) export TOUR_WATCH=1 ;;   # visible Chrome for the web half (the simulator is visible anyway)
     --keep-xcresult) KEEP_XCRESULT=1 ;;
     --set-password) SET_PASSWORD=1 ;;
     -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
