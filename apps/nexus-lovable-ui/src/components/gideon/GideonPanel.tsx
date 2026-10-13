@@ -482,13 +482,15 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
         <div className="truncate text-sm font-bold">{name}</div>
         <div className="truncate text-[11px] text-muted-foreground">{chatTitle && !fresh ? chatTitleText(chatTitle) : t("Acts in NEXUS as you")}</div>
       </div>
-      {!isPage && (
-        <button type="button" onClick={() => setView((v) => (v === "history" ? "chat" : "history"))} title={t("Chat history")} aria-label={t("Chat history")} aria-pressed={view === "history"} className={cn("rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground", view === "history" && "bg-accent text-foreground")}>
-          <History className="h-4 w-4" />
-        </button>
-      )}
+      {/* The full page keeps its chat list in a left column from md up; on a phone that column is hidden,
+          so the page gets the same history toggle as the panel (UI tour 13 Oct 2026: no way back to an old
+          chat at 440 px). */}
+      <button type="button" onClick={() => setView((v) => (v === "history" ? "chat" : "history"))} title={t("Chat history")} aria-label={t("Chat history")} aria-pressed={view === "history"} className={cn("rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground", view === "history" && "bg-accent text-foreground", isPage && "md:hidden")}>
+        <History className="h-4 w-4" />
+      </button>
       <button type="button" onClick={newChat} title={t("New chat ({keys})", { keys: modKey("O") })} aria-label={t("New chat")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><SquarePen className="h-4 w-4" /></button>
-      <span className="hidden sm:contents" title={GIDEON_TIERS.find((x) => x.id === tier)?.blurb}>
+      {/* The tier picker shows on the phone too, as on the desktop (it was hidden below sm). */}
+      <span className="contents" title={GIDEON_TIERS.find((x) => x.id === tier)?.blurb}>
         <SelectPicker
           variant="field"
           size="sm"
@@ -538,8 +540,12 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
     </div>
   );
 
-  const body = view === "history" && !isPage ? (
-    <ChatHistoryList activeId={fresh ? null : chatId} onPick={(id) => openChat(id)} onNew={newChat} />
+  const body = view === "history" ? (
+    <ChatHistoryList
+      activeId={fresh ? null : chatId}
+      onPick={(id) => { openChat(id); if (isPage) router.history.replace(`/gideon?chat=${id}`); }}
+      onNew={() => { newChat(); if (isPage) router.history.replace("/gideon"); }}
+    />
   ) : (
     <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-4">
       <div className={cn("mx-auto w-full space-y-4", isPage && "max-w-3xl")}>

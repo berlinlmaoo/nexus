@@ -1576,7 +1576,7 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
       data-morph-id={morph ? `list-taskcard-${task.id}` : undefined}
       style={{ borderRadius: 6, ...tint }}
       {...cardProps}
-      className={cn("group flex min-h-9 w-full items-center gap-2.5 border-b border-border/70 px-2 py-1.5 text-left transition-colors [contain-intrinsic-size:auto_37px] [content-visibility:auto] hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--accent-foreground)]/40", selected && "bg-accent", task.parentId && "pl-7")}
+      className={cn("group flex min-h-9 w-full flex-wrap items-center gap-x-2.5 gap-y-1 border-b sm:flex-nowrap sm:gap-y-0 border-border/70 px-2 py-1.5 text-left transition-colors [contain-intrinsic-size:auto_37px] [content-visibility:auto] hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--accent-foreground)]/40", selected && "bg-accent", task.parentId && "pl-7")}
     >
       {/* The circle is a checkbox (Notion; C-BUG-26): a click marks done / not done, it doesn't open the task. */}
       <span
@@ -1597,8 +1597,11 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
         <QuestChip task={task} />
         {filteredOut && <FilterHint />}
       </span>
-      <PropLine task={task} keys={keys} defs={defs} ctx={ctx} className="hidden shrink-0 flex-nowrap justify-end sm:flex [&>*]:shrink-0" />
-      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground" />
+      {/* Phone: the properties wrap onto a second line under the title instead of disappearing (UI tour
+          13 Oct 2026: at 440 px the list showed titles only; the desktop row shows amount, person, dates,
+          priority and status). From sm up they sit right-aligned on the same line, as before. */}
+      <PropLine task={task} keys={keys} defs={defs} ctx={ctx} className="basis-full pl-[26px] sm:basis-auto sm:shrink-0 sm:flex-nowrap sm:justify-end sm:pl-0 sm:[&>*]:shrink-0" />
+      <ChevronRight className="hidden h-4 w-4 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground sm:block" />
     </button>
   );
   return handle ? <div className="group/row relative">{handle}{row}</div> : row;

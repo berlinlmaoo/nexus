@@ -102,9 +102,10 @@ function Dashboard() {
         <div className="space-y-6">
           <StatRow data={data} />
           <Reveal delay={0.1}><XpRulesCard /></Reveal>
-          {/* Wide screens: the calendar and schedule fill the main column under XP rules (QA S-26: ~1,000 px
-              of dead space while the rail ran past the fold). Narrower: they stay in the rail's order. */}
-          <div data-dashboard-main-cal="" className="hidden gap-6 xl:grid xl:grid-cols-2">
+          {/* The calendar and schedule sit under XP rules on every width, as on the desktop (QA S-26 put
+              them in the main column; the UI tour of 13 Oct 2026 found the phone showing them only after
+              the whole rail, and a double gap where the hidden copy was). Two columns from xl. */}
+          <div data-dashboard-main-cal="" className="grid gap-6 xl:grid-cols-2">
             <Reveal delay={0.15}><CalendarCard /></Reveal>
             <Reveal delay={0.2}><ScheduleCard /></Reveal>
           </div>
@@ -115,10 +116,6 @@ function Dashboard() {
           <Reveal delay={0.05}><ProfileCard userName={userName} avatarUrl={profile.data?.user?.avatar} /></Reveal>
           <Reveal delay={0.1}><MessagesCard /></Reveal>
           <Reveal delay={0.15}><LeaderboardCard /></Reveal>
-          <div className="space-y-6 xl:hidden">
-            <Reveal delay={0.2}><CalendarCard /></Reveal>
-            <Reveal delay={0.25}><ScheduleCard /></Reveal>
-          </div>
         </aside>
       </div>
     </div>

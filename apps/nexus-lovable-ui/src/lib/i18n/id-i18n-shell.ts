@@ -381,6 +381,7 @@ export const ID_I18N_SHELL: Record<string, string> = {
   "{name} updated \"{project}\" status to {status}": "{name} mengubah status \"{project}\" menjadi {status}",
   "{n} day-off day left": "Sisa {n} hari day off",
   "{n} days on the line — finish something today to keep it.": "{n} hari dipertaruhkan — selesaikan sesuatu hari ini supaya tetap jalan.",
+  "1 day on the line — finish something today to keep it.": "1 hari dipertaruhkan — selesaikan sesuatu hari ini supaya tetap jalan.",
   "{n} public-holiday day left": "Sisa {n} hari tanggal merah",
   "{room} in {n} min": "{room} dalam {n} menit",
   "Adjusted by the BoD": "Disesuaikan oleh BoD",

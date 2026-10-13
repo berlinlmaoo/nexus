@@ -174,6 +174,8 @@ const MESSAGE_RULES: Rule[] = [
   { re: /^You're now an? (\w+) of "([\s\S]+)"\.$/, key: "You're now {role} of \"{project}\".", vars: (m) => ({ role: m[1], project: m[2] }) },
   { re: /^(.+?) updated "([\s\S]+)" status to ([\s\S]+)$/, key: "{name} updated \"{project}\" status to {status}", vars: (m) => ({ name: m[1], project: m[2], status: m[3] }) },
   { re: /^(.+?) moved "([\s\S]+)" from (.+) to (.+)$/, key: "{name} moved \"{subject}\" from {from} to {to}", vars: (m) => ({ name: m[1], subject: m[2], from: m[3], to: m[4] }) },
+  // One day reads "1 day" (the server already writes it that way; "1 days on the line" was the client's plural).
+  { re: /^1 day on the line — finish something today to keep it\.$/, key: "1 day on the line — finish something today to keep it.", vars: () => ({}) },
   { re: /^(\d+) days? on the line — finish something today to keep it\.$/, key: "{n} days on the line — finish something today to keep it.", vars: (m) => ({ n: m[1] }) },
   { re: /^You've used (\d+) of (\d+) this month\.$/, key: "You've used {used} of {quota} this month.", vars: (m) => ({ used: m[1], quota: m[2] }) },
   { re: /^"([\s\S]+)" is done — collect the XP before the week resets\.$/, key: "\"{title}\" is done — collect the XP before the week resets.", vars: (m) => ({ title: m[1] }) },

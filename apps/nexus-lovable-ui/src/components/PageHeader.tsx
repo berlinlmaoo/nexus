@@ -31,7 +31,9 @@ export function PageHeader({
           {icon && <div className="hidden sm:block text-2xl mt-0.5 shrink-0">{icon}</div>}
           <div className="min-w-0">
             <h1 className="text-xl md:text-2xl font-semibold tracking-tight truncate">{title}</h1>
-            {subtitle && <p className={cn("text-sm text-muted-foreground mt-0.5 line-clamp-1 sm:line-clamp-2", compact && "max-sm:hidden")}>{subtitle}</p>}
+            {/* Two lines on the phone too: one line cut most subtitles mid-sentence at 440 px ("Only the
+                BoD…", UI tour 13 Oct 2026); the desktop shows them whole. */}
+            {subtitle && <p className={cn("text-sm text-muted-foreground mt-0.5 line-clamp-2", compact && "max-sm:hidden")}>{subtitle}</p>}
           </div>
         </div>
         {/* Touch: every control in the actions row is one height (44px), so a picker never stands taller than the

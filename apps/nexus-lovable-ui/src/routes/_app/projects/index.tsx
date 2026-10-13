@@ -597,7 +597,9 @@ function ProjectsPage() {
                 {tr("Open a project to see its board, pages, calendar and timeline.")}
               </p>
             </div>
-            <div className="hidden grid-cols-3 gap-2 sm:grid sm:min-w-[280px]">
+            {/* Shown on the phone too (UI tour 13 Oct 2026: the desktop's three numbers were missing at
+                440 px); one compact row of three keeps the list close to the fold. */}
+            <div className="grid grid-cols-3 gap-2 sm:min-w-[280px]">
               <MiniStat
                 icon={<Target className="h-4 w-4" />}
                 label={tr("Average progress")}
