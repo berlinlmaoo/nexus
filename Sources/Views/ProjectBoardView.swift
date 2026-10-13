@@ -334,6 +334,8 @@ struct ProjectDetailView: View {
     }
 
     @State private var actionError: String?
+    /// "Your access to this project changed" (socket taken out of the project's room, reason revoked).
+    @State private var accessToast: FailureToastPayload?
     /// A new task that could not be created while offline / on a blip, and that the inline card could not
     /// take back (it had closed): kept here with Try again (web createInline toast, QA 13 Oct 2026).
     @State private var keptNewTask: KeptNewTask?
@@ -453,6 +455,14 @@ struct ProjectDetailView: View {
         // timeline without a reload. The server sends task events only to the project's room, which
         // this screen holds while it is up; the timer is the fallback for when the connection is down.
         .realtimeRoom("project:\(projectId)")
+        // Access ended while open: say so and reload, which lands on the no-access state.
+        .onReceive(NotificationCenter.default.publisher(for: .nexusRoomRevoked)) { note in
+            guard (note.userInfo?[RealtimeKey.room] as? String) == "project:\(projectId)" else { return }
+            accessToast = FailureToastPayload(title: T("Your access to this project changed"),
+                                              detail: T("Ask its Project Owner if you still need it."))
+            Task { await load() }
+        }
+        .failureToast($accessToast)
         .liveRefresh(every: 60, on: [.nexusProjectTasksChanged, .nexusWorkspaceChanged],
                      kinds: [RealtimeKind.projects], projectId: projectId) { await reloadQuietly() }
         .alert(T("Couldn't update the board"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {

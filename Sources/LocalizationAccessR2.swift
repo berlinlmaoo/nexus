@@ -106,5 +106,7 @@ extension AppLanguage {
         "Server URL for Claude": "URL server untuk Claude",
         // Calendar: a task opened read-only by someone outside its project (web 80a286c, id-qafix-perm.ts).
         "You're not in this project — view only": "Kamu bukan anggota project ini — hanya lihat",
-    ]
+        "Your access to this project changed": "Akses kamu ke project ini berubah",
+        "Ask its Project Owner if you still need it.": "Minta ke Project Owner-nya kalau kamu masih butuh.",
+]
 }

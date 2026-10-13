@@ -59,6 +59,14 @@ final class RealtimeClient {
         engine.onState = { [weak self] state in self?.stateChanged(state) }
         engine.onConnected = { [weak self] in self?.catchUp() }
         engine.onEvent = { [weak self] name, payload in self?.route(name, payload) }
+        // Access to a project ended while its screen was open (web lib/realtime.tsx onJoinDenied): that
+        // project / sheet refetches and shows the no-access state, and the project lists refresh.
+        engine.onDenied = { room, reason in
+            guard reason == "revoked", !room.isEmpty else { return }
+            let center = NotificationCenter.default
+            center.post(name: .nexusRoomRevoked, object: nil, userInfo: [RealtimeKey.room: room])
+            center.post(name: .nexusWorkspaceChanged, object: nil, userInfo: [RealtimeKey.kind: RealtimeKind.projects])
+        }
     }
 
     // MARK: lifecycle

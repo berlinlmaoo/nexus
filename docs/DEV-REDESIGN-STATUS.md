@@ -361,6 +361,17 @@ reloads (project board and tabs, task detail, page, spreadsheet, chat list + ope
 badges), and flushes the spreadsheet save queue. Screens on `.liveRefresh` also reload on returning to the
 front even when the socket can't connect. Verified by reading the paths; no code change needed.
 
+Realtime parity with web f661bfb (13 Oct):
+- `join-denied` { reason: "revoked" } (access to a project ended while its room was held): the open project
+  refetches → no-access state, with the toast "Your access to this project changed" (EN/ID); an open sheet of
+  it reloads with the same notice; project lists refresh.
+- Spreadsheet same-cell race: a save's answer older than the row already on screen (someone else saved after
+  us; the server's updatedAt strictly increases) no longer puts our value back over the newer row. Queued
+  (unsent) edits still stay on screen until sent.
+- `form-responses-changed`: the app has no form-responses screen yet (web only), so nothing listens.
+- Task/comment user payloads without email/phone: no app decoder requires them (checked). `task-created`
+  customFieldValues / reorder listOrder are additive; the app refetches by id.
+
 ## Server pieces that must ship to production WITH the app
 
 All of these exist on the dev server only (branch `dev` of the NEXUS repo). The app calls them; on today's
@@ -408,7 +419,9 @@ Detail for each item is in its section above; this is the order to go through th
    board/list/table/calendar/pages/forms/overview, task detail notice, comment box only from Can comment,
    chat "View only", level picker, LAST_OWNER sentence on demote and remove, remove confirmation; Full access
    behaves exactly as before (regression).
-7. Error states: airplane mode on Control Room tabs, Tickets, Reports, Vault — error + Try again, never an
+7. Access revoked live: with a project open on the device, remove yourself (or lower to no access) on the
+   web → toast "Your access to this project changed" + no-access state; same with a sheet open.
+7b. Error states: airplane mode on Control Room tabs, Tickets, Reports, Vault — error + Try again, never an
    empty list; open a task/page link of a non-member project → "no access".
 
 **C. Spreadsheet (new, large)**
@@ -418,7 +431,8 @@ Detail for each item is in its section above; this is the order to go through th
 9. Copy → paste (formula shifts), paste wider than the sheet (columns added), delete a column → ⌘Z (values,
    formulas, validation back), undo/redo on iPhone.
 10. Offline: airplane mode → edit → badge → back online → sent; kill the app mid-edit → relaunch → sent.
-11. Realtime: edit on the web → appears live (not over the cell being edited); edit in the app → web.
+11. Realtime: edit on the web → appears live (not over the cell being edited); edit in the app → web; two
+    devices typing the same cell at once end on the same (last) value on both.
 12. Freeze (menu + corner drag), resize (pointer edge, touch handle), overflow text, merges, borders, wrap +
     auto row height, rotation, fonts, custom number formats, filters / filter views / slicers, hide/unhide.
 13. Panels: find & replace, comments (amber corner, thread, resolve), version history, validation editor

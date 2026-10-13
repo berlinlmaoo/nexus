@@ -1091,7 +1091,12 @@ final class SheetStore {
         let pending = outbox.pending(sheet)
         for o in list {
             guard let id = o["id"] as? String, let i = rows.firstIndex(where: { $0.id == id }) else { continue }
-            if let at = o["updatedAt"] as? String { rows[i].updatedAt = at }
+            // The same-cell race (web f661bfb): someone else's save may have landed after ours and already
+            // reached this screen live. The server's updatedAt strictly increases, so an answer older than
+            // the row on screen is stale — keep the newer row, never put this request's value back over it.
+            let at = o["updatedAt"] as? String ?? ""
+            if !at.isEmpty, !rows[i].updatedAt.isEmpty, at < rows[i].updatedAt { continue }
+            if !at.isEmpty { rows[i].updatedAt = at }
             if let cells = o["cells"] as? SheetJSON, pending.values[id] == nil {
                 let editingCol = editing && rowId(selection.active.r) == id ? columnId(selection.active.c) : nil
                 var next = cells

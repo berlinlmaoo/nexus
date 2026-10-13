@@ -69,8 +69,9 @@ final class RealtimeEngine {
     var onConnected: (@MainActor () -> Void)?
     /// Every server event but `join-denied`: its name and first argument.
     var onEvent: (@MainActor (String, SIOJSON?) -> Void)?
-    /// The server refused a room (`join-denied`).
-    var onDenied: (@MainActor (String) -> Void)?
+    /// The server refused a room, or took the socket out of one (`join-denied` { room, reason? };
+    /// reason "revoked" = access to that project ended, server since 13 Oct 2026).
+    var onDenied: (@MainActor (String, String?) -> Void)?
     /// 0..<1, for the backoff jitter. Replaceable so tests can pin it.
     var random: @MainActor () -> Double = { Double.random(in: 0..<1) }
 
@@ -258,7 +259,7 @@ final class RealtimeEngine {
         case .event(let namespace, _, let name, let args) where namespace == "/":
             guard link.connectedAt != nil else { return }
             if name == "join-denied" {
-                onDenied?(args.first?["room"]?.string ?? "")
+                onDenied?(args.first?["room"]?.string ?? "", args.first?["reason"]?.string)
             } else {
                 onEvent?(name, args.first)
             }

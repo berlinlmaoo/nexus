@@ -58,6 +58,9 @@ extension Notification.Name {
     static let nexusSheetCells = Notification.Name("nexus.sheet.cells")
     /// `sheet-structure`: rows / columns / settings changed; the open sheet reads itself again.
     static let nexusSheetStructure = Notification.Name("nexus.sheet.structure")
+    /// `join-denied` with reason "revoked": the socket was taken out of a room (RealtimeKey.room) because
+    /// access to that project ended.
+    static let nexusRoomRevoked = Notification.Name("nexus.room.revoked")
 }
 
 /// The userInfo keys of the notifications above.
@@ -76,6 +79,8 @@ enum RealtimeKey {
     static let automationId = "automationId"
     /// On the sheet notifications: the event's payload as JSON text.
     static let json = "json"
+    /// On `.nexusRoomRevoked`: "project:<id>" or "sheet:<id>".
+    static let room = "room"
 }
 
 /// The values of `RealtimeKey.kind`.

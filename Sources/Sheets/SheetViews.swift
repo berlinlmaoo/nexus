@@ -68,6 +68,11 @@ private struct SheetScreen: View {
         .onReceive(NotificationCenter.default.publisher(for: .nexusSheetCells)) { note in
             if let o = Self.payload(note) { store.receiveCells(o) }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .nexusRoomRevoked)) { note in
+            guard let id = store.sheetId, (note.userInfo?[RealtimeKey.room] as? String) == "sheet:\(id)" else { return }
+            store.notice = T("Your access to this project changed")
+            Task { await store.reload() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .nexusSheetStructure)) { note in
             store.receiveStructure(Self.payload(note) ?? [:])
             // Catch-up after a reconnect (or a structure change): comment threads and markers too —
