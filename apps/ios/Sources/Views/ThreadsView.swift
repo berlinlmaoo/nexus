@@ -416,7 +416,7 @@ struct ThreadsView: View {
                     Text(p.authorName).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
                         .layoutPriority(1)
                     let edited = (p.editedAt?.isEmpty == false) ? T("edited") : nil
-                    let meta = [Self.timeAgo(p.createdAt), edited].compactMap { $0 }
+                    let meta = [p.createdAt.flatMap { Self.timeAgo($0) }, edited].compactMap { $0 }
                     if !meta.isEmpty {
                         Text("· " + meta.joined(separator: " · ")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     }
