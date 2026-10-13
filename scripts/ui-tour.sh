@@ -22,6 +22,7 @@ cd "$(dirname "$0")/.." || exit 2
 REPO=$(pwd)
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
+ORIG_ARGS=("$@")
 SAFARI_MOBILE=1 DO_IPHONE=1 DO_IPAD=0 DO_MAC=0 DO_WEB=1 DO_UPLOAD=1 DO_PULL=1 DO_OPEN=1 KEEP_XCRESULT=0 SET_PASSWORD=0
 ONLY=""
 while [ $# -gt 0 ]; do
@@ -97,7 +98,15 @@ say "results → $OUT"
 
 # ------------------------------------------------------------------------------------------- repo + check
 if [ "$DO_PULL" = 1 ]; then
+  before=$(git rev-parse HEAD 2>/dev/null)
   if git pull --ff-only -q >"$OUT/logs/git.log" 2>&1; then say "git pull: $(git log -1 --format='%h %s' | cut -c1-70)"
+    # bash already parsed THIS file's old functions: when the pull changed the tour, start over on the new
+    # version (owner's Mac, 13 Oct 2026: a run kept the old xcodebuild handling after pulling the fix).
+    if [ "$(git rev-parse HEAD)" != "$before" ] && [ -z "${UI_TOUR_REEXEC:-}" ]; then
+      say "tour updated — restarting on the new version"
+      rm -rf "$OUT"
+      UI_TOUR_REEXEC=1 exec "$0" "${ORIG_ARGS[@]+"${ORIG_ARGS[@]}"}" --no-pull
+    fi
   else say "git pull failed (local changes?) — continuing with what is checked out; see logs/git.log"; fi
 fi
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "?")
