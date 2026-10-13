@@ -379,6 +379,60 @@ submitter deletes their own from My Submissions, already in the app).
 - Task/comment user payloads without email/phone: no app decoder requires them (checked). `task-created`
   customFieldValues / reorder listOrder are additive; the app refetches by id.
 
+## Mac / iPad parity with the dev web (13 Oct, after the owner's first Mac build of 92a2d6e)
+
+Regular width (Mac Catalyst, iPad landscape) follows the dev web; iPhone keeps native patterns with the same
+colours, type sizes and copy. Shared chrome: `Sources/Views/NXPageChrome.swift` — `NXPageHeader` (left title
+26 pt + subtitle + right actions + hairline), button styles `.nxPrimary` (near-black, web --primary) /
+`.nxBordered` / `.nxGhost`, `NXCard`; `MacPagesChrome.swift` decides "sidebar root in regular width" (pushed
+copies keep Back). Screens that hide their bar there get the top band that clears the window controls.
+
+### Shell (sidebar, My Tasks)
+- Sidebar header: logo + NEXUS / Phaëthon + collapse; "Search… ⌘K" row opens search.
+- Groups Home / Work / Team / System in the web's order, small non-uppercase labels (Reports and Forms appended to Work; the web has no sidebar entry for them).
+- Badges: Notifications, Messages, Attendance (pending offsite check-outs, BoD / OAA).
+- Projects header with + (Create project) and the Pinned list ("Pin a project to keep it here." when empty). Not ported: the web's folder tree / No folder group; Recent moved off the sidebar (still on Dashboard).
+- Footer: avatar + name/email (→ Settings), theme, keyboard shortcuts, EN/ID, log out (same Check-out-first alert).
+- ⌘1–⌘7, ⌘K, ⌘/, ⌘S still work.
+- My Tasks (regular): page header + subtitle + black "+ New task"; empty state upper-middle with "Browse projects"; 15 pt rows + status pill. Not matched: assignee avatar + right due column.
+- My Tasks (compact): native bar, web copy, "Browse projects".
+
+### Page headers (sidebar root screens)
+Regular width, as the sidebar's root only (pushed copies keep their nav bar and Back): left-aligned header + subtitle + bordered actions, primary near-black, 15 pt body, flat bordered cards.
+- Projects: header, search, grid/list toggle (list mode new), Folder, black New project; flat cards.
+- Notifications: header, Mark all as read, filter tabs under it; grey unread line; black unread dot.
+- Messages: full-width header with Live / Reconnecting dot + black New chat (⌘N); 300 pt list column.
+- Threads, Leaderboard ("Current period · …"), My Submissions, Tickets (queue tabs under header), Reports (Me / Team tabs, period button), Pages/Docs (header search), Control Room (sections as tabs), Attendance (header only).
+- Dashboard unchanged (already matches). Not done: Threads "Mentions" tab; Pages "New page" (no project-picking composer in the app).
+- Check: no centred titles on Mac; Home tiles still push with Back; dark mode black buttons.
+
+### Project (header, tabs, Table, List, Timeline)
+- Header (regular): title + member avatars (+N) + Ask GIDEON + Project settings; no Add task in the header (phone unchanged).
+- Tab row (regular): Overview · views in the web's order (saved views like "Per kategori"; the active one has a ▾ menu) · + · divider · icon-only Spreadsheet / Pages / Forms / Chat; tools: filter / sort / group (one sheet), bolt → Automations, ✨ → GIDEON, search icon → field (⌘F), view settings; split "+ Add task ▾" (▾ = add to a section; New form on Forms).
+- Table: bordered grid, type-icon headers, collapsible status groups (pill + count), + New task per group, assignee / priority / status menus (undo), 16 pt rows, selection + drag, read-only below Can edit, 40 rows per group + "Show 25 more". Not matched: Tags column (tasks don't carry tags in the app model), + add column, inline due-date edit.
+- List (regular): fixed property columns in one order (≤3 fields, due, priority, status, people), 15 pt.
+- Timeline: bordered card, Name | Duration | Progress, collapsible groups with duration + progress, status circles, month + weekday/date header, today circle + line, opens near today, full width, "No date"; tap opens the task. Not matched: sticky header (would need offset syncing), hover "+", bar drag.
+
+### Calendar, Z Vault, Settings, Room Booking
+- Calendar (regular): full-width web header (icon + title, ‹ month ›, Today, Month | People, Everyone | Mine | My division, Filters, Reset, keyboard), division chips under it; dot-only cells (count top-right, overdue dash, ✓ for done, +N), today = dark disc, selected = outlined; Mac hover tooltip "Thu 8 Oct · 5 tasks / divisions"; web legend; "Show all" in the overdue heading; bordered day arrows. Not matched: iPad tooltip (`.help` is a VoiceOver hint there), Filters as a popover (kept as the sheet).
+- Z Vault: page header + subtitle with search, Select, Trash, Folder, Upload (primary; menu adds Photos); usage bar "x of y used"; breadcrumb; folder / file cards in a grid, thumbnail cards for media, section labels, floating selection bar; all actions kept. Pushed folders also show the Vault header (plus Back).
+- Settings: page header + left sub-nav; Profile card like the web (photo row, Name | Email + Change, Google Workspace, Phone number — saved via PATCH /api/user/profile, Save right-aligned near-black), Password card (Profile + Security), Delete account card, Logout card, DEV server card kept; no violet full-width buttons. Phone: same content + phone field.
+- Room Booking: page header (web copy), Upcoming / History, room picker, black "+ New booking".
+
+### Form builder
+- Top bar (regular): ← project / form name, centre tabs Questions · Settings · Share · Responses (count), "✓ Saved / Saving… / Couldn't save — Retry", Preview, ⋯ (open page, duplicate, delete / discard draft); compact: nav title + underline tabs.
+- Autosave like the web (700 ms, one save at a time, flush on leave, a new form is created by its first edit as the web's blank form); manual Save removed.
+- Questions: page canvas (cover + icon, big title, description, access banner + Change), question cards with the real input preview and chips (→ Task title / Kategori, logic, routing, autofill); regular width has the right "Question settings" panel (type, required, description, list display, Rupiah, autofill, attachment, logic, answer goes to incl. Kategori, routing incl. Set field, move / duplicate / delete); compact pushes the same editor, delete has Undo.
+- Settings tab (who can fill it in, login, when it's open, limit, after-sending texts, notify people), Share tab (link, copy, open, share, QR), Responses tab (embedded, count).
+- Not matched: drag-to-reorder (Move up/down instead), "/" type command, local unsaved-draft preview (Preview saves first and shows the live form), option renames carried into dependent rules (stale warnings instead).
+
+### GIDEON
+- Regular width: web header (mark, "Acts in NEXUS as you" / chat title, new chat, "Luna ▾", ⋯ Personalize / Delete chat / Clear history), chat list column (search, groups by day, rename / delete), conversation max 768 pt.
+- Both widths: Markdown rendered (bold, lists, headings, code, tables, links → in-app); raw tool names gone (friendly step words, collapsible "N steps"); empty state with the web's 3 suggestions; composer card ("Ask anything. Type @ to add a page", + menu, "Review before writing ▾", round send).
+- Context bug fixed (proven on dev): the app kept the last "Ask GIDEON" project in a shared context and appended to one old chat, so "task disini" from the GIDEON page answered about Finance / GENEZIZ / ZZ Audit QA. Now: the GIDEON page = new chat with no page context (like the web), Ask GIDEON = new chat about that project / task, ⌘O and the launcher follow the page on screen (project, task, doc register themselves); body `context {projectId, taskId, docId, refs}` like the web.
+- Not matched: pending-approvals banner, Insert into page, floating window / side-panel modes.
+- Check: ask "task disini" from a project (Ask GIDEON), from ⌘O, and from the sidebar page; switch projects — the chip follows.
+
 ## Server pieces that must ship to production WITH the app
 
 All of these exist on the dev server only (branch `dev` of the NEXUS repo). The app calls them; on today's
@@ -430,6 +484,12 @@ Detail for each item is in its section above; this is the order to go through th
    web → toast "Your access to this project changed" + no-access state; same with a sheet open.
 7b. Error states: airplane mode on Control Room tabs, Tickets, Reports, Vault — error + Try again, never an
    empty list; open a task/page link of a non-member project → "no access".
+
+**B2. Mac / iPad parity pass (13 Oct, large UI change — see its section)**
+7c. Mac + iPad landscape, each sidebar screen: sidebar (header, ⌘K row, groups, Projects + Pinned, footer),
+    page headers (no centred titles; Back on pushed copies), project header + tab row + Table / List /
+    Timeline, Calendar, Z Vault, Settings (phone number save), Room Booking, Form builder (autosave, tabs,
+    panel), GIDEON (chat list, Markdown, context from a project / task / doc). Dark mode on each.
 
 **C. Spreadsheet (new, large)**
 8. Grid: scroll both ways (and bounce), tap / double-tap / type to edit, formula bar (Esc cancels, tap cells
