@@ -3,7 +3,7 @@ import { useLang } from "@/lib/lang";
 import type { PipelineSummary } from "@/lib/pipeline";
 import { fmtIdr, fmtIdrFull } from "./pipeline-ui";
 
-type Tile = { label: string; value: string; full?: string; sub: string; zero: boolean; tone?: "bad" | "warn" | "good"; kind: "money" | "count" };
+type Tile = { label: string; value: string; full?: string; sub: string; warn?: string; zero: boolean; tone?: "bad" | "warn" | "good"; kind: "money" | "count" };
 
 /**
  * The instrument strip (the GM's "instruments"): readings over every deal of the project, never the
@@ -14,8 +14,9 @@ type Tile = { label: string; value: string; full?: string; sub: string; zero: bo
  * parent: one row of eight on a wide screen, money above counts (5 + 3) on a narrower one, and a row that
  * scrolls sideways on a phone. Hairline dividers come from the 1px gap over the border colour, so they stay
  * right in every arrangement. A reading of zero is drawn quietly instead of in bold. "Real profit" (Control
- * Tower v6, 14 Oct 2026) = Σ (net value − real cost) over the deals not Lost that have cost lines; red
- * below zero (lib/pipeline.ts summarize).
+ * Tower v6, 14 Oct 2026) = Σ (net value − real cost) over the deals not Lost that have cost lines and a
+ * net value; red below zero. Deals with costs but no net value are left out and named in a small warning
+ * line under the tile (lib/pipeline.ts summarize).
  */
 export function PipelineKpis({ s }: { s: PipelineSummary }) {
   const { t, lang } = useLang();
@@ -33,6 +34,7 @@ export function PipelineKpis({ s }: { s: PipelineSummary }) {
       kind: "money", label: t("Real profit"), ...money(s.realProfit ?? 0),
       full: `${fmtIdrFull(s.realProfit ?? 0, lang)} · ${t("Real cost")} ${fmtIdrFull(s.realCost ?? 0, lang)}`,
       sub: t("{n} of {total} deals have costs", { n: s.costDealCount ?? 0, total: s.costEligibleCount ?? 0 }),
+      warn: (s.costNoNetCount ?? 0) > 0 ? t("{n} deals have costs but no net value", { n: s.costNoNetCount }) : undefined,
       tone: (s.realProfit ?? 0) < 0 ? "bad" : undefined,
     },
     { kind: "count", label: t("Critical"), value: String(s.criticalCount), zero: !s.criticalCount, sub: t("{n} need attention", { n: s.attentionCount }), tone: s.criticalCount > 0 ? "bad" : undefined },
@@ -66,6 +68,11 @@ export function PipelineKpis({ s }: { s: PipelineSummary }) {
                 {tile.value}
               </dd>
               <dd className="mt-0.5 truncate text-xs tabular-nums text-muted-foreground">{tile.sub}</dd>
+              {tile.warn && (
+                <dd title={tile.warn} className="mt-0.5 truncate text-xs tabular-nums text-amber-700 dark:text-amber-300">
+                  {tile.warn}
+                </dd>
+              )}
             </div>
           ))}
         </dl>

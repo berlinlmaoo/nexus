@@ -300,4 +300,5 @@ export const ID_PIPELINE: Record<string, string> = {
   "Net value − real cost": "Nilai bersih − real cost",
   "{n} cost lines · {amount}": "{n} baris biaya · {amount}",
   "{n} of {total} deals have costs": "{n} dari {total} deal sudah ada biaya",
+  "{n} deals have costs but no net value": "{n} deal ada biaya tapi nilai bersih kosong",
 };

@@ -48,7 +48,7 @@ vi.mock('@/lib/prisma', () => {
 import prisma from '@/lib/prisma'
 import { costTotalOf, marginOf, summarize, type PipelineDealFacts } from '@/lib/pipeline'
 import { costsOf, normalizeCosts, parseDealFields, serializeDeal } from '@/lib/pipeline-server'
-import { MASTER_COLUMNS, contentDisposition, costLines, exportFileName } from '@/lib/pipeline-export'
+import { MANUAL_DUE_LABEL, MASTER_COLUMNS, contentDisposition, costLines, exportFileName } from '@/lib/pipeline-export'
 import { GET as listGET } from '@/app/api/projects/[projectId]/pipeline/route'
 import { GET as dealGET, PATCH as dealPATCH } from '@/app/api/projects/[projectId]/pipeline/[dealId]/route'
 import { GET as exportGET } from '@/app/api/projects/[projectId]/pipeline/export/route'
@@ -103,7 +103,7 @@ describe('margin rules', () => {
   it('a deal from before the column (no costs) is 100% margin on its net value', () => {
     expect(marginOf({ netValue: 50 })).toEqual({ totalCost: 0, costCount: 0, margin: 50, marginPct: 1 })
   })
-  it('Real Profit counts only deals not Lost that have cost lines (Control Tower v6)', () => {
+  it('Real Profit counts only deals not Lost that have cost lines AND a net value', () => {
     const s = summarize([
       facts({ netValue: 100, costs: [{ id: 'a', label: '', amount: 30 }] }),
       facts({ netValue: 200, costs: [{ id: 'b', label: '', amount: 250 }] }),
@@ -111,11 +111,26 @@ describe('margin rules', () => {
       facts({ netValue: 40 }),
       facts({ stage: 'Incoming', netValue: 500 }),
       facts({ stage: 'Lost / Cancelled', netValue: 900, costs: [{ id: 'd', label: '', amount: 10 }] }),
+      facts({ stage: 'Lost / Cancelled', netValue: 0, costs: [{ id: 'e', label: '', amount: 7 }] }),
     ], TODAY)
-    expect(s.realCost).toBe(285)
-    expect(s.realProfit).toBe(70 + -50 + -5)
+    // The deal with costs but no net value is out of both sums (no phantom loss of 5).
+    expect(s.realCost).toBe(280)
+    expect(s.realProfit).toBe(70 + -50)
+    // "N of M deals have costs": N = not Lost with cost lines (net value or not), M = not Lost.
     expect(s.costDealCount).toBe(3)
     expect(s.costEligibleCount).toBe(5)
+    // The warning counts the excluded one only; a Lost deal without a net value never warns.
+    expect(s.costNoNetCount).toBe(1)
+  })
+  it('no warning when every deal with costs has a net value; nothing counted without costs', () => {
+    const s = summarize([
+      facts({ netValue: 100, costs: [{ id: 'a', label: '', amount: 30 }] }),
+      facts({ netValue: 40 }),
+      facts({ netValue: 0 }),
+    ], TODAY)
+    expect(s).toMatchObject({ realCost: 30, realProfit: 70, costDealCount: 1, costEligibleCount: 3, costNoNetCount: 0 })
+    const empty = summarize([facts({ netValue: 0, costs: [{ id: 'z', label: '', amount: 9 }] })], TODAY)
+    expect(empty).toMatchObject({ realCost: 0, realProfit: 0, costDealCount: 1, costNoNetCount: 1 })
   })
 })
 
@@ -198,6 +213,7 @@ describe('who receives the numbers (project access, server side)', () => {
     expect(body.summary.realProfit).toBe(60_000_000)
     expect(body.summary.costDealCount).toBe(1)
     expect(body.summary.costEligibleCount).toBe(1)
+    expect(body.summary.costNoNetCount).toBe(0)
 
     const patch = await dealPATCH(req('/api/projects/p1/pipeline/d1', { method: 'PATCH', body: JSON.stringify({ costs: [] }) }), dealCtx)
     expect(patch.status).toBe(403)
@@ -221,12 +237,14 @@ describe('who receives the numbers (project access, server side)', () => {
     expect(call.data.costs).toEqual([{ id: 'c1', label: 'Vendor sound', amount: 35_000_000 }])
   })
 
-  it("the export is Gerro's 33 columns in his order, with real numbers, dates and formats", async () => {
+  it("the export is Gerro's 33 columns in his order plus Diperbarui Oleh, with real numbers, dates and formats", async () => {
     h.level = 'VIEW'
     h.deals = [
-      row({ mainDate: new Date('2026-11-02T00:00:00Z'), nextAction: 'Kirim invoice', terms: [] }),
+      row({ mainDate: new Date('2026-11-02T00:00:00Z'), nextAction: 'Kirim invoice', terms: [], updatedBy: { id: 'u9', name: 'Test Editor', avatar: null } }),
       row({ id: 'd2', code: 'TZN-26002', netValue: 0, costs: [] }),
       row({ id: 'd3', code: 'TZN-26003', netValue: 10_000_000, costs: [{ id: 'x', label: 'Over', amount: 15_000_000 }] }),
+      row({ id: 'd4', code: 'TZN-26004', netValue: 50_000_000, costs: [] }),
+      row({ id: 'd5', code: 'TZN-26005', netValue: 0, costs: [{ id: 'y', label: 'Only cost', amount: 3_000_000 }] }),
     ]
     const res = await exportGET(req('/api/projects/p1/pipeline/export'), ctx)
     expect(res.status).toBe(200)
@@ -243,7 +261,9 @@ describe('who receives the numbers (project access, server side)', () => {
       'Status Deliverable', 'Risiko Deliverable', 'Status Pembayaran', 'Piutang Outstanding', 'Hari Overdue Maks',
       'Posisi Kas Bersih', 'Status Closing', 'Total Real Cost', 'Margin (Rp)', 'Margin (%)', 'Project Health', 'Tanggal Event',
       'Next Action', 'Tanggal Next Action', 'Blocker / Issue', 'Catatan', 'Dokumen & Link', 'Rincian Real Cost', 'Terakhir Diperbarui',
+      'Diperbarui Oleh',
     ])
+    expect(header).toHaveLength(34)
     const at = (name: string) => header.indexOf(name) + 1
     const r2 = ws.getRow(2)
     expect(r2.getCell(at('Nilai Kontrak')).value).toBe(120_000_000)
@@ -264,6 +284,18 @@ describe('who receives the numbers (project access, server side)', () => {
     expect(ws.getRow(3).getCell(at('Margin (Rp)')).value).toBeNull()
     expect(ws.getRow(3).getCell(at('Margin (%)')).value).toBeNull()
     expect(ws.getRow(4).getCell(at('Margin (Rp)')).value).toBe(-5_000_000)
+    // No cost lines → margin cells empty, not the net value and 100% (the board shows no margin either).
+    expect(ws.getRow(5).getCell(at('Nilai Bersih Project')).value).toBe(50_000_000)
+    expect(ws.getRow(5).getCell(at('Margin (Rp)')).value).toBeNull()
+    expect(ws.getRow(5).getCell(at('Margin (%)')).value).toBeNull()
+    // Costs but no net value → still empty.
+    expect(ws.getRow(6).getCell(at('Total Real Cost')).value).toBe(3_000_000)
+    expect(ws.getRow(6).getCell(at('Margin (Rp)')).value).toBeNull()
+    expect(ws.getRow(6).getCell(at('Margin (%)')).value).toBeNull()
+    // 34 · the last editor; blank when nobody is recorded.
+    expect(at('Diperbarui Oleh')).toBe(34)
+    expect(r2.getCell(34).value).toBe('Test Editor')
+    expect(ws.getRow(3).getCell(34).value).toBeNull()
     expect(ws.getRow(1).getCell(1).font?.bold).toBe(true)
     expect(ws.views[0]).toMatchObject({ state: 'frozen', xSplit: 2, ySplit: 1 })
     expect(ws.autoFilter).toBeTruthy()
@@ -280,8 +312,46 @@ describe('who receives the numbers (project access, server side)', () => {
     await wb.xlsx.load(await res.arrayBuffer())
     const header = (wb.getWorksheet('Master Project')!.getRow(1).values as unknown[]).slice(1)
     expect(header).toEqual(MASTER_COLUMNS.map((c) => c.en))
-    expect(header).toHaveLength(33)
+    expect(header).toHaveLength(34)
+    expect(header[32]).toBe('Last Updated')
+    expect(header[33]).toBe('Updated By')
     expect(wb.worksheets.map((w) => w.name)).toEqual(['Master Project', 'Payment Terms', 'Info'])
+  })
+
+  it('a deal without terms keeps its manual due date as one marked row on the terms sheet', async () => {
+    h.level = 'VIEW'
+    const term = {
+      id: 't1', dealId: 'd1', position: 0, label: 'DP', amount: 60_000_000, dueDate: new Date('2026-10-01T00:00:00Z'),
+      invoiceNo: 'INV-1', invoiceDate: null, paidAmount: 0, paidAt: null, note: '',
+      createdAt: new Date('2026-10-01T00:00:00Z'), updatedAt: new Date('2026-10-01T00:00:00Z'),
+    }
+    h.deals = [
+      row({ terms: [term], paymentDueDate: new Date('2026-12-31T00:00:00Z') }),
+      row({ id: 'd2', code: 'TZN-26002', terms: [], paymentDueDate: new Date('2026-11-20T00:00:00Z'), outstandingReceivable: 5 }),
+      row({ id: 'd3', code: 'TZN-26003', terms: [], paymentDueDate: null }),
+    ]
+    for (const lang of ['id', 'en'] as const) {
+      const res = await exportGET(req(`/api/projects/p1/pipeline/export?lang=${lang}`), ctx)
+      const wb = new ExcelJS.Workbook()
+      await wb.xlsx.load(await res.arrayBuffer())
+      const ws = wb.getWorksheet(lang === 'en' ? 'Payment Terms' : 'Termin Pembayaran')!
+      expect(ws.rowCount).toBe(3)
+      // The deal with terms: its terms only, its stored manual date is not added.
+      expect(ws.getRow(2).getCell(1).value).toBe('TZN-26001')
+      expect(ws.getRow(2).getCell(3).value).toBe('DP')
+      // The deal without terms: one row, marked, carrying the date; no amount or status of a term.
+      const manual = ws.getRow(3)
+      expect(manual.getCell(1).value).toBe('TZN-26002')
+      expect(manual.getCell(3).value).toBe(MANUAL_DUE_LABEL[lang])
+      expect(manual.getCell(4).value).toBeNull()
+      expect(manual.getCell(5).value).toEqual(new Date('2026-11-20T00:00:00.000Z'))
+      expect(manual.getCell(5).numFmt).toBe('dd mmm yyyy')
+      expect(manual.getCell(12).value).toBeNull()
+      const info = JSON.stringify(wb.getWorksheet('Info')!.getSheetValues())
+      expect(info).toContain(MANUAL_DUE_LABEL[lang])
+    }
+    expect(MANUAL_DUE_LABEL.id).toBe('Jatuh tempo manual (tanpa termin)')
+    expect(MANUAL_DUE_LABEL.en).toBe('Manual due date (no terms)')
   })
 
   it('file name: "<Board> — Pipeline <date>.xlsx", unsafe characters out, ASCII fallback', () => {

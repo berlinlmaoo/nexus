@@ -388,16 +388,20 @@ export type PipelineSummary = {
   deliverablesOnTrack: number
   deliverablesDone: number
   /**
-   * "Real Profit" (Control Tower v6, owner + Gerro 14 Oct 2026): only deals that are NOT Lost / Cancelled
-   * AND have at least one cost line count. realProfit = Σ (net value − real cost) over them (a deal with
-   * costs but no net value counts its costs as a loss); realCost = Σ real cost over them.
+   * "Real Profit" (Control Tower v6, owner + Gerro 14 Oct 2026; refined 14 Oct 2026): only deals that are
+   * NOT Lost / Cancelled, have at least one cost line AND have a net value (> 0) count.
+   * realProfit = Σ (net value − real cost) over them; realCost = Σ real cost over the same deals. A deal
+   * with costs but no net value is left out of both and counted in costNoNetCount instead (a warning on
+   * the tile), so a missing net value never shows up as a loss.
    */
   realCost: number
   realProfit: number
-  /** N of "N of M deals have costs": the counted deals. */
+  /** N of "N of M deals have costs": deals not Lost / Cancelled with at least one cost line. */
   costDealCount: number
   /** M: every deal that is not Lost / Cancelled. */
   costEligibleCount: number
+  /** Of those N, the deals with no net value: left out of Real Profit ("2 deals have costs but no net value"). */
+  costNoNetCount: number
 }
 
 /** The KPI strip, over every deal of the project (never the filtered view). The GM's renderInstruments. */
@@ -406,7 +410,7 @@ export function summarize(deals: PipelineDealFacts[], today: string): PipelineSu
     total: deals.length, openCount: 0, openValue: 0, weightedValue: 0, wonCount: 0, wonValue: 0, activeCount: 0,
     lostCount: 0, lostValue: 0, readyCount: 0, blockedCount: 0, receivable: 0, receivableOverdue: 0,
     criticalCount: 0, attentionCount: 0, deliverablesOnTrack: 0, deliverablesDone: 0,
-    realCost: 0, realProfit: 0, costDealCount: 0, costEligibleCount: 0,
+    realCost: 0, realProfit: 0, costDealCount: 0, costEligibleCount: 0, costNoNetCount: 0,
   }
   for (const d0 of deals) {
     const terms = termSummaryOf(d0.terms, today)
@@ -441,8 +445,11 @@ export function summarize(deals: PipelineDealFacts[], today: string): PipelineSu
       const m = marginOf(d0)
       if (m.costCount > 0) {
         s.costDealCount++
-        s.realCost += m.totalCost
-        s.realProfit += (d0.netValue || 0) - m.totalCost
+        if (m.margin === null) s.costNoNetCount++
+        else {
+          s.realCost += m.totalCost
+          s.realProfit += m.margin
+        }
       }
     }
   }
