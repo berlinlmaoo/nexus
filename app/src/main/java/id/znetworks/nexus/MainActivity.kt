@@ -36,6 +36,7 @@ class MainActivity : AppCompatActivity() {
         val container = (application as NexusApplication).container
         val gate = container.versionGate
         route(intent)
+        runTour(intent)
         setContent {
             val session by container.sessionStore.session.collectAsStateWithLifecycle()
             val gateState by gate.state.collectAsStateWithLifecycle()
@@ -79,6 +80,41 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         route(intent)
+        runTour(intent)
+    }
+
+    /**
+     * The UI tour (DEBUG only, scripts/ui-tour-android.sh): sign out, sign in on the DEV server, or open one screen
+     * (the shell opens [TourMode.go]); every outcome is a NEXUS_TOUR logcat line the script waits for.
+     */
+    private fun runTour(intent: Intent?) {
+        id.znetworks.nexus.core.tour.TourMode.read(intent, BuildConfig.DEBUG)
+        val tour = id.znetworks.nexus.core.tour.TourMode
+        if (!tour.active) return
+        val container = (application as NexusApplication).container
+        // The tour always talks to the DEV server: switched once (saved), then the script launches again.
+        if (tour.wantsDev && id.znetworks.nexus.core.net.NexusConfig.env != id.znetworks.nexus.core.net.ServerEnv.DEV) {
+            id.znetworks.nexus.core.net.ServerEnvStore.save(this, id.znetworks.nexus.core.net.ServerEnv.DEV)
+            tour.status("server-switched")
+            finishAffinity(); Runtime.getRuntime().exit(0)
+            return
+        }
+        when (tour.step) {
+            "signout" -> {
+                if (container.sessionStore.current != null) container.auth.signOut()
+                container.appScope.launch { kotlinx.coroutines.delay(2500); tour.status("signed-out") }
+            }
+            "login" -> container.appScope.launch {
+                if (container.sessionStore.current != null) { tour.status("signed-in"); return@launch }
+                try {
+                    container.auth.login(tour.email.orEmpty(), tour.password.orEmpty())
+                    kotlinx.coroutines.delay(2000); tour.status("signed-in")
+                } catch (e: Exception) {
+                    tour.status("login-failed " + (e.message ?: e::class.java.simpleName).replace('\n', ' '))
+                }
+            }
+            else -> if (container.sessionStore.current == null) tour.status("not-signed-in")
+        }
     }
 
     /**

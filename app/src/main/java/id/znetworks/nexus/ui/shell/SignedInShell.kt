@@ -229,7 +229,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
     // Android 13+: without this, the refused-tap notice and push never show. Asked once.
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= 33 &&
+        if (!id.znetworks.nexus.core.tour.TourMode.active && Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         container.announcements.refresh()
@@ -243,7 +243,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             Target.Inbox -> { openInbox(); container.router.consumed(t) }
             Target.Settings -> { goTab(Tab.MORE); container.router.consumed(t) }
             is Target.Tab -> { Tab.entries.firstOrNull { it.route == t.route }?.let(::goTab); container.router.consumed(t) }
-            is Target.Project -> { container.router.consumed(t); nav.navigate("project/${enc(t.id)}") }
+            is Target.Project -> { container.router.consumed(t); nav.navigate("project/${enc(t.id)}" + (t.view?.let { "?view=${enc(it)}" } ?: "")) }
             is Target.Task -> { container.router.consumed(t); nav.navigate("task/${enc(t.id)}") }
             is Target.Threads -> { container.router.consumed(t); nav.navigate(t.postId?.let { "threads?post=${enc(it)}" } ?: "threads") }
             is Target.Tickets -> { container.router.consumed(t); nav.navigate(t.ticketId?.let { "ticket/${enc(it)}" } ?: "tickets") }
@@ -296,7 +296,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
     AnnouncementDialog(container.announcements)
     // Once per version, after the location disclosure and announcements have had their turn.
     val version = container.identity.versionName
-    var whatsNew by rememberSaveable { mutableStateOf(WhatsNew.due(context, version)) }
+    var whatsNew by rememberSaveable { mutableStateOf(WhatsNew.due(context, version) && !id.znetworks.nexus.core.tour.TourMode.active) }
     if (whatsNew) WhatsNewSheet(version) { WhatsNew.seen(context, version); whatsNew = false }
 
     // Tablets and unfolded phones: the same five tabs as a rail on the left (PRD Phase 5); from 840 dp the
@@ -328,6 +328,16 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
         }
     }
     val shellLogout = rememberLogout(onSignOut) { nav.navigate("attendance") { launchSingleTop = true } }
+    // The UI tour (DEBUG): open the asked screen by its route, then say "settled" once it has had time to load.
+    val tourGo by id.znetworks.nexus.core.tour.TourMode.go.collectAsStateWithLifecycle()
+    LaunchedEffect(tourGo) {
+        val g = tourGo ?: return@LaunchedEffect
+        id.znetworks.nexus.core.tour.TourMode.consumed()
+        val tab = tabs.firstOrNull { it.route == g.route }
+        if (tab != null) goTab(tab) else nav.navigate(g.route) { launchSingleTop = true }
+        kotlinx.coroutines.delay(4500)
+        id.znetworks.nexus.core.tour.TourMode.status("settled ${g.id}")
+    }
     Scaffold(
         containerColor = Nx.colors.background,
         bottomBar = {
@@ -503,7 +513,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 MoreScreen(session, shellLogout, onItem = ::openItem, onSearch = { nav.navigate("search") { launchSingleTop = true } },
                     tabs = if (sidebar) emptySet() else tabs.map { it.route }.toSet())
             }
-            composable("project/{id}") { entry ->
+            composable("project/{id}?view={view}", arguments = listOf(androidx.navigation.navArgument("view") { nullable = true; defaultValue = null })) { entry ->
                 ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
                     onOpenSettings = { nav.navigate("project/${entry.arguments?.getString("id")}/settings") },
                     onOpenChat = { nav.navigate("chat/$it") },
@@ -511,6 +521,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onOpenDoc = { nav.navigate("doc/$it") },
                     onBuildForm = { form -> nav.navigate("form-builder/${entry.arguments?.getString("id")}" + (form?.let { "?form=$it" } ?: "")) },
                     onOpenProject = { nav.navigate("project/$it") }, onOpenFolder = { nav.navigate("folder/$it") },
+                    initialView = entry.arguments?.getString("view"),
                     onOpenGideon = { name -> nav.navigate("gideon?project=${enc(entry.arguments?.getString("id").orEmpty())}&name=${enc(name)}") }, onOpenProjects = { nav.popBackStack(); goTab(Tab.PROJECTS) })
             }
             composable("form-builder/{projectId}?form={form}", arguments = listOf(androidx.navigation.navArgument("form") { nullable = true; defaultValue = null })) {

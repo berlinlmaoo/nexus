@@ -472,6 +472,8 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                         /** A won deal's execution folder (PIPELINE §15). */ onOpenFolder: (String) -> Unit = {},
                         /** A fresh GIDEON chat about this project (its name for the context chip). */ onOpenGideon: (String) -> Unit = {},
                         /** Projects (a project that is gone). */ onOpenProjects: () -> Unit = onBack,
+                        /** A link's `?view=`: a layout (board, list, table, calendar, timeline), overview or a module tab (forms, sheet…). */
+                        initialView: String? = null,
                         vm: ProjectDetailViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
@@ -499,6 +501,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     var menuFor by remember { mutableStateOf<ProjectView?>(null) }
     var renameFor by remember { mutableStateOf<ProjectView?>(null) }
     var deleteViewFor by remember { mutableStateOf<ProjectView?>(null) }
+    var templateOpenedGuard by rememberSaveable { mutableStateOf(false) }
     var filterFor by remember { mutableStateOf<ProjectView?>(null) }
     // Access ended while this project was open (join-denied "revoked"): LiveRefresh refetches into the no-access
     // state; say why it changed (web f661bfb).
@@ -539,8 +542,26 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
             is PageTabItem.Module -> tab = item.tab
         }
     }
+    // A link's ?view= (the UI tour, nexus://projects/<id>?view=…): applied once, when the views are known.
+    var linkApplied by rememberSaveable { mutableStateOf(initialView == null) }
+    LaunchedEffect(views, tabs, s.detail?.id) {
+        if (linkApplied || s.detail == null || s.views == null) return@LaunchedEffect
+        linkApplied = true; templateOpenedGuard = true
+        val want = initialView!!.lowercase()
+        when (want) {
+            "overview" -> tab = ProjectTab.OVERVIEW
+            "forms" -> tab = ProjectTab.FORMS
+            "sheet", "spreadsheet" -> tab = ProjectTab.SHEET
+            "pages" -> tab = ProjectTab.PAGES
+            "chat" -> tab = ProjectTab.CHAT
+            "automations" -> tab = ProjectTab.AUTOMATIONS
+            else -> (views.firstOrNull { it.id == want } ?: views.firstOrNull { it.builtin == want } ?: views.firstOrNull { ViewsLogic.layoutOf(it) == want })
+                ?.let { v -> viewId = v.id; tab = layoutTab(ViewsLogic.layoutOf(v)) }
+        }
+    }
     // The open view gone (deleted, hidden, another device): the first view. Built from a template: its tab, once.
     var templateOpened by rememberSaveable { mutableStateOf(false) }
+    if (templateOpenedGuard) templateOpened = true
     LaunchedEffect(views, tabs, s.template, s.detail?.id) {
         if (s.detail == null) return@LaunchedEffect
         if (!s.taskProject) { tab = ProjectTabsLogic.fallback(tab, tabs); return@LaunchedEffect }
