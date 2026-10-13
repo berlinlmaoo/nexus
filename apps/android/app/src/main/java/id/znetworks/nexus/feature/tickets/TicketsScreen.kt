@@ -109,10 +109,13 @@ fun ticketStatusLabel(s: String) = stringResource(when (s) {
 
 @Composable
 fun ticketStatusColor(s: String) = when (s) {
-    "IN_REVIEW", "AWAITING_DECISION" -> Nx.colors.warning
+    // The web's chips (complaints.tsx STATUS): Open amber, Awaiting decision violet, In review sky, Resolved green, Closed slate.
+    "OPEN" -> Nx.colors.warning
+    "AWAITING_DECISION" -> Nx.colors.violetText
+    "IN_REVIEW" -> Nx.colors.blue
     "RESOLVED" -> Nx.colors.success
     "CLOSED" -> Nx.colors.mutedFg
-    else -> Nx.colors.blue
+    else -> Nx.colors.mutedFg
 }
 
 @Composable

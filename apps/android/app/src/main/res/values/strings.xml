@@ -586,9 +586,9 @@
     <string name="mytasks_empty_sub">Tasks assigned to you show up here, from a project or a form. Nothing is waiting on you right now — pick something up from a project.</string>
     <string name="mytasks_browse">Browse projects</string>
     <string name="mytasks_load_failed">Couldn\'t load.</string>
-    <string name="home_morning">Good Morning,</string>
-    <string name="home_afternoon">Good Afternoon,</string>
-    <string name="home_evening">Good Evening,</string>
+    <string name="home_morning">Good morning,</string>
+    <string name="home_afternoon">Good afternoon,</string>
+    <string name="home_evening">Good evening,</string>
     <string name="home_commander">Commander</string>
     <string name="home_attendance">Attendance</string>
     <string name="more_attendance_sub">Check in, check out, requests and the attendance board</string>
@@ -601,10 +601,10 @@
     <string name="home_att_rest">Rest day</string>
     <string name="home_att_not_yet">Not checked in yet</string>
     <string name="home_att_not_yet_shift">Not checked in yet · shift %1$s</string>
-    <string name="home_search">Search..</string>
+    <string name="home_search">Search…</string>
     <string name="home_stat_projects">Projects</string>
-    <string name="home_stat_mission">Task</string>
-    <string name="home_stat_quest">Quest</string>
+    <string name="home_stat_mission">Tasks</string>
+    <string name="home_stat_quest">Quests</string>
     <string name="home_no_projects">No projects yet.</string>
     <string name="home_no_tasks">No open tasks.</string>
     <string name="home_no_quests">No quests yet.</string>
@@ -618,8 +618,8 @@
     <string name="home_streak">Streak</string>
     <string name="home_quests_claimed">Quests claimed</string>
     <string name="home_total_xp">Total XP</string>
-    <string name="xp_rules">XP / Points Rules</string>
-    <string name="xp_rules_sub">Deductions, bonuses &amp; monthly reward tiers</string>
+    <string name="xp_rules">XP rules</string>
+    <string name="xp_rules_sub">What takes XP away and what adds it</string>
     <string name="xp_penalties">XP Penalties</string>
     <string name="xp_bonuses">XP Bonuses</string>
     <string name="xp_late">Late check-in</string>
@@ -878,8 +878,8 @@
     <string name="tk_closed">Closed</string>
     <string name="tk_all">All</string>
     <string name="tk_cat_attendance">Attendance</string>
-    <string name="tk_cat_exp">EXP / Gamification</string>
-    <string name="tk_cat_dayoff">Leave / Day-off</string>
+    <string name="tk_cat_exp">XP</string>
+    <string name="tk_cat_dayoff">Leave / day off</string>
     <string name="tk_cat_other">Other</string>
     <string name="tk_load_failed">Couldn\'t load tickets.</string>
     <string name="tk_empty">No tickets yet</string>
@@ -3010,7 +3010,7 @@
     <string name="ov_team">Who\'s working on what</string>
     <string name="ov_person">Person</string>
     <string name="ov_done_month">Done this month</string>
-    <string name="ov_lead">Lead</string>
+    <string name="ov_lead">Project Owner</string>
     <string name="ov_team_empty">No members or assignees yet. Add people to the project, then assign tasks to see the workload here.</string>
     <string name="ov_by_priority">Open tasks by priority</string>
     <string name="ov_no_priority">No priority</string>

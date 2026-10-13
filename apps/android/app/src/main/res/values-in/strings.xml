@@ -595,7 +595,7 @@
     <string name="home_att_rest">Hari libur</string>
     <string name="home_att_not_yet">Belum check in</string>
     <string name="home_att_not_yet_shift">Belum check in · shift %1$s</string>
-    <string name="home_search">Cari..</string>
+    <string name="home_search">Cari…</string>
     <string name="home_stat_projects">Proyek</string>
     <string name="home_stat_mission">Tugas</string>
     <string name="home_stat_quest">Quest</string>
@@ -612,8 +612,8 @@
     <string name="home_streak">Streak</string>
     <string name="home_quests_claimed">Quest klaim</string>
     <string name="home_total_xp">Total XP</string>
-    <string name="xp_rules">Aturan XP / Poin</string>
-    <string name="xp_rules_sub">Potongan, bonus, &amp; reward tier bulanan</string>
+    <string name="xp_rules">Aturan XP</string>
+    <string name="xp_rules_sub">Apa yang mengurangi dan menambah XP</string>
     <string name="xp_penalties">Potongan XP</string>
     <string name="xp_bonuses">Bonus XP</string>
     <string name="xp_late">Telat check-in</string>
@@ -872,8 +872,8 @@
     <string name="tk_closed">Ditutup</string>
     <string name="tk_all">Semua</string>
     <string name="tk_cat_attendance">Absensi</string>
-    <string name="tk_cat_exp">EXP / Gamifikasi</string>
-    <string name="tk_cat_dayoff">Cuti / Day-Off</string>
+    <string name="tk_cat_exp">XP</string>
+    <string name="tk_cat_dayoff">Cuti / day off</string>
     <string name="tk_cat_other">Lainnya</string>
     <string name="tk_load_failed">Gagal memuat ticket.</string>
     <string name="tk_empty">Belum ada tiket</string>
@@ -2959,7 +2959,7 @@
     <string name="ov_team">Siapa mengerjakan apa</string>
     <string name="ov_person">Orang</string>
     <string name="ov_done_month">Selesai bulan ini</string>
-    <string name="ov_lead">Lead</string>
+    <string name="ov_lead">Pemilik Project</string>
     <string name="ov_team_empty">Belum ada member atau assignee. Tambahkan orang ke project, lalu assign task untuk melihat beban kerjanya di sini.</string>
     <string name="ov_by_priority">Task terbuka menurut prioritas</string>
     <string name="ov_no_priority">Tanpa prioritas</string>
