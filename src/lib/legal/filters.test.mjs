@@ -119,4 +119,21 @@ test("field edits: presentation only, the file decides what exists", () => {
   assert.equal(out.length, 3)
 })
 
+test("form values: checked and normalized before anything is allocated", () => {
+  const fields = [
+    { name: "TANGGAL_DOKUMEN", label: "", type: "date", required: true },
+    { name: "NAMA", label: "", type: "text", required: true },
+    { name: "HONOR", label: "", type: "money", required: true },
+    { name: "JENIS", label: "", type: "select", required: false, options: ["A", "B"] },
+    { name: "MATERAI", label: "", type: "boolean", required: false },
+    { name: "BARANG", label: "", type: "list", required: true, columns: [{ name: "NAMA_BARANG", label: "", type: "text", required: true }, { name: "JUMLAH", label: "", type: "number", required: false }] },
+  ]
+  const ok = F.validateFormValues(fields, { TANGGAL_DOKUMEN: "2026-10-14", NAMA: "  Budi ", HONOR: "25.000.000", MATERAI: true, BARANG: [{ NAMA_BARANG: "Speaker", JUMLAH: "2" }, { NAMA_BARANG: "", JUMLAH: "" }], EXTRA: "x" })
+  assert.deepEqual(ok.errors, {})
+  assert.deepEqual(ok.values, { TANGGAL_DOKUMEN: "2026-10-14", NAMA: "Budi", HONOR: 25000000, MATERAI: true, BARANG: [{ NAMA_BARANG: "Speaker", JUMLAH: 2 }] })
+  const bad = F.validateFormValues(fields, { TANGGAL_DOKUMEN: "2026-13-01", HONOR: "abc", JENIS: "C", BARANG: [{ JUMLAH: "3" }] })
+  assert.deepEqual(bad.errors, { TANGGAL_DOKUMEN: "Not a valid date", NAMA: "Required", HONOR: "Not a number", JENIS: "Pick one of the choices", "BARANG.0.NAMA_BARANG": "Required" })
+  assert.equal(F.validateFormValues(fields, { BARANG: [] }).errors.BARANG, "Add at least one row")
+})
+
 console.log(`legal filters: ${passed} passed`)

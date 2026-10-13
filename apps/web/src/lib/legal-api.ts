@@ -125,3 +125,117 @@ export const legalTemplatesApi = {
   },
   fileUrl: (id: string, version: number) => `/api/legal/templates/${encodeURIComponent(id)}/versions/${version}/file`,
 };
+
+// ── Documents ──
+export const LEGAL_STATUSES = ["DRAFT", "FINAL", "SENT", "SIGNED", "VOID"] as const;
+export type LegalStatus = (typeof LEGAL_STATUSES)[number];
+
+export type LegalDocumentSummary = {
+  id: string;
+  number: string;
+  docType: LegalDocType;
+  title: string;
+  counterparty: string;
+  /** YYYY-MM-DD */
+  docDate: string | null;
+  status: LegalStatus;
+  source: "GENERATED" | "UPLOADED";
+  company: { id: string; code: string; name: string };
+  project: { id: string; name: string } | null;
+  deal: { id: string; code: string; name: string; projectId: string } | null;
+  currentVersion: number;
+  createdBy: LegalPerson | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type LegalDocumentVersion = {
+  version: number;
+  kind: "GENERATED" | "MANUAL" | "GIDEON" | "UPLOAD" | "RESTORE";
+  fileName: string;
+  mimeType: string;
+  size: number;
+  hasDocx: boolean;
+  hasPdf: boolean;
+  hasFile: boolean;
+  note: string;
+  changes: unknown;
+  author: LegalPerson | null;
+  createdAt: string;
+};
+
+export type LegalDocument = LegalDocumentSummary & {
+  notes: string;
+  series: { id: string; key: string; label: string } | null;
+  template: { id: string; name: string; version: number } | null;
+  fieldValues: Record<string, unknown>;
+  finalVersion: number | null;
+  hasNumber: boolean;
+  updatedBy: LegalPerson | null;
+  versions: LegalDocumentVersion[];
+};
+
+export type PreparedDocument = {
+  template: { id: string; name: string; docType: LegalDocType; version: number };
+  company: { id: string; code: string; name: string; hasKop: boolean };
+  series: { id: string; key: string; label: string; format: string; resetPeriod: "YEAR" | "MONTH" };
+  fields: TemplateField[];
+  numberPreview: string;
+};
+
+export type ArchiveQuery = {
+  q?: string; companyId?: string; docType?: string; status?: string; source?: string;
+  projectId?: string; dealId?: string; from?: string; to?: string; sort?: string; page?: number; limit?: number;
+};
+
+/** A 422 from generating carries `fieldErrors` by field name ("ROWS.0.CELL" for a table cell). */
+export function fieldErrorsOf(error: unknown): Record<string, string> {
+  const payload = (error as { payload?: { fieldErrors?: unknown } })?.payload;
+  return payload?.fieldErrors && typeof payload.fieldErrors === "object" ? (payload.fieldErrors as Record<string, string>) : {};
+}
+
+const docUrl = (id: string) => `/api/legal/documents/${encodeURIComponent(id)}`;
+
+export const legalDocsApi = {
+  list: (q: ArchiveQuery) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== "") qs.set(k, String(v));
+    return apiFetch<{ documents: LegalDocumentSummary[]; total: number; page: number; pageSize: number }>(`/api/legal/documents?${qs}`);
+  },
+  get: (id: string) => apiFetch<{ document: LegalDocument }>(docUrl(id)),
+  prepare: (input: { templateId: string; companyId?: string | null; values?: Record<string, unknown> }) =>
+    apiFetch<PreparedDocument>("/api/legal/documents/prepare", { method: "POST", body: JSON.stringify(input) }),
+  generate: (input: { templateId: string; companyId?: string | null; values: Record<string, unknown>; title?: string; counterparty?: string; projectId?: string | null; dealId?: string | null }) =>
+    apiFetch<{ id: string; number: string; pdfError: string | null }>("/api/legal/documents", { method: "POST", body: JSON.stringify(input) }),
+  update: (id: string, patch: Partial<{ title: string; counterparty: string; status: LegalStatus; notes: string; projectId: string | null; dealId: string | null; finalVersion: number | null; number: string; docType: string; docDate: string | null }>) =>
+    apiFetch<{ document: LegalDocument }>(docUrl(id), { method: "PATCH", body: JSON.stringify(patch) }),
+  remove: (id: string) => apiFetch<{ ok: true }>(docUrl(id), { method: "DELETE" }),
+  fileUrl: (id: string, version: number, format: "docx" | "pdf" | "original", inline = false) =>
+    `${docUrl(id)}/versions/${version}/file?format=${format}${inline ? "&inline=1" : ""}`,
+  makePdf: (id: string, version: number) => apiFetch<{ ok: true }>(`${docUrl(id)}/versions/${version}/pdf`, { method: "POST" }),
+};
+
+// ── Settings ──
+export const legalSettingsApi = {
+  updateCompany: (id: string, patch: Partial<{ name: string; legalName: string; address: string; code: string; active: boolean }>) =>
+    apiFetch<{ company: LegalCompany }>(`/api/legal/companies/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  uploadKop: (id: string, file: File) => {
+    const fd = new FormData();
+    fd.set("file", file);
+    return apiFetch<{ company: LegalCompany }>(`/api/legal/companies/${encodeURIComponent(id)}/kop`, { method: "POST", body: fd });
+  },
+  kopUrl: (id: string) => `/api/legal/companies/${encodeURIComponent(id)}/kop`,
+  addSeries: (companyId: string, input: { docType: string; label: string; format: string; resetPeriod: "YEAR" | "MONTH" }) =>
+    apiFetch<{ series: LegalSeries }>(`/api/legal/companies/${encodeURIComponent(companyId)}/series`, { method: "POST", body: JSON.stringify(input) }),
+  series: (id: string) => apiFetch<{ series: LegalSeries; issued: number; next: string }>(`/api/legal/series/${encodeURIComponent(id)}`),
+  updateSeries: (id: string, patch: Partial<{ label: string; format: string; resetPeriod: "YEAR" | "MONTH"; active: boolean }>) =>
+    apiFetch<{ series: LegalSeries }>(`/api/legal/series/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(patch) }),
+};
+
+export const legalUploadApi = {
+  upload: (input: { file: File; companyId: string; docType: string; title: string; number?: string; counterparty?: string; docDate?: string; status?: LegalStatus; notes?: string; projectId?: string | null; dealId?: string | null }) => {
+    const fd = new FormData();
+    for (const [k, v] of Object.entries(input)) if (v !== undefined && v !== null && v !== "") fd.set(k, v as string | Blob);
+    return apiFetch<{ id: string; pdfError: string | null }>("/api/legal/documents/upload", { method: "POST", body: fd });
+  },
+};

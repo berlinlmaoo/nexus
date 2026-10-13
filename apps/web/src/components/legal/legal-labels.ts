@@ -41,3 +41,31 @@ export function formatBytes(n: number): string {
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
+
+export function statusLabel(status: string): string {
+  const labels: Record<string, string> = { DRAFT: t("Draft"), FINAL: t("Final"), SENT: t("Sent"), SIGNED: t("Signed"), VOID: t("Void") };
+  return labels[status] ?? status;
+}
+
+/** Badge colours by status: a quiet draft, a green signed, a struck-through void. */
+export function statusClass(status: string): string {
+  switch (status) {
+    case "FINAL": return "bg-blue-500/10 text-blue-700 dark:text-blue-300";
+    case "SENT": return "bg-amber-500/10 text-amber-700 dark:text-amber-300";
+    case "SIGNED": return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+    case "VOID": return "bg-muted text-muted-foreground line-through";
+    default: return "bg-muted text-foreground";
+  }
+}
+
+export function versionKindLabel(kind: string): string {
+  const labels: Record<string, string> = { GENERATED: t("Generated"), MANUAL: t("Edited"), GIDEON: "GIDEON", UPLOAD: t("Uploaded"), RESTORE: t("Restored") };
+  return labels[kind] ?? kind;
+}
+
+/** "2026-09-30" → "30 Sep 2026" in the interface language. */
+export function fmtDay(day: string | null | undefined, lang: "id" | "en"): string {
+  if (!day) return "—";
+  const d = new Date(`${day}T12:00:00Z`);
+  return d.toLocaleDateString(lang === "id" ? "id-ID" : "en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}

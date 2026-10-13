@@ -99,6 +99,17 @@ export function formatProblem(format: string): string | null {
   return null
 }
 
+/** formatProblem, plus what the reset period needs: a yearly counter must print the year, a monthly one the
+ *  month too — otherwise next year's (or month's) 001 prints exactly like this one's. */
+export function seriesProblem(format: string, resetPeriod: string): string | null {
+  const p = formatProblem(format)
+  if (p) return p
+  if (!isResetPeriod(resetPeriod)) return "Reset must be YEAR or MONTH"
+  if (!/\{(YYYY|YY)\}/.test(format)) return "Format must contain the year ({YYYY} or {YY})"
+  if (resetPeriod === "MONTH" && !/\{(ROMAWI|MM|BLN)\}/.test(format)) return "A monthly counter needs the month in the format ({ROMAWI}, {MM} or {BLN})"
+  return null
+}
+
 /** A form value as it may appear between the slashes of a number. */
 export function numberSegment(raw: string): string {
   return raw

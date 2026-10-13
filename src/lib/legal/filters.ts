@@ -252,3 +252,76 @@ export function applyFieldEdits(current: TemplateField[], edited: unknown): Temp
     return next
   })
 }
+
+// ── Form values ─────────────────────────────────────────────────────────────────────────────────────
+
+export type FormValues = Record<string, unknown>
+export type FieldErrors = Record<string, string>
+
+const MAX_TEXT = 5000
+const MAX_LONGTEXT = 20000
+const MAX_ROWS = 200
+
+const isEmpty = (v: unknown) => v == null || (typeof v === "string" && v.trim() === "") || (Array.isArray(v) && v.length === 0)
+
+/**
+ * Check and normalize what a form sent, before anything is allocated: dates as YYYY-MM-DD, amounts as
+ * numbers, lists as rows of their columns (empty rows dropped). Unknown keys are dropped. Errors are keyed by
+ * field name ("BARANG.2.NAMA_BARANG" for a cell).
+ */
+export function validateFormValues(fields: TemplateField[], input: unknown, prefix = ""): { values: FormValues; errors: FieldErrors } {
+  const src = input && typeof input === "object" && !Array.isArray(input) ? (input as Record<string, unknown>) : {}
+  const values: FormValues = {}
+  const errors: FieldErrors = {}
+  for (const f of fields) {
+    const key = `${prefix}${f.name}`
+    const raw = src[f.name]
+    if (f.type === "list") {
+      const rows = Array.isArray(raw) ? raw : []
+      if (rows.length > MAX_ROWS) { errors[key] = `At most ${MAX_ROWS} rows`; continue }
+      const out: FormValues[] = []
+      rows.forEach((row) => {
+        const cells = row && typeof row === "object" ? (row as Record<string, unknown>) : {}
+        if ((f.columns ?? []).every((c) => isEmpty(cells[c.name]) || cells[c.name] === false)) return
+        const r = validateFormValues(f.columns ?? [], cells, `${key}.${out.length}.`)
+        Object.assign(errors, r.errors)
+        out.push(r.values)
+      })
+      if (f.required && out.length === 0) errors[key] = "Add at least one row"
+      values[f.name] = out
+      continue
+    }
+    if (f.type === "boolean") {
+      values[f.name] = raw === true || raw === "true"
+      continue
+    }
+    if (isEmpty(raw)) {
+      if (f.required) errors[key] = "Required"
+      continue
+    }
+    const s = String(raw).trim()
+    switch (f.type) {
+      case "date":
+        if (!parseIsoDate(s)) errors[key] = "Not a valid date"
+        else values[f.name] = s.slice(0, 10)
+        break
+      case "number":
+      case "money": {
+        const n = parseAmount(s)
+        if (n == null) errors[key] = "Not a number"
+        else values[f.name] = n
+        break
+      }
+      case "select":
+        if (f.options?.length && !f.options.includes(s)) errors[key] = "Pick one of the choices"
+        else values[f.name] = s
+        break
+      case "longtext":
+        values[f.name] = s.slice(0, MAX_LONGTEXT)
+        break
+      default:
+        values[f.name] = s.slice(0, MAX_TEXT)
+    }
+  }
+  return { values, errors }
+}

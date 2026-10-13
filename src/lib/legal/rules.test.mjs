@@ -107,6 +107,13 @@ test("format validation: {SEQ} required, braces must close", () => {
   assert.equal(R.formatProblem("{SEQ:3}/{CO}/{ROMAWI}/{YYYY}"), null)
   assert.equal(R.formatProblem(""), "Format is empty")
 })
+test("series: the counter's reset period must be visible in the number", () => {
+  assert.equal(R.seriesProblem("{SEQ}/X/{YYYY}", "YEAR"), null)
+  assert.equal(R.seriesProblem("{SEQ}/X/{ROMAWI}", "YEAR"), "Format must contain the year ({YYYY} or {YY})")
+  assert.match(R.seriesProblem("{SEQ}/X/{YYYY}", "MONTH"), /monthly counter/)
+  assert.equal(R.seriesProblem("INV/{CO}/{BLN}/{YY}/{SEQ}", "MONTH"), null)
+  assert.equal(R.seriesProblem("{SEQ}/{YYYY}", "WEEK"), "Reset must be YEAR or MONTH")
+})
 test("Jakarta month: 31 Oct 20:00 UTC is already November", () => {
   assert.deepEqual(R.jakartaYearMonth(new Date("2026-10-31T20:00:00Z")), { year: 2026, month: 11 })
   assert.deepEqual(R.jakartaYearMonth(new Date("2026-12-31T16:59:00Z")), { year: 2026, month: 12 })

@@ -59,3 +59,10 @@ export async function legalGate(): Promise<LegalGate> {
   }
   return { ok: true, actor }
 }
+
+/** Company details, kops and numbering formats are changed only by those who may invite (the owner and the
+ *  BoD members he invited): a wrong format or kop lands on every document after it. */
+export function settingsForbidden(actor: LegalActor): NextResponse | null {
+  if (actor.power !== "NONE") return null
+  return NextResponse.json({ error: "Only the owner or a BoD member with Legal can change Legal settings" }, { status: 403 })
+}
