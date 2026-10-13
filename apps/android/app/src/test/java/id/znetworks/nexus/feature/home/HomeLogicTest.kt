@@ -35,8 +35,11 @@ class HomeLogicTest {
              "quests":[{"key":"a","title":"A","progress":2,"target":2,"xpReward":20,"claimed":true,"claimable":false},
                        {"key":"b","title":"B","progress":2,"target":2,"xpReward":10,"claimable":true}]}""")
         assertEquals(1, g.questsDone)
-        assertEquals(0.5f, g.levelFraction, 0.001f)
-        assertEquals(0.5f, g.copy(xp = g.xp.copy(pct = null)).levelFraction, 0.001f)
-        assertEquals(0.25f, g.copy(xp = g.xp.copy(pct = 0.25)).levelFraction, 0.001f)
+        // iOS / web: total XP over the next level's floor, whatever pct says (dev, 14 Oct: 1,000 / 1,150 drew an empty bar).
+        assertEquals(1250f / 1500f, g.levelFraction, 0.001f)
+        assertEquals(1000f / 1150f, g.copy(xp = g.xp.copy(totalXp = 1000, floor = 1000, nextFloor = 1150, pct = 0.0)).levelFraction, 0.001f)
+        assertEquals(1f, g.copy(xp = g.xp.copy(nextFloor = null)).levelFraction, 0.001f)
+        assertEquals("1,250 XP / 1,500", g.xpLabel(java.util.Locale.UK))
+        assertEquals("1.250 XP", g.copy(xp = g.xp.copy(nextFloor = null)).xpLabel(java.util.Locale.forLanguageTag("id-ID")))
     }
 }

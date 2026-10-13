@@ -36,16 +36,14 @@ data class Quest(
 @Serializable
 data class Gamification(val xp: XpInfo = XpInfo(), val streak: Streak = Streak(), val quests: List<Quest> = emptyList()) {
     val questsDone: Int get() = quests.count { it.claimed == true }
-    /** 0..1 for the bar; the server's pct may be 0..1 or 0..100. */
+    /** 0..1 for the bar, as iOS / web: total XP over the next level's floor (1 at the top level). */
     val levelFraction: Float get() {
-        val p = xp.pct ?: run {
-            val floor = xp.floor ?: return 0f
-            val next = xp.nextFloor ?: return 1f
-            if (next <= floor) return 1f
-            (xp.totalXp - floor).toDouble() / (next - floor)
-        }
-        return (if (p > 1.0) p / 100.0 else p).toFloat().coerceIn(0f, 1f)
+        val next = xp.nextFloor?.takeIf { it > 0 } ?: return 1f
+        return (xp.totalXp.toDouble() / next).toFloat().coerceIn(0f, 1f)
     }
+    /** "1,000 XP / 1,150" (web): the next level's floor after the slash; nothing after it at the top. */
+    fun xpLabel(locale: java.util.Locale): String =
+        "%,d XP".format(locale, xp.totalXp) + (xp.nextFloor?.takeIf { it > 0 }?.let { " / " + "%,d".format(locale, it) } ?: "")
 }
 
 @Serializable

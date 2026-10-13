@@ -600,7 +600,7 @@
     <string name="home_att_out_queued">Check-out saved, waiting to send</string>
     <string name="home_att_rest">Rest day</string>
     <string name="home_att_not_yet">Not checked in yet</string>
-    <string name="home_att_not_yet_shift">Not checked in yet · shift %1$s</string>
+    <string name="home_att_not_yet_shift">Not checked in yet · %1$s</string>
     <string name="home_search">Search…</string>
     <string name="home_stat_projects">Projects</string>
     <string name="home_stat_mission">Tasks</string>

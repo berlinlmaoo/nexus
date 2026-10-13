@@ -594,7 +594,7 @@
     <string name="home_att_out_queued">Check out tersimpan, menunggu terkirim</string>
     <string name="home_att_rest">Hari libur</string>
     <string name="home_att_not_yet">Belum check in</string>
-    <string name="home_att_not_yet_shift">Belum check in · shift %1$s</string>
+    <string name="home_att_not_yet_shift">Belum check in · %1$s</string>
     <string name="home_search">Cari…</string>
     <string name="home_stat_projects">Proyek</string>
     <string name="home_stat_mission">Tugas</string>

@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.home
 
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material.icons.filled.Storage
 import android.app.Application
@@ -299,7 +300,8 @@ private fun AttendanceCard(s: HomeState, onOpen: () -> Unit) {
     val c = Nx.colors
     val rec = s.today?.today
     val hhmm = { iso: String? -> iso?.let { runCatching { LocalNotifier.hhmm(Instant.parse(it).toEpochMilli()) }.getOrNull() } ?: "—" }
-    val shift = s.today?.myShift?.let { sh -> if (sh.startTime != null && sh.endTime != null) "${sh.startTime}–${sh.endTime}" else null }
+    // iOS attendanceLine: "Flexi 12:00–15:00" for a flexi shift.
+    val shift = s.today?.myShift?.let { sh -> if (sh.startTime != null && sh.endTime != null) (if (sh.flexi == true) "Flexi " else "") + "${sh.startTime}–${sh.endTime}" else null }
     val (line, tone) = when {
         s.today == null && !s.loaded -> stringResource(R.string.home_att_loading) to c.mutedFg
         s.today?.pendingCheckout != null -> stringResource(R.string.home_att_pending_checkout) to c.warning
@@ -308,8 +310,10 @@ private fun AttendanceCard(s: HomeState, onOpen: () -> Unit) {
         rec?.hasCheckedIn == true -> stringResource(R.string.home_att_in, hhmm(rec.checkInAt)) to c.success
         s.checkInQueued -> stringResource(R.string.home_att_in_queued) to c.warning
         s.today?.isRestDayToday == true -> stringResource(R.string.home_att_rest) to c.mutedFg
-        else -> (if (shift != null) stringResource(R.string.home_att_not_yet_shift, shift) else stringResource(R.string.home_att_not_yet)) to c.violetText
+        else -> (if (shift != null) stringResource(R.string.home_att_not_yet_shift, shift) else stringResource(R.string.home_att_not_yet)) to c.warning
     }
+    // The action iOS writes on the card: "Check in" while nobody has; otherwise a chevron.
+    val notIn = s.today != null && rec?.hasCheckedIn != true && !s.checkInQueued && s.today?.isRestDayToday != true && s.today?.pendingCheckout == null
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(18.dp))
             .clickable(onClick = onOpen).padding(14.dp),
@@ -323,7 +327,8 @@ private fun AttendanceCard(s: HomeState, onOpen: () -> Unit) {
             Text(stringResource(R.string.home_attendance), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = c.foreground)
             Text(line, fontSize = 13.sp, color = tone, fontWeight = FontWeight.SemiBold)
         }
-        Text(stringResource(R.string.open), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.violetText)
+        if (notIn) Text(stringResource(R.string.home_att_check_in), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.violetText)
+        else Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -355,7 +360,7 @@ private fun LevelCard(g: Gamification?, onOpen: () -> Unit) {
                 LinearProgressIndicator(progress = { g?.levelFraction ?: 0f }, color = c.foreground, trackColor = c.muted,
                     modifier = Modifier.weight(1f).height(6.dp).clip(CircleShape))
                 Spacer(Modifier.width(8.dp))
-                Text(g?.let { "%,d XP".format(Locale.getDefault(), it.xp.totalXp) } ?: "… XP", fontSize = 10.sp, color = c.mutedFg)
+                Text(g?.xpLabel(Locale.getDefault()) ?: "… XP", fontSize = 10.sp, color = c.mutedFg)
             }
         }
     }

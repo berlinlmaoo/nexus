@@ -317,4 +317,5 @@
     <string name="of_none">Belum ada office</string>
     <string name="of_none_sub">Office itu titik di peta dengan radius di sekelilingnya. Staff hanya bisa check-in di dalam radius itu, jadi belum ada yang bisa tercatat sebelum office pertama dibuat.</string>
     <string name="vault_folder_short">Folder</string>
+    <string name="home_att_check_in">Check in</string>
 </resources>

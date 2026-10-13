@@ -335,4 +335,5 @@
     <string name="of_none">No offices yet</string>
     <string name="of_none_sub">An office is a point on the map with a radius around it. Staff can only check in inside that radius, so nothing can be recorded until the first office exists.</string>
     <string name="vault_folder_short">Folder</string>
+    <string name="home_att_check_in">Check in</string>
 </resources>
