@@ -1,0 +1,560 @@
+import SwiftUI
+import PhotosUI
+import UIKit
+
+/// Port of the web ProjectSettingsDrawer: identity, customize flags, custom fields,
+/// members, and danger zone. Reached from the ⚙︎ in the project header.
+struct ProjectSettingsView: View {
+    let projectId: String
+    let detail: ProjectDetail
+    var onChange: () async -> Void = {}
+    var onDeleted: () -> Void = {}
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AuthStore.self) private var auth
+
+    // identity
+    @State private var name = ""
+    @State private var desc = ""
+    /// The stored icon as the server has it. Only its photo is drawn (ProjectMark): emoji and named
+    /// icons are ignored since 11 Oct 2026, and there is no field to type one any more.
+    @State private var icon: String?
+    @State private var pickedPhoto: PhotosPickerItem?
+    @State private var photoBusy = false
+    @State private var photoError: String?
+    @State private var photoProgress = UploadProgress()
+    @State private var savingIdentity = false
+    @State private var identitySaved = false
+
+    // flags
+    @State private var hiddenTabs: [String] = []
+    @State private var savingTabs = false
+    @State private var autoAssign = false
+    @State private var autoIds: Set<String> = []
+    @State private var viewerWsRole: String?
+
+    // fields & members
+    @State private var fields: [CustomField] = []
+    @State private var roster: [WorkspaceRoster.Member] = []
+    @State private var projectMembers: [ProjectDetail.ProjectMember] = []
+    @State private var showAddMembers = false
+
+    // danger
+    @State private var confirmDelete = false
+    @State private var busy = false
+    @State private var toast: String?
+
+    /// Full access (Notion-style levels, owner 13 Oct 2026): the server says what this viewer may do here
+    /// (viewerAccessLevel / viewerCanManage, ProjectAccess.swift). A Staff Project Owner manages their
+    /// project; a Manager who is only a member does not. The org-role guess is only for an older server.
+    private var serverSaysAccess: Bool { detail.viewerAccessLevel != nil || detail.viewerCanManage != nil }
+    private var canManage: Bool {
+        if serverSaysAccess { return detail.canManageProject }
+        return ["MANAGER", "BOD", "ONE_ABOVE_ALL"].contains(viewerWsRole ?? "")
+    }
+    /// Until the role is known nothing is editable (and no read-only line flashes either).
+    private var accessKnown: Bool { serverSaysAccess || viewerWsRole != nil }
+    private var canManageTabs: Bool { canManage }
+    private var isBoD: Bool { ["BOD", "ONE_ABOVE_ALL"].contains(viewerWsRole ?? "") }
+    @State private var levelBusy: String?
+    @State private var addLevel: ProjectAccessLevel = .edit
+    /// The member whose Remove waits for a yes (QA BoD R2 N01: it takes their access away at once).
+    @State private var confirmRemove: ProjectDetail.ProjectMember?
+    private var hasPhoto: Bool { ProjectMark.isPhoto(icon) }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if accessKnown && !canManage { readOnlyNote }
+                    identityCard
+                    customizeCard
+                    // A Pipeline Dashboard shows its pipeline, not task tabs: nothing to choose (owner,
+                    // 9 Oct 2026, as on the web).
+                    // A Pipeline or Outlet Sales Dashboard has fixed tabs (as on the web).
+                    if detail.type != "PIPELINE" && detail.type != "OUTLET_SALES" { tabsCard }
+                    fieldsCard
+                    membersCard
+                    if canManage || isBoD { dangerCard }
+                }
+                .padding(16)
+            }
+            .background(NX.background.ignoresSafeArea())
+            .navigationTitle(T("Project settings")).navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(T("Close")) { dismiss() } } }
+            .overlay(alignment: .bottom) { if let toast { toastView(toast) } }
+            .alert(removePrompt, isPresented: removeAlertShown) {
+                Button(T("Remove"), role: .destructive) {
+                    if let m = confirmRemove { Task { await removeMember(m) } }
+                    confirmRemove = nil
+                }
+                Button(T("Cancel"), role: .cancel) { confirmRemove = nil }
+            }
+            .onAppear(perform: hydrate)
+            .task { await load() }
+        }
+    }
+
+    private var removeAlertShown: Binding<Bool> {
+        Binding(get: { confirmRemove != nil }, set: { if !$0 { confirmRemove = nil } })
+    }
+    private var removePrompt: String {
+        let name = (confirmRemove?.user?.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty { return T("Remove them from this project? They lose access right away.") }
+        return String(format: T("Remove %@ from this project? They lose access right away."), name)
+    }
+
+    // MARK: access
+
+    /// One line saying why everything below is read-only and who can change it (web settings drawer).
+    private var readOnlyNote: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "lock.fill").font(.system(size: 12)).foregroundStyle(NX.mutedFg).padding(.top, 2)
+            Text(String(format: T("You have %@ here. Only people with Full access (the Project Owner and the BoD) can change the project's name, photo, status, auto assign and members."),
+                        (detail.viewerLevel ?? .edit).label))
+                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+        .background(NX.muted.opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+    }
+
+    // MARK: identity
+
+    private var identityCard: some View {
+        card("Identitas") {
+            field(T("Project name")) { TextField(T("Name"), text: $name).textFieldStyle(.plain).font(NXFont.text(15)) }
+            field("Deskripsi") { TextField("Deskripsi singkat", text: $desc, axis: .vertical).lineLimit(2...4).font(NXFont.text(14)) }
+            // No emoji and no colour any more (owner, 11 Oct 2026): the project's photo, or the Tasks icon.
+            field(T("Photo")) { photoRow }
+            Button { Task { await saveIdentity() } } label: {
+                Text(savingIdentity ? "Menyimpan…" : (identitySaved ? "Tersimpan ✓" : T("Save identity"))).font(NXFont.text(14, .bold))
+            }.buttonStyle(NexusPrimaryButton()).disabled(savingIdentity || !canManage)
+        }
+        .disabled(!canManage)
+    }
+
+    /// The mark as it will be drawn, and the photo actions.
+    /// Uploading and removing save at once, like the web drawer; "Save identity" never sends `icon`.
+    private var photoRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                ProjectMark(icon: icon, color: nil, size: 48)
+                VStack(alignment: .leading, spacing: 6) {
+                    PhotosPicker(selection: $pickedPhoto, matching: .images, photoLibrary: .shared()) {
+                        HStack(spacing: 6) {
+                            if photoBusy { ProgressView().controlSize(.small) }
+                            Text(hasPhoto ? T("Change photo") : T("Add photo"))
+                        }
+                        .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
+                    }
+                    .disabled(photoBusy)
+                    if hasPhoto {
+                        Button(T("Remove photo")) { Task { await removePhoto() } }
+                            .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                            .disabled(photoBusy)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            if !hasPhoto {
+                Text(T("Without a photo, the project shows the default task icon."))
+                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            }
+            if let photoError {
+                Text(photoError).font(NXFont.text(11)).foregroundStyle(NX.danger)
+            }
+            if photoProgress.isActive {
+                UploadProgressBar(progress: photoProgress).frame(maxWidth: 180)
+            }
+        }
+        .onChange(of: pickedPhoto) { _, item in
+            guard let item else { return }
+            Task { await uploadPhoto(item) }
+        }
+    }
+
+    // MARK: customize flags
+
+    /// Only Auto assign is left (owner, 11 Oct 2026). Task duplicate mode is always on, and P&L,
+    /// Finance, "proof before Done" and calendar mode are gone; the server ignores writes of those keys.
+    private var customizeCard: some View {
+        card("Customize") {
+            flagToggle("Auto assign", T("Auto-assign the selected members to new tasks in this project."), $autoAssign) {
+                if autoAssign && autoIds.isEmpty { autoAssign = false; show(T("Pick at least one member first.")); return }
+                await patch(["autoAssignEnabled": autoAssign, "autoAssignAssigneeIds": Array(autoIds)])
+            }
+            if autoAssign {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(T("Auto-assign to:")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                    ForEach(projectMembers) { m in
+                        Button {
+                            if autoIds.contains(m.uid) { autoIds.remove(m.uid) } else { autoIds.insert(m.uid) }
+                            Task { await patch(["autoAssignEnabled": true, "autoAssignAssigneeIds": Array(autoIds)]) }
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: autoIds.contains(m.uid) ? "checkmark.circle.fill" : "circle").foregroundStyle(autoIds.contains(m.uid) ? NX.violetText : NX.mutedFg)
+                                AvatarView(url: m.user?.avatar, initial: m.initial, size: 26)
+                                Text(m.displayName).font(NXFont.text(13)).foregroundStyle(NX.foreground)
+                                Spacer()
+                            }
+                        }.buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .disabled(!canManage)
+    }
+
+    // MARK: tabs (owner, 9 Oct 2026)
+
+    /// One switch per tab. Off only hides the tab; Board or List always stays on.
+    private var tabsCard: some View {
+        card(T("Tabs")) {
+            Text(T("Choose the tabs this project shows. Turning a tab off only hides it: nothing in it is deleted, and turning it back on brings everything back."))
+                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+            ForEach(ProjectTab.hideable) { tab in
+                if tab != ProjectTab.hideable.first { Divider().overlay(NX.border) }
+                tabToggle(tab)
+            }
+            if !canManageTabs && accessKnown {
+                Text(T("You need Full access to change this project's settings.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            }
+        }
+    }
+
+    private func tabToggle(_ tab: ProjectTab) -> some View {
+        let key = tab.key ?? ""
+        let shown = !hiddenTabs.contains(key)
+        let shownTaskViews = ProjectTab.taskViews.filter { !hiddenTabs.contains($0.key ?? "") }
+        // The last task view stays on: a task project needs some way to see its tasks.
+        let lastTaskView = shown && shownTaskViews == [tab]
+        return Toggle(isOn: Binding(get: { !hiddenTabs.contains(key) }, set: { on in Task { await setTab(key, shown: on) } })) {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 8) {
+                    Image(systemName: tab.icon).font(.system(size: 12, weight: .semibold)).foregroundStyle(NX.violetText).frame(width: 18)
+                    Text(tab.label).font(NXFont.text(14, .semibold)).foregroundStyle(shown ? NX.foreground : NX.mutedFg)
+                }
+                if lastTaskView {
+                    Text(T("Board or List stays on")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                }
+            }
+        }
+        .tint(NX.violetText)
+        .disabled(!canManageTabs || lastTaskView || savingTabs)
+    }
+
+    // MARK: custom fields
+
+    private var fieldsCard: some View {
+        card("Custom Fields") {
+            if fields.isEmpty {
+                Text(T("No custom fields in this project yet.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            }
+            ForEach(fields) { f in
+                HStack(spacing: 10) {
+                    Image(systemName: cfIcon(f.type)).font(.system(size: 13)).foregroundStyle(NX.violetText)
+                        .frame(width: 30, height: 30).background(NX.violet.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(f.name).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                        Text(cfSummary(f)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    }
+                    Spacer(minLength: 4)
+                    if canManage {
+                        Button { Task { await deleteField(f) } } label: { Image(systemName: "trash").font(.system(size: 12)).foregroundStyle(NX.danger) }.disabled(busy)
+                    }
+                }
+                .padding(.vertical, 3)
+            }
+            if canManage {
+                NavigationLink { CustomFieldEditor(projectId: projectId) { await reloadFields() } } label: {
+                    Label("Field baru", systemImage: "plus").font(NXFont.text(13, .bold)).foregroundStyle(NX.violetText)
+                }
+            }
+        }
+    }
+
+    // MARK: members
+
+    private var membersCard: some View {
+        card(T("Project members")) {
+            ForEach(projectMembers) { m in memberRow(m) }
+            // Adding and inviting are Full access (Notion: only Full access shares, owner 13 Oct 2026).
+            if canManage {
+                // A searchable multi-select sheet, not a long menu of names (owner, 9 Oct 2026).
+                Button { showAddMembers = true } label: {
+                    Label(T("Add members"), systemImage: "person.badge.plus").font(NXFont.text(13, .bold)).foregroundStyle(NX.violetText)
+                }
+                .disabled(busy)
+                .sheet(isPresented: $showAddMembers) {
+                    AddProjectMembersSheet(projectId: projectId, roster: roster, memberIds: Set(projectMembers.map(\.uid))) { added in
+                        await membersAdded(added)
+                    }
+                }
+                NavigationLink { InviteByEmailView(projectId: projectId) } label: {
+                    Label(T("Invite by email"), systemImage: "envelope").font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                }
+            }
+        }
+    }
+
+    /// Name, "Project Owner" under it, and the level: a dropdown (change it, or Remove) for someone with
+    /// Full access, plain text for everyone else (web settings drawer + header members popover).
+    private func memberRow(_ m: ProjectDetail.ProjectMember) -> some View {
+        HStack(spacing: 10) {
+            AvatarView(url: m.user?.avatar, initial: m.initial, size: 32)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                if m.isProjectOwner {
+                    Text(T("Project Owner")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                }
+            }
+            Spacer(minLength: 4)
+            if levelBusy == m.uid { ProgressView().controlSize(.small) }
+            if canManage && !m.uid.isEmpty {
+                AccessLevelMenu(value: m.level, disabled: busy || levelBusy != nil, accessibilityName: m.displayName,
+                                onChange: { level in Task { await setLevel(m, level) } },
+                                onRemove: { confirmRemove = m })
+            } else {
+                Text(m.level.label).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    // MARK: danger
+
+    private var dangerCard: some View {
+        card("Danger Zone") {
+            // Duplicate: BoD and above (it clones every task, assignee and member at once; web drawer).
+            if isBoD {
+                Button { Task { await duplicate() } } label: {
+                    Label(busy ? "…" : "Duplikat project", systemImage: "doc.on.doc").font(NXFont.text(14, .bold)).foregroundStyle(NX.blue)
+                }.disabled(busy)
+            }
+            if isBoD && canManage { Divider().overlay(NX.border) }
+            // Delete: Full access. It is restorable from Control Room → Audit for 90 days, and says so.
+            if canManage {
+                Button(role: .destructive) { confirmDelete = true } label: {
+                    Label(T("Delete project"), systemImage: "trash").font(NXFont.text(14, .bold)).foregroundStyle(NX.danger)
+                }.disabled(busy)
+            }
+        }
+        .alert(String(format: T("Delete the project “%@”? A manager or the BoD can restore it from Control Room → Audit for 90 days."), name), isPresented: $confirmDelete) {
+                Button(T("Delete"), role: .destructive) { Task { await deleteProj() } }
+                Button(T("Cancel"), role: .cancel) {}
+        }
+    }
+
+    // MARK: building blocks
+
+    private func card<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel(title)
+            content()
+        }
+        .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
+    }
+    private func field<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+            content().padding(10).background(NX.muted, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+    }
+    private func flagToggle(_ title: String, _ sub: String, _ binding: Binding<Bool>, _ onSet: @escaping () async -> Void) -> some View {
+        Toggle(isOn: Binding(get: { binding.wrappedValue }, set: { binding.wrappedValue = $0; Task { await onSet() } })) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                Text(sub).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            }
+        }.tint(NX.violetText)
+    }
+    private func toastView(_ t: String) -> some View {
+        Text(t).font(NXFont.text(13, .semibold)).foregroundStyle(.white)
+            .padding(.horizontal, 16).padding(.vertical, 10).background(NX.onyx, in: Capsule()).padding(.bottom, 20)
+    }
+    private func cfIcon(_ type: String) -> String {
+        switch type { case "NUMBER": return "number"; case "DATE": return "calendar"; case "PLACE": return "mappin.and.ellipse"
+        case "MULTI_SELECT": return "checklist"; case "STATUS": return "flag.fill"; default: return "chevron.down.circle" }
+    }
+    private func cfSummary(_ f: CustomField) -> String {
+        if f.type == "NUMBER" { return f.options?.format == "currency-idr" ? "Angka · Rp" : "Angka" }
+        if !f.choices.isEmpty { return "\(f.type.replacingOccurrences(of: "_", with: " ").capitalized) · \(f.choices.joined(separator: ", "))" }
+        return f.type.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+
+    // MARK: logic
+
+    private func hydrate() {
+        name = detail.name
+        desc = detail.description ?? ""
+        icon = detail.icon
+        hiddenTabs = detail.hiddenTabs ?? []
+        autoAssign = detail.autoAssignEnabled ?? false
+        autoIds = Set(detail.autoAssignAssigneeIds ?? [])
+        projectMembers = detail.members ?? []
+    }
+    private func load() async {
+        async let f = try? APIClient.shared.projectCustomFields(projectId)
+        async let r = try? APIClient.shared.roster()
+        fields = (await f) ?? []
+        if let r = await r { roster = r.members ?? []; viewerWsRole = r.role }
+    }
+    private func reloadFields() async { fields = (try? await APIClient.shared.projectCustomFields(projectId)) ?? [] }
+
+    private func saveIdentity() async {
+        savingIdentity = true; identitySaved = false
+        // No `icon` here: the photo saves on its own (uploadPhoto/removePhoto), and sending the field
+        // back could only overwrite a photo uploaded meanwhile. No `color` either (owner, 11 Oct 2026):
+        // there is no colour option any more; the stored one stays for the views that still use it.
+        do {
+            _ = try await APIClient.shared.updateProject(projectId, fields: ["name": name, "description": desc])
+            savingIdentity = false; identitySaved = true
+            await onChange()
+        } catch {
+            // The typed name and description stay in the fields; the toast says why it didn't save.
+            savingIdentity = false; identitySaved = false
+            show(saveErrorText(error))
+        }
+    }
+    /// Same handling as the profile photo: the library hands back HEIC more often than not, which the
+    /// server refuses, so it goes up as JPEG with the long edge capped (well under the 5 MB limit).
+    /// Then the url is PATCHed onto the project — the upload alone does not store it.
+    private func uploadPhoto(_ item: PhotosPickerItem) async {
+        photoBusy = true
+        photoError = nil
+        defer { photoBusy = false; pickedPhoto = nil }
+        guard let raw = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: raw) else {
+            photoError = T("Couldn't read that photo.")
+            return
+        }
+        let maxEdge: CGFloat = 1024
+        let scale = min(1, maxEdge / max(image.size.width, image.size.height))
+        let target = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let resized = UIGraphicsImageRenderer(size: target).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
+        guard let jpeg = resized.jpegData(compressionQuality: 0.85) else {
+            photoError = T("Couldn't read that photo.")
+            return
+        }
+        do {
+            let url = try await APIClient.shared.uploadProjectIcon(projectId: projectId, fileName: "icon.jpg", mime: "image/jpeg",
+                                                                   data: jpeg, progress: photoProgress)
+            _ = try await APIClient.shared.updateProject(projectId, fields: ["icon": url])
+            icon = url
+            await onChange()
+        } catch {
+            photoError = (error as? LocalizedError)?.errorDescription ?? T("Upload failed. Try again.")
+        }
+    }
+
+    /// Back to the default mark: "folder" is the column's default, which ProjectMark draws as the square.
+    private func removePhoto() async {
+        photoBusy = true
+        photoError = nil
+        defer { photoBusy = false }
+        do {
+            _ = try await APIClient.shared.updateProject(projectId, fields: ["icon": "folder"])
+            icon = "folder"
+            await onChange()
+        } catch {
+            photoError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save — try again.")
+        }
+    }
+
+    private func patch(_ fields: [String: Any]) async {
+        do {
+            _ = try await APIClient.shared.updateProject(projectId, fields: fields)
+            await onChange()
+        } catch {
+            show(saveErrorText(error))
+        }
+    }
+    /// A refused save says why (web saveErrorText): 403 = not Full access.
+    private func saveErrorText(_ error: Error) -> String {
+        if case APIError.http(403, _) = error { return T("You need Full access to change this project's settings.") }
+        return (error as? LocalizedError)?.errorDescription ?? T("Couldn't save — try again.")
+    }
+    /// The whole hidden set goes up each time; keys this build does not know are kept as they are.
+    private func setTab(_ key: String, shown: Bool) async {
+        guard !key.isEmpty, !savingTabs else { return }
+        let before = hiddenTabs
+        var next = hiddenTabs.filter { $0 != key }
+        if !shown { next.append(key) }
+        hiddenTabs = next
+        savingTabs = true
+        do {
+            _ = try await APIClient.shared.updateProject(projectId, fields: ["hiddenTabs": next])
+            savingTabs = false
+            await onChange()
+        } catch let failure {
+            savingTabs = false
+            hiddenTabs = before
+            show((failure as? LocalizedError)?.errorDescription ?? T("Couldn't save — try again."))
+        }
+    }
+    private func deleteField(_ f: CustomField) async {
+        busy = true; try? await APIClient.shared.deleteCustomFieldDef(id: f.id); await reloadFields(); busy = false
+    }
+    private func membersAdded(_ added: [ProjectDetail.ProjectMember]) async {
+        let known = Set(projectMembers.map(\.uid))
+        projectMembers.append(contentsOf: added.filter { !known.contains($0.uid) })
+        if added.isEmpty { show(T("They're already in this project.")) }
+        else if added.count == 1 { show(T("1 member added")) }
+        else { show(String(format: T("%d members added"), added.count)) }
+        await onChange()
+    }
+    private func removeMember(_ m: ProjectDetail.ProjectMember) async {
+        busy = true
+        do {
+            _ = try await APIClient.shared.removeProjectMember(projectId: projectId, userId: m.uid)
+            projectMembers.removeAll { $0.uid == m.uid }; autoIds.remove(m.uid)
+        } catch {
+            show(ProjectAccessText.changeFailed(error))
+        }
+        busy = false; await onChange()
+    }
+    /// One member's level (PATCH …/members). The last Project Owner can't be lowered: the server answers
+    /// 409 LAST_OWNER and its sentence is shown; the row keeps its level.
+    private func setLevel(_ m: ProjectDetail.ProjectMember, _ level: ProjectAccessLevel) async {
+        guard levelBusy == nil else { return }
+        levelBusy = m.uid
+        defer { levelBusy = nil }
+        do {
+            try await APIClient.shared.setProjectMemberAccess(projectId: projectId, userId: m.uid, level: level)
+            if let i = projectMembers.firstIndex(where: { $0.uid == m.uid }) {
+                var row = projectMembers[i]
+                row = ProjectDetail.ProjectMember(userId: row.userId, role: APIClient.roleForLevel(level),
+                                                  accessLevel: level.rawValue, user: row.user)
+                projectMembers[i] = row
+            }
+            await onChange()
+        } catch {
+            show(ProjectAccessText.changeFailed(error))
+        }
+    }
+    private func duplicate() async {
+        busy = true
+        if (try? await APIClient.shared.duplicateProject(projectId: projectId)) != nil { show("Project diduplikat ✓") }
+        else { show(T("Couldn't duplicate.")) }
+        busy = false
+    }
+    private func deleteProj() async {
+        busy = true
+        do {
+            _ = try await APIClient.shared.deleteProject(projectId: projectId)
+            dismiss(); onDeleted()
+        } catch {
+            if case APIError.http(403, _) = error { show(T("You need Full access to change this project's settings.")) }
+            else { show((error as? LocalizedError)?.errorDescription ?? T("Couldn't delete.")) }
+            busy = false
+        }
+    }
+    private func show(_ t: String) {
+        toast = t
+        Task { try? await Task.sleep(nanoseconds: 2_200_000_000); if toast == t { toast = nil } }
+    }
+}

@@ -1,0 +1,49 @@
+/*
+  NEXUS widgets — Indonesian.
+
+  Only what iOS shows outside the widget itself: names and descriptions in the widget gallery, and the
+  words of the "Edit Widget" sheet (scope, ring). Everything drawn INSIDE a widget follows the app's
+  own language through GlanceText.t, because the phone's language and the app's can differ.
+
+  Keys are the English source strings, one each. A key used twice (gallery name and picker option,
+  e.g. "Today") is listed once.
+*/
+
+/* Gallery: names */
+"Attendance" = "Absensi";
+"Month" = "Bulan";
+"Month + Coming up" = "Bulan + Tidak lama lagi";
+"This week" = "Minggu ini";
+"Important & urgent" = "Penting dan mendesak";
+"Important" = "Penting";
+"Urgent" = "Mendesak";
+"Someday" = "Suatu hari";
+"Next" = "Berikutnya";
+"Week" = "Minggu";
+"Today" = "Hari ini";
+"Calendar line" = "Baris kalender";
+
+/* Gallery: descriptions */
+"Where you stand today." = "Posisi absensimu hari ini.";
+"This month at a glance." = "Bulan ini dalam sekali lihat.";
+"The month, and what comes next." = "Bulan ini, dan tugas yang segera datang.";
+"Monday to Sunday at a glance." = "Senin sampai Minggu dalam sekali lihat.";
+"High priority and due now: do these first." = "Prioritas tinggi dan tenggatnya sudah dekat: kerjakan dulu.";
+"High priority, not due yet: plan them in." = "Prioritas tinggi, tenggat masih longgar: rencanakan.";
+"Urgent, not high priority: due now, get them done." = "Mendesak, bukan prioritas tinggi: tenggat sudah dekat, segera bereskan.";
+"Not urgent, not high priority: everything else, tasks without a date included." = "Tidak mendesak, bukan prioritas tinggi: sisanya, termasuk tugas tanpa tenggat.";
+"Your next tasks and their times." = "Tugas berikutnya beserta jamnya.";
+"This week's tasks as dots." = "Tugas minggu ini sebagai titik.";
+"Today's tasks done, or the year so far." = "Tugas hari ini yang sudah selesai, atau tahun yang sudah berjalan.";
+"Today's tasks in one line." = "Tugas hari ini dalam satu baris.";
+
+/* Edit Widget: scope */
+"Scope" = "Cakupan";
+"Whose tasks the widget shows." = "Tugas siapa yang ditampilkan widget ini.";
+"Mine" = "Saya";
+"My division" = "Divisi saya";
+"Everyone" = "Semua orang";
+
+/* Edit Widget: the ring */
+"Show" = "Tampilkan";
+"Year" = "Tahun";

@@ -1,0 +1,118 @@
+{
+ "cell": {
+  "day": "2026-09-18",
+  "count": 1,
+  "dots": [
+   {
+    "unitId": "cmuo08aix000801p593ezxuzd",
+    "filled": true,
+    "count": 1
+   }
+  ],
+  "overdue": false
+ },
+ "legend": [
+  {
+   "unitId": "cmuo08aix000801p593ezxuzd",
+   "count": 1
+  }
+ ],
+ "tree": {
+  "total": 1,
+  "people": 2,
+  "unplaced": [
+   {
+    "userId": "cmnr9lfd3000701rq5ev4pkfv",
+    "items": [
+     "cmspx6d97018i01t76z55z69c"
+    ]
+   }
+  ],
+  "root": {
+   "unit": "PATS",
+   "count": 1,
+   "items": [],
+   "loose": [],
+   "people": [],
+   "children": [
+    {
+     "unit": "PATS Archive",
+     "count": 1,
+     "items": [
+      "cmspx6d97018i01t76z55z69c"
+     ],
+     "loose": [],
+     "people": [
+      {
+       "userId": "cmnsprzv5001801rzxwljcblg",
+       "items": [
+        "cmspx6d97018i01t76z55z69c"
+       ]
+      }
+     ],
+     "children": []
+    }
+   ]
+  }
+ },
+ "week": [
+  {
+   "kind": "unit",
+   "unit": "PATS",
+   "depth": 0,
+   "count": 1
+  },
+  {
+   "kind": "unit",
+   "unit": "PATS Archive",
+   "depth": 1,
+   "count": 1
+  },
+  {
+   "kind": "person",
+   "unitId": "cmuo08aix000801p593ezxuzd",
+   "userId": "cmnsprzv5001801rzxwljcblg",
+   "depth": 2,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [
+     "cmspx6d97018i01t76z55z69c"
+    ],
+    [],
+    []
+   ]
+  },
+  {
+   "kind": "unplaced",
+   "depth": 0,
+   "count": 1
+  },
+  {
+   "kind": "person",
+   "unitId": null,
+   "userId": "cmnr9lfd3000701rq5ev4pkfv",
+   "depth": 1,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [
+     "cmspx6d97018i01t76z55z69c"
+    ],
+    [],
+    []
+   ]
+  }
+ ],
+ "overdue": {
+  "cmspx6d97018i01t76z55z69c": "stale",
+  "cmtlk52pz01cy01vulzspofmi": "none",
+  "cmtliz7jv015701vump6zhitz": "none",
+  "cmtx491h405g701ke61hoowmd": "none",
+  "cmu17knaa0akc01ke87uc247i": "none"
+ }
+}

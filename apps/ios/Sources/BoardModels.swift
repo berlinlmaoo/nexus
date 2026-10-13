@@ -1,0 +1,358 @@
+import Foundation
+
+/// GET /api/projects/{id} — project with lanes (taskLists) + their cards (top-level tasks only;
+/// subtasks are hidden Asana-style and surface inside the task detail).
+struct ProjectDetail: Decodable, Sendable {
+    let id: String
+    let name: String
+    let color: String?
+    let icon: String?
+    let description: String?
+    let workspaceId: String?
+    let taskLists: [Lane]?
+    let members: [ProjectMember]?
+    // project settings flags. The server still sends enableTaskBatchDuplicate, enablePnlDashboard,
+    // financeEnabled, requireAttachmentForDone and disableTaskStatus, but they are fixed since 11 Oct
+    // 2026 (duplicate always on, the rest off), so they are deliberately not read.
+    let autoAssignEnabled: Bool?
+    let autoAssignAssigneeIds: [String]?
+    // Project type and tabs (owner, 9 Oct 2026) — see ProjectKinds.swift. Additive: a server from
+    // before sends none of them, and they are read leniently so an odd shape in one of them can never
+    // cost the whole board.
+    /// "TASK" | "FINANCE" | "CONTENT" | "PIPELINE". nil = an older server = TASK.
+    let type: String?
+    /// Tab keys this project hides (ProjectTab.key). A key this build does not know is ignored.
+    let hiddenTabs: [String]?
+    /// The template it was built from (project templates, 12 Oct 2026; DEV server): its tab is where the
+    /// project opens, and its "My …" preset is offered. nil for every other project.
+    let templateId: String?
+    /// The viewer's access here (Notion-style levels, owner 13 Oct 2026; DEV server): "FULL" | "EDIT" |
+    /// "COMMENT" | "VIEW". nil from an older server. Read through ProjectAccess.swift (viewerLevel).
+    let viewerAccessLevel: String?
+    /// Full access, the rule every manage route uses (settings, members, statuses, delete). nil = older server.
+    let viewerCanManage: Bool?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, color, icon, description, workspaceId, taskLists, members
+        case autoAssignEnabled, autoAssignAssigneeIds
+        case type, hiddenTabs, templateId
+        case viewerAccessLevel, viewerCanManage
+    }
+
+    /// Written out only so type and hiddenTabs can be read leniently. Every other field decodes
+    /// exactly as the synthesized version did.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        color = try c.decodeIfPresent(String.self, forKey: .color)
+        icon = try c.decodeIfPresent(String.self, forKey: .icon)
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        workspaceId = try c.decodeIfPresent(String.self, forKey: .workspaceId)
+        taskLists = try c.decodeIfPresent([Lane].self, forKey: .taskLists)
+        members = try c.decodeIfPresent([ProjectMember].self, forKey: .members)
+        autoAssignEnabled = try c.decodeIfPresent(Bool.self, forKey: .autoAssignEnabled)
+        autoAssignAssigneeIds = try c.decodeIfPresent([String].self, forKey: .autoAssignAssigneeIds)
+        type = try? c.decodeIfPresent(String.self, forKey: .type)
+        hiddenTabs = try? c.decodeIfPresent([String].self, forKey: .hiddenTabs)
+        templateId = try? c.decodeIfPresent(String.self, forKey: .templateId)
+        viewerAccessLevel = try? c.decodeIfPresent(String.self, forKey: .viewerAccessLevel)
+        viewerCanManage = try? c.decodeIfPresent(Bool.self, forKey: .viewerCanManage)
+    }
+
+    struct Lane: Decodable, Identifiable, Sendable {
+        let id: String
+        let name: String
+        let tasks: [BoardTask]?
+        /// The task status this section stands for (project templates, 12 Oct 2026; DEV server): a task
+        /// moved in takes it. nil = a plain section, and every section from an older server.
+        var taskStatus: String? = nil
+        /// The status option's colour (Notion-style statuses, 12 Oct 2026): a palette key, or an older
+        /// one the server keeps ("sky", "emerald", …); nil = its status's colour. See StatusOptions.swift.
+        var color: String? = nil
+        /// The project's own order of its sections. nil from older payloads (they arrive in order).
+        var position: Int? = nil
+    }
+    struct ProjectMember: Decodable, Identifiable, Sendable {
+        let userId: String?
+        /// "LEAD" | "MEMBER" | "GUEST" | "VIEWER" — LEAD is the Project Owner (Overview badge, "Led by").
+        let role: String?
+        /// "FULL" | "EDIT" | "COMMENT" | "VIEW" (servers from 13 Oct 2026). Read through `level`
+        /// (ProjectAccess.swift), which follows the server's rule when role and this disagree.
+        var accessLevel: String? = nil
+        let user: UserRef?
+        struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String? }
+        var uid: String { userId ?? user?.id ?? "" }
+        var id: String { uid }
+        var displayName: String { user?.name ?? "?" }
+        var initial: String { String((user?.name ?? "?").first ?? "?").uppercased() }
+    }
+}
+
+/// A task-bundle quest this card is part of — drives the "+N XP" chip (board/list) and the
+/// task-detail banner. total/done only populated by the task-detail endpoint.
+struct TaskQuestRef: Decodable, Identifiable, Sendable {
+    let id: String
+    let title: String?
+    let xpReward: Int?
+    let total: Int?
+    let done: Int?
+}
+
+/// A subtask's parent, resolved CLIENT-SIDE during the board/list merge (the /api/tasks list
+/// endpoint returns parentId but not the parent object) → the "↳ Subtask · <parent>" mark.
+struct BoardParent: Sendable { let id: String; let title: String? }
+
+struct BoardTask: Decodable, Identifiable, Sendable {
+    let id: String
+    let title: String
+    let status: String?
+    let priority: String?
+    let startDate: String?
+    let dueDate: String?
+    let assignees: [Assignee]?
+    let subtasks: [Sub]?
+    let count: CountRef?
+    let customFieldValues: [CFValue]?
+    let parentId: String?
+    let taskListId: String?
+    let quests: [TaskQuestRef]?
+    /// When the task was marked done and by whom (the project Overview, owner 11 Oct 2026). Sent by
+    /// GET /api/projects/:id; nil from older payloads and while the task is open.
+    let completedAt: String?
+    let completedById: String?
+    /// Set during the board/list subtask-merge (not decoded — /api/tasks omits the parent object).
+    var parent: BoardParent? = nil
+
+    struct Assignee: Decodable, Sendable {
+        let user: UserRef?
+        /// `deactivatedAt`: set once the person was offboarded (left the company); their tasks stay
+        /// theirs and the task detail marks them "Left". Sent by GET /api/tasks/:id (8 Oct 2026+).
+        struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String?; let deactivatedAt: String? }
+    }
+    struct Sub: Decodable, Sendable { let status: String? }
+    struct CountRef: Decodable, Sendable { let comments: Int? }
+    struct CFValue: Decodable, Sendable {
+        let customFieldId: String
+        let value: String?
+        let customField: FieldRef?
+        struct FieldRef: Decodable, Sendable { let name: String?; let type: String?; let options: CFOptions? }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, status, priority, startDate, dueDate, assignees, subtasks, customFieldValues
+        case parentId, taskListId, quests, completedAt, completedById
+        case count = "_count"
+    }
+
+    var isSubtask: Bool { !(parentId ?? "").isEmpty }
+    var questXP: Int { (quests ?? []).reduce(0) { $0 + ($1.xpReward ?? 0) } }
+    var hasQuest: Bool { !(quests ?? []).isEmpty }
+    var isDone: Bool { (status ?? "").uppercased() == "DONE" }
+    var doneSubs: Int { (subtasks ?? []).filter { ($0.status ?? "").uppercased() == "DONE" }.count }
+    var totalSubs: Int { (subtasks ?? []).count }
+    var commentCount: Int { count?.comments ?? 0 }
+    var assigneeInitial: String? {
+        guard let n = assignees?.first?.user?.name, let c = n.first else { return nil }
+        return String(c).uppercased()
+    }
+    /// Up to 3 assignees (avatar URL + initial) for a small overlapping stack on the card.
+    var assigneeAvatars: [(id: String, initial: String, url: String?)] {
+        (assignees ?? []).prefix(3).enumerated().map { idx, a in
+            let n = a.user?.name ?? "?"
+            return (id: a.user?.id ?? "a\(idx)", initial: String(n.first ?? "?").uppercased(), url: a.user?.avatar)
+        }
+    }
+}
+
+/// GET /api/tasks/{id} — focused task-detail fields.
+struct TaskDetail: Decodable, Sendable {
+    let id: String
+    let title: String
+    let description: String?
+    let status: String?
+    let priority: String?
+    let startDate: String?
+    let dueDate: String?
+    let assignees: [BoardTask.Assignee]?
+    let subtasks: [SubDetail]?
+    let comments: [Comment]?
+    let parent: ParentRef?
+    let taskList: TaskListInfo?
+    let activityLogs: [ActivityLog]?
+    let quests: [TaskQuestRef]?   // task-bundle quests this task is in (with total/done) → detail banner
+    /// Who made the task: the task detail's "Created by" line (with their picture), and whether they
+    /// were offboarded (`deactivatedAt`), which that line and the CREATED custom field mark "Left".
+    /// GET /api/tasks/:id sends the whole user row; every field is optional.
+    let creator: CreatorRef?
+    struct CreatorRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String?; let deactivatedAt: String? }
+
+    struct ActivityLog: Decodable, Identifiable, Sendable {
+        let id: String
+        let action: String?
+        let details: String?
+        let createdAt: String?
+        let user: UserRef?
+        /// `avatar` tells the system user "Automation" apart (SystemUsers).
+        struct UserRef: Decodable, Sendable { let name: String?; let avatar: String? }
+    }
+
+    struct TaskListInfo: Decodable, Sendable {
+        let id: String?
+        let project: ProjectRef?
+        struct ProjectRef: Decodable, Sendable { let id: String? }
+    }
+    var taskListId: String? { taskList?.id }
+    var projectId: String? { taskList?.project?.id }
+
+    struct SubDetail: Decodable, Identifiable, Sendable {
+        let id: String
+        let title: String?
+        let status: String?
+        var isDone: Bool { (status ?? "").uppercased() == "DONE" }
+    }
+    struct Comment: Decodable, Identifiable, Sendable {
+        let id: String
+        let content: String?
+        let createdAt: String?
+        let user: UserRef?
+        struct UserRef: Decodable, Sendable { let name: String?; let avatar: String? }
+    }
+    struct ParentRef: Decodable, Sendable { let id: String; let title: String? }
+
+    var isDone: Bool { (status ?? "").uppercased() == "DONE" }
+}
+
+/// GET/POST /api/status-updates — one post in a project's Status updates.
+struct ProjectStatusUpdate: Decodable, Identifiable, Sendable {
+    let id: String
+    let text: String
+    let status: String?
+    let createdAt: String?
+    let author: Author?
+    struct Author: Decodable, Sendable { let id: String?; let name: String?; let avatar: String? }
+}
+
+/// POST /api/tasks returns the created task (top-level id).
+struct CreatedTaskRef: Decodable, Sendable { let id: String }
+
+/// GET /api/custom-fields?projectId=[&taskId=] — project custom fields (with current value when taskId set).
+struct CustomFieldsResponse: Decodable, Sendable { let fields: [CustomField]? }
+struct CustomField: Decodable, Identifiable, Sendable {
+    let id: String
+    let name: String
+    let type: String          // SELECT | MULTI_SELECT | STATUS | NUMBER | DATE | PLACE | CREATED
+    let options: CFOptions?
+    let value: CFFieldValue?   // present only when fetched with taskId
+    /// CREATED only, fetched with taskId: who made the task and when (the web shows the name).
+    let createdMeta: CreatedMeta?
+    struct CreatedMeta: Decodable, Sendable { let userName: String?; let timestamp: String? }
+    var choices: [String] { options?.list ?? [] }
+}
+/// A stored custom-field value: plain string, a multi-select array, or a PLACE {label, mapUrl}.
+enum CFFieldValue: Decodable, Sendable {
+    case text(String), list([String]), place(label: String, mapUrl: String?)
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let s = try? c.decode(String.self) { self = .text(s) }
+        else if let a = try? c.decode([String].self) { self = .list(a) }
+        else if let o = try? c.decode(PlaceObj.self) { self = .place(label: o.label ?? "", mapUrl: o.mapUrl) }
+        else { self = .text("") }
+    }
+    struct PlaceObj: Decodable, Sendable { let label: String?; let mapUrl: String? }
+}
+
+/// GET /api/attachments?taskId= — task file attachments.
+struct TaskAttachment: Decodable, Identifiable, Sendable {
+    let id: String
+    let name: String?
+    let url: String?
+    let size: Int?
+    let mimeType: String?
+    let createdAt: String?
+    let uploader: Uploader?
+    /// "PROOF" for a payout proof uploaded by an older app or the old web section; since 12 Oct 2026 a
+    /// proof is an ordinary attachment and only keeps this tag (owner). nil/"GENERAL" otherwise.
+    var kind: String? = nil
+    struct Uploader: Decodable, Sendable { let name: String? }
+    var isPayoutProof: Bool { (kind ?? "").uppercased() == "PROOF" }
+}
+
+/// GET /api/tasks/{id}/dependencies — blocking + blocked-by relations.
+struct TaskDependenciesResponse: Decodable, Sendable {
+    let dependencies: [TaskDependency]?   // this task depends on (is blocked by) these
+    let dependedOnBy: [TaskDependency]?   // these depend on this task
+}
+struct TaskDependency: Decodable, Identifiable, Sendable {
+    let id: String
+    let type: String?
+    let dependsOnTask: TaskRef?
+    let task: TaskRef?
+    struct TaskRef: Decodable, Sendable { let id: String; let title: String; let status: String? }
+}
+/// options is polymorphic: ["a","b"] | {options:[…], format?} | {choices:[…]} | null.
+struct CFOptions: Decodable, Sendable {
+    let list: [String]
+    let format: String?   // e.g. "currency-idr"
+    init(from decoder: Decoder) throws {
+        if let arr = try? decoder.singleValueContainer().decode([String].self) {
+            list = arr; format = nil
+        } else if let c = try? decoder.container(keyedBy: CodingKeys.self) {
+            if let o = try c.decodeIfPresent([String].self, forKey: .options) { list = o }
+            else if let ch = try c.decodeIfPresent([String].self, forKey: .choices) { list = ch }
+            else { list = [] }
+            format = try? c.decodeIfPresent(String.self, forKey: .format)
+        } else { list = []; format = nil }
+    }
+    enum CodingKeys: String, CodingKey { case options, choices, format }
+}
+
+/// GET /api/time-entries?taskId= — logged time on a task.
+struct TimeEntriesResponse: Decodable, Sendable { let entries: [TimeEntry]? }
+struct TimeEntry: Decodable, Identifiable, Sendable {
+    let id: String
+    let duration: Int?       // minutes
+    let description: String?
+    let startTime: String?
+    let user: UserRef?
+    struct UserRef: Decodable, Sendable { let name: String? }
+}
+
+/// Tasks' description column can hold rich-block JSON; show plain text only (for read-only display).
+func plainBlockText(_ raw: String?) -> String {
+    guard let raw, !raw.isEmpty else { return "" }
+    let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    if t.hasPrefix("[") || t.hasPrefix("{") { return "" }  // rich-block JSON → skip (rendered elsewhere later)
+    return raw
+}
+
+/// Extracts plain text from a description that may be block-editor JSON (else returns it as-is).
+/// Port of the web `blockText` — used to seed the editable description field.
+func blockText(_ raw: String?) -> String {
+    guard let raw else { return "" }
+    let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !(s.hasPrefix("[") || s.hasPrefix("{")) { return raw }
+    guard let data = s.data(using: .utf8), let json = try? JSONSerialization.jsonObject(with: data) else { return raw }
+    func inlineText(_ content: Any?) -> String {
+        if let str = content as? String { return str }
+        if let arr = content as? [Any] {
+            return arr.map { c -> String in
+                if let str = c as? String { return str }
+                if let o = c as? [String: Any] {
+                    if let t = o["text"] as? String { return t }
+                    if let inner = o["content"] { return inlineText(inner) }
+                }
+                return ""
+            }.joined()
+        }
+        return ""
+    }
+    var lines: [String] = []
+    func walk(_ b: Any?) {
+        guard let o = b as? [String: Any] else { return }
+        let t = inlineText(o["content"]); if !t.isEmpty { lines.append(t) }
+        if let children = o["children"] as? [Any] { children.forEach(walk) }
+    }
+    if let arr = json as? [Any] { arr.forEach(walk) } else { walk(json) }
+    return lines.joined(separator: "\n")
+}

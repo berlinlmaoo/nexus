@@ -1,0 +1,143 @@
+{
+ "cell": {
+  "day": "2026-10-03",
+  "count": 2,
+  "dots": [
+   {
+    "unitId": "cmuqqed05001z01mrlii7qx3u",
+    "filled": false,
+    "count": 2
+   }
+  ],
+  "overdue": false
+ },
+ "legend": [
+  {
+   "unitId": "cmuqqed05001z01mrlii7qx3u",
+   "count": 2
+  }
+ ],
+ "tree": {
+  "total": 2,
+  "people": 3,
+  "unplaced": [],
+  "root": {
+   "unit": "Framework Agency",
+   "count": 2,
+   "items": [],
+   "loose": [],
+   "people": [],
+   "children": [
+    {
+     "unit": "Multimedia",
+     "count": 2,
+     "items": [
+      "cmuofioc800vm01qiqczbfgj7",
+      "cmunx4kld009q01nqndjkfyzg"
+     ],
+     "loose": [],
+     "people": [
+      {
+       "userId": "cmnrb0skr000u01o7aln3jkp6",
+       "items": [
+        "cmuofioc800vm01qiqczbfgj7"
+       ]
+      },
+      {
+       "userId": "cmotv4wdi000f08o5evtzwh3n",
+       "items": [
+        "cmunx4kld009q01nqndjkfyzg"
+       ]
+      },
+      {
+       "userId": "cmnrdwjw2000001rynkblrbaj",
+       "items": [
+        "cmuofioc800vm01qiqczbfgj7"
+       ]
+      }
+     ],
+     "children": []
+    }
+   ]
+  }
+ },
+ "week": [
+  {
+   "kind": "unit",
+   "unit": "Framework Agency",
+   "depth": 0,
+   "count": 2
+  },
+  {
+   "kind": "unit",
+   "unit": "Multimedia",
+   "depth": 1,
+   "count": 2
+  },
+  {
+   "kind": "person",
+   "unitId": "cmuqqed05001z01mrlii7qx3u",
+   "userId": "cmnrb0skr000u01o7aln3jkp6",
+   "depth": 2,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [
+     "cmuofioc800vm01qiqczbfgj7"
+    ],
+    []
+   ]
+  },
+  {
+   "kind": "person",
+   "unitId": "cmuqqed05001z01mrlii7qx3u",
+   "userId": "cmotv4wdi000f08o5evtzwh3n",
+   "depth": 2,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [
+     "cmunx4kld009q01nqndjkfyzg"
+    ],
+    []
+   ]
+  },
+  {
+   "kind": "person",
+   "unitId": "cmuqqed05001z01mrlii7qx3u",
+   "userId": "cmnrdwjw2000001rynkblrbaj",
+   "depth": 2,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [
+     "cmuofioc800vm01qiqczbfgj7"
+    ],
+    []
+   ]
+  }
+ ],
+ "overdue": {
+  "cmuma31cn017e01p8vkmrsorv": "recent",
+  "cmuma89jb019g01p8vo09zag9": "recent",
+  "cmunxi0cb005u01nn3gc19rgx": "recent",
+  "cmunxhdj2005b01nnxu80gjk9": "recent",
+  "cmunxfdq0004b01nnwhjmcfau": "recent",
+  "cmunxgh96004t01nn2j5qzlp6": "recent",
+  "cmuppgahr047t01qizvo8x5td": "none",
+  "cmuofioc800vm01qiqczbfgj7": "none",
+  "cmunx4kld009q01nqndjkfyzg": "none",
+  "cmuppa96b046701qiff754acx": "none",
+  "cmur08gjx00st01t7cfxvioub": "none",
+  "cmur0b8ff00uh01t7pgx55s18": "none"
+ }
+}

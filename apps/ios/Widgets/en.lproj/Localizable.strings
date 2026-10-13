@@ -1,0 +1,49 @@
+/*
+  NEXUS widgets — English (the source language: every value is its own key).
+
+  Only what iOS shows outside the widget itself: names and descriptions in the widget gallery, and the
+  words of the "Edit Widget" sheet (scope, ring). Everything drawn INSIDE a widget follows the app's
+  own language through GlanceText.t, because the phone's language and the app's can differ.
+
+  Keys are the English source strings, one each. A key used twice (gallery name and picker option,
+  e.g. "Today") is listed once.
+*/
+
+/* Gallery: names */
+"Attendance" = "Attendance";
+"Month" = "Month";
+"Month + Coming up" = "Month + Coming up";
+"This week" = "This week";
+"Important & urgent" = "Important & urgent";
+"Important" = "Important";
+"Urgent" = "Urgent";
+"Someday" = "Someday";
+"Next" = "Next";
+"Week" = "Week";
+"Today" = "Today";
+"Calendar line" = "Calendar line";
+
+/* Gallery: descriptions */
+"Where you stand today." = "Where you stand today.";
+"This month at a glance." = "This month at a glance.";
+"The month, and what comes next." = "The month, and what comes next.";
+"Monday to Sunday at a glance." = "Monday to Sunday at a glance.";
+"High priority and due now: do these first." = "High priority and due now: do these first.";
+"High priority, not due yet: plan them in." = "High priority, not due yet: plan them in.";
+"Urgent, not high priority: due now, get them done." = "Urgent, not high priority: due now, get them done.";
+"Not urgent, not high priority: everything else, tasks without a date included." = "Not urgent, not high priority: everything else, tasks without a date included.";
+"Your next tasks and their times." = "Your next tasks and their times.";
+"This week's tasks as dots." = "This week's tasks as dots.";
+"Today's tasks done, or the year so far." = "Today's tasks done, or the year so far.";
+"Today's tasks in one line." = "Today's tasks in one line.";
+
+/* Edit Widget: scope */
+"Scope" = "Scope";
+"Whose tasks the widget shows." = "Whose tasks the widget shows.";
+"Mine" = "Mine";
+"My division" = "My division";
+"Everyone" = "Everyone";
+
+/* Edit Widget: the ring */
+"Show" = "Show";
+"Year" = "Year";

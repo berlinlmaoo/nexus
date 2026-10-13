@@ -1,0 +1,93 @@
+{
+ "v": 1,
+ "tz": "Asia/Jakarta",
+ "userId": "u_staff",
+ "access": "all",
+ "today": "2026-10-05",
+ "now": "2026-10-05T04:00:00.000Z",
+ "from": "2026-09-21",
+ "to": "2026-12-06",
+ "rules": {
+  "overdueWindowDays": 14,
+  "urgentDays": 2
+ },
+ "holidays": [
+  {
+   "day": "2026-10-28",
+   "name": "Cuti bersama (uji)"
+  }
+ ],
+ "truncated": false,
+ "scope": "me",
+ "requestedScope": "division",
+ "items": [
+  {
+   "id": "a01",
+   "t": "Brief klien Suwara",
+   "day": "2026-09-22",
+   "time": null,
+   "c": "#0EA5E9",
+   "p": "Suwara Radio",
+   "prio": "HIGH",
+   "done": false,
+   "m": false
+  },
+  {
+   "id": "a02",
+   "t": "Revisi deck PATS",
+   "day": "2026-09-30",
+   "time": "15:00",
+   "c": "#F97316",
+   "p": "PATS x Brand",
+   "prio": "URGENT",
+   "done": false,
+   "m": false
+  },
+  {
+   "id": "a03",
+   "t": "Laporan mingguan",
+   "day": "2026-10-02",
+   "time": null,
+   "c": "#10B981",
+   "p": "Operasional",
+   "prio": "MEDIUM",
+   "done": true,
+   "m": false
+  },
+  {
+   "id": null,
+   "k": "x_m1",
+   "t": null,
+   "day": "2026-10-05",
+   "time": "09:00",
+   "c": "#64748b",
+   "p": "Finance",
+   "prio": "HIGH",
+   "done": false,
+   "m": true
+  },
+  {
+   "id": "a05",
+   "t": "Shooting konten Multimedia",
+   "day": "2026-10-05",
+   "time": "19:00",
+   "c": "#7B68EE",
+   "p": "Framework Agency",
+   "prio": "MEDIUM",
+   "done": false,
+   "m": false
+  },
+  {
+   "id": "a06",
+   "t": "Kirim invoice",
+   "day": "2026-10-05",
+   "time": null,
+   "c": "#10B981",
+   "p": "Operasional",
+   "prio": "LOW",
+   "done": false,
+   "m": false
+  }
+ ],
+ "undated": []
+}

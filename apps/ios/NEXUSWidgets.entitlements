@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The widget runs in its own process and never talks to the API. Everything it draws comes
+	     from the snapshot the app writes into this shared container, which is why the group has to
+	     be declared identically on both sides. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.id.znetworks.nexus</string>
+	</array>
+</dict>
+</plist>

@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>NEXUS By Z</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<!-- Required by the Mac App Store and ignored everywhere else (error 90242 on a Mac archive
+	     without it). Must match the Primary Category chosen for the macOS platform in App Store
+	     Connect, so if that changes to Productivity this changes with it. -->
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.business</string>
+	<key>NSCameraUsageDescription</key>
+	<string>NEXUS by Z Networks uses the camera to take attendance selfies.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>NEXUS by Z Networks uses your location while the app is open to verify attendance within the office area and to attach where you are to a permit request.</string>
+	<!-- Shown by iOS when the app asks to upgrade to Always, right after a check-in. The app asks only
+	     then, after its own sheet has explained the same thing (WorkLocationTracker.swift). Specific on
+	     purpose — when, why, who sees it, and when it stops — because App Review rejects a vague
+	     background-location reason, and because the person deserves to know exactly this. -->
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>NEXUS by Z Networks checks your location only between your check-in and check-out, including while the app is closed, so your manager can see where you worked during work hours: about once an hour while you are at the office, and your route while you are out of the office. Nothing is recorded before check-in or after check-out.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>NEXUS by Z Networks accesses your photo library to attach photos to requests, tasks, forms, chats and Threads.</string>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UIStatusBarStyle</key>
+	<string>UIStatusBarStyleDefault</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<!-- iPad has to offer all four or App Store validation rejects the bundle outright
+	     (error 90474): an iPad-capable app must support multitasking, and multitasking means
+	     the user can put the app in any orientation. The phone key above stays portrait-only,
+	     which is still allowed and is what every screen was designed for. -->
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<!-- ProMotion. Without this key iOS caps the app at 60Hz on a 120Hz iPhone, no matter how
+	     cheap the frame is — the display simply never offers the higher rate. It is opt-in, and
+	     its absence looks exactly like a slow app rather than a missing entry. -->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<!-- Working ahead, so the app is useful on a site with no bars. `fetch` is the short window
+	     that keeps today's attendance and the board current; `processing` is the long idle one
+	     that pulls the files. See Sources/BackgroundRefresh.swift — the identifiers below and the
+	     ones it registers are checked against each other by iOS, and a disagreement is a trap at
+	     launch rather than a feature that silently never runs.
+	     `location` is the work-hours trail (WorkLocationTracker.swift), only between check-in and
+	     check-out: continuous updates while the person is OUTSIDE the office, with the blue
+	     indicator showing; inside, a coarse cell/Wi-Fi-level stream (no GPS, no indicator under
+	     Always) that keeps the app running for one presence check about every hour. Without this
+	     key, setting allowsBackgroundLocationUpdates traps at runtime. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+		<string>location</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>id.znetworks.nexus.refresh</string>
+		<string>id.znetworks.nexus.prefetch</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>id.znetworks.nexus</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>nexus</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

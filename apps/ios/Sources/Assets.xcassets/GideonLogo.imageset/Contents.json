@@ -1,0 +1,9 @@
+{
+  "images" : [
+    { "filename" : "gideon-1x.png", "idiom" : "universal", "scale" : "1x" },
+    { "filename" : "gideon-2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "gideon-3x.png", "idiom" : "universal", "scale" : "3x" }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 },
+  "properties" : { "template-rendering-intent" : "template" }
+}

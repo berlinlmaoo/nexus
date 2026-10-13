@@ -1,0 +1,31 @@
+{
+  "comment": "One list for the whole UI tour (scripts/ui-tour.sh): web = path on the dev web, app = route the iOS/iPad/Mac app opens (TourDriver.swift). {project} and {form} are replaced by projectId / formId (or TOUR_PROJECT_ID / TOUR_FORM_ID). Order = order in index.html.",
+  "projectId": "2c11faead7e64f908f1f5c574105ec9c",
+  "projectName": "Finance PATS",
+  "formId": "f9f7c0d7271a474eb2c0eaf87635e64f",
+  "screens": [
+    { "id": "login",            "title": "Login",                "web": "/login",                           "app": "login" },
+    { "id": "dashboard",        "title": "Dashboard",            "web": "/dashboard",                       "app": "nexus://dashboard" },
+    { "id": "my-tasks",         "title": "My Tasks",             "web": "/my-tasks",                        "app": "nexus://tasks" },
+    { "id": "calendar",         "title": "Calendar",             "web": "/calendar",                        "app": "nexus://teamCalendar" },
+    { "id": "messages",         "title": "Messages",             "web": "/messages",                        "app": "nexus://messages" },
+    { "id": "gideon",           "title": "GIDEON",               "web": "/gideon",                          "app": "nexus://gideon" },
+    { "id": "notifications",    "title": "Notifications",        "web": "/inbox",                           "app": "nexus://inbox" },
+    { "id": "threads",          "title": "Threads",              "web": "/threads",                         "app": "nexus://threads" },
+    { "id": "vault",            "title": "Z Vault",              "web": "/vault",                           "app": "nexus://vault" },
+    { "id": "submissions",      "title": "My Submissions",       "web": "/submissions",                     "app": "nexus://submissions" },
+    { "id": "room-booking",     "title": "Room Booking",         "web": "/room-booking",                    "app": "nexus://roomBooking" },
+    { "id": "projects",         "title": "Projects",             "web": "/projects",                        "app": "nexus://projects" },
+    { "id": "project-overview", "title": "Project · Overview",   "web": "/projects/{project}?v=overview",   "app": "nexus://projects/{project}?view=overview" },
+    { "id": "project-board",    "title": "Project · Board",      "web": "/projects/{project}?v=board",      "app": "nexus://projects/{project}?view=board" },
+    { "id": "project-list",     "title": "Project · List",       "web": "/projects/{project}?v=list",       "app": "nexus://projects/{project}?view=list" },
+    { "id": "project-table",    "title": "Project · Table",      "web": "/projects/{project}?v=table",      "app": "nexus://projects/{project}?view=table" },
+    { "id": "project-calendar", "title": "Project · Calendar",   "web": "/projects/{project}?v=calendar",   "app": "nexus://projects/{project}?view=calendar" },
+    { "id": "project-timeline", "title": "Project · Timeline",   "web": "/projects/{project}?v=timeline",   "app": "nexus://projects/{project}?view=timeline" },
+    { "id": "form-builder",     "title": "Form builder",         "web": "/projects/{project}?v=forms&form={form}", "app": "nexus://projects/{project}?view=forms&form={form}" },
+    { "id": "leaderboard",      "title": "Leaderboard",          "web": "/leaderboard",                     "app": "nexus://leaderboard" },
+    { "id": "attendance",       "title": "Attendance",           "web": "/attendance",                      "app": "nexus://attendance" },
+    { "id": "tickets",          "title": "Tickets",              "web": "/complaints",                      "app": "nexus://tickets" },
+    { "id": "settings",         "title": "Settings",             "web": "/settings",                        "app": "nexus://settings" }
+  ]
+}

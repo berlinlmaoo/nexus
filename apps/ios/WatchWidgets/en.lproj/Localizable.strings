@@ -1,0 +1,32 @@
+/* Calendar complications (WatchCalendarWidget.swift): names in the face editor, the widget gallery
+   and the configuration, in the device's language. What the face itself shows comes from GlanceText,
+   in the app's language. Keep the keys in step with id.lproj. */
+
+/* Widgets */
+"Calendar" = "Calendar";
+"Calendar progress" = "Calendar progress";
+"What's due next, and how much is left today." = "What's due next, and how much is left today.";
+"Today's tasks done, or how far the year has gone." = "Today's tasks done, or how far the year has gone.";
+"Your tasks from the NEXUS Calendar." = "Your tasks from the NEXUS Calendar.";
+
+/* Parameters and their choices */
+"Scope" = "Scope";
+"Mine" = "Mine";
+"My division" = "My division";
+"Everyone" = "Everyone";
+"Show" = "Show";
+"Today" = "Today";
+"Year" = "Year";
+
+/* Recommendations (the face editor's list) */
+"My tasks" = "My tasks";
+"My division's tasks" = "My division's tasks";
+"Everyone's tasks" = "Everyone's tasks";
+"Today · My tasks" = "Today · My tasks";
+"Today · My division" = "Today · My division";
+"Today · Everyone" = "Today · Everyone";
+"Year progress" = "Year progress";
+
+/* Attendance complication (WatchAttendanceWidget.swift) */
+"Attendance" = "Attendance";
+"Today's clock and your last seven days." = "Today's clock and your last seven days.";

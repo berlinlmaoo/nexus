@@ -1,0 +1,283 @@
+# XcodeGen spec — regenerate the Xcode project anytime with:  xcodegen generate
+# (run from apps/nexus-ios). The .xcodeproj is NOT committed; this file is the source of truth.
+name: NEXUS
+options:
+  bundleIdPrefix: id.znetworks
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    # Versi yang dilihat orang di TestFlight/App Store. Naikin kalau isinya berubah berarti.
+    MARKETING_VERSION: "0.1.7"
+    # WAJIB NAIK TIAP UPLOAD ke App Store Connect. Apple nolak build number yang sudah pernah
+    # dipakai untuk MARKETING_VERSION yang sama, dan errornya baru muncul setelah upload selesai.
+    CURRENT_PROJECT_VERSION: "14"
+    SWIFT_VERSION: "5.0"            # Swift 5 language mode — smoother first build (no strict-concurrency friction)
+    CODE_SIGN_STYLE: Automatic
+    # Team ID Apple (10 karakter). Sengaja ditaruh di sini, BUKAN di GUI Xcode: .xcodeproj tidak
+    # di-commit dan ditimpa tiap `xcodegen generate`, jadi Team yang di-set lewat GUI hilang tiap
+    # ganti branch. Cari punyamu: Xcode → Settings → Accounts, atau Build Settings → DEVELOPMENT_TEAM.
+    # Team ID bukan rahasia — dia ikut ke setiap app yang didistribusikan.
+    DEVELOPMENT_TEAM: "5YR5T42G97"
+
+targets:
+  NEXUS:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+        # Info.plist is pointed at by INFOPLIST_FILE below; it must NOT also be copied as a
+        # resource, or the build fails on a duplicate Info.plist.
+        excludes:
+          - Info.plist
+    preBuildScripts:
+      # A Swift dictionary LITERAL traps at runtime on a duplicate key, and the Indonesian table is only
+      # built when someone picks Bahasa — so a duplicate is a crash nobody sees until a user switches
+      # language. 0.1.5 shipped five (Tue/Wed/Thu/Sat/Sun) and crashed on every launch for those users.
+      # This fails the build instead, with the offending keys in the error.
+      - name: Check Localization keys
+        basedOnDependencyAnalysis: false
+        # Every Indonesian table counts: Localization.swift and LocalizationRedesign.swift (dev redesign,
+        # 12 Oct 2026). A key in both would not crash, but one would silently shadow the other, so it fails
+        # too. scripts/check-localization.sh runs the same check outside Xcode (Linux, CI).
+        inputFiles:
+          - $(SRCROOT)/Sources/Localization.swift
+          - $(SRCROOT)/Sources/LocalizationRedesign.swift
+        script: |
+          # Byte-wise compare: in a UTF-8 locale macOS sort/uniq collate "Choose" and "Choose…" as equal.
+          export LC_ALL=C
+          DUP=$(cat "$SRCROOT"/Sources/Localization*.swift | grep -oE '"([^"\\]|\\.)*"[[:space:]]*:' | sed -E 's/[[:space:]]*:$//' | sort | uniq -d)
+          if [ -n "$DUP" ]; then
+            echo "error: Localization tables have duplicate keys — the app would crash in Bahasa Indonesia:"
+            echo "$DUP" | sed 's/^/error:   /'
+            exit 1
+          fi
+    dependencies:
+      # Embeds the widget extension into the app. platformFilter keeps it OUT of the Mac Catalyst
+      # build: ActivityKit does not exist on macOS, so a Mac archive that tries to embed this fails
+      # while complaining about something else entirely.
+      - target: NEXUSWidgets
+        platformFilter: iOS
+      # Rich push: attaches the photo of a Threads post so a long press shows it. iOS only, like the
+      # widgets: Mac Catalyst could run it, but it would need its own Mac signing for a Mac that
+      # shows notification pictures small anyway, so the Mac keeps plain-text pushes.
+      - target: NEXUSNotificationService
+        platformFilter: iOS
+      # The watch app rides inside the iOS app. platformFilter keeps it out of the Mac build, where
+      # there is nothing to pair with and the copy phase would fail.
+      - target: NEXUSWatch
+        platformFilter: iOS
+        embed: true
+        codeSign: true
+        copy:
+          destination: productsDirectory
+          subpath: "$(CONTENTS_FOLDER_PATH)/Watch"
+    settings:
+      base:
+        # USE the committed plist — do not let XcodeGen generate one.
+        #
+        # This was `info: { path: Sources/Info.plist }`, which reads like "use this file" but means
+        # "GENERATE a file here". Every `xcodegen generate` overwrote the handcrafted plist with a
+        # minimal one, silently dropping UILaunchScreen — and an iOS app with no launch screen is
+        # run in compatibility mode: letterboxed with black bars, floating tab bar over content.
+        # It also dropped CFBundleDisplayName and the camera/location/photo usage strings, which
+        # would have crashed attendance the first time it asked for the camera.
+        INFOPLIST_FILE: Sources/Info.plist
+        # BRANCH dev ONLY — never merge this line to main. Turns on the Production / Dev server switch
+        # (Sources/Config.swift ServerEnvironment, Tuning Room → Server, long press on the login title).
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) NEXUS_DEV_SERVER"
+        PRODUCT_BUNDLE_IDENTIFIER: id.znetworks.nexus
+        PRODUCT_NAME: NEXUS
+        # Associated Domains (passkeys) live in BOTH entitlement files: this one for iOS/iPadOS,
+        # and NEXUS-Catalyst.entitlements below for Mac. Entitlements do NOT merge across the two,
+        # so `webcredentials:nexus.znetworks.id` has to be written in each of them - otherwise
+        # passkeys work on one platform and fail on the other with a generic "not handled" error.
+        CODE_SIGN_ENTITLEMENTS: NEXUS.entitlements
+        # Mac Catalyst: the same code, built as a Mac app.
+        #
+        # The Mac needs its own entitlements file and cannot share the iOS one. The Mac App Store
+        # requires the app sandbox, and the com.apple.security.* keys that open it back up again
+        # are macOS-only - an iOS build carrying an unrecognised entitlement fails provisioning
+        # rather than ignoring it. The bracketed key below is a conditional build setting: it
+        # applies only when the SDK is macOS, and the plain key above still covers iOS and iPadOS.
+        SUPPORTS_MACCATALYST: YES
+        CODE_SIGN_ENTITLEMENTS[sdk=macosx*]: NEXUS-Catalyst.entitlements
+        # Keep one bundle identifier across all three platforms. Left to itself Xcode invents a
+        # "maccatalyst." prefixed one, which would be a different app to App Store Connect, to the
+        # push service, and to every device already carrying a token.
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        # 1,2 = iPhone + iPad. This MUST live on the target, not on the project above: XcodeGen's
+        # built-in setting presets write TARGETED_DEVICE_FAMILY = "1,2" onto every iOS application
+        # target, and a target setting always beats a project one - so a project-level value here
+        # is silently overridden and the app ships universal anyway.
+        #
+        # Universal is what App Store validation rejects (error 90474): an iPad-capable app must
+        # list all four orientations for multitasking, while Info.plist deliberately locks this app
+        # to portrait. Every screen is designed for a phone, so supporting iPad landscape means
+        # rebuilding all of them - and universal also demands its own set of iPad screenshots if
+        # this ever goes to the App Store. The app still installs on iPad, in an iPhone-sized window.
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+  # Live Activities (Dynamic Island + Lock Screen). iOS only, by construction.
+  NEXUSWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widgets
+        excludes:
+          - Info.plist
+      # Compiled into BOTH targets on purpose: ActivityKit hands ContentState across the process
+      # boundary, so the app and the extension have to agree on the declaration exactly.
+      - path: Sources/Shared
+    settings:
+      base:
+        INFOPLIST_FILE: Widgets/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: id.znetworks.nexus.widgets
+        PRODUCT_NAME: NEXUSWidgets
+        CODE_SIGN_ENTITLEMENTS: NEXUSWidgets.entitlements
+        # An extension is delivered inside the app, never installed on its own.
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+  # Notification Service Extension. Runs for pushes marked mutable-content, downloads the `image`
+  # URL the server put in the payload and attaches it (owner, 9 Oct 2026). No App Group, no
+  # entitlements: it never sees the session and only adds an attachment to a copy of the push.
+  NEXUSNotificationService:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: NotificationService
+        excludes:
+          - Info.plist
+    settings:
+      base:
+        INFOPLIST_FILE: NotificationService/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: id.znetworks.nexus.NotificationService
+        PRODUCT_NAME: NEXUSNotificationService
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+  # Apple Watch. Shows where today stands and answers approvals. It can never take attendance:
+  # check-in needs a selfie and check-out needs the reflection as well, and a wrist-sized shortcut
+  # past either would instantly become the easiest way to be marked present from somewhere else.
+  NEXUSWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: Watch
+        excludes:
+          - Info.plist
+      # Reused verbatim rather than copied. All three are Foundation-only and self-contained, so the
+      # watch decodes the same shapes with the same code — a duplicated model is a model that drifts.
+      - path: Sources/Config.swift
+      - path: Sources/Keychain.swift
+      - path: Sources/AttendanceModels.swift
+      # The snapshot the complication draws — the same type the phone's widgets read.
+      - path: Sources/Shared/AttendanceSnapshot.swift
+      - path: Sources/Shared/CalendarCore.swift
+      # The calendar complications' snapshot: the watch fetches /api/calendar/glance and saves it.
+      - path: Sources/Shared/CalendarGlance.swift
+    dependencies:
+      # The watch-face complication rides inside the watch app.
+      - target: NEXUSWatchWidgets
+    settings:
+      base:
+        INFOPLIST_FILE: Watch/Info.plist
+        CODE_SIGN_ENTITLEMENTS: NEXUSWatch.entitlements
+        # Without this the watch app ships with no icon at all, and App Store validation refuses the
+        # whole upload — twice over: "CFBundleIconName is missing" and "No icons found for watch
+        # application". It builds and runs fine, so nothing says anything until the upload is done.
+        # The catalog lives at Watch/Assets.xcassets and is picked up by the `- path: Watch` source
+        # above; the artwork is the same 1024 the phone app uses.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        PRODUCT_BUNDLE_IDENTIFIER: id.znetworks.nexus.watchkitapp
+        PRODUCT_NAME: NEXUS
+        # 4 = Apple Watch.
+        TARGETED_DEVICE_FAMILY: "4"
+        SKIP_INSTALL: YES
+
+  # Watch-face complication. Reads the snapshot the watch app writes into the shared container;
+  # never talks to the API, never sees the session.
+  NEXUSWatchWidgets:
+    type: app-extension
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: WatchWidgets
+        excludes:
+          - Info.plist
+      - path: Sources/Shared/AttendanceSnapshot.swift
+      # The calendar complications draw the saved snapshot with the web's rules (CalendarGlance, days via CalendarCore).
+      - path: Sources/Shared/CalendarCore.swift
+      - path: Sources/Shared/CalendarGlance.swift
+    settings:
+      base:
+        INFOPLIST_FILE: WatchWidgets/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: id.znetworks.nexus.watchkitapp.widgets
+        PRODUCT_NAME: NEXUSWatchWidgets
+        CODE_SIGN_ENTITLEMENTS: NEXUSWatchWidgets.entitlements
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "4"
+
+  # The UI screenshot tour (docs/UI-TOUR.md): XCUITest that photographs a fixed list of screens on
+  # iPhone, iPad and Mac Catalyst. Run with scripts/ui-tour.sh, which supplies the QA account and the
+  # screen list through the environment. Debug-only machinery; nothing of it ships in the app.
+  NEXUSUITour:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests/NEXUSUITour
+    dependencies:
+      - target: NEXUS
+    settings:
+      base:
+        TEST_TARGET_NAME: NEXUS
+        PRODUCT_BUNDLE_IDENTIFIER: id.znetworks.nexus.uitour
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: YES
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
+
+# Default scheme runs RELEASE so a plain ⌘R is the optimized, smooth-on-device build
+# (Debug SwiftUI is dramatically slower on device — the usual cause of on-device lag).
+#   • NEXUS       → Release (-O; default ⌘R — the build to actually use on the phone)
+#   • NEXUS-Debug → Debug (use only when you need breakpoints / fast incremental builds)
+schemes:
+  NEXUS:
+    build:
+      targets:
+        NEXUS: all
+    run:
+      config: Release
+    archive:
+      config: Release
+  NEXUS-Debug:
+    build:
+      targets:
+        NEXUS: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  # scripts/ui-tour.sh runs this one (`xcodebuild test -scheme NEXUSUITour`). Debug, because the tour's
+  # launch arguments (TourMode) exist only in Debug / NEXUS_DEV_SERVER builds.
+  NEXUSUITour:
+    build:
+      targets:
+        NEXUS: all
+        NEXUSUITour: [test]
+    test:
+      config: Debug
+      gatherCoverageData: false
+      # The tour saves its own named screenshots; automatic per-step captures made the result bundle
+      # huge and its finalize took 10+ minutes on the owner's Mac (13 Oct 2026).
+      captureScreenshotsAutomatically: false
+      deleteScreenshotsWhenEachTestSucceeds: true
+      targets:
+        - NEXUSUITour

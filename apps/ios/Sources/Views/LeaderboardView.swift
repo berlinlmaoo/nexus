@@ -1,0 +1,264 @@
+import SwiftUI
+
+/// Port of leaderboard.tsx: period banner + top-3 podium (gold/silver/bronze) + rankings list.
+struct LeaderboardView: View {
+    @Environment(AuthStore.self) private var auth
+    @Environment(AppRouter.self) private var router
+    @Environment(\.horizontalSizeClass) private var hSize
+    @State private var rows: [LeaderboardRow] = []
+    @State private var loading = true
+    @State private var error: String?
+    /// When what is on screen was fetched. Non-nil only while showing a cached copy that has not
+    /// been refreshed yet — data that looks live but is a day old is worse than a spinner.
+    @State private var showingCacheFrom: Date?
+    /// The person a tapped rank opens. Held as a value because a NavigationLink(destination:) inside
+    /// the ForEach would build every profile on the way past.
+    @State private var openProfile: ProfileTarget?
+
+    /// BoD+ (atBottom) sink below staff; then by XP desc, then name (case-insensitive, as the web).
+    private var ranked: [LeaderboardRow] {
+        rows.sorted {
+            if ($0.atBottom ?? false) != ($1.atBottom ?? false) { return !($0.atBottom ?? false) }
+            if $0.totalXp != $1.totalXp { return $0.totalXp > $1.totalXp }
+            return ($0.name ?? "").localizedCaseInsensitiveCompare($1.name ?? "") == .orderedAscending
+        }
+    }
+    /// Standard competition ranking (web lib/competition-rank.ts, QA 13 Oct 2026): equal XP shares a rank
+    /// and the next one skips (1, 1, 1, 4). Before, seven people on 1,000 XP got ranks 1–7. A BoD row that
+    /// sinks to the bottom never ties with the staff above it.
+    private var ranks: [Int] {
+        let list = ranked
+        var out: [Int] = []
+        for (i, r) in list.enumerated() {
+            if i > 0, list[i - 1].totalXp == r.totalXp, (list[i - 1].atBottom ?? false) == (r.atBottom ?? false) {
+                out.append(out[i - 1])
+            } else {
+                out.append(i + 1)
+            }
+        }
+        return out
+    }
+
+    /// The sidebar's Leaderboard page on an iPad or Mac: the web's page header instead of the nav bar.
+    private var isRoot: Bool { NXSidebarPage.isRoot(.leaderboard, hSize: hSize, router: router) }
+
+    /// The period the board covers: this calendar month in WIB, shown as its first and LAST day
+    /// ("1 Oct – 31 Oct"), as the web's header since QA 13 Oct 2026.
+    private static var periodText: String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Jakarta") ?? .current
+        let now = Date()
+        guard let start = cal.date(from: cal.dateComponents([.year, .month], from: now)),
+              let next = cal.date(byAdding: .month, value: 1, to: start),
+              let last = cal.date(byAdding: .day, value: -1, to: next) else { return "" }
+        let f = DateFormatter()
+        f.calendar = cal
+        f.timeZone = cal.timeZone
+        f.locale = Locale(identifier: AppLanguage.shared.lang == .id ? "id_ID" : "en_GB")
+        f.dateFormat = "d MMM"
+        return "\(f.string(from: start)) – \(f.string(from: last))"
+    }
+
+    /// Web leaderboard.tsx PageHeader: the current period sits at the right.
+    private static var periodSuffix: String { " · " + periodText }
+
+    private var pageHeader: some View {
+        NXPageHeader(title: T("Leaderboard"), subtitle: T("Everyone's XP this month. It resets on the 1st.")) {
+            (Text(T("Current period")).font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground)
+             + Text(Self.periodSuffix).font(NXFont.text(13)).foregroundStyle(NX.mutedFg))
+                .accessibilityHint(T("XP resets on the 1st at 00:00 WIB"))
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            NX.background.ignoresSafeArea()
+            content
+        }
+        .nxSidebarPageChrome(isRoot, phoneSubtitle: T("Everyone's XP this month. It resets on the 1st.")) { pageHeader }
+        .safeAreaInset(edge: .top) {
+            if let at = showingCacheFrom {
+                Text(T("Showing saved data") + " · " + Self.ago(at))
+                    .font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(NX.muted, in: Capsule())
+                    .padding(.top, 4)
+            }
+        }
+        .navigationTitle(T("Leaderboard"))
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $openProfile) { MemberProfileView(target: $0) }
+        .task {
+            // Draw the last known board first so the screen opens with content instead of a
+            // skeleton, then refresh underneath.
+            if rows.isEmpty, let hit = ResponseCache.decoded("leaderboard", as: LeaderboardResponse.self) {
+                rows = hit.value.rows ?? []
+                showingCacheFrom = hit.savedAt
+                loading = false
+            }
+            await load()
+        }
+    }
+
+    @ViewBuilder private var content: some View {
+        if loading {
+            SkeletonList()
+        } else if let error {
+            ErrorState(message: error, icon: "trophy") { Task { await load() } }
+        } else {
+            ScrollView {
+                VStack(spacing: 16) {
+                    // The period line went through T() (it was hard-coded Indonesian); on the iPad / Mac
+                    // page it is in the header instead.
+                    // A plain line as on the web phone ("Current period · 1 Oct – 31 Oct"); the reset rule is in
+                    // the subtitle above (UI tour 13 Oct 2026: it was a bordered banner).
+                    if !isRoot {
+                        (Text(T("Current period")).foregroundStyle(NX.foreground).fontWeight(.medium)
+                            + Text(" · " + Self.periodText).foregroundStyle(NX.mutedFg))
+                            .font(NXFont.text(13))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    Text(T("XP ranking for everyone"))
+                        .font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if ranked.count >= 1 {
+                        Podium(rows: Array(ranked.prefix(3)), labels: Array(ranks.prefix(3))) { row in
+                            openProfile = ProfileTarget(userId: row.userId, name: row.name, avatar: row.avatar)
+                        }
+                    }
+
+                    VStack(spacing: 0) {
+                        let shared = ranks
+                        ForEach(Array(ranked.enumerated()), id: \.element.id) { idx, r in
+                            if idx > 0 { Divider().overlay(NX.border) }
+                            RankRow(rank: idx < shared.count ? shared[idx] : idx + 1, row: r) {
+                                openProfile = ProfileTarget(userId: r.userId, name: r.name, avatar: r.avatar)
+                            }
+                        }
+                    }
+                    // Hairline card like the web's, no drop shadow.
+                    .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                }
+                .padding(.horizontal, NXSidebarPage.gutter(isRoot))
+                .padding(.vertical, isRoot ? 24 : 16)
+            }
+            .refreshable { await load() }
+        }
+    }
+
+    private static func ago(_ date: Date) -> String {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .short
+        return f.localizedString(for: date, relativeTo: .now)
+    }
+
+    private func load() async {
+        error = nil
+        do {
+            rows = try await APIClient.shared.leaderboard()
+            showingCacheFrom = nil
+        }
+        catch APIError.unauthorized { auth.logout() }
+        catch {
+            // With something already on screen from cache, an error is a stale badge, not an error
+            // page: replacing a readable board with a failure message helps nobody.
+            if rows.isEmpty {
+                self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load the leaderboard.")
+            }
+        }
+        loading = false
+    }
+}
+
+struct Podium: View {
+    let rows: [LeaderboardRow]   // already ranked 1..3
+    /// The rank to print on each place when it differs from the place (a tie: two people on rank 1).
+    var labels: [Int] = []
+    let onOpen: (LeaderboardRow) -> Void
+    // Visual order: 2nd · 1st · 3rd
+    private var slots: [(rank: Int, row: LeaderboardRow?)] {
+        [(2, rows.count > 1 ? rows[1] : nil), (1, rows.first), (3, rows.count > 2 ? rows[2] : nil)]
+    }
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 10) {
+            ForEach(slots, id: \.rank) { slot in podium(slot.rank, slot.row) }
+        }
+        .padding(.vertical, 8)
+    }
+    private func podium(_ rank: Int, _ row: LeaderboardRow?) -> some View {
+        // Tied people share a rank, so they share its step too: 1 / 1 / 1 are three gold steps of one
+        // height (web leaderboard-podium, QA BoD R2 N05). The place only decides left / middle / right.
+        let step: Int = min(3, max(1, label(rank)))
+        let (barColor, ring, crown, avatar, height): (Color, Color, Color, CGFloat, CGFloat) = {
+            switch step {
+            case 1: return (Color(hex: "#fcd34d"), Color(hex: "#f59e0b"), Color(hex: "#f59e0b"), 70, 96)
+            case 2: return (Color(hex: "#e2e8f0"), Color(hex: "#94a3b8"), Color(hex: "#94a3b8"), 56, 72)
+            default: return (Color(hex: "#fdba74"), Color(hex: "#f97316"), Color(hex: "#f97316"), 56, 60)
+            }
+        }()
+        return VStack(spacing: 6) {
+            if let row {
+                // Only the person half of the tile opens a profile. The numbered bar below stays
+                // scenery, so a tap on the podium's base does not fire.
+                Button { onOpen(row) } label: {
+                    VStack(spacing: 6) {
+                        ZStack {
+                            AvatarView(url: row.avatar, initial: row.initial, size: avatar)
+                                .overlay(Circle().strokeBorder(ring, lineWidth: 3))
+                            if label(rank) == 1 { Image(systemName: "crown.fill").font(.system(size: 18)).foregroundStyle(crown).offset(y: -avatar/2 - 6) }
+                        }
+                        Text(row.name ?? "—").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        Text(row.totalXp.formatted(.number.locale(AppDateLocale.current))).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            ZStack(alignment: .top) {
+                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(barColor).frame(height: height)
+                // Dark on the coloured step, as the web's podium (white was hard to read on gold).
+                Text("\(label(rank))").font(NXFont.display(22, .black)).foregroundStyle(Color(hex: "#78350f").opacity(0.9)).padding(.top, 8)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .opacity(row == nil ? 0 : 1)
+    }
+    /// The shared rank for a podium place (1-based), else the place itself.
+    private func label(_ place: Int) -> Int {
+        place - 1 < labels.count ? labels[place - 1] : place
+    }
+}
+
+struct RankRow: View {
+    let rank: Int
+    let row: LeaderboardRow
+    let onOpen: () -> Void
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(spacing: 12) {
+                Text("\(rank)").font(NXFont.text(15, .semibold)).foregroundStyle(rank <= 3 ? NX.foreground : NX.mutedFg)
+                    .frame(width: 28)
+                // The web marks first place with a crown in every row that holds it.
+                Image(systemName: "crown")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color(hex: "#f59e0b"))
+                    .frame(width: 18)
+                    .opacity(rank == 1 ? 1 : 0)
+                    .accessibilityHidden(true)
+                AvatarView(url: row.avatar, initial: row.initial, size: 36)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(row.name ?? "—").font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    Text("Level \(row.level)\(row.levelName.map { " – \($0)" } ?? "")").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                }
+                Spacer()
+                Text(row.totalXp.formatted(.number.locale(AppDateLocale.current)))
+                    .font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 11)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
