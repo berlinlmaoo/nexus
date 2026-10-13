@@ -659,7 +659,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                                     onEditBrief = onOpenSettings,
                                     onAddTask = { if (s.lanes.isNotEmpty() && access.canEdit) { createDue = null; creating = true } })
                                 ProjectTab.BOARD -> BoardView(groups, cfg, s.lanes, access, vm, s.selected, propCtx, linkedLanes, onOpenTask) { dupDateFor = it }
-                                ProjectTab.LIST -> ListView(view?.id ?: "list", groups, cfg, s.lanes, access, vm, s.selected, onOpenTask) { dupDateFor = it }
+                                ProjectTab.LIST -> ListView(view?.id ?: "list", groups, cfg, s.lanes, access, vm, s.selected, propCtx, onOpenTask) { dupDateFor = it }
                                 ProjectTab.TABLE -> TableView(groups, cfg, s.lanes, propCtx, members, access, vm, s.selected, onOpenTask) { t -> dueFor = listOf(t.id) }
                                 ProjectTab.SHEET -> ProjectSpreadsheetTab(vm.projectId, web)
                                 ProjectTab.CALENDAR -> CalendarTab(visibleTasks, onOpenTask,

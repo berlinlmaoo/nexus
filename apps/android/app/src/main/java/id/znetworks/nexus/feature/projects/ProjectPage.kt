@@ -511,7 +511,7 @@ fun colorName(k: String): String = stringResource(when (k) {
  */
 @Composable
 fun ListView(viewId: String, groups: List<TaskGroup>, cfg: ViewConfig, lanes: List<Lane>, access: ProjectAccess, vm: ProjectDetailViewModel,
-             selected: Set<String>, onOpenTask: (String) -> Unit, onDuplicateDate: (List<String>) -> Unit) {
+             selected: Set<String>, props: PropCtx, onOpenTask: (String) -> Unit, onDuplicateDate: (List<String>) -> Unit) {
     val c = Nx.colors
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("view_collapsed", android.content.Context.MODE_PRIVATE) }
@@ -531,7 +531,7 @@ fun ListView(viewId: String, groups: List<TaskGroup>, cfg: ViewConfig, lanes: Li
             if (open) {
                 val create = if (access.canEdit) groupCreate(g, cfg.groupBy, vm) else null
                 if (create != null) item(key = "n-" + g.key) { Box(Modifier.padding(start = 26.dp, bottom = 4.dp)) { InlineNewTask(create, flat = true) } }
-                items(g.tasks, key = { g.key + "/" + it.id }) { t -> ListRow(t, lanes, vm, selected, access, onOpenTask, onDuplicateDate) }
+                items(g.tasks, key = { g.key + "/" + it.id }) { t -> ListRow(t, lanes, vm, selected, access, props, onOpenTask, onDuplicateDate) }
             }
         }
     }
@@ -539,30 +539,29 @@ fun ListView(viewId: String, groups: List<TaskGroup>, cfg: ViewConfig, lanes: Li
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun ListRow(t: BoardTask, lanes: List<Lane>, vm: ProjectDetailViewModel, selected: Set<String>, access: ProjectAccess,
+private fun ListRow(t: BoardTask, lanes: List<Lane>, vm: ProjectDetailViewModel, selected: Set<String>, access: ProjectAccess, props: PropCtx,
                     onOpenTask: (String) -> Unit, onDuplicateDate: (List<String>) -> Unit) {
     val c = Nx.colors
     val selecting = selected.isNotEmpty()
     var menu by remember { mutableStateOf(false) }
     Box {
+        // iOS ListTaskRow (compact): the done circle, the title (two lines at most), then the view's properties in one
+        // wrapping line — fields, due, priority, status, people (run 5: rows were 3–4 lines of chips).
         Row(Modifier.fillMaxWidth().background(if (t.id in selected) c.accentBg else Color.Transparent)
             .combinedClickable(onClick = { if (selecting) vm.toggleSelect(t.id) else onOpenTask(t.id) },
                 onLongClick = { if (selecting) vm.toggleSelect(t.id) else menu = true })
-            .padding(start = if (t.isSubtask) 30.dp else 4.dp, end = 4.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.Top) {
+            .padding(start = if (t.isSubtask) 30.dp else 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.Top) {
             Icon(if (t.isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, stringResource(R.string.task_toggle_done),
-                tint = if (t.isDone) c.success else c.mutedFg.copy(alpha = 0.6f),
-                modifier = Modifier.size(22.dp).clip(CircleShape).clickable(enabled = access.canEdit && !selecting) { vm.toggleDone(t) })
+                tint = if (t.isDone) c.success else c.mutedFg.copy(alpha = 0.55f),
+                modifier = Modifier.padding(top = 1.dp).size(20.dp).clip(CircleShape).clickable(enabled = access.canEdit && !selecting) { vm.toggleDone(t) })
             Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text((if (t.isSubtask) "↳ " else "") + t.title.ifBlank { "—" }, fontSize = 15.sp, color = if (t.isDone) c.mutedFg else c.foreground,
-                    textDecoration = if (t.isDone) TextDecoration.LineThrough else null, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (t.dueDate != null) DueLabel(t.dueDate, t.isDone)
-                    if (!t.priority.isNullOrBlank() && !t.priority.equals("NONE", true)) PriorityChip(t.priority)
-                    if (t.assignees.isNotEmpty()) id.znetworks.nexus.ui.components.AvatarStack(t.assignees.map { it.user?.name to it.user?.avatar }, size = 18.dp)
-                    if (t.questXp > 0) Text("+${t.questXp} XP", fontSize = 11.sp, color = c.violetText)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text((if (t.isSubtask) "↳ " else "") + t.title.ifBlank { "—" }, fontSize = 15.sp, color = if (t.isDone) c.mutedFg else c.foreground,
+                        textDecoration = if (t.isDone) TextDecoration.LineThrough else null, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (t.questXp > 0) { Spacer(Modifier.width(6.dp)); Text("+${t.questXp} XP", fontSize = 11.sp, color = c.violetText) }
                 }
-                if (t.customFieldValues.isNotEmpty()) FieldChipRow(t.customFieldValues)
+                PropLine(props.items(t))
             }
         }
         HorizontalDivider(Modifier.align(Alignment.BottomStart).padding(start = 36.dp), color = c.border.copy(alpha = 0.7f))

@@ -59,7 +59,8 @@ object CardProps {
         val cfs = fields.sortedBy { it.position ?: Int.MAX_VALUE }.map { "cf:" + it.id }
         return when (layout) {
             "board" -> listOf("priority", "tags") + cfs + listOf("due", "subtasks", "comments", "assignee")
-            "list" -> listOf("due") + cfs.take(3) + listOf("priority", "status", "assignee")
+            // iOS ListPropLine order (the Android reference): the first three fields, due, priority, status, people.
+            "list" -> cfs.take(3) + listOf("due", "priority", "status", "assignee")
             "table" -> listOf("assignee", "due", "priority", "status", "tags")
             "gallery" -> listOf("status", "due", "assignee")
             else -> listOf("status", "assignee")
