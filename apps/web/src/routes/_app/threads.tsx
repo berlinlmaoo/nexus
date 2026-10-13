@@ -204,9 +204,9 @@ function FeedPage() {
     <div>
       {/* The app's standard header (title, subtitle, the All / Mentions switch in its tabs row) at full
           width, like every other page; it was a centred 600px column with its own slim bar (audit 12 Oct
-          2026). The wrapper carries the header's md+ stickiness so its height can be measured for the
+          2026). The wrapper carries the header's stickiness so its height can be measured for the
           new-posts pill, which sits just under it. */}
-      <div ref={headRef} className="md:sticky md:top-0 md:z-40">
+      <div ref={headRef} className="sticky top-0 z-30 md:z-40">
         <PageHeader
           title={t("Threads")}
           subtitle={t("Short updates from the team. Tag someone with @ and they get notified.")}
