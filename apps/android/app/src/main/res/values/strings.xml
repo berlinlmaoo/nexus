@@ -6,7 +6,7 @@
 
     <string name="login_email_label">ACCESS ID (EMAIL)</string>
     <string name="login_password_label">ENCRYPTION KEY</string>
-    <string name="login_cta">Enter Mission Control</string>
+    <string name="login_cta">Sign in</string>
     <string name="login_busy">Opening uplink…</string>
     <string name="login_fill_both">Fill in your Access ID and Encryption Key first.</string>
     <string name="login_failed">Login failed. Check your email/password.</string>
@@ -180,7 +180,7 @@
     <string name="req_pending">Pending</string>
     <string name="req_all">All</string>
     <string name="submissions_title">Submissions</string>
-    <string name="submissions_sub_review">Review the crew\'s requests and offsite check-outs, and file your own.</string>
+    <string name="submissions_sub_review">Review the team\'s requests and offsite check-outs, and file your own.</string>
     <string name="submissions_sub_staff">File leave, permit, sick or day-off.</string>
     <string name="req_new">New request</string>
     <string name="req_new_title">New request</string>
@@ -277,7 +277,7 @@
     <string name="battery_huawei">Huawei / Honor: in App launch, manage NEXUS manually and allow all three switches.</string>
 
     <!-- Board -->
-    <string name="board_title">Crew streak board</string>
+    <string name="board_title">Attendance board</string>
     <string name="board_title_me">Your attendance history</string>
     <string name="board_full">Full screen</string>
     <string name="board_export">Export this period (xlsx)</string>
@@ -407,15 +407,15 @@
     <string name="updater_install_failed">The update was not installed.</string>
     <string name="updater_signed_out">Sign in first, or download the update from the NEXUS website.</string>
     <string name="metric_dayoff_help_bonus">This period: %1$d + %2$d extra</string>
-    <string name="projects_title">Mission Control</string>
-    <string name="projects_new">New mission</string>
+    <string name="projects_title">Projects</string>
+    <string name="projects_new">New project</string>
     <string name="folder_new">New folder</string>
-    <string name="projects_search">Search missions and tasks…</string>
-    <string name="projects_load_failed">Couldn\'t load the missions</string>
-    <string name="projects_empty">No missions yet</string>
-    <string name="projects_empty_sub">A mission is a project board: its tasks, people and deadlines in one place. You\'ll see every mission you\'re part of here. Create one to get started.</string>
+    <string name="projects_search">Search projects and tasks…</string>
+    <string name="projects_load_failed">Couldn\'t load the projects</string>
+    <string name="projects_empty">No projects yet</string>
+    <string name="projects_empty_sub">A project is one board for a piece of work: its tasks, people and deadlines in one place. You\'ll see every project you\'re part of here — create the first one to get going.</string>
     <string name="projects_nothing_matches">Nothing matches that.</string>
-    <string name="projects_section_missions">Missions</string>
+    <string name="projects_section_missions">Projects</string>
     <string name="projects_section_tasks">Tasks</string>
     <string name="folder_edit">Edit folder</string>
     <string name="folder_delete">Delete folder</string>
@@ -458,15 +458,15 @@
     <string name="folder_name">Folder name</string>
     <string name="folder_create">Create folder</string>
     <string name="save">Save</string>
-    <string name="project_name">Mission name</string>
-    <string name="project_launch">Launch mission</string>
-    <string name="project_no_brief">No brief yet — add one and make the mission clearer.</string>
+    <string name="project_name">Project name</string>
+    <string name="project_launch">Create project</string>
+    <string name="project_no_brief">No description yet.</string>
     <string name="project_cards">Cards</string>
     <string name="project_done">Done</string>
-    <string name="project_lanes">Lanes</string>
+    <string name="project_lanes">Sections</string>
     <string name="project_calculating">Calculating…</string>
     <string name="project_no_progress">No progress data</string>
-    <string name="project_energy">%1$d%% mission energy</string>
+    <string name="project_energy">%1$d%% done</string>
     <string name="project_left">%1$d left</string>
     <string name="project_solo">Solo quest</string>
     <string name="project_no_deadline">No deadline</string>
@@ -497,8 +497,8 @@
     <string name="project_locked">Project locked</string>
     <string name="project_locked_sub">You\'re not a member of this project. Ask its lead to add you.</string>
     <string name="project_load_failed">Couldn\'t load the project.</string>
-    <string name="board_no_lanes">This project has no lanes yet.</string>
-    <string name="board_no_lanes_sub">Lanes are the columns a task moves through. Set them up on the web board, then add tasks here.</string>
+    <string name="board_no_lanes">This project has no sections yet.</string>
+    <string name="board_no_lanes_sub">Sections are the columns a task moves through. Set them up on the web board, then add tasks here.</string>
     <string name="board_empty_lane">Empty</string>
     <string name="board_add_task">Add task</string>
     <string name="board_task_title">Task title…</string>
@@ -591,7 +591,7 @@
     <string name="home_evening">Good Evening,</string>
     <string name="home_commander">Commander</string>
     <string name="home_attendance">Attendance</string>
-    <string name="more_attendance_sub">Check in, check out, requests and the crew board</string>
+    <string name="more_attendance_sub">Check in, check out, requests and the attendance board</string>
     <string name="home_att_loading">Loading today…</string>
     <string name="home_att_pending_checkout">An earlier day is still open: check out first</string>
     <string name="home_att_done">Done for today · %1$s–%2$s</string>
@@ -811,8 +811,8 @@
     <string name="wn016_trail_b">Between check-in and check-out NEXUS checks about once an hour that you\'re at the office. Step out and it follows your route, and the Work session notification counts down to the automatic check-out, with a File a permit button. Nothing before check-in, nothing after check-out.</string>
     <string name="wn016_offline_t">No signal? It still counts</string>
     <string name="wn016_offline_b">A check-in or check-out tapped while NEXUS can\'t be reached is kept on this phone with the time you tapped, and sends itself when NEXUS is back.</string>
-    <string name="wn016_projects_t">Your missions, in the app</string>
-    <string name="wn016_projects_b">Home, My Quest Log, boards, task details with files and comments, sprints, calendar, timeline and search all run on the phone now.</string>
+    <string name="wn016_projects_t">Your projects, in the app</string>
+    <string name="wn016_projects_b">Home, My Tasks, boards, task details with files and comments, sprints, calendar, timeline and search all run on the phone now.</string>
     <string name="wn016_account_t">Sign up, reset and passkeys</string>
     <string name="wn016_account_b">Create an account with your company\'s workspace code, reset a forgotten password, or add a passkey and sign in with the phone\'s screen lock.</string>
     <string name="wn016_update_t">Updates arrive inside NEXUS</string>
@@ -1010,7 +1010,7 @@
     <string name="rp_team">My team</string>
     <string name="rp_this_period">This period</string>
     <string name="rp_period">Period</string>
-    <string name="rp_search_crew">Search crew</string>
+    <string name="rp_search_crew">Search people</string>
     <string name="rp_no_reports">People appear here once the approval chart lists you as their manager.</string>
     <string name="rp_no_one">People join this list once they are members of the workspace.</string>
     <string name="rp_your_reports">Your direct reports</string>
@@ -1518,10 +1518,10 @@
     <string name="company_only">Only for Z Networks. This is part of the company workspace.</string>
     <string name="hero_recenter">Show my location</string>
     <string name="more_title">More</string>
-    <string name="more_sec_home">HOME BASE</string>
-    <string name="more_sec_missions">MISSIONS</string>
+    <string name="more_sec_home">HOME</string>
+    <string name="more_sec_missions">WORK</string>
     <string name="more_sec_knowledge">KNOWLEDGE</string>
-    <string name="more_sec_pulse">PULSE CHECK</string>
+    <string name="more_sec_pulse">TEAM</string>
     <string name="more_sec_system">SYSTEM</string>
     <string name="mt_messages">Messages</string>
     <string name="mt_threads">Threads</string>
@@ -1534,7 +1534,7 @@
     <string name="mt_attendance">Attendance</string>
     <string name="mt_ticket">Ticket</string>
     <string name="mt_whats_new">What\'s new</string>
-    <string name="mt_tuning">Tuning Room</string>
+    <string name="mt_tuning">Settings</string>
     <string name="mt_control">Control Room</string>
     <string name="fm_empty_title">No forms yet</string>
     <string name="fm_empty_body">A form is an intake page — a request, a reimbursement, a report — that turns into a task the moment it\'s submitted. BoD builds them on the web; once one is published it appears here for you to fill in.</string>

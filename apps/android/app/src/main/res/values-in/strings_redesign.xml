@@ -292,4 +292,21 @@
     <string name="st_copy">Salin</string>
     <string name="st_copied">Tersalin</string>
     <string name="st_mcp_body">Hubungkan Claude (aplikasi, Claude Code, atau Claude Desktop) ke NEXUS agar bisa membaca dan mengubah task dan halamanmu dengan aksesmu. Token koneksinya dibuat di web, di Pengaturan › Claude (MCP), dan hanya ditampilkan sekali.</string>
+    <!-- Projects summary card (iOS ProjectsSummaryCard), 14 Oct 2026 -->
+    <string name="psum_avg_progress">Rata-rata progres</string>
+    <string name="psum_tasks_done">Task selesai</string>
+    <string name="psum_members">Member</string>
+    <string name="psum_filters">Filter</string>
+    <string name="psum_all">Semua project</string>
+    <string name="psum_active">Aktif</string>
+    <string name="psum_planning">Perencanaan</string>
+    <string name="psum_on_hold">Ditunda</string>
+    <string name="psum_completed">Selesai</string>
+    <string name="psum_archived">Diarsipkan</string>
+    <string name="psum_sort_progress">Urutkan menurut progres</string>
+    <string name="psum_sort_tasks">Urutkan menurut jumlah task</string>
+    <string name="psum_sort_name">Urutkan menurut nama</string>
+    <plurals name="psum_n_of_m">
+        <item quantity="other">%1$d dari %2$d project</item>
+    </plurals>
 </resources>

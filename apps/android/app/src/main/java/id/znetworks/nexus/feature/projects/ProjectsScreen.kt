@@ -340,7 +340,7 @@ fun IconTile(icon: String?, fallback: String, size: Int = 44) {
     }
 }
 
-/** "Mission Control" (iOS ProjectsView): search, folder tree, project cards, create. */
+/** Projects (iOS ProjectsView): search, the summary card, folder tree, project cards, create. */
 @Composable
 fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit, onOpenFolder: (String) -> Unit = {},
                    onOpenSettings: (String) -> Unit = {}, vm: ProjectsViewModel = viewModel()) {
@@ -371,7 +371,11 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
         val r = snackbar.showSnackbar(t.text, actionLabel = t.undo?.let { undoLabel }, duration = androidx.compose.material3.SnackbarDuration.Short)
         if (r == androidx.compose.material3.SnackbarResult.ActionPerformed) t.undo?.invoke()
     }
-    val tree = FolderTree(s.folders, s.projects)
+    // The summary card's filter and order (iOS ProjectsSummaryCard / web visibleProjects); the folders show what passes.
+    var statusFilter by rememberSaveable { mutableStateOf("all") }
+    var sortMode by rememberSaveable { mutableStateOf("energy") }
+    val visible = ProjectsLogic.visible(s.projects, statusFilter, sortMode, s.tallies.orEmpty())
+    val tree = FolderTree(s.folders, visible)
     drag.onDrop = { item, target ->
         when (item) {
             is TreeDrag.ProjectItem -> vm.moveProject(item.project, target)
@@ -432,22 +436,16 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
                     items(s.taskHits, key = { "t-" + it.id }) { t -> TaskHitRow(t) { onOpenTask(t.id) } }
                 }
                 else -> {
-                    // Pinned (Berlin 29 Sep, iOS 286cada; folders FOLDERS-DND): the person's pins, synced with the web and
-                    // the other devices, in the server's order. A pinned folder is the whole folder, openable here.
-                    val pinnedFolders = s.pinnedFolders.mapNotNull { id -> s.folders.firstOrNull { it.id == id } }
-                    val pinned = pinnedIds.mapNotNull { id -> s.projects.firstOrNull { it.id == id } }
-                    if (pinnedFolders.isNotEmpty() || pinned.isNotEmpty()) {
-                        item { Section(stringResource(R.string.home_pinned)) }
-                        items(pinnedFolders, key = { "pf-" + it.id }) { f -> FolderNode(f, 0, "pin", actions) }
-                        items(pinned, key = { "pin-" + it.id }) { p -> ProjectRow(p, actions) }
+                    // iOS ProjectsView: the summary card, the folders as rows, then "No folder" and its project cards.
+                    // (Pins live on Home and in the sidebar; the Projects page has no Pinned section.)
+                    item(key = "summary") {
+                        ProjectsSummaryCard(visible.size, s.projects.size, ProjectsLogic.summary(s.projects, s.tallies), statusFilter, sortMode,
+                            { statusFilter = it }, { sortMode = it })
                     }
                     val roots = tree.roots().filter { s.canManage || tree.hasProjects(it.id) }
-                    if (roots.isNotEmpty()) {
-                        item { Section(stringResource(R.string.tree_folders)) }
-                        items(roots, key = { "f-" + it.id }) { f -> FolderNode(f, 0, "tree", actions) }
-                    }
+                    items(roots, key = { "f-" + it.id }) { f -> FolderNode(f, 0, "tree", actions) }
                     val loose = tree.loose()
-                    if (loose.isNotEmpty() || s.canManage) item { Section(stringResource(R.string.folder_none)) }
+                    if (s.folders.isNotEmpty() && (loose.isNotEmpty() || s.canManage)) item { Section(stringResource(R.string.folder_none)) }
                     if (s.canManage && s.folders.isNotEmpty()) item { NoFolderStrip(actions) }
                     items(loose, key = { "p-" + it.id }) { p -> ProjectRow(p, actions) }
                 }
