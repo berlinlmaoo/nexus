@@ -5,7 +5,8 @@
 #                                       (mobile reference) + dev web desktop 1440x900 in Chrome (master reference)
 #   scripts/ui-tour.sh --ipad           … plus the iPad simulator
 #   scripts/ui-tour.sh --mac            … plus "My Mac (Mac Catalyst)"
-#   scripts/ui-tour.sh --all            iPhone + iPad + Mac + web
+#   scripts/ui-tour.sh --android        … plus the Android tour (apps/android/scripts/ui-tour-android.sh)
+#   scripts/ui-tour.sh --all            iPhone + iPad + Mac + web + Android
 #   --only calendar,settings            just these screen ids (scripts/ui-tour-screens.json)
 #   --no-web | --web-only | --no-upload | --no-pull | --no-open | --keep-xcresult
 #   --chrome-mobile                     web mobile from Chrome emulation (440x956@3x) instead of Safari
@@ -23,18 +24,19 @@ REPO=$(pwd)
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 ORIG_ARGS=("$@")
-SAFARI_MOBILE=1 DO_IPHONE=1 DO_IPAD=0 DO_MAC=0 DO_WEB=1 DO_UPLOAD=1 DO_PULL=1 DO_OPEN=1 KEEP_XCRESULT=0 SET_PASSWORD=0
+SAFARI_MOBILE=1 DO_IPHONE=1 DO_IPAD=0 DO_MAC=0 DO_ANDROID=0 DO_WEB=1 DO_UPLOAD=1 DO_PULL=1 DO_OPEN=1 KEEP_XCRESULT=0 SET_PASSWORD=0
 ONLY=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --ipad) DO_IPAD=1 ;;
     --mac) DO_MAC=1 ;;
-    --all) DO_IPAD=1; DO_MAC=1 ;;
+    --android) DO_ANDROID=1 ;;
+    --all) DO_IPAD=1; DO_MAC=1; DO_ANDROID=1 ;;
     --only) ONLY="${2:-}"; shift ;;
     --only=*) ONLY="${1#--only=}" ;;
     --no-web) DO_WEB=0 ;;
     --chrome-mobile) SAFARI_MOBILE=0 ;;
-    --web-only) DO_IPHONE=0; DO_IPAD=0; DO_MAC=0 ;;
+    --web-only) DO_IPHONE=0; DO_IPAD=0; DO_MAC=0; DO_ANDROID=0 ;;
     --no-upload) DO_UPLOAD=0 ;;
     --no-pull) DO_PULL=0 ;;
     --no-open) DO_OPEN=0 ;;
@@ -42,7 +44,7 @@ while [ $# -gt 0 ]; do
     --headless) TOUR_HEADLESS=1 ;;   # no Chrome window
     --keep-xcresult) KEEP_XCRESULT=1 ;;
     --set-password) SET_PASSWORD=1 ;;
-    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
     *) echo "unknown option: $1 (see --help)"; exit 2 ;;
   esac
   shift
@@ -303,3 +305,29 @@ for line in ${SUMMARY[@]+"${SUMMARY[@]}"}; do echo "- $line"; done
 echo "- local:  $OUT/index.html"
 [ -n "$REMOTE" ] && echo "- server: $REMOTE"
 echo "=== end ==="
+
+# ---------------------------------------------------------------------------------------------- android
+# Runs after the Apple/web half so a failure here never costs those screenshots. Uploads to its own folder.
+if [ "$DO_ANDROID" = 1 ]; then
+  ADB="$HOME/Library/Android/sdk/platform-tools/adb"
+  EMU="$HOME/Library/Android/sdk/emulator/emulator"
+  if ! "$ADB" get-state >/dev/null 2>&1 && [ -x "$EMU" ]; then
+    # Nightly run: no Orca emulator open, so boot the first AVD without a window and wait for it.
+    AVD=$("$EMU" -list-avds 2>/dev/null | head -1)
+    if [ -n "$AVD" ]; then
+      echo "== android: booting $AVD (headless)"
+      nohup "$EMU" -avd "$AVD" -no-window -no-audio -no-boot-anim >"$OUT/logs/android-emulator.log" 2>&1 &
+      STARTED_EMU=$!
+      "$ADB" wait-for-device
+      for _ in $(seq 1 120); do [ "$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && break; sleep 2; done
+    fi
+  fi
+  ONLY_ARGS=(); [ -n "$ONLY" ] && ONLY_ARGS=(--only "$ONLY")
+  UP_ARGS=(); [ "$DO_UPLOAD" = 1 ] || UP_ARGS=(--no-upload)
+  if "$REPO/../android/scripts/ui-tour-android.sh" ${ONLY_ARGS[@]+"${ONLY_ARGS[@]}"} ${UP_ARGS[@]+"${UP_ARGS[@]}"}; then
+    echo "- android: done"
+  else
+    echo "- android: FAILED (see output above)"
+  fi
+  [ -n "${STARTED_EMU:-}" ] && { "$ADB" emu kill >/dev/null 2>&1 || kill "$STARTED_EMU" 2>/dev/null; }
+fi
