@@ -23,7 +23,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ProjectIcon, ProjectPageIcon } from "@/components/projects/ProjectIcon";
+import { ProjectIcon, ProjectMarkFor } from "@/components/projects/ProjectIcon";
 import { nexusApi, type NexusProject, type NexusProjectFolder } from "@/lib/nexus-api";
 import { canMoveInto, folderPath } from "@/lib/folder-tree-client";
 import { canAddSubfolder } from "@/lib/project-tree-dnd";
@@ -68,17 +68,8 @@ function isNearBlack(color?: string | null): boolean {
  * A project's mark: its photo, else the one default every project shares — the grey Notion-style page
  * icon (owner: no per-project emoji or colour since 11 Oct 2026; page icon = option A, 14 Oct).
  */
-export function ProjectGlyph({ project, size = 16, className }: { project: Pick<NexusProject, "icon" | "color">; size?: number; className?: string }) {
-  if (isUploadedIcon(project.icon)) {
-    return (
-      <span className={cn("grid shrink-0 place-items-center overflow-hidden rounded leading-none", className)} style={{ width: size, height: size, fontSize: size - 3 }}>
-        <ProjectIcon icon={project.icon} className="h-full w-full rounded object-cover" />
-      </span>
-    );
-  }
-  return (
-    <ProjectPageIcon size={size} className={className} />
-  );
+export function ProjectGlyph({ project, size = 16, className }: { project: Pick<NexusProject, "icon" | "color"> & { id?: string }; size?: number; className?: string }) {
+  return <ProjectMarkFor projectId={project.id} icon={project.icon} size={size} className={className} />;
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────────────────────────

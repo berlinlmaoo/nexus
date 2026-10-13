@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, ArrowRight, CalendarDays, ChevronDown, CircleCheck, Folder, FolderKanban, History, ListChecks, Loader2, Plus, Trash2, X } from "lucide-react";
@@ -221,7 +222,7 @@ function ExecutionProject({ deal, projectId, canEdit }: { deal: PipelineDeal; pr
         </>
       ) : tasks || calendar ? (
         <Link to="/projects/$projectId" params={{ projectId: (tasks ?? calendar)!.id }} className={primary}>
-          <FolderKanban className="h-4 w-4 shrink-0" />
+          <ProjectMarkFor projectId={(tasks ?? calendar)!.id} icon={((tasks ?? calendar)! as { icon?: string | null }).icon} size={16} />
           <span className="truncate">{t("Open execution project")}</span>
           <ArrowRight className="h-3.5 w-3.5 shrink-0" />
         </Link>

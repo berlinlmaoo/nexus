@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { useQueryClient } from "@tanstack/react-query";
 import type { Socket } from "socket.io-client";
 import { getSocket } from "./socket";
-import { invalidateAuditViews, invalidateProjectViews } from "./invalidate";
+import { invalidateAuditViews, invalidateProjectViews, patchProjectIcon } from "./invalidate";
 import { bindTypingSocket } from "./chat-typing";
 import { applyRemoteTask, applyRemoteTaskDeleted, taskWriteInFlight, type RemoteApplyResult } from "./task-cache";
 
@@ -210,7 +210,12 @@ export function RealtimeProvider({
           flushTimer = setTimeout(flushPings, Math.max(0, Math.min(PING_DEBOUNCE_MS, burstStartedAt + PING_MAX_WAIT_MS - now)));
         };
         const onWorkspaceChanged = (payload?: unknown) => {
-          const data = (payload && typeof payload === "object" ? payload : {}) as { kind?: unknown; projectId?: unknown };
+          const data = (payload && typeof payload === "object" ? payload : {}) as { kind?: unknown; projectId?: unknown; icon?: unknown };
+          // A changed project icon rides along (server since 14 Oct 2026): swap it everywhere now, the
+          // debounced refetch below then confirms it.
+          if (data.kind === "projects" && typeof data.projectId === "string" && "icon" in data && (typeof data.icon === "string" || data.icon === null)) {
+            patchProjectIcon(queryClient, data.projectId, data.icon);
+          }
           if (data.kind === "audit") {
             pending.audit = true;
           } else if (data.kind === "submissions") {

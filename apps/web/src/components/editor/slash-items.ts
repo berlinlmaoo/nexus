@@ -1,4 +1,5 @@
 import type { Editor, Range } from "@tiptap/core";
+import { ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import {
   AtSign, Bell, Bookmark, CalendarDays, ChevronRight, Code2, FileText, FolderKanban, Heading1, Heading2, Heading3,
   Image as ImageIcon, Sparkles, List, ListChecks, ListOrdered, Minus, Paperclip, Quote, SquareCheckBig, Table2, Type, Lightbulb, MonitorPlay,
@@ -54,7 +55,7 @@ export const SLASH_ITEMS: SlashItem[] = [
   { id: "mention-user", group: "NEXUS", label: "Mention a person", hint: "@", icon: AtSign, keywords: ["person", "people", "user", "orang", "sebut"], run: (e, r) => openMention(e, r, "user") },
   { id: "mention-task", group: "NEXUS", label: "Mention a task", icon: ListChecks, keywords: ["task", "todo", "tugas"], run: (e, r) => openMention(e, r, "task") },
   { id: "mention-doc", group: "NEXUS", label: "Link to doc", icon: FileText, keywords: ["page", "doc", "wiki", "halaman", "dokumen"], run: (e, r) => openMention(e, r, "doc") },
-  { id: "mention-project", group: "NEXUS", label: "Mention a project", icon: FolderKanban, keywords: ["project", "proyek"], run: (e, r) => openMention(e, r, "project") },
+  { id: "mention-project", group: "NEXUS", label: "Mention a project", icon: ProjectPageIcon as unknown as typeof FolderKanban, keywords: ["project", "proyek"], run: (e, r) => openMention(e, r, "project") },
 
   { id: "date", group: "Inline", label: "Date", icon: CalendarDays, keywords: ["today", "date", "tanggal", "hari ini"], run: (e, r) => e.chain().focus().deleteRange(r).insertContent([{ type: "dateChip", attrs: { date: jakartaDate() } }, { type: "text", text: " " }]).run() },
   {

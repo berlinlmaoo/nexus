@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { createPortal } from "react-dom";
 import { Bell, CalendarDays, CheckSquare, FileText, FolderKanban } from "lucide-react";
 import { useLang } from "@/lib/lang";
@@ -154,7 +155,7 @@ export function MentionMenu({ store }: { store: MenuStore<MentionItem> }) {
           if (item.kind === "user") icon = <AvatarFace name={item.label} avatar={item.avatar ?? null} seed={item.id} size={20} decorative />;
           else if (item.kind === "task") icon = <CheckSquare className="h-4 w-4 text-muted-foreground" />;
           else if (item.kind === "doc") icon = <FileText className="h-4 w-4 text-muted-foreground" />;
-          else if (item.kind === "project") icon = <FolderKanban className="h-4 w-4" style={{ color: item.color ?? undefined }} />;
+          else if (item.kind === "project") icon = <ProjectMarkFor projectId={item.id} icon={(item as { icon?: string | null }).icon} size={16} />;
           else icon = "remind" in item && item.remind ? <Bell className="h-4 w-4 text-muted-foreground" /> : <CalendarDays className="h-4 w-4 text-muted-foreground" />;
           return (
             <div key={`${item.kind}:${item.id}`}>

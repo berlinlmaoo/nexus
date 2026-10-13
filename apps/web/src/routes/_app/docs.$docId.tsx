@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { docTitle } from "@/lib/doc-title";
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -176,7 +177,7 @@ function DocPage() {
         <div className="flex min-w-0 items-center gap-1.5 text-sm">
           {d?.project && (
             <button type="button" onClick={() => projectId && navigate({ to: "/projects/$projectId", params: { projectId } })} className="inline-flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-muted-foreground hover:bg-muted hover:text-foreground">
-              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: d.project.color ?? "#7b68ee" }} />
+              <ProjectMarkFor projectId={projectId} icon={(d.project as { icon?: string | null }).icon} size={14} />
               <span className="truncate">{d.project.name}</span>
             </button>
           )}

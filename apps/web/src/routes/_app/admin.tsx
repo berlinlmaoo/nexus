@@ -1,4 +1,5 @@
 import { GideonInsights } from "@/components/gideon/GideonInsights";
+import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { notificationTitle } from "@/lib/server-text";
 import { SelectPicker } from "@/components/SelectPicker";
 import { useEffect, useMemo, useState } from "react";
@@ -994,13 +995,13 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                   </div>
                 </div>
                 <div>
-                  <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground"><FolderKanban className="h-3.5 w-3.5" /> {t("Projects · {n}", { n: projectCount })}</div>
+                  <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground"><ProjectPageIcon size={14} /> {t("Projects · {n}", { n: projectCount })}</div>
                   {membershipsLoading && <div className="text-xs text-muted-foreground/70">{t("Loading…")}</div>}
                   {!membershipsLoading && projectCount === 0 && <div className="mb-1.5 text-xs text-muted-foreground/70">{t("Not in any project yet.")}</div>}
                   <div className="flex flex-wrap gap-1.5">
                     {(memberships?.projects ?? []).map((pr) => (
                       <span key={pr.id} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card py-1 pl-2 pr-1 text-[11px] font-semibold text-foreground">
-                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: pr.color ?? "#94A3B8" }} />
+                        <ProjectMarkFor projectId={pr.id} icon={(pr as { icon?: string | null }).icon} size={14} />
                         <Link to="/projects/$projectId" params={{ projectId: pr.id }} className="underline-offset-2 hover:text-primary hover:underline">{pr.name}</Link>
                         {/* Lewat tim, bukan langsung: mencabutnya dari halaman project TIDAK bertahan —
                             sinkronisasi tim menuliskannya lagi. Sebut timnya, dan jangan beri tombol lepas. */}
@@ -1134,7 +1135,7 @@ function ProjectAddPicker({ projects, already, pending, onPick }: { projects: Ar
         {options.length === 0 && <div className="px-1 py-2 text-[11px] text-muted-foreground/70">{t("Nothing matches.")}</div>}
         {options.map((p) => (
           <button key={p.id} type="button" disabled={pending} onClick={() => { onPick(p.id); setOpen(false); setQ(""); }} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[11px] font-semibold transition hover:bg-accent disabled:opacity-50">
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: p.color ?? "#94A3B8" }} />
+            <ProjectMarkFor projectId={p.id} icon={(p as { icon?: string | null }).icon} size={14} />
             <span className="truncate">{p.name}</span>
             {p.status && <span className="ml-auto shrink-0 font-normal text-muted-foreground">{statusLabel(p.status)}</span>}
           </button>

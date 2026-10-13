@@ -1,4 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { SelectPicker } from "@/components/SelectPicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -348,7 +349,7 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
                       onClick={() => { linkProject.mutate(p.id); setProjectQuery(""); setProjectOpen(false); }}
                       className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-semibold hover:bg-accent"
                     >
-                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: p.color ?? "#7b68ee" }} />
+                      <ProjectMarkFor projectId={p.id} icon={(p as { icon?: string | null }).icon} size={14} />
                       <span className="truncate">{p.name}</span>
                     </button>
                   ))

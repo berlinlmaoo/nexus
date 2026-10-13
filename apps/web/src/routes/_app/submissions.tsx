@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -328,7 +329,7 @@ function MySubmissions() {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className={cn(chip(!!activeProject), "inline-flex max-w-[16rem] items-center gap-1")} aria-label={t("Filter by project")}>
-                      <FolderKanban className="h-3.5 w-3.5 shrink-0" />
+                      {activeProject ? <ProjectMarkFor projectId={activeProject} size={14} /> : <ProjectPageIcon size={14} />}
                       <span className="truncate">{activeProject ? projectOptions.find((p) => p.id === activeProject)?.name : t("All projects")}</span>
                       <ChevronDown className="h-3 w-3 shrink-0" />
                     </button>

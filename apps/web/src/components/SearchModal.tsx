@@ -1,4 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
+import type { ReactNode } from "react";
 import { docTitle } from "@/lib/doc-title";
 import type React from "react";
 import { useNavigate } from "@tanstack/react-router";
@@ -11,7 +13,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useEscape } from "@/hooks/use-escape";
 import { cn } from "@/lib/utils";
 
-type ResultItem = { key: string; label: string; sub?: string; to: () => void | Promise<void>; icon: typeof Search };
+type ResultItem = { key: string; label: string; sub?: string; to: () => void | Promise<void>; icon: typeof Search; mark?: ReactNode };
 
 /** Roles that may open anyone's record (/people/:id); everyone else is sent to the person's chat instead. */
 const SEES_EVERY_RECORD = new Set(["ONE_ABOVE_ALL", "BOD"]);
@@ -67,7 +69,7 @@ export function SearchModal({ onClose, takeInitial }: { onClose: () => void; tak
   const go = (item: ResultItem) => { void item.to(); onClose(); };
   const groups: Array<{ label: string; items: ResultItem[] }> = r ? [
     { label: t("Tasks"), items: (r.tasks ?? []).map((task) => ({ key: `t:${task.id}`, label: task.title, sub: task.taskList?.project?.name ?? undefined, to: () => navigate({ to: "/tasks/$taskId", params: { taskId: task.id } }), icon: CheckSquare })) },
-    { label: t("Projects"), items: (r.projects ?? []).map((p) => ({ key: `p:${p.id}`, label: p.name, to: () => navigate({ to: "/projects/$projectId", params: { projectId: p.id } }), icon: FolderKanban })) },
+    { label: t("Projects"), items: (r.projects ?? []).map((p) => ({ key: `p:${p.id}`, label: p.name, to: () => navigate({ to: "/projects/$projectId", params: { projectId: p.id } }), icon: FolderKanban, mark: <ProjectMarkFor projectId={p.id} icon={(p as { icon?: string | null }).icon} size={16} /> })) },
     { label: t("Docs"), items: (r.docs ?? []).map((d) => ({ key: `d:${d.id}`, label: docTitle(d.title), sub: d.project?.name ?? undefined, to: () => navigate({ to: "/docs/$docId", params: { docId: d.id } }), icon: FileText })) },
     { label: t("People"), items: (r.members ?? []).map((m) => ({
       key: `m:${m.id}`,
@@ -145,7 +147,7 @@ export function SearchModal({ onClose, takeInitial }: { onClose: () => void; tak
                     onClick={() => go(item)}
                     className={cn("flex min-h-10 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors", on ? "bg-accent" : "hover:bg-accent/60")}
                   >
-                    <item.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    {item.mark ?? <item.icon className="h-4 w-4 shrink-0 text-muted-foreground" />}
                     <span className="min-w-0 flex-1 truncate font-medium">{item.label}</span>
                     {item.sub && <span className="max-w-[45%] shrink-0 truncate text-xs text-muted-foreground">{item.sub}</span>}
                     {on && !phone && <CornerDownLeft aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
