@@ -39,8 +39,8 @@ struct NexusApp: App {
                         // non-optional @Environment does not return nil there, it traps. The app opened on
                         // a black screen.
                         .whatsNew()
-                        // Branch dev: a "DEV" mark while the app talks to the DEV server.
-                        .overlay(alignment: .top) { DevServerBadge().padding(.top, 2) }
+                        // Branch dev: an orange top edge while the app talks to the DEV server.
+                        .overlay(alignment: .top) { DevServerBadge() }
                         .environment(auth)
                         .environment(router)
                         .tint(NX.violetText)

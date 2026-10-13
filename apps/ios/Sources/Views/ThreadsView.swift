@@ -326,8 +326,9 @@ struct ThreadsView: View {
                 .buttonStyle(.plain)
                 // A photo alone is a post. The route refuses only when text AND images are both
                 // empty, and a picture with nothing to say is the commonest thing on this screen.
+                // .disabled alone: a plain-style Button already dims when disabled, and the extra
+                // .opacity(0.5) on top left "Post" all but invisible (UI tour run 5).
                 .disabled(posting || !canPost)
-                .opacity(canPost ? 1 : 0.5)
             }
         }
         .nexusCard()

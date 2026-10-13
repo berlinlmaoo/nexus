@@ -807,30 +807,56 @@ struct CalendarTab: View {
             Button { monthOffset += 1; selected = nil } label: { Image(systemName: "chevron.right").foregroundStyle(NX.foreground) }
         }
     }
+    /// Monday first, in the app's language (it was "Sen Sel Rab…" hard-coded, so an English app read
+    /// Indonesian day names — UI tour run 5).
+    private var weekdayNames: [String] {
+        let names = ProjDate.fmt("EEE").shortWeekdaySymbols ?? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        return Array(names[1...]) + [names[0]]
+    }
     private var weekdayRow: some View {
         HStack(spacing: 4) {
-            ForEach(["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"], id: \.self) { d in
+            ForEach(Array(weekdayNames.enumerated()), id: \.offset) { _, d in
                 Text(d).font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg).frame(maxWidth: .infinity)
             }
         }
     }
+    /// Today's day of the month while the shown month is the current one.
+    private var todayDay: Int? {
+        let now = cal.dateComponents([.year, .month, .day], from: Date())
+        return now.year == comps.year && now.month == comps.month ? now.day : nil
+    }
     private var grid: some View {
         let cols = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
         let map = tasksByDay   // build the day→tasks map ONCE, not once per day cell (was a full task-scan ×31)
+        let today = todayDay
+        // One ForEach over every cell. The blanks and the days used to be two ForEach with Int ids 0…n-1
+        // and 1…31 in one grid: the ids collided and the grid dropped days — October 2026 (three blanks)
+        // showed no 1st or 2nd (UI tour run 5). Blanks are negative now.
+        let cells = Array(-leadingBlanks..<0) + Array(1...daysInMonth)
         return LazyVGrid(columns: cols, spacing: 4) {
-            ForEach(0..<leadingBlanks, id: \.self) { _ in Color.clear.frame(height: 42) }
-            ForEach(1...daysInMonth, id: \.self) { day in
-                let has = !(map[day]?.isEmpty ?? true)
-                Button { selected = day } label: {
-                    VStack(spacing: 3) {
-                        Text("\(day)").font(NXFont.text(13, selected == day ? .bold : .regular))
-                            .foregroundStyle(selected == day ? .white : NX.foreground)
-                        Circle().fill(has ? (selected == day ? Color.white : NX.violet) : .clear).frame(width: 5, height: 5)
+            ForEach(cells, id: \.self) { day in
+                if day < 0 {
+                    Color.clear.frame(height: 42)
+                } else {
+                    let has = !(map[day]?.isEmpty ?? true)
+                    Button { selected = day } label: {
+                        VStack(spacing: 3) {
+                            Text("\(day)").font(NXFont.text(13, selected == day || day == today ? .bold : .regular))
+                                .foregroundStyle(selected == day ? .white : NX.foreground)
+                            Circle().fill(has ? (selected == day ? Color.white : NX.violet) : .clear).frame(width: 5, height: 5)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                        .background(selected == day ? NX.violet : (has ? NX.violet.opacity(0.08) : Color.clear), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        // Today ringed, as on the web's month grid.
+                        .overlay {
+                            if day == today, selected != day {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.foreground, lineWidth: 1.5)
+                            }
+                        }
                     }
-                    .frame(maxWidth: .infinity, minHeight: 42)
-                    .background(selected == day ? NX.violet : (has ? NX.violet.opacity(0.08) : Color.clear), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(selected == day ? .isSelected : [])
                 }
-                .buttonStyle(.plain)
             }
         }
     }
