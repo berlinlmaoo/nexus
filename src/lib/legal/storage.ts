@@ -1,5 +1,6 @@
 import path from "path"
 import { mkdir, readFile, rename, unlink, writeFile } from "fs/promises"
+import { inflateRawSync } from "zlib"
 import { newStorageKey } from "@/lib/vault"
 
 // Where Legal keeps its files: templates, kops, generated DOCX/PDF and uploaded documents. Same scheme as
@@ -57,9 +58,42 @@ export const looksLikePdf = (b: Buffer) => b.length > 4 && b.subarray(0, 5).toSt
 /** What a .docx may unpack to. A real contract is a few MB; a 50 KB zip of 1 GB of text is an attack. */
 export const DOCX_MAX_UNZIPPED_BYTES = 100 * 1024 * 1024
 
-/** Total uncompressed size the zip declares for its entries — checked before anything is inflated. */
-export function zipUnpackedSize(zip: { files: Record<string, unknown> }): number {
+type ZipEntryData = {
+  uncompressedSize?: number
+  compressedSize?: number
+  compressionMethod?: string
+  getCompressedContent?: () => Uint8Array | number[]
+}
+
+const DEFLATE = "\x08\x00"
+
+/**
+ * Total uncompressed size of the zip's entries, or Infinity when any entry is bigger than it declares.
+ *
+ * The declared sizes alone are not enough: PizZip inflates an entry completely and only then compares the
+ * result with the declared size, so an entry that declares 1 KB and inflates to 20 GB would exhaust memory
+ * long before that check. Each deflated entry is therefore inflated here with a hard output cap equal to its
+ * declared size (and the declared sizes are capped as a whole by the caller), so a lying entry fails fast.
+ */
+export function zipUnpackedSize(zip: { files: Record<string, unknown> }, budget = DOCX_MAX_UNZIPPED_BYTES): number {
   let total = 0
-  for (const f of Object.values(zip.files)) total += (f as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize ?? 0
+  for (const f of Object.values(zip.files)) {
+    const d = (f as { _data?: ZipEntryData })._data
+    const declared = d?.uncompressedSize ?? 0
+    total += declared
+    if (total > budget) return Number.POSITIVE_INFINITY
+    // Entries added in memory (not read from bytes) have no compressed content to verify.
+    if (!d || typeof d.getCompressedContent !== "function") continue
+    if (d.compressionMethod === DEFLATE) {
+      try {
+        const out = inflateRawSync(Buffer.from(d.getCompressedContent()), { maxOutputLength: Math.max(declared, 1) })
+        if (out.length !== declared) return Number.POSITIVE_INFINITY
+      } catch {
+        return Number.POSITIVE_INFINITY
+      }
+    } else if ((d.compressedSize ?? 0) !== declared) {
+      return Number.POSITIVE_INFINITY // stored: the bytes are the content
+    }
+  }
   return total
 }
