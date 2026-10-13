@@ -663,9 +663,11 @@ struct ProjectDetailView: View {
         HStack(spacing: 4) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 2) {
-                    ForEach(visibleTabs) { t in
-                        tabChip(t)
-                        ForEach(extraViews(t)) { v in viewChip(v, tab: t) }
+                    ForEach(chipItems) { item in
+                        switch item {
+                        case .tab(let t): tabChip(t)
+                        case .view(let v, let t): viewChip(v, tab: t)
+                        }
                     }
                     if let layout = layoutOf(tab), canEdit {
                         Button { alertText = ""; boardAlert = .newView(layout: layout) } label: {
@@ -726,6 +728,23 @@ struct ProjectDetailView: View {
             }
         }
         return ranked.sorted { $0.pos != $1.pos ? $0.pos < $1.pos : $0.seq < $1.seq }.map(\.item)
+    }
+
+    /// The phone row in the same order as the wide one and the web: the views by the project's own
+    /// position, where the first view tab would sit; every other tab where it was. The phone used the
+    /// app's fixed order, so "Board" came before "Per kategori" while the web, the iPad and the Mac put
+    /// it after (UI tour run 4).
+    private var chipItems: [ViewTabItem] {
+        var out: [ViewTabItem] = []
+        var placed = false
+        for t in visibleTabs {
+            if Self.viewTabOrder.contains(t) {
+                if !placed { out += viewTabItems; placed = true }
+            } else {
+                out.append(.tab(t))
+            }
+        }
+        return out
     }
 
     private var wideTabBar: some View {
