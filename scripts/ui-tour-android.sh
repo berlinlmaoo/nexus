@@ -78,7 +78,7 @@ launch() { "$ADB" logcat -c; "$ADB" shell am start -S -W -n "$ACT" --es nexusTou
 wait_for() {
   local pat="$1" secs="$2" i line
   for ((i = 0; i < secs * 2; i++)); do
-    line=$("$ADB" logcat -d -s NEXUS_TOUR:I 2>/dev/null | grep -o 'status=.*' | tail -1)
+    line=$("$ADB" logcat -d -s NEXUS_TOUR:I 2>/dev/null | grep -o 'status=.*' | tr -d '\r' | tail -1)
     if [ -n "$line" ] && echo "$line" | grep -Eq "$pat"; then echo "${line#status=}"; return 0; fi
     sleep 0.5
   done
