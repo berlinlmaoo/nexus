@@ -665,13 +665,17 @@ struct ProjectDetailView: View {
     /// The phone's row (and an outlet's / a pipeline's anywhere): every tab as an icon + label chip.
     private var chipTabBar: some View {
         HStack(spacing: 4) {
+            ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 2) {
                     ForEach(chipItems) { item in
-                        switch item {
-                        case .tab(let t): tabChip(t)
-                        case .view(let v, let t): viewChip(v, tab: t)
+                        Group {
+                            switch item {
+                            case .tab(let t): tabChip(t)
+                            case .view(let v, let t): viewChip(v, tab: t)
+                            }
                         }
+                        .id(item.id)
                     }
                     if let layout = layoutOf(tab), canEdit {
                         Button { alertText = ""; boardAlert = .newView(layout: layout) } label: {
@@ -684,6 +688,8 @@ struct ProjectDetailView: View {
                     }
                 }
                 .padding(.horizontal, wide ? 18 : 8)
+            }
+            .modifier(TabRowOverflow(activeId: activeTabItemId, proxy: proxy))
             }
             if let layout = layoutOf(tab), let v = activeView(layout) {
                 let filtered = configOf(v).isFiltered
@@ -753,10 +759,11 @@ struct ProjectDetailView: View {
 
     private var wideTabBar: some View {
         HStack(spacing: 8) {
+            ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 2) {
-                    if visibleTabs.contains(.overview) { wideViewTab(.tab(.overview)) }
-                    ForEach(viewTabItems) { item in wideViewTab(item) }
+                    if visibleTabs.contains(.overview) { wideViewTab(.tab(.overview)).id(ViewTabItem.tab(.overview).id) }
+                    ForEach(viewTabItems) { item in wideViewTab(item).id(item.id) }
                     if canEdit {
                         Button { alertText = ""; boardAlert = .newView(layout: layoutOf(tab) ?? "board") } label: {
                             Image(systemName: "plus").font(.system(size: 14, weight: .regular)).foregroundStyle(NX.mutedFg)
@@ -772,15 +779,26 @@ struct ProjectDetailView: View {
                         ProjectTabDivider()
                         ForEach(modules) { t in
                             ProjectIconTab(title: t.label, icon: t.macIcon, on: tab == t) { pickTab(t) }
+                                .id(ViewTabItem.tab(t).id)
                         }
                     }
                 }
                 .padding(.leading, 18)
             }
+            .modifier(TabRowOverflow(activeId: activeTabItemId, proxy: proxy))
+            }
             wideTools
                 .fixedSize()
                 .padding(.trailing, 24)
         }
+    }
+
+    /// The id of the tab (or saved view) on screen, as the rows tag their items.
+    private var activeTabItemId: String {
+        if let layout = layoutOf(tab), let v = activeView(layout), v.builtin != layout {
+            return ViewTabItem.view(v, tab).id
+        }
+        return ViewTabItem.tab(tab).id
     }
 
     @ViewBuilder private func wideViewTab(_ item: ViewTabItem) -> some View {
@@ -2013,5 +2031,35 @@ struct BoardCard: View {
     private var isOverdue: Bool {
         guard !task.isDone, let d = ProjDate.parse(task.dueDate) else { return false }
         return ProjDate.cal.startOfDay(for: d) < ProjDate.cal.startOfDay(for: Date())
+    }
+}
+
+
+/// A row of tabs wider than the screen (iPad / Mac with many views: "Timeli…" cut at the edge, UI tour
+/// run 5), as the web's view-toolbar does it: the selected tab is scrolled into view, and the trailing
+/// edge fades out so a cut tab reads as "more this way" rather than a broken label. The content gets a
+/// matching trailing margin, so the last tab can always scroll clear of the fade.
+private struct TabRowOverflow: ViewModifier {
+    let activeId: String
+    let proxy: ScrollViewProxy
+    private let fade: CGFloat = 28
+
+    func body(content: Content) -> some View {
+        content
+            .contentMargins(.trailing, fade, for: .scrollContent)
+            .mask {
+                HStack(spacing: 0) {
+                    Rectangle()
+                    LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: fade)
+                }
+            }
+            .onAppear {
+                // After the first layout, or scrollTo finds no frames yet.
+                DispatchQueue.main.async { proxy.scrollTo(activeId) }
+            }
+            .onChange(of: activeId) { _, id in
+                withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(id) }
+            }
     }
 }

@@ -746,6 +746,9 @@ struct CalendarTab: View {
         plotChoices.first { $0.id == dateFieldId }?.name ?? T("Due date")
     }
 
+    /// Tasks with no date to plot by: listed under the month, as the web's "No date · n" box.
+    private var undated: [BoardTask] { tasks.filter { plotDate($0) == nil } }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
@@ -794,17 +797,62 @@ struct CalendarTab: View {
                     Text(canCreate ? T("Pick a date to see its tasks, or tap + to create one.") : T("Pick a date to see its tasks."))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.top, 4)
                 }
+                let rest = undated
+                if !rest.isEmpty { undatedBox(rest) }
             }.padding(16)
         }
     }
 
+    /// Web: a dashed box under the month, "No date · 3", the tasks as small chips that open them.
+    private func undatedBox(_ items: [BoardTask]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(String(format: T("No date · %d"), items.count))
+                .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            FlowLayout(spacing: 6) {
+                ForEach(items) { t in
+                    Button { onOpen(t.id) } label: {
+                        Text(t.title).font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(1)
+                            .frame(maxWidth: 220, alignment: .leading)
+                            .padding(.horizontal, 8).padding(.vertical, 5)
+                            .background(NX.card, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(NX.border))
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffect(.highlight)
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+    }
+
+    /// Web: the month on the left, then Today · ‹ · ›.
     private var header: some View {
-        HStack {
-            Button { monthOffset -= 1; selected = nil } label: { Image(systemName: "chevron.left").foregroundStyle(NX.foreground) }
-            Spacer()
+        HStack(spacing: 2) {
             Text(ProjDate.fmt("MMMM yyyy").string(from: monthDate).capitalized).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-            Spacer()
-            Button { monthOffset += 1; selected = nil } label: { Image(systemName: "chevron.right").foregroundStyle(NX.foreground) }
+            Spacer(minLength: 8)
+            Button { monthOffset = 0; selected = nil } label: {
+                Text(T("Today")).font(NXFont.text(14)).foregroundStyle(monthOffset == 0 ? NX.mutedFg.opacity(0.6) : NX.mutedFg)
+                    .padding(.horizontal, 10).frame(minHeight: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            Button { monthOffset -= 1; selected = nil } label: {
+                Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            .accessibilityLabel(T("Previous month"))
+            Button { monthOffset += 1; selected = nil } label: {
+                Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            .accessibilityLabel(T("Next month"))
         }
     }
     /// Monday first, in the app's language (it was "Sen Sel Rab…" hard-coded, so an English app read

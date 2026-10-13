@@ -336,7 +336,9 @@ struct DashboardView: View {
     private var greetingText: String {
         switch ProjDate.cal.component(.hour, from: Date()) {
         // Sentence case, as the web dashboard writes it (UI tour 13 Oct 2026).
-        case 4..<11:  return T("Good morning,")
+        // The web's rule (dashboard.tsx TopBar): before 11 is morning, from midnight on. Night hours
+        // used to say "Good evening" at 03:00 while the web said "Good morning".
+        case 0..<11:  return T("Good morning,")
         case 11..<18: return T("Good afternoon,")
         default:      return T("Good evening,")
         }
@@ -475,7 +477,10 @@ struct DashboardView: View {
 
     private var xpLabel: String {
         guard let game else { return "… XP" }
-        return game.xp.totalXp.formatted(.number.grouping(.automatic)) + " XP"
+        // Web: "1,000 XP / 1,150" — the next level's floor after the slash; nothing after it at the top.
+        let total = AppNumber.int(game.xp.totalXp) + " XP"
+        guard let next = game.xp.nextFloor, next > 0 else { return total }
+        return total + " / " + AppNumber.int(next)
     }
 
     // MARK: search + bell
@@ -742,9 +747,9 @@ struct DashboardView: View {
                     }
                 }.frame(height: 10)
                 HStack {
-                    Text("\(g?.xp.totalXp ?? 0) XP").font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground)
+                    Text("\(AppNumber.int(g?.xp.totalXp ?? 0)) XP").font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground)
                     Spacer()
-                    if let next = g?.xp.nextFloor { Text("Next: \(next) XP").font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+                    if let next = g?.xp.nextFloor { Text(String(format: T("Next: %@ XP"), AppNumber.int(next))).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
                 }
             }
             .opacity(morphReady ? 1 : 0)
@@ -1238,7 +1243,7 @@ if !XpRules.tiers.isEmpty {
                 AvatarView(url: profile?.avatar, initial: String(name.first ?? "?").uppercased(), size: 64)
                 VStack(alignment: .leading, spacing: 8) {
                     row("LEVEL", "\(game?.xp.level ?? 0) · \(game?.xp.levelName ?? "—")")
-                    row(T("POINTS THIS PERIOD"), (game?.xp.totalXp ?? 0).formatted(.number.grouping(.automatic)))
+                    row(T("POINTS THIS PERIOD"), AppNumber.int(game?.xp.totalXp ?? 0))
                 }
                 Spacer()
             }

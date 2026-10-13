@@ -399,8 +399,8 @@ enum CalReadOnlyText {
     /// "1.5 MB" / "320 KB", as the web writes it.
     static func size(_ bytes: Double?) -> String {
         let b = max(0, bytes ?? 0)
-        if b >= 1_048_576 { return String(format: "%.1f MB", b / 1_048_576) }
-        return "\(max(1, Int((b / 1024).rounded()))) KB"
+        if b >= 1_048_576 { return AppNumber.bytes(b) }
+        return "\(AppNumber.int(max(1, Int((b / 1024).rounded())))) KB"
     }
 
     /// "13 Oct, 14.05" in Jakarta time, in the app's language.

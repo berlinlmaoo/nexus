@@ -156,8 +156,7 @@ struct OfflineCard: View {
     // MARK: formatting
 
     static func size(_ bytes: Int) -> String {
-        let f = ByteCountFormatter(); f.countStyle = .file
-        return f.string(fromByteCount: Int64(bytes))
+        AppNumber.bytes(bytes)
     }
     static func saved(_ date: Date?) -> String {
         guard let date else { return T("Not saved yet") }
