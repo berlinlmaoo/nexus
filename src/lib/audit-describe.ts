@@ -726,6 +726,11 @@ const NOUNS: Record<string, string> = {
   pipeline_term: "payment term",
   outlet_sales_event: "outlet event",
   outlet_sales_target: "outlet target",
+  legal_member: "Legal member",
+  legal_company: "issuing company",
+  legal_series: "numbering series",
+  legal_template: "legal template",
+  legal_document: "legal document",
 }
 
 const REQUEST_TYPE_NOUN: Record<string, string> = {
@@ -983,6 +988,8 @@ const NOUNS_ID: Record<string, string> = {
   pnl_payment: "pembayaran", pnl_category: "kategori pengeluaran", pnl_stage: "tahap pemasukan",
   pnl_recurring: "pengeluaran rutin", pnl_expense_attachment: "struk", pnl_budget: "anggaran", chat_group: "grup chat",
   pipeline_deal: "deal pipeline", pipeline_term: "termin pembayaran", outlet_sales_event: "acara outlet",
+  legal_member: "anggota Legal", legal_company: "perusahaan penerbit", legal_series: "seri penomoran",
+  legal_template: "template legal", legal_document: "dokumen legal",
   outlet_sales_target: "target outlet", quest: "quest", announcement: "pengumuman", comment: "komentar",
   attachment: "lampiran", notification: "notifikasi", person_report_roster: "laporan tim", person_report: "laporan orang",
   team: "tim", division: "divisi", goal: "goal", doc: "dokumen", page: "halaman", form: "form",

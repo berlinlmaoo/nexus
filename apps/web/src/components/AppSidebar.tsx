@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Inbox, MessageCircle, CheckSquare, Calendar, CalendarClock, FolderKanban,
   Users, Trophy, ClipboardCheck, Settings, Shield, FileText, Megaphone,
   Search, PanelLeftClose, LogOut, Loader2, AtSign, Ticket, Sun, Moon,
- HardDrive, Languages, Keyboard,
+ HardDrive, Languages, Keyboard, Scale,
 } from "lucide-react";
 import { useState } from "react";
 import { SidebarProjectTree } from "@/components/SidebarProjectTree";
@@ -45,6 +45,8 @@ const groups = [
     label: "Work",
     items: [
       { title: "Projects", url: "/projects", icon: FolderKanban },
+      // Invitation only (owner, 14 Oct 2026): shown when canAccessLegal; the server refuses everyone else.
+      { title: "Legal", url: "/legal", icon: Scale },
       { title: "Leaderboard", url: "/leaderboard", icon: Trophy },
     ],
   },
@@ -147,7 +149,7 @@ export function AppSidebar() {
             <SidebarGroupLabel>{t(g.label)}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {g.items.filter((item) => orgRoleQuery.data?.isCompany === true || (item.url !== "/vault" && item.url !== "/threads")).map((item) => (
+                {g.items.filter((item) => (orgRoleQuery.data?.isCompany === true || (item.url !== "/vault" && item.url !== "/threads")) && (orgRoleQuery.data?.canAccessLegal === true || item.url !== "/legal")).map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={t(item.title)}>
                       <Link to={item.url} className="flex items-center gap-2">
