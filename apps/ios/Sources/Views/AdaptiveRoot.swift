@@ -69,7 +69,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .tasks:        return "checklist"
         case .inbox:        return "tray.fill"
         case .projects:     return "rectangle.stack.fill"
-        case .legal:        return "scale.3d"
+        case .legal:        return NX.legalSymbol
         case .messages:     return "bubble.left.and.bubble.right.fill"
         case .gideon:       return "sparkles"
         case .threads:      return "text.bubble.fill"
@@ -97,7 +97,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .tasks:        return "checkmark.square"
         case .inbox:        return "tray"
         case .projects:     return "folder"
-        case .legal:        return "scale.3d"
+        case .legal:        return NX.legalSymbol
         case .messages:     return "bubble.left"
         case .gideon:       return "sparkles"
         case .threads:      return "at"
@@ -795,7 +795,7 @@ struct SidebarRoot: View {
                     .frame(width: 15, height: 15)
                     .foregroundStyle(glyph)
             } else {
-                Image(systemName: screen.sidebarIcon)
+                Image.nxSymbol(screen.sidebarIcon)
                     .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(glyph)
             }
