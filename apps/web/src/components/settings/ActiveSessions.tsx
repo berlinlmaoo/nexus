@@ -8,7 +8,12 @@ type T = ReturnType<typeof useLang>["t"];
 
 function deviceName(d: DeviceLabel, t: T): string {
   if (d.type === "app") {
-    const app = d.platform === "ios" ? t("NEXUS app for iOS") : t("NEXUS app for Android");
+    // The iOS-family app says in its User-Agent whether it runs on a Mac, an iPad or an iPhone (run 12); older
+    // sessions do not, and keep "NEXUS app for iOS".
+    const app = d.platform === "android" ? t("NEXUS app for Android")
+      : d.os === "macOS" ? t("NEXUS app for macOS")
+      : d.os === "iPadOS" ? t("NEXUS app for iPadOS")
+      : t("NEXUS app for iOS");
     if (d.version) return d.build ? `${app} ${d.version} (${d.build})` : `${app} ${d.version}`;
     return d.build ? `${app} (${t("build {n}", { n: d.build })})` : app;
   }

@@ -185,8 +185,11 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
                         <span className={cn("truncate", d.numberReleased && "line-through text-muted-foreground")}>{d.number || "—"}</span>
                       </div>
                       {d.status === "VOID" && d.numberReusedBy && (
-                        <div className="font-sans text-[11px] text-muted-foreground [overflow-wrap:anywhere]" title={t("Number reused by {number}", { number: d.numberReusedBy.number })}>
-                          {t("Number reused by {number}", { number: d.numberReusedBy.number })}
+                        // The label on its own line, the number whole on one line under it, cut with an ellipsis and
+                        // shown in full on hover (UI tour run 12, WD1: it wrapped mid-number in the narrow column).
+                        <div className="min-w-0 text-[11px] text-muted-foreground" title={t("Number reused by {number}", { number: d.numberReusedBy.number })}>
+                          <div className="font-sans">{t("Number reused by")}</div>
+                          <div className="truncate whitespace-nowrap">{d.numberReusedBy.number}</div>
                         </div>
                       )}
                     </td>

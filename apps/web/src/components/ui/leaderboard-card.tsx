@@ -30,6 +30,8 @@ interface LeaderboardCardProps extends React.HTMLAttributes<HTMLDivElement> {
   selectedRunId?: string
   onRunChange?: (runId: string) => void
   onSelectUser?: (item: LeaderboardRankingItem, origin?: MorphOrigin) => void
+  /** A line under the podium, e.g. how many share 1st when more do than the podium has steps. */
+  podiumCaption?: React.ReactNode
 }
 
 function formatRangeDate(date: string | Date) {
@@ -58,6 +60,7 @@ const LeaderboardCard = React.forwardRef<HTMLDivElement, LeaderboardCardProps>(
       selectedRunId,
       onRunChange,
       onSelectUser,
+      podiumCaption,
       ...props
     },
     ref
@@ -110,7 +113,8 @@ const LeaderboardCard = React.forwardRef<HTMLDivElement, LeaderboardCardProps>(
           ) : null}
         </div>
 
-        <LeaderboardPodium rankings={podiumRankings} className="mx-auto mb-6 max-w-3xl" />
+        <LeaderboardPodium rankings={podiumRankings} className={cn("mx-auto max-w-3xl", podiumCaption ? "mb-3" : "mb-6")} />
+        {podiumCaption ? <p className="mb-6 text-center text-sm font-semibold text-muted-foreground">{podiumCaption}</p> : null}
 
         <LeaderboardRankings
           rankings={rankings}

@@ -24,7 +24,7 @@ import { CustomFieldInput } from "@/components/tasks/TaskDetailPanel";
 import { FieldEditor } from "@/components/projects/ProjectCustomFieldsManager";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { Avatar, AvatarFace, useUserLookup } from "@/components/Avatar";
+import { Avatar, useUserLookup } from "@/components/Avatar";
 import { useTaskBulk } from "@/components/tasks/task-bulk";
 import { toast } from "sonner";
 import { Incremental } from "@/components/projects/views/incremental";
@@ -200,7 +200,11 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
 
   return (
     <div data-touch-drag-root="" className="px-4 py-3 md:px-8">
-      <div className="overflow-x-auto overscroll-x-contain rounded-lg border border-border">
+      {/* Phone: the table is its own vertical scroller, as tall as the screen between the pinned project header
+          and the tab bar. A sticky header row only sticks inside the box that scrolls, and this box already
+          scrolls sideways, so with the page doing the vertical scrolling the column names left with the first
+          rows (UI tour run 12, WM3). */}
+      <div className="overflow-x-auto overscroll-x-contain rounded-lg border border-border max-md:max-h-[calc(100dvh-14rem)] max-md:overflow-y-auto">
         {/* Width from the columns' minimums, never from cell contents (perf pass, 12 Oct 2026): with min-w-max a
             row that loaded wider content widened every column and the header jumped. */}
         <div className="w-full" style={{ minWidth: 240 + columns.reduce((n, k) => n + (colW[k] ?? 160), 0) + 40 }}>
@@ -304,9 +308,10 @@ function NameCell({ task, handle, onRename, onOpen }: { task: NexusTask; handle?
 /**
  * A "Created by" field (CREATED) in the table, read-only and plain like the other cells (UI tour run 11, WD-2).
  * It held a boxed input showing "04 May 2026 • 19:19" on some rows and a name on others (a Notion import keeps
- * the requester's name as text; a task made here stores its creation time). Now: whoever is known, as a name
- * chip (the task's creator for a timestamp, the imported name otherwise); a bare date only when nobody is,
- * short ("15 Apr", the year only when it is not this one). One line, so rows keep their height.
+ * the requester's name as text; a task made here stores its creation time). Now: whoever is known, as plain
+ * name text (the task's creator for a timestamp, the imported name otherwise; UI tour run 12, WD3: no avatar
+ * pill, it read as an editable person picker); a bare date only when nobody is, short ("15 Apr", the year only
+ * when it is not this one). One line, so rows keep their height.
  */
 function CreatedCell({ raw, task, members }: { raw: string; task: NexusTask; members: NexusUser[] }) {
   const { locale } = useLang();
@@ -321,10 +326,7 @@ function CreatedCell({ raw, task, members }: { raw: string; task: NexusTask; mem
   let body: ReactNode = <span className="text-muted-foreground/60">—</span>;
   if (person?.name) {
     body = (
-      <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full bg-muted/60 py-0.5 pl-0.5 pr-2" title={isTime ? `${person.name} · ${when!.toLocaleString(locale, { timeZone: "Asia/Jakarta" })}` : person.name}>
-        {person.id ? <Avatar userId={person.id} name={person.name} avatar={person.avatar} size={18} className="shrink-0 ring-0" /> : <AvatarFace name={person.name} size={18} className="shrink-0 ring-0" />}
-        <span className="truncate text-sm">{person.name}</span>
-      </span>
+      <span className="truncate text-sm" title={isTime ? `${person.name} · ${when!.toLocaleString(locale, { timeZone: "Asia/Jakarta" })}` : person.name}>{person.name}</span>
     );
   } else if (isTime) {
     const sameYear = when!.getFullYear() === new Date().getFullYear();

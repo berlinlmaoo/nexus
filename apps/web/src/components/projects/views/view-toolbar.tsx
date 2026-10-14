@@ -3,6 +3,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, Lock, Plus, Search, X } from "l
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
+import { hidePartialTabs, revealTab } from "@/components/tab-overflow";
 import type { NexusProjectView } from "@/lib/nexus-api";
 import { menuItemCls } from "./view-controls";
 import { ViewTabMenu } from "./view-settings";
@@ -23,6 +24,9 @@ export type ToolbarTab = {
  * right. Tabs are Notion's quiet pills; the active one carries a small menu. Saved views can be dragged
  * to reorder (shared ones by project members only).
  */
+/** Width of the edge arrows (w-9), the zone a tab must clear to stay shown. */
+const EDGE_W = 36;
+
 export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder, onRename, onSettings, onDuplicate, onCopyLink, onDelete, onHide, addView, divideAfter }: {
   tabs: ToolbarTab[];
   activeKey: string | null;
@@ -46,31 +50,31 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
   const scroller = useRef<HTMLDivElement>(null);
   // The active tab is brought into view with room on both sides (scroll-padding), never flush against a cut
   // edge (UI tour run 11, WM-15: the leading tab sat half under the fade on a phone).
+  // Run 12 (WM1): it lands with a whole tab right after the left arrow, not on the gap of a hidden half tab.
   useEffect(() => {
     const box = scroller.current;
     const el = box?.querySelector<HTMLElement>("[data-active-tab='true']");
     if (!box || !el) return;
-    const pad = 36;
-    const l = el.offsetLeft - pad, r = el.offsetLeft + el.offsetWidth + pad;
-    if (l < box.scrollLeft) box.scrollLeft = Math.max(0, l);
-    else if (r > box.scrollLeft + box.clientWidth) box.scrollLeft = r - box.clientWidth;
-  }, [activeKey]);
+    revealTab(box, el, "[role='tab']", EDGE_W);
+  }, [activeKey, tabs.length]);
   // Tabs that don't fit scroll sideways. The cut edge gets an arrow on a solid fade (UI tour run 11, WD-13/WM-15):
   // a see-through mask alone left a half-visible ghost icon there, which read as a broken button.
   const [edges, setEdges] = useState({ left: false, right: false });
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    const read = () => setEdges((e) => {
+    const read = () => {
       const left = el.scrollLeft > 2, right = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
-      return e.left === left && e.right === right ? e : { left, right };
-    });
+      // A tab cut by an arrow is hidden whole, never left as a glyph fragment beside it (UI tour run 12, WM1).
+      hidePartialTabs(el, "[role='tab'], [data-tab-extra]", { left, right }, EDGE_W);
+      setEdges((e) => (e.left === left && e.right === right ? e : { left, right }));
+    };
     read();
     el.addEventListener("scroll", read, { passive: true });
     const ro = new ResizeObserver(read);
     ro.observe(el);
     return () => { el.removeEventListener("scroll", read); ro.disconnect(); };
-  }, [tabs.length]);
+  }, [tabs.length, activeKey]);
   const nudge = (dir: 1 | -1) => scroller.current?.scrollBy({ left: dir * Math.max(140, (scroller.current?.clientWidth ?? 0) * 0.6), behavior: "smooth" });
   const edgeBtn = "absolute inset-y-0 z-10 flex w-9 items-center text-muted-foreground transition-colors hover:text-foreground";
   const viewIds = tabs.filter((x) => x.view).map((x) => x.view!.id);
@@ -90,13 +94,13 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
     {edges.right && (
       <button type="button" tabIndex={-1} aria-label={t("Show more tabs")} onClick={() => nudge(1)} className={cn(edgeBtn, "right-0 justify-end bg-gradient-to-l from-card from-60% to-transparent")}><ChevronRight className="h-4 w-4" /></button>
     )}
-    <div ref={scroller} role="tablist" aria-label={t("Views")} className="relative flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div ref={scroller} role="tablist" aria-label={t("Views")} className="relative flex min-w-0 flex-1 snap-x snap-proximity items-center gap-0.5 overflow-x-auto [scroll-padding-inline:36px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {tabs.map((tab) => {
         const active = tab.key === activeKey;
         const v = tab.view;
         const editable = v ? canEditView(v) : false;
         return (
-          <div key={tab.key} className="flex shrink-0 items-center">
+          <div key={tab.key} className="flex shrink-0 snap-start items-center">
             <div
               role="tab"
               aria-selected={active}
@@ -142,14 +146,14 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
             </div>
             {divideAfter === tab.key && (
               <>
-                {addView}
-                <span aria-hidden className="mx-1.5 h-4 w-px shrink-0 bg-border" />
+                {addView && <span data-tab-extra="" className="inline-flex shrink-0 items-center">{addView}</span>}
+                <span aria-hidden data-tab-extra="" className="mx-1.5 h-4 w-px shrink-0 bg-border" />
               </>
             )}
           </div>
         );
       })}
-      {!divideAfter && addView}
+      {!divideAfter && addView && <span data-tab-extra="" className="inline-flex shrink-0 items-center">{addView}</span>}
     </div>
     </div>
   );
