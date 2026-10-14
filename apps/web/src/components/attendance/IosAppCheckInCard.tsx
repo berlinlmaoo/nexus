@@ -144,7 +144,7 @@ function PhoneAppCheckInCard({ className }: { className?: string }) {
         </div>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <a href={NEXUS_APP_STORE_URL} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-semibold whitespace-nowrap transition hover:bg-accent active:scale-[0.99]"><span className="hidden sm:inline">iPhone · </span>App Store <ExternalLink className="h-3.5 w-3.5 shrink-0" /></a>
+        <a href={NEXUS_APP_STORE_URL} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-semibold whitespace-nowrap transition hover:bg-accent active:scale-[0.99]"><Smartphone className="h-3.5 w-3.5 shrink-0" /> {t("iPhone app")} <ExternalLink className="h-3 w-3 shrink-0 opacity-60" /></a>
         <a href={NEXUS_ANDROID_DOWNLOAD} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-semibold whitespace-nowrap transition hover:bg-accent active:scale-[0.99]"><Download className="h-3.5 w-3.5 shrink-0" /> {t("Android app")}</a>
       </div>
     </div>

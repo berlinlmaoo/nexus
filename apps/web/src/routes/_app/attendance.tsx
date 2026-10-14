@@ -339,9 +339,14 @@ function Attendance() {
   const landedPeriod = useRef<string | null>(null);
   // Phone: a fade on the right edge while more days lie that way, so the column cut there reads as "more".
   const [boardMore, setBoardMore] = useState(false);
+  // …and at the bottom edge while more rows lie below, so a row cut there fades instead of showing a fragment
+  // of its name (UI tour run 15, R15-WM-8: a lone "J" under the rounded border).
+  const [boardMoreDown, setBoardMoreDown] = useState(false);
   const setBoardEdge = () => {
     const el = boardScrollRef.current;
-    if (el) setBoardMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+    if (!el) return;
+    setBoardMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+    setBoardMoreDown(el.scrollTop + el.clientHeight < el.scrollHeight - 2);
   };
   useEffect(() => {
     if (viewMode !== "grid" || history.isLoading || landedPeriod.current === monthKey) return;
@@ -382,6 +387,8 @@ function Attendance() {
       const room = Math.max(0, box.clientHeight - headH - 56);
       const shift = Math.min(room, Math.max(0, pageHeaderBottom - box.getBoundingClientRect().top));
       box.style.setProperty("--board-head-shift", `${Math.round(shift)}px`);
+      // Rows snap whole under the (possibly shifted) day header, not half under it (UI tour run 15, R15-WB-1).
+      box.style.setProperty("--board-snap-top", `${Math.round(shift + headH)}px`);
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(place); };
     place();
@@ -593,7 +600,7 @@ function Attendance() {
           // (scroll-snap with the column's width as padding), and the right edge fades while more days lie
           // that way (UI tour run 12, WM4: "Wed 14" was cut there with nothing saying so).
           <div className="relative">
-          <div ref={boardScrollRef} onScroll={setBoardEdge} className="isolate max-h-[calc(100dvh-11rem)] overflow-auto overscroll-contain max-sm:snap-x max-sm:snap-proximity max-sm:[scroll-padding-left:7.5rem]">
+          <div ref={boardScrollRef} onScroll={setBoardEdge} className="isolate max-h-[calc(100dvh-11rem)] overflow-auto overscroll-contain [scroll-padding-top:var(--board-snap-top,0px)] [scroll-snap-type:y_proximity] max-sm:[scroll-padding-left:7.5rem] max-sm:[scroll-snap-type:both_proximity]">
             {/* `min-w-max`: with a plain `w-full` the 31 day columns and the member column were
                 squeezed into the phone's width, so the name, the pills and the dots all landed on
                 top of each other. Now the table keeps its natural width and this container scrolls,
@@ -603,7 +610,7 @@ function Attendance() {
                 <tr>
                   <th data-member-col style={HEAD_SHIFT} className="sticky left-0 top-0 z-30 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] bg-muted px-2 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:max-w-[20rem] sm:px-4">{tr("Member")}</th>
                   {periodDays.map((pd) => (
-                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} style={HEAD_SHIFT} className={cn("sticky top-0 z-20 snap-start bg-muted px-1 py-1.5 font-medium text-[10px] leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
+                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} style={HEAD_SHIFT} className={cn("sticky top-0 z-20 snap-start bg-muted px-1 py-1.5 font-medium text-[10px] lg:px-0 leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
                       <span className={cn("block text-[9px] uppercase", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" })}</span>
                       {pd.key === todayKey
                         ? <span className="inline-grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 font-bold text-primary-foreground">{pd.day}</span>
@@ -624,7 +631,7 @@ function Attendance() {
                   <tr><td colSpan={periodDays.length + 2} className="px-4 py-10 text-center text-sm text-muted-foreground">{q ? tr("No one matches “{q}”.", { q: memberQuery.trim() }) : tr("No attendance data for this month yet.")}</td></tr>
                 )}
                 {memberRows.map((u) => (
-                  <tr key={u.id} className="border-b border-border last:border-0 hover:bg-muted/20">
+                  <tr key={u.id} className="border-b border-border [scroll-snap-align:start_none] last:border-0 hover:bg-muted/20">
                     <td className="sticky left-0 z-10 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] bg-card px-1.5 py-2 shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:max-w-[20rem] sm:px-4 sm:py-2.5">
                       {/* Two lines at every width: who, then everything about them. One row squeezed the
                           badges and pills on top of each other in the 20rem column (28 Sep 2026). */}
@@ -638,7 +645,7 @@ function Attendance() {
                             <MemberAvatar user={u} />
                             <div className="min-w-0">
                               {/* Phone: first name only, so the pinned column stays narrow (UI tour run 9). */}
-                              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-[13px] font-medium tracking-tight sm:hidden" title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
+                              <div className="flex min-w-0 items-center gap-1.5"><span className="line-clamp-2 text-[13px] font-medium leading-tight tracking-tight [overflow-wrap:anywhere] sm:hidden" title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
                               <div className="hidden truncate text-[10px] text-muted-foreground sm:block">{memberSubtitle(u)}</div>
                               <PhoneMemberSummary d={canManage ? dayOffOf(u.id) : null} />
                             </div>
@@ -648,7 +655,7 @@ function Attendance() {
                             <MemberAvatar user={u} />
                             <div className="min-w-0">
                               {/* Phone: first name only, so the pinned column stays narrow (UI tour run 9). */}
-                              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-[13px] font-medium tracking-tight sm:hidden" title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
+                              <div className="flex min-w-0 items-center gap-1.5"><span className="line-clamp-2 text-[13px] font-medium leading-tight tracking-tight [overflow-wrap:anywhere] sm:hidden" title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
                               <div className="hidden truncate text-[10px] text-muted-foreground sm:block">{memberSubtitle(u)}</div>
                               <PhoneMemberSummary d={canManage ? dayOffOf(u.id) : null} />
                             </div>
@@ -716,7 +723,7 @@ function Attendance() {
                       const rec = recMap.get(`${u.id}:${pd.key}`);
                       const tone = rec ? recTone(rec) : "none";
                       return (
-                        <td key={pd.key} className={cn("px-1 py-2.5 text-center", pd.day === 1 && "border-l border-border/70")}>
+                        <td key={pd.key} className={cn("px-1 py-2.5 text-center lg:px-0.5", pd.day === 1 && "border-l border-border/70")}>
                           {/* The marks below sit on the day's dot, not on the cell's corner: in a tall row the cell's
                               corner is far above the dot, so a mark floated there on its own, and on a phone it
                               showed as a sliver beside the pinned name column (UI tour run 14, R14-WM-17). */}
@@ -726,10 +733,10 @@ function Attendance() {
                               <button
                                 onClick={() => setOverrideTarget({ userId: u.id, name: u.name ?? null, dateKey: pd.key })}
                                 title={`${fmtDate(rec.attendanceDate)} · ${tr("Absent — no check-in. Tap to set a status (Present/Leave/Sick/Day off).")}`}
-                                className={cn("inline-block h-5 w-5 rounded-lg pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls.absent)}
+                                className={cn("inline-block h-5 w-5 rounded-lg lg:h-[18px] lg:w-[18px] lg:rounded-md pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls.absent)}
                               />
                             ) : tone === "absent" ? (
-                              <span title={`${fmtDate(rec.attendanceDate)} · ${tr("Absent")}`} className={cn("inline-block h-5 w-5 rounded-lg pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding", sCls.absent)} />
+                              <span title={`${fmtDate(rec.attendanceDate)} · ${tr("Absent")}`} className={cn("inline-block h-5 w-5 rounded-lg lg:h-[18px] lg:w-[18px] lg:rounded-md pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding", sCls.absent)} />
                             ) : tone === "leave" || tone === "permit" || tone === "sick" || tone === "dayoff" ? (
                               <motion.button
                                 whileHover={reduceMotion ? undefined : { scale: 1.3 }}
@@ -737,7 +744,7 @@ function Attendance() {
                                 transition={{ type: "spring", stiffness: 500, damping: 18 }}
                                 onClick={(e) => { setCorrectOrigin(rectCenter(e.currentTarget)); setLeaveDetail(rec); }}
                                 title={`${fmtDate(rec.attendanceDate)} · ${tr(toneLabel[tone])}${rec.notes ? " — " + rec.notes : ""} — ${tr("tap for details")}`}
-                                className={cn("inline-block h-5 w-5 rounded-lg pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls[tone])}
+                                className={cn("inline-block h-5 w-5 rounded-lg lg:h-[18px] lg:w-[18px] lg:rounded-md pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls[tone])}
                               />
                             ) : (
                               <motion.button
@@ -746,17 +753,17 @@ function Attendance() {
                                 transition={{ type: "spring", stiffness: 500, damping: 18 }}
                                 onClick={(e) => { setCorrectOrigin(rectCenter(e.currentTarget)); setCorrectRecord(rec); }}
                                 title={`${fmtDate(rec.attendanceDate)} · ${statusLabel(rec.status || "")} · ${tr("In {time}", { time: fmtTime(rec.checkInAt) })} / ${tr("Out {time}", { time: fmtTime(rec.checkOutAt) })}${rec.locationTrackingState === "denied" ? ` · ${tr("Location off")}` : rec.locationTrackingState === "web" ? ` · ${tr("Web check-in · location not tracked")}` : ""} — ${tr("tap to see location and selfie")}`}
-                                className={cn("inline-block h-5 w-5 rounded-lg pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls[tone])}
+                                className={cn("inline-block h-5 w-5 rounded-lg lg:h-[18px] lg:w-[18px] lg:rounded-md pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls[tone])}
                               />
                             )
                           ) : canManage ? (
                             <button
                               onClick={() => setOverrideTarget({ userId: u.id, name: u.name ?? null, dateKey: pd.key })}
                               title={`${pd.key} — ${tr("empty. Tap to set a status (Present/Leave/Sick/Day off).")}`}
-                              className="inline-block h-5 w-5 rounded-lg pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding bg-muted/30 transition-[box-shadow] hover:ring-2 hover:ring-primary/50"
+                              className="inline-block h-5 w-5 rounded-lg lg:h-[18px] lg:w-[18px] lg:rounded-md pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding bg-muted/30 transition-[box-shadow] hover:ring-2 hover:ring-primary/50"
                             />
                           ) : (
-                            <span className="inline-block h-5 w-5 rounded-lg pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding bg-muted/30" />
+                            <span className="inline-block h-5 w-5 rounded-lg lg:h-[18px] lg:w-[18px] lg:rounded-md pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding bg-muted/30" />
                           )}
                           {rec?.locationTrackingState === "denied" && (
                             <span title={tr("Location off")} aria-label={tr("Location off")} className="pointer-events-none absolute -right-1.5 -top-1.5 grid h-3 w-3 place-items-center rounded-full bg-card text-slate-500 ring-1 ring-border pointer-coarse:right-0.5 pointer-coarse:top-0.5 dark:text-slate-400"><MapPinOff className="h-2 w-2" /></span>
@@ -788,7 +795,21 @@ function Attendance() {
           </div>
           {/* About a day column wide and solid at the edge, so a column cut there is covered instead of showing
               "T" / "1" fragments (UI tour run 13, W-M3). */}
-          {boardMore && <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 z-30 w-10 bg-gradient-to-l from-card from-45% to-transparent sm:hidden" />}
+          {/* Every width (UI tour run 15, R15-WD-5: on desktop the period ended at SUN 25 with MON 26 and TUE 27
+              hidden and nothing saying so). Wide screens fit the whole period; narrower ones get the fade plus a
+              button that scrolls a week further. */}
+          {boardMore && <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 z-30 w-10 bg-gradient-to-l from-card from-45% to-transparent" />}
+          {boardMoreDown && <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 z-30 h-8 rounded-b-3xl bg-gradient-to-t from-card from-40% to-transparent" />}
+          {boardMore && (
+            <button
+              type="button"
+              onClick={() => boardScrollRef.current?.scrollBy({ left: 7 * 28, behavior: reduceMotion ? "auto" : "smooth" })}
+              aria-label={tr("Show later days")} title={tr("Show later days")}
+              className="absolute right-1 top-1.5 z-40 hidden h-7 w-7 place-items-center rounded-full bg-card text-muted-foreground shadow-sm ring-1 ring-border transition hover:text-foreground sm:grid"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          )}
           </div>
           )}
         </div>
@@ -1839,7 +1860,7 @@ function EmploymentStartSection() {
           </button>
         </div>
       )}
-      <div className="divide-y divide-border">
+      <div data-snap-rows className="divide-y divide-border">
         {q.isLoading && <p className="px-5 py-4 text-sm text-muted-foreground">{tr("Loading…")}</p>}
         {!q.isLoading && rows.length > 0 && shownRows.length === 0 && <p className="px-5 py-4 text-sm text-muted-foreground">{tr("No one matches.")}</p>}
         {shownRows.map((m) => (
