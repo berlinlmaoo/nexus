@@ -66,8 +66,14 @@ struct LegalArchiveQuery: Equatable {
 
 extension APIClient {
 
+    /// One path segment. The unreserved marks "-._~" stay as they are: makeRequest builds the URL with
+    /// appendingPathComponent, which encodes "%" once more, so a link id "legal-<token>" sent as
+    /// "legal%2D…" arrived as "legal%252D…" and every Legal request link answered 404 in the app
+    /// (UI tour run 10, 14 Oct 2026); a company scope "legalco_x" broke the same way.
+    static let legalSegment: CharacterSet = .alphanumerics.union(CharacterSet(charactersIn: "-._~"))
+
     private static func legalEnc(_ s: String) -> String {
-        s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s
+        s.addingPercentEncoding(withAllowedCharacters: legalSegment) ?? s
     }
     private func legalDoc(_ id: String) -> String { "/api/legal/documents/\(Self.legalEnc(id))" }
 
@@ -426,7 +432,7 @@ extension APIClient {
 // (/api/legal/requests, /api/legal/request-links) are Legal's, refused like every /api/legal route.
 
 extension APIClient {
-    private static func reqEnc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s }
+    private static func reqEnc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: legalSegment) ?? s }
 
     // MARK: Requester
 
