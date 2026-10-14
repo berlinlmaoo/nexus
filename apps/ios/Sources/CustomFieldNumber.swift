@@ -197,10 +197,9 @@ enum CustomFieldNumber {
     /// A stored Rupiah value (even a legacy "369.000") → "Rp 369.000", "−Rp 25.000" (a true minus, as
     /// AppNumber.rupiah); "" when there is no amount.
     static func formatIDR(_ value: String?) -> String {
-        let n = normalize(value ?? "", idr: true)
-        if n.isEmpty { return "" }
-        let neg = n.hasPrefix("-")
-        return (neg ? minus : "") + "Rp " + groupIDR(neg ? String(n.dropFirst()) : n)
+        let idr = Style(numberFormat: "IDR")
+        guard let d = decimal(value, style: idr) else { return "" }
+        return format(d, style: idr)
     }
 
     /// The true minus sign every number format prints (web rupiah()/formatCount, run 13 owner rule).
@@ -471,12 +470,12 @@ extension CustomFieldNumber {
         // field with 3 decimal places is 123,456 rupiah, not grouping) — web storedNumber.
         let wholeRupiah = style.isIDR && (style.decimals ?? 0) == 0
         if !wholeRupiah, isMachineNumber(raw), let d = Decimal(string: raw, locale: posix) { return d }
-        // A machine number with a fraction can't be id-ID grouping when its whole part is "0" or has four
-        // or more digits ("1234567.891", "0.42", a value kept from before the field became Rupiah): read
-        // it as the number it is. "369.000" / "13.600000" (legacy typed Rupiah) stay grouping.
-        if style.isIDR, raw.range(of: "^-?(0|[1-9][0-9]{3,})\\.[0-9]+$", options: .regularExpression) != nil,
+        // In a whole-rupiah field "369.000" is a legacy typed amount (thousands grouping). A dot after four or
+        // more digits ("1234.567", stored while the field still showed 3 decimals) can be no grouping: a
+        // machine number, read as itself (web storedNumber).
+        if wholeRupiah, raw.range(of: "^-?[0-9]{4,}\\.[0-9]+$", options: .regularExpression) != nil,
            let d = Decimal(string: raw, locale: posix) {
-            return rounded(d, style.decimals ?? 0)
+            return d
         }
         let n = normalize(raw, style: style)
         // The server stores what JavaScript's String(n) writes, which can be "1e-8" for a tiny fraction.
@@ -540,7 +539,8 @@ extension CustomFieldNumber {
     static func display(_ value: String?, style: Style) -> String {
         let raw = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if raw.isEmpty { return "" }
-        guard let d = decimal(raw, style: style) else { return style.isIDR ? formatIDR(raw) : raw }
+        // Text that is no number shows as typed (web formatNumberField).
+        guard let d = decimal(raw, style: style) else { return raw }
         return format(d, style: style)
     }
 

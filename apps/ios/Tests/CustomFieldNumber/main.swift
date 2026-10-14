@@ -272,5 +272,113 @@ check(CFN.filterFormats("peso").map(\.code).joined(separator: ","), "MXN,CLP,PHP
 check(CFN.filterFormats("ollar").first?.code ?? "", "USD", "filter inside a word")
 check(CFN.filterFormats("dolar", lang: .id).first?.code ?? "", "USD", "filter explicit lang")
 
+// ── The web's own cases (src/__tests__/custom-field-number-format.test.ts), one for one ──────────
+func fmt(_ n: String, _ f: String, _ d: Int? = nil) -> String { CFN.format(Decimal(string: n)!, style: style(f, d)) }
+let webCases: [(String, Int?, String, String)] = [
+    ("number", nil, "1234567.891", "1.234.567,891"),
+    ("number", 0, "1234567.891", "1.234.568"),
+    ("number", 2, "42", "42,00"),
+    ("number", 5, "0.5", "0,50000"),
+    ("number", nil, "-1500.5", M + "1.500,5"),
+    ("number_with_separators", nil, "1234567.891", "1.234.567,891"),
+    ("number_with_separators", 1, "-0.04", "0,0"),
+    ("number_with_separators", 3, "-2", M + "2,000"),
+    ("percent", nil, "0.42", "42%"),
+    ("percent", nil, "0.4213", "42,13%"),
+    ("percent", nil, "0.07", "7%"),
+    ("percent", 1, "0.42", "42,0%"),
+    ("percent", nil, "1234567.891", "123.456.789,1%"),
+    ("percent", 0, "-0.425", M + "43%"),
+    ("IDR", nil, "1234567.891", "Rp 1.234.568"),
+    ("IDR", 0, "-1500.5", M + "Rp 1.501"),
+    ("IDR", 2, "1234567.891", "Rp 1.234.567,89"),
+    ("IDR", 5, "42", "Rp 42,00000"),
+    ("USD", nil, "1234567.891", "US$1.234.567,89"),
+    ("USD", 0, "-1500.5", M + "US$1.501"),
+    ("EUR", nil, "1234567.891", "€1.234.567,89"),
+    ("EUR", 3, "1", "€1,000"),
+    ("JPY", nil, "1234567.891", "JP¥1.234.568"),
+    ("JPY", 2, "5", "JP¥5,00"),
+    ("BTC", nil, "0.12345678", "₿0,12345678"),
+    ("BTC", 5, "1234567.891", "₿1.234.567,89100"),
+    ("BTC", nil, "-2", M + "₿2"),
+]
+for (f, d, n, want) in webCases { check(fmt(n, f, d), want, "web \(f) d=\(d.map(String.init) ?? "Default") \(n)") }
+// Every format × every decimals choice × sign: grouped, signed with "−", the asked number of digits.
+for f in CFN.formats.map(\.code) {
+    for d in [nil, 0, 1, 2, 3, 4, 5] as [Int?] {
+        let pos = fmt("1234567.891", f, d), neg = fmt("-1234567.891", f, d)
+        let tag = "\(f)/\(d.map(String.init) ?? "Default")"
+        check(neg, M + pos, "web sign \(tag)")
+        if f != "percent" { checkD(pos.range(of: "1\\.234\\.56[78]", options: .regularExpression) != nil, "web grouped \(tag) → \(pos)") }
+        if let d, d > 0 { checkD(pos.range(of: ",[0-9]{\(d)}([^0-9]|$)", options: .regularExpression) != nil, "web digits \(tag) → \(pos)") }
+        checkD(!pos.contains("\u{00A0}") && !pos.contains("\u{202F}"), "web spaces \(tag)")
+    }
+}
+check(fmt("0", "IDR"), "Rp 0", "web zero idr")
+check(fmt("0", "percent"), "0%", "web zero percent")
+// Stored values.
+check(CFN.decimal("1.234", style: style(nil)).map { "\($0)" } ?? "nil", "1.234", "web stored 1.234 plain")
+check(CFN.decimal("369.000", style: Style(format: "currency-idr")).map { "\($0)" } ?? "nil", "369000", "web stored 369.000 idr")
+check(CFN.decimal("1234.567", style: Style(format: "currency-idr")).map { "\($0)" } ?? "nil", "1234.567", "web stored 1234.567 whole idr")
+check(CFN.display("1234.567", style: Style(format: "currency-idr")), "Rp 1.235", "web display 1234.567 whole idr")
+check(CFN.decimal("1500.5", style: style("IDR", 2)).map { "\($0)" } ?? "nil", "1500.5", "web stored 1500.5 idr d=2")
+checkD(CFN.decimal("", style: style(nil)) == nil, "web stored empty")
+checkD(CFN.decimal("abc", style: style(nil)) == nil, "web stored text")
+check(CFN.display("abc", style: style(nil)), "abc", "web display text")
+check(CFN.display("1500000", style: style(nil)), "1.500.000", "web display plain")
+check(CFN.display("369.000", style: Style(format: "rupiah")), "Rp 369.000", "web display rupiah legacy")
+check(CFN.display("0.42", style: style("percent")), "42%", "web display percent")
+check(CFN.display("0.123", style: style("IDR")), "Rp 123", "web whole idr 0.123 is grouping")
+check(CFN.formatIDR("1234.567"), "Rp 1.235", "web formatIdr machine")
+check(CFN.formatIDR("-25000"), M + "Rp 25.000", "web formatIdr minus")
+// Rupiah keeps a fraction only with decimal places.
+check(CFN.normalize("1.500,50", style: Style(format: "currency-idr")), "1501", "web idr 1.500,50")
+check(CFN.normalize("1.500,50", style: style("IDR", 2)), "1500.5", "web idr d=2 1.500,50")
+check(CFN.normalize("1.500,555", style: style("IDR", 2)), "1500555", "web idr d=2 1.500,555")
+check(CFN.normalize("1,234", style: style("IDR", 1)), "1234", "web idr d=1 1,234")
+check(CFN.normalize("2,25", style: style("IDR", 1)), "2.3", "web idr d=1 2,25")
+check(CFN.normalize("1,5jt", style: style("IDR", 2)), "1500000", "web idr d=2 1,5jt")
+// A typed percent is the stored fraction (not in Rupiah).
+check(CFN.normalize("42%", style: style("percent")), "0.42", "web 42%")
+check(CFN.normalize("12,5 %", style: .plain), "0.125", "web 12,5 %")
+check(CFN.normalize("0.42", style: style("percent")), "0.42", "web 0.42 percent")
+check(CFN.normalize("50%", style: Style(format: "currency-idr")), "50", "web 50% idr")
+// Currency marks typed with the amount are dropped.
+check(CFN.normalize("US$1.500,25", style: style("USD")), "1500.25", "web US$")
+check(CFN.normalize("€ 12", style: style("EUR")), "12", "web €")
+// Bar / Ring fill.
+func fillD(_ v: String, _ s: Style) -> Double { CFN.fill(Decimal(string: v)!, style: s) }
+var div10 = style("IDR"); div10.divideBy = 10
+check(String(format: "%.3f", fillD("42", style("number"))), "0.420", "web fill 42")
+check(String(format: "%.3f", fillD("500", style("number"))), "1.000", "web fill 500")
+check(String(format: "%.3f", fillD("-5", style("number"))), "0.000", "web fill -5")
+check(String(format: "%.3f", fillD("5", div10)), "0.500", "web fill divideBy 10")
+check(String(format: "%.3f", fillD("5", Style(options: ["divideBy": 0]))), "0.050", "web fill divideBy 0")
+var pct1000 = style("percent"); pct1000.divideBy = 1000
+check(String(format: "%.3f", fillD("0.42", pct1000)), "0.420", "web percent fill ignores divideBy")
+// Options compat and write side.
+check(Style(options: "idr").numberFormat, "IDR", "web compat bare idr")
+checkD(Style(options: nil) == Style(), "web compat null = defaults")
+let badPct = Style(options: ["numberFormat": "percent", "decimals": 9, "showAs": "pie", "barColor": "teal", "divideBy": -3, "showNumber": "no"])
+var wantPct = Style(); wantPct.numberFormat = "percent"
+checkD(badPct == wantPct, "web invalid values read as defaults")
+check(CFN.barColors.first ?? "", "default", "web bar colours start with default")
+let ring = Style(options: ["numberFormat": "percent", "decimals": 1, "showAs": "ring", "barColor": "blue", "divideBy": "250", "showNumber": false])
+let ringOut = ring.options
+check("\(ringOut["numberFormat"] as? String ?? "") \(ringOut["decimals"] as? Int ?? -1) \(ringOut["showAs"] as? String ?? "") \(ringOut["barColor"] as? String ?? "") \(ringOut["divideBy"] as? Double ?? 0) \(ringOut["showNumber"] as? Bool ?? true) \(ringOut["format"] == nil)",
+      "percent 1 ring blue 250.0 false true", "web write ring")
+let eur = Style(options: ["numberFormat": "EUR", "decimals": 0, "showAs": "bar", "barColor": "red", "divideBy": 50, "showNumber": false])
+checkD(Style(options: eur.options) == eur, "web round trip eur bar")
+check((Style(options: ["numberFormat": "IDR", "decimals": 2]).options["format"] as? String) ?? "", "currency-idr", "web write idr d=2 legacy key")
+checkD(Style(options: ["numberFormat": "USD", "format": "currency-idr"]).options["format"] == nil, "web write usd drops legacy key")
+// Filter formats.
+let rupEN = CFN.filterFormats("rup", lang: .en).map(\.code)
+checkD(["INR", "IDR", "PKR", "UYU"].allSatisfy(rupEN.contains) && !rupEN.contains("PEN"), "web filter rup")
+check(CFN.filterFormats("dolar", lang: .id).first?.code ?? "", "USD", "web filter dolar id")
+check(CFN.filterFormats("persen", lang: .id).map(\.code).joined(separator: ","), "percent", "web filter persen id")
+check(CFN.filterFormats("idr", lang: .en).first?.code ?? "", "IDR", "web filter idr")
+checkD(CFN.filterFormats("zzzz", lang: .en).isEmpty, "web filter none")
+
 print("passes", passes, "fails", fails)
 if fails > 0 { exit(1) }
