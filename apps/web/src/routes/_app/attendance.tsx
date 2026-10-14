@@ -616,10 +616,9 @@ function Attendance() {
                             remaining === 0 ? "bg-rose-100 text-rose-700 ring-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-500/30"
                               : remaining <= 1 ? "bg-amber-100 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30"
                               : "bg-muted text-muted-foreground ring-border";
-                          // XP sits at baseline 1000; below that means penalties are winning.
-                          const xpTone = d.xp.score < PERIOD_BASELINE_XP ? "bg-rose-100 text-rose-700 ring-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-500/30"
-                            : d.xp.score > PERIOD_BASELINE_XP ? "bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30"
-                            : "bg-muted text-muted-foreground ring-border";
+                          // Red only for negative XP; any positive score reads neutral, and above the 1000 baseline
+                          // green (UI tour run 10, WD-6: "791 XP" wore the same red pill as "-590 XP").
+                          const xpTone = xpPillTone(d.xp.score);
                           const pill = "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ring-1";
                           return (
                             <>
@@ -926,9 +925,22 @@ function shortName(name: string | null | undefined) {
 }
 
 // Phone line under the name: this period's day-off quota and XP as plain text (the pills sit on desktop).
+/** The board's XP pill: red only below zero, neutral up to the 1000 baseline, green above it. */
+function xpPillTone(score: number): string {
+  if (score < 0) return "bg-rose-100 text-rose-700 ring-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-500/30";
+  if (score > PERIOD_BASELINE_XP) return "bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30";
+  return "bg-muted text-muted-foreground ring-border";
+}
+
+/** Phone: day off and XP on their own lines, so the narrow pinned column never cuts the XP (UI tour run 10, WM-3). */
 function PhoneMemberSummary({ d }: { d: { remaining: number; quota: number; xp: { score: number } } | null }) {
   if (!d) return null;
-  return <div className="truncate text-[10px] tabular-nums text-muted-foreground sm:hidden">{d.remaining}/{d.quota} DO · {d.xp.score} XP</div>;
+  return (
+    <div className="text-[10px] leading-tight tabular-nums text-muted-foreground sm:hidden">
+      <div className="whitespace-nowrap">{d.remaining}/{d.quota} DO</div>
+      <div className={cn("whitespace-nowrap", d.xp.score < 0 && "font-medium text-rose-600 dark:text-rose-400")}>{d.xp.score} XP</div>
+    </div>
+  );
 }
 
 // Member avatar that falls back to the initials Avatar if the photo URL 404s.

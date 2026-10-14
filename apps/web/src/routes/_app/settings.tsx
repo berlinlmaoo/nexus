@@ -507,18 +507,33 @@ function PasswordSection() {
   const { t } = useLang();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
-  const change = useMutation({ mutationFn: () => nexusApi.changePassword(current, next), onSuccess: () => { setCurrent(""); setNext(""); } });
+  const [repeat, setRepeat] = useState("");
+  const change = useMutation({ mutationFn: () => nexusApi.changePassword(current, next), onSuccess: () => { setCurrent(""); setNext(""); setRepeat(""); } });
+  // Three fields like the app (UI tour run 10, WD-3): the new password typed twice. The server takes 8
+  // characters at least; the button allowed 6 and the server then refused it.
+  const tooShort = next.length > 0 && next.length < 8;
+  const mismatch = repeat.length > 0 && repeat !== next;
+  const field = "mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary aria-[invalid=true]:border-destructive";
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
       <h2 className="font-semibold">{t("Password")}</h2>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <label className="block"><span className="text-xs font-medium text-muted-foreground">{t("Current password")}</span><input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" /></label>
-        <label className="block"><span className="text-xs font-medium text-muted-foreground">{t("New password")}</span><input type="password" value={next} onChange={(e) => setNext(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" /></label>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <label className="block"><span className="text-xs font-medium text-muted-foreground">{t("Current password")}</span><input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} className={field} /></label>
+        <label className="block">
+          <span className="text-xs font-medium text-muted-foreground">{t("New password")}</span>
+          <input type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} aria-invalid={tooShort} aria-describedby="pw-new-hint" className={field} />
+          <span id="pw-new-hint" className={cn("mt-1 block text-[11px]", tooShort ? "text-destructive" : "text-muted-foreground")}>{t("At least 8 characters")}</span>
+        </label>
+        <label className="block">
+          <span className="text-xs font-medium text-muted-foreground">{t("Repeat new password")}</span>
+          <input type="password" autoComplete="new-password" value={repeat} onChange={(e) => setRepeat(e.target.value)} aria-invalid={mismatch} aria-describedby={mismatch ? "pw-repeat-error" : undefined} className={field} />
+          {mismatch && <span id="pw-repeat-error" className="mt-1 block text-[11px] text-destructive">{t("The passwords don't match.")}</span>}
+        </label>
       </div>
       <div className="flex items-center justify-end gap-2">
         {change.isSuccess && <span className="text-xs font-semibold text-success">{t("Password updated.")}</span>}
         {change.isError && <span className="text-xs font-semibold text-destructive">{t("Couldn't change it. Check your current password.")}</span>}
-        <button disabled={!current || next.length < 6 || change.isPending} onClick={() => change.mutate()} className="inline-flex items-center gap-2 text-sm rounded-md bg-primary text-primary-foreground px-4 py-1.5 shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{change.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Change password")}</button>
+        <button disabled={!current || next.length < 8 || repeat !== next || change.isPending} onClick={() => change.mutate()} className="inline-flex items-center gap-2 text-sm rounded-md bg-primary text-primary-foreground px-4 py-1.5 shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{change.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Change password")}</button>
       </div>
     </div>
   );

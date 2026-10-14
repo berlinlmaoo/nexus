@@ -84,7 +84,7 @@ export function LegalRequests({ openId, onOpen, onOpenDocument }: {
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-52 flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={text} onChange={(e) => setText(e.target.value)} placeholder={t("Search requester, type, notes…")} className="pl-8" />
+          <Input value={text} onChange={(e) => setText(e.target.value)} placeholder={t("Search requests")} aria-label={t("Search requester, type, notes…")} className="pl-8" />
         </div>
         <Segmented label={t("View")} value={view} onChange={setView}
           options={[{ key: "board", label: t("Board"), icon: Kanban }, { key: "list", label: t("List"), icon: List }]} />

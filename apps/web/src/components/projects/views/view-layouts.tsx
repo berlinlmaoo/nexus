@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, CalendarDays, ChevronRight, CircleCheck, Clock, ImageOff, ListChecks, MessageSquare, Plus, UserRound } from "lucide-react";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { Avatar } from "@/components/Avatar";
 import { StatusPill } from "@/components/tasks/StatusPicker";
 import { useTaskBulk } from "@/components/tasks/task-bulk";
@@ -152,12 +152,20 @@ export function PropLine({ task, keys, defs, ctx, className }: { task: NexusTask
   // the first of them sits: start → due first (one chip, the clock icon), then the other date fields in
   // the view's order with a calendar icon and their name on hover. A day already on screen is not drawn
   // again; its field name joins the tooltip of the chip that shows it.
+  // The group's slot is the view's first date property, whether or not this task has a value for it: anchoring
+  // it on the first date the task happens to have moved the dates past the amount on some rows and not on
+  // others (UI tour run 10, WD-4). Every row now reads in the same order.
   const isDateItem = (d: PropDef) => d.kind === "date" && taskValues(task, d.key).some((v) => !Number.isNaN(new Date(v).getTime()));
-  const firstDate = items.find(isDateItem)?.key ?? null;
+  const dateItems = items.filter(isDateItem);
+  const firstDate = dateItems.length ? (items.find((d) => d.kind === "date")?.key ?? null) : null;
   return (
     <div className={cn("flex flex-wrap items-center gap-1.5", className)}>
       {items.map((d) => {
-        if (isDateItem(d)) return d.key === firstDate ? <DateChips key="dates" task={task} items={items.filter(isDateItem)} /> : null;
+        if (d.key === firstDate) {
+          // The slot's own field may hold a name instead of a date (a Notion "Request by"): it follows the dates.
+          return <Fragment key="dates"><DateChips task={task} items={dateItems} />{!isDateItem(d) && <PropValue task={task} def={d} ctx={ctx} />}</Fragment>;
+        }
+        if (isDateItem(d)) return null;
         return <PropValue key={d.key} task={task} def={d} ctx={ctx} />;
       })}
     </div>

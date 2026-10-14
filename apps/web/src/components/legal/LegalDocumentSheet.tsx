@@ -118,10 +118,16 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
             </SheetHeader>
 
             <div className="flex flex-wrap items-center gap-2">
-              <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", statusClass(doc.status))}>{statusLabel(doc.status)}</span>
-              {doc.status !== "VOID" && (
+              {/* One control (UI tour run 10, WD-2): the status chip is itself the dropdown. A chip next to a
+                  dropdown said the same word twice. Void is final, so it stays a plain chip. */}
+              {doc.status === "VOID" ? (
+                <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", statusClass(doc.status))}>{statusLabel(doc.status)}</span>
+              ) : (
                 <Select value={doc.status} onValueChange={(v) => changeStatus(v as LegalStatus)}>
-                  <SelectTrigger className="h-8 w-40" aria-label={t("Status")}><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Status")}
+                    className={cn("h-7 w-auto gap-1 rounded-full border-0 px-2.5 py-1 text-xs font-medium shadow-none hover:brightness-95 dark:hover:brightness-125", statusClass(doc.status))}>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>{statusChoices(doc).map((s) => <SelectItem key={s} value={s}>{statusLabel(s)}</SelectItem>)}</SelectContent>
                 </Select>
               )}

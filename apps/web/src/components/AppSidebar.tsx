@@ -171,7 +171,10 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border">
-        <div className="flex items-center gap-2 overflow-hidden px-1 py-1">
+        {/* Who's signed in gets the whole row and the actions sit on their own row under it: on one row the
+            four buttons left "QA D…" / "qa5@…" (UI tour run 10, WD-7). The full name and email are on hover. */}
+        <div className="flex flex-col gap-1 overflow-hidden px-1 py-1">
+        <div className="flex min-w-0 items-center gap-2" title={[me?.name, me?.email].filter(Boolean).join("\n") || undefined}>
           {me?.avatar ? (
             <img src={thumbUrl(me.avatar, 40)} loading="lazy" decoding="async" alt="" className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-sidebar-border" />
           ) : (
@@ -183,6 +186,8 @@ export function AppSidebar() {
             <span className="truncate text-xs font-medium">{me?.name ?? "—"}</span>
             <span className="truncate text-[10px] text-muted-foreground">{me?.email ?? ""}</span>
           </div>
+        </div>
+        <div className="flex items-center gap-1 group-data-[collapsible=icon]:hidden">
           <button
             onClick={toggleTheme}
             aria-label={t("Toggle theme")}
@@ -215,10 +220,11 @@ export function AppSidebar() {
             disabled={loggingOut}
             aria-label={t("Log out")}
             title={t("Log out")}
-            className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring disabled:opacity-50 group-data-[collapsible=icon]:hidden"
+            className="ml-auto grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring disabled:opacity-50 group-data-[collapsible=icon]:hidden"
           >
             {loggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
           </button>
+        </div>
         </div>
       </SidebarFooter>
       <SidebarRail aria-label={t("Show or hide the sidebar")} />
