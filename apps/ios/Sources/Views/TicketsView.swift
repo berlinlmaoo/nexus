@@ -463,12 +463,11 @@ struct TicketsView: View {
         HStack(spacing: 12) {
             HStack(spacing: 6) {
                 Text(t.title).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
-                // The two markers as small icons, so a long subject never pushes them into the next column.
+                // The same chip as the narrow rows (one style, UI tour run 11 IP-1); it never shrinks, the
+                // subject truncates first.
                 if t.showsDecisionMarker {
-                    Image(systemName: "calendar.badge.clock").font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(NX.violetText)
-                        .frame(width: 20, height: 20).background(NX.violetText.opacity(0.14), in: Circle())
-                        .accessibilityLabel(T("Awaiting decision"))
+                    NexusChip(text: T("Correction awaiting decision"), tone: .accent, systemImage: "calendar.badge.clock")
+                        .fixedSize()
                 }
                 if t.hasGideonReply {
                     Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
@@ -568,8 +567,11 @@ struct TicketsView: View {
     @ViewBuilder private func markers(_ t: Complaint) -> some View {
         if t.showsDecisionMarker || t.hasGideonReply {
             HStack(spacing: 6) {
+                // Names WHAT waits, so a Closed ticket that stays in "In review" reads "Closed" plus this chip
+                // rather than two statuses (owner rule 13 Oct 2026; UI tour run 11, IP-1). One chip style
+                // everywhere the marker appears.
                 if t.showsDecisionMarker {
-                    NexusChip(text: T("Awaiting decision"), tone: .accent,
+                    NexusChip(text: T("Correction awaiting decision"), tone: .accent,
                               systemImage: "calendar.badge.clock")
                 }
                 if t.hasGideonReply { gideonMarker }

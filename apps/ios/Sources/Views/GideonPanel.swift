@@ -384,7 +384,7 @@ struct GideonPanel: View {
     // MARK: - header (regular width)
 
     /// The web's page header: the mark, the name and "Acts in NEXUS as you" (or the chat's title), then
-    /// New chat, the tier chip and ⋯ at the right.
+    /// the tier chip and ⋯ at the right.
     private var pageHeader: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
@@ -402,15 +402,8 @@ struct GideonPanel: View {
                         .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
                 Spacer(minLength: 12)
-                Button { newChat() } label: {
-                    Image(systemName: "square.and.pencil").font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(NX.mutedFg)
-                        .frame(width: 34, height: 34).contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .hoverEffect(.highlight)
-                .help(T("New chat (⌘O)"))
-                .accessibilityLabel(T("New chat"))
+                // No New chat here: the chats column beside the conversation always has one, and two
+                // identical buttons a few points apart read as two different actions (UI tour run 11, PD-15).
                 tierChip
                 Menu {
                     Button { showPersonalize = true } label: { Label(T("Personalize"), systemImage: "person.crop.circle") }

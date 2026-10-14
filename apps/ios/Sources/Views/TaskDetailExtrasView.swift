@@ -74,6 +74,11 @@ struct TaskCustomFieldsCard: View {
                     .padding(10)
                     .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .onSubmit { Task { await commit(f) } }
+            } else if type == "DATE", !cfText(f.id).isEmpty, Self.ymdParse(String(cfText(f.id).prefix(10))) == nil {
+                // A date field holding a name or a timestamp (Notion's created-by / created-time import,
+                // "Request by"): plain text with a person icon, not a date picker showing today (UI tour run 11).
+                Label(cfText(f.id), systemImage: "person").font(NXFont.text(14)).foregroundStyle(NX.foreground)
+                    .labelStyle(.titleAndIcon).lineLimit(2)
             } else if type == "DATE" {
                 DatePicker("", selection: dateBinding(f), displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violetText)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -261,7 +266,7 @@ struct TaskAttachmentsCard: View {
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
             } else if items.isEmpty {
-                Text(canEdit ? T("No files yet. Tap + to add receipts, proofs or documents.") : T("No files yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                Text(canEdit ? PlatformWording.tapOrClick(tap: "No files yet. Tap + to add receipts, proofs or documents.", click: "No files yet. Click + to add receipts, proofs or documents.") : T("No files yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
                 ForEach(items) { a in row(a) }
             }

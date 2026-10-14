@@ -654,7 +654,7 @@ struct ChatThreadView: View {
                         .foregroundStyle(NX.foreground)
                         .lineLimit(1)
                     // "typing…" in place of the hint while someone types here, as WhatsApp does.
-                    Text(typingHere ? T("typing…") : T("Tap for info"))
+                    Text(typingHere ? T("typing…") : PlatformWording.tapOrClick(tap: "Tap for info", click: "Click for info"))
                         .font(NXFont.text(11, typingHere ? .semibold : .regular))
                         .foregroundStyle(typingHere ? NX.violetText : NX.mutedFg)
                         .lineLimit(1)
@@ -708,7 +708,7 @@ struct ChatThreadView: View {
                         .font(NXFont.text(15, .semibold))
                         .foregroundStyle(NX.foreground)
                         .lineLimit(1)
-                    Text(typingHere ? T("typing…") : T("Tap for info"))
+                    Text(typingHere ? T("typing…") : PlatformWording.tapOrClick(tap: "Tap for info", click: "Click for info"))
                         .font(NXFont.text(10, typingHere ? .semibold : .regular))
                         .foregroundStyle(typingHere ? NX.violetText : NX.mutedFg)
                         .lineLimit(1)

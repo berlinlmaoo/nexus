@@ -233,8 +233,13 @@ struct ListTab: View {
     }
 
     @ViewBuilder private func row(_ t: BoardTask, laneId: String, columns: [String], order: @escaping () -> [String]) -> some View {
-        let base = ListTaskRow(task: t, status: statusOf(t) ?? RowStatus.plain(t), wide: hSize == .regular,
-                               fieldColumns: columns, onOpen: onOpen, selection: selection, order: order)
+        // Grouped by status (or priority), the group header already says it: the row leaves that chip out
+        // instead of repeating it on every row (UI tour run 11, IP-8).
+        let groupProp = ViewEngine.groupTarget(laneId)?.prop
+        let byStatus = groupProp == "status" || (groupProp == nil && statusStyle)
+        let base = ListTaskRow(task: t, status: byStatus ? nil : (statusOf(t) ?? RowStatus.plain(t)), wide: hSize == .regular,
+                               fieldColumns: columns, hidePriority: groupProp == "priority",
+                               onOpen: onOpen, selection: selection, order: order)
         if onDrop == nil {
             // Read-only (Can view / Can comment): rows open, nothing drags.
             base
@@ -274,6 +279,8 @@ struct TimelineTab: View {
     @Environment(\.horizontalSizeClass) private var hSize
     @State private var collapsed: Set<String> = []
     @State private var shown: [String: Int] = [:]
+    /// The chart's horizontal scroll (iOS 18): drives the sticky day header above it.
+    @State private var offsetX: CGFloat = 0
 
     private let dayW: CGFloat = 40
     private let rowH: CGFloat = 48
@@ -385,20 +392,46 @@ struct TimelineTab: View {
         return Axis(start: start, days: list, todayIndex: (0..<count).contains(ti) ? ti : nil, months: months)
     }
 
+    /// The frozen Name (| Duration | Progress) column. Wider than before: the phone's ~150 pt showed about
+    /// ten characters of a name (UI tour run 11, IP-14).
     private func leftWidth(_ width: CGFloat) -> CGFloat {
-        compact ? min(200, max(120, width * 0.4)) : 460
+        compact ? min(240, max(160, width * 0.5)) : min(560, max(460, width * 0.45))
+    }
+
+    /// iOS 18 knows the chart's scroll offset, so the day header can sit above the rows and stay put while
+    /// they scroll (UI tour run 11, PD-18); iOS 17 keeps the header inside the scroll, as before.
+    private var stickyHeader: Bool {
+        if #available(iOS 18.0, *) { return true } else { return false }
     }
 
     private func chart(_ gs: [Group], width: CGFloat) -> some View {
         let leftW = leftWidth(width)
         let ax = axis(gs, chartWidth: max(0, width - leftW))
         let ls = lines(gs)
-        return ScrollView(.vertical, showsIndicators: true) {
-            HStack(alignment: .top, spacing: 0) {
-                leftColumn(ls, width: leftW)
-                    .frame(width: leftW)
-                    .overlay(alignment: .trailing) { Rectangle().fill(NX.border).frame(width: 1) }
-                rightPane(ls, ax: ax)
+        let sticky = stickyHeader
+        return VStack(spacing: 0) {
+            if #available(iOS 18.0, *) {
+                HStack(alignment: .top, spacing: 0) {
+                    leftHeader
+                        .frame(width: leftW)
+                        .overlay(alignment: .trailing) { Rectangle().fill(NX.border).frame(width: 1) }
+                    TimelineAxisHeader(offsetX: offsetX, monthLabel: visibleMonth(ax), monthH: monthH) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            monthRow(ax)
+                            dayRow(ax)
+                        }
+                        .frame(width: CGFloat(ax.days.count) * dayW, alignment: .leading)
+                    }
+                }
+                .frame(height: monthH + dayH)
+            }
+            ScrollView(.vertical, showsIndicators: true) {
+                HStack(alignment: .top, spacing: 0) {
+                    leftColumn(ls, width: leftW, header: !sticky)
+                        .frame(width: leftW)
+                        .overlay(alignment: .trailing) { Rectangle().fill(NX.border).frame(width: 1) }
+                    rightPane(ls, ax: ax, header: !sticky)
+                }
             }
         }
         .background(NX.card)
@@ -406,20 +439,34 @@ struct TimelineTab: View {
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
     }
 
+    /// The month of the first day in view, while that month's own label has scrolled off to the left.
+    private func visibleMonth(_ ax: Axis) -> String? {
+        guard !ax.days.isEmpty else { return nil }
+        let i = min(ax.days.count - 1, max(0, Int((offsetX + 1) / dayW)))
+        let first = ax.days[i]
+        guard let monthStart = ax.days.firstIndex(where: { cal.isDate($0, equalTo: first, toGranularity: .month) }),
+              CGFloat(monthStart) * dayW < offsetX - 1 else { return nil }
+        return ProjLocaleDate.fmt("MMMM yyyy").string(from: first)
+    }
+
     // MARK: left: Name | Duration | Progress
 
-    private func leftColumn(_ ls: [Line], width: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 0) {
-                headLabel(T("Name")).padding(.leading, compact ? 12 : 16).frame(maxWidth: .infinity, alignment: .bottomLeading)
-                if !compact {
-                    headLabel(T("Duration")).padding(.horizontal, 8).frame(width: durationW, alignment: .bottomLeading)
-                    headLabel(T("Progress")).padding(.horizontal, 12).frame(width: progressW, alignment: .bottomLeading)
-                        .overlay(alignment: .leading) { Rectangle().fill(NX.border).frame(width: 1) }
-                }
+    private var leftHeader: some View {
+        HStack(spacing: 0) {
+            headLabel(T("Name")).padding(.leading, compact ? 12 : 16).frame(maxWidth: .infinity, alignment: .bottomLeading)
+            if !compact {
+                headLabel(T("Duration")).padding(.horizontal, 8).frame(width: durationW, alignment: .bottomLeading)
+                headLabel(T("Progress")).padding(.horizontal, 12).frame(width: progressW, alignment: .bottomLeading)
+                    .overlay(alignment: .leading) { Rectangle().fill(NX.border).frame(width: 1) }
             }
-            .frame(height: monthH + dayH)
-            .overlay(alignment: .bottom) { TableHairline() }
+        }
+        .frame(height: monthH + dayH)
+        .overlay(alignment: .bottom) { TableHairline() }
+    }
+
+    private func leftColumn(_ ls: [Line], width: CGFloat, header: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if header { leftHeader }
             ForEach(ls) { line in leftLine(line) }
         }
     }
@@ -541,15 +588,25 @@ struct TimelineTab: View {
 
     // MARK: right: the axis and the bars
 
-    private func rightPane(_ ls: [Line], ax: Axis) -> some View {
+    private func rightPane(_ ls: [Line], ax: Axis, header: Bool) -> some View {
         let timelineW = CGFloat(ax.days.count) * dayW
         let todayX: CGFloat? = ax.todayIndex.map { CGFloat($0) * dayW + dayW / 2 }
         let landing = max(0, (ax.todayIndex ?? 0) - (compact ? 1 : 3))
         return ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 0) {
-                    monthRow(ax)
-                    dayRow(ax)
+                    if header {
+                        monthRow(ax)
+                        dayRow(ax)
+                    } else {
+                        // The day header sits above the scroll (sticky); these zero-height markers keep the
+                        // "day-i" ids the landing scroll aims at.
+                        HStack(spacing: 0) {
+                            ForEach(ax.days.indices, id: \.self) { i in
+                                Color.clear.frame(width: dayW, height: 0).id("day-\(i)")
+                            }
+                        }
+                    }
                     ForEach(ls) { line in rightLine(line, ax: ax, todayX: todayX) }
                 }
                 .frame(width: timelineW, alignment: .leading)
@@ -557,12 +614,13 @@ struct TimelineTab: View {
                     if let todayX {
                         Rectangle().fill(NX.onyx.opacity(0.55)).frame(width: 1)
                             .frame(maxHeight: .infinity)
-                            .padding(.top, monthH + dayH)
+                            .padding(.top, header ? monthH + dayH : 0)
                             .padding(.leading, todayX)
                             .allowsHitTesting(false)
                     }
                 }
             }
+            .modifier(TimelineOffsetTracker(offsetX: $offsetX))
             // Opens around today (web: today minus three days at the left edge).
             .onAppear { DispatchQueue.main.async { proxy.scrollTo("day-\(landing)", anchor: .leading) } }
         }
@@ -694,6 +752,48 @@ struct TimelineTab: View {
     static func dayCount(_ n: Int) -> String { n == 1 ? T("1 day") : String(format: T("%d days"), n) }
 }
 
+/// Reports a horizontal ScrollView's offset (iOS 18; a no-op before).
+private struct TimelineOffsetTracker: ViewModifier {
+    @Binding var offsetX: CGFloat
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.x } action: { _, x in
+                if abs(x - offsetX) > 0.5 { offsetX = x }
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/// The timeline's month + day header, above the rows so it stays while they scroll vertically. It follows
+/// the chart's horizontal scroll (it is not scrolled by hand), and when the first month's own label has
+/// scrolled off to the left, that month is named at the leading edge (UI tour run 11, PD-18).
+@available(iOS 18.0, *)
+private struct TimelineAxisHeader<Content: View>: View {
+    let offsetX: CGFloat
+    let monthLabel: String?
+    let monthH: CGFloat
+    @ViewBuilder let content: Content
+    @State private var position = ScrollPosition(edge: .leading)
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) { content }
+            .scrollPosition($position)
+            .scrollDisabled(true)
+            .onChange(of: offsetX, initial: true) { _, x in position.scrollTo(x: x) }
+            .overlay(alignment: .topLeading) {
+                if let monthLabel {
+                    Text(monthLabel).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground.opacity(0.75)).lineLimit(1)
+                        .padding(.horizontal, 8)
+                        .frame(height: monthH - 1)
+                        .background(NX.card)
+                        .allowsHitTesting(false)
+                }
+            }
+    }
+}
+
 // MARK: - Calendar
 
 /// One "Plot by" option: nil id = the due date, else a DATE custom field.
@@ -796,7 +896,7 @@ struct CalendarTab: View {
                         }
                     }
                 } else {
-                    Text(canCreate ? T("Pick a date to see its tasks, or tap + to create one.") : T("Pick a date to see its tasks."))
+                    Text(canCreate ? PlatformWording.tapOrClick(tap: "Pick a date to see its tasks, or tap + to create one.", click: "Pick a date to see its tasks, or click + to create one.") : T("Pick a date to see its tasks."))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.top, 4)
                 }
                 let rest = undated

@@ -25,6 +25,24 @@ private let cfYMD: DateFormatter = {
 }()
 private let cfDecoder = JSONDecoder()   // reused — a fresh JSONDecoder per chip per scroll was an allocation hit
 
+/// A custom date value as a day: an ISO timestamp or "yyyy-MM-dd…"; nil for anything else (a name).
+func cfParseDay(_ s: String) -> Date? {
+    if let d = ProjDate.parse(s) { return d }
+    return cfYMD.date(from: String(s.prefix(10)))
+}
+
+/// A date field that holds names, not dates: Notion's created-by / created-time import ("Request by")
+/// filled it with who asked. True when most of its filled values on these tasks are not dates.
+func cfFieldHoldsNames(_ fieldId: String, in tasks: [BoardTask]) -> Bool {
+    var names = 0, dates = 0
+    for t in tasks {
+        guard let raw = t.customFieldValues?.first(where: { $0.customFieldId == fieldId })?.value?
+            .trimmingCharacters(in: .whitespaces), !raw.isEmpty else { continue }
+        if cfParseDay(raw) == nil { names += 1 } else { dates += 1 }
+    }
+    return names > dates
+}
+
 /// Port of the web `cfStatusTone` — colors a STATUS value.
 func cfStatusTone(_ v: String) -> ChipTone {
     // Normalize "_"/"-" to spaces and collapse runs (was a per-call regex) — split/join is cheaper.
@@ -43,10 +61,7 @@ func customFieldChip(_ cfv: BoardTask.CFValue) -> CFChip? {
     let raw = (cfv.value ?? "").trimmingCharacters(in: .whitespaces)
     guard !raw.isEmpty else { return nil }
 
-    func parseDay(_ s: String) -> Date? {
-        if let d = ProjDate.parse(s) { return d }
-        return cfYMD.date(from: String(s.prefix(10)))
-    }
+    func parseDay(_ s: String) -> Date? { cfParseDay(s) }
 
     switch type {
     case "NUMBER":

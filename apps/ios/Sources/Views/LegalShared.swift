@@ -92,6 +92,13 @@ enum LegalLabels {
         return AppDateLocale.formatter("d MMM yyyy", timeZone: TimeZone(identifier: "Asia/Jakarta")).string(from: d)
     }
 
+    /// "2026-10-14" → "14 Oct" this year, "14 Oct 2025" otherwise: the documents list, as the web writes it
+    /// (UI tour run 11).
+    static func shortDay(_ day: String?) -> String {
+        guard let day, let d = LegalText.date(fromDay: day) else { return "—" }
+        return AppDateLocale.shortDate(d, timeZone: LegalText.jakarta)
+    }
+
     /// An ISO timestamp → "14 Oct" this year, "14 Oct 2025" otherwise (web fmtDate: the signed line,
     /// templates and the kop row read the short date; UI tour run 10).
     static func date(_ iso: String?) -> String {

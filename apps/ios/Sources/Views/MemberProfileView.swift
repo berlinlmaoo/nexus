@@ -481,7 +481,7 @@ struct MemberProfileView: View {
                     if let today = days.first(where: { $0.isToday == true }) { proxy.scrollTo(today.date, anchor: .center) }
                 }
             }
-            Text(T("Tap a day for its detail. A red dot means XP was deducted for that day."))
+            Text(PlatformWording.tapOrClick(tap: "Tap a day for its detail. A red dot means XP was deducted for that day.", click: "Click a day for its detail. A red dot means XP was deducted for that day."))
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -26,6 +26,15 @@ enum AppDateLocale {
         cache[key] = f
         return f
     }
+
+    /// A short date that leaves the year out when it is the current year: "14 Oct", "3 Mar 2025" (UI tour
+    /// run 11: Legal lists and project Table cells, as the web writes them).
+    static func shortDate(_ d: Date, timeZone: TimeZone? = TimeZone(identifier: "Asia/Jakarta")) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        if let timeZone { cal.timeZone = timeZone }
+        let thisYear = cal.component(.year, from: d) == cal.component(.year, from: Date())
+        return formatter(thisYear ? "d MMM" : "d MMM yyyy", timeZone: timeZone).string(from: d)
+    }
 }
 
 /// Numbers in the language the app is set to, not the device's region: English "1,000" and "18.5 MB",

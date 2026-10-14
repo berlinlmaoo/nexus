@@ -592,10 +592,13 @@ private struct LegalDocumentFacts: View {
 
     private func linkRow(_ text: String, _ ref: LegalDocRef) -> some View {
         Button { open(ref.id) } label: {
+            // The number stays on one line, cut in the middle, never broken part-way (UI tour run 11, IP-12 / PD-13).
             HStack(spacing: 4) {
-                Text(text)
+                Text(text).lineLimit(1).layoutPriority(1)
                 Text(ref.number.isEmpty ? ref.title : ref.number).font(.system(size: 13, design: .monospaced)).foregroundStyle(NX.violetText)
+                    .lineLimit(1).truncationMode(.middle)
             }
+            .help(ref.number.isEmpty ? ref.title : ref.number)
         }
         .buttonStyle(.plain)
     }
@@ -611,7 +614,7 @@ private struct LegalDocumentFacts: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(a.number).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.foreground)
                                     .strikethrough(a.numberReleased).lineLimit(1)
-                                Text([a.title, LegalLabels.day(a.docDate)].joined(separator: " · ")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                                Text([a.title, LegalLabels.shortDay(a.docDate)].joined(separator: " · ")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
                             }
                             Spacer(minLength: 4)
                             LegalStatusChip(status: a.status ?? "DRAFT")

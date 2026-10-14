@@ -400,8 +400,8 @@ struct SubmissionsView: View {
         // as before — proven on device).
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 12) {
-                ForEach(Array(cols.enumerated()), id: \.element.key) { i, col in
-                    column(col, groupLabel: i == 0 || cols[i - 1].statusGroup != col.statusGroup ? col.statusGroup.header(above: col.name) : nil)
+                ForEach(cols, id: \.key) { col in
+                    column(col)
                 }
             }
             .padding(.horizontal, gutter).padding(.bottom, 16)
@@ -410,11 +410,12 @@ struct SubmissionsView: View {
         .scrollTargetBehavior(.viewAligned)
     }
 
-    private func column(_ col: SubmissionColumn, groupLabel: String?) -> some View {
+    private func column(_ col: SubmissionColumn) -> some View {
         let items = shown.filter { $0.columnKey == col.key }
         let sw = StatusColor.swatch(col.colorKey)
         return VStack(alignment: .leading, spacing: 4) {
-            Text(groupLabel ?? " ").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg).padding(.leading, 4)
+            // One label per column — its own stage name; the status-group label above it doubled it
+            // ("Complete" over "Done", UI tour run 11).
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     StatusPill(name: col.name, colorKey: col.colorKey)
@@ -459,7 +460,7 @@ struct SubmissionsView: View {
 
     private func card(_ s: MySubmission) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(s.title).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(3)
+            Text(nxUnbreakableParentheses(s.title)).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(3)
                 .multilineTextAlignment(.leading)
             if let money = subMoney(s.amount) {
                 Text(money).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).monospacedDigit()
@@ -701,7 +702,8 @@ struct SubmissionDetailSheet: View {
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(p.name ?? T("Proof")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    Text(p.isImage ? T("Tap to enlarge") : T("Tap to open or save")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    Text(p.isImage ? PlatformWording.tapOrClick(tap: "Tap to enlarge", click: "Click to enlarge")
+                                    : PlatformWording.tapOrClick(tap: "Tap to open or save", click: "Click to open or save")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer(minLength: 0)
                 if fetching == p.id { ProgressView().scaleEffect(0.8) }
@@ -846,4 +848,23 @@ struct SubmissionDetailSheet: View {
             problem = (error as? LocalizedError)?.errorDescription ?? T("Couldn't delete the submission.")
         }
     }
+}
+
+/// A title whose parenthesised part never breaks across lines: "(SP I/ II/III)" broke after "I/" on a
+/// submissions card (UI tour run 11, MC-15). Inside parentheses, spaces become no-break spaces and a word
+/// joiner follows each slash, so the line breaks before "(" instead.
+func nxUnbreakableParentheses(_ s: String) -> String {
+    var out = ""
+    var depth = 0
+    for ch in s {
+        if ch == "(" { depth += 1 }
+        if ch == ")" { depth = max(0, depth - 1) }
+        if depth > 0 && ch == " " {
+            out.append("\u{00A0}")
+        } else {
+            out.append(ch)
+            if depth > 0 && (ch == "/" || ch == "-") { out.append("\u{2060}") }
+        }
+    }
+    return out
 }

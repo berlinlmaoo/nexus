@@ -108,7 +108,7 @@ struct ProjectFormsBuilderTab: View {
                                 .font(NXFont.text(15, .semibold)).foregroundStyle(NX.violetText)
                         }
                     } footer: {
-                        Text(T("Tap a form to edit it. Touch and hold it to fill it in, copy or share its link, or publish it."))
+                        Text(PlatformWording.tapOrClick(tap: "Tap a form to edit it. Touch and hold it to fill it in, copy or share its link, or publish it.", click: "Click a form to edit it. Right-click it to fill it in, copy or share its link, or publish it."))
                     }
                 }
                 Section {
@@ -392,6 +392,15 @@ struct FormBuilderView: View {
                         // Full labels always (web, Mac): the tabs keep their ideal width and the breadcrumb truncates.
                         FormStudioTabBar(selection: $tab, responseCount: responseCount).fixedSize()
                     }
+                }
+            } else {
+                // Phone: a smaller inline title, cut in the middle, so a long form name keeps its start and its
+                // end beside the three bar buttons ("Pengajuan Financ…", UI tour run 11 IP-13). The form's
+                // name is also the page's own heading right under the bar.
+                ToolbarItem(placement: .principal) {
+                    Text(displayName).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
+                        .lineLimit(1).truncationMode(.middle)
+                        .accessibilityAddTraits(.isHeader)
                 }
             }
             ToolbarItemGroup(placement: .topBarTrailing) {

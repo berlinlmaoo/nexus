@@ -27,7 +27,23 @@ final class Viewer {
     /// /api/legal call for everyone else, so this decides what is drawn, nothing more.
     var canAccessLegal: Bool { legalAccess == true }
 
-    private init() {}
+    /// The last roster answer, kept across launches so the iPad / Mac sidebar draws the same rows from the
+    /// first frame. Before it, a screen opened straight from a link (the form builder, UI tour run 11 MC-7)
+    /// drew the sidebar before the roster landed: no Threads, Z Vault or Legal, and Settings moved up into
+    /// their place. Still only a courtesy — every route checks the role itself. Cleared on sign-out.
+    private static let cacheKey = "nexus.viewer.roster"
+
+    private init() {
+        if let saved = UserDefaults.standard.dictionary(forKey: Self.cacheKey) {
+            role = saved["role"] as? String
+            isCompany = saved["isCompany"] as? Bool
+            legalAccess = saved["legal"] as? Bool
+        }
+    }
+
+    /// True once the server has answered in this launch; the cached values alone do not count, so the
+    /// first `loadIfNeeded` still asks.
+    private var fetched = false
 
     /// Control Room. Matches the web, where /admin sits behind the same three roles.
     var canAdminister: Bool {
@@ -46,11 +62,11 @@ final class Viewer {
     var canAnnounce: Bool { isBoD }
 
     func loadIfNeeded() async {
-        guard role == nil, !loading else { return }
+        guard !fetched, !loading else { return }
         loading = true
         defer { loading = false }
-        let roster = try? await APIClient.shared.roster()
-        apply(roster)
+        // A failed fetch keeps what is known (the cache) instead of wiping it; the next caller asks again.
+        if let roster = try? await APIClient.shared.roster() { apply(roster) }
     }
 
     /// Asks the server again, without waiting for a relaunch.
@@ -61,12 +77,21 @@ final class Viewer {
         if let roster = try? await APIClient.shared.roster() { apply(roster) }
     }
 
-    private func apply(_ roster: WorkspaceRoster?) {
-        role = roster?.role
-        isCompany = roster?.isCompany
-        legalAccess = roster?.canAccessLegal
+    private func apply(_ roster: WorkspaceRoster) {
+        role = roster.role
+        isCompany = roster.isCompany
+        legalAccess = roster.canAccessLegal
+        fetched = true
+        var saved: [String: Any] = [:]
+        if let role { saved["role"] = role }
+        if let isCompany { saved["isCompany"] = isCompany }
+        if let legalAccess { saved["legal"] = legalAccess }
+        UserDefaults.standard.set(saved, forKey: Self.cacheKey)
     }
 
     /// A new session must not inherit the last person's role.
-    func reset() { role = nil; isCompany = nil; legalAccess = nil }
+    func reset() {
+        role = nil; isCompany = nil; legalAccess = nil; fetched = false
+        UserDefaults.standard.removeObject(forKey: Self.cacheKey)
+    }
 }

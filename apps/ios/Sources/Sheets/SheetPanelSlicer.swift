@@ -143,7 +143,7 @@ struct SheetSlicerEditor: View {
                 }
             }
         } footer: {
-            Text(T("The slicer filters this column of the range for everyone. Tap it on the sheet to pick values."))
+            Text(PlatformWording.tapOrClick(tap: "The slicer filters this column of the range for everyone. Tap it on the sheet to pick values.", click: "The slicer filters this column of the range for everyone. Click it on the sheet to pick values."))
         }
     }
 

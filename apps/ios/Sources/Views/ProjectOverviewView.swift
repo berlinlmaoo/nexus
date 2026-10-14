@@ -517,9 +517,17 @@ private struct OverviewProgressCard: View {
                 Button { onDrill?(c.drill) } label: {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(alignment: .top, spacing: 4) {
-                            // Two lines rather than "No due d…" in a narrow tile (UI tour run 9, P4).
-                            Text(c.label).font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg)
-                                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                            // Two lines rather than "No due d…" in a narrow tile (UI tour run 9, P4). A one-word
+                            // label stays on one line and shrinks a little instead of breaking mid-word
+                            // ("Unassigne / d", UI tour run 11, PD-4). Every label reserves two lines, so the
+                            // numbers under them sit on one baseline across the row (PD-7).
+                            ZStack(alignment: .topLeading) {
+                                Text(verbatim: "A\nA").font(NXFont.text(12, .medium)).hidden().accessibilityHidden(true)
+                                Text(c.label).font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg)
+                                    .lineLimit(c.label.contains(" ") ? 2 : 1)
+                                    .minimumScaleFactor(c.label.contains(" ") ? 1 : 0.75)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                             Spacer(minLength: 0)
                             if c.value > 0 && onDrill != nil {
                                 Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .semibold))

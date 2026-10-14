@@ -273,7 +273,7 @@ private struct SheetScreen: View {
                 .onKeyPress(.tab) { store.commitEdit(move: (0, 1)); return .handled }
         } else {
             Button { if store.canEdit { store.beginEdit() } } label: {
-                Text(store.activeEditText.isEmpty ? (store.canEdit ? T("Tap to type") : " ") : store.activeEditText)
+                Text(store.activeEditText.isEmpty ? (store.canEdit ? PlatformWording.tapOrClick(tap: "Tap to type", click: "Click to type") : " ") : store.activeEditText)
                     .font(.system(size: 14, design: store.activeEditText.hasPrefix("=") ? .monospaced : .default))
                     .foregroundStyle(store.activeEditText.isEmpty ? NX.mutedFg : NX.foreground)
                     .lineLimit(1)
