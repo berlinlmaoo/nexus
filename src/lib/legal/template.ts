@@ -186,5 +186,54 @@ export function fillTemplate(buf: Buffer, fields: TemplateField[], data: Record<
     throw new TemplateFileError("The template could not be filled", explain(error))
   }
   if (problems.length) throw new TemplateFileError("Some values don't fit their placeholders", [...new Set(problems)])
-  return doc.getZip().generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer
+  const out = doc.getZip()
+  if (hasLineBreak(data)) keepManualBreaksUnstretched(out)
+  return out.generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer
+}
+
+function hasLineBreak(v: unknown): boolean {
+  if (typeof v === "string") return v.includes("\n")
+  if (Array.isArray(v)) return v.some(hasLineBreak)
+  if (v && typeof v === "object") return Object.values(v).some(hasLineBreak)
+  return false
+}
+
+// A multi-line value becomes lines ending in a manual break (<w:br/>). In a justified paragraph Word and
+// LibreOffice stretch each such line to the full width ("1.   Menandatangani      perjanjian …"), unless the
+// file sets Word's compatibility option "Don't expand character spaces on a line ending with SHIFT+RETURN".
+
+/** CT_Compat children that come before doNotExpandShiftReturn (the schema order). */
+const COMPAT_BEFORE = ["useSingleBorderforContiguousCells", "wpJustification", "noTabHangInd", "noLeading", "spaceForUL", "noColumnBalance", "balanceSingleByteDoubleByteWidth", "noExtraLineSpacing", "doNotLeaveBackslashAlone", "ulTrailSpace"]
+/** CT_Settings children that come after w:compat. */
+const SETTINGS_AFTER_COMPAT = ["w:docVars", "w:rsids", "m:mathPr", "w:attachedSchema", "w:themeFontLang", "w:clrSchemeMapping", "w:doNotIncludeSubdocsInStats", "w:doNotAutoCompressPictures", "w:forceUpgrade", "w:captions", "w:readModeInkLockDown", "w:smartTagType", "sl:schemaLibrary", "w:shapeDefaults", "w:doNotEmbedSmartTags", "w:decimalSymbol", "w:listSeparator"]
+
+/** settings.xml with w:doNotExpandShiftReturn set, in schema order. Unchanged when it is already there. */
+export function withManualBreaksUnstretched(xml: string): string {
+  if (/<w:doNotExpandShiftReturn\b/.test(xml)) return xml
+  const flag = "<w:doNotExpandShiftReturn/>"
+  if (/<w:compat\s*\/>/.test(xml)) return xml.replace(/<w:compat\s*\/>/, `<w:compat>${flag}</w:compat>`)
+  const open = /<w:compat>/.exec(xml)
+  if (open) {
+    const start = open.index + open[0].length
+    const end = xml.indexOf("</w:compat>", start)
+    const body = xml.slice(start, end < 0 ? undefined : end)
+    let at = 0
+    for (const tag of COMPAT_BEFORE) {
+      for (const m of body.matchAll(new RegExp(`<w:${tag}\\b[^>]*?(?:/>|>[\\s\\S]*?</w:${tag}>)`, "g"))) at = Math.max(at, m.index! + m[0].length)
+    }
+    return `${xml.slice(0, start + at)}${flag}${xml.slice(start + at)}`
+  }
+  const block = `<w:compat>${flag}</w:compat>`
+  const next = SETTINGS_AFTER_COMPAT.map((tag) => xml.search(new RegExp(`<${tag}[\\s/>]`))).filter((i) => i >= 0)
+  if (next.length) {
+    const i = Math.min(...next)
+    return `${xml.slice(0, i)}${block}${xml.slice(i)}`
+  }
+  return xml.replace("</w:settings>", `${block}</w:settings>`)
+}
+
+/** Apply withManualBreaksUnstretched to a docx's settings part (a file without one is left as it is). */
+export function keepManualBreaksUnstretched(zip: PizZip) {
+  const xml = zip.file("word/settings.xml")?.asText()
+  if (xml) zip.file("word/settings.xml", withManualBreaksUnstretched(xml))
 }

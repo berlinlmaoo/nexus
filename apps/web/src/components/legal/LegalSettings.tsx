@@ -104,7 +104,7 @@ function SeriesTable({ company, canEdit }: { company: LegalCompany; canEdit: boo
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">{t("Numbering series")}</h3>
-        {canEdit && !adding && <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> {t("Add series")}</Button>}
+        {canEdit && !adding && <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> {t("Add numbering series")}</Button>}
       </div>
       <ul className="divide-y divide-border rounded-md border border-border">
         {company.series.map((s) => <SeriesRow key={s.id} s={s} canEdit={canEdit} />)}
@@ -212,7 +212,7 @@ function TokenHelp() {
   ];
   return (
     <div className="rounded-lg border border-border p-3 text-sm">
-      <div className="mb-1 font-medium">{t("Number format")}</div>
+      <div className="mb-1 font-medium">{t("Numbering format")}</div>
       <table className="w-full"><tbody>{rows.map(([k, v]) => <tr key={k}><td className="w-32 py-0.5 font-mono text-xs">{k}</td><td className="py-0.5 text-muted-foreground">{v}</td></tr>)}</tbody></table>
     </div>
   );

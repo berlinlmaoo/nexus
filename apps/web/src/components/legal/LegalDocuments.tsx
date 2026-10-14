@@ -92,7 +92,7 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
             <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                 <tr>
-                  <th className="px-3 py-2 font-medium">{t("Number")}</th>
+                  <th className="px-3 py-2 font-medium">{t("Document no.")}</th>
                   <th className="px-3 py-2 font-medium">{t("Title")}</th>
                   <th className="px-3 py-2 font-medium">{t("Counterparty")}</th>
                   <th className="px-3 py-2 font-medium">{t("Company")}</th>
