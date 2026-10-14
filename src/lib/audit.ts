@@ -3,6 +3,7 @@ import type { InputJsonValue } from '@prisma/client/runtime/client'
 import { NextRequest } from 'next/server'
 import { createLogger } from '@/lib/logger'
 import { redactAuditMetadata } from '@/lib/audit-describe'
+import { clientIpFromHeaders } from '@/lib/client-ip'
 import { emitAuditChanged } from '@/lib/socket-emitter'
 
 const log = createLogger('audit')
@@ -32,10 +33,7 @@ export async function logAudit({
 
     if (request) {
       const headers = request.headers
-      ipAddress =
-        headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-        headers.get('x-real-ip') ||
-        undefined
+      ipAddress = clientIpFromHeaders(headers) ?? undefined
       userAgent = headers.get('user-agent') || undefined
     }
 
@@ -83,10 +81,7 @@ export async function logAuditBatch(
 
     if (request) {
       const headers = request.headers
-      ipAddress =
-        headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-        headers.get('x-real-ip') ||
-        undefined
+      ipAddress = clientIpFromHeaders(headers) ?? undefined
       userAgent = headers.get('user-agent') || undefined
     }
 

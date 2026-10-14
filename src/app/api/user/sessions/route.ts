@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { displayableIp } from "@/lib/client-ip"
 import { readSessionToken, revokeOtherSessions, sessionKeyOf } from "@/lib/user-sessions"
 
 /**
@@ -38,7 +39,9 @@ export async function GET(req: NextRequest) {
     })
 
     const sessions = rows
-      .map(({ token, ...row }) => ({ ...row, current: currentKey !== null && token === currentKey }))
+      // A proxy or local-network hop (every row recorded before the client-IP fix) means nothing to the
+      // person reading the list: send no address rather than the same internal one on every row.
+      .map(({ token, ipAddress, ...row }) => ({ ...row, ipAddress: displayableIp(ipAddress), current: currentKey !== null && token === currentKey }))
       .sort((a, b) => Number(b.current) - Number(a.current))
 
     return NextResponse.json({ sessions }, { headers: { "Cache-Control": "no-store" } })

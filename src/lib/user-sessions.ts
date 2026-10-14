@@ -2,6 +2,7 @@ import { decode } from "next-auth/jwt"
 import prisma from "@/lib/prisma"
 import { getSessionCookieName } from "@/lib/session-cookie"
 import { createLogger } from "@/lib/logger"
+import { clientIpFromHeaders } from "@/lib/client-ip"
 
 /**
  * The session list behind Settings → Security → Active sessions (12 Oct 2026).
@@ -43,14 +44,10 @@ function remember(key: string, entry: Entry) {
   cache.set(key, entry)
 }
 
-/** Where the request came from: the same order lib/rate-limit trustedClientIp uses (Cloudflare, nginx, XFF). */
+/** Where the request came from: the client IP by the proxy trust rule of lib/client-ip.ts (as rate limiting uses). */
 export function requestOrigin(h: HeaderSource): { ipAddress: string | null; userAgent: string | null; client: string | null } {
   if (!h) return { ipAddress: null, userAgent: null, client: null }
-  const ip =
-    h.get("cf-connecting-ip")?.trim() ||
-    h.get("x-real-ip")?.trim() ||
-    h.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    null
+  const ip = clientIpFromHeaders(h)
   return {
     ipAddress: ip ? ip.slice(0, 64) : null,
     userAgent: h.get("user-agent")?.slice(0, 512) || null,
