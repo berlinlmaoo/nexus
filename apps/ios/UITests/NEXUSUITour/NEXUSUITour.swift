@@ -451,7 +451,7 @@ final class NEXUSUITour: XCTestCase {
                 // Not on the first page of the archive: search for it, as a person would (typing saves nothing).
                 let search = app.textFields.firstMatch
                 if search.waitForExistence(timeout: 5) {
-                    search.tap()
+                    press(search)
                     search.typeText(title)
                     pause(1.5)
                 }
@@ -470,9 +470,8 @@ final class NEXUSUITour: XCTestCase {
 
     /// Taps `element` and waits until `landed()` (or the app's picture changed). Run 10, 14 Oct 2026: on
     /// the Mac every Legal tab and document tap was "ok" yet did nothing, and all five Legal screens were
-    /// the same picture. The NEXUS window is brought to the front only for a shot (takeShot), so the click
-    /// went to a window that was not key, and macOS spends a click on a background window on making it
-    /// key. So: front first, a normal tap, and if nothing happened a click at the element's centre.
+    /// the same picture. The window is brought to the front first (a click on a background window only
+    /// makes it key), and on the Mac the element is CLICKED, not tapped: see `press`.
     @MainActor
     private func tapUntil(_ element: XCUIElement, landed: () -> Bool) -> Bool {
         for attempt in 0..<3 {
@@ -481,10 +480,10 @@ final class NEXUSUITour: XCTestCase {
             #endif
             let before = app.windows.firstMatch.screenshot().pngRepresentation
             if attempt == 0 {
-                element.tap()
+                press(element)
             } else {
                 guard element.exists else { return landed() }
-                element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+                press(element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
             }
             let deadline = Date().addingTimeInterval(4)
             while Date() < deadline {
@@ -495,6 +494,28 @@ final class NEXUSUITour: XCTestCase {
             if app.windows.firstMatch.screenshot().pngRepresentation != before { return true }
         }
         return landed()
+    }
+
+    /// A tap on the iPhone / iPad, a mouse click on the Mac. Run 11, 14 Oct 2026: on Mac Catalyst
+    /// XCUIElement.tap() (and a coordinate tap) on a SwiftUI Button (the Legal tabs, a document row) was
+    /// delivered at the right point yet the button never fired, three times in a row; click() on the same
+    /// element, the mouse event a person sends, switched the tab at once. Not an app bug: a mouse works.
+    @MainActor
+    private func press(_ element: XCUIElement) {
+        #if targetEnvironment(macCatalyst)
+        element.click()
+        #else
+        element.tap()
+        #endif
+    }
+
+    @MainActor
+    private func press(_ point: XCUICoordinate) {
+        #if targetEnvironment(macCatalyst)
+        point.click()
+        #else
+        point.tap()
+        #endif
     }
 
     /// The Indonesian labels of the tabs named in ui-tour-screens.json (LocalizationLegal.swift).
@@ -673,7 +694,7 @@ final class NEXUSUITour: XCTestCase {
         let navigatedAway = { () -> Bool in
             guard !web, backs() > backsBefore else { return false }
             let back = root.navigationBars.buttons.matching(identifier: "BackButton").firstMatch
-            if back.exists && back.isHittable { back.tap(); self.pause(1.0) }
+            if back.exists && back.isHittable { self.press(back); self.pause(1.0) }
             return true
         }
         if id.hasSuffix("board") || id.hasSuffix("table") || id.hasSuffix("timeline") {
