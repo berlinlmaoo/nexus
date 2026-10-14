@@ -6,8 +6,11 @@
 //                                                   "tour-" = app, "safari-" = Safari) out of an
 //                                                   `xcresulttool export attachments` folder
 //   node tools.mjs check-login                   → POSTs the QA account to the DEV server once
+//   node tools.mjs same <dir>                    → marks screens with identical pictures "suspect" in the
+//                                                   results, prints the groups (empty output = none)
 //   node tools.mjs index <outDir>                → writes <outDir>/index.html
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -96,6 +99,54 @@ function extract(exportDir, destDir, prefix = "tour-") {
   console.log(`${found.filter((f) => f.endsWith(".png") || f.endsWith(".jpg")).length} screenshots`);
 }
 
+// -------------------------------------------------------------------------------------------------- same
+/**
+ * Different screen ids with byte-identical pictures = a route or tap that did not go anywhere (run 3: seven
+ * project screens were the Projects list; run 10: five Mac Legal screens were one picture), while every
+ * status said "ok". Compares the FIRST picture (<id>.png) of every screen id in ui-tour-screens.json found
+ * in <dir>, marks each member of a group `suspect: "identical to <other ids>"` in its results entry
+ * (<dir>/results.json, else the matching variant in <outDir>/web-results.json; written fresh each call, so
+ * it can run again after more screens landed in the same folder), and prints one line per group.
+ */
+function same(dir) {
+  const config = JSON.parse(fs.readFileSync(new URL("../ui-tour-screens.json", import.meta.url), "utf8"));
+  const by = {};
+  for (const { id } of config.screens) {
+    const file = path.join(dir, `${id}.png`);
+    if (!fs.existsSync(file)) continue;
+    const h = createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+    (by[h] = by[h] || []).push(id);
+  }
+  const groups = Object.values(by).filter((g) => g.length > 1);
+  const suspect = {};
+  for (const g of groups) for (const id of g) suspect[id] = `identical to ${g.filter((x) => x !== id).join(", ")}`;
+  const mark = (list, match) => {
+    for (const r of list) {
+      if (!match(r)) continue;
+      if (suspect[r.id]) r.suspect = suspect[r.id];
+      else delete r.suspect;
+    }
+  };
+  const own = path.join(dir, "results.json");
+  const seen = new Set();
+  if (fs.existsSync(own)) {
+    const list = JSON.parse(fs.readFileSync(own, "utf8"));
+    mark(list, () => true);
+    list.forEach((r) => seen.add(r.id));
+    fs.writeFileSync(own, JSON.stringify(list, null, 2));
+  }
+  const web = path.join(path.dirname(dir), "web-results.json");
+  if (fs.existsSync(web)) {
+    const variant = path.basename(dir);
+    const list = JSON.parse(fs.readFileSync(web, "utf8"));
+    if (list.some((r) => r.variant === variant)) {
+      mark(list, (r) => r.variant === variant && !seen.has(r.id));
+      fs.writeFileSync(web, JSON.stringify(list, null, 2));
+    }
+  }
+  if (groups.length) console.log(groups.map((g) => g.join(" = ")).join("; "));
+}
+
 // ------------------------------------------------------------------------------------------- check-login
 async function checkLogin() {
   const email = process.env.TOUR_EMAIL || "qa5@dev.invalid";
@@ -137,9 +188,11 @@ function index(outDir) {
   }
   const status = {};
   const note = (dir, id, s) => { if (s && s !== "ok") (status[`${dir}/${id}`] = s); };
-  try { for (const r of JSON.parse(fs.readFileSync(path.join(outDir, "web-results.json"), "utf8"))) note(r.variant, r.id, r.status + (r.horizontalOverflowPx > 0 ? `; scrolls sideways ${r.horizontalOverflowPx}px` : "")); } catch {}
+  // `suspect` (tools.mjs same): shown in front of the status, and the cell is marked like a failure.
+  const withSuspect = (r, s) => (r.suspect ? `suspect: ${r.suspect}${s && s !== "ok" ? ` · ${s}` : ""}` : s);
+  try { for (const r of JSON.parse(fs.readFileSync(path.join(outDir, "web-results.json"), "utf8"))) note(r.variant, r.id, withSuspect(r, r.status + (r.horizontalOverflowPx > 0 ? `; scrolls sideways ${r.horizontalOverflowPx}px` : ""))); } catch {}
   for (const dir of ["web-mobile", "iphone", "ipad", "mac"]) {
-    try { for (const r of JSON.parse(fs.readFileSync(path.join(outDir, dir, "results.json"), "utf8"))) note(dir, r.id, r.status); } catch {}
+    try { for (const r of JSON.parse(fs.readFileSync(path.join(outDir, dir, "results.json"), "utf8"))) note(dir, r.id, withSuspect(r, r.status)); } catch {}
   }
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const ids = config.screens.map((s) => [s.id, s.title]);
@@ -170,7 +223,7 @@ function index(outDir) {
             + (pages.length > 1 ? `<small>${pages.length} pages</small>` : "")
           : `<div class="none">—</div>`;
         const extraText = fs.existsSync(txt) ? `<pre>${esc(fs.readFileSync(txt, "utf8"))}</pre>` : "";
-        const cls = s && /^(wrong-screen|timeout|no-session|bounced|error|FAILED)/.test(s) ? "bad" : "warn";
+        const cls = s && /^(wrong-screen|timeout|no-session|bounced|error|FAILED|suspect)/.test(s) ? "bad" : "warn";
         return `<td>${s ? `<div class="${cls}">${esc(s)}</div>` : ""}${body}${extraText}</td>`;
       }).join("");
       return `<tr id="${esc(id)}"><th><a href="#${esc(id)}">${esc(title)}</a><small>${esc(id)}</small></th>${cells}</tr>`;
@@ -212,7 +265,8 @@ try {
   else if (cmd === "extract") extract(rest[0], rest[1], rest[2] || "tour-");
   else if (cmd === "check-login") await checkLogin();
   else if (cmd === "index") index(rest[0]);
-  else { console.error("usage: tools.mjs pick-sim|extract|check-login|index …"); process.exit(2); }
+  else if (cmd === "same") same(rest[0]);
+  else { console.error("usage: tools.mjs pick-sim|extract|check-login|same|index …"); process.exit(2); }
 } catch (e) {
   console.error(`tools ${cmd}: ${e.message || e}`);
   process.exit(1);

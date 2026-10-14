@@ -2,7 +2,8 @@
 import { existsSync } from "node:fs";
 // Web half of the NEXUS UI screenshot tour (../ui-tour.sh, docs/UI-TOUR.md).
 //
-// Full-page screenshots (owner, 13 Oct 2026): the whole document, not just the first viewport.
+// The whole screen (owner, 13 Oct 2026), not just the first viewport: since run 10 as viewport-sized pages
+// <id>.png, <id>-2.png … paged through the screen's scroller (capture()), not one full-page document shot.
 // Photographs every screen in ../ui-tour-screens.json on the DEV web twice: desktop 1440x900 (the master
 // reference) and mobile 440x956 @3x (iPhone 17 Pro Max). Signs in ONCE with the QA account and reuses
 // that session for both. One Chromium, closed in `finally`.
@@ -79,6 +80,9 @@ async function prepare(ctx) {
       localStorage.setItem("nexus-lang", lang);
       localStorage.setItem("nexus-theme", "light");
       localStorage.setItem("nexus-appstore-never", "1");
+      // The "You haven't checked in today" reminder, answered "Later" in advance (its own 30-minute
+      // snooze key, AttendanceReminderModal.tsx): run 10's legal-hidden shots of qa6 were that modal.
+      localStorage.setItem("nx-checkin-reminder-snooze", String(Date.now() + 12 * 3600 * 1000));
       // The "install NEXUS on your phone" prompt, dismissed for this tab.
       const get = Storage.prototype.getItem;
       Storage.prototype.getItem = function (k) {
@@ -115,8 +119,96 @@ async function settle(page) {
     await remind.first().click().catch(() => {});
     await page.waitForTimeout(500);
   }
+  await dismissAttendanceReminder(page);
   await page.waitForTimeout(800);
   return quiet >= 3;
+}
+
+/**
+ * The attendance reminder over any page (check-in, or "finish your previous attendance"): "Later", else its
+ * close button, as a person would. Only inside that dialog: My Tasks has a "Later" group of its own.
+ */
+async function dismissAttendanceReminder(page) {
+  const dialog = page.locator('[role="dialog"]').filter({
+    hasText: /checked in today|belum check-in hari ini|Finish your previous attendance|forgot to check out|lupa check-out/i,
+  });
+  if (!(await dialog.first().isVisible().catch(() => false))) return false;
+  const later = dialog.first().getByRole("button", { name: /^(Later|Nanti)$/ });
+  const close = dialog.first().getByRole("button", { name: /^(Close|Tutup)$/ });
+  if (await later.first().isVisible().catch(() => false)) await later.first().click().catch(() => {});
+  else await close.first().click().catch(() => {});
+  await dialog.first().waitFor({ state: "hidden", timeout: 3000 }).catch(() => {});
+  await page.waitForTimeout(300);
+  return true;
+}
+
+const MAX_PAGES = Number(process.env.TOUR_MAX_PAGES) || 6;
+
+/**
+ * The screenshot(s) of one screen: `<id>.png`, then `<id>-2.png` … like the app tour (TOUR_MAX_PAGES, default 6).
+ * Not a full-page document screenshot (run 10): Chrome draws that beyond the viewport without resizing it, so
+ * fixed parts stay where the viewport was (the mobile bottom nav floated mid-page), and on app-shell pages
+ * (a 100vh shell whose content scrolls inside) the shot got the document's empty tail (Calendar desktop:
+ * ~900 px of blank) while the inner scrollers stayed cut at the viewport (the Calendar's right rail). So:
+ * viewport-sized shots; between them every scroller on screen (the document, and each inner content scroll
+ * area that covers at least a fifth of the viewport, not the navigation) moves on by 85% of its height, but never past its last
+ * visible content, so an empty tail is not photographed. Stops when nothing moves any more.
+ */
+async function capture(page, dir, id) {
+  const shot = (n) => page.screenshot({ path: path.join(dir, n === 1 ? `${id}.png` : `${id}-${n}.png`) });
+  for (const f of fs.readdirSync(dir)) if (f.startsWith(`${id}-`) && /^-\d+\.png$/.test(f.slice(id.length))) fs.rmSync(path.join(dir, f));
+  const step = () => page.evaluate(() => {
+    const vw = innerWidth, vh = innerHeight;
+    const doc = document.scrollingElement || document.documentElement;
+    const all = [...document.body.querySelectorAll("*")];
+    const inner = new Set(all.filter((el) => el.scrollHeight > el.clientHeight + 4 && el.clientHeight >= 120
+      && /(auto|scroll|overlay)/.test(getComputedStyle(el).overflowY)));
+    // Where each scroller's content really ends: the lowest drawn leaf (no element children, or a picture /
+    // control) whose nearest scroller it is. Wrappers stretched to a min-height do not count.
+    const end = new Map([[doc, 0], ...[...inner].map((s) => [s, 0])]);
+    const pos = new Map();
+    for (const el of all) {
+      if (el.children.length && !/^(svg|img|canvas|video|input|textarea|select|button)$/i.test(el.tagName)) continue;
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      // Fixed and sticky parts move with the scroll position: counting them pushed the end on by every step.
+      let s = doc, pinned = false;
+      for (let a = el; a && a !== document.body; a = a.parentElement) {
+        if (a !== el && inner.has(a)) { s = a; break; }
+        if (!pos.has(a)) pos.set(a, getComputedStyle(a).position);
+        if (pos.get(a) === "fixed" || pos.get(a) === "sticky") { pinned = true; break; }
+      }
+      if (pinned) continue;
+      const bottom = s === doc ? r.bottom + scrollY : r.bottom - s.getBoundingClientRect().top + s.scrollTop;
+      if (bottom > end.get(s)) end.set(s, bottom);
+    }
+    let moved = false;
+    for (const [s, bottom] of end) {
+      const height = s === doc ? vh : s.clientHeight;
+      if (s !== doc) {
+        const r = s.getBoundingClientRect();
+        const w = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
+        const h = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+        // The navigation sidebar scrolls too, but is not the screen (run 10 retest: page 2 of short pages
+        // was the sidebar scrolled): only content scrollers of a fifth of the viewport or more.
+        if (w * h < vw * vh * 0.2 || s.closest("nav, [role='navigation'], [data-sidebar]")) continue;
+      }
+      const limit = Math.max(0, Math.ceil(bottom + 16 - height));
+      const before = s.scrollTop;
+      if (before >= limit) continue;
+      s.scrollTop = Math.min(limit, before + Math.round(height * 0.85));
+      if (s.scrollTop > before + 1) moved = true;
+    }
+    return moved;
+  }).catch(() => false);
+  await shot(1);
+  let pages = 1;
+  while (pages < MAX_PAGES && (await step())) {
+    await page.waitForTimeout(700);
+    pages += 1;
+    await shot(pages);
+  }
+  return { pages };
 }
 
 async function signIn(browser) {
@@ -283,23 +375,37 @@ async function nonmemberTour(browser, results) {
           } catch (e) {
             problems.push(`error: ${String(e.message || e).split("\n")[0]}`);
           }
-          await page.screenshot({ path: path.join(dir, `${s.id}.png`), fullPage: true }).catch((e) => problems.push(`no screenshot: ${e.message}`));
+          let pages = 0;
+          try {
+            pages = (await capture(page, dir, s.id)).pages;
+          } catch (e) {
+            problems.push(`no screenshot: ${e.message}`);
+          }
           if (name === "mobile") {
-            // The mobile navigation lives in the More sheet: open it, look for Legal, photograph it.
+            // The mobile navigation lives in the More sheet: open it, look for Legal, photograph it as the
+            // next page. Run 10: the attendance reminder swallowed the click, the sheet never opened, the
+            // "-2" shot repeated the first one and the Legal check passed on a page without the menu.
+            await dismissAttendanceReminder(page);
+            await page.evaluate(() => { for (const el of document.querySelectorAll("*")) if (el.scrollTop) el.scrollTop = 0; }).catch(() => {});
             const more = page.getByRole("button", { name: /^(More|Lainnya)$/ }).first();
             if (await more.isVisible().catch(() => false)) {
               await more.click().catch(() => {});
-              await page.waitForTimeout(900);
-              if (await page.locator('a[href="/legal"]').count()) problems.push("Legal menu item is in More");
-              await page.screenshot({ path: path.join(dir, `${s.id}-2.png`) }).catch(() => {});
-              await page.keyboard.press("Escape").catch(() => {});
+              const sheet = page.getByRole("dialog", { name: /More navigation|Navigasi lainnya/ }).first();
+              if (await sheet.waitFor({ state: "visible", timeout: 5000 }).then(() => true, () => false)) {
+                await page.waitForTimeout(700);
+                if (await sheet.locator('a[href="/legal"]').count()) problems.push("Legal menu item is in More");
+                await page.screenshot({ path: path.join(dir, `${s.id}-${Math.max(pages, 1) + 1}.png`) }).catch(() => {});
+                await page.keyboard.press("Escape").catch(() => {});
+              } else {
+                problems.push("More sheet did not open (mobile menu not checked)");
+              }
             } else {
               problems.push("More button not found (mobile menu not checked)");
             }
           }
           const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth).catch(() => null);
           const status = problems.length ? `FAILED (${NONMEMBER_EMAIL}): ${problems.join("; ")}` : `ok (${NONMEMBER_EMAIL}: no Legal menu, invitation-only state)`;
-          results.push({ variant: variant.dir, id: s.id, status, seconds: (Date.now() - started) / 1000, horizontalOverflowPx: overflow, pageErrors: [...errors] });
+          results.push({ variant: variant.dir, id: s.id, status, pages, seconds: (Date.now() - started) / 1000, horizontalOverflowPx: overflow, pageErrors: [...errors] });
           console.log(`${variant.dir} ${s.id}: ${status}`);
         }
       } finally {
@@ -374,9 +480,14 @@ async function main() {
             } catch (e) {
               status = `error: ${String(e.message || e).split("\n")[0]}`;
             }
-            await page.screenshot({ path: path.join(dir, `${s.id}.png`), fullPage: true }).catch((e) => { status = `no screenshot: ${e.message}`; });
+            let pages = 0;
+            try {
+              pages = (await capture(page, dir, s.id)).pages;
+            } catch (e) {
+              status = `no screenshot: ${e.message}`;
+            }
             const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth).catch(() => null);
-            results.push({ variant: variant.dir, id: s.id, status, seconds: (Date.now() - started) / 1000, horizontalOverflowPx: overflow, pageErrors: [...errors] });
+            results.push({ variant: variant.dir, id: s.id, status, pages, seconds: (Date.now() - started) / 1000, horizontalOverflowPx: overflow, pageErrors: [...errors] });
             console.log(`${variant.dir} ${s.id}: ${status}`);
           }
         } finally {

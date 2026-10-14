@@ -435,7 +435,10 @@ final class NEXUSUITour: XCTestCase {
                 button = app.buttons.matching(match).firstMatch   // tabs drawn without their container label
             }
             guard button.waitForExistence(timeout: 5) else { return "wrong-screen: \(screen.id) (no \"\(tab)\" tab found)" }
-            button.tap()
+            // NXTabs marks the chosen tab .isSelected; the picture changing counts too.
+            guard tapUntil(button, landed: { button.isSelected }) else {
+                return "wrong-screen: \(screen.id) (tapped the \"\(tab)\" tab, it did not open)"
+            }
             pause(1.2)
         }
         if screen.appOpen == "legalDoc" {
@@ -456,10 +459,42 @@ final class NEXUSUITour: XCTestCase {
             guard row.waitForExistence(timeout: 15) else {
                 return "skipped: Legal document \"\(title)\" not in the app's archive"
             }
-            row.tap()
+            // The document is pushed over the archive: its row leaves the hierarchy.
+            guard tapUntil(row, landed: { !row.exists }) else {
+                return "wrong-screen: \(screen.id) (tapped \"\(title)\", the document did not open)"
+            }
             pause(2.0)
         }
         return nil
+    }
+
+    /// Taps `element` and waits until `landed()` (or the app's picture changed). Run 10, 14 Oct 2026: on
+    /// the Mac every Legal tab and document tap was "ok" yet did nothing, and all five Legal screens were
+    /// the same picture. The NEXUS window is brought to the front only for a shot (takeShot), so the click
+    /// went to a window that was not key, and macOS spends a click on a background window on making it
+    /// key. So: front first, a normal tap, and if nothing happened a click at the element's centre.
+    @MainActor
+    private func tapUntil(_ element: XCUIElement, landed: () -> Bool) -> Bool {
+        for attempt in 0..<3 {
+            #if targetEnvironment(macCatalyst)
+            _ = bringToFront(app)
+            #endif
+            let before = app.windows.firstMatch.screenshot().pngRepresentation
+            if attempt == 0 {
+                element.tap()
+            } else {
+                guard element.exists else { return landed() }
+                element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
+            let deadline = Date().addingTimeInterval(4)
+            while Date() < deadline {
+                pause(0.5)
+                if landed() { return true }
+            }
+            // No trait to read (or a slow load): a different picture is a tap that registered.
+            if app.windows.firstMatch.screenshot().pngRepresentation != before { return true }
+        }
+        return landed()
     }
 
     /// The Indonesian labels of the tabs named in ui-tour-screens.json (LocalizationLegal.swift).
