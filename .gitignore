@@ -104,3 +104,6 @@ docs/plans/
 *.ipa
 # Onboarding screenshots were captured from real data; real copies are kept privately and dropped in at deploy.
 apps/web/public/onboarding/*.png
+
+# Internal company documents (PRD & rules) - kept locally, never pushed (public repo)
+/docs/internal/
