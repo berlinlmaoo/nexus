@@ -2195,7 +2195,7 @@ struct StreakBoardCard: View {
                     ForEach(members) { m in
                         HStack(spacing: gap) {
                             ForEach(periodDays) { pd in
-                                let fill = RoundedRectangle(cornerRadius: 5, style: .continuous).fill((m.cells[pd.key] ?? .none).color).frame(width: cellW, height: cell)
+                                let fill = RoundedRectangle(cornerRadius: 5, style: .continuous).fill((m.cells[pd.key] ?? .none).color).frame(width: cell, height: cell)
                                     .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(pd.key == todayKey ? NX.violet : Color.clear, lineWidth: 1.5))
                                     .overlay(alignment: .leading) {
                                         if pd.startsMonth { Rectangle().fill(NX.border).frame(width: 1, height: cell).offset(x: -gap / 2) }
