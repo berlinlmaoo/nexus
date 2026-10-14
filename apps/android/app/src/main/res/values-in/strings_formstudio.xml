@@ -203,4 +203,8 @@
     </plurals>
     <string name="fs_delete_tail">Task-nya tetap di board, tapi jawabannya hilang dari My Submissions pengirim. Link-nya berhenti berfungsi. Control Room → Audit bisa memulihkan form beserta jawabannya.</string>
     <string name="fs_new_responses">Ada jawaban baru masuk selama kamu di sini.</string>
+    <string name="fs_qr_title">Kode QR</string>
+    <string name="fs_qr_hint">Cetak atau tampilkan di layar; memindainya membuka form.</string>
+    <string name="fs_qr_a11y">Kode QR untuk link form</string>
+    <string name="fs_qr_share">Simpan atau bagikan kode QR</string>
 </resources>

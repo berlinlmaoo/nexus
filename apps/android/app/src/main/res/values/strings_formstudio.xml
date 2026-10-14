@@ -206,4 +206,8 @@
     </plurals>
     <string name="fs_delete_tail">Their tasks stay on the board, but the responses leave their senders\' My Submissions. The link stops working. Control Room → Audit can restore the form with its responses.</string>
     <string name="fs_new_responses">New responses came in while you were here.</string>
+    <string name="fs_qr_title">QR code</string>
+    <string name="fs_qr_hint">Print it or put it on a screen; scanning opens the form.</string>
+    <string name="fs_qr_a11y">QR code for the form link</string>
+    <string name="fs_qr_share">Save or share the QR code</string>
 </resources>

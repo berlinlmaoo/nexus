@@ -2,6 +2,13 @@ package id.znetworks.nexus.feature.forms
 
 import android.content.ClipData
 import android.content.Intent
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -314,7 +321,7 @@ private fun NotifyCard(ids: List<String>, members: List<StudioMember>, onChange:
 
 // region Share tab
 
-/** The web's Share tab: the link (copy, open, share) and who it works for. */
+/** The web's Share tab: the link (copy, open, share), who it works for, and its QR code. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FormStudioShareTab(link: String?, isPublic: Boolean, onOpen: () -> Unit, onGoSettings: () -> Unit, onGoQuestions: () -> Unit) {
@@ -352,6 +359,18 @@ fun FormStudioShareTab(link: String?, isPublic: Boolean, onOpen: () -> Unit, onG
                     modifier = Modifier.weight(1f, fill = false))
                 Text(stringResource(R.string.fs_change), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground,
                     modifier = Modifier.clip(RoundedCornerShape(4.dp)).clickable(role = Role.Button, onClick = onGoSettings).padding(4.dp))
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        val qr = remember(link) { FormQR.bitmap(link) }
+        if (qr != null) StudioCard(stringResource(R.string.fs_qr_title), stringResource(R.string.fs_qr_hint)) {
+            val a11y = stringResource(R.string.fs_qr_a11y)
+            val shareTitle = stringResource(R.string.fs_qr_title)
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Always black on white: phone cameras read that best, in dark mode too.
+                Image(qr.asImageBitmap(), a11y, filterQuality = FilterQuality.None,
+                    modifier = Modifier.background(Color.White, RoundedCornerShape(10.dp)).padding(12.dp).size(200.dp))
+                NxButton(stringResource(R.string.fs_qr_share), { runCatching { FormQR.share(context, qr, shareTitle) } }, compact = true, icon = Icons.Filled.Download)
             }
         }
     }

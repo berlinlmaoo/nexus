@@ -146,6 +146,8 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play)
     implementation(libs.androidx.glance.appwidget)
+    // The form share QR, made on the phone (no network): ZXing core only, Apache-2.0.
+    implementation(libs.zxing.core)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
