@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { globalModShortcut, modKey } from "@/lib/keyboard";
 import { useRouterState } from "@tanstack/react-router";
 import { GideonMark } from "./GideonMark";
@@ -17,6 +17,9 @@ const GideonPanel = lazy(() => loadPanel().then((m) => ({ default: m.GideonPanel
  * through openGideon() (the project header's "Ask GIDEON"). Two layouts: a floating window, or docked as a
  * full-height side panel; the full page is the /gideon route (where this launcher steps aside).
  */
+/** What the floating button must not cover. */
+const AVOID = 'button, a[href], input, select, textarea, [role="button"], [role="combobox"], [role="checkbox"], [role="switch"], [role="tab"], [data-gideon-avoid]';
+
 export function GideonLauncher() {
   const { open, context, nonce, chatId, newChat } = useGideonLauncher();
   const layout = useGideonLayout();
@@ -54,6 +57,45 @@ export function GideonLauncher() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onFullPage]);
 
+  // The button never rests on a control (UI tour run 10, WD-3: it sat on Settings' "Change password" as the
+  // page opened). After each scroll, resize or content change it checks what lies under it and, when that is a
+  // button, link or field, rises to the first clear spot above (in button-sized steps), else stays put.
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const liftRef = useRef(0);
+  const [lift, setLift] = useState(0);
+  const buttonShown = !open && !hideButton && !onFullPage;
+  useEffect(() => {
+    if (!buttonShown) return;
+    let timer = 0;
+    const check = () => {
+      const b = btnRef.current;
+      if (!b) return;
+      const r = b.getBoundingClientRect();
+      if (r.width === 0) return; // hidden on phones (display: none; a fixed element has no offsetParent either way)
+      const baseTop = r.top + liftRef.current;
+      const blocked = (offset: number) => {
+        const top = baseTop - offset;
+        const pts: [number, number][] = [[r.left + 4, top + 4], [r.right - 4, top + 4], [r.left + 4, top + r.height - 4], [r.right - 4, top + r.height - 4], [r.left + r.width / 2, top + r.height / 2]];
+        return pts.some(([x, y]) => {
+          const under = document.elementsFromPoint(x, y).find((el) => !b.contains(el));
+          const hit = under?.closest(AVOID);
+          // Row-wide buttons (a list row, a card) are not what the button hides: only controls under ~half a page.
+          return !!hit && hit.getBoundingClientRect().width < Math.min(480, window.innerWidth / 2);
+        });
+      };
+      const next = [0, 56, 112, 168].find((o) => !blocked(o)) ?? 0;
+      if (next !== liftRef.current) { liftRef.current = next; setLift(next); }
+    };
+    const schedule = () => { window.clearTimeout(timer); timer = window.setTimeout(check, 200); };
+    schedule();
+    // Content arriving (a query resolving) changes what is under the button without a scroll or a resize.
+    const mo = new MutationObserver(schedule);
+    mo.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("scroll", schedule, { capture: true, passive: true });
+    window.addEventListener("resize", schedule);
+    return () => { window.clearTimeout(timer); mo.disconnect(); window.removeEventListener("scroll", schedule, { capture: true }); window.removeEventListener("resize", schedule); };
+  }, [buttonShown, pathname]);
+
   if (onFullPage) return null;
   const panel = (
     <Suspense fallback={<div className="h-full w-full rounded-2xl border border-border bg-card" aria-busy />}>
@@ -77,6 +119,8 @@ export function GideonLauncher() {
           type="button"
           // Sheet sidebars hide this while open (sheet-shell HideGideonButton): it sat on their Done button.
           data-gideon-launcher=""
+          ref={btnRef}
+          style={lift ? { translate: `0 -${lift}px` } : undefined}
           onClick={() => openGideon(null)}
           onPointerEnter={() => void loadPanel()}
           onFocus={() => void loadPanel()}

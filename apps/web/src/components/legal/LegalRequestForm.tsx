@@ -220,7 +220,8 @@ function RequestForm({ linkId, info }: { linkId: string; info: RequestFormInfo }
           </div>
         </div>
         <div className="space-y-1.5">
-          <Label>{t("Attachments")}</Label>
+          {/* A block label: inline, the "Attach files" button sat on its line, out of line with it (UI tour run 10, WD-5). */}
+          <Label className="block">{t("Attachments")}</Label>
           <input ref={fileInput} type="file" multiple accept={ACCEPT} className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
           {files.length > 0 && (
             <ul className="space-y-1.5">
@@ -236,9 +237,11 @@ function RequestForm({ linkId, info }: { linkId: string; info: RequestFormInfo }
             </ul>
           )}
           {files.length < MAX_FILES && (
-            <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => fileInput.current?.click()}>
-              <Paperclip className="h-4 w-4" /> {t("Attach files")}
-            </Button>
+            <div>
+              <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => fileInput.current?.click()}>
+                <Paperclip className="h-4 w-4" /> {t("Attach files")}
+              </Button>
+            </div>
           )}
           <p className="text-xs text-muted-foreground">{t("PDF, Word or photos (JPG, PNG). Up to {n} files, 50 MB each.", { n: MAX_FILES })}</p>
           {fileError && <p className="text-xs text-destructive">{fileError}</p>}
