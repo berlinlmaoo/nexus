@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -41,6 +41,13 @@ type Filter = "all" | "finance" | "multimedia";
 const GROUP_LABEL: Record<string, string> = { todo: "To-do", in_progress: "In progress", complete: "Complete" };
 const STATUS_LABEL: Record<string, string> = { TODO: "To do", IN_PROGRESS: "In progress", IN_REVIEW: "In review", DONE: "Done", CANCELLED: "Cancelled" };
 const GROUP_COLOR: Record<string, string> = { todo: "gray", in_progress: "blue", complete: "green" };
+const GROUP_ORDER = ["todo", "in_progress", "complete"] as const;
+/** What an empty lane of each group is for (UI tour run 14, R14-WB-4): a reason, not a bare "Nothing here yet". */
+const EMPTY_LANE: Record<string, string> = {
+  todo: "New requests wait here until the team picks them up.",
+  in_progress: "Requests the team is working on move here.",
+  complete: "Finished requests end up here.",
+};
 
 function preset(c: { color?: string | null; group?: string } | null | undefined) {
   return COLOR_PRESETS[normalizeColor(c?.color) ?? GROUP_COLOR[c?.group ?? "todo"] ?? "gray"];
@@ -306,9 +313,13 @@ function MySubmissions() {
       const key = s.column?.key ?? (s.procStatus?.trim() || "new");
       if (known.has(key)) continue;
       known.add(key);
-      extra.push(s.column ?? { key, name: s.procStatus?.trim() || t("New"), group: "in_progress" });
+      extra.push(s.column ?? { key, name: s.procStatus?.trim() || t("New"), group: key === "new" ? "todo" : "in_progress" });
     }
-    return [...base, ...extra];
+    // Each extra column joins its own group (stable within a group), instead of trailing after Done: appended
+    // at the end, a second "In progress" lane sat past the Complete column, off the right edge, under a
+    // repeated group caption (UI tour run 14, R14-WD-2 / R14-WM-7).
+    const order = (g: string) => { const i = GROUP_ORDER.indexOf(g as (typeof GROUP_ORDER)[number]); return i < 0 ? GROUP_ORDER.length : i; };
+    return [...base, ...extra].map((c, i) => ({ c, i })).sort((a, b) => order(a.c.group) - order(b.c.group) || a.i - b.i).map((x) => x.c);
   }, [q.data, t]);
 
   const shown = subs.filter((s) => (filter === "all" || s.kind === filter) && inProject(s) && (!mine || s.needsAction));
@@ -321,8 +332,21 @@ function MySubmissions() {
   // Phone: the lane cut at the right edge fades out, so it reads as "swipe for more" (UI tour run 9).
   const boardRef = useRef<HTMLDivElement>(null);
   const boardFade = useEdgeFade(boardRef, [visibleCols.length, shown.length]);
-  // The row of group labels only exists when some group has more than one column.
+  // The row of group labels only exists when some group has more than one column. The columns are sorted by
+  // group, so each group is one run of lanes and its caption spans that run (UI tour run 14, R14-WD-2: a
+  // caption over a single lane read like a stray header).
   const groupRow = visibleCols.some((c, i) => visibleCols.findIndex((x) => x.group === c.group) !== i);
+  const groupRuns = useMemo(() => {
+    const runs: Array<{ group: string; cols: NexusSubmissionColumn[] }> = [];
+    for (const c of visibleCols) {
+      const last = runs[runs.length - 1];
+      if (last && last.group === c.group) last.cols.push(c);
+      else runs.push({ group: c.group, cols: [c] });
+    }
+    return runs;
+  }, [visibleCols]);
+  // Where to send a request from: shown in the first empty To-do lane, so an empty board has a next step.
+  const firstEmptyTodo = visibleCols.find((c) => c.group === "todo" && !shown.some((s) => keyOf(s) === c.key))?.key;
 
   // `/submissions?id=<submissionId>` opens straight onto that submission (the `submission_status`
   // notification links here).
@@ -411,38 +435,55 @@ function MySubmissions() {
             ) : (
               // Phone: the lanes run to the screen edges, snap one at a time and the next one peeks in (UI tour
               // run 11, WM-4).
-              // The trailing spacer keeps the last lane clear of the screen edge at full scroll (a scroller's end
-              // padding is not scrollable room in a flex row; UI tour run 13, W-M9).
-              <div ref={boardRef} className={cn("-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-4 after:block after:w-1 after:shrink-0 after:content-[''] sm:mx-0 sm:snap-none sm:px-0 sm:after:hidden", boardFade)}>
-                {visibleCols.map((col, i) => {
-                  const items = shown.filter((s) => keyOf(s) === col.key);
-                  const p = preset(col);
-                  // The group label ("To-do", "Complete") only over a group of several columns (UI tour run 11,
-                  // WD-3): over a single one it repeated the column's own name ("To-do" over "To Do").
-                  const firstOfGroup = (i === 0 || visibleCols[i - 1].group !== col.group) && visibleCols.filter((c) => c.group === col.group).length > 1;
-                  return (
-                    // Phone (UI tour run 7, 14 Oct 2026): a column with cards takes ~85% of the screen, so its
-                    // cards read whole and the next column peeks in; an empty one shrinks to a narrow lane
-                    // that says why it is empty, instead of a 288 px blank pushing the work off screen.
-                    <div key={col.key} className={cn("flex shrink-0 snap-start flex-col sm:w-72", items.length ? "w-[82vw] max-w-[22rem]" : "w-[8.5rem]")}>
-                      {groupRow && <div className="mb-1 h-4 text-[11px] font-semibold text-muted-foreground">{firstOfGroup ? t(GROUP_LABEL[col.group]) : ""}</div>}
-                      <div className="flex flex-1 flex-col rounded-xl" style={{ background: p.lane }}>
-                        <div className="flex items-center gap-2 px-3 py-2.5">
-                          <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-semibold" style={{ background: p.bg, color: p.text }}>
-                            <span className="h-1.5 w-1.5 rounded-full" style={{ background: p.dot }} />{col.name}
-                          </span>
-                          <span className="text-xs text-muted-foreground">{items.length}</span>
-                        </div>
-                        <div className="flex-1 space-y-2 px-2 pb-2">
-                          {/* Long columns render in slices as they scroll into view (perf pass, 12 Oct 2026). */}
-                          <Incremental items={items} first={25} step={30} keyOf={(s) => s.id} render={(s) => <Card s={s} onOpen={() => setOpenId(s.id)} />} />
-                          {/* One short hint per empty lane; the read-only note above already says the team moves the cards. */}
-                          {items.length === 0 && <div className="px-2 py-4 text-center text-[11px] leading-snug text-muted-foreground">{t("Nothing here yet")}</div>}
-                        </div>
+              // The trailing spacer keeps the last lane clear of the edge at full scroll on every width (a
+              // scroller's end padding is not scrollable room in a flex row; UI tour run 13 W-M9, run 14 R14-WM-7
+              // / R14-WD-2), and the cut edge fades, so a lane past the edge reads as "scroll for more".
+              <div ref={boardRef} className={cn("-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-4 after:block after:w-1 after:shrink-0 after:content-[''] sm:mx-0 sm:snap-none sm:px-0", boardFade)}>
+                {groupRuns.map((run) => (
+                  <div key={run.group + run.cols[0].key} className="flex shrink-0 flex-col">
+                    {/* The group caption ("In progress") spans every lane of its group, with a rule under it. */}
+                    {groupRow && (
+                      <div className={cn("mb-1.5 h-5 truncate text-[11px] font-semibold text-muted-foreground", run.cols.length > 1 && "border-b border-border/70")}>
+                        {run.cols.length > 1 ? t(GROUP_LABEL[run.group]) : ""}
                       </div>
+                    )}
+                    <div className="flex flex-1 gap-3">
+                      {run.cols.map((col) => {
+                        const items = shown.filter((s) => keyOf(s) === col.key);
+                        const p = preset(col);
+                        return (
+                          // A lane with cards takes ~85% of a phone screen (its cards read whole, the next lane
+                          // peeks in) and 18 rem on a computer; an empty lane is narrow on both (UI tour run 14,
+                          // R14-WD-2: four 18 rem lanes did not fit next to the sidebar).
+                          <div key={col.key} className={cn("flex shrink-0 snap-start flex-col", items.length ? "w-[82vw] max-w-[22rem] sm:w-72" : "w-[8.5rem] sm:w-48")}>
+                            <div className="flex flex-1 flex-col rounded-xl" style={{ background: p.lane }}>
+                              <div className="flex items-center gap-2 px-3 py-2.5">
+                                <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-semibold" style={{ background: p.bg, color: p.text }}>
+                                  <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: p.dot }} /><span className="truncate">{col.name}</span>
+                                </span>
+                                <span className="text-xs text-muted-foreground">{items.length}</span>
+                              </div>
+                              <div className="flex-1 space-y-2 px-2 pb-2">
+                                {/* Long columns render in slices as they scroll into view (perf pass, 12 Oct 2026). */}
+                                <Incremental items={items} first={25} step={30} keyOf={(s) => s.id} render={(s) => <Card s={s} onOpen={() => setOpenId(s.id)} />} />
+                                {/* An empty lane says what lands in it (UI tour run 14, R14-WB-4); the first empty To-do lane
+                                    also links to the forms, the way a request gets here. */}
+                                {items.length === 0 && (
+                                  <div className="flex flex-col items-center gap-2 px-2 py-4 text-center text-[11px] leading-snug text-muted-foreground">
+                                    <span>{t(EMPTY_LANE[col.group] ?? EMPTY_LANE.in_progress)}</span>
+                                    {col.key === firstEmptyTodo && (
+                                      <Link to="/forms" className="font-semibold text-primary hover:underline">{t("Open forms")}</Link>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             )}
           </>

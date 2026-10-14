@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DateField } from "@/components/DateField";
 import { useQuery } from "@tanstack/react-query";
 import { CornerDownRight, FilePlus2, FileSignature, FileText, GitBranch, ListFilter, Loader2, Search, Upload, X } from "lucide-react";
@@ -159,13 +159,14 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
                 the room. */}
             <table className="w-full min-w-[900px] table-fixed text-sm">
               <colgroup>
-                {/* Status gave up width it did not use to the number and the counterparty (UI tour run 13, W-D11). */}
+                {/* Status gave up width it did not use to the number and the counterparty (UI tour run 13, W-D11),
+                    and again to the title (run 14, R14-WD-12: a chip needs ~6 rem; the signed line truncates). */}
                 <col className="w-[14rem]" />
                 <col />
-                <col className="w-[13rem]" />
-                <col className="w-[8.5rem]" />
+                <col className="w-[12rem]" />
+                <col className="w-[8rem]" />
                 <col className="w-[6.5rem]" />
-                <col className="w-[10rem]" />
+                <col className="w-[7.5rem]" />
               </colgroup>
               <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                 <tr>
@@ -195,7 +196,8 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
                       )}
                     </td>
                     <td className="px-3 py-2 align-top">
-                      <div className="truncate font-medium" title={d.title}>{d.title}</div>
+                      {/* Up to two lines (R14-WD-12): long titles that share a start were cut to the same first words. */}
+                      <div className="line-clamp-2 break-words font-medium" title={d.title}>{d.title}</div>
                       <div className="line-clamp-2 text-xs text-muted-foreground">
                         <DocKind d={d} />
                       </div>
@@ -251,8 +253,32 @@ function DocKind({ d }: { d: ArchiveDoc }) {
   return (
     <>
       {docTypeLabel(d.docType)}{d.source === "UPLOADED" ? ` · ${t("Uploaded")}` : ""}{d.deal ? ` · ${d.deal.code}` : d.project ? ` · ${d.project.name}` : ""}
-      {d.parent && <> · {t("Addendum to {number}", { number: d.parent.number })}</>}
+      {d.parent && <> · <AddendumOf number={d.parent.number} /></>}
     </>
+  );
+}
+
+/**
+ * "Addendum to PKS/PATS-UNIV/…/2026/002" with the number kept whole: it moves to the next line as one piece
+ * and, when even a line is too short, breaks only after a "/" (UI tour run 14, R14-WM-20: the phone card
+ * broke it at the hyphen, "PKS/PATS- / UNIV/…").
+ */
+function AddendumOf({ number }: { number: string }) {
+  const { t } = useLang();
+  const label = t("Addendum to {number}", { number: "\u0000" });
+  const [before, after = ""] = label.split("\u0000");
+  return <>{before}<UnbrokenNumber number={number} />{after}</>;
+}
+
+/** A document number that breaks only after "/" (each part is unbreakable), and starts a line whole when it fits. */
+export function UnbrokenNumber({ number, className }: { number: string; className?: string }) {
+  const parts = number.split("/");
+  return (
+    <span className={cn("inline-block max-w-full align-top", className)}>
+      {parts.map((p, i) => (
+        <Fragment key={i}><span className="whitespace-nowrap">{p}{i < parts.length - 1 ? "/" : ""}</span>{i < parts.length - 1 && <wbr />}</Fragment>
+      ))}
+    </span>
   );
 }
 
@@ -339,16 +365,42 @@ function FilterSelect({ value, onChange, all, options, block }: { value?: string
  * A document number cut in the middle, never at its end: the last two parts ("/2026/003", "/002/ADD-1") stay
  * whole, so numbers that share a long start stay told apart (UI tour run 13, W-D5: three rows all read
  * "PKS/PATS-UNIV/YOGYAKART…"). The full number is on hover.
+ *
+ * The cut is counted in characters, not left to CSS: a truncated head span next to the tail left the unused
+ * part of a character cell between "…" and the tail ("…  /2027/001", UI tour run 14, R14-WB-6). The number
+ * is set in a monospace face, so the width of one character is the measured width over its length.
  */
 function DocNumber({ number, className }: { number: string; className?: string }) {
+  const box = useRef<HTMLSpanElement>(null);
+  const probe = useRef<HTMLSpanElement>(null);
+  const [fit, setFit] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = box.current, pr = probe.current;
+    if (!el || !pr) return;
+    const read = () => {
+      const full = pr.getBoundingClientRect().width;
+      const room = el.getBoundingClientRect().width;
+      if (!full || !number.length) return setFit(null);
+      const per = full / number.length;
+      setFit(full <= room + 0.5 ? null : Math.max(0, Math.floor((room + 0.5) / per)));
+    };
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [number]);
   const cut = number.split("/");
   const tail = cut.length > 2 ? `/${cut.slice(-2).join("/")}` : "";
-  const head = tail ? number.slice(0, number.length - tail.length) : number;
+  let text = number;
+  if (fit !== null) {
+    const headRoom = fit - tail.length - 1; // one cell for "…"
+    text = tail && headRoom >= 1 ? `${number.slice(0, headRoom)}…${tail}` : number;
+  }
   return (
-    <span className={cn("flex min-w-0", className)} title={number}>
-      <span className="truncate">{head}</span>
-      {tail && <span className="shrink-0 whitespace-nowrap">{tail}</span>}
+    <span ref={box} className="relative block min-w-0 flex-1 overflow-hidden" title={number}>
+      {/* The full number, out of sight, measures one character. */}
+      <span ref={probe} aria-hidden className="invisible absolute left-0 top-0 whitespace-pre">{number}</span>
+      <span className={cn("block truncate whitespace-pre", className)}>{text}</span>
     </span>
   );
 }
-

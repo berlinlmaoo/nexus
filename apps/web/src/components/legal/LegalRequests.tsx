@@ -78,6 +78,9 @@ export function LegalRequests({ openId, onOpen, onOpenDocument }: {
     onSettled: () => { void qc.invalidateQueries({ queryKey: ["legal", "requests"] }); void qc.invalidateQueries({ queryKey: ["legal", "request"] }); },
   });
   const set = (patch: Partial<BoardQuery>) => setFilters((f) => ({ ...f, ...patch }));
+  // Phones show one column at a time: the one picked, else the first that holds requests.
+  const [phoneColState, setPhoneColState] = useState<RequestColumn | null>(null);
+  const phoneCol: RequestColumn = phoneColState ?? REQUEST_COLUMNS.find((c) => rows.some((r) => r.column === c)) ?? REQUEST_COLUMNS[0];
 
   return (
     <section className="space-y-3">
@@ -108,33 +111,42 @@ export function LegalRequests({ openId, onOpen, onOpenDocument }: {
           action={!(filters.q || filtered) ? <Button size="sm" onClick={() => setLinksOpen(true)} className="gap-1.5"><Link2 className="h-4 w-4" /> {t("Request links")}</Button> : undefined} />
       ) : view === "board" ? (
         <>
-        {/* Phones: one chip per column, with its count, that brings the column in; the board shows one column at
-            a time and the others were only cut names at the edge (UI tour run 13, W-M10). */}
-        <div role="group" aria-label={t("Columns")} className="-mt-1 mb-2 flex gap-1.5 overflow-x-auto sm:hidden">
-          {REQUEST_COLUMNS.map((col) => (
-            <button key={col} type="button"
-              onClick={() => document.getElementById(`lr-col-${col}`)?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" })}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium pointer-coarse:min-h-9">
-              {columnLabel(col)}<span className="tabular-nums text-muted-foreground">{rows.filter((r) => r.column === col).length}</span>
-            </button>
-          ))}
+        {/* Phones: the chips, one per column with its count, switch the board between its columns; the
+            chosen column fills the width (UI tour run 13 W-M10, run 14 R14-WM-8: as a scroll row the other
+            columns were only cut names at the edge, "In Prog", "Adder…"). Computers show every column. */}
+        <div role="tablist" aria-label={t("Columns")} className="-mt-1 mb-2 flex gap-1.5 overflow-x-auto sm:hidden">
+          {REQUEST_COLUMNS.map((col) => {
+            const on = col === phoneCol;
+            return (
+              <button key={col} type="button" role="tab" aria-selected={on} aria-controls={`lr-col-${col}`}
+                onClick={() => setPhoneColState(col)}
+                className={cn("inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors pointer-coarse:min-h-9",
+                  on ? "border-foreground/25 bg-accent text-foreground" : "border-border bg-card text-muted-foreground")}>
+                {columnLabel(col)}<span className="tabular-nums text-muted-foreground">{rows.filter((r) => r.column === col).length}</span>
+              </button>
+            );
+          })}
         </div>
-        {/* Phones: the columns snap one at a time and the next one peeks in from the screen edge (UI tour run 11,
-            WM-6); the row runs to the edges so the peek is not cut by the page gutter. A column is as tall as its
-            cards, not a tall empty grey body (W-M10). */}
-        <div className="-mx-4 flex snap-x snap-mandatory scroll-px-4 items-start gap-3 overflow-x-auto overscroll-x-contain px-4 pb-3 sm:mx-0 sm:snap-none sm:px-0">
+        {/* A column is as tall as its cards, not a tall empty grey body (W-M10). */}
+        <div className="flex items-start gap-3 sm:overflow-x-auto sm:pb-3">
           {REQUEST_COLUMNS.map((col) => {
             const items = rows.filter((r) => r.column === col);
             return (
-              <div key={col} id={`lr-col-${col}`}
-                className={cn("flex w-[82vw] max-w-[22rem] shrink-0 snap-start flex-col rounded-xl bg-muted/50 sm:w-80", dragOver === col && "ring-2 ring-primary/50")}
+              <div key={col} id={`lr-col-${col}`} role="tabpanel"
+                className={cn("flex w-full shrink-0 flex-col rounded-xl bg-muted/50 sm:w-80", col !== phoneCol && "max-sm:hidden", dragOver === col && "ring-2 ring-primary/50")}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(col); }}
                 onDragLeave={() => setDragOver((c) => (c === col ? null : c))}
                 onDrop={(e) => { e.preventDefault(); setDragOver(null); const id = e.dataTransfer.getData("text/x-legal-request"); const r = rows.find((x) => x.id === id); if (r && r.column !== col) move.mutate({ id, column: col }); }}>
                 <div className="flex items-center gap-2 px-3 py-2.5 text-sm font-semibold">{columnLabel(col)}<span className="text-xs font-normal text-muted-foreground">{items.length}</span></div>
                 <div className="flex-1 space-y-2 px-2 pb-2">
                   {items.map((r) => <RequestCard key={r.id} r={r} onOpen={() => onOpen(r.id)} />)}
-                  {items.length === 0 && <div className="px-2 py-6 text-center text-[11px] text-muted-foreground">{t("Drag a request here, or let it move by itself as its document goes.")}</div>}
+                  {items.length === 0 && (
+                    <div className="px-2 py-6 text-center text-[11px] text-muted-foreground">
+                      {/* A phone has no dragging: there a request is moved from its sheet. */}
+                      <span className="max-sm:hidden">{t("Drag a request here, or let it move by itself as its document goes.")}</span>
+                      <span className="sm:hidden">{t("Open a request to move it here, or let it move by itself as its document goes.")}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
