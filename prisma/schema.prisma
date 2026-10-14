@@ -145,6 +145,7 @@ model User {
   outletEventsUpdated  OutletSalesEvent[]   @relation("OutletEventUpdatedBy")
   outletEventsReported OutletSalesEvent[]   @relation("OutletEventReportedBy")
   outletTargetsUpdated OutletSalesTarget[]  @relation("OutletTargetUpdatedBy")
+  outletDayTargetsUpdated OutletSalesDayTarget[] @relation("OutletDayTargetUpdatedBy")
   blockReminders       BlockReminder[]
   legalMembership      LegalMember?           @relation("LegalMemberUser")
   legalInvites         LegalMember[]          @relation("LegalMemberInvitedBy")
@@ -574,6 +575,10 @@ model Project {
   /// Outlet Sales Dashboard (Project.type "OUTLET_SALES", owner 10 Oct 2026): one project = one outlet.
   outletSalesEvents  OutletSalesEvent[]
   outletSalesTargets OutletSalesTarget[]
+  outletSalesDayTargets OutletSalesDayTarget[]
+  /// Outlet report breakdown (owner, 14 Oct 2026): RSVP items, Hosting items, Communities. Null = the
+  /// original seven items. Shape and rules: src/lib/outlet-sales.ts (readReportConfig / mergeReportConfig).
+  outletReportConfig Json?
 
   @@index([folderId, position])
   @@index([workspaceId]) // perf pass 12 Oct 2026 (prisma/sql/2026-10-12-perf-indexes.sql)
@@ -4009,6 +4014,24 @@ model OutletSalesTarget {
   @@unique([projectId, month])
 }
 
+/// A date's own target of an outlet (owner, 14 Oct 2026, after a meeting with Ryan): sales, pax, or both;
+/// null = that part falls back to the month's target split evenly over its days. A row whose two parts are
+/// both cleared is deleted (the audit row keeps what it was). SQL: prisma/sql/2026-10-14-outlet-custom-report.sql.
+model OutletSalesDayTarget {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  date        DateTime @db.Date
+  salesTarget Float?
+  paxTarget   Int?
+  updatedById String?
+  updatedBy   User?    @relation("OutletDayTargetUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([projectId, date])
+}
+
 /// One event (night) of an outlet and its report: Ryan's form (owner, 10 Oct 2026). A date may hold
 /// several events. Every actual is nullable: null = not filled yet (0 is a real zero). The totals (RSVP,
 /// hosting) are never stored; the server adds them up (src/lib/outlet-sales.ts), and the status
@@ -4038,6 +4061,9 @@ model OutletSalesEvent {
   failWhat      String    @default("")
   failWhy       String    @default("")
   failPrevent   String    @default("")
+  /// Figures of the outlet's own breakdown items by stable id (owner, 14 Oct 2026), except the seven
+  /// original items, which keep their columns above (their ids are the column names).
+  reportValues  Json      @default("{}")
   /// When the event first became REPORTED, and by whom.
   reportedAt    DateTime?
   reportedById  String?

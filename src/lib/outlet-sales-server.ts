@@ -6,16 +6,27 @@ import { logAudit } from "@/lib/audit"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 import { emitOutletSalesChanged } from "@/lib/socket-emitter"
 import {
+  COUNT_MAX,
+  LEGACY_ITEM_IDS,
+  MONEY_MAX,
   OUTLET_FIELDS,
-  OUTLET_FORM,
+  buildMonthDays,
+  configIds,
+  eventTotals,
+  isLegacyItemId,
   isMonth,
+  legacyFormFor,
+  mergeReportConfig,
   missingOf,
   monthBounds,
   outletToday,
   pctOf,
+  readReportConfig,
   statusOf,
-  sumFilled,
+  summarizeGuests,
   summarizeMonth,
+  type OutletReportConfig,
+  type OutletValues,
 } from "@/lib/outlet-sales"
 
 /**
@@ -84,10 +95,31 @@ function dayIn(day: string): Date {
   return new Date(`${day}T00:00:00.000Z`)
 }
 
+type ValueRow = Pick<EventRow, "reportValues" | "rsvpWalkIn" | "rsvpTeam" | "rsvpPr" | "rsvpEo" | "hostingTeam" | "hostingPr" | "hostingEo">
+
+/**
+ * Every breakdown figure of a report by item id: the seven original items from their columns, the rest
+ * from `reportValues`. A legacy id is never read from the JSON (the column is the only home of its figure).
+ */
+export function valuesOf(row: ValueRow): OutletValues {
+  const out: OutletValues = {}
+  const json = row.reportValues
+  if (json && typeof json === "object" && !Array.isArray(json)) {
+    for (const [k, v] of Object.entries(json as Record<string, unknown>)) {
+      if (!isLegacyItemId(k) && typeof v === "number" && Number.isFinite(v)) out[k] = v
+    }
+  }
+  const cols = row as unknown as Record<string, number | null>
+  for (const id of LEGACY_ITEM_IDS) if (cols[id] !== null && cols[id] !== undefined) out[id] = cols[id] as number
+  return out
+}
+
 /** An event as every client receives it: what was typed, and what the rules derive from it. */
-export function serializeEvent(row: EventRow, today: string) {
+export function serializeEvent(row: EventRow, today: string, config: OutletReportConfig) {
   const date = dayOut(row.date)
   const facts = { date, sales: row.sales, pax: row.pax }
+  const values = valuesOf(row)
+  const totals = eventTotals(config, values)
   return {
     id: row.id,
     projectId: row.projectId,
@@ -110,9 +142,14 @@ export function serializeEvent(row: EventRow, today: string) {
     failWhat: row.failWhat,
     failWhy: row.failWhy,
     failPrevent: row.failPrevent,
-    // Derived: the server's answer, so a phone does not port the arithmetic.
-    rsvpTotal: sumFilled([row.rsvpWalkIn, row.rsvpTeam, row.rsvpPr, row.rsvpEo]),
-    hostingTotal: sumFilled([row.hostingTeam, row.hostingPr, row.hostingEo]),
+    // The outlet's breakdown (owner, 14 Oct 2026): every figure by item id, the seven originals included.
+    values,
+    // Derived: the server's answer, so a phone does not port the arithmetic. The totals add up every item
+    // of the outlet's config (an archived item keeps counting in the reports that have it).
+    rsvpTotal: totals.rsvpTotal,
+    hostingTotal: totals.hostingTotal,
+    communityTotal: totals.communityTotal,
+    communityTotals: totals.communities,
     salesPct: pctOf(row.sales, row.salesTarget),
     paxPct: pctOf(row.pax, row.paxTarget),
     status: statusOf(facts, today),
@@ -209,6 +246,51 @@ export function parseEventFields(
   return { ok: true, data }
 }
 
+/**
+ * `values` of a create or PATCH body: { [itemId]: number | null }. Only the ids sent change; null or ""
+ * clears one. An id the outlet's config does not know (an item removed meanwhile) answers CONFIG_CHANGED,
+ * so a stale form reloads instead of a figure silently going nowhere. The seven original ids land in their
+ * columns (`columns`), every other id in the JSON (`json`).
+ */
+export function parseValues(
+  raw: unknown,
+  config: OutletReportConfig,
+):
+  | { ok: true; columns: Record<string, number | null>; json: Record<string, number | null> }
+  | { ok: false; error: FieldError & { code: string } } {
+  const columns: Record<string, number | null> = {}
+  const json: Record<string, number | null> = {}
+  if (raw === undefined) return { ok: true, columns, json }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, error: { field: "values", error: "Harus berupa objek.", code: "INVALID_FIELD" } }
+  }
+  const known = configIds(config)
+  for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!known.has(id)) {
+      return { ok: false, error: { field: `values.${id}`, error: "Pengaturan laporan baru saja berubah. Muat ulang form, lalu isi lagi.", code: "CONFIG_CHANGED" } }
+    }
+    let n: number | null
+    if (v === null || v === "") n = null
+    else {
+      const x = typeof v === "string" ? Number(v.replace(/[.,\s]/g, "")) : v
+      if (typeof x !== "number" || !Number.isFinite(x)) return { ok: false, error: { field: `values.${id}`, error: "Harus berupa angka.", code: "INVALID_FIELD" } }
+      if (x < 0) return { ok: false, error: { field: `values.${id}`, error: "Tidak boleh negatif.", code: "INVALID_FIELD" } }
+      if (x > COUNT_MAX) return { ok: false, error: { field: `values.${id}`, error: "Angkanya terlalu besar.", code: "INVALID_FIELD" } }
+      if (!Number.isInteger(x)) return { ok: false, error: { field: `values.${id}`, error: "Harus bilangan bulat.", code: "INVALID_FIELD" } }
+      n = x
+    }
+    if (isLegacyItemId(id)) columns[id] = n
+    else json[id] = n
+  }
+  return { ok: true, columns, json }
+}
+
+/** The outlet's report config (the original seven items when it never set one). */
+export async function loadReportConfig(projectId: string): Promise<OutletReportConfig> {
+  const p = await prisma.project.findUnique({ where: { id: projectId }, select: { outletReportConfig: true } })
+  return readReportConfig(p?.outletReportConfig ?? null)
+}
+
 // ── Reads ─────────────────────────────────────────────────────────────────────────────────────────────
 
 /** How many older events still waiting for a report one read returns. */
@@ -217,7 +299,7 @@ const WAITING_EARLIER_LIMIT = 50
 /** GET …/outlet-sales?month=: the month's target, summary and events, and older nights still unreported. */
 export async function loadOutletMonth(projectId: string, month: string, today: string = outletToday()) {
   const { start, next } = monthBounds(month)
-  const [targetRow, rows, earlier] = await Promise.all([
+  const [targetRow, rows, earlier, config, dayRows] = await Promise.all([
     prisma.outletSalesTarget.findUnique({ where: { projectId_month: { projectId, month } }, include: { updatedBy: personSelect } }),
     prisma.outletSalesEvent.findMany({
       where: { projectId, date: { gte: dayIn(start), lt: dayIn(next) } },
@@ -232,17 +314,43 @@ export async function loadOutletMonth(projectId: string, month: string, today: s
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
       take: WAITING_EARLIER_LIMIT,
     }),
+    loadReportConfig(projectId),
+    prisma.outletSalesDayTarget.findMany({
+      where: { projectId, date: { gte: dayIn(start), lt: dayIn(next) } },
+      include: { updatedBy: personSelect },
+      orderBy: { date: "asc" },
+    }),
   ])
-  const events = rows.map((r) => serializeEvent(r, today))
+  const events = rows.map((r) => serializeEvent(r, today, config))
   const target = targetRow ? serializeTarget(targetRow) : null
+  const dayTargets = dayRows.map(serializeDayTarget)
   return {
     month,
     today,
     target,
     summary: summarizeMonth(month, events, target),
     events,
-    waitingEarlier: earlier.map((r) => serializeEvent(r, today)),
-    form: OUTLET_FORM,
+    waitingEarlier: earlier.map((r) => serializeEvent(r, today, config)),
+    // Owner, 14 Oct 2026: the outlet's own breakdown, the month's Guest overview, and every day's target
+    // in force (its own, else the month's share) with its actuals.
+    config,
+    guests: summarizeGuests(config, events.map((e) => e.values)),
+    days: buildMonthDays(month, events, target, dayTargets),
+    dayTargets,
+    // Released apps draw this form: the original items under this outlet's labels (legacyFormFor).
+    form: legacyFormFor(config),
+  }
+}
+
+type DayTargetRow = Prisma.OutletSalesDayTargetGetPayload<{ include: { updatedBy: typeof personSelect } }>
+
+export function serializeDayTarget(row: DayTargetRow) {
+  return {
+    date: dayOut(row.date),
+    salesTarget: row.salesTarget,
+    paxTarget: row.paxTarget,
+    updatedAt: row.updatedAt.toISOString(),
+    updatedBy: row.updatedBy,
   }
 }
 
@@ -274,12 +382,19 @@ export async function createOutletEvent(
 ): Promise<WriteResult<SerializedOutletEvent>> {
   const parsed = parseEventFields(body, "create")
   if (!parsed.ok) return { ok: false, status: 400, body: { ...parsed.error, code: "INVALID_FIELD" } }
-  const d = parsed.data
+  const config = await loadReportConfig(projectId)
+  const vals = parseValues(body.values, config)
+  if (!vals.ok) return { ok: false, status: 400, body: { ...vals.error } }
+  // `values` wins over an old key for the same item (a client that sends both).
+  const d = { ...parsed.data, ...vals.columns }
+  const json: Record<string, number> = {}
+  for (const [k, v] of Object.entries(vals.json)) if (v !== null) json[k] = v
   const sales = (d.sales as number | null | undefined) ?? null
   const pax = (d.pax as number | null | undefined) ?? null
   const created = await prisma.outletSalesEvent.create({
     data: {
       ...(d as Omit<Prisma.OutletSalesEventUncheckedCreateInput, "projectId" | "name" | "date">),
+      reportValues: json,
       name: d.name as string,
       date: d.date as Date,
       projectId,
@@ -300,7 +415,7 @@ export async function createOutletEvent(
     metadata: { projectId, date, sales, pax },
   })
   emitOutletSalesChanged(projectId, created.id, date.slice(0, 7), userId)
-  return { ok: true, value: serializeEvent(created, outletToday()) }
+  return { ok: true, value: serializeEvent(created, outletToday(), config) }
 }
 
 export async function findOutletEvent(projectId: string, eventId: string) {
@@ -324,16 +439,29 @@ export async function updateOutletEvent(
   if (!current) return notFound
   const parsed = parseEventFields(body, "patch")
   if (!parsed.ok) return { ok: false, status: 400, body: { ...parsed.error, code: "INVALID_FIELD" } }
+  const config = await loadReportConfig(projectId)
+  const vals = parseValues(body.values, config)
+  if (!vals.ok) return { ok: false, status: 400, body: { ...vals.error } }
+  const fields = { ...parsed.data, ...vals.columns }
   const cur = current as unknown as Record<string, unknown>
-  const changed = Object.keys(parsed.data).filter((k) => {
-    const a = auditValue(cur[k])
-    const b = auditValue(parsed.data[k])
-    return a !== b
-  })
-  if (changed.length === 0) return { ok: true, value: serializeEvent(current, outletToday()) }
+  const changed = Object.keys(fields).filter((k) => auditValue(cur[k]) !== auditValue(fields[k]))
+  // The JSON figures: merged key by key, so two people filling different items never undo each other.
+  const before = valuesOf(current)
+  const changedValues = Object.keys(vals.json).filter((k) => (before[k] ?? null) !== vals.json[k])
+  if (changed.length === 0 && changedValues.length === 0) return { ok: true, value: serializeEvent(current, outletToday(), config) }
 
   const update: Record<string, unknown> = {}
-  for (const k of changed) update[k] = parsed.data[k]
+  for (const k of changed) update[k] = fields[k]
+  if (changedValues.length > 0) {
+    const json: Record<string, number> = {}
+    for (const [k, v] of Object.entries(before)) if (!isLegacyItemId(k)) json[k] = v
+    for (const k of changedValues) {
+      const v = vals.json[k]
+      if (v === null) delete json[k]
+      else json[k] = v
+    }
+    update.reportValues = json
+  }
   const sales = "sales" in update ? (update.sales as number | null) : current.sales
   const pax = "pax" in update ? (update.pax as number | null) : current.pax
   const saved = await prisma.outletSalesEvent.update({
@@ -341,9 +469,10 @@ export async function updateOutletEvent(
     data: { ...update, updatedById: userId, ...reportStamp(current, { sales, pax }, userId) } as Prisma.OutletSalesEventUncheckedUpdateInput,
     include: eventInclude,
   })
-  const before: Record<string, unknown> = {}
-  const after: Record<string, unknown> = {}
-  for (const k of changed) { before[k] = auditValue(cur[k]); after[k] = auditValue(update[k]) }
+  const auditBefore: Record<string, unknown> = {}
+  const auditAfter: Record<string, unknown> = {}
+  for (const k of changed) { auditBefore[k] = auditValue(cur[k]); auditAfter[k] = auditValue(update[k]) }
+  for (const k of changedValues) { auditBefore[`values.${k}`] = before[k] ?? null; auditAfter[`values.${k}`] = vals.json[k] }
   const date = dayOut(saved.date)
   await logAudit({
     action: "update",
@@ -352,12 +481,12 @@ export async function updateOutletEvent(
     entityName: `${saved.name} (${date})`,
     userId,
     request,
-    metadata: { projectId, date, fields: changed, before, after },
+    metadata: { projectId, date, fields: [...changed, ...changedValues.map((k) => `values.${k}`)], before: auditBefore, after: auditAfter },
   })
   // A date moved to another month: both months' screens refetch (the ping names the new one; clients
   // refetch whatever month they show on any ping of their project).
   emitOutletSalesChanged(projectId, eventId, date.slice(0, 7), userId)
-  return { ok: true, value: serializeEvent(saved, outletToday()) }
+  return { ok: true, value: serializeEvent(saved, outletToday(), config) }
 }
 
 /** Delete, restorable from Control Room → Audit (lib/deletion-snapshot.ts; owner: every delete restorable). */
@@ -448,4 +577,112 @@ export async function putOutletTarget(
     emitOutletSalesChanged(projectId, null, month, userId)
   }
   return { ok: true, value: serializeTarget(saved) }
+}
+
+// ── Daily targets (owner, 14 Oct 2026) ────────────────────────────────────────────────────────────────
+
+/**
+ * PUT …/day-targets { date, salesTarget?, paxTarget? }: one date's own target. Each part on its own: a
+ * key left out keeps its value, null (or "") clears it and that part falls back to the month's share. A
+ * date whose two parts are both cleared has no row any more. Same people as the monthly target.
+ */
+export async function putOutletDayTarget(
+  userId: string,
+  projectId: string,
+  body: Record<string, unknown>,
+  request?: Request,
+): Promise<WriteResult<{ date: string; salesTarget: number | null; paxTarget: number | null }>> {
+  const date = body.date
+  if (!validDay(date)) return { ok: false, status: 400, body: { field: "date", error: "Tanggal harus YYYY-MM-DD.", code: "INVALID_FIELD" } }
+  const data: { salesTarget?: number | null; paxTarget?: number | null } = {}
+  for (const [key, max, whole] of [["salesTarget", MONEY_MAX * 10, false], ["paxTarget", COUNT_MAX * 10, true]] as const) {
+    if (!(key in body)) continue
+    const v = body[key]
+    if (v === null || v === "") { data[key] = null; continue }
+    const n = typeof v === "string" ? Number(v.replace(/[.,\s]/g, "")) : v
+    if (typeof n !== "number" || !Number.isFinite(n) || n < 0 || n > max || (whole && !Number.isInteger(n))) {
+      return { ok: false, status: 400, body: { field: key, error: "Target harus angka 0 atau lebih.", code: "INVALID_FIELD" } }
+    }
+    data[key] = Math.round(n)
+  }
+  const where = { projectId_date: { projectId, date: dayIn(date) } }
+  const before = await prisma.outletSalesDayTarget.findUnique({ where })
+  const next = {
+    salesTarget: "salesTarget" in data ? data.salesTarget ?? null : before?.salesTarget ?? null,
+    paxTarget: "paxTarget" in data ? data.paxTarget ?? null : before?.paxTarget ?? null,
+  }
+  const was = { salesTarget: before?.salesTarget ?? null, paxTarget: before?.paxTarget ?? null }
+  if (was.salesTarget === next.salesTarget && was.paxTarget === next.paxTarget) return { ok: true, value: { date, ...next } }
+  let entityId: string
+  if (next.salesTarget === null && next.paxTarget === null) {
+    if (!before) return { ok: true, value: { date, ...next } }
+    await prisma.outletSalesDayTarget.delete({ where })
+    entityId = before.id
+  } else {
+    const saved = await prisma.outletSalesDayTarget.upsert({
+      where,
+      create: { projectId, date: dayIn(date), ...next, updatedById: userId },
+      update: { ...next, updatedById: userId },
+    })
+    entityId = saved.id
+  }
+  await logAudit({
+    action: "update",
+    entityType: "outlet_sales_target",
+    entityId,
+    entityName: `Target ${date}`,
+    userId,
+    request,
+    metadata: { projectId, date, before: was, after: next },
+  })
+  emitOutletSalesChanged(projectId, null, date.slice(0, 7), userId)
+  return { ok: true, value: { date, ...next } }
+}
+
+// ── Report settings (owner, 14 Oct 2026) ──────────────────────────────────────────────────────────────
+
+/** How many reports of the outlet hold a figure for each item / community id. */
+export async function reportUsage(projectId: string): Promise<Record<string, number>> {
+  const rows = await prisma.outletSalesEvent.findMany({
+    where: { projectId },
+    select: { reportValues: true, rsvpWalkIn: true, rsvpTeam: true, rsvpPr: true, rsvpEo: true, hostingTeam: true, hostingPr: true, hostingEo: true },
+  })
+  const usage: Record<string, number> = {}
+  for (const r of rows) for (const id of Object.keys(valuesOf(r))) usage[id] = (usage[id] ?? 0) + 1
+  return usage
+}
+
+export async function loadOutletConfig(projectId: string) {
+  const [config, usage] = await Promise.all([loadReportConfig(projectId), reportUsage(projectId)])
+  return { config, usage }
+}
+
+/**
+ * PUT …/config { config }: the outlet's RSVP items, Hosting items and Communities, in order. The client
+ * sends the whole list; mergeReportConfig keeps every figure (a removed item with figures comes back
+ * archived). Same people as the targets.
+ */
+export async function putOutletConfig(
+  userId: string,
+  projectId: string,
+  body: Record<string, unknown>,
+  request?: Request,
+): Promise<WriteResult<{ config: OutletReportConfig; usage: Record<string, number> }>> {
+  const { config: previous, usage } = await loadOutletConfig(projectId)
+  const merged = mergeReportConfig(body.config, previous, new Set(Object.keys(usage)))
+  if (!merged.ok) return { ok: false, status: 400, body: { ...merged.error } }
+  const config = merged.config
+  if (JSON.stringify(config) === JSON.stringify(previous)) return { ok: true, value: { config, usage } }
+  await prisma.project.update({ where: { id: projectId }, data: { outletReportConfig: config as unknown as Prisma.InputJsonValue } })
+  await logAudit({
+    action: "update",
+    entityType: "outlet_report_config",
+    entityId: projectId,
+    entityName: "Report settings",
+    userId,
+    request,
+    metadata: { projectId, before: previous, after: config },
+  })
+  emitOutletSalesChanged(projectId, null, null, userId)
+  return { ok: true, value: { config, usage } }
 }

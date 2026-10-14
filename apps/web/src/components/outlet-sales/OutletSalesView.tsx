@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarPlus, Check, Info, Link2, Loader2, Plus, Store, X } from "lucide-react";
+import { Check, Info, Link2, Loader2, Plus, Settings2, Store, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
@@ -11,8 +11,10 @@ import {
   outletApi, outletFormLink, outletKey, outletMonthKey, type OutletEvent, type OutletMonthResponse, type OutletStatus,
 } from "@/lib/outlet-sales-api";
 import {
-  EventDetail, Meter, MonthSwitcher, STATUS_DOT, STATUS_LABEL, STATUS_ORDER, StatusPill, count, dayShort, monthLabel, rupiah, vsTarget, wibToday,
+  EventDetail, Meter, MonthSwitcher, STATUS_DOT, STATUS_LABEL, STATUS_ORDER, count, dayShort, monthLabel, rupiah, vsTarget, wibToday,
 } from "./outlet-ui";
+import { GuestOverview } from "./OutletGuests";
+import { OutletReportSettings } from "./OutletReportSettings";
 import { OutletCalendar } from "./OutletCalendar";
 import { OutletReportForm, type FormTarget } from "./OutletReportForm";
 
@@ -46,6 +48,7 @@ export function OutletSalesView({
   const [selected, setSelected] = useState<string | null>(initial?.date ?? null);
   const [formTarget, setFormTarget] = useState<FormTarget>(() => (initial?.eventId ? { eventId: initial.eventId } : { date: initial?.date }));
   const [openId, setOpenId] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const q = useQuery({
     queryKey: outletMonthKey(projectId, month),
@@ -112,6 +115,17 @@ export function OutletSalesView({
     <div className="flex flex-wrap items-center justify-between gap-2">
       <MonthSwitcher month={month} today={today} onChange={(m) => { setMonth(m); setSelected(null); }} />
       <div className="flex items-center gap-2">
+        {(data.canManageSettings ?? data.canManageTargets) && (
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:h-11"
+          >
+            <Settings2 aria-hidden className="h-4 w-4" />
+            <span className="hidden sm:inline">{t("Report settings")}</span>
+            <span className="sr-only sm:hidden">{t("Report settings")}</span>
+          </button>
+        )}
         <button
           type="button"
           onClick={() => copyLink()}
@@ -136,7 +150,13 @@ export function OutletSalesView({
     <div className="flex flex-col gap-4 p-4 md:p-8" aria-busy={q.isFetching || undefined}>
       {view !== "form" && toolbar}
       {view === "overview" && (
-        <Overview data={data} projectId={projectId} onOpen={setOpenId} onFill={(e) => openForm({ eventId: e.id })} onAdd={() => openForm({})} />
+        <Overview
+          data={data}
+          projectId={projectId}
+          onFill={(e) => openForm({ eventId: e.id })}
+          onAdd={() => openForm({})}
+          onSetup={() => setSettingsOpen(true)}
+        />
       )}
       {view === "calendar" && (
         <OutletCalendar
@@ -148,6 +168,7 @@ export function OutletSalesView({
           }}
           onEdit={(e) => openForm({ eventId: e.id })}
           onAdd={(day) => openForm({ date: day })}
+          projectId={projectId}
         />
       )}
       {view === "board" && <Board data={data} onOpen={setOpenId} onAdd={() => openForm({})} />}
@@ -178,7 +199,7 @@ export function OutletSalesView({
                 </button>
               </header>
               <div className="flex-1 overflow-y-auto overscroll-contain p-4">
-                <EventDetail event={openEvent} form={data.form} today={today} onEdit={() => openForm({ eventId: openEvent.id })} />
+                <EventDetail event={openEvent} form={data.form} config={data.config} today={today} onEdit={() => openForm({ eventId: openEvent.id })} />
               </div>
             </>
           )}
@@ -191,9 +212,9 @@ export function OutletSalesView({
 // ── Overview ──────────────────────────────────────────────────────────────────────────────────────────
 
 function Overview({
-  data, projectId, onOpen, onFill, onAdd,
+  data, projectId, onFill, onAdd, onSetup,
 }: {
-  data: OutletMonthResponse; projectId: string; onOpen: (id: string) => void; onFill: (e: OutletEvent) => void; onAdd: () => void;
+  data: OutletMonthResponse; projectId: string; onFill: (e: OutletEvent) => void; onAdd: () => void; onSetup: () => void;
 }) {
   const { t, tn, lang, locale } = useLang();
   const s = data.summary;
@@ -237,21 +258,6 @@ function Overview({
       </div>
       {editing && <TargetEditor projectId={projectId} data={data} onClose={() => setEditing(false)} />}
 
-      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-5">
-        {([
-          ["Events", String(s.eventCount)],
-          ["Reported", String(s.reportedCount)],
-          ["Waiting report", String(s.waitingCount)],
-          ["RSVP", count(s.rsvpTotal, lang)],
-          ["Hosting", count(s.hostingTotal, lang)],
-        ] as const).map(([label, value]) => (
-          <div key={label} className="bg-card px-4 py-3 last:col-span-2 sm:last:col-span-1">
-            <dt className="truncate text-xs font-medium text-muted-foreground">{t(label)}</dt>
-            <dd className="mt-0.5 text-lg font-semibold tabular-nums">{value}</dd>
-          </div>
-        ))}
-      </dl>
-
       {waiting.length > 0 && (
         <section className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-100">
@@ -270,36 +276,20 @@ function Overview({
         </section>
       )}
 
-      <section aria-labelledby="os-events" className="rounded-xl border border-border bg-card">
-        <h3 id="os-events" className="border-b border-border px-4 py-3 text-sm font-semibold">{t("Events in {month}", { month: monthName })}</h3>
-        {data.events.length === 0 ? (
-          <div className="px-4 py-8 text-center">
-            <p className="text-sm font-semibold">{t("No events this month yet")}</p>
-            <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">{t("Add the nights you have planned. After each one, the team fills its report and the totals above update.")}</p>
-            <button type="button" onClick={onAdd} className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] pointer-coarse:min-h-[44px]">
-              <CalendarPlus aria-hidden className="h-4 w-4" /> {t("Add event")}
-            </button>
-          </div>
-        ) : (
-          <ul className="divide-y divide-border">
-            {data.events.map((e) => (
-              <li key={e.id}>
-                <button type="button" onClick={() => onOpen(e.id)} className="grid w-full grid-cols-[4.5rem_1fr_auto] items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none sm:grid-cols-[5.5rem_1fr_auto_10rem_6rem]">
-                  <span className="text-xs tabular-nums text-muted-foreground">{dayShort(e.date, locale)}</span>
-                  <span className="min-w-0 truncate text-sm font-medium">{e.name}</span>
-                  <StatusPill status={e.status} className="hidden sm:inline-flex" />
-                  <span aria-hidden className={cn("h-2 w-2 rounded-full sm:hidden", STATUS_DOT[e.status])} />
-                  <span className="col-span-3 -mt-1 text-xs tabular-nums text-muted-foreground sm:col-span-1 sm:mt-0 sm:text-right sm:text-sm sm:text-foreground">
-                    {e.sales !== null || e.salesTarget !== null ? vsTarget(e.sales, e.salesTarget, e.salesPct, (n) => rupiah(n, lang)) : "—"}
-                    <span className="sm:hidden"> · {t("{n} pax", { n: count(e.pax, lang) })}</span>
-                  </span>
-                  <span className="hidden text-right text-sm tabular-nums sm:block">{t("{n} pax", { n: count(e.pax, lang) })}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {/* Owner, 14 Oct 2026: one Guest overview replaces the counts strip and the month's event list. */}
+      {data.guests ? (
+        <GuestOverview
+          guests={data.guests}
+          month={data.month}
+          onFill={() => {
+            const next = waiting[0] ?? data.events.find((e) => e.status !== "REPORTED");
+            if (next) onFill(next);
+            else onAdd();
+          }}
+          canSetup={!!(data.canManageSettings ?? data.canManageTargets)}
+          onSetup={onSetup}
+        />
+      ) : null}
     </>
   );
 }

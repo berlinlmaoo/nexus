@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef } from "react";
-import { CalendarPlus } from "lucide-react";
+import { CalendarPlus, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import type { OutletEvent, OutletMonthResponse } from "@/lib/outlet-sales-api";
 import { EventDetail, STATUS_DOT, dayLong, monthLabel } from "./outlet-ui";
+import { DayTargetPanel } from "./OutletDayTarget";
 
 function addDays(iso: string, n: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
@@ -26,13 +27,14 @@ function monthDays(month: string): string[] {
  * previous or next month switches to that month.
  */
 export function OutletCalendar({
-  data, selected, onSelect, onEdit, onAdd,
+  data, selected, onSelect, onEdit, onAdd, projectId,
 }: {
   data: OutletMonthResponse;
   selected: string | null;
   onSelect: (day: string) => void;
   onEdit: (e: OutletEvent) => void;
   onAdd: (day: string) => void;
+  projectId: string;
 }) {
   const { t, tn, locale } = useLang();
   const days = useMemo(() => monthDays(data.month), [data.month]);
@@ -46,6 +48,8 @@ export function OutletCalendar({
     ? selected
     : data.today.slice(0, 7) === data.month ? data.today : data.events[0]?.date ?? `${data.month}-01`;
   const dayEvents = byDay.get(day) ?? [];
+  // Dates with their own target (owner, 14 Oct 2026): a small marker on the cell.
+  const custom = useMemo(() => new Set((data.dayTargets ?? []).map((d) => d.date)), [data.dayTargets]);
   const weekdays = useMemo(
     () => Array.from({ length: 7 }, (_, i) => new Date(`2026-10-${String(5 + i).padStart(2, "0")}T00:00:00`).toLocaleDateString(locale, { weekday: "short" })),
     [locale],
@@ -73,9 +77,11 @@ export function OutletCalendar({
             const evs = inMonth ? byDay.get(d) ?? [] : [];
             const isSel = d === day;
             const isToday = d === data.today;
+            const hasTarget = inMonth && custom.has(d);
             const label = [
               dayLong(d, locale, data.today.slice(0, 4)),
               evs.length ? `${tn(evs.length, "1 event", "{n} events")}: ${evs.map((e) => e.name).join(", ")}` : t("No events"),
+              hasTarget ? t("Own daily target") : "",
               isToday ? t("Today") : "",
             ].filter(Boolean).join(", ");
             return (
@@ -101,6 +107,9 @@ export function OutletCalendar({
                 >
                   {Number(d.slice(8))}
                 </span>
+                {hasTarget && (
+                  <Target aria-hidden className="absolute right-1 top-1 h-3 w-3 text-primary sm:right-1.5 sm:top-1.5 sm:h-3.5 sm:w-3.5" />
+                )}
                 {evs.length > 0 && (
                   <>
                     {/* A phone: one dot per night (three at most), coloured by status. */}
@@ -135,13 +144,14 @@ export function OutletCalendar({
             <CalendarPlus aria-hidden className="h-4 w-4" /> {t("Add event on this day")}
           </button>
         </div>
+        <DayTargetPanel projectId={projectId} data={data} day={day} />
         {dayEvents.length === 0 ? (
           <p className="rounded-xl border border-dashed border-border bg-card/60 px-4 py-6 text-center text-sm text-muted-foreground">
             {t("No event on this day. Add one to fill its report after the night.")}
           </p>
         ) : (
           <div className="grid gap-3 lg:grid-cols-2">
-            {dayEvents.map((e) => <EventDetail key={e.id} event={e} form={data.form} today={data.today} onEdit={() => onEdit(e)} />)}
+            {dayEvents.map((e) => <EventDetail key={e.id} event={e} form={data.form} config={data.config} today={data.today} onEdit={() => onEdit(e)} />)}
           </div>
         )}
       </section>

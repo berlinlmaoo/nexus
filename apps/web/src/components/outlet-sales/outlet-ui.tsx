@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { ChevronLeft, ChevronRight, PencilLine } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang, type Lang } from "@/lib/lang";
-import type { Bilingual, OutletEvent, OutletForm, OutletStatus } from "@/lib/outlet-sales-api";
+import type { Bilingual, OutletEvent, OutletForm, OutletItem, OutletReportConfig, OutletStatus } from "@/lib/outlet-sales-api";
 
 /**
  * Shared bits of the Outlet Sales Dashboard (owner, 10 Oct 2026, for Ryan): number and date formats in
@@ -69,6 +69,53 @@ export function shiftMonthKey(month: string, by: number): string {
 /** The company's day (WIB) on this device's clock, until the server's `today` has arrived. */
 export function wibToday(): string {
   return new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+}
+
+// ── The outlet's own breakdown (owner, 14 Oct 2026) ──
+
+const LEGACY_IDS = ["rsvpWalkIn", "rsvpTeam", "rsvpPr", "rsvpEo", "hostingTeam", "hostingPr", "hostingEo"] as const;
+const LEGACY_LABELS: Record<string, string> = {
+  rsvpWalkIn: "Walk-in RSVP", rsvpTeam: "RSVP Team", rsvpPr: "RSVP PR", rsvpEo: "RSVP EO",
+  hostingTeam: "Hosting Team", hostingPr: "Hosting PR", hostingEo: "Hosting EO",
+};
+
+/** The original seven items, for an answer that has no `config` (a server older than this client). */
+export function defaultOutletConfig(): OutletReportConfig {
+  return {
+    version: 1,
+    rsvp: LEGACY_IDS.slice(0, 4).map((id) => ({ id, label: LEGACY_LABELS[id] })),
+    hosting: LEGACY_IDS.slice(4).map((id) => ({ id, label: LEGACY_LABELS[id] })),
+    communities: [],
+  };
+}
+
+/** One breakdown figure of a report by item id; the original items also from their old keys. */
+export function figureOf(event: OutletEvent | null | undefined, id: string): number | null {
+  if (!event) return null;
+  const v = event.values?.[id];
+  if (typeof v === "number") return v;
+  if ((LEGACY_IDS as readonly string[]).includes(id)) {
+    const old = (event as unknown as Record<string, unknown>)[id];
+    return typeof old === "number" ? old : null;
+  }
+  return null;
+}
+
+/** The items a report shows: the active ones, and an archived one only when this report has a figure for it. */
+export function visibleItems(items: OutletItem[], event: OutletEvent | null | undefined): OutletItem[] {
+  return items.filter((i) => !i.archived || figureOf(event, i.id) !== null);
+}
+
+/** The sum of what was filled; null when nothing was (the server's sumFilled). */
+export function sumOf(values: (number | null | undefined)[]): number | null {
+  let any = false;
+  let total = 0;
+  for (const v of values) {
+    if (v === null || v === undefined) continue;
+    any = true;
+    total += v;
+  }
+  return any ? total : null;
 }
 
 export function pick(b: Bilingual | undefined, lang: Lang): string {
@@ -176,8 +223,11 @@ function Answer({ text }: { text: string }) {
  * terulang lagi), Hal yang gagal (Apa / Kenapa gagal / Gimana biar tidak kejadian lagi). Labels from the
  * server's form, in the interface language.
  */
-export function EventDetail({ event, form, today, onEdit }: { event: OutletEvent; form: OutletForm; today: string; onEdit?: () => void }) {
+export function EventDetail({
+  event, form, config, today, onEdit,
+}: { event: OutletEvent; form: OutletForm; config?: OutletReportConfig; today: string; onEdit?: () => void }) {
   const { t, lang, locale } = useLang();
+  const cfg = config ?? defaultOutletConfig();
   const fields = new Map(form.sections.flatMap((s) => s.fields).map((f) => [f.key, f]));
   const label = (key: string, fallback: string) => pick(fields.get(key as never)?.label, lang) || fallback;
   const section = (key: string) => form.sections.find((s) => s.key === key);
@@ -185,13 +235,43 @@ export function EventDetail({ event, form, today, onEdit }: { event: OutletEvent
   const num = (n: number | null) => count(n, lang);
   const total = (key: "rsvp" | "hosting") => {
     const s = section(key);
-    if (!s) return null;
+    const items = visibleItems(key === "rsvp" ? cfg.rsvp : cfg.hosting, event);
     const value = key === "rsvp" ? event.rsvpTotal : event.hostingTotal;
     return (
       <div className="border-t border-border/70 py-1">
-        <Row label={pick(s.title, lang)} strong>{num(value)}</Row>
+        <Row label={s ? pick(s.title, lang) : key === "rsvp" ? "RSVP – TOTAL" : "HOSTING – TOTAL"} strong>{num(value)}</Row>
         <dl className="pl-3">
-          {s.fields.map((f) => <Row key={f.key} label={pick(f.label, lang)}>{num(event[f.key] as number | null)}</Row>)}
+          {items.map((i) => (
+            <Row key={i.id} label={i.archived ? `${i.label} · ${t("archived")}` : i.label}>{num(figureOf(event, i.id))}</Row>
+          ))}
+        </dl>
+      </div>
+    );
+  };
+  const communities = () => {
+    const list = cfg.communities.filter((c) => !c.archived || event.communityTotals?.[c.id] != null);
+    if (list.length === 0) return null;
+    return (
+      <div className="border-t border-border/70 py-1">
+        <Row label={t("Communities – TOTAL")} strong>{num(event.communityTotal ?? null)}</Row>
+        <dl className="pl-3">
+          {list.map((c) => {
+            const subs = visibleItems(c.items, event);
+            const own = figureOf(event, c.id);
+            return (
+              <div key={c.id}>
+                <Row label={c.archived ? `${c.name} · ${t("archived")}` : c.name} strong={c.mode === "breakdown" && subs.length > 0}>
+                  {num(event.communityTotals?.[c.id] ?? null)}
+                </Row>
+                {c.mode === "breakdown" && (subs.length > 0 || own !== null) && (
+                  <dl className="pl-3">
+                    {subs.map((i) => <Row key={i.id} label={i.archived ? `${i.label} · ${t("archived")}` : i.label}>{num(figureOf(event, i.id))}</Row>)}
+                    {own !== null && <Row label={t("Total only")}>{num(own)}</Row>}
+                  </dl>
+                )}
+              </div>
+            );
+          })}
         </dl>
       </div>
     );
@@ -235,6 +315,7 @@ export function EventDetail({ event, form, today, onEdit }: { event: OutletEvent
       </dl>
       {total("rsvp")}
       {total("hosting")}
+      {communities()}
       {story("success")}
       {story("fail")}
       {who && (
