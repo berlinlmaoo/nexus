@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Archive, FileText, Loader2, Lock, Settings2, Users } from "lucide-react";
+import { Archive, FileText, Inbox, Loader2, Lock, Settings2, Users } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { PageBody, PageTabs } from "@/components/PageLayout";
 import { EmptyState } from "@/components/EmptyState";
@@ -8,6 +8,7 @@ import { LegalMembers } from "@/components/legal/LegalMembers";
 import { LegalTemplates } from "@/components/legal/LegalTemplates";
 import { LegalDocuments } from "@/components/legal/LegalDocuments";
 import { LegalSettings } from "@/components/legal/LegalSettings";
+import { LegalRequests } from "@/components/legal/LegalRequests";
 import { ApiError } from "@/lib/nexus-api";
 import { legalApi } from "@/lib/legal-api";
 import { useLang } from "@/lib/lang";
@@ -17,16 +18,18 @@ import { useLang } from "@/lib/lang";
  * and the archive of every legal document. Invitation only — the nav entry is hidden for everyone else and
  * the server refuses every /api/legal call, so a typed URL lands on the "by invitation" state below.
  */
-type LegalTab = "documents" | "templates" | "settings" | "members";
-type LegalSearch = { tab?: LegalTab; doc?: string };
+type LegalTab = "documents" | "requests" | "templates" | "settings" | "members";
+type LegalSearch = { tab?: LegalTab; doc?: string; request?: string };
 
-const TABS: LegalTab[] = ["documents", "templates", "settings", "members"];
+const TABS: LegalTab[] = ["documents", "requests", "templates", "settings", "members"];
 
 export const Route = createFileRoute("/_app/legal")({
   component: LegalPage,
   validateSearch: (s: Record<string, unknown>): LegalSearch => ({
     tab: typeof s.tab === "string" && (TABS as string[]).includes(s.tab) ? (s.tab as LegalTab) : undefined,
     doc: typeof s.doc === "string" && s.doc ? s.doc : undefined,
+    // The request board opened on one request (the legal_request_new notification links here).
+    request: typeof s.request === "string" && s.request ? s.request : undefined,
   }),
 });
 
@@ -72,6 +75,7 @@ function LegalPage() {
             onChange={(k) => navigate({ search: { tab: k } })}
             tabs={[
               { key: "documents", label: t("Documents"), icon: Archive },
+              { key: "requests", label: t("Requests"), icon: Inbox },
               { key: "templates", label: t("Templates"), icon: FileText },
               { key: "settings", label: t("Companies & numbering"), icon: Settings2 },
               { key: "members", label: t("Members"), icon: Users },
@@ -82,6 +86,11 @@ function LegalPage() {
       <PageBody>
         {tab === "documents" && (
           <LegalDocuments openId={search.doc ?? null} onOpen={(id) => navigate({ search: (s) => ({ ...s, doc: id ?? undefined }) })} />
+        )}
+        {tab === "requests" && (
+          <LegalRequests openId={search.request ?? null}
+            onOpen={(id) => navigate({ search: (s) => ({ ...s, request: id ?? undefined }) })}
+            onOpenDocument={(id) => navigate({ search: { tab: "documents", doc: id } })} />
         )}
         {tab === "templates" && <LegalTemplates />}
         {tab === "settings" && <LegalSettings />}

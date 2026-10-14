@@ -84,6 +84,51 @@ Web: `apps/web/src/routes/_app/legal.tsx`, `apps/web/src/components/legal/*`.
 - The owner's real templates are **not** in this repo, which is public. They are uploaded through the app.
   Two of the originals contain real personal data and must never be committed.
 
+## Requests (owner, 14 Oct 2026)
+
+People outside Legal ask for a document through a **request link**, the same way finance and multimedia
+forms work. Server: `src/lib/legal/requests.ts` (+ the pure `request-rules.ts`); web:
+`components/legal/LegalRequestForm.tsx`, `MyLegalRequests.tsx`, `LegalRequests.tsx`; iOS:
+`Views/LegalRequestViews.swift`.
+
+- **Link only.** `/f/legal-<24 letters/digits>`; no menu entry or button for anyone else. One general link
+  (the company is picked in the form) and one per active company (preset and locked), made on first use
+  (`LegalRequestLink.scope` = `general` or the company id). Legal members copy them, open / close them for
+  new requests, and regenerate them (a new token: the old URL answers 404 `LEGAL_LINK_UNKNOWN` at once).
+- **Sign in to send.** Anyone may open the link; the document types and their fields are shown only after
+  signing in to NEXUS, and sending needs a session. The request then appears in the requester's
+  **My Submissions** (web `/submissions`, iOS My Submissions) with its stage, live.
+- **The form.** Company (unless locked) and document type (the active templates, those of another company
+  hidden). The template's fields, from its current version, all optional and without `TANGGAL_DOKUMEN`
+  (Legal sets the date). Then purpose / notes, needed-by date, up to 5 attachments (Legal's upload rules:
+  PDF / Word / JPG / PNG checked on the bytes, 50 MB each), and a related project or deal (only what the
+  requester can open). `Idempotency-Key` makes a retry safe.
+- **Addendum requests** (an `ADD` template) type the parent's number as free text, plus the changes
+  (`PERUBAHAN` rows of `PASAL_DIUBAH` + `ISI_BARU`). Nothing looks the number up and the answer is the same
+  whatever it is, so numbers can't be probed. Legal picks the real parent (a SIGNED document) on the board,
+  then the usual addendum flow runs.
+- **Nothing else leaks.** A requester sees only their own requests (someone else's answers 404 like a
+  missing one) and, of the archive, only the document their own request produced: its number, title and
+  status, and the FINAL / SIGNED file (`requesterFileVersion`: the signed copy once SIGNED, the final
+  version once FINAL or SENT, nothing before).
+- **The board** (Legal → Requests, invited members only): To Do / In Progress / Done, or a list, filtered
+  by type, company, PIC and deadline (red when overdue). "Create document" opens New document filled from
+  the request (`requestId` on `POST /api/legal/documents`), links the document to the request, makes the
+  maker PIC when there was none, and moves the card to In Progress. The card follows its document
+  (`syncRequestForDocument`, after every version, status change and signed copy): SIGNED → Done. Cards can
+  be dragged by hand. Reject needs a reason, which the requester reads; it goes to Done labelled Rejected,
+  and moving it back to To Do / In Progress reopens it. A request whose document is signed can't be
+  rejected; a request whose document was voided can get a new one.
+- **Stages** the requester sees: RECEIVED, IN_PROGRESS, REVISION (a version after the first), FINAL,
+  SIGNED, DONE (dragged to Done without a signed document), REJECTED. In progress, revision, final, signed
+  and rejected are pushed (in-app + push, EN/ID by the recipient's language) and link to
+  `/submissions?legal=<id>`. A new request is pushed to every Legal member, linking to
+  `/legal?tab=requests&request=<id>`.
+- **Live:** `workspace-changed {kind: "legal"}` to the Legal members' own rooms (the board), and
+  `{kind: "submissions"}` to the requester's room (My Submissions).
+- Files live under the Legal storage dir, never as task attachments or Vault items.
+- SQL: `prisma/sql/2026-10-14-legal-requests.sql` (two new tables, expand-only).
+
 ## Kop
 
 Each company's kop is a `.docx` whose page header holds the logo and the address. `applyKop` copies that header

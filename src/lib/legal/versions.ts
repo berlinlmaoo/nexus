@@ -7,6 +7,7 @@ import { deleteLegalFile, readLegalFile, storeLegalFile } from "@/lib/legal/stor
 import { storeUpload, type StoredUpload } from "@/lib/legal/uploads"
 import { downloadBaseName, lockProblem, statusChangeProblem } from "@/lib/legal/rules"
 import { PDF_MIME } from "@/lib/legal/storage"
+import { syncRequestForDocument } from "@/lib/legal/requests"
 
 // Review after generation (owner, 14 Oct 2026): every change — a manual edit, an approved GIDEON proposal, an
 // uploaded file, a restore — is a new version with its author and time. Versions are never changed or
@@ -112,6 +113,8 @@ async function addVersion(actorId: string, documentId: string, baseVersion: numb
     await Promise.all([deleteLegalFile(v.files.docxKey), deleteLegalFile(v.files.pdfKey), deleteLegalFile(v.files.fileKey)])
     throw error
   }
+  // A document made for a Legal request: its card and the requester's stage follow (revision, signed → Done).
+  await syncRequestForDocument(documentId, actorId)
   return next
 }
 

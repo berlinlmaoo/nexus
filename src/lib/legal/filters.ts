@@ -6,6 +6,7 @@
 //   {{TANGGAL_TTD | tanggal}}              → 30 September 2026   (also the default for a date)
 //   {{HONOR | angka}}                      → 25.000.000          (also the default for money)
 //   {{HONOR | terbilang_rupiah | upper}}   → DUA PULUH LIMA JUTA RUPIAH
+//   {{TINGKAT | urutan}}                   → Kedua                (I / II / 2 → the ordinal in words)
 // Repeating rows: {{#BARANG}} … {{NAMA_BARANG}} … {{/BARANG}} (a table row or paragraphs).
 // A section with no placeholders inside ({{#PAKAI_MATERAI}} … {{/PAKAI_MATERAI}}) is a yes/no switch.
 // A section that prints its own field ({{#NPWP}}, NPWP {{NPWP}}{{/NPWP}}) shows only when that field has a
@@ -72,7 +73,7 @@ export function splitFilter(filter: string): { name: string; arg: string | null 
 
 const DATE_FILTERS = ["hari", "tanggal", "tgl", "tgl_terbilang", "bulan", "bulan_romawi", "tahun", "tahun_terbilang", "dmy"]
 const MONEY_FILTERS = ["rupiah", "angka", "terbilang", "terbilang_rupiah"]
-const TEXT_FILTERS = ["upper", "lower", "title"]
+const TEXT_FILTERS = ["upper", "lower", "title", "urutan"]
 /** Filters that compute a new value, and what their argument is. */
 const COMPUTED_FILTERS: Record<string, "number" | "field" | "field-or-number"> = {
   persen: "number",
@@ -253,6 +254,44 @@ export function displayValue(type: FieldType | undefined, v: unknown): string {
 
 export class FilterError extends Error {}
 
+const ROMAN: Record<string, number> = { I: 1, V: 5, X: 10, L: 50, C: 100 }
+
+/** "III" → 3, "iv" → 4; null when it isn't a roman numeral up to 399. */
+export function romanValue(s: string): number | null {
+  const t = s.trim().toUpperCase()
+  if (!/^[IVXLC]+$/.test(t)) return null
+  let n = 0
+  for (let i = 0; i < t.length; i++) {
+    const v = ROMAN[t[i]]
+    const next = ROMAN[t[i + 1]] ?? 0
+    n += v < next ? -v : v
+  }
+  const back = ["C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"].reduce(
+    (acc, sym) => {
+      const val = { C: 100, XC: 90, L: 50, XL: 40, X: 10, IX: 9, V: 5, IV: 4, I: 1 }[sym]!
+      while (acc.n >= val) { acc.s += sym; acc.n -= val }
+      return acc
+    },
+    { n, s: "" },
+  ).s
+  return n > 0 && back === t ? n : null
+}
+
+const URUTAN = ["", "satu", "dua", "tiga", "empat", "lima", "enam", "tujuh", "delapan", "sembilan", "sepuluh", "sebelas"]
+
+/**
+ * `{{TINGKAT | urutan}}`: a level written as a roman numeral or a number, in words as Indonesian letters print
+ * it — "I" → "Pertama", "II" → "Kedua", "III" → "Ketiga", "12" → "Kedua Belas". Anything else prints as is.
+ */
+export function ordinalText(current: string): string {
+  const t = current.trim()
+  const n = /^\d+$/.test(t) ? Number(t) : romanValue(t)
+  if (!n || n > 99) return current
+  if (n === 1) return "Pertama"
+  const words = n < 12 ? URUTAN[n] : n < 20 ? `${URUTAN[n - 10]} belas` : `${URUTAN[Math.floor(n / 10)]} puluh${n % 10 ? ` ${URUTAN[n % 10]}` : ""}`
+  return titleCase(`ke${words}`)
+}
+
 /** Apply one filter. Date and money filters read the raw value; text filters the text so far. */
 export function applyFilter(filter: string, current: string, raw: unknown): string {
   const date = () => {
@@ -282,6 +321,7 @@ export function applyFilter(filter: string, current: string, raw: unknown): stri
     case "upper": return current.toUpperCase()
     case "lower": return current.toLowerCase()
     case "title": return titleCase(current)
+    case "urutan": return ordinalText(current)
     default: throw new FilterError(`Unknown filter "${filter}"`)
   }
 }

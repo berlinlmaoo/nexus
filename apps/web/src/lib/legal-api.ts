@@ -236,7 +236,7 @@ export const legalDocsApi = {
   get: (id: string) => apiFetch<{ document: LegalDocument }>(docUrl(id)),
   prepare: (input: { templateId: string; companyId?: string | null; values?: Record<string, unknown>; parentDocumentId?: string | null }) =>
     apiFetch<PreparedDocument>("/api/legal/documents/prepare", { method: "POST", body: JSON.stringify(input) }),
-  generate: (input: { templateId: string; companyId?: string | null; values: Record<string, unknown>; title?: string; counterparty?: string; projectId?: string | null; dealId?: string | null; parentDocumentId?: string | null }) =>
+  generate: (input: { templateId: string; companyId?: string | null; values: Record<string, unknown>; title?: string; counterparty?: string; projectId?: string | null; dealId?: string | null; parentDocumentId?: string | null; requestId?: string | null }) =>
     apiFetch<{ id: string; number: string; pdfError: string | null }>("/api/legal/documents", { method: "POST", body: JSON.stringify(input) }),
   update: (id: string, patch: Partial<{ title: string; counterparty: string; status: LegalStatus; notes: string; projectId: string | null; dealId: string | null; finalVersion: number | null; number: string; docType: string; docDate: string | null }>) =>
     apiFetch<{ document: LegalDocument }>(docUrl(id), { method: "PATCH", body: JSON.stringify(patch) }),

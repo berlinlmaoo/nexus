@@ -208,11 +208,14 @@ extension APIClient {
     }
 
     /// Generate: takes the number. A 422 carries `fieldErrors` / `problems`.
+    /// `requestId`: made for that Legal request — linked to it, and its card moves to In Progress.
     func legalGenerate(templateId: String, companyId: String?, values: [String: LegalValue], title: String,
-                       counterparty: String, projectId: String?, dealId: String?, parentDocumentId: String? = nil) async throws -> LegalGenerated {
+                       counterparty: String, projectId: String?, dealId: String?, parentDocumentId: String? = nil,
+                       requestId: String? = nil) async throws -> LegalGenerated {
         var body: [String: Any] = ["templateId": templateId, "values": LegalValue.json(values)]
         if let companyId { body["companyId"] = companyId }
         if let parentDocumentId { body["parentDocumentId"] = parentDocumentId }
+        if let requestId { body["requestId"] = requestId }
         if !title.isEmpty { body["title"] = title }
         if !counterparty.isEmpty { body["counterparty"] = counterparty }
         body["projectId"] = projectId ?? NSNull()
@@ -413,6 +416,106 @@ extension APIClient {
         try? FileManager.default.removeItem(at: dest)
         try FileManager.default.moveItem(at: raw, to: dest)
         return dest
+    }
+}
+
+// MARK: - Legal requests (owner, 14 Oct 2026)
+//
+// The requester's side (/api/legal-requests/*: the form behind a link, my own requests, my own final file) is
+// open to anyone signed in and answers only about their own requests. The board and the links
+// (/api/legal/requests, /api/legal/request-links) are Legal's, refused like every /api/legal route.
+
+extension APIClient {
+    private static func reqEnc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s }
+
+    // MARK: Requester
+
+    /// The form behind a link: the companies (or the one the link fixes) and the document types with their
+    /// fields. 404 `LEGAL_LINK_UNKNOWN` for a link that was regenerated or never existed.
+    func legalRequestForm(linkId: String) async throws -> LegalRequestFormInfo {
+        try await legalRun(makeRequest("/api/legal-requests/form/\(Self.reqEnc(linkId))"), as: LegalRequestFormInfo.self)
+    }
+
+    /// Send a request. `input`: templateId, companyId, values, purpose, deadline, projectId, dealId,
+    /// parentNumber. `key`: one per attempt, so a retry never sends it twice.
+    func legalSendRequest(linkId: String, input: [String: Any], files: [URL], key: String) async throws -> LegalRequestSent {
+        var form = LegalMultipart()
+        let json = try JSONSerialization.data(withJSONObject: input)
+        form.add("data", String(decoding: json, as: UTF8.self))
+        for f in files { try form.addFile(f) }
+        var req = makeRequest("/api/legal-requests/form/\(Self.reqEnc(linkId))", method: "POST")
+        let (body, contentType) = form.encoded()
+        req.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        req.setValue(key, forHTTPHeaderField: "Idempotency-Key")
+        req.httpBody = body
+        req.timeoutInterval = 180
+        return try legalDecode(try await legalExchange(req), as: LegalRequestSent.self)
+    }
+
+    /// Projects and deals the requester can open themselves (the form's "related project or deal").
+    func legalRequestLinks(q: String) async throws -> LegalLinks {
+        try await legalRun(makeRequest("/api/legal-requests/links?q=\(encValue(q))"), as: LegalLinks.self)
+    }
+
+    func myLegalRequests() async throws -> [MyLegalRequest] {
+        try await legalRun(makeRequest("/api/legal-requests/mine"), as: MyLegalRequestsResponse.self).requests
+    }
+
+    func myLegalRequest(id: String) async throws -> MyLegalRequest {
+        try await legalRun(makeRequest("/api/legal-requests/mine/\(Self.reqEnc(id))"), as: MyLegalRequestResponse.self).request
+    }
+
+    /// The final / signed file of my own request, saved to a temporary file.
+    func myLegalRequestFile(id: String) async throws -> URL {
+        try await legalDownload("/api/legal-requests/mine/\(Self.reqEnc(id))/file", fallbackName: "document.pdf")
+    }
+
+    func myLegalRequestAttachment(id: String, attachment: LegalRequestAttachment) async throws -> URL {
+        try await legalDownload("/api/legal-requests/mine/\(Self.reqEnc(id))/attachments/\(Self.reqEnc(attachment.id))",
+                                fallbackName: attachment.fileName.isEmpty ? "file" : attachment.fileName, preferredName: attachment.fileName)
+    }
+
+    // MARK: Legal's board
+
+    func legalBoard(_ q: LegalBoardQuery) async throws -> [LegalBoardRequest] {
+        var qs: [String] = []
+        func add(_ k: String, _ v: String?) { if let v, !v.isEmpty { qs.append("\(k)=\(encValue(v))") } }
+        add("q", q.q); add("docType", q.docType); add("companyId", q.companyId); add("picId", q.picId); add("deadline", q.deadline)
+        return try await legalRun(makeRequest("/api/legal/requests" + (qs.isEmpty ? "" : "?" + qs.joined(separator: "&"))), as: LegalBoardResponse.self).requests
+    }
+
+    func legalBoardRequest(id: String) async throws -> LegalBoardDetail {
+        try await legalRun(makeRequest("/api/legal/requests/\(Self.reqEnc(id))"), as: LegalBoardDetail.self)
+    }
+
+    /// `{column?, picId?, parentDocumentId?}`; NSNull() clears picId / parentDocumentId.
+    func legalUpdateRequest(id: String, fields: [String: Any]) async throws -> LegalBoardRequest {
+        let data = try await legalSend("/api/legal/requests/\(Self.reqEnc(id))", method: "PATCH", body: fields)
+        return try legalDecode(data, as: LegalBoardOne.self).request
+    }
+
+    func legalRejectRequest(id: String, reason: String) async throws -> LegalBoardRequest {
+        let data = try await legalSend("/api/legal/requests/\(Self.reqEnc(id))/reject", method: "POST", body: ["reason": reason])
+        return try legalDecode(data, as: LegalBoardOne.self).request
+    }
+
+    func legalRequestAttachment(id: String, attachment: LegalRequestAttachment) async throws -> URL {
+        try await legalDownload("/api/legal/requests/\(Self.reqEnc(id))/attachments/\(Self.reqEnc(attachment.id))",
+                                fallbackName: attachment.fileName.isEmpty ? "file" : attachment.fileName, preferredName: attachment.fileName)
+    }
+
+    func legalRequestLinkList() async throws -> [LegalRequestLink] {
+        try await legalRun(makeRequest("/api/legal/request-links"), as: LegalRequestLinksResponse.self).links
+    }
+
+    func legalSetRequestLinkAccepting(scope: String, accepting: Bool) async throws -> LegalRequestLink {
+        let data = try await legalSend("/api/legal/request-links/\(Self.reqEnc(scope))", method: "PATCH", body: ["accepting": accepting])
+        return try legalDecode(data, as: LegalRequestLinkResponse.self).link
+    }
+
+    func legalRegenerateRequestLink(scope: String) async throws -> LegalRequestLink {
+        let data = try await legalSend("/api/legal/request-links/\(Self.reqEnc(scope))/regenerate", method: "POST", body: nil)
+        return try legalDecode(data, as: LegalRequestLinkResponse.self).link
     }
 }
 

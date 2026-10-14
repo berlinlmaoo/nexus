@@ -5,6 +5,7 @@ import { logAudit } from "@/lib/audit"
 import { legalGate } from "@/lib/legal/access"
 import { generateLegalDocument, LegalGenerateError } from "@/lib/legal/generate"
 import { listDocuments } from "@/lib/legal/archive"
+import { linkRequestToDocument, requestGenerateProblem } from "@/lib/legal/requests"
 
 /** The archive: every legal document, filtered (see lib/legal/archive.ts for the parameters). */
 export async function GET(request: NextRequest) {
@@ -20,7 +21,8 @@ export async function GET(request: NextRequest) {
 
 /**
  * Make a document from a template: `{ templateId, companyId?, values, title?, counterparty?, projectId?, dealId?,
- * parentDocumentId? }` (parentDocumentId: an addendum to that signed document; its template is type ADD).
+ * parentDocumentId?, requestId? }` (parentDocumentId: an addendum to that signed document; its template is type ADD;
+ * requestId: made for that Legal request — it is linked to it and the card moves to In Progress).
  * 422 carries `fieldErrors` (by field name) or `problems` (the template); nothing is numbered then.
  */
 export async function POST(request: NextRequest) {
@@ -29,6 +31,12 @@ export async function POST(request: NextRequest) {
     if (!gate.ok) return gate.response
     const body = await request.json().catch(() => null)
     if (!body || typeof body.templateId !== "string") return NextResponse.json({ error: "templateId is required" }, { status: 400 })
+    const requestId = typeof body.requestId === "string" && body.requestId ? body.requestId : null
+    const parentDocumentId = typeof body.parentDocumentId === "string" ? body.parentDocumentId : null
+    if (requestId) {
+      const problem = await requestGenerateProblem(requestId, parentDocumentId)
+      if (problem) return NextResponse.json({ error: problem.error }, { status: problem.status })
+    }
     const made = await generateLegalDocument(gate.actor, {
       templateId: body.templateId,
       companyId: typeof body.companyId === "string" ? body.companyId : null,
@@ -45,9 +53,10 @@ export async function POST(request: NextRequest) {
       entityId: made.id,
       entityName: made.number,
       userId: gate.actor.userId,
-      metadata: { templateId: body.templateId, number: made.number, ...(body.parentDocumentId ? { parentDocumentId: body.parentDocumentId } : {}) },
+      metadata: { templateId: body.templateId, number: made.number, ...(body.parentDocumentId ? { parentDocumentId: body.parentDocumentId } : {}), ...(requestId ? { requestId } : {}) },
       request,
     })
+    if (requestId) await linkRequestToDocument(requestId, made.id, parentDocumentId, gate.actor.userId)
     return NextResponse.json({ id: made.id, number: made.number, pdfError: made.pdfError }, { status: 201 })
   } catch (error) {
     if (error instanceof LegalGenerateError) {

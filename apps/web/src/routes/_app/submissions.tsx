@@ -16,8 +16,17 @@ import { fmtTime, nexusApi, type NexusMySubmission, type NexusSubmissionColumn }
 import { thumbUrl } from "@/lib/thumb";
 import { Incremental } from "@/components/projects/views/incremental";
 import { rupiah } from "@/lib/custom-field-number";
+import { MyLegalRequestDetail, MyLegalRequestsSection } from "@/components/legal/MyLegalRequests";
+import { legalRequestsApi } from "@/lib/legal-requests-api";
 
-export const Route = createFileRoute("/_app/submissions")({ component: MySubmissions });
+export const Route = createFileRoute("/_app/submissions")({
+  component: MySubmissions,
+  // `?id=` opens a form submission, `?legal=` one of my Legal requests (the notifications link here).
+  validateSearch: (s: Record<string, unknown>): { id?: string; legal?: string } => ({
+    id: typeof s.id === "string" && s.id ? s.id : undefined,
+    legal: typeof s.legal === "string" && s.legal ? s.legal : undefined,
+  }),
+});
 
 /**
  * My Submissions (owner, 12 Oct 2026): what I filed through a form, on a board whose columns are the
@@ -259,6 +268,9 @@ function MySubmissions() {
   const { t } = useLang();
   const q = useQuery({ queryKey: ["my-submissions"], queryFn: () => nexusApi.mySubmissions(), retry: 1 });
   const subs = q.data?.submissions ?? [];
+  // What I asked Legal for (owner, 14 Oct 2026): their own list, above the form board.
+  const legalQ = useQuery({ queryKey: ["legal-requests-mine"], queryFn: () => legalRequestsApi.mine(), retry: 1 });
+  const legal = legalQ.data?.requests ?? [];
   const [filter, setFilter] = useState<Filter>("all");
   const [mine, setMine] = useState(false);
   // Per-project filter (owner, 12 Oct 2026). Remembered on this device; a project with no submission left is ignored.
@@ -295,13 +307,20 @@ function MySubmissions() {
 
   // `/submissions?id=<submissionId>` opens straight onto that submission (the `submission_status`
   // notification links here).
-  const search = useSearch({ strict: false }) as { id?: string };
+  const search = useSearch({ strict: false }) as { id?: string; legal?: string };
   const navigate = useNavigate();
   const [openId, setOpenId] = useState<string | null>(search.id ?? null);
   useEffect(() => { if (search.id) setOpenId(search.id); }, [search.id]);
   const closeDetail = () => {
     setOpenId(null);
     if (search.id) navigate({ to: "/submissions", search: {}, replace: true }).catch(() => {});
+  };
+  // `?legal=<requestId>`: one of my Legal requests (the legal_request_status notification links here).
+  const [openLegal, setOpenLegal] = useState<string | null>(search.legal ?? null);
+  useEffect(() => { if (search.legal) setOpenLegal(search.legal); }, [search.legal]);
+  const closeLegal = () => {
+    setOpenLegal(null);
+    if (search.legal) navigate({ to: "/submissions", search: {}, replace: true }).catch(() => {});
   };
 
   const chip = (on: boolean) => cn("rounded-full border px-3 py-1 text-xs font-semibold transition", on ? "border-foreground/25 bg-accent text-foreground" : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground");
@@ -313,7 +332,9 @@ function MySubmissions() {
         {q.isLoading && <div className="flex gap-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-64 w-72 rounded-2xl" />)}</div>}
         {q.isError && <EmptyState icon={AlertCircle} tone="muted" title={t("Couldn't load your submissions.")} action={<EmptyAction onClick={() => q.refetch()}>{t("Try again")}</EmptyAction>} />}
 
-        {!q.isLoading && !q.isError && subs.length === 0 && (
+        {!q.isLoading && filter === "all" && <MyLegalRequestsSection requests={legal} onOpen={setOpenLegal} />}
+
+        {!q.isLoading && !q.isError && subs.length === 0 && legal.length === 0 && (
           <EmptyState icon={Inbox} title={t("No submissions yet")}
             message={t("Everything you send through a form (a payment request, a design request, a report) shows up here with where it stands, so you never have to ask.")}
             action={<EmptyAction to="/forms">{t("Open forms")}</EmptyAction>} />
@@ -395,6 +416,7 @@ function MySubmissions() {
       </div>
 
       {openId && <SubmissionDetail id={openId} onClose={closeDetail} />}
+      {openLegal && <MyLegalRequestDetail id={openLegal} onClose={closeLegal} />}
     </div>
   );
 }

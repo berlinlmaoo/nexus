@@ -96,4 +96,6 @@ enum RealtimeKind {
     static let vault = "vault"
     /// My Submissions: a submission of mine moved, was answered or got a proof (to my own room).
     static let submissions = "submissions"
+    /// The Legal request board (14 Oct 2026): only Legal members' own rooms get it.
+    static let legal = "legal"
 }

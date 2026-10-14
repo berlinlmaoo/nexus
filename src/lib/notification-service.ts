@@ -1507,3 +1507,70 @@ export async function notifyComplaintStatus(data: { reporterId: string; complain
     push: true,
   }).catch(() => null)
 }
+
+/**
+ * A new Legal request (owner, 14 Oct 2026): every Legal member gets it in-app and as a push, opened on the
+ * request on the Legal board. The requester is left out when they are a Legal member themselves.
+ */
+export async function notifyLegalRequestNew(data: {
+  requestId: string
+  memberIds: string[]
+  requesterId: string
+  requesterName: string
+  subject: string
+  companyName: string
+}) {
+  const link = `/legal?tab=requests&request=${data.requestId}`
+  await Promise.allSettled(
+    data.memberIds
+      .filter((id) => id !== data.requesterId)
+      .map((userId) =>
+        createInAppNotification({
+          userId,
+          actorId: data.requesterId,
+          type: "legal_request_new",
+          ...bi(
+            [`New legal request from ${data.requesterName}`, `${data.subject} · ${data.companyName}`],
+            [`Permintaan legal baru dari ${data.requesterName}`, `${data.subject} · ${data.companyName}`],
+          ),
+          link,
+          push: true,
+        }),
+      ),
+  )
+}
+
+/**
+ * A Legal request reached a stage the requester is told about (in progress, revision, final, signed,
+ * rejected). Opens their own request in My Submissions — the one place they can see it.
+ */
+export async function notifyLegalRequestStage(data: {
+  requesterId: string
+  requestId: string
+  subject: string
+  stage: "IN_PROGRESS" | "REVISION" | "FINAL" | "SIGNED" | "REJECTED"
+  reason?: string | null
+  actorId?: string | null
+}) {
+  if (await isUserDnd(data.requesterId)) return
+  const prefs = await getUserPrefs(data.requesterId)
+  const s = `“${data.subject}”`
+  const reason = (data.reason ?? "").trim()
+  const short = reason.length > 140 ? `${reason.slice(0, 137)}…` : reason
+  const texts: Record<typeof data.stage, ReturnType<typeof bi>> = {
+    IN_PROGRESS: bi(["Legal is working on your request", `${s} is in progress.`], ["Legal sedang mengerjakan permintaanmu", `${s} sedang dikerjakan.`]),
+    REVISION: bi(["Your legal document was revised", `${s} has a new revision.`], ["Dokumen legalmu direvisi", `${s} punya revisi baru.`]),
+    FINAL: bi(["Your legal document is final", `${s} is final. Download it from My Submissions.`], ["Dokumen legalmu sudah final", `${s} sudah final. Unduh di Pengajuan Saya.`]),
+    SIGNED: bi(["Your legal document is signed", `${s} is signed. Download it from My Submissions.`], ["Dokumen legalmu sudah ditandatangani", `${s} sudah ditandatangani. Unduh di Pengajuan Saya.`]),
+    REJECTED: bi(["Your legal request was declined", short ? `${s}: ${short}` : `${s} was declined.`], ["Permintaan legalmu ditolak", short ? `${s}: ${short}` : `${s} ditolak.`]),
+  }
+  await createInAppNotification({
+    userId: data.requesterId,
+    actorId: data.actorId ?? null,
+    type: "legal_request_status",
+    ...texts[data.stage],
+    link: `/submissions?legal=${data.requestId}`,
+    push: data.stage === "REJECTED" || data.stage === "FINAL" || data.stage === "SIGNED" ? true : prefs.statusUpdate,
+    dedupeWindowMs: SUBMISSION_STATUS_DEDUPE_MS,
+  })
+}

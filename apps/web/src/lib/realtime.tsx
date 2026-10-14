@@ -182,7 +182,7 @@ export function RealtimeProvider({
           );
         };
         // What the pending workspace/audit pings ask for, flushed as one invalidation per burst.
-        const pending = { tree: false, allProjects: false, audit: false, vault: false, submissions: false, projectIds: new Set<string>() };
+        const pending = { tree: false, allProjects: false, audit: false, vault: false, submissions: false, legal: false, projectIds: new Set<string>() };
         let flushTimer: ReturnType<typeof setTimeout> | null = null;
         let burstStartedAt = 0;
         const flushPings = () => {
@@ -195,8 +195,11 @@ export function RealtimeProvider({
           // ["vault", …]. Share dialogs (["vault-shares", id]) refetch on their own when opened.
           if (pending.vault) queryClient.invalidateQueries({ queryKey: ["vault"] });
           // My Submissions (12 Oct 2026): a request of mine moved, got a handler, a comment or a proof.
-          if (pending.submissions) { queryClient.invalidateQueries({ queryKey: ["my-submissions"] }); queryClient.invalidateQueries({ queryKey: ["submission-detail"] }); }
+          if (pending.submissions) { queryClient.invalidateQueries({ queryKey: ["my-submissions"] }); queryClient.invalidateQueries({ queryKey: ["submission-detail"] }); queryClient.invalidateQueries({ queryKey: ["legal-requests-mine"] }); }
+          // The Legal request board (14 Oct 2026; only Legal members' rooms get it): the board, an open request.
+          if (pending.legal) { queryClient.invalidateQueries({ queryKey: ["legal", "requests"] }); queryClient.invalidateQueries({ queryKey: ["legal", "request"] }); }
           pending.submissions = false;
+          pending.legal = false;
           pending.tree = false;
           pending.allProjects = false;
           pending.audit = false;
@@ -220,6 +223,8 @@ export function RealtimeProvider({
             pending.audit = true;
           } else if (data.kind === "submissions") {
             pending.submissions = true;
+          } else if (data.kind === "legal") {
+            pending.legal = true;
           } else if (data.kind === "vault") {
             // Server since 9 Oct 2026: a file or folder in Z Vault was added, moved, renamed, trashed,
             // restored or locked. Nothing about projects moved, so the project tree stays as it is.
@@ -254,6 +259,7 @@ export function RealtimeProvider({
             pending.audit = true;
             pending.vault = true;
             pending.submissions = true;
+            pending.legal = true;
             flushPings();
           }
           connectedBefore = true;

@@ -5,8 +5,17 @@ import { ApiError, nexusApi } from "@/lib/nexus-api";
 import { useDocumentLang, useLang } from "@/lib/lang";
 import { FormHead, FormRenderer } from "@/components/forms/FormRenderer";
 import type { RichField } from "@/components/forms/form-model";
+import { LegalRequestPage } from "@/components/legal/LegalRequestForm";
+import { isLegalLinkId } from "@/lib/legal-requests-api";
 
-export const Route = createFileRoute("/f/$formId")({ component: PublicForm });
+export const Route = createFileRoute("/f/$formId")({ component: FormOrLegalRequest });
+
+/** /f/legal-<token> is a Legal request link (owner, 14 Oct 2026); every other id or slug is a form. */
+function FormOrLegalRequest() {
+  const { formId } = useParams({ from: "/f/$formId" });
+  if (isLegalLinkId(formId)) return <LegalRequestPage linkId={formId} fallback={<PublicForm />} />;
+  return <PublicForm />;
+}
 
 /** The page people fill in. The body is FormRenderer, the same component as the builder's Preview. */
 function PublicForm() {
