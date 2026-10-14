@@ -58,6 +58,13 @@ extension KeyedDecodingContainer where K == OutletAnyKey {
         return nil
     }
     func outletString(_ key: String) -> String? { try? decodeIfPresent(String.self, forKey: OutletAnyKey(key)) }
+    /// { "id": number } leniently: a value that is not a number is skipped, not the whole map.
+    func outletNumberMap(_ key: String) -> [String: Int64] {
+        guard let nested = try? nestedContainer(keyedBy: OutletAnyKey.self, forKey: OutletAnyKey(key)) else { return [:] }
+        var out: [String: Int64] = [:]
+        for k in nested.allKeys { if let v = nested.outletNumber(k.stringValue) { out[k.stringValue] = v } }
+        return out
+    }
     func outletPerson(_ key: String) -> OutletPerson? { try? decodeIfPresent(OutletPerson.self, forKey: OutletAnyKey(key)) }
 }
 
@@ -74,6 +81,12 @@ struct OutletEvent: Decodable, Identifiable, Hashable, Sendable {
     let texts: [String: String]
     let rsvpTotal: Int64?
     let hostingTotal: Int64?
+    /// Every breakdown figure by item id (owner, 14 Oct 2026), the seven original items included.
+    /// Absent = not filled. An older server sends none: the original items are read from `numbers`.
+    let values: [String: Int64]
+    /// All communities together, and per community id.
+    let communityTotal: Int64?
+    let communityTotals: [String: Int64]
     let salesPct: Int64?
     let paxPct: Int64?
     let status: OutletStatus
@@ -110,6 +123,11 @@ struct OutletEvent: Decodable, Identifiable, Hashable, Sendable {
         texts = txt
         rsvpTotal = c.outletNumber("rsvpTotal")
         hostingTotal = c.outletNumber("hostingTotal")
+        var vals = c.outletNumberMap("values")
+        for k in OutletReportConfig.legacyIds where vals[k] == nil { if let v = nums[k] { vals[k] = v } }
+        values = vals
+        communityTotal = c.outletNumber("communityTotal")
+        communityTotals = c.outletNumberMap("communityTotals")
         salesPct = c.outletNumber("salesPct")
         paxPct = c.outletNumber("paxPct")
         status = OutletStatus(rawValue: c.outletString("status") ?? "") ?? .upcoming
@@ -337,11 +355,23 @@ struct OutletMonthResponse: Decodable, Sendable {
     let events: [OutletEvent]
     let waitingEarlier: [OutletEvent]
     let form: OutletForm?
+    /// Owner, 14 Oct 2026: the outlet's own breakdown, the month's guest overview, every day's target in
+    /// force, and the dates that set their own. An older server sends none of them.
+    let config: OutletReportConfig?
+    let guests: OutletGuests?
+    let days: [OutletDay]
+    let dayTargets: [OutletDayTarget]
+    let canManageSettings: Bool
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: OutletAnyKey.self)
+        config = try? c.decodeIfPresent(OutletReportConfig.self, forKey: OutletAnyKey("config"))
+        guests = try? c.decodeIfPresent(OutletGuests.self, forKey: OutletAnyKey("guests"))
+        days = ((try? c.decodeIfPresent([OutletLossy<OutletDay>].self, forKey: OutletAnyKey("days"))) ?? []).compactMap(\.value)
+        dayTargets = ((try? c.decodeIfPresent([OutletLossy<OutletDayTarget>].self, forKey: OutletAnyKey("dayTargets"))) ?? []).compactMap(\.value)
         project = try? c.decodeIfPresent(OutletProjectInfo.self, forKey: OutletAnyKey("project"))
         canManageTargets = (try? c.decodeIfPresent(Bool.self, forKey: OutletAnyKey("canManageTargets"))) ?? false
+        canManageSettings = (try? c.decodeIfPresent(Bool.self, forKey: OutletAnyKey("canManageSettings"))) ?? canManageTargets
         month = c.outletString("month") ?? ""
         today = c.outletString("today")
         target = try? c.decodeIfPresent(OutletTarget.self, forKey: OutletAnyKey("target"))
@@ -356,6 +386,247 @@ struct OutletMonthResponse: Decodable, Sendable {
 struct OutletEventDetail: Decodable, Sendable {
     let event: OutletEvent
     let form: OutletForm?
+    let config: OutletReportConfig?
+}
+
+// MARK: - The outlet's own report breakdown (owner, 14 Oct 2026, after a meeting with Ryan)
+//
+// RSVP items, Hosting items and Communities, set up per outlet (Report settings). Every item has a stable
+// id: renaming changes the label only, and an item removed while reports hold figures for it stays,
+// archived, so those reports keep their numbers. The seven original items keep the old keys as ids.
+
+struct OutletItem: Codable, Hashable, Sendable, Identifiable {
+    /// "" for an item added in Report settings and not saved yet (the server gives it an id).
+    var id: String
+    var label: String
+    var archived: Bool = false
+    /// Only to tell unsaved new rows apart in a list; never sent.
+    var localKey: String = UUID().uuidString
+
+    var rowId: String { id.isEmpty ? localKey : id }
+
+    init(id: String, label: String, archived: Bool = false) { self.id = id; self.label = label; self.archived = archived }
+
+    enum CodingKeys: String, CodingKey { case id, label, archived }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? ""
+        label = (try? c.decode(String.self, forKey: .label)) ?? ""
+        archived = (try? c.decodeIfPresent(Bool.self, forKey: .archived)) ?? false
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        if !id.isEmpty { try c.encode(id, forKey: .id) }
+        try c.encode(label, forKey: .label)
+        if archived { try c.encode(true, forKey: .archived) }
+    }
+
+    static func == (a: OutletItem, b: OutletItem) -> Bool { a.id == b.id && a.label == b.label && a.archived == b.archived }
+    func hash(into h: inout Hasher) { h.combine(id); h.combine(label); h.combine(archived) }
+}
+
+struct OutletCommunity: Codable, Hashable, Sendable, Identifiable {
+    var id: String
+    var name: String
+    /// "total" (one number) or "breakdown" (its own items).
+    var mode: String
+    var items: [OutletItem]
+    var archived: Bool = false
+    var localKey: String = UUID().uuidString
+
+    var rowId: String { id.isEmpty ? localKey : id }
+    var isBreakdown: Bool { mode == "breakdown" }
+
+    init(id: String, name: String, mode: String, items: [OutletItem], archived: Bool = false) {
+        self.id = id; self.name = name; self.mode = mode; self.items = items; self.archived = archived
+    }
+
+    enum CodingKeys: String, CodingKey { case id, name, mode, items, archived }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? ""
+        name = (try? c.decode(String.self, forKey: .name)) ?? ""
+        mode = (try? c.decode(String.self, forKey: .mode)) == "breakdown" ? "breakdown" : "total"
+        items = ((try? c.decodeIfPresent([OutletLossy<OutletItem>].self, forKey: .items)) ?? []).compactMap(\.value)
+        archived = (try? c.decodeIfPresent(Bool.self, forKey: .archived)) ?? false
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        if !id.isEmpty { try c.encode(id, forKey: .id) }
+        try c.encode(name, forKey: .name)
+        try c.encode(mode, forKey: .mode)
+        try c.encode(items, forKey: .items)
+        if archived { try c.encode(true, forKey: .archived) }
+    }
+
+    static func == (a: OutletCommunity, b: OutletCommunity) -> Bool {
+        a.id == b.id && a.name == b.name && a.mode == b.mode && a.items == b.items && a.archived == b.archived
+    }
+    func hash(into h: inout Hasher) { h.combine(id); h.combine(name); h.combine(mode); h.combine(archived) }
+}
+
+struct OutletReportConfig: Codable, Hashable, Sendable {
+    var version: Int = 1
+    var rsvp: [OutletItem]
+    var hosting: [OutletItem]
+    var communities: [OutletCommunity]
+
+    static let legacyIds = ["rsvpWalkIn", "rsvpTeam", "rsvpPr", "rsvpEo", "hostingTeam", "hostingPr", "hostingEo"]
+
+    init(rsvp: [OutletItem], hosting: [OutletItem], communities: [OutletCommunity]) {
+        self.rsvp = rsvp; self.hosting = hosting; self.communities = communities
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: OutletAnyKey.self)
+        version = 1
+        rsvp = ((try? c.decodeIfPresent([OutletLossy<OutletItem>].self, forKey: OutletAnyKey("rsvp"))) ?? []).compactMap(\.value)
+        hosting = ((try? c.decodeIfPresent([OutletLossy<OutletItem>].self, forKey: OutletAnyKey("hosting"))) ?? []).compactMap(\.value)
+        communities = ((try? c.decodeIfPresent([OutletLossy<OutletCommunity>].self, forKey: OutletAnyKey("communities"))) ?? []).compactMap(\.value)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: OutletAnyKey.self)
+        try c.encode(1, forKey: OutletAnyKey("version"))
+        try c.encode(rsvp, forKey: OutletAnyKey("rsvp"))
+        try c.encode(hosting, forKey: OutletAnyKey("hosting"))
+        try c.encode(communities, forKey: OutletAnyKey("communities"))
+    }
+
+    /// The seven items every outlet starts with (Ryan's words, the same in both languages).
+    static let standard = OutletReportConfig(
+        rsvp: [OutletItem(id: "rsvpWalkIn", label: "Walk-in RSVP"), OutletItem(id: "rsvpTeam", label: "RSVP Team"),
+               OutletItem(id: "rsvpPr", label: "RSVP PR"), OutletItem(id: "rsvpEo", label: "RSVP EO")],
+        hosting: [OutletItem(id: "hostingTeam", label: "Hosting Team"), OutletItem(id: "hostingPr", label: "Hosting PR"),
+                  OutletItem(id: "hostingEo", label: "Hosting EO")],
+        communities: [])
+
+    /// Every id a report can hold a figure for (items, communities and their items).
+    var allIds: [String] {
+        rsvp.map(\.id) + hosting.map(\.id) + communities.flatMap { [$0.id] + $0.items.map(\.id) }
+    }
+}
+
+/// GET/PUT /api/projects/:id/outlet-sales/config
+struct OutletConfigResponse: Decodable, Sendable {
+    let config: OutletReportConfig
+    /// Per item id: how many reports hold a figure for it (ask before removing it).
+    let usage: [String: Int64]
+    let canManage: Bool
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: OutletAnyKey.self)
+        config = (try? c.decodeIfPresent(OutletReportConfig.self, forKey: OutletAnyKey("config"))) ?? .standard
+        usage = c.outletNumberMap("usage")
+        canManage = (try? c.decodeIfPresent(Bool.self, forKey: OutletAnyKey("canManage"))) ?? false
+    }
+}
+
+struct OutletGuestLine: Decodable, Hashable, Sendable, Identifiable {
+    let id: String
+    let label: String
+    let archived: Bool
+    let total: Int64
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: OutletAnyKey.self)
+        id = (try? c.decode(String.self, forKey: OutletAnyKey("id"))) ?? UUID().uuidString
+        label = c.outletString("label") ?? c.outletString("name") ?? ""
+        archived = (try? c.decodeIfPresent(Bool.self, forKey: OutletAnyKey("archived"))) ?? false
+        total = c.outletNumber("total") ?? 0
+    }
+}
+
+struct OutletGuestCommunity: Decodable, Hashable, Sendable, Identifiable {
+    let id: String
+    let name: String
+    let mode: String
+    let archived: Bool
+    let total: Int64
+    let items: [OutletGuestLine]
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: OutletAnyKey.self)
+        id = (try? c.decode(String.self, forKey: OutletAnyKey("id"))) ?? UUID().uuidString
+        name = c.outletString("name") ?? ""
+        mode = c.outletString("mode") ?? "total"
+        archived = (try? c.decodeIfPresent(Bool.self, forKey: OutletAnyKey("archived"))) ?? false
+        total = c.outletNumber("total") ?? 0
+        items = ((try? c.decodeIfPresent([OutletLossy<OutletGuestLine>].self, forKey: OutletAnyKey("items"))) ?? []).compactMap(\.value)
+    }
+}
+
+/// The Overview's Guest overview for the month: worked out by the server (summarizeGuests).
+struct OutletGuests: Decodable, Sendable {
+    struct Bucket: Sendable { var total: Int64 = 0; var items: [OutletGuestLine] = [] }
+    struct Communities: Sendable { var total: Int64 = 0; var items: [OutletGuestCommunity] = [] }
+    let reportCount: Int64
+    let rsvp: Bucket
+    let hosting: Bucket
+    let communities: Communities
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: OutletAnyKey.self)
+        reportCount = c.outletNumber("reportCount") ?? 0
+        func group(_ key: String) -> Bucket {
+            guard let g = try? c.nestedContainer(keyedBy: OutletAnyKey.self, forKey: OutletAnyKey(key)) else { return Bucket() }
+            let items = ((try? g.decodeIfPresent([OutletLossy<OutletGuestLine>].self, forKey: OutletAnyKey("items"))) ?? []).compactMap(\.value)
+            return Bucket(total: g.outletNumber("total") ?? 0, items: items)
+        }
+        rsvp = group("rsvp")
+        hosting = group("hosting")
+        if let g = try? c.nestedContainer(keyedBy: OutletAnyKey.self, forKey: OutletAnyKey("communities")) {
+            let items = ((try? g.decodeIfPresent([OutletLossy<OutletGuestCommunity>].self, forKey: OutletAnyKey("items"))) ?? []).compactMap(\.value)
+            communities = Communities(total: g.outletNumber("total") ?? 0, items: items)
+        } else {
+            communities = Communities()
+        }
+    }
+}
+
+/// One day of the month with the target in force (its own, else the month's share) and its actuals.
+struct OutletDay: Decodable, Hashable, Sendable {
+    let date: String
+    let sales: Int64?
+    let pax: Int64?
+    let salesTarget: Int64?
+    let paxTarget: Int64?
+    /// "day" = set on this date, "month" = the month's share, nil = no target.
+    let salesTargetSource: String?
+    let paxTargetSource: String?
+    let salesPct: Int64?
+    let paxPct: Int64?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: OutletAnyKey.self)
+        date = c.outletString("date") ?? ""
+        sales = c.outletNumber("sales")
+        pax = c.outletNumber("pax")
+        salesTarget = c.outletNumber("salesTarget")
+        paxTarget = c.outletNumber("paxTarget")
+        salesTargetSource = c.outletString("salesTargetSource")
+        paxTargetSource = c.outletString("paxTargetSource")
+        salesPct = c.outletNumber("salesPct")
+        paxPct = c.outletNumber("paxPct")
+    }
+}
+
+/// A date's own target (either part may be nil = the month's share for that part).
+struct OutletDayTarget: Decodable, Hashable, Sendable {
+    let date: String
+    let salesTarget: Int64?
+    let paxTarget: Int64?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: OutletAnyKey.self)
+        date = c.outletString("date") ?? ""
+        salesTarget = c.outletNumber("salesTarget")
+        paxTarget = c.outletNumber("paxTarget")
+    }
 }
 
 /// What POST /api/projects answers that this app reads: the new project's id.

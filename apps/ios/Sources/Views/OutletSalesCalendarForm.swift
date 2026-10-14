@@ -91,6 +91,8 @@ struct OutletCalendarView: View {
         let list = inMonth ? store.events(on: d) : []
         let isToday = d == store.today
         let number = OutletFormat.parts(d)?.d ?? 0
+        // A date with its own target (owner, 14 Oct 2026): a small marker in the cell's corner.
+        let ownTarget = inMonth && store.ownTarget(d) != nil
         return Button {
             store.selectedDay = d
             // A day of the next or previous month switches to that month (web does the same).
@@ -128,13 +130,19 @@ struct OutletCalendarView: View {
             }
             .padding(wide ? 6 : 3)
             .frame(maxWidth: .infinity, minHeight: wide ? 104 : 52, alignment: wide ? .topLeading : .top)
+            .overlay(alignment: .topTrailing) {
+                if ownTarget {
+                    Image(systemName: "target").font(.system(size: wide ? 11 : 9, weight: .semibold))
+                        .foregroundStyle(NX.violetText).padding(wide ? 6 : 3)
+                }
+            }
             .background(selected ? NX.violet.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(selected ? NX.violet.opacity(0.6) : .clear))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .hoverEffect(.highlight)
-        .accessibilityLabel("\(OutletFormat.dayLong(d, thisYear: store.thisYear)), \(list.isEmpty ? T("No events") : (list.count == 1 ? T("1 event") : String(format: T("%d events"), list.count)))")
+        .accessibilityLabel("\(OutletFormat.dayLong(d, thisYear: store.thisYear)), \(list.isEmpty ? T("No events") : (list.count == 1 ? T("1 event") : String(format: T("%d events"), list.count)))\(ownTarget ? ", " + T("Own daily target") : "")")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -162,6 +170,7 @@ struct OutletCalendarView: View {
             } else {
                 HStack(alignment: .center, spacing: 8) { title; Spacer(minLength: 4); add }
             }
+            OutletDayTargetCard(store: store, day: day)
             if list.isEmpty {
                 Text(T("No event on this day. Add one to fill its report after the night."))
                     .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
@@ -171,7 +180,7 @@ struct OutletCalendarView: View {
                     .background(NX.muted.opacity(0.45), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             } else {
                 ForEach(list) { e in
-                    OutletEventCard(event: e, form: store.form, thisYear: store.thisYear, narrow: wide) {
+                    OutletEventCard(event: e, form: store.form, thisYear: store.thisYear, config: store.config, narrow: wide) {
                         store.openForm(eventId: e.id, date: nil)
                         tab = .reportForm
                     }
@@ -398,7 +407,98 @@ struct OutletReportFormView: View {
 
     // MARK: the sections, exactly as the server's form lists them
 
-    private func section(_ s: OutletFormSection) -> some View {
+    @ViewBuilder private func section(_ s: OutletFormSection) -> some View {
+        // RSVP and Hosting come from the outlet's own items (owner, 14 Oct 2026); Communities follow Hosting.
+        if s.key == "rsvp" {
+            breakdownSection(s.title.text, store.config.rsvp)
+        } else if s.key == "hosting" {
+            breakdownSection(s.title.text, store.config.hosting)
+            communitiesSection
+        } else {
+            formSection(s)
+        }
+    }
+
+    /// The active items, and an archived one only when this report already holds a figure for it.
+    private func shown(_ items: [OutletItem]) -> [OutletItem] {
+        items.filter { !$0.archived || OutletFormat.parse(draft.originalFigures[$0.id] ?? "") != nil }
+    }
+
+    private func itemLabel(_ label: String, archived: Bool) -> String {
+        archived ? "\(label) · \(T("archived"))" : label
+    }
+
+    private func figure(_ id: String) -> Binding<String> {
+        Binding(get: { store.draft.figures[id] ?? "" }, set: { store.draft.figures[id] = $0 })
+    }
+
+    private func figureBox(_ id: String, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(2)
+            OutletNumberField(text: figure(id), money: false, placeholder: "—")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var boxColumns: [GridItem] { Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: 2) }
+
+    private func breakdownSection(_ title: String, _ items: [OutletItem]) -> some View {
+        let list = shown(items)
+        return OutletCard {
+            Text("\(title): \(OutletFormat.count(draft.figureTotal(items.map(\.id))))")
+                .font(NXFont.text(12, .bold)).tracking(0.3).foregroundStyle(NX.foreground)
+            if list.isEmpty {
+                Text(T("No items yet. Report settings sets them up.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            } else {
+                LazyVGrid(columns: boxColumns, alignment: .leading, spacing: 12) {
+                    ForEach(list, id: \.rowId) { i in figureBox(i.id, itemLabel(i.label, archived: i.archived)) }
+                }
+            }
+        }
+    }
+
+    /// Communities: per community one number (Total only) or its own items (Breakdown), the grand total on top.
+    @ViewBuilder private var communitiesSection: some View {
+        let list = store.config.communities.filter { c in
+            !c.archived || ([c.id] + c.items.map(\.id)).contains { OutletFormat.parse(draft.originalFigures[$0] ?? "") != nil }
+        }
+        if !list.isEmpty {
+            let grand: Int64? = {
+                let totals = list.compactMap { c in draft.figureTotal([c.id] + c.items.map(\.id)) }
+                return totals.isEmpty ? nil : totals.reduce(0, +)
+            }()
+            OutletCard {
+                Text("\(T("Communities – TOTAL")): \(OutletFormat.count(grand))")
+                    .font(NXFont.text(12, .bold)).tracking(0.3).foregroundStyle(NX.foreground)
+                ForEach(list, id: \.rowId) { c in
+                    let subs = shown(c.items)
+                    let name = itemLabel(c.name, archived: c.archived)
+                    if !c.isBreakdown || subs.isEmpty {
+                        figureBox(c.id, name)
+                    } else {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Text(name).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)
+                                Spacer(minLength: 4)
+                                Text(OutletFormat.count(draft.figureTotal([c.id] + c.items.map(\.id))))
+                                    .font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg).monospacedDigit()
+                            }
+                            LazyVGrid(columns: boxColumns, alignment: .leading, spacing: 12) {
+                                ForEach(subs, id: \.rowId) { i in figureBox(i.id, itemLabel(i.label, archived: i.archived)) }
+                                // Filled as one number before the community was split: still editable.
+                                if OutletFormat.parse(draft.originalFigures[c.id] ?? "") != nil { figureBox(c.id, T("Total only")) }
+                            }
+                        }
+                        .padding(12)
+                        .background(NX.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                    }
+                }
+            }
+        }
+    }
+
+    private func formSection(_ s: OutletFormSection) -> some View {
         OutletCard {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(sectionTitle(s)).font(NXFont.text(12, .bold)).tracking(0.3).foregroundStyle(NX.foreground)
