@@ -1,222 +1,328 @@
-# NEXUS — Project Management & Team Operations Platform
+<div align="center">
 
-NEXUS is the internal platform built for **PATS Group**. It started as an Asana-style project/task workspace and has grown into a full team-operations suite: project management, attendance & HR, gamification, a company feed, a complaints channel, room booking, and an AI assistant (**GIDEON**) reachable both in-app and over WhatsApp.
+# NEXUS
 
-The repository is a monorepo with **two frontends sharing one Next.js API + PostgreSQL database**:
+**One workspace for a whole group of companies: projects, people, attendance, chat, deals and documents, live on every screen.**
 
-- **`src/`** — the Next.js 15 application: all REST API routes, auth, real-time, scheduled jobs, **and** the original server-rendered web UI.
-- **`apps/web/`** — **"Phaëthon"**, a Vite + React 19 single-page client (TanStack Router/Query) that talks to the same API.
+[![Web](https://img.shields.io/badge/web-SPA-0ea5e9?style=flat-square)](#monorepo-layout)
+[![iOS](https://img.shields.io/badge/iOS%20%C2%B7%20iPadOS-17%2B-000000?style=flat-square&logo=apple)](#monorepo-layout)
+[![macOS](https://img.shields.io/badge/macOS-Catalyst-000000?style=flat-square&logo=apple)](#monorepo-layout)
+[![watchOS](https://img.shields.io/badge/watchOS-10%2B-000000?style=flat-square&logo=apple)](#monorepo-layout)
+[![Android](https://img.shields.io/badge/Android-8.0%2B-3ddc84?style=flat-square&logo=android&logoColor=white)](#monorepo-layout)
 
-## Tech Stack
+[![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=flat-square&logo=nextdotjs)](https://nextjs.org)
+[![React](https://img.shields.io/badge/React-19-149eca?style=flat-square&logo=react&logoColor=white)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Vite](https://img.shields.io/badge/Vite-7-646cff?style=flat-square&logo=vite&logoColor=white)](https://vite.dev)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-06b6d4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+[![Prisma](https://img.shields.io/badge/Prisma-7-2d3748?style=flat-square&logo=prisma)](https://www.prisma.io)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15%2B-4169e1?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org)
+[![Socket.IO](https://img.shields.io/badge/Socket.IO-4-010101?style=flat-square&logo=socketdotio)](https://socket.io)
+[![SwiftUI](https://img.shields.io/badge/SwiftUI-Swift%205-f05138?style=flat-square&logo=swift&logoColor=white)](https://developer.apple.com/xcode/swiftui/)
+[![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7f52ff?style=flat-square&logo=kotlin&logoColor=white)](https://developer.android.com/compose)
 
-| Layer | Technology |
-|-------|-----------|
-| Backend / API | Next.js 15 (App Router), TypeScript |
-| Database | PostgreSQL + Prisma 7 (100+ models) |
-| Auth | NextAuth.js v5 (Credentials + Google OAuth + email OTP) |
-| Real-time | Socket.IO |
-| Legacy web UI | Next.js (App Router), Tailwind CSS, Radix UI, Lucide |
-| Phaëthon client | Vite 7, React 19, TanStack Router + Query, Tailwind 4, Framer Motion |
-| Rich Text | TipTap |
-| AI | Anthropic Claude (GIDEON assistant + WhatsApp command/agent bot) |
-| Messaging | WhatsApp (Hermes/Gideon bridge), Email (Nodemailer), Slack |
-| Files | Local uploads (chunked, up to 1GB), Synology NAS, Google Drive |
-| Mobile | Native iOS (SwiftUI) — separate repository |
+[Features](#features) · [Screenshots](#screenshots) · [Architecture](#architecture) · [Monorepo layout](#monorepo-layout) · [Getting started](#getting-started) · [Tech stack](#tech-stack)
+
+</div>
+
+---
+
+NEXUS is an internal workspace app built for a group of companies that share people, rooms and clients. It
+replaces the usual pile of a task tool, a chat app, an attendance spreadsheet, a deal tracker and a shared
+drive with one product, one account and one source of truth. Every client talks to the same API, and every
+change shows up everywhere in real time.
 
 ## Features
 
-### Project & Task Management
-- Workspaces, projects, and task lists
-- Kanban board, list, **table**, calendar, and timeline views
-- Tasks: assignment, priorities, due dates, subtasks (progress rollup), dependencies, recurrence, followers, threaded comments + reactions
-- **Custom fields**: text, number, date, dropdown, checkbox, URL, files & media
-- Time tracking and chunked file attachments (up to 1GB)
-- **Folders** (multi-project aggregate boards/calendars) and **Team Calendars** (saved, project-sourced deadline calendars)
-- Project pages (wiki docs), portfolios, archive/duplicate/inline edit
+<table>
+<tr>
+<td width="33%" valign="top">
 
-### Sprint, Goals & Docs
-- Sprint planning / active / completed with incomplete-task handling and velocity tracking
-- Hierarchical goals with cascading progress, milestones, and status (on track / at risk / behind)
-- Wiki-style docs with TipTap rich text, templates, and full-text search
+### Attendance
+Check in with a **selfie and a liveness check** inside an office **geofence**. Shifts, flexi time, rest days,
+leave and permit requests, an approval chart, offline check-in that syncs later, and signals that flag a
+faked location instead of silently trusting it.
 
-### Attendance & HR
-- Selfie + GPS **geofenced** check-in/out, with a per-member geofence-exempt mode
-- Per-member **flexible shifts** ("Flexi Time")
-- Leave / Sick / Permit / Day-off / Red-date requests with monthly quotas (day-off quota on the **28→27 payroll period**; red-date on the calendar month)
-- Crew **streak board**, admin status overrides, and offsite-checkout approvals
-- Mandatory **daily reflection** to check out; WhatsApp shift reminders
-- Approvals actionable in-app **or via WhatsApp commands**, with result notifications to the requester and other approvers
+</td>
+<td width="33%" valign="top">
 
-### Gamification & Engagement
-- XP, levels, streaks, quests (including task-bundle quests), and a company leaderboard
+### Projects
+Notion-style projects with **board, list, table, calendar and timeline** views, saved views per person,
+custom fields (amount, category, people, dates…), subtasks, dependencies, comments and a block editor
+with live co-editing.
 
-### Company Feed — "The Wire"
-- Company-wide timeline: posts, comments, mentions
+</td>
+<td width="33%" valign="top">
 
-### Complaints
-- Private, categorized **Complaint & Escalation** channel (anonymous / confidential options) routed to the BoD
+### Forms
+Build a request form in minutes, share it, and every submission becomes a task in the right section, with
+answers mapped to custom fields and routing rules that pick the assignee.
 
-### Room Booking
-- Studio / VIP / meeting room bookings with double-booking prevention and public **TV kiosk** display pages
+</td>
+</tr>
+<tr>
+<td valign="top">
 
-### Forms, Automation & Webhooks
-- Form builder with public (no-auth) submission and auto-create tasks
-- Automation rules (triggers → conditions → actions) and HMAC-signed webhooks with delivery tracking
+### Chat
+Direct messages, groups and a room for every project, with replies, mentions, attachments, unread counts,
+typing indicators and per-room mute. Built to replace the team group chat.
 
-### Notifications
-- In-app, email (SMTP), Slack, and **WhatsApp** (via the Gideon bridge)
-- Per-user preferences, Do-Not-Disturb, and an inbox with bulk actions
+</td>
+<td valign="top">
 
-### Access Control
-- Three-level RBAC: **System** (One-Above-All / Admin) → **Workspace** (BoD / Manager / Staff) → **Project** (Lead / Member / Viewer / Guest)
-- Workspace-scoped queries and a full audit log
+### GIDEON, the AI assistant
+Ask in plain language to find, create or update work, summarise what changed, and get a first pass on
+support tickets. Changes it proposes are shown before they apply.
 
-### Integrations & AI
-- Google Drive and Synology NAS file browsing/upload/download
-- Asana and Notion import; CSV and PDF export
-- **GIDEON** — natural-language task/ops actions powered by Anthropic Claude, available in-app and over WhatsApp (deterministic command bot + LLM agent)
+</td>
+<td valign="top">
 
-## Prerequisites
+### Z Vault
+File storage for the workspace: folders, large chunked uploads, previews, and share links you can revoke.
 
-- Node.js 20+
-- PostgreSQL 14+
-- Google OAuth credentials (for `@patsgroup.id` SSO)
+</td>
+</tr>
+<tr>
+<td valign="top">
 
-## Getting Started
+### Room booking
+Book meeting rooms and the studio with double-booking protection, reminders, and a kiosk page for the
+screen outside the room.
 
-### 1. Clone and Install
+</td>
+<td valign="top">
 
-```bash
-git clone <repository-url>
-cd nexus
-npm install
-```
+### Tickets
+A private channel to raise an issue or a complaint, routed to the right people, with a full message
+history and status.
 
-The Phaëthon SPA client is a separate package:
+</td>
+<td valign="top">
 
-```bash
-cd apps/web
-npm install
-```
+### Leaderboard & XP
+Monthly XP, levels, streaks and quests that reward finished work and good attendance habits.
 
-### 2. Configure Environment
+</td>
+</tr>
+<tr>
+<td valign="top">
 
-```bash
-cp .env.example .env
-```
+### Master calendar
+One calendar across projects and teams, so deadlines, shoots and events never collide unnoticed.
 
-Edit `.env` and fill in your values. See `.env.example` for all required variables.
+</td>
+<td valign="top">
 
-**Required:**
-- `DATABASE_URL` — PostgreSQL connection string
-- `AUTH_SECRET` — Generate with `openssl rand -base64 32`
-- `NEXTAUTH_URL` — Application URL (e.g. `https://nexus.patsgroup.id`)
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth credentials
+### Pipeline dashboard
+Every deal from first call to closing: stages, probability, payment terms, receivables, and **real cost
+lines with live margin** on the net value. A won deal turns into an execution project in one click.
 
-**Optional (for integrations):**
-- `SMTP_*` — Email notification delivery
-- `NAS_*` — Synology NAS file storage
-- `GOOGLE_DRIVE_*` — Google Drive integration
-- `WA_WEBHOOK_URL` / `HERMES_WA_BRIDGE_URL` / `SLACK_WEBHOOK_URL` — Messaging notifications
+</td>
+<td valign="top">
 
-For local OTP email testing, Mailpit is the recommended free setup:
-- `SMTP_HOST=mailpit`, `SMTP_PORT=1025`, `SMTP_FROM=NEXUS <noreply@localhost>`
-- Mail inbox UI: [http://localhost:8025](http://localhost:8025)
+### Legal documents
+Fill a `.docx` template through a form, get a **gap-free document number** automatically, export to
+**PDF**, keep every version, and work incoming requests on a board.
 
-### 3. Set Up Database
+</td>
+</tr>
+</table>
 
-```bash
-npx prisma generate
-npx prisma db push
-```
+**Realtime everywhere.** Tasks, chat, attendance boards, bookings and deals update live on web, iOS, iPadOS,
+macOS, watchOS and Android, without a refresh.
 
-### 4. Seed Database (optional)
+## Screenshots
 
-```bash
-npx prisma db seed
-```
+Screenshots are captured from the fictional **Demo Studio** workspace (see
+[Demo workspace](#demo-workspace)) and live in [`docs/screenshots/`](docs/screenshots/README.md).
 
-### 5. Build and Run
+| Surface | File |
+|---|---|
+| Web, desktop | `docs/screenshots/web-desktop.png` |
+| Web, mobile | `docs/screenshots/web-mobile.png` |
+| iPhone | `docs/screenshots/iphone.png` |
+| iPad | `docs/screenshots/ipad.png` |
+| Mac | `docs/screenshots/mac.png` |
+| Android | `docs/screenshots/android.png` |
 
-**Next.js API + legacy web UI:**
-```bash
-npm run dev          # development
-npm run build        # production build
-pm2 start npm --name nexus -- start
-```
+<!--
+TODO: enable once the images are in docs/screenshots/.
 
-**Phaëthon SPA client** (`apps/web`):
-```bash
-npm run dev          # Vite dev server, proxies /api → the Next.js backend
-npm run build        # static dist/ — serve behind nginx with /api proxied to the backend
-```
-
-Open your configured URL (default: [http://localhost:3000](http://localhost:3000)).
-
-## Docker Deployment
-
-### Local PostgreSQL in Docker
-
-```bash
-cp .env.docker.example .env.docker
-docker compose --env-file .env.docker up -d --build
-```
-
-This local stack includes Mailpit for OTP/email testing (SMTP `localhost:1025`, inbox [http://localhost:8025](http://localhost:8025)), starts PostgreSQL, runs `prisma db push`, then launches the app on port `3000`.
-
-### External PostgreSQL / NAS
-
-```bash
-cp .env.docker.nas.example .env.docker.nas
-docker compose --env-file .env.docker.nas -f docker-compose.nas.yml up -d --build
-```
-
-Set `NEXTAUTH_URL` to the host IP or public domain users will actually open. With Synology's PostgreSQL package, double-check the exposed port (many setups listen on `5433` instead of `5432`).
-
-### Seed Demo Users Safely
-
-```bash
-docker compose --env-file .env.docker.nas -f docker-compose.nas.yml run --rm --build bootstrap npm run db:seed:users
-```
-
-This only upserts demo login accounts + workspace membership. Do **not** run `npm run db:seed` on a live database unless you intend to wipe existing data first.
-
-## Login
-
-**Google OAuth:** sign in with any `@patsgroup.id` Google account.
-
-**Credentials:** local/demo seed accounts are created by the seed script (see `prisma/seed.ts`). These are for development only — never deploy seed passwords to production.
+<p align="center">
+  <img src="docs/screenshots/web-desktop.png" alt="NEXUS on the web, desktop" width="100%">
+</p>
+<p align="center">
+  <img src="docs/screenshots/iphone.png" alt="NEXUS on iPhone" width="24%">
+  <img src="docs/screenshots/android.png" alt="NEXUS on Android" width="24%">
+  <img src="docs/screenshots/web-mobile.png" alt="NEXUS on the web, mobile" width="24%">
+</p>
+<p align="center">
+  <img src="docs/screenshots/ipad.png" alt="NEXUS on iPad" width="49%">
+  <img src="docs/screenshots/mac.png" alt="NEXUS on Mac" width="49%">
+</p>
+-->
 
 ## Architecture
 
+```mermaid
+flowchart LR
+  subgraph Clients
+    WEB["Web SPA<br/>(apps/web)"]
+    IOS["iOS · iPadOS · macOS · watchOS<br/>(apps/ios)"]
+    AND["Android<br/>(apps/android)"]
+  end
+
+  subgraph Server["NEXUS server (Next.js)"]
+    API["REST API<br/>src/app/api"]
+    RT["Realtime<br/>Socket.IO · pages/api/socket"]
+    CRON["Scheduled jobs<br/>cron/"]
+  end
+
+  WEB -- HTTPS --> API
+  IOS -- HTTPS --> API
+  AND -- HTTPS --> API
+  WEB <-. WebSocket .-> RT
+  IOS <-. WebSocket .-> RT
+  AND <-. WebSocket .-> RT
+  CRON --> API
+
+  API --> PG[("PostgreSQL<br/>Prisma")]
+  RT --> PG
+  RT -. optional .-> REDIS[("Redis<br/>adapter")]
+  API --> FILES[("File storage<br/>uploads")]
+  API --> GOT["Gotenberg<br/>DOCX to PDF"]
+  API --> FACE["Face check<br/>sidecar (face/)"]
+  API --> AI["AI assistant<br/>service (GIDEON)"]
+  API --> PUSH["Push and email<br/>APNs · FCM · SMTP"]
 ```
-src/                          # Next.js 15 — API, auth, real-time, crons + legacy web UI
-├── app/
-│   ├── (app)/                # Authenticated app pages (dashboard, projects, attendance, …)
-│   ├── api/                  # REST API routes (projects, tasks, attendance, feed, gideon, …)
-│   ├── f/[formId]/           # Public form submissions
-│   └── room-display/         # Public TV kiosk pages (no auth)
-├── components/               # Legacy UI (layout, tasks, projects, gideon, editor, ui/…)
-├── lib/                      # Server utilities
-│   ├── auth.ts               # NextAuth config
-│   ├── prisma.ts             # Prisma client singleton
-│   ├── attendance*.ts        # Attendance + absence/penalty engine
-│   ├── gamification.ts       # XP / levels / quests
-│   ├── notification-service.ts  # In-app + email + Slack + WA dispatch
-│   ├── wa-bot.ts             # WhatsApp command bot + Gideon notifications
-│   ├── automation-engine.ts  # Automation rules
-│   └── webhook-dispatcher.ts # Outbound webhooks
-└── generated/prisma/         # Generated Prisma client
 
-apps/web/        # "Phaëthon" — Vite + React 19 SPA (TanStack Router/Query)
-├── src/routes/_app/          # File-based routes (projects, attendance, feed, leaderboard, …)
-├── src/components/           # Board, table view, task panel, motion toolkit, …
-└── src/lib/nexus-api.ts      # Typed API client against the Next.js backend
+- **One API for every client.** The web SPA and the native apps call the same REST endpoints; a client
+  version header lets one server serve every released app version at once.
+- **Realtime** runs in the server process (Socket.IO) and broadcasts per workspace, project, room and user;
+  a Redis adapter is used when more than one instance runs.
+- **Workspace isolation.** Every query is scoped to the workspaces the caller belongs to, with roles at three
+  levels: system, workspace (owner, BoD, manager, staff) and project (lead, member, viewer, guest).
+- **Sidecars** do the heavy lifting the Node process should not: Gotenberg renders PDFs, a small OpenCV
+  service counts faces in attendance selfies.
 
-pages/api/socket.ts           # Socket.IO server (Pages API)
-prisma/schema.prisma          # Database schema (100+ models)
+## Monorepo layout
+
+| Path | What |
+|---|---|
+| [`src/`](src) | Server: Next.js App Router API routes (`src/app/api`) and the domain logic (`src/lib`) |
+| [`pages/api/`](pages/api) | Realtime: the Socket.IO server and its init endpoints |
+| [`prisma/`](prisma) | Database schema (`schema.prisma`), additive SQL changes (`prisma/sql`) and seeds |
+| [`apps/web/`](apps/web) | Web SPA: Vite, React 19, TanStack Router and Query |
+| [`apps/ios/`](apps/ios) | Native SwiftUI app for iOS, iPadOS, macOS (Catalyst) and watchOS, with widgets |
+| [`apps/android/`](apps/android) | Native Android app: Kotlin and Jetpack Compose |
+| [`apps/realtime/`](apps/realtime) | Placeholder for a standalone realtime package (lockfile only for now) |
+| [`face/`](face) | Face-count sidecar for attendance selfies (Python, OpenCV) |
+| [`cron/`](cron) | Scheduled job runner |
+| [`deploy/`](deploy) | Blue-green release tooling |
+| [`scripts/`](scripts) | One-off maintenance and data scripts, including the demo seed |
+| [`e2e/`](e2e) | Playwright end-to-end tests |
+| [`docs/`](docs) | Reference docs |
+
+More on how the monorepo is organised: [`MONOREPO.md`](MONOREPO.md).
+
+## Getting started
+
+### Requirements
+
+- Node.js 22 (what CI uses) and npm
+- PostgreSQL 15+ (or Docker)
+- Xcode with [XcodeGen](https://github.com/yonaskolb/XcodeGen) for the Apple apps, Android Studio / JDK for Android
+
+### Option A: Docker Compose
+
+`docker-compose.yml` starts PostgreSQL, applies the schema, a Mailpit inbox for sign-up and OTP emails, and
+the app.
+
+```bash
+cp .env.docker.example .env.docker      # set AUTH_SECRET (openssl rand -base64 32)
+docker compose --env-file .env.docker up --build
 ```
 
-## API Documentation
+- App: <http://localhost:3000>
+- Mail inbox (Mailpit): <http://localhost:8025>
 
-See [docs/API.md](docs/API.md) for a reference of the API endpoints.
+### Option B: run it locally
+
+```bash
+npm ci --legacy-peer-deps
+cp .env.example .env                    # DATABASE_URL, AUTH_SECRET and NEXTAUTH_URL at minimum
+npx prisma generate
+npx prisma db push                      # create the schema in an empty database
+npm run dev                             # API + server on http://localhost:3000
+```
+
+The web SPA is its own package and proxies `/api` to the server:
+
+```bash
+cd apps/web
+npm ci
+npm run dev                             # VITE_API_TARGET defaults to http://127.0.0.1:3000
+```
+
+Everything else in `.env.example` (push, email, storage, the AI assistant, PDF rendering) is optional and
+switches the matching feature on when set.
+
+### Demo workspace
+
+Seed a self-contained, entirely fictional workspace ("Demo Studio": eight members, projects with a board and
+timeline, a form with submissions, chat, three weeks of attendance, a pipeline with costs and margins, room
+bookings and a leaderboard):
+
+```bash
+DEMO_PASSWORD='choose-a-long-password' npx tsx scripts/seed-demo-workspace.ts   # create or refresh
+npx tsx scripts/seed-demo-workspace.ts --remove                                 # delete all of it
+```
+
+Sign in as `demo.owner@example.com` with that password. The script only touches rows it owns, and running
+it again rebuilds the same workspace.
+
+### Native apps
+
+```bash
+cd apps/ios && xcodegen generate         # then open the project in Xcode and run
+cd apps/android && ./gradlew assembleDebug
+```
+
+### Checks
+
+```bash
+npm run lint
+npm run typecheck
+npm test                                # Vitest
+npm run test:e2e                        # Playwright
+```
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Server | Next.js 15 (App Router), TypeScript, Zod |
+| Database | PostgreSQL, Prisma 7 |
+| Auth | Auth.js (NextAuth v5): email and password, email OTP, passkeys (WebAuthn), SAML single sign-on |
+| Realtime | Socket.IO 4, optional Redis adapter, Yjs for co-editing |
+| Web | Vite 7, React 19, TanStack Router and Query, Tailwind CSS 4, Radix UI, HeroUI, TipTap, Framer Motion, Recharts, Leaflet |
+| Apple | SwiftUI (iOS 17+, iPadOS, macOS via Catalyst, watchOS 10+), WidgetKit, Live Activities |
+| Android | Kotlin, Jetpack Compose, Material 3, Kotlin coroutines and serialization |
+| Documents | docxtemplater, Gotenberg (DOCX to PDF), ExcelJS, jsPDF |
+| Spreadsheets | formula.js |
+| Push and mail | APNs, FCM, SMTP (Nodemailer) |
+| Testing | Vitest, Testing Library, Playwright |
+
+## Documentation
+
+- [API reference](docs/API.md)
+- [Legal API](docs/legal-api.md) and [Legal on Android](docs/legal-android.md)
+- [Monorepo notes](MONOREPO.md)
+
+## Status and license
+
+NEXUS is in active daily use and active development; the `dev` branch is where new work lands and `master`
+is what runs in production.
+
+There is no open-source license: **all rights reserved**. The code is public to read, not to reuse,
+redistribute or deploy without permission.
