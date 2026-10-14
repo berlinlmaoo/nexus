@@ -407,7 +407,11 @@ struct ConvoRow: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
-                    Text(convo.title(meId: meId)).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    // Two lines before it is cut: a project room's name ("ZZ QA Social Media Report") was cut
+                    // to "…R…" in the list column (run 14, P-I24 / P-M25).
+                    Text(convo.title(meId: meId)).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                     if muted {
                         Image(systemName: "bell.slash.fill")
                             .font(.system(size: 11))

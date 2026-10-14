@@ -310,7 +310,7 @@ struct TabRoot: View {
                 .tag(PhoneTab.dashboard)
             // Its own stack as a tab root, as the sidebar gives it (MoreView pushes the no-stack form).
             MessagesView(providesOwnStack: true)
-                .tabItem { Label(T("Chat"), systemImage: "bubble.left.and.bubble.right.fill") }
+                .tabItem { Label(T("Messages"), systemImage: "bubble.left.and.bubble.right.fill") }
                 .badge(chat.totalUnread)
                 .tag(PhoneTab.messages)
             if calendarTab {

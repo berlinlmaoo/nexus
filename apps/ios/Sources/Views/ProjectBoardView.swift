@@ -986,7 +986,10 @@ struct ProjectDetailView: View {
 
     private func tabChip(_ t: ProjectTab) -> some View {
         let builtin = layoutOf(t).flatMap { l in viewsFor(l).first { $0.builtin == l } }
-        return ProjectTabChip(title: t.label, icon: t.icon, on: tabIsOn(t),
+        // The web's outline icons on every width (run 14, P-I26 / P-M19): Overview is the pulse line, Chat
+        // an outline bubble, and an outlet's / a social report's Board the 2×2 grid the web draws.
+        let icon = isTypedDashboard && t == .board ? "square.grid.2x2" : t.macIcon
+        return ProjectTabChip(title: t.label, icon: icon, on: tabIsOn(t),
                               filtered: builtin.map { configOf($0).isFiltered } ?? false) { pickTab(t) }
             .contextMenu {
                 if let builtin { viewMenuItems(builtin) }
@@ -995,7 +998,7 @@ struct ProjectDetailView: View {
 
     private func viewChip(_ v: ProjectViewFull, tab t: ProjectTab) -> some View {
         let layout = layoutOf(t) ?? "board"
-        return ProjectTabChip(title: viewTitle(v), icon: t.icon, on: tab == t && activeView(layout)?.id == v.id,
+        return ProjectTabChip(title: viewTitle(v), icon: t.macIcon, on: tab == t && activeView(layout)?.id == v.id,
                               filtered: configOf(v).isFiltered) {
             tab = t
             pickView(layout, v.id)

@@ -240,9 +240,21 @@ struct SubmissionsView: View {
 
     /// The projects' status options; an older server's names become columns after "New".
     private var columns: [SubmissionColumn] {
-        if !serverColumns.isEmpty { return serverColumns }
-        return [SubmissionColumn(key: "new", name: T("New"), color: nil, group: "todo", taskStatus: nil, projectIds: nil)]
-            + statusColumns.map { SubmissionColumn(key: $0, name: $0, color: nil, group: "in_progress", taskStatus: nil, projectIds: nil) }
+        let base = !serverColumns.isEmpty ? serverColumns
+            : [SubmissionColumn(key: "new", name: T("New"), color: nil, group: "todo", taskStatus: nil, projectIds: nil)]
+                + statusColumns.map { SubmissionColumn(key: $0, name: $0, color: nil, group: "in_progress", taskStatus: nil, projectIds: nil) }
+        // A submission whose column the list doesn't have (a status renamed or removed on its project, or
+        // "New" on a form without a status) gets a column of its own, as on the web (W-B7). Without it the
+        // board showed three empty lanes while four requests sat in "New" (run 14, P-M28 / P-I35 / N-16).
+        var known = Set(base.map(\.key))
+        var extra: [SubmissionColumn] = []
+        for sub in subs where !known.contains(sub.columnKey) {
+            known.insert(sub.columnKey)
+            let status = sub.procStatus?.trimmingCharacters(in: .whitespaces) ?? ""
+            extra.append(sub.column ?? SubmissionColumn(key: sub.columnKey, name: status.isEmpty ? T("New") : status, color: nil,
+                                                        group: "in_progress", taskStatus: nil, projectIds: nil))
+        }
+        return base + extra
     }
 
     /// The columns of the filtered requests' projects (empty ones too, as on their board).
@@ -408,8 +420,9 @@ struct SubmissionsView: View {
             .scrollTargetLayout()
         }
         .scrollTargetBehavior(.viewAligned)
-        // The column peeking in at the edge fades, so it reads as "more this way" (F-35).
-        .nxEdgeFade(20)
+        // The column peeking in at the edge fades, so it reads as "more this way" (F-35); wide enough to
+        // read as a fade, not a cut (run 14, N-16).
+        .nxEdgeFade(40)
     }
 
     private func column(_ col: SubmissionColumn) -> some View {
@@ -433,9 +446,10 @@ struct SubmissionsView: View {
                                 .hoverEffect(.highlight)
                         }
                         if items.isEmpty {
-                            // Short: the page's subtitle already says the team moves the cards, and the same four
-                            // lines in every column were cut mid-sentence in the peeking one (UI tour run 13, F-35).
-                            Text(T("Nothing here yet"))
+                            // Short, and says what the lane holds (run 14, P-I35 / P-M28: "Nothing here yet" said
+                            // nothing); the same four lines in every column were cut mid-sentence in the peeking
+                            // one (UI tour run 13, F-35).
+                            Text(emptyText(col))
                                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                                 .multilineTextAlignment(.center)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -454,9 +468,25 @@ struct SubmissionsView: View {
         // An empty column is narrower, so it doesn't push the cards of the next one off screen
         // (UI tour run 7: an empty To Do took most of the phone's width).
         .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in
+            // iPad / Mac: the lanes share the page's width when they fit (run 14, P-M28: the board stopped at
+            // ~1490 px with 500 px empty beside it), 260 pt at least.
+            if hSize == .regular {
+                let n = CGFloat(max(1, visibleColumns.count))
+                let fair = (width - 2 * gutter - 12 * (n - 1)) / n
+                if fair >= 260 { return fair }
+                return 300
+            }
             // Two empty columns used to fill a phone exactly, so the third sat just off screen with no hint
             // of it (UI tour run 9, I8): an empty one is now narrow enough that the next always peeks in.
-            items.isEmpty ? min(200, width * 0.4) : min(320, width * 0.85)
+            return items.isEmpty ? min(200, width * 0.4) : min(320, width * 0.85)
+        }
+    }
+
+    private func emptyText(_ col: SubmissionColumn) -> String {
+        switch col.statusGroup {
+        case .todo: return T("No request waiting for the team")
+        case .complete: return T("Nothing finished yet")
+        default: return T("Nothing being worked on")
         }
     }
 

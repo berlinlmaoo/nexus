@@ -862,6 +862,14 @@ final class NEXUSUITour: XCTestCase {
                 #endif
                 break
             }
+            // Moved, but the picture holds almost nothing the page before did not show already (run 14,
+            // P-T2 / N-11 / N-12: pages that scrolled 17–130 pt, a sheet's last rows, a rubber-banded end).
+            // Measured by rows of the whole window, so a sticky header or a sheet over the scroll view can't
+            // hide it the way a pure shift of the scroll view's rect could.
+            if let fresh = newContentFraction(from: last, to: data, window: root.windows.firstMatch.frame),
+               fresh < minNewContent {
+                break
+            }
             #if targetEnvironment(macCatalyst)
             scrolled = true
             #endif
@@ -875,6 +883,19 @@ final class NEXUSUITour: XCTestCase {
     /// The least a page must have moved (fraction of the scrolled view's visible height) to be kept. A drag
     /// asks for half; touch slop and rubber-banding take a little of that.
     private var minPageShift: CGFloat { CGFloat(Double(env["TOUR_MIN_PAGE_SHIFT"] ?? "") ?? 0.35) }
+
+    /// The least share of a new page's rows that must be new (not anywhere on the page before) to keep it.
+    private var minNewContent: Double { Double(env["TOUR_MIN_NEW_CONTENT"] ?? "") ?? 0.2 }
+
+    /// The share of the window's pixel rows in `new` that appear nowhere in `old` (0 = nothing new). Plain
+    /// background rows are on both pages, so empty space never makes a page look new.
+    private func newContentFraction(from old: Data, to new: Data, window: CGRect) -> Double? {
+        guard let a = rowHashes(old, rect: window, window: window), let b = rowHashes(new, rect: window, window: window),
+              !b.isEmpty else { return nil }
+        let seen = Set(a)
+        let fresh = b.filter { !seen.contains($0) }.count
+        return Double(fresh) / Double(b.count)
+    }
 
     /// How far the content inside `rect` (screen points) moved up between two screenshots, as a fraction of
     /// the rect's height: 0 = the same rows, 0.5 = half a view. nil when no shift explains the new picture
@@ -1135,8 +1156,8 @@ enum LegalLookup {
 /// The run-time values of the dashboard screens, looked up once per test process with the QA account (the
 /// same sign-in and sign-out as LegalLookup; GET /api/projects and the projects' month only). `outlet` /
 /// `socmed` = the project named "ZZ QA Manager Outlet" / "ZZ QA Social Media Report" (else the first "ZZ QA"
-/// project of type OUTLET_SALES / SOCIAL_MEDIA_REPORT) unless overridden; `outletDay` = the newest date with a
-/// reported night, else with its own daily target; `socmedDay` = the newest date up to today with figures.
+/// project of type OUTLET_SALES / SOCIAL_MEDIA_REPORT) unless overridden; `outletDay` = a day other than today
+/// (the newest night waiting for its report, else reported, else with its own daily target); `socmedDay` = the newest date up to today with figures.
 /// Each from this month, else the month before. A missing value has its reason in `problems`.
 enum DashboardLookup {
     struct Found {
@@ -1232,11 +1253,24 @@ enum DashboardLookup {
         return result
     }
 
+    /// A day other than today: the calendar opens with today picked and its panel already on screen, so a
+    /// shot of today was the outlet-calendar shot again (run 14, P-T1 / N-10). The newest night still
+    /// waiting for its report, else the newest reported one, else a day with its own target, else any
+    /// event day; never today.
     private static func outletDay(_ json: [String: Any]) -> String? {
+        let today = String((json["today"] as? String ?? "").prefix(10))
         let events = (json["events"] as? [[String: Any]]) ?? []
-        let reported = events.filter { ($0["status"] as? String) == "REPORTED" }.compactMap { $0["date"] as? String }
-        let targets = ((json["dayTargets"] as? [[String: Any]]) ?? []).compactMap { $0["date"] as? String }
-        return (reported.isEmpty ? targets : reported).max()
+        func dates(_ status: String?) -> [String] {
+            events.filter { status == nil || ($0["status"] as? String) == status }
+                .compactMap { ($0["date"] as? String).map { String($0.prefix(10)) } }
+                .filter { $0 != today }
+        }
+        let targets = ((json["dayTargets"] as? [[String: Any]]) ?? [])
+            .compactMap { ($0["date"] as? String).map { String($0.prefix(10)) } }.filter { $0 != today }
+        for list in [dates("WAITING_REPORT"), dates("REPORTED"), targets, dates(nil)] where !list.isEmpty {
+            return list.max()
+        }
+        return nil
     }
 
     private static func socmedDay(_ json: [String: Any]) -> String? {

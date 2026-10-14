@@ -124,9 +124,29 @@ struct OutletGuestOverview: View {
         .accessibilityHidden(true)
     }
 
+    /// One community: the chevron's slot on every row so the names line up (F-33 / I-27); the ones that
+    /// open draw it. Same height and text colour for both kinds.
+    private func communityRow(_ c: OutletGuestCommunity, expandable: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(NX.violetText)
+                .rotationEffect(.degrees(open.contains(c.id) ? 90 : 0))
+                .frame(width: 12)
+                .opacity(expandable ? 1 : 0)
+                .accessibilityHidden(true)
+            Text(c.archived ? "\(c.name) · \(T("archived"))" : c.name)
+                .font(NXFont.text(14)).foregroundStyle(c.archived ? NX.mutedFg : NX.foreground).lineLimit(1)
+            Spacer(minLength: 4)
+            Text(OutletFormat.count(c.total)).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                .monospacedDigit()
+        }
+        .frame(minHeight: 32)
+        .contentShape(Rectangle())
+    }
+
     private func communities(_ g: OutletGuests) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            total(T("Communities"), g.communities.total)
+            total(T("Communities total"), g.communities.total)
             if g.communities.items.isEmpty {
                 Text(T("No communities yet. Add the ones that come in Report settings."))
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
@@ -135,33 +155,21 @@ struct OutletGuestOverview: View {
                     ForEach(g.communities.items) { c in
                         let expandable = c.mode == "breakdown" && !c.items.isEmpty
                         VStack(alignment: .leading, spacing: 4) {
-                            Button {
-                                guard expandable else { return }
-                                withAnimation(.easeOut(duration: 0.18)) {
-                                    if open.contains(c.id) { open.remove(c.id) } else { open.insert(c.id) }
+                            // A Total-only community is a plain row, not a disabled button: a disabled
+                            // button greys its label, so "Run Club" read as switched off (run 14, N-27).
+                            if expandable {
+                                Button {
+                                    withAnimation(.easeOut(duration: 0.18)) {
+                                        if open.contains(c.id) { open.remove(c.id) } else { open.insert(c.id) }
+                                    }
+                                } label: {
+                                    communityRow(c, expandable: true)
                                 }
-                            } label: {
-                                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                    // The chevron's slot is kept on every row, so the names line up; the
-                                    // ones that open draw it (UI tour run 13, F-33 / I-27).
-                                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
-                                        .foregroundStyle(NX.violetText)
-                                        .rotationEffect(.degrees(open.contains(c.id) ? 90 : 0))
-                                        .frame(width: 12)
-                                        .opacity(expandable ? 1 : 0)
-                                        .accessibilityHidden(true)
-                                    Text(c.archived ? "\(c.name) · \(T("archived"))" : c.name)
-                                        .font(NXFont.text(14)).foregroundStyle(c.archived ? NX.mutedFg : NX.foreground).lineLimit(1)
-                                    Spacer(minLength: 4)
-                                    Text(OutletFormat.count(c.total)).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
-                                        .monospacedDigit()
-                                }
-                                .frame(minHeight: expandable ? 32 : nil)
-                                .contentShape(Rectangle())
+                                .buttonStyle(.plain)
+                            } else {
+                                communityRow(c, expandable: false)
+                                    .accessibilityElement(children: .combine)
                             }
-                            .buttonStyle(.plain)
-                            .disabled(!expandable)
-                            .accessibilityAddTraits(expandable ? .isButton : [])
                             share(c.total, of: g.communities.total)
                             if expandable && open.contains(c.id) {
                                 VStack(spacing: 8) { ForEach(c.items) { line($0, of: c.total, inset: true) } }
@@ -422,7 +430,11 @@ struct OutletReportSettingsView: View {
             communitySections(cfg.communities)
         }
         .listStyle(.insetGrouped)
-        // The sheet goes on below its edge (Communities, on an iPad): the indicator shows once (I-5).
+        // One even gap between the item cards and the communities (run 14, P-M21: the default spacing
+        // left wide, uneven bands on a Mac).
+        .listSectionSpacing(.compact)
+        // The sheet goes on below its edge (Communities): the indicator shows once (I-5), and on an iPad /
+        // Mac the sheet is page sized (see `tallSheet`), so Communities start inside the first screen.
         .scrollIndicatorsFlash(onAppear: true)
         .environment(\.editMode, .constant(.active))
         .scrollDismissesKeyboard(.interactively)
@@ -453,6 +465,9 @@ struct OutletReportSettingsView: View {
                 .font(NXFont.text(15))
                 .submitLabel(.done)
                 .padding(.leading, inset)
+                // Only the separator under a row: a reordered row kept a full-width top line too, so
+                // "Hosting Team" showed two lines (UI tour run 13 F-23 / run 14 N-29).
+                .listRowSeparator(.hidden, edges: .top)
         }
         .onMove { from, to in moveActive(items, from: from, to: to) }
         .onDelete { offsets in
@@ -465,9 +480,11 @@ struct OutletReportSettingsView: View {
         }
         addRow(newText, label: addLabel) { append(items, $0) }
             .padding(.leading, inset)
+            .listRowSeparator(.hidden, edges: .top)
         ForEach(archived, id: \.rowId) { item in
             archivedRow(item.label) { setArchived(items, item.rowId, false) }
                 .padding(.leading, inset)
+                .listRowSeparator(.hidden, edges: .top)
         }
     }
 
@@ -529,8 +546,24 @@ struct OutletReportSettingsView: View {
         ForEach(Array(active.enumerated()), id: \.element.rowId) { pos, item in
             let c = community(list, item.rowId)
             Section {
-                TextField(T("Community name"), text: Binding(get: { c.wrappedValue.name }, set: { c.wrappedValue.name = String($0.prefix(60)) }))
-                    .font(NXFont.text(15, .semibold))
+                // The name with its order and remove controls on one row: on their own row under the picker
+                // they left an empty band in every community card (run 14, P-M21).
+                HStack(spacing: 14) {
+                    TextField(T("Community name"), text: Binding(get: { c.wrappedValue.name }, set: { c.wrappedValue.name = String($0.prefix(60)) }))
+                        .font(NXFont.text(15, .semibold))
+                    Button { moveCommunity(list, item.rowId, by: -1) } label: { Label(T("Move up"), systemImage: "arrow.up") }
+                        .disabled(pos == 0)
+                    Button { moveCommunity(list, item.rowId, by: 1) } label: { Label(T("Move down"), systemImage: "arrow.down") }
+                        .disabled(pos == active.count - 1)
+                    Button(role: .destructive) {
+                        remove(item.name, ids: [item.id] + item.items.map(\.id),
+                               archive: { c.wrappedValue.archived = true },
+                               drop: { list.wrappedValue.removeAll { $0.rowId == item.rowId } })
+                    } label: { Label(T("Remove"), systemImage: "trash") }
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .font(NXFont.text(15, .semibold))
                 Picker(T("How it is counted"), selection: c.mode) {
                     Text(T("Total only")).tag("total")
                     Text(T("Breakdown")).tag("breakdown")
@@ -541,21 +574,6 @@ struct OutletReportSettingsView: View {
                              newText: Binding(get: { newSub[item.rowId] ?? "" }, set: { newSub[item.rowId] = $0 }),
                              addLabel: String(format: T("Add item to %@"), item.name.isEmpty ? T("this community") : item.name))
                 }
-                HStack(spacing: 18) {
-                    Button { moveCommunity(list, item.rowId, by: -1) } label: { Label(T("Move up"), systemImage: "arrow.up") }
-                        .disabled(pos == 0)
-                    Button { moveCommunity(list, item.rowId, by: 1) } label: { Label(T("Move down"), systemImage: "arrow.down") }
-                        .disabled(pos == active.count - 1)
-                    Spacer(minLength: 4)
-                    Button(role: .destructive) {
-                        remove(item.name, ids: [item.id] + item.items.map(\.id),
-                               archive: { c.wrappedValue.archived = true },
-                               drop: { list.wrappedValue.removeAll { $0.rowId == item.rowId } })
-                    } label: { Label(T("Remove"), systemImage: "trash") }
-                }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.borderless)
-                .font(NXFont.text(15, .semibold))
             } header: {
                 if pos == 0 { Text(T("Communities")) }
             }
@@ -580,5 +598,18 @@ struct OutletReportSettingsView: View {
         let active = list.wrappedValue.indices.filter { !list.wrappedValue[$0].archived }
         guard let pos = active.firstIndex(where: { list.wrappedValue[$0].rowId == rowId }), active.indices.contains(pos + by) else { return }
         list.wrappedValue.swapAt(active[pos], active[pos + by])
+    }
+}
+
+
+extension View {
+    /// A settings sheet with a long form: page sized on an iPad / Mac (iOS 18+), so the form sheet's fixed
+    /// height doesn't end the visible part halfway (run 14, P-I3 Communities, P-I31 Add platform).
+    @ViewBuilder func tallSheet() -> some View {
+        if #available(iOS 18.0, *) {
+            self.presentationSizing(.page)
+        } else {
+            self.presentationDetents([.large])
+        }
     }
 }

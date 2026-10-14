@@ -124,9 +124,9 @@ private struct LegalCompanyCard: View {
     @ViewBuilder private var kopRow: some View {
         Group {
             if hSize == .regular {
-                HStack(spacing: 10) { kopText(oneLine: true); Spacer(minLength: 0); kopButtons.fixedSize() }
+                HStack(spacing: 10) { kopText; Spacer(minLength: 0); kopButtons.fixedSize() }
             } else {
-                VStack(alignment: .leading, spacing: 8) { kopText(oneLine: false); kopButtons }
+                VStack(alignment: .leading, spacing: 8) { kopText; kopButtons }
             }
         }
         .padding(12)
@@ -134,23 +134,25 @@ private struct LegalCompanyCard: View {
         .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    private func kopText(oneLine: Bool) -> some View {
+    private var kopText: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(T("Letterhead")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).fixedSize()
             Text(company.hasKop
                  ? String(format: T("%@, uploaded %@"), company.kopFileName ?? "kop.docx", LegalLabels.date(company.kopUpdatedAt))
                  : T("Not uploaded: documents get no letterhead."))
                 .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                .lineLimit(oneLine ? 1 : nil).truncationMode(.middle)
-                .fixedSize(horizontal: false, vertical: !oneLine)
+                // The whole file name, wrapping when it must: cut in the middle it read
+                // "Kop_Surat_Suwara_Lo….docx" (four dots; run 14, P-I27).
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private var kopButtons: some View {
         HStack(spacing: 6) {
             if company.hasKop {
+                // Bordered like Replace beside it: one button style in the row (N-40).
                 Button { Task { await downloadKop() } } label: { Label(T("Download"), systemImage: "arrow.down.circle") }
-                    .buttonStyle(NXButtonStyle(kind: .ghost, compact: true))
+                    .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
                     .disabled(kopBusy)
             }
             if canEdit {
@@ -255,7 +257,8 @@ private struct LegalSeriesRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(series.label).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
                 HStack(spacing: 0) {
-                    Text(LegalLabels.docType(series.docType)).lineLimit(1)
+                    // The short type ("MoU", "PKS"): the long one was cut inside its brackets (N-40).
+                    Text(LegalLabels.docTypeShort(series.docType)).lineLimit(1)
                     Text("  ·  \(LegalLabels.resetPeriod(series.resetPeriod))").lineLimit(1).fixedSize()
                 }
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)

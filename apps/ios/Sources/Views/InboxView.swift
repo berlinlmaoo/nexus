@@ -349,9 +349,10 @@ struct NotificationRow: View {
         .frame(width: size, height: size)
     }
 
-    /// " · " joined to the word before it, so a wrapped line never starts with "· PATS" (F-32).
+    /// " · " joined to the word before it, so a wrapped line never starts with "· PATS" (F-32), and a
+    /// bracketed run such as "(SP I/II/III)" kept whole (run 14, N-23: "(SP I/II/ ⏎ III)").
     static func keepSeparators(_ s: String) -> String {
-        s.replacingOccurrences(of: " · ", with: "\u{00A0}·\u{00A0}")
+        nxUnbreakableParentheses(s.replacingOccurrences(of: " · ", with: "\u{00A0}·\u{00A0}"))
     }
 
     /// The web's own meta line, hint included: a row that opens something says so, and a row that

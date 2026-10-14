@@ -462,8 +462,12 @@ struct TicketsView: View {
     private func wideRow(_ t: Complaint) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(t.title).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+                // Two lines for the subject and the sender, so neither is cut beside spare width in the
+                // other columns (run 14, P-M14).
+                HStack(alignment: .top, spacing: 6) {
+                    Text(t.title).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                     if t.hasGideonReply {
                         Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
                             .frame(width: 11, height: 11).foregroundStyle(NX.mutedFg)
@@ -484,7 +488,8 @@ struct TicketsView: View {
                     if let r = t.reporter {
                         AvatarView(url: r.avatar, initial: String((r.name ?? "?").prefix(1)).uppercased(), size: 20)
                     }
-                    Text(t.reporter?.name ?? "—").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    Text(t.reporter?.name ?? "—").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(width: Col.from, alignment: .leading)
             }

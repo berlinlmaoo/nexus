@@ -183,8 +183,9 @@ struct VaultView: View {
     // MARK: Web page header (regular width)
 
     private var webHeader: some View {
+        // The search box sits on the usage row under the header (below): five controls beside the title
+        // wrapped the subtitle onto two lines on a Mac (run 14, P-M27).
         NXPageHeader(title: T("Z Vault"), subtitle: T("The whole office's shared shelf — logos, decks, assets.")) {
-            webSearchField
             if selecting {
                 Button(allSelected ? T("Deselect All") : T("Select All")) { toggleAll() }
                     .buttonStyle(.nxBordered)
@@ -336,7 +337,13 @@ struct VaultView: View {
                     empty(icon: "externaldrive.badge.xmark", title: T("Vault unavailable"), msg: problem)
                         .frame(minHeight: 260)
                 } else {
-                    if let quota = listing?.quota { quotaBar(quota) }
+                    if webChrome {
+                        HStack(spacing: 12) {
+                            if let quota = listing?.quota { quotaBar(quota).padding(.horizontal, -gutter) } else { Spacer(minLength: 0) }
+                            webSearchField
+                        }
+                        .padding(.horizontal, gutter)
+                    } else if let quota = listing?.quota { quotaBar(quota) }
                     if !trash && query.isEmpty { breadcrumb }
                     if trash { trashBanner }
 

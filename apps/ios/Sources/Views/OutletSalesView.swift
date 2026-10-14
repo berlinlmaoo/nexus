@@ -416,7 +416,7 @@ struct OutletSalesTab: View {
                 }
                 // Report settings (owner, 14 Oct 2026). On this inner view, not next to the event sheet
                 // below: two .sheet modifiers on one view leave one of them dead.
-                .sheet(isPresented: $store.settingsOpen) { OutletReportSettingsView(store: store) }
+                .sheet(isPresented: $store.settingsOpen) { OutletReportSettingsView(store: store).tallSheet() }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -599,20 +599,57 @@ struct OutletMonthSwitcher: View {
 }
 
 /// What the small markers in a calendar cell mean, with the glyphs the cells draw (W-B11 / F-21):
-/// "◎ Day target · ✎ Note". Outlet cells only mark day targets; Social Media cells mark notes too.
+/// "◎ Day target · ✎ Note" on Social Media; the outlet adds its event dots, the same four entries as the
+/// web ("◎ Day target · ● Upcoming · ● Waiting report · ● Reported", run 14 N-06 / P-I28 / P-M20).
 struct OutletCalendarLegend: View {
     var notes = false
+    /// The event status dots the outlet cells draw.
+    var statuses = false
+    /// Social Media: the grey dot of a past day with nothing recorded (web "Not recorded", P-I30).
+    var unrecorded = false
     var body: some View {
-        HStack(spacing: 14) {
-            Label(T("Day target"), systemImage: "target")
-                .labelStyle(LegendLabelStyle(tint: NX.violetText))
-            if notes {
-                Label(T("Note"), systemImage: "note.text")
-                    .labelStyle(LegendLabelStyle(tint: NX.mutedFg))
+        // Wraps onto a second line on a narrow phone instead of cutting the last entry.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 14) { entries }
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 14) { target; if notes { note } }
+                if statuses { HStack(spacing: 14) { dots } }
+                if unrecorded { notRecorded }
             }
         }
         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
         .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder private var entries: some View {
+        target
+        if notes { note }
+        if statuses { dots }
+        if unrecorded { notRecorded }
+    }
+
+    private var notRecorded: some View {
+        HStack(spacing: 5) {
+            Circle().fill(NX.mutedFg.opacity(0.5)).frame(width: 4, height: 4)
+            Text(T("Not recorded")).lineLimit(1)
+        }
+    }
+
+    private var target: some View {
+        Label(T("Day target"), systemImage: "target").labelStyle(LegendLabelStyle(tint: NX.violetText))
+    }
+
+    private var note: some View {
+        Label(T("Note"), systemImage: "square.and.pencil").labelStyle(LegendLabelStyle(tint: NX.mutedFg))
+    }
+
+    @ViewBuilder private var dots: some View {
+        ForEach(OutletStatus.allCases) { s in
+            HStack(spacing: 5) {
+                Circle().fill(s.tone.fg).frame(width: 6, height: 6)
+                Text(s.label).lineLimit(1)
+            }
+        }
     }
 
     private struct LegendLabelStyle: LabelStyle {
@@ -660,11 +697,13 @@ struct OutletMeter: View {
 
 /// One card with the outlet's look.
 struct OutletCard<Content: View>: View {
+    /// Stretch to the row's height (cards side by side line up at the bottom too).
+    var fillHeight = false
     @ViewBuilder let content: () -> Content
     var body: some View {
         VStack(alignment: .leading, spacing: 10) { content() }
             .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: fillHeight ? .infinity : nil, alignment: .topLeading)
             .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
     }
@@ -1023,7 +1062,8 @@ struct OutletEventCard: View {
     var onEdit: (() -> Void)? = nil
 
     @Environment(\.horizontalSizeClass) private var hSize
-    private var labelWidth: CGFloat { hSize == .regular ? 200 : 132 }
+    /// Wide enough on a Mac/iPad for "How to keep it from happening again" on one line (run 14, P-M20).
+    private var labelWidth: CGFloat { hSize == .regular ? 280 : 132 }
     /// A night still to come: its report opens on the night itself.
     private var future: Bool { today.map { event.date.prefix(10) > $0.prefix(10) } ?? false }
 
@@ -1061,7 +1101,8 @@ struct OutletEventCard: View {
             }
             .padding(.bottom, 6)
             row(form.label("name", "Event name"), Text(event.name).fontWeight(.semibold))
-            row(form.label("date", "Day/Date"), Text(OutletFormat.dayLong(event.date, thisYear: thisYear)))
+            // "Date", not the question's "Day/Date": the answer is one date (run 14, N-28).
+            row(T("Date"), Text(OutletFormat.dayLong(event.date, thisYear: thisYear)))
             row(form.label("sales", "Sales"), Text(OutletFormat.vsTarget(event.sales, event.salesTarget, event.salesPct, money: true)), number: true)
             row(form.label("pax", "Pax"), Text(OutletFormat.vsTarget(event.pax, event.paxTarget, event.paxPct, money: false)), number: true)
             total("rsvp", event.rsvpTotal)
@@ -1154,7 +1195,8 @@ struct OutletEventCard: View {
     @ViewBuilder private func story(_ key: String) -> some View {
         if let s = form.section(key) {
             Divider().overlay(NX.border).padding(.vertical, 4)
-            Text(s.title.text.uppercased()).font(NXFont.text(11, .bold)).tracking(0.4).foregroundStyle(NX.foreground)
+            // Sentence case like "RSVP total" / "Communities total" (run 14, N-28 / P-M20), not all caps.
+            Text(s.title.text).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
                 .padding(.vertical, 5)
             ForEach(s.fields, id: \.key) { f in
                 let answer = event.texts[f.key] ?? ""

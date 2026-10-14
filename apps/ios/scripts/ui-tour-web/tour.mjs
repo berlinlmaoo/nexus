@@ -148,6 +148,13 @@ async function dismissAttendanceReminder(page) {
 const MAX_PAGES = Number(process.env.TOUR_MAX_PAGES) || 6;
 /** The least a scroll step must move (fraction of the viewport) to be worth a page of its own. */
 const MIN_PAGE_STEP = Number(process.env.TOUR_MIN_PAGE_STEP) || 0.5;
+/**
+ * A shorter last step still gets one final "scrolled to the bottom" page when it moved at least this much
+ * (run 14 tooling note: dashboard-2, project-overview-3, leaderboard-4, project-timeline-5 and
+ * settings-security-6 on web-mobile stopped before the true end, so content under the tab bar could not be
+ * checked). Less than this is the near-duplicate W-M24 was about (50-77 px) and ends the paging unshot.
+ */
+const MIN_LAST_STEP = Number(process.env.TOUR_MIN_LAST_STEP) || 0.15;
 
 /**
  * The screenshot(s) of one screen: `<id>.png`, then `<id>-2.png` … like the app tour (TOUR_MAX_PAGES, default 6).
@@ -220,11 +227,15 @@ async function capture(page, dir, id) {
   await shot(1);
   let pages = 1;
   // A step that moved less than half a viewport shows mostly the previous page again (UI tour run 13, W-M24:
-  // dashboard-3 and projects-2 were 50-77 px further down): no page for it, and the paging ends there.
-  while (pages < MAX_PAGES && (await step()) >= MIN_PAGE_STEP) {
+  // dashboard-3 and projects-2 were 50-77 px further down), so the paging ends there; but when it still
+  // reached a real part of the page (MIN_LAST_STEP), that end is shot once as the last page.
+  while (pages < MAX_PAGES) {
+    const moved = await step();
+    if (moved < MIN_LAST_STEP) break;
     await page.waitForTimeout(700);
     pages += 1;
     await shot(pages);
+    if (moved < MIN_PAGE_STEP) break;
   }
   return { pages };
 }
@@ -299,8 +310,8 @@ function monthBefore(month) {
 /**
  * The run-time values of the dashboard screens (14 Oct 2026), read with the QA session (GET only):
  * `{outlet}` / `{socmed}` = the QA Outlet Sales / Social Media Report project (by name, else the first "ZZ QA"
- * project of that type; TOUR_OUTLET_PROJECT_ID / TOUR_SOCMED_PROJECT_ID win), `{outletDay}` = the newest date
- * with a reported night (else with its own daily target), `{socmedDay}` = the newest date up to today with
+ * project of that type; TOUR_OUTLET_PROJECT_ID / TOUR_SOCMED_PROJECT_ID win), `{outletDay}` = a day other than
+ * today (the newest night waiting for its report, else reported, else with its own daily target), `{socmedDay}` = the newest date up to today with
  * figures; this month, else the month before. Missing = `{ skip: "<reason>" }`, like the Legal values.
  */
 async function dashboardValues(browser, state) {
@@ -315,10 +326,17 @@ async function dashboardValues(browser, state) {
   };
   const kinds = [
     { key: "outlet", env: "TOUR_OUTLET_PROJECT_ID", type: "OUTLET_SALES", name: "ZZ QA Manager Outlet", api: "outlet-sales",
+      // A day other than today: the calendar opens with today picked and its panel already shown, so a shot
+      // of today repeated outlet-calendar (run 14 tooling note / P-T1). The newest night waiting for its
+      // report, else the newest reported one, else a day with its own target, else any event day.
       day: (d) => {
-        const reported = (d.events || []).filter((e) => e.status === "REPORTED").map((e) => e.date);
-        const targets = (d.dayTargets || []).map((t) => t.date);
-        return (reported.length ? reported : targets).sort().pop() || null;
+        const today = String(d.today || "").slice(0, 10);
+        const day = (x) => String(x || "").slice(0, 10);
+        const events = d.events || [];
+        const of = (status) => events.filter((e) => !status || e.status === status).map((e) => day(e.date)).filter((x) => x && x !== today);
+        const targets = (d.dayTargets || []).map((t) => day(t.date)).filter((x) => x && x !== today);
+        const pick = [of("WAITING_REPORT"), of("REPORTED"), targets, of(null)].find((l) => l.length);
+        return pick ? pick.sort().pop() : null;
       } },
     { key: "socmed", env: "TOUR_SOCMED_PROJECT_ID", type: "SOCIAL_MEDIA_REPORT", name: "ZZ QA Social Media Report", api: "social-media",
       day: (d) => (d.days || [])
