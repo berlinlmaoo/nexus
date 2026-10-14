@@ -83,6 +83,7 @@ extension APIClient {
 /// one of them never opens. A sheet on this child is a different view, so both work.
 struct EmailChangeRow: View {
     @Binding var email: String
+    @Environment(AuthStore.self) private var auth
     @State private var changing = false
 
     var body: some View {
@@ -102,7 +103,7 @@ struct EmailChangeRow: View {
         .buttonStyle(.plain)
         .accessibilityHint(T("Change the email you sign in with"))
         .sheet(isPresented: $changing) {
-            ChangeEmailSheet(current: email) { email = $0 }
+            ChangeEmailSheet(current: email) { email = $0 }.environment(auth)
         }
     }
 }

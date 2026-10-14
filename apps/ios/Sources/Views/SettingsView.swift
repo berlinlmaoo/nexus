@@ -54,7 +54,7 @@ struct SettingsView: View {
         .alert(T("Couldn't save"), isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
             Button("OK") { saveError = nil }
         } message: { Text(saveError ?? "") }
-        .sheet(isPresented: $showDeleteAccount) { DeleteAccountSheet() }
+        .sheet(isPresented: $showDeleteAccount) { DeleteAccountSheet().environment(auth) }
         .navigationTitle(webChrome ? "" : T("Settings"))
         .navigationBarTitleDisplayMode(.inline)
         // The sidebar's root draws its own header (webChrome); pushed, the bar stays for Back.
@@ -707,6 +707,7 @@ private struct WebEmailField: View {
     /// Asks for the whole address on one line (the profile card's side-by-side layout, which steps
     /// down to a stacked one when it does not fit).
     var wholeLine = false
+    @Environment(AuthStore.self) private var auth
     @State private var changing = false
 
     var body: some View {
@@ -726,7 +727,7 @@ private struct WebEmailField: View {
                 .accessibilityHint(T("Change the email you sign in with"))
         }
         .sheet(isPresented: $changing) {
-            ChangeEmailSheet(current: email) { email = $0 }
+            ChangeEmailSheet(current: email) { email = $0 }.environment(auth)
         }
     }
 }

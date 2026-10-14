@@ -18,6 +18,8 @@ struct AdminAuditSection: View {
     /// unit or announcement opens on its own tab there.
     var controlRoomTabs: Set<String> = []
     var openTab: (String) -> Void = { _ in }
+    @Environment(AuthStore.self) private var auth
+    @Environment(AppRouter.self) private var router
     @State private var logs: [AuditLog] = []
     @State private var total: Int?
     @State private var loading = true
@@ -93,6 +95,7 @@ struct AdminAuditSection: View {
         .sheet(item: $opened) { log in
             AuditEntrySheet(log: log, onRestored: { restoredHere(log.id) },
                             controlRoomTabs: controlRoomTabs, openTab: openTab)
+                .environment(auth).environment(router)
         }
     }
 

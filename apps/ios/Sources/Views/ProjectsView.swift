@@ -151,21 +151,26 @@ struct ProjectsView: View {
                     .disabled(workspaceId == nil)
                 }
             }
+            // Environment passed explicitly: a sheet on Mac Catalyst does not always inherit it, and the
+            // page-sized New project sheet crashed there without AuthStore (UI tour run 15).
             .sheet(item: $sheet) { which in
-                switch which {
-                case .newProject:
-                    // The type picker (Task Project, Outlet Sales Dashboard, Pipeline Dashboard; Content
-                    // Planner coming soon) is CreateProjectSheet's first step — the only way in.
-                    CreateProjectSheet(workspaceId: workspaceId ?? "", onOpenProject: { openBoard = $0 }) { await load() }
-                case .newProjectIn(let f):
-                    CreateProjectSheet(workspaceId: workspaceId ?? "", onOpenProject: { openBoard = $0 }, folder: f) { await load() }
-                case .newFolder:
-                    CreateFolderSheet(workspaceId: workspaceId ?? "") { await load() }
-                case .newSubfolder(let parent):
-                    CreateFolderSheet(workspaceId: workspaceId ?? "", parent: parent) { await load() }
-                case .editFolder(let f):
-                    CreateFolderSheet(workspaceId: workspaceId ?? "", editing: f) { await load() }
+                Group {
+                    switch which {
+                    case .newProject:
+                        // The type picker (Task Project, Outlet Sales Dashboard, Pipeline Dashboard; Content
+                        // Planner coming soon) is CreateProjectSheet's first step — the only way in.
+                        CreateProjectSheet(workspaceId: workspaceId ?? "", onOpenProject: { openBoard = $0 }) { await load() }
+                    case .newProjectIn(let f):
+                        CreateProjectSheet(workspaceId: workspaceId ?? "", onOpenProject: { openBoard = $0 }, folder: f) { await load() }
+                    case .newFolder:
+                        CreateFolderSheet(workspaceId: workspaceId ?? "") { await load() }
+                    case .newSubfolder(let parent):
+                        CreateFolderSheet(workspaceId: workspaceId ?? "", parent: parent) { await load() }
+                    case .editFolder(let f):
+                        CreateFolderSheet(workspaceId: workspaceId ?? "", editing: f) { await load() }
+                    }
                 }
+                .environment(auth).environment(router)
             }
             .task {
                 // Projects barely change between visits, so draw the last known list immediately

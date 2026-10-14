@@ -485,6 +485,7 @@ struct ProjectDetailView: View {
         .sheet(isPresented: $showSettings) {
             if let detail {
                 ProjectSettingsView(projectId: projectId, detail: detail, onChange: { await load() }, onDeleted: { dismiss() })
+                    .environment(auth).environment(router)
             }
         }
         .task { await load() }

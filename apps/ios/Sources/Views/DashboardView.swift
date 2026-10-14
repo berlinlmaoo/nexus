@@ -219,7 +219,7 @@ struct DashboardView: View {
                 }
             }
             .navigationDestination(isPresented: $showInbox) { InboxView(providesOwnStack: false) }
-            .sheet(item: $openSubmission) { SubmissionDetailSheet(submissionId: $0.id, preview: $0.preview) }
+            .sheet(item: $openSubmission) { SubmissionDetailSheet(submissionId: $0.id, preview: $0.preview).environment(auth).environment(router) }
             .coordinateSpace(.named(morphSpace))
             .onChange(of: morphTarget) { _, t in
                 guard t.width > 1, activeStat != nil || activeLevel || activeBell, !morphExpanded else { return }
