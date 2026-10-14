@@ -1067,6 +1067,18 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   // (UI tour run 14, WD-3).
   const boardRef = useRef<HTMLDivElement>(null);
   const boardFade = useEdgeFade(boardRef, [tasks.length, cfg.cardSize, linkedLanes.length], true);
+  // Phone: the board opens on the first column that holds cards, not on an empty To Do that fills the screen
+  // while the cards only peek in (UI tour run 15, R15-WB-8). Once per board.
+  const openedOn = useRef(false);
+  useEffect(() => {
+    const box = boardRef.current;
+    if (openedOn.current || !box || tasks.length === 0 || !window.matchMedia("(max-width: 639.98px)").matches) return;
+    openedOn.current = true;
+    const first = lanes.find((g) => g.tasks.length > 0 && !collapsed.has(g.key));
+    if (!first || first === lanes[0]) return;
+    const el = box.querySelector<HTMLElement>(`[data-lane-key="${CSS.escape(first.key)}"]`);
+    if (el) box.scrollLeft += el.getBoundingClientRect().left - box.getBoundingClientRect().left - 16;
+  }, [tasks.length]); // eslint-disable-line react-hooks/exhaustive-deps
   // Notion's coloured board (owner, 12 Oct 2026): each column takes its status option's colour (or the
   // group value's), a light tint behind white cards, the header as a pill with the count in its hue.
   const laneColor = (g: TaskGroup): string => {
@@ -1170,7 +1182,10 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
         // only blank page under it).
         // Desktop too (UI tour run 13, W-D27): each column scrolls on its own under the project header, instead
         // of the page scrolling down a long Done column past short ones into blank canvas.
-        className={cn("group/lane flex shrink-0 flex-col rounded-lg p-1.5 transition-shadow", laneW, showHeader && "max-h-[max(24rem,calc(100dvh-11rem))] max-sm:max-h-[calc(100dvh-16rem)]", dragLaneId === g.key && "opacity-40")}
+        // Phone: a lane nearly fills the screen, so the next one peeks in by its card edges only, never by half a
+        // value ("Rp 3", UI tour run 15, R15-WM-2). Wider screens: an empty lane is narrow, so the columns with
+        // cards come into view (R15-WB-8).
+        className={cn("group/lane flex shrink-0 snap-start flex-col rounded-lg p-1.5 transition-shadow", laneW, "max-sm:w-[calc(100vw-4rem)]", showHeader && items.length === 0 && draft !== id && "sm:w-48", showHeader && "max-h-[max(24rem,calc(100dvh-11rem))] max-sm:max-h-[calc(100dvh-16rem)]", dragLaneId === g.key && "opacity-40")}
         onDragOver={(e) => {
           if (!dropOk) return;
           e.preventDefault();
@@ -1239,6 +1254,10 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
               <Plus className="h-3.5 w-3.5" />{t("New task")}
             </button>
           )}
+          {/* An empty column says so, as the List does (UI tour run 15, R15-WB-8 / iPhone R15-I-10). */}
+          {items.length === 0 && draft !== id && (
+            <p className="px-2 pb-1 text-xs opacity-70" style={{ color: tone.text }}>{t("No tasks")}</p>
+          )}
           <Incremental
             items={items}
             keyOf={(task) => `${task.id}-${g.key}`}
@@ -1266,7 +1285,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   };
 
   const linkedLaneEls = linkedLanes.map((lane) => (
-    <section key={`linked-${lane.id}`} data-lane-key={`linked-${lane.id}`} className={cn("flex shrink-0 flex-col rounded-lg border border-dashed border-border p-1.5 max-h-[max(24rem,calc(100dvh-11rem))] max-sm:max-h-[calc(100dvh-16rem)]", laneW)}>
+    <section key={`linked-${lane.id}`} data-lane-key={`linked-${lane.id}`} className={cn("flex shrink-0 snap-start flex-col rounded-lg border border-dashed border-border p-1.5 max-h-[max(24rem,calc(100dvh-11rem))] max-sm:max-h-[calc(100dvh-16rem)]", laneW, "max-sm:w-[calc(100vw-4rem)]")}>
       <div className="mb-1 flex items-center gap-1.5 px-1.5 py-1">
         <span className="truncate text-sm font-semibold">{lane.name}</span>
         <span className="shrink-0 rounded bg-muted px-1.5 text-[11px] text-muted-foreground">{t("Linked")}</span>
@@ -1305,7 +1324,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
           ))}
         </div>
       )}
-      <div ref={boardRef} data-touch-drag-root="" className={cn("overflow-x-auto overscroll-x-contain px-4 pb-6 pt-3 md:px-8", boardFade)}>
+      <div ref={boardRef} data-touch-drag-root="" className={cn("overflow-x-auto overscroll-x-contain px-4 pb-6 pt-3 max-sm:snap-x max-sm:snap-mandatory max-sm:scroll-px-4 md:px-8", boardFade)}>
         {/* The trailing spacer keeps the last column clear of the edge at full scroll (W-D4). */}
         <div className="flex min-w-max items-start gap-2.5 after:block after:w-2 after:shrink-0 after:content-[''] md:after:w-6">
           {lanes.map((g) => renderLane(g, null, g.tasks, true))}
@@ -1912,6 +1931,9 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
         </div>
       )}
 
+      {/* Wide screens: the chosen day sits beside the month, in view on the first screen (UI tour run 15, R15-WD-9:
+          under the grid it was below the fold at 900 px). */}
+      <div className={cn(!isMobile && "xl:grid xl:grid-cols-[minmax(0,1fr)_19rem] xl:items-start xl:gap-4")}>
       {isMobile ? (
         // Phone (UI tour run 7, 14 Oct 2026): the month grid like the desktop and the iPhone app, a dot per
         // task on its day, then the chosen day's tasks under it. It used to be an agenda with no grid.
@@ -2035,7 +2057,8 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
           </div>
         </div>
       )}
-      {!isMobile && dayPanel}
+      {!isMobile && dayPanel && <div className="max-xl:mt-3 xl:sticky xl:top-[calc(var(--page-sticky-top,0px)+0.75rem)]">{dayPanel}</div>}
+      </div>
       {undated.length > 0 && (
         <div ref={undatedRef} className="scroll-mt-24 rounded-lg border border-dashed border-border">
           {/* Notion's "No date" tray (UI tour run 9: 84 truncated chips made a wall under the month). A count
@@ -2437,7 +2460,8 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                             return (
                               <button type="button" onClick={(e) => { e.stopPropagation(); scrollToWin(win); }}
                                 title={t("Show the bar")}
-                                className="absolute top-1/2 inline-flex -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                                // Above today's line, which used to run through "4 May" (UI tour run 15, R15-WM-4).
+                                className="absolute top-1/2 z-[6] inline-flex -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground ring-2 ring-card transition-colors hover:bg-accent hover:text-foreground"
                                 style={before ? { left: port.left + 6 } : { left: port.left + port.width - 6, transform: "translate(-100%, -50%)" }}>
                                 {before && <ChevronLeft className="h-3 w-3" aria-hidden />}{when}{!before && <ChevronRight className="h-3 w-3" aria-hidden />}
                               </button>
@@ -2483,6 +2507,9 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
             })}
           </div>
         </div>
+        {/* The box's bottom edge fades while rows continue below it; at full scroll it sits over this empty
+            band, so the last row is never dimmed (UI tour run 15, R15-WM-5: rows were cut hard at the edge). */}
+        <div aria-hidden className="pointer-events-none sticky bottom-0 left-0 z-[8] h-6 w-full bg-gradient-to-t from-card to-transparent" />
       </div>
 
       {/* Context menu / multi-select handled by the shared TaskBulkProvider (right-click / long-press). */}
