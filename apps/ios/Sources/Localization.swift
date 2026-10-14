@@ -76,7 +76,7 @@ final class AppLanguage {
         [indonesian, indonesianRedesign, indonesianQAWork, indonesianQAInteract, indonesianSheetsGrid,
          indonesianSheetsPanels, indonesianAccessR2, indonesianMacShell, indonesianMacPages, indonesianMacProject,
          indonesianMacScreens, indonesianMacForms, indonesianMacGideon, indonesianUITour, indonesianRun5, indonesianRun6,
-         indonesianLegal, indonesianRun7A, indonesianRun7B, indonesianRun7C, indonesianLegalRequests, indonesianRun9]
+         indonesianLegal, indonesianRun7A, indonesianRun7B, indonesianRun7C, indonesianLegalRequests, indonesianRun9, indonesianRun10]
     }
 
     /// English → Indonesian. Keys must match the source literal EXACTLY.
@@ -461,7 +461,7 @@ final class AppLanguage {
         "Remove": "Keluarkan",
         "SECURITY": "KEAMANAN",
         "Current password": "Password sekarang",
-        "New password (min 6)": "Password baru (min 6)",
+        "New password (min 8)": "Password baru (min 8)",
         "Repeat new password": "Ulangi password baru",
         "Change password": "Ganti password",
         "Password changed ✓": "Password diganti ✓",

@@ -269,9 +269,12 @@ struct TableHeaderRow: View {
             cell(T("Name"), icon: "textformat", width: cols.name, first: true)
             cell(T("Assignee"), icon: "person", width: cols.col)
             cell(T("Due date"), icon: "calendar", width: cols.col)
+            // The project's fields come right after the dates, as on the web's table (Harga, Request by,
+            // Tanggal Penggunaan…, then Priority and Status): an iPad beside the sidebar showed the four
+            // built-in columns and never a field (UI tour run 10, IPD-4).
+            ForEach(fields) { f in cell(f.name, icon: Self.icon(f.type), width: cols.field) }
             cell(T("Priority"), icon: "flag", width: cols.col)
             cell(T("Status"), icon: "rectangle.split.3x1", width: cols.col)
-            ForEach(fields) { f in cell(f.name, icon: Self.icon(f.type), width: cols.field) }
             Color.clear.frame(width: cols.open, height: 40)
                 .overlay(alignment: .leading) { Rectangle().fill(NX.border).frame(width: 1) }
         }
@@ -335,12 +338,12 @@ struct ProjectTableRow: View {
             nameCell
             assigneeCell.modifier(TableCell(width: cols.col, height: rowH))
             dueCell.modifier(TableCell(width: cols.col, height: rowH))
-            priorityCell.modifier(TableCell(width: cols.col, height: rowH))
-            statusCell.modifier(TableCell(width: cols.col, height: rowH))
             ForEach(fields) { f in
                 openButton { Text(fieldText(f)).font(NXFont.text(14)).foregroundStyle(NX.foreground.opacity(0.9)).lineLimit(1) }
                     .modifier(TableCell(width: cols.field, height: rowH))
             }
+            priorityCell.modifier(TableCell(width: cols.col, height: rowH))
+            statusCell.modifier(TableCell(width: cols.col, height: rowH))
             openButton {
                 Image(systemName: "chevron.right").font(.system(size: 13, weight: .medium)).foregroundStyle(NX.mutedFg)
                     .frame(maxWidth: .infinity)

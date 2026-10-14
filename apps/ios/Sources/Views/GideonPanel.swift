@@ -326,12 +326,15 @@ struct GideonPanel: View {
                 conversation
             }
             .navigationBarTitleDisplayMode(.inline)
+            .modifier(GideonSystemTitle(title: displayName, subtitle: subtitleText))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     // Esc closes the panel (hardware keyboard, Mac — web QA 13 Oct 2026).
                     if !embedded { Button(T("Close")) { dismiss() }.keyboardShortcut(.cancelAction) }
                 }
-                ToolbarItem(placement: .principal) { title }
+                if !GideonSystemTitle.available {
+                    ToolbarItem(placement: .principal) { title }
+                }
                 ToolbarItem(placement: .topBarTrailing) { tierChip }
                 // Chat history and New chat as their own buttons, as web's header (UI tour run 7);
                 // the rest stays in ⋯.
@@ -461,10 +464,12 @@ struct GideonPanel: View {
     /// "GIDEON" over "Acts in NEXUS as you" (or the chat's title), as web's header (UI tour run 9, I9). The
     /// tier is its own "Luna ▾" chip beside it, so the title's width no longer changes with the tier (the
     /// old "GIDEON Luna ▾" title animated between widths and clipped its first letters).
+    private var subtitleText: String { chat.chatTitle.flatMap { GideonChatTitle.text($0) } ?? T("Acts in NEXUS as you") }
+
     private var title: some View {
         VStack(spacing: 0) {
             Text(displayName).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-            Text(chat.chatTitle.flatMap { GideonChatTitle.text($0) } ?? T("Acts in NEXUS as you"))
+            Text(subtitleText)
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
         }
         .frame(maxWidth: 170)
@@ -1434,5 +1439,28 @@ struct AskGideonButton: View {
         Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
             .frame(width: size, height: size)
             .foregroundStyle(NX.violetText)
+    }
+}
+
+
+/// iOS 26+: the bar's own title and subtitle ("GIDEON" / "Acts in NEXUS as you", web's header). A
+/// principal item is the first thing the bar drops when the trailing group (tier, history, new chat, ⋯)
+/// needs the room, and the iPhone showed no title at all (UI tour runs 9–10); the system title is kept.
+/// Earlier systems keep the principal item, which they do not drop.
+struct GideonSystemTitle: ViewModifier {
+    let title: String
+    let subtitle: String
+
+    static var available: Bool {
+        if #available(iOS 26.0, *) { return true }
+        return false
+    }
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.navigationTitle(title).navigationSubtitle(subtitle)
+        } else {
+            content
+        }
     }
 }

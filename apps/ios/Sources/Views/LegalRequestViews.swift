@@ -82,7 +82,7 @@ struct LegalRequestFormView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Image(systemName: "building.columns").font(.system(size: 20)).foregroundStyle(NX.mutedFg)
+                Image(systemName: "scale.3d").font(.system(size: 20)).foregroundStyle(NX.mutedFg)
                     .frame(width: 44, height: 44).background(NX.muted, in: Circle())
                 Text(T("Legal request")).font(NXFont.display(26)).foregroundStyle(NX.foreground)
                 content
@@ -331,7 +331,7 @@ struct MyLegalRequestsStrip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Image(systemName: "building.columns").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
+                Image(systemName: "scale.3d").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
                 Text(T("Legal requests")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                 Text("\(requests.count)").font(NXFont.text(12)).foregroundStyle(NX.mutedFg).monospacedDigit()
             }
@@ -774,17 +774,24 @@ struct LegalRequestCard: View {
             Text([r.company?.name, r.isAddendum && !r.parentNumberText.isEmpty ? String(format: T("Amends %@"), r.parentNumberText) : nil]
                     .compactMap { $0 }.joined(separator: " · "))
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            // A narrow board column (iPad portrait) cut "PIC · Q…" and "Sig…" and wrapped the date (UI tour
+            // run 10, IPD-3): the date and the count keep their width, the PIC has its own line, and the
+            // document's number truncates in the middle beside a status chip that is never squeezed.
             HStack(spacing: 8) {
-                Text(r.requester?.name ?? "—")
-                if let d = r.deadline { Label(LegalLabels.day(d), systemImage: "calendar").foregroundStyle(r.overdue ? NX.danger : NX.mutedFg).fontWeight(r.overdue ? .semibold : .regular) }
-                if !r.attachments.isEmpty { Label("\(r.attachments.count)", systemImage: "paperclip") }
+                Text(r.requester?.name ?? "—").lineLimit(1)
+                if let d = r.deadline {
+                    Label(LegalLabels.day(d), systemImage: "calendar").lineLimit(1).fixedSize()
+                        .foregroundStyle(r.overdue ? NX.danger : NX.mutedFg).fontWeight(r.overdue ? .semibold : .regular)
+                }
+                if !r.attachments.isEmpty { Label("\(r.attachments.count)", systemImage: "paperclip").fixedSize() }
             }
             .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-            HStack(spacing: 6) {
-                Text(r.pic.map { "PIC · \($0.name)" } ?? T("No PIC yet")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                Spacer(minLength: 4)
-                if let doc = r.document {
-                    Text(doc.number).font(.system(size: 10, design: .monospaced)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            Text(r.pic.map { "PIC · \($0.name)" } ?? T("No PIC yet")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            if let doc = r.document {
+                HStack(spacing: 6) {
+                    Text(doc.number).font(.system(size: 10, design: .monospaced)).foregroundStyle(NX.mutedFg)
+                        .lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 4)
                     LegalStatusChip(status: doc.status)
                 }
             }

@@ -199,7 +199,7 @@ struct MoreView: View {
                             LazyVGrid(columns: cols, spacing: 12) {
                                 // Invitation only (owner, 14 Oct 2026): the roster's canAccessLegal.
                                 if viewer.canAccessLegal {
-                                    MoreTile(T("Legal"), "building.columns.fill", NX.blue) { LegalView() }
+                                    MoreTile(T("Legal"), "scale.3d", NX.blue) { LegalView() }
                                 }
                                 MoreTile(T("Leaderboard"), "trophy.fill", NX.warning) { LeaderboardView() }
                                 MoreTile(T("Reports"), "chart.bar.fill", NX.success) { ReportsView() }

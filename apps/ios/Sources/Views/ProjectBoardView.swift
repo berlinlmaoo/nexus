@@ -101,6 +101,8 @@ struct ProjectDetailView: View {
     }
 
     private var viewContext: ViewContext { ViewContext(fields: allFields, meId: meId, today: Date()) }
+    /// This project's custom fields, so a linked card shows this project's properties only (web board).
+    private var projectFieldIds: Set<String>? { allFields.isEmpty ? nil : Set(allFields.map(\.id)) }
 
     /// The saved views shown as chips on a layout: the layout's built-in first, then the others of the same
     /// layout (e.g. "Per kategori" on Board). Calendar/Timeline/Table views are their own tabs here.
@@ -787,12 +789,14 @@ struct ProjectDetailView: View {
                         }
                     }
                 }
-                .padding(.leading, 18)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { tabsWidth = $0 }
             }
             .modifier(TabRowOverflow(activeId: activeTabItemId, itemIds: wideMenuItems.map(\.id), proxy: proxy,
                                      overflowing: $tabsOverflow, contentWidth: tabsWidth))
             }
+            // The inset sits OUTSIDE the scroll view: inside it, it scrolled away with the tabs and a
+            // scrolled row put its first tab flush against the sidebar (UI tour run 10, MAC-1).
+            .padding(.leading, 18)
             if tabsOverflow { tabOverflowMenu(wideMenuItems) }
             wideTools
                 .fixedSize()
@@ -1222,14 +1226,15 @@ struct ProjectDetailView: View {
             canAdd: false,
             canEdit: false,
             linked: true,
-            groupRow: groupRow
+            groupRow: groupRow,
+            fieldIds: projectFieldIds
         )
     }
 
     /// One column, built outside the ForEach so the type checker sees one plain call.
     private func laneColumn(_ lane: ProjectDetail.Lane, at i: Int, in shown: [ProjectDetail.Lane], statusStyle: Bool, grouped: Bool) -> LaneColumn {
         let firstOfGroup = i == 0 || shown[i - 1].group != lane.group
-        let label: String? = statusStyle && firstOfGroup ? lane.group.label : nil
+        let label: String? = statusStyle && firstOfGroup ? lane.group.header(above: lane.name) : nil
         var sectionStatus: ((String?) async -> Void)? = nil
         // Status columns are edited with Full access only (project access levels).
         let manages = detail?.canManageProject ?? true
@@ -1248,7 +1253,8 @@ struct ProjectDetailView: View {
             options: statusStyle && manages ? optionActions(lane) : nil,
             onSetStatus: sectionStatus,
             canAdd: addable && canEdit,
-            canEdit: canEdit
+            canEdit: canEdit,
+            fieldIds: projectFieldIds
         )
     }
 
@@ -1768,6 +1774,8 @@ struct LaneColumn: View {
     /// Draw the group-label row even when this column is not a status column, so a linked lane lines up
     /// with status columns beside it.
     var groupRow = false
+    /// The project's own custom fields, for the cards (BoardCard.fieldIds).
+    var fieldIds: Set<String>? = nil
     @State private var composing = false
     /// True while a card is hovering over this column, so the target is obvious before you let go.
     @State private var dropTargeted = false
@@ -1872,7 +1880,7 @@ struct LaneColumn: View {
             editableCard(task)
         } else {
             // Read-only: the card opens the task, nothing else.
-            Button { onOpen(task.id) } label: { BoardCard(task: task, linkedFrom: linked ? lane.name : nil) }
+            Button { onOpen(task.id) } label: { BoardCard(task: task, linkedFrom: linked ? lane.name : nil, fieldIds: fieldIds) }
                 .buttonStyle(.plain)
                 .hoverEffect(.lift)
         }
@@ -1884,7 +1892,7 @@ struct LaneColumn: View {
             if selection.active { selection.toggle(task.id) } else { onOpen(task.id) }
         } label: {
             // The tick is drawn inside the card, so the column's scroll view never clips it.
-            BoardCard(task: task, selectMark: selection.active ? selection.contains(task.id) : nil, linkedFrom: linked ? lane.name : nil)
+            BoardCard(task: task, selectMark: selection.active ? selection.contains(task.id) : nil, linkedFrom: linked ? lane.name : nil, fieldIds: fieldIds)
                 .overlay {
                     if selection.active && selection.contains(task.id) {
                         RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.violet, lineWidth: 2)
@@ -1899,7 +1907,7 @@ struct LaneColumn: View {
         // The id is the payload; a selected card carries the whole selection (the board reads it on drop).
         .draggable(task.id) {
             let count = selection.active && selection.contains(task.id) ? selection.ids.count : 1
-            BoardCard(task: task).frame(width: 250).opacity(0.9)
+            BoardCard(task: task, fieldIds: fieldIds).frame(width: 250).opacity(0.9)
                 .overlay(alignment: .topTrailing) {
                     if count > 1 {
                         Text("\(count)").font(NXFont.text(12, .bold)).foregroundStyle(.white)
@@ -2026,6 +2034,8 @@ struct BoardCard: View {
     var selectMark: Bool? = nil
     /// The source project of a card linked in from another project: "From <project>" on top, as web.
     var linkedFrom: String? = nil
+    /// The viewing project's custom fields (CFChipRow.only); nil = every value the task carries.
+    var fieldIds: Set<String>? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -2045,7 +2055,7 @@ struct BoardCard: View {
                     PriorityPill(priority: p)
                 }
             }
-            CFChipRow(values: task.customFieldValues)
+            CFChipRow(values: task.customFieldValues, only: fieldIds)
             HStack(spacing: 8) {
                 // No "No due" placeholder on every card (Notion shows nothing when there is no date).
                 if let due = dueText {
@@ -2107,12 +2117,18 @@ private struct TabRowOverflow: ViewModifier {
     /// The tabs' own width (measured by the row's HStack: onScrollGeometryChange needs iOS 18).
     let contentWidth: CGFloat
     @State private var viewportWidth: CGFloat = 0
+    /// Scrolled away from the start: the leading edge fades too, so a tab cut there ("gori" for "Per
+    /// kategori" on the iPhone) reads as "more this way" (UI tour run 10, MAC-1). iOS 18 knows the
+    /// offset; iOS 17 keeps the trailing fade only.
+    @State private var scrolled = false
 
     func body(content: Content) -> some View {
-        content
+        tracked(content)
             .contentMargins(.trailing, fade, for: .scrollContent)
             .mask {
                 HStack(spacing: 0) {
+                    LinearGradient(colors: [.black.opacity(scrolled ? 0 : 1), .black], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: fade)
                     Rectangle()
                     LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .leading, endPoint: .trailing)
                         .frame(width: fade)
@@ -2123,6 +2139,16 @@ private struct TabRowOverflow: ViewModifier {
             .onAppear { reveal(animated: false) }
             .onChange(of: activeId) { _, _ in reveal(animated: true) }
             .onChange(of: itemIds) { _, _ in reveal(animated: false) }
+    }
+
+    @ViewBuilder private func tracked(_ content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: Bool.self) { g in
+                g.contentOffset.x > -g.contentInsets.leading + 1
+            } action: { _, now in scrolled = now }
+        } else {
+            content
+        }
     }
 
     private func update() {

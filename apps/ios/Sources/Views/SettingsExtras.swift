@@ -263,7 +263,10 @@ struct SecurityCard: View {
     /// Regular width is the web's Password card: Current | New side by side and Change password at the
     /// right, no repeat field (PasswordSection in settings.tsx). The phone keeps its repeat field.
     private var web: Bool { hSize == .regular }
-    private var valid: Bool { !current.isEmpty && new1.count >= 6 && (web || new1 == new2) }
+    /// The server (and the web) take a new password of 8 characters or more, counted in UTF-16 units as
+    /// zod counts them; the app said and checked "min 6", so a 6- or 7-character password passed here and
+    /// was refused by the server (run 10).
+    private var valid: Bool { !current.isEmpty && new1.utf16.count >= 8 && (web || new1 == new2) }
 
     var body: some View {
         if web { webBody } else { phoneBody }
@@ -275,7 +278,7 @@ struct SecurityCard: View {
             Text(T("Password")).font(NXFont.text(17, .semibold)).foregroundStyle(NX.foreground)
                 .accessibilityAddTraits(.isHeader)
             secureField(T("Current password"), $current)
-            secureField(T("New password (min 6)"), $new1)
+            secureField(T("New password (min 8)"), $new1)
             secureField(T("Repeat new password"), $new2)
             if let msg { Text(msg.text).font(NXFont.text(12, .semibold)).foregroundStyle(msg.ok ? NX.success : NX.danger) }
             // Near-black like the web's primary, not the old violet fill.
@@ -298,7 +301,7 @@ struct SecurityCard: View {
                     .accessibilityAddTraits(.isHeader)
                 HStack(alignment: .top, spacing: 16) {
                     webSecure(T("Current password"), $current)
-                    webSecure(T("New password"), $new1)
+                    webSecure(T("New password (min 8)"), $new1)
                 }
                 HStack(spacing: 10) {
                     Spacer(minLength: 0)

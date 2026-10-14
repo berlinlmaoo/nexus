@@ -130,6 +130,12 @@ struct LegalDocumentsPane: View {
     @State private var link: LegalLink?
     @State private var sheet: Sheet?
     @State private var open: LegalOpenID?
+    /// The pane's width. The table's fixed columns need ~720 pt before the Title column gets any room:
+    /// on an iPad in portrait beside the sidebar they overflowed, pushed the whole page off both edges and
+    /// squeezed Title out (UI tour run 10, IPD-1). Narrower than `tableWidth` reads the phone's cards.
+    @State private var width: CGFloat = 0
+    private static let tableWidth: CGFloat = 880
+    private var table: Bool { wide && width - 2 * gutter >= Self.tableWidth }
 
     var body: some View {
         ScrollView {
@@ -141,6 +147,7 @@ struct LegalDocumentsPane: View {
             .padding(.horizontal, gutter)
             .padding(.vertical, 16)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .refreshable { await load() }
         .task(id: text) {
             if !text.isEmpty { try? await Task.sleep(nanoseconds: 300_000_000) }
@@ -248,6 +255,7 @@ struct LegalDocumentsPane: View {
             }
             .padding(.vertical, 1)
         }
+        .nxEdgeFade()
     }
 
     private var dateLabel: String {
@@ -277,11 +285,11 @@ struct LegalDocumentsPane: View {
                 .frame(maxWidth: .infinity)
         } else if let result {
             LegalListCard {
-                if wide { wideHeader; Divider().overlay(NX.border) }
+                if table { wideHeader; Divider().overlay(NX.border) }
                 ForEach(Array(result.documents.enumerated()), id: \.element.id) { i, d in
                     if i > 0 { Divider().overlay(NX.border) }
                     Button { open = LegalOpenID(id: d.id) } label: {
-                        if wide { wideRow(d) } else { phoneRow(d) }
+                        if table { wideRow(d) } else { phoneRow(d) }
                     }
                     .buttonStyle(.plain)
                     .hoverEffect(.highlight)

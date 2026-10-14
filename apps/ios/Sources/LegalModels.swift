@@ -866,6 +866,19 @@ enum LegalText {
 
     static let jakarta = TimeZone(identifier: "Asia/Jakarta") ?? TimeZone(secondsFromGMT: 7 * 3600)!
 
+    /// A title that may be one long "word" (a file name: "03_SPK_City_Head_PATS_University.docx") gets a
+    /// zero-width break opportunity after each _ . - /, so it wraps at those joins instead of mid-letter
+    /// ("…University.doc / x", UI tour run 10, IP-2). For display only.
+    static func wrappable(_ s: String) -> String {
+        var out = ""
+        out.reserveCapacity(s.count + 8)
+        for ch in s {
+            out.append(ch)
+            if ch == "_" || ch == "." || ch == "-" || ch == "/" { out.append("\u{200B}") }
+        }
+        return out
+    }
+
     private static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)

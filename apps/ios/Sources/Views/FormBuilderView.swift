@@ -311,6 +311,18 @@ struct FormBuilderView: View {
     }
 
     private var regular: Bool { hSize == .regular }
+    /// The four tabs sit in the bar only on the Mac. On iPad the system bar lays the leading breadcrumb and
+    /// a principal item out independently, and from iOS 26 the breadcrumb pill was drawn over the tabs
+    /// ("Pengajuan Finan… uestions", "Responses 24" clipped; UI tour run 10, IPD-2): iPad gets the
+    /// underline strip under the bar instead, as on iPhone, so the tabs are always fully visible.
+    private static let tabsFitInBar: Bool = {
+        #if targetEnvironment(macCatalyst)
+        return true
+        #else
+        return false
+        #endif
+    }()
+    private var barTabs: Bool { regular && Self.tabsFitInBar }
     /// The screen's width, for the top bar: an iPad in portrait with the sidebar open is "regular" but
     /// too narrow for breadcrumb + four tabs + save state + Preview, and the bar then crushed the tabs to
     /// single letters (UI tour run 9, P2). Below `tightBarWidth` the breadcrumb gives way, never the tabs.
@@ -375,9 +387,11 @@ struct FormBuilderView: View {
         if loaded && loadError == nil {
             if regular {
                 ToolbarItem(placement: .topBarLeading) { breadcrumb }
-                ToolbarItem(placement: .principal) {
-                    // Full labels always (web, Mac): the tabs keep their ideal width and the breadcrumb truncates.
-                    FormStudioTabBar(selection: $tab, responseCount: responseCount).fixedSize()
+                if barTabs {
+                    ToolbarItem(placement: .principal) {
+                        // Full labels always (web, Mac): the tabs keep their ideal width and the breadcrumb truncates.
+                        FormStudioTabBar(selection: $tab, responseCount: responseCount).fixedSize()
+                    }
                 }
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -448,7 +462,7 @@ struct FormBuilderView: View {
 
     private var studio: some View {
         VStack(spacing: 0) {
-            if !regular {
+            if !barTabs {
                 NXUnderlineTabs(items: tabItems, selection: $tab, accessibilityName: T("Form builder"))
             } else {
                 Rectangle().fill(NX.border).frame(height: 1)

@@ -84,7 +84,9 @@ struct LegalDocumentView: View {
             }
         }
         .background(NX.background.ignoresSafeArea())
-        .navigationTitle(model.doc.map { $0.number.isEmpty ? $0.title : $0.number } ?? T("Document"))
+        // The number and the title are both in the header below; the bar repeated the number cut to
+        // "SPK/CH/PATS-UNIV/YOGYAKARTA/JAN/…" (UI tour run 10, IP-2), so it carries a short word instead.
+        .navigationTitle(T("Document"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load() }
         // PDFs are made in the background after generate / save / upload / approve: while a recent Word
@@ -169,7 +171,7 @@ struct LegalDocumentView: View {
             Text(doc.number.isEmpty ? T("No number") : doc.number)
                 .font(.system(size: 13, design: .monospaced)).foregroundStyle(NX.mutedFg).textSelection(.enabled)
                 .strikethrough(doc.numberReleased)
-            Text(doc.title).font(NXFont.text(hSize == .regular ? 24 : 21, .semibold)).foregroundStyle(NX.foreground)
+            Text(LegalText.wrappable(doc.title)).font(NXFont.text(hSize == .regular ? 24 : 21, .semibold)).foregroundStyle(NX.foreground)
                 .fixedSize(horizontal: false, vertical: true)
             Text(headerLine(doc)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
         }
@@ -206,9 +208,12 @@ struct LegalDocumentView: View {
         }
     }
 
+    /// One control (web, UI tour run 10): the current status, tinted as its chip, opens the status menu.
+    /// A void document has nowhere to go, so it shows the chip alone.
     @ViewBuilder private func statusControls(_ doc: LegalDocument) -> some View {
-        LegalStatusChip(status: doc.status)
-        if doc.status != "VOID" {
+        if doc.status == "VOID" {
+            LegalStatusChip(status: doc.status)
+        } else {
             Menu {
                 ForEach(doc.statusChoices, id: \.self) { s in
                     Button {
@@ -219,16 +224,20 @@ struct LegalDocumentView: View {
                     }
                 }
             } label: {
-                HStack(spacing: 4) {
-                    Text(T("Status")).font(NXFont.text(13, .medium))
+                let tone = LegalLabels.statusTone(doc.status)
+                HStack(spacing: 5) {
+                    Text(LegalLabels.status(doc.status)).font(NXFont.text(13, .semibold))
                     Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold))
                 }
-                .foregroundStyle(NX.foreground)
-                .padding(.horizontal, 10).frame(minHeight: 30)
-                .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(NX.border))
+                .foregroundStyle(tone.fg)
+                .padding(.horizontal, 12).frame(minHeight: 30)
+                .background(tone.bg, in: Capsule())
+                .contentShape(Capsule())
+                .fixedSize()
             }
             .menuIndicator(.hidden)
             .accessibilityLabel(T("Status"))
+            .accessibilityValue(LegalLabels.status(doc.status))
         }
     }
 

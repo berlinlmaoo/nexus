@@ -92,10 +92,14 @@ enum LegalLabels {
         return AppDateLocale.formatter("d MMM yyyy", timeZone: TimeZone(identifier: "Asia/Jakarta")).string(from: d)
     }
 
-    /// An ISO timestamp → "14 Oct 2026".
+    /// An ISO timestamp → "14 Oct" this year, "14 Oct 2025" otherwise (web fmtDate: the signed line,
+    /// templates and the kop row read the short date; UI tour run 10).
     static func date(_ iso: String?) -> String {
         guard let iso, let d = parseISO(iso) else { return "—" }
-        return AppDateLocale.formatter("d MMM yyyy").string(from: d)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = LegalText.jakarta
+        let thisYear = cal.component(.year, from: d) == cal.component(.year, from: Date())
+        return AppDateLocale.formatter(thisYear ? "d MMM" : "d MMM yyyy", timeZone: LegalText.jakarta).string(from: d)
     }
 
     static func parseISO(_ s: String) -> Date? {
@@ -214,6 +218,8 @@ struct LegalStatusChip: View {
             .padding(.horizontal, 8).padding(.vertical, 4)
             .foregroundStyle(LegalLabels.statusTone(status).fg)
             .background(LegalLabels.statusTone(status).bg, in: Capsule())
+            .lineLimit(1)
+            .fixedSize()
     }
 }
 
