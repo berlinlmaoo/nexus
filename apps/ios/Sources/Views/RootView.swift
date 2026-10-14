@@ -109,6 +109,8 @@ struct RootView: View {
                                 }
                             }
                     }
+                    // Passed explicitly: a sheet on Mac Catalyst does not always inherit the environment.
+                    .environment(auth).environment(router)
                 }
                 // A vault link tapped outside the app. Inside the authenticated branch for the same
                 // reason the form sheet is: a link that arrives while signed out waits in the router
@@ -123,6 +125,8 @@ struct RootView: View {
                                 }
                             }
                     }
+                    // Passed explicitly: a sheet on Mac Catalyst does not always inherit the environment.
+                    .environment(auth).environment(router)
                 }
                 // A task, project or submission a notification pointed at. A sheet for the same
                 // reason the form is one: it arrives from outside, it has no list behind it, and it
@@ -144,6 +148,8 @@ struct RootView: View {
                             }
                         }
                     }
+                    // Passed explicitly: a sheet on Mac Catalyst does not always inherit the environment.
+                    .environment(auth).environment(router)
                 }
         } else {
             // LoginView forces `.light` itself, and MUST stay outside that modifier.

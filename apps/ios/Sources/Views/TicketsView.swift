@@ -352,11 +352,11 @@ struct TicketsView: View {
         .alert(T("That ticket isn't in your list"), isPresented: $focusMissing) { Button("OK") {} } message: {
             Text(T("It may have been deleted, or the link is wrong. Your own tickets are in the list."))
         }
-        .sheet(item: $selected) { t in TicketDetailSheet(ticket: t) { await load() } }
+        .sheet(item: $selected) { t in TicketDetailSheet(ticket: t) { await load() }.environment(auth).environment(router) }
         // Reloads rather than splicing the new ticket in: the server decides the status, the
         // reporter shown (anonymous tickets hide it) and the ordering, so a locally-invented row
         // would differ from the one everybody else sees.
-        .sheet(isPresented: $showCreate) { NewTicketSheet { await load() } }
+        .sheet(isPresented: $showCreate) { NewTicketSheet { await load() }.environment(auth).environment(router) }
     }
 
     @ViewBuilder private var content: some View {
@@ -1094,7 +1094,7 @@ struct AttendanceCorrectionCard: View {
         }
         .task(id: reloadToken) { await load() }
         .sheet(isPresented: $showComposer) {
-            CorrectionComposerSheet(ticket: ticket) { await load() }
+            CorrectionComposerSheet(ticket: ticket) { await load() }.environment(auth)
         }
     }
 
