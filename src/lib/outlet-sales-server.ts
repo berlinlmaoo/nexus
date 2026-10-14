@@ -20,6 +20,8 @@ import {
   missingOf,
   monthBounds,
   outletToday,
+  reportOpen,
+  writesReport,
   pctOf,
   readReportConfig,
   statusOf,
@@ -389,6 +391,7 @@ export async function createOutletEvent(
   const d = { ...parsed.data, ...vals.columns }
   const json: Record<string, number> = {}
   for (const [k, v] of Object.entries(vals.json)) if (v !== null) json[k] = v
+  if (!reportOpen(dayOut(d.date as Date), outletToday()) && writesReport({ ...d, ...json })) return reportNotOpen
   const sales = (d.sales as number | null | undefined) ?? null
   const pax = (d.pax as number | null | undefined) ?? null
   const created = await prisma.outletSalesEvent.create({
@@ -424,6 +427,13 @@ export async function findOutletEvent(projectId: string, eventId: string) {
 
 const notFound = { ok: false as const, status: 404, body: { error: "Event tidak ditemukan.", code: "EVENT_NOT_FOUND" } }
 
+/** A report for a night after today (WIB): refused until the night itself (UI tour run 13, W-B5). */
+const reportNotOpen = {
+  ok: false as const,
+  status: 400,
+  body: { error: "Laporan dibuka pada malam itu.", errorEn: "Reports open on the night itself.", code: "REPORT_NOT_OPEN" },
+}
+
 /**
  * Change what is sent, nothing else: two people filling different parts of the same report never undo
  * each other. A PATCH that changes nothing answers the event as it is and writes no audit row.
@@ -449,6 +459,17 @@ export async function updateOutletEvent(
   const before = valuesOf(current)
   const changedValues = Object.keys(vals.json).filter((k) => (before[k] ?? null) !== vals.json[k])
   if (changed.length === 0 && changedValues.length === 0) return { ok: true, value: serializeEvent(current, outletToday(), config) }
+  // A night after today: no report yet. Clearing one, or changing the plan (name, targets), still goes; moving
+  // a night that already has a report into the future does not.
+  const nextDate = changed.includes("date") ? dayOut(fields.date as Date) : dayOut(current.date)
+  if (!reportOpen(nextDate, outletToday())) {
+    const sent: Record<string, unknown> = {}
+    for (const k of changed) sent[k] = fields[k]
+    for (const k of changedValues) sent[k] = vals.json[k]
+    const kept: Record<string, unknown> = { ...before }
+    for (const k of Object.keys(OUTLET_FIELDS)) kept[k] = cur[k]
+    if (writesReport(sent) || (changed.includes("date") && writesReport({ ...kept, ...sent }))) return reportNotOpen
+  }
 
   const update: Record<string, unknown> = {}
   for (const k of changed) update[k] = fields[k]

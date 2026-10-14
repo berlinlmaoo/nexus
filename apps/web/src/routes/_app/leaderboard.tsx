@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Lock, Trophy } from "lucide-react";
+import { Info, Lock, Trophy } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence } from "framer-motion";
@@ -55,15 +55,15 @@ function Leaderboard() {
 
   return (
     <div>
-      {/* The period sits in the header's action slot (it was a floating pill above a centred 3xl column;
-          the content now runs full width like every list page, UI sweep 12 Oct 2026). */}
-      <PageHeader title={t("Leaderboard")} subtitle={t("Everyone's XP this month. It resets on the 1st.")} actions={board.data?.period ? (
-        <span className="text-xs text-muted-foreground" title={t("XP resets on the 1st at 00:00 WIB")}>
-          <span className="font-medium text-foreground">{t("Current period")}</span> · {/* `end` is exclusive (the 1st of next month): show the last day that counts, "1 Oct – 31 Oct"
-              (QA 13 Oct 2026: it read "1 Oct → 1 Nov"). */}
-          {fmtDate(board.data.period.start)} – {fmtDate(new Date(new Date(board.data.period.end).getTime() - 1).toISOString())}
-        </span>
-      ) : undefined} />
+      {/* The period is part of the subtitle, under the title (UI tour run 13, W-D9: it floated small at the top
+          right, off the title's baseline). `end` is exclusive (the 1st of next month): the range shows the last
+          day that counts, "1 Oct – 31 Oct" (QA 13 Oct 2026: it read "1 Oct → 1 Nov"). */}
+      <PageHeader
+        title={t("Leaderboard")}
+        subtitle={board.data?.period
+          ? t("Everyone's XP for {range}. It resets on the 1st.", { range: `${fmtDate(board.data.period.start)} – ${fmtDate(new Date(new Date(board.data.period.end).getTime() - 1).toISOString())}` })
+          : t("Everyone's XP this month. It resets on the 1st.")}
+      />
       <PageBody>
         <div className="space-y-6">
           {board.isLoading && (
@@ -84,6 +84,15 @@ function Leaderboard() {
           {!board.isLoading && !board.isError && ranked.length === 0 && (
             <EmptyState icon={Trophy} title={t("No XP yet this month")}
               message={t("XP comes from quests the BoD assigns and is kept by showing up on time. The ranking appears as soon as someone earns or loses XP.")} />
+          )}
+
+          {/* Left out by rule (BoD and above): say so, rather than a ranking the viewer is silently missing from
+              (UI tour run 13, W-B4). */}
+          {board.data?.viewer && !board.data.viewer.ranked && board.data.viewer.reason === "MANAGEMENT" && (
+            <p className="flex items-start gap-2 rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+              <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+              {t("You're not on this ranking: the BoD is left out, so management doesn't compete with staff.")}
+            </p>
           )}
 
           {!board.isLoading && !board.isError && ranked.length > 0 && (

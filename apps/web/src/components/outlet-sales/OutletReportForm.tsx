@@ -14,7 +14,7 @@ import {
   outletApi, outletEventKey, outletKey, type OutletEvent, type OutletEventWrite, type OutletFieldKey, type OutletFormField,
   type OutletItem, type OutletMonthResponse, type OutletReportConfig,
 } from "@/lib/outlet-sales-api";
-import { StatusPill, count, dayShort, defaultOutletConfig, figureOf, pick, rupiah, sumOf, visibleItems, vsTarget, wibToday } from "./outlet-ui";
+import { StatusPill, count, dayShort, defaultOutletConfig, figureOf, pick, reportOpen, rupiah, sumOf, visibleItems, vsTarget, wibToday } from "./outlet-ui";
 
 /** The form's sections the outlet's own breakdown replaces (owner, 14 Oct 2026). */
 const BREAKDOWN_SECTIONS = new Set(["rsvp", "hosting"]);
@@ -24,13 +24,17 @@ export type FormTarget = { eventId?: string; date?: string };
 
 const NEW = "__new__";
 
-function errorOf(error: unknown): { text: string | null; field: string | null } {
-  const payload = (error as { payload?: { error?: unknown; field?: unknown } } | null)?.payload;
+function errorOf(error: unknown): { text: string | null; field: string | null; code: string | null } {
+  const payload = (error as { payload?: { error?: unknown; field?: unknown; code?: unknown } } | null)?.payload;
   return {
     text: typeof payload?.error === "string" ? payload.error : null,
     field: typeof payload?.field === "string" ? payload.field : null,
+    code: typeof payload?.code === "string" ? payload.code : null,
   };
 }
+
+/** The keys of the form that plan a night; every other one is its report, which opens on the night itself. */
+const PLAN_KEYS = new Set(["name", "date", "salesTarget", "paxTarget"]);
 
 /**
  * The default report form (Ryan, 10 Oct 2026: "form dengan pertanyaan yang diatas, supaya team nya tinggal
@@ -199,6 +203,9 @@ function FormBody({
   const [invalid, setInvalid] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const nf = nfOf(lang);
+  // A night after today (WIB) is planned here (name, day, targets) but reported only from the night itself
+  // (UI tour run 13, W-B5); the server refuses an earlier report too.
+  const notYet = !!draft.date && !reportOpen(draft.date, data.today ?? wibToday());
 
   const set = (f: OutletFormField, raw: string) => {
     const v = f.type === "money" || f.type === "count" ? (numberOf(raw) === null ? "" : nf.format(numberOf(raw)!)) : raw;
@@ -218,6 +225,8 @@ function FormBody({
     const out: Record<string, unknown> = {};
     for (const f of fields) {
       const next = valueOf(f, draft[f.key] ?? "");
+      // Not the night yet: its report waits (only clearing one made too early goes).
+      if (notYet && !PLAN_KEYS.has(f.key) && next !== null && next !== "") continue;
       if (!event) {
         if (next !== null && next !== "") out[f.key] = next;
         continue;
@@ -228,6 +237,7 @@ function FormBody({
     const values: Record<string, number | null> = {};
     for (const [id, raw] of Object.entries(figures)) {
       const next = numberOf(raw);
+      if (notYet && next !== null) continue;
       if (!event) { if (next !== null) values[id] = next; continue; }
       if (figureOf(event, id) !== next) values[id] = next;
     }
@@ -253,11 +263,11 @@ function FormBody({
       onDone(saved);
     },
     onError: (error) => {
-      const { text, field } = errorOf(error);
+      const { text, field, code } = errorOf(error);
       if (field) setInvalid(field);
       // The report settings changed meanwhile: fetch them, the typed figures stay.
       if (field?.startsWith("values.")) qc.invalidateQueries({ queryKey: outletKey(projectId) });
-      toast.error(text ?? t("That wasn't saved. Try again."));
+      toast.error(code === "REPORT_NOT_OPEN" ? t("Reports open on the night itself.") : text ?? t("That wasn't saved. Try again."));
     },
   });
 
@@ -287,7 +297,7 @@ function FormBody({
     const list = shown(items);
     const total = sumOf((extra?.allIds ?? items.map((i) => i.id)).map(fig));
     return (
-      <fieldset key={key} className="rounded-xl border border-border bg-card p-4">
+      <fieldset key={key} disabled={notYet} className="rounded-xl border border-border bg-card p-4 disabled:opacity-60">
         <legend className="sr-only">{extra?.legend ?? title}</legend>
         <div aria-hidden className="mb-3 flex items-baseline justify-between gap-2">
           <span className="text-sm font-semibold">{title}: <span className="tabular-nums">{total === null ? "—" : count(total, lang)}</span></span>
@@ -332,10 +342,10 @@ function FormBody({
     const totalOf = (c: (typeof list)[number]) => sumOf([fig(c.id), ...c.items.map((i) => fig(i.id))]);
     const grand = sumOf(list.map(totalOf));
     return (
-      <fieldset key="communities" className="rounded-xl border border-border bg-card p-4">
+      <fieldset key="communities" disabled={notYet} className="rounded-xl border border-border bg-card p-4 disabled:opacity-60">
         <legend className="sr-only">{t("Communities")}</legend>
         <div aria-hidden className="mb-3 flex items-baseline justify-between gap-2">
-          <span className="text-sm font-semibold">{t("Communities – TOTAL")}: <span className="tabular-nums">{grand === null ? "—" : count(grand, lang)}</span></span>
+          <span className="text-sm font-semibold">{t("Communities total")}: <span className="tabular-nums">{grand === null ? "—" : count(grand, lang)}</span></span>
         </div>
         <div className="flex flex-col gap-3">
           {list.map((c) => {
@@ -372,12 +382,12 @@ function FormBody({
 
   const control = (f: OutletFormField) => {
     const base = cn(
-      "w-full rounded-lg border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 hover:border-control-border focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30",
+      "w-full rounded-lg border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 hover:border-control-border focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60",
       invalid === f.key ? "border-destructive" : "border-border",
     );
     const id = `os-f-${f.key}`;
     const hint = f.hint ? `${id}-hint` : undefined;
-    const common = { id, "aria-describedby": hint, "aria-invalid": invalid === f.key || undefined };
+    const common = { id, "aria-describedby": hint, "aria-invalid": invalid === f.key || undefined, disabled: notYet && !PLAN_KEYS.has(f.key) };
     switch (f.type) {
       case "longtext":
         return <textarea {...common} rows={2} maxLength={f.max} value={draft[f.key] ?? ""} onChange={(e) => set(f, e.target.value)} className={cn(base, "min-h-[4.5rem] resize-y py-2 leading-relaxed")} />;
@@ -414,10 +424,16 @@ function FormBody({
           {event.updatedBy && <span>{t("Last changed by {name}", { name: event.updatedBy.name ?? "?" })}</span>}
         </div>
       )}
+      {notYet && (
+        <p role="status" className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+          {t("Reports open on the night itself.")} {t("You can plan this night now: its name, day and targets.")}
+        </p>
+      )}
       {data.form.sections.map((s) => {
         // RSVP and Hosting come from the outlet's own items; Communities follow Hosting.
-        if (s.key === "rsvp") return breakdown("rsvp", pick(s.title, lang), config.rsvp);
-        if (s.key === "hosting") return [breakdown("hosting", pick(s.title, lang), config.hosting), communities()];
+        // Sentence-case totals as everywhere else (UI tour run 13; the server's form says "RSVP – TOTAL").
+        if (s.key === "rsvp") return breakdown("rsvp", t("RSVP total"), config.rsvp);
+        if (s.key === "hosting") return [breakdown("hosting", t("Hosting total"), config.hosting), communities()];
         const grid = s.fields.every((f) => f.type === "count") ? "grid gap-3 grid-cols-2 sm:grid-cols-4" : s.fields.every((f) => f.type === "money" || f.type === "count") ? "grid gap-3 sm:grid-cols-2" : "grid gap-3";
         return (
           <fieldset key={s.key} className="rounded-xl border border-border bg-card p-4">

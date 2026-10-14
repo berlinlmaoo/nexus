@@ -15,6 +15,8 @@
 // apps/web/src/lib/custom-field-number.ts — keep the two copies identical
 // (src/lib/custom-field-number.test.mjs checks).
 
+import { formatRupiah } from "./number-format.ts"
+
 export type NumberFieldFormat = "plain" | "currency-idr"
 
 const IDR_FORMAT = /^(currency-idr|idr|rupiah)$/i
@@ -190,8 +192,6 @@ export function formatIdr(value: unknown): string {
   return `${neg ? "-" : ""}Rp ${groupIdrDigits(n.replace("-", ""))}`
 }
 
-const IDR_DIGITS = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 })
-
 /**
  * A Rupiah amount for display: "Rp 3.849.000", a plain space after "Rp", in every browser and both
  * languages. Intl's own IDR currency style is not used: Safari prints "Rp3.849.000" and Chromium
@@ -199,6 +199,5 @@ const IDR_DIGITS = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 })
  * screen read "Rp 3.849.000").
  */
 export function rupiah(n: number): string {
-  const r = Math.round(n)
-  return `${r < 0 ? "-" : ""}Rp ${IDR_DIGITS.format(Math.abs(r))}`
+  return formatRupiah(n)
 }

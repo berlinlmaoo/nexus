@@ -6,9 +6,9 @@ import { motion } from "framer-motion"
 import { ChevronLeft, ChevronRight, Crown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { localeOf } from "@/lib/lang"
 import { type MorphOrigin } from "@/components/motion/MorphPanel"
 import { AvatarFace } from "@/components/Avatar";
+import { formatCount } from "@/lib/number-format"
 
 export interface LeaderboardRankingItem {
   userId: string
@@ -22,8 +22,8 @@ export interface LeaderboardRankingItem {
 
 
 function formatValue(value: number) {
-  // Show the full XP number (1,100 / 1.100 in Indonesian) — no "k" abbreviation.
-  return value.toLocaleString(localeOf())
+  // The full XP number, "1.100" in both languages (UI tour run 13) — no "k" abbreviation.
+  return formatCount(value)
 }
 
 const CROWN_COLOR: Record<number, string> = {

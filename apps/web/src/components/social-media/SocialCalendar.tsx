@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { NotebookPen, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
-import { dayLong, monthLabel } from "@/components/outlet-sales/outlet-ui";
+import { MarkerLegend, dayLong, monthLabel } from "@/components/outlet-sales/outlet-ui";
+import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
 import type { SocialMonthResponse } from "@/lib/social-media-api";
 import { num } from "./social-ui";
 
@@ -26,6 +27,7 @@ function monthGrid(month: string): string[] {
  */
 export function SocialCalendar({ data, onOpen }: { data: SocialMonthResponse; onOpen: (date: string) => void }) {
   const { t, tn, lang, locale } = useLang();
+  const coarse = useCoarsePointer();
   const cells = useMemo(() => monthGrid(data.month), [data.month]);
   const byDate = useMemo(() => new Map(data.days.map((d) => [d.date, d])), [data.days]);
   const custom = useMemo(() => new Set(data.dayTargets.map((d) => d.date)), [data.dayTargets]);
@@ -87,8 +89,9 @@ export function SocialCalendar({ data, onOpen }: { data: SocialMonthResponse; on
                     {compact.format(day.engagement)}
                   </span>
                 )}
+                {/* On a phone too (UI tour run 13, W-M14): the posts were dropped below sm. */}
                 {day && day.posts !== null && (
-                  <span aria-hidden className="hidden truncate text-[11px] tabular-nums text-muted-foreground sm:block">
+                  <span aria-hidden className="truncate text-center text-[10px] tabular-nums text-muted-foreground sm:text-left sm:text-[11px]">
                     {tn(day.posts, "1 post", "{n} posts")}
                   </span>
                 )}
@@ -100,7 +103,17 @@ export function SocialCalendar({ data, onOpen }: { data: SocialMonthResponse; on
           })}
         </div>
       </div>
-      <p className="text-xs text-muted-foreground">{t("Each day shows its engagement (likes + comments + shares) across platforms, and the posts published. Tap a day to record it.")}</p>
+      <MarkerLegend
+        items={[
+          { mark: <Target className="h-3 w-3 text-primary" />, label: t("Day target") },
+          { mark: <NotebookPen className="h-3 w-3" />, label: t("Note") },
+          { mark: <span className="h-1 w-1 rounded-full bg-muted-foreground/30" />, label: t("Not recorded") },
+        ]}
+      />
+      <p className="text-xs text-muted-foreground">
+        {t("Each day shows its engagement (likes + comments + shares) across platforms, and the posts published.")}{" "}
+        {coarse ? t("Tap a day to record it.") : t("Click a day to record it.")}
+      </p>
     </div>
   );
 }

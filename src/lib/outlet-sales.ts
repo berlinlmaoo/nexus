@@ -79,6 +79,23 @@ export function statusOf(e: OutletEventFacts, today: string): OutletEventStatus 
   return e.date < today ? "WAITING_REPORT" : "UPCOMING"
 }
 
+/**
+ * A night's report opens on the night itself (UI tour run 13, W-B5: tomorrow's night was already
+ * "Reported" while yesterday's still waited). A night after today (WIB) takes its plan (name, date, its own
+ * targets) but no report yet; the apps disable "Fill report" until then and the server refuses it.
+ */
+export function reportOpen(date: string, today: string): boolean {
+  return date <= today
+}
+
+/** An event's keys that are its plan, not its report. Everything else a write sends is report. */
+const PLAN_KEYS: ReadonlySet<string> = new Set(["name", "date", "salesTarget", "paxTarget"])
+
+/** Whether a write of these keys (event fields and `values` figures) puts anything into the report. */
+export function writesReport(fields: Record<string, unknown>): boolean {
+  return Object.entries(fields).some(([k, v]) => !PLAN_KEYS.has(k) && v !== null && v !== undefined && v !== "")
+}
+
 export type OutletMonthSummary = {
   month: string
   /** Sum of the month's events' actual sales / pax (an event not filled counts 0). */

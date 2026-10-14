@@ -29,6 +29,7 @@ import {
   FolderGlyph, ProjectGlyph, TreeMenuBody, folderMenuEntries, projectMenuEntries, useProjectTreeActions, type TreeActions,
 } from "@/components/projects/project-tree";
 import { canDropInto, dragFromDrop, endTreeDrag, isTreeDrag, startTreeDrag, useTreeDrag } from "@/lib/project-tree-dnd";
+import { formatCount } from "@/lib/number-format";
 import {
   ArrowRight,
   Check,
@@ -610,14 +611,14 @@ function ProjectsPage() {
               <MiniStat
                 icon={<CheckCircle2 className="h-4 w-4" />}
                 label={tr("Tasks done")}
-                value={`${totalCompleted}`}
+                value={formatCount(totalCompleted)}
               />
               <MiniStat
                 icon={<Users className="h-4 w-4" />}
                 label={tr("Members")}
                 // Distinct people, not memberships summed over projects ("972 Members" in a 54-person
                 // workspace, QA 13 Oct 2026).
-                value={`${new Set(computedProjects.flatMap((p) => p.memberIds)).size}`}
+                value={formatCount(new Set(computedProjects.flatMap((p) => p.memberIds)).size)}
               />
             </div>
           </div>

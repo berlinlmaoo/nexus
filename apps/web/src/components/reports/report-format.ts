@@ -4,6 +4,7 @@
 import { ApiError, type ReportRatio } from "@/lib/nexus-api";
 import { localeOf, t } from "@/lib/lang";
 import { failureText } from "@/lib/failure";
+import { formatCount } from "@/lib/number-format";
 
 export const REPORT_TIMEZONE = "Asia/Jakarta";
 const CUTOFF_DAY = 27; // attendance period = 28th of the previous month → 27th of the key's month
@@ -13,11 +14,11 @@ function monthShort(index: number): string {
   return new Date(Date.UTC(2000, index, 1)).toLocaleDateString(localeOf(), { month: "short", timeZone: "UTC" });
 }
 
-/** 2 → "2", 2.5 → "2.5", 2.04 → "2", 1020 → "1,020", null → "—". */
+/** 2 → "2", 2.5 → "2,5", 2.04 → "2", 1020 → "1.020", null → "—" (Indonesian grouping in both languages). */
 export function fmtNum(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return "—";
   const r = Math.round(n * 10) / 10;
-  return (r === 0 ? 0 : r).toLocaleString(localeOf(), { maximumFractionDigits: 1 });
+  return formatCount(r === 0 ? 0 : r, 1);
 }
 
 /** Whole-point percentage, or null when there is nothing to divide by. */

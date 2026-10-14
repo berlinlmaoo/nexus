@@ -15,6 +15,7 @@
 import type { NexusCustomField, NexusProjectView, NexusTask } from "./nexus-api";
 import { groupIndex, orderedOptions, usesStatusOptions } from "./status-options.ts";
 import { normalizeNumberFieldValue, numberFieldFormat, rupiah } from "./custom-field-number.ts";
+import { formatCount } from "./number-format.ts";
 
 export type ViewLayout = NexusProjectView["layout"];
 export const VIEW_LAYOUTS: ViewLayout[] = ["board", "list", "table", "calendar", "timeline", "gallery"];
@@ -167,10 +168,13 @@ export function propDefs(ctx: ViewCtx): PropDef[] {
   return defs;
 }
 
-/** A number property for display: Rupiah fields as "Rp 1.500.000", other numbers grouped in the UI locale. */
-export function formatNumberProp(n: number, format: PropDef["numberFormat"], maxFractionDigits = 2, locale = "id-ID"): string {
+/**
+ * A number property for display: Rupiah fields as "Rp 1.500.000", other numbers with Indonesian grouping
+ * ("1.500") in both languages (UI tour run 13). `_locale` stays for the callers.
+ */
+export function formatNumberProp(n: number, format: PropDef["numberFormat"], maxFractionDigits = 2, _locale = "id-ID"): string {
   if (format === "currency-idr") return rupiah(n);
-  return new Intl.NumberFormat(locale, { maximumFractionDigits: maxFractionDigits }).format(n);
+  return formatCount(n, maxFractionDigits);
 }
 
 export function propDef(defs: PropDef[], key: string | null | undefined): PropDef | undefined {

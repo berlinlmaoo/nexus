@@ -101,7 +101,9 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
 
   return (
     <Sheet open={!!documentId} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent lang={lang} className="w-full overflow-y-auto sm:max-w-3xl">
+      {/* Opens with the drawer itself focused, not its close button: a ring on the X before anyone used the
+          keyboard read as an error, and was cut at the corner (UI tour run 13, W-B17). */}
+      <SheetContent lang={lang} className="w-full overflow-y-auto outline-none sm:max-w-3xl" onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus(); }}>
         {!doc ? (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
             {q.isError ? <span className="text-destructive">{(q.error as Error).message}</span> : <><Loader2 className="h-4 w-4 animate-spin" /> {t("Loading…")}</>}

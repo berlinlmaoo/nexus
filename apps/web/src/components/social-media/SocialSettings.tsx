@@ -182,7 +182,7 @@ export function SocialSettings({
                     <Plus aria-hidden className="ml-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     <input
                       aria-label={t("Add platform")}
-                      placeholder={t("Add platform, e.g. YouTube")}
+                      placeholder={t("Add platform, e.g. LinkedIn")}
                       value={adding}
                       maxLength={40}
                       onChange={(e) => setAdding(e.target.value)}

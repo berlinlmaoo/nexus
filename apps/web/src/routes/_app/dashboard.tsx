@@ -47,6 +47,7 @@ import { Reveal, AnimatedBar, CountUp } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { monthGrid, sameMonth, shiftMonth } from "@/lib/calendar/core";
 import { thumbUrl } from "@/lib/thumb";
+import { formatCount } from "@/lib/number-format";
 
 export const Route = createFileRoute("/_app/dashboard")({
   // `quest` comes from the quest_claimable notification: "<questKey>:<periodKey>".
@@ -678,7 +679,7 @@ function LevelChip() {
           <div className="mt-1 flex items-center gap-2">
             <AnimatedBar pct={info.pct} className="h-1.5 flex-1 rounded-full bg-muted sm:w-24 sm:flex-none" barClassName="h-full rounded-full bg-primary" />
             <span className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
-              {totalXp.toLocaleString(locale)} XP{info.isMax ? "" : ` / ${(info.nextFloor ?? 0).toLocaleString(locale)}`}
+              {formatCount(totalXp)} XP{info.isMax ? "" : ` / ${formatCount((info.nextFloor ?? 0))}`}
             </span>
           </div>
         </div>
@@ -731,8 +732,8 @@ function LevelModal({ open, onClose, info, totalXp, streak }: { open: boolean; o
                 </div>
                 <AnimatedBar pct={info.pct} className="mt-2 h-2 rounded-full bg-muted" barClassName="h-full rounded-full bg-primary" />
                 <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
-                  <span>{totalXp.toLocaleString(locale)} XP</span>
-                  <span>{info.isMax ? t("Top level") : t("{xp} XP to the next level", { xp: (info.nextFloor ?? 0).toLocaleString(locale) })}</span>
+                  <span>{formatCount(totalXp)} XP</span>
+                  <span>{info.isMax ? t("Top level") : t("{xp} XP to the next level", { xp: formatCount((info.nextFloor ?? 0)) })}</span>
                 </div>
               </div>
             </div>
@@ -753,7 +754,7 @@ function LevelModal({ open, onClose, info, totalXp, streak }: { open: boolean; o
                     <span className={cn("flex-1 truncate text-sm", isCurrent ? "font-bold" : "font-medium", !reached && "text-muted-foreground")}>{lv.name}</span>
                     {isCurrent && <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">{t("Current")}</span>}
                     {reached && !isCurrent && <Check className="h-4 w-4 shrink-0 text-success" />}
-                    <span className="w-16 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">{lv.floor.toLocaleString(locale)} XP</span>
+                    <span className="w-16 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">{formatCount(lv.floor)} XP</span>
                   </div>
                 );
               })}
@@ -784,7 +785,7 @@ function ProfileCard({ userName, avatarUrl }: { userName: string; avatarUrl?: st
         )}
         <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex items-baseline justify-between gap-2"><span className="text-xs uppercase tracking-wide text-muted-foreground">{t("Level")}</span><span className="text-sm font-bold">{levelLabel(info.level, info.name, t)}</span></div>
-          <div className="flex items-baseline justify-between gap-2"><span className="text-xs uppercase tracking-wide text-muted-foreground">{t("Period points")}</span><span className="text-sm font-bold tabular-nums">{totalXp.toLocaleString(locale)}</span></div>
+          <div className="flex items-baseline justify-between gap-2"><span className="text-xs uppercase tracking-wide text-muted-foreground">{t("Period points")}</span><span className="text-sm font-bold tabular-nums">{formatCount(totalXp)}</span></div>
         </div>
       </div>
       <Link to="/settings" className="mt-4 flex h-11 items-center justify-center gap-2 rounded-xl border border-primary/40 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
@@ -968,7 +969,7 @@ function LeaderboardCard() {
                 <div className="truncate text-sm font-semibold">{r.name ?? t("Member")}{r.userId === myId ? ` ${t("(you)")}` : ""}</div>
                 <div className="flex items-center gap-1 text-[11px] text-muted-foreground"><TierBadge level={r.level} size={14} rounded="rounded" /> {levelLabel(r.level, r.levelName, t)}</div>
               </div>
-              <span className="shrink-0 text-xs font-bold">{r.totalXp.toLocaleString(locale)} XP</span>
+              <span className="shrink-0 text-xs font-bold">{formatCount(r.totalXp)} XP</span>
             </div>
           </motion.button>
         ))}
@@ -1029,7 +1030,7 @@ function LeaderboardExpandModal({ origin, originScale, onClose, onSelect, myId }
               <span className="w-6 shrink-0 text-center text-xs font-bold tabular-nums text-muted-foreground">{i === 0 ? <Crown className="mx-auto h-4 w-4 text-amber-500" /> : i + 1}</span>
               {r.avatar ? <img src={thumbUrl(r.avatar, 40)} loading="lazy" decoding="async" alt="" className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-border" /> : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary ring-1 ring-border">{(r.name ?? "?").trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")}</span>}
               <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{r.name ?? t("Member")}{r.userId === myId ? ` ${t("(you)")}` : ""}</div><div className="flex items-center gap-1 text-[11px] text-muted-foreground"><TierBadge level={r.level} size={14} rounded="rounded" /> {levelLabel(r.level, r.levelName, t)}</div></div>
-              <span className="shrink-0 text-xs font-bold tabular-nums">{r.totalXp.toLocaleString(locale)} XP</span>
+              <span className="shrink-0 text-xs font-bold tabular-nums">{formatCount(r.totalXp)} XP</span>
             </motion.button>
           ))}
         </motion.div>

@@ -211,11 +211,11 @@ function Messages() {
 
   return (
     // The page itself never scrolls: it fills the screen under the app header (above the phone's tab
-    // bar, which the app shell pads for with 7rem), and the list, the thread and the info panel each
+    // bar, which the app shell leaves room for), and the list, the thread and the info panel each
     // scroll on their own. Until 8 Oct 2026 the page was taller than the screen, so scrolling the
     // thread past its end scrolled the whole page and pushed the list out of view. On a phone it ends just
-    // above the floating tab bar (7rem left a dead band, audit 12 Oct 2026); -mb-8 gives back the shell's
-    // extra padding so the page still doesn't scroll.
+    // above the floating tab bar (7rem left a dead band, audit 12 Oct 2026); -mb-8 overlaps the shell's
+    // tab bar room so the page still doesn't scroll.
     <div lang={lang} className="-mb-8 flex h-[calc(100dvh-5rem-env(safe-area-inset-bottom))] flex-col overflow-hidden md:mb-0 md:h-[100dvh]">
       <div className={cn("shrink-0", phoneThread && "hidden md:block")}>
         <PageHeader title={t("Messages")} subtitle={t("Chat with your team and in project rooms.")} actions={

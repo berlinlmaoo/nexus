@@ -696,13 +696,23 @@ function ProjectDetail() {
       )}
     </div>
   ) : data && isSpecial ? (
-    <div className="flex items-center gap-0.5 -mb-px overflow-x-auto py-1.5">
-      {specialTabs.map((tab) => (
-        <button key={tab.id} type="button" onClick={() => setSpecialView(tab.id)}
-          className={cn("inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-sm transition-colors", specialView === tab.id ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground")}>
-          <tab.icon className="h-3.5 w-3.5" /> {tr(tab.label)}
-        </button>
-      ))}
+    // The same strip as every other project (edge arrow, whole tabs only), so a tab past the edge is announced
+    // instead of silently cut ("Chat" on the outlet, UI tour run 13, W-M12). These tabs are not views: nothing
+    // to drag, rename or set up.
+    <div className="flex min-w-0 py-1.5">
+      <ViewTabsBar
+        tabs={specialTabs.map((tab) => ({ key: tab.id, label: tr(tab.label), icon: tab.icon }))}
+        activeKey={specialView}
+        onSelect={(key) => setSpecialView(key as typeof specialView)}
+        canEditView={() => false}
+        onReorder={() => {}}
+        onRename={() => {}}
+        onSettings={() => {}}
+        onDuplicate={() => {}}
+        onCopyLink={() => {}}
+        onDelete={() => {}}
+        onHide={() => {}}
+      />
     </div>
   ) : undefined;
 
@@ -727,11 +737,11 @@ function ProjectDetail() {
 
   return (
     <ProjectAccessContext.Provider value={data?.viewerAccessLevel}>
-    {/* Phone: the app shell adds pb-28 under every page for the floating tab bar. On top of this sheet's
-        min-h-dvh that made every short project view 112 px taller than the screen, a grey strip scrolled
+    {/* Phone: the app shell leaves room under every page for the floating tab bar (--tabbar-room). On top of
+        this sheet's min-h-dvh that made every short project view taller than the screen, a grey strip scrolled
         into view under the tab bar (UI tour run 9). The sheet takes that room over as its own padding, so a
         short view is exactly one screen tall and the white runs to the bottom edge. */}
-    <div className="min-h-dvh bg-card max-md:-mb-28 max-md:pb-28">
+    <div className="min-h-dvh bg-card max-md:-mb-(--tabbar-room) max-md:pb-(--tabbar-room)">
       <PageHeader
         compact
         className="bg-card md:bg-card max-md:bg-card max-md:before:bg-card"

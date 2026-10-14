@@ -76,7 +76,9 @@ export function PageHeader({
           a project opened on the phone had no icon beside its name). */}
       {icon && <div className="shrink-0 text-2xl sm:mt-0.5">{icon}</div>}
       <div className="min-w-0">
-        <h1 className="text-xl md:text-2xl font-semibold tracking-tight truncate">{title}</h1>
+        {/* Compact (project) header on a phone: a long name takes two lines instead of being cut beside the
+            icon buttons (UI tour run 13, W-M15). */}
+        <h1 className={cn("text-xl md:text-2xl font-semibold tracking-tight truncate", compact && "max-sm:line-clamp-2 max-sm:whitespace-normal max-sm:break-words max-sm:text-lg max-sm:leading-snug")}>{title}</h1>
         {subtitle && <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground max-md:hidden">{subtitle}</p>}
       </div>
     </div>
@@ -89,7 +91,9 @@ export function PageHeader({
         data-page-header-sticky={compact ? "" : undefined}
         className={cn(
           "px-4 md:px-8 md:pt-6 md:flex md:flex-row md:items-start md:justify-between md:gap-6 md:pb-3",
-          compact ? cn("flex flex-row items-center justify-between gap-2 pt-3 pb-1", pinnedBar, barEdge, className) : "max-md:contents",
+          // The top padding comes after pinnedBar's safe-area padding, which otherwise replaced it and left the
+          // icon buttons touching the top edge (UI tour run 13, W-M6).
+          compact ? cn("flex flex-row items-center justify-between gap-2 pt-3 pb-1", pinnedBar, "max-md:pt-[calc(env(safe-area-inset-top)+0.75rem)]", barEdge, className) : "max-md:contents",
         )}
       >
         {titleBlock}

@@ -16,6 +16,7 @@ import {
   type TermStatus,
 } from "@/lib/pipeline";
 import type { PipelineDeal, PipelineDealPatch } from "@/lib/pipeline-api";
+import { formatRupiah, MINUS } from "@/lib/number-format";
 
 /**
  * Shared bits of the Pipeline Dashboard (owner, 9 Oct 2026): money and date formats, the labels of the
@@ -23,7 +24,7 @@ import type { PipelineDeal, PipelineDealPatch } from "@/lib/pipeline-api";
  * only what is shown is translated (id-pipeline.ts).
  */
 
-/** Compact rupiah for cards and KPIs: Rp950Jt / Rp1,2M (id) or Rp950M / Rp1.2B (en) — the GM's fmtIDR. */
+/** Compact rupiah for cards and KPIs: Rp 950Jt / Rp 1,2M (id) or Rp 950M / Rp 1.2B (en) — the GM's fmtIDR. */
 export function fmtIdr(n: number | null | undefined, lang: Lang): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "–";
   const abs = Math.abs(n);
@@ -35,16 +36,16 @@ export function fmtIdr(n: number | null | undefined, lang: Lang): string {
   else if (abs >= 1e3) { v = abs / 1e3; s = suf.k; }
   const digits = s && v < 100 ? (v < 10 ? 1 : 0) : 0;
   const num = new Intl.NumberFormat(lang === "en" ? "en-GB" : "id-ID", { maximumFractionDigits: digits }).format(v);
-  return `${n < 0 ? "-" : ""}Rp${num}${s}`;
+  return `${n < 0 ? MINUS : ""}Rp ${num}${s}`;
 }
 
 /**
- * Full rupiah: Rp950.000.000 — always grouped the Indonesian way (dots), in both languages (pipeline UI
+ * Full rupiah: Rp 950.000.000 — always grouped the Indonesian way (dots), in both languages (pipeline UI
  * pass, 12 Oct 2026: "Rp1,000,000,000" in English read like dollars). `_lang` stays for the callers.
  */
 export function fmtIdrFull(n: number | null | undefined, _lang?: Lang): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "–";
-  return `${n < 0 ? "-" : ""}Rp${IDR_GROUPING.format(Math.abs(Math.round(n)))}`;
+  return formatRupiah(n);
 }
 
 /** id-ID digit grouping (1.250.000), for every amount on the pipeline whatever the interface language. */

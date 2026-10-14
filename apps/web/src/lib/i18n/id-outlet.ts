@@ -112,7 +112,6 @@ export const ID_OUTLET: Record<string, string> = {
   "No hosting items. Add them in Report settings.": "Belum ada item hosting. Tambahkan di Pengaturan laporan.",
   "No communities yet. Add the ones that come in Report settings.": "Belum ada komunitas. Tambahkan yang datang di Pengaturan laporan.",
   "archived": "diarsipkan",
-  "Communities – TOTAL": "Komunitas – TOTAL",
   "Total only": "Total saja",
   "Breakdown": "Rincian",
   "Report settings saved. The form uses them from now on.": "Pengaturan laporan disimpan. Form memakainya mulai sekarang.",

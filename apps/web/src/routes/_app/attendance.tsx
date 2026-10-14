@@ -32,6 +32,7 @@ import { recordPlace } from "@/lib/attendance-place";
 import { StatusOverridePanel } from "@/components/attendance/StatusOverridePanel";
 import { LeftTag, leftAtOf } from "@/components/LeftTag";
 import { localeOf, t as tr, useLang } from "@/lib/lang";
+import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
 
 type HistRow = NonNullable<NexusAttendanceHistory["rows"]>[number];
 
@@ -205,6 +206,7 @@ function DeleteRecordPanel({ recordId, hasCheckOut, name, dateKey, onDone }: { r
 
 function Attendance() {
   const { locale } = useLang();
+  const coarse = useCoarsePointer();
   const today = useQuery({ queryKey: ["attendance-today"], queryFn: nexusApi.attendanceToday, retry: 1 });
   const reduceMotion = useReducedMotion();
   const [logKind, setLogKind] = useState<{ kind: "DAY_OFF" | "RED_DATE"; origin?: MorphOrigin } | null>(null);
@@ -463,7 +465,8 @@ function Attendance() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
             <div>
               <h2 className="text-lg font-semibold tracking-tight">{viewMode === "grid" ? (canSeeBoard ? tr("Attendance board") : tr("Your attendance history")) : (canSeeBoard ? tr("Attendance log") : tr("Your attendance history"))}</h2>
-              <p className="text-sm text-muted-foreground">{viewMode === "grid" ? tr("Green = present or permit, red = absent, orange = sick, purple = day off / public holiday, yellow = leave. Tap a cell for details.") : (canSeeBoard ? tr("Everyone’s attendance history, with check-in/out selfie and location. Tap a row for details.") : tr("Your check-in/out history, with selfie and location. Tap a row for details."))}</p>
+              <p className="text-sm text-muted-foreground">{viewMode === "grid" ? tr("Green = present or permit, red = absent, orange = sick, purple = day off / public holiday, yellow = leave.") : (canSeeBoard ? tr("Everyone’s attendance history, with check-in/out selfie and location.") : tr("Your check-in/out history, with selfie and location."))}
+                {" "}{viewMode === "grid" ? (coarse ? tr("Tap a cell for details.") : tr("Click a cell for details.")) : (coarse ? tr("Tap a row for details.") : tr("Click a row for details."))}</p>
             </div>
             <div className="flex items-center gap-3">
               {viewMode === "grid" && (

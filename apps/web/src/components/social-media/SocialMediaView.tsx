@@ -85,7 +85,8 @@ export function SocialMediaView({
     <div className="flex flex-col gap-4 p-4 md:p-8" aria-busy={q.isFetching || undefined}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <MonthSwitcher month={month} today={today} onChange={setMonth} />
-        <div className="flex items-center gap-2">
+        {/* Labelled on a phone too (UI tour run 13, W-M13: a bare icon). */}
+        <div className="flex flex-wrap items-center gap-2">
           {data.canManage && (
             <button
               type="button"
@@ -93,8 +94,7 @@ export function SocialMediaView({
               className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:h-11"
             >
               <Settings2 aria-hidden className="h-4 w-4" />
-              <span className="hidden sm:inline">{t("Platforms & targets")}</span>
-              <span className="sr-only sm:hidden">{t("Platforms & targets")}</span>
+              {t("Platforms & targets")}
             </button>
           )}
           {data.canRecord && (
@@ -127,7 +127,7 @@ export function SocialMediaView({
 // ── Overview ──────────────────────────────────────────────────────────────────────────────────────────
 
 function Overview({ data, onRecord, onSetup }: { data: SocialMonthResponse; onRecord: () => void; onSetup: () => void }) {
-  const { t, lang, locale } = useLang();
+  const { t, tn, lang, locale } = useLang();
   const o = data.overview;
   const monthName = monthLabel(data.month, locale);
   const hasTargets = data.targets.some((x) => x.engagementTarget !== null || x.postsTarget !== null);
@@ -178,7 +178,14 @@ function Overview({ data, onRecord, onSetup }: { data: SocialMonthResponse; onRe
       </div>
 
       <section aria-label={t("Engagement by platform")} className={cn("grid gap-3", o.platforms.length > 1 && "md:grid-cols-2", o.platforms.length > 2 && "xl:grid-cols-3")}>
-        {o.platforms.map((p) => <EngagementCard key={p.platformId} p={p} />)}
+        {o.platforms.map((p) => (
+          <EngagementCard
+            key={p.platformId}
+            p={p}
+            baseTarget={data.targets.find((x) => x.platformId === p.platformId)?.engagementTarget ?? null}
+            onSetTarget={data.canManage ? onSetup : undefined}
+          />
+        ))}
       </section>
 
       <section aria-labelledby="sm-posts" className="rounded-xl border border-border bg-card p-4 md:p-5">
@@ -189,8 +196,8 @@ function Overview({ data, onRecord, onSetup }: { data: SocialMonthResponse; onRe
               <span className="truncate text-sm font-medium">{p.name}{p.archived && <span className="text-muted-foreground"> · {t("archived")}</span>}</span>
               <span className="tabular-nums text-sm sm:order-3 sm:text-right">
                 {p.postsTargetToDate === null
-                  ? t("{n} posts", { n: num(p.posts, lang) })
-                  : t("{n} / {target} posts", { n: num(p.posts, lang), target: num(p.postsTargetToDate, lang) })}
+                  ? tn(p.posts, "1 post", "{n} posts", { n: num(p.posts, lang) })
+                  : tn(p.postsTargetToDate, "{n} / {target} post", "{n} / {target} posts", { n: num(p.posts, lang), target: num(p.postsTargetToDate, lang) })}
                 {p.postsPct !== null && <span className="ml-1.5 text-muted-foreground">({p.postsPct}%)</span>}
               </span>
               <div className="col-span-2 sm:col-span-1"><Meter pct={p.postsPct} label={t("{name} posts against target", { name: p.name })} /></div>
@@ -203,8 +210,17 @@ function Overview({ data, onRecord, onSetup }: { data: SocialMonthResponse; onRe
   );
 }
 
-function EngagementCard({ p }: { p: SocialPlatformOverview }) {
+function EngagementCard({ p, baseTarget, onSetTarget }: {
+  p: SocialPlatformOverview;
+  /** The month's own target in Platforms & targets; the card's month target also counts the day targets. */
+  baseTarget: number | null;
+  /** Opens Platforms & targets (people who manage the report). */
+  onSetTarget?: () => void;
+}) {
   const { t, lang } = useLang();
+  // Day targets change the month's sum: say so, or 35.000 here reads as a mismatch with the 31.000 typed in
+  // Platforms & targets (UI tour run 13, W-B3).
+  const withDays = p.engagementTargetMonth !== null && p.engagementTargetMonth !== baseTarget;
   return (
     <article className="flex flex-col rounded-xl border border-border bg-card p-4 md:p-5">
       <header className="flex items-baseline justify-between gap-2">
@@ -222,8 +238,21 @@ function EngagementCard({ p }: { p: SocialPlatformOverview }) {
       </p>
       <div className="mt-3"><Meter pct={p.engagementPct} label={t("{name} engagement against target", { name: p.name })} /></div>
       <p className="mt-2 text-xs text-muted-foreground">
-        {p.engagementTargetToDate === null
-          ? t("No engagement target")
+        {p.engagementTargetToDate === null ? (
+          <>
+            {t("No engagement target")}
+            {/* A next step, not a dead end (UI tour run 13, W-B15). */}
+            {onSetTarget && (
+              <>
+                {" · "}
+                <button type="button" onClick={onSetTarget} className="rounded font-medium text-foreground underline underline-offset-2 hover:text-primary focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[36px]">
+                  {t("Set a target")}
+                </button>
+              </>
+            )}
+          </>
+        ) : withDays
+          ? t("Target to date · month target {target} (incl. day targets)", { target: num(p.engagementTargetMonth, lang) })
           : t("Target to date · month target {target}", { target: num(p.engagementTargetMonth, lang) })}
       </p>
       <Sparkline values={p.trend} label={t("{name} engagement per day", { name: p.name })} />

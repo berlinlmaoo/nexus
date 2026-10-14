@@ -576,9 +576,12 @@
 }
 
 /* The phone's floating tab bar (MobileTabBar, md:hidden) covers the bottom of every page: a control
-   reached by Tab is scrolled clear of it instead of landing underneath (WCAG 2.2 SC 2.4.11). */
+   reached by Tab is scrolled clear of it instead of landing underneath (WCAG 2.2 SC 2.4.11).
+   --tabbar-room is that bar's height plus its gap above the safe area: the app shell's spacer under every
+   page (UI tour run 13, W-M1) and anything else that has to clear the bar. */
+:root { --tabbar-room: calc(max(0.75rem, env(safe-area-inset-bottom)) + 5rem); }
 @media (max-width: 767.98px) {
-  html { scroll-padding-bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + 5rem); }
+  html { scroll-padding-bottom: var(--tabbar-room); }
 }
 
 /* Small icon buttons get a finger-sized hit area on touch screens without changing the layout
