@@ -144,7 +144,10 @@ export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; c
 }
 
 /** The properties a card shows, in the view's order. */
-export function PropLine({ task, keys, defs, ctx, className }: { task: NexusTask; keys: string[]; defs: PropDef[]; ctx: ViewCtx; className?: string }) {
+export function PropLine({ task, keys, defs, ctx, className, slots }: { task: NexusTask; keys: string[]; defs: PropDef[]; ctx: ViewCtx; className?: string;
+  /** List rows (sm and up): the assignee keeps a fixed-width slot, empty or not, so the status pill before it
+   *  sits at the same x on every row (UI tour run 11, WD-15: rows with an avatar pushed it left). */
+  slots?: boolean }) {
   const items = keys.map((k) => propDef(defs, k)).filter(Boolean) as PropDef[];
   if (!items.length) return null;
   // Dates read as one ordered group (UI tour run 9: "26 May · Rp… · 24 May 24 May" gave no way to tell
@@ -166,6 +169,9 @@ export function PropLine({ task, keys, defs, ctx, className }: { task: NexusTask
           return <Fragment key="dates"><DateChips task={task} items={dateItems} />{!isDateItem(d) && <PropValue task={task} def={d} ctx={ctx} />}</Fragment>;
         }
         if (isDateItem(d)) return null;
+        if (slots && d.key === "assignee") {
+          return <span key={d.key} className="inline-flex max-sm:empty:hidden sm:w-[3.75rem] sm:justify-start"><PropValue task={task} def={d} ctx={ctx} /></span>;
+        }
         return <PropValue key={d.key} task={task} def={d} ctx={ctx} />;
       })}
     </div>

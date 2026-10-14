@@ -129,7 +129,7 @@ export const DayPanel = memo(function DayPanel({
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <h2 ref={dayRef} tabIndex={-1} className={cn("rounded-sm font-display text-lg font-bold tracking-tight", FOCUS_PILL)}>{fmtDay(day, { weekday: "long", day: "numeric", month: "short", year: "numeric" }, locale)}</h2>
+              <h2 ref={dayRef} tabIndex={-1} className={cn("rounded-sm font-display text-lg font-bold tracking-tight", FOCUS_PILL)}>{fmtDay(day, { weekday: "long", day: "numeric", month: "short", ...(day.slice(0, 4) === today.slice(0, 4) ? {} : { year: "numeric" }) }, locale)}</h2>
               {relLabel && <span className={cn("rounded-md bg-cal-accent/10 px-1.5 py-px text-cal-accent dark:bg-cal-accent/15", CAPS)}>{relLabel}</span>}
             </div>
             {holiday && <div className="mt-0.5 text-xs font-semibold text-cal-holiday">{holiday}</div>}

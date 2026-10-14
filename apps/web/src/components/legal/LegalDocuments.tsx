@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DateField } from "@/components/DateField";
 import { useQuery } from "@tanstack/react-query";
 import { CornerDownRight, FilePlus2, FileSignature, FileText, GitBranch, ListFilter, Loader2, Search, Upload, X } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
@@ -155,7 +156,7 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
           <div className="overflow-x-auto rounded-lg border border-border">
             {/* Fixed columns (UI tour run 10, WD-1): the number column took a third of the row and cut the
                 title; it is now a set width with an ellipsis (the full number on hover), and the title gets
-                the room. The status column keeps clear of the GIDEON button (pr-16). */}
+                the room. */}
             <table className="w-full min-w-[860px] table-fixed text-sm">
               <colgroup>
                 <col className="w-[12.5rem]" />
@@ -172,7 +173,7 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
                   <th className="px-3 py-2 font-medium">{t("Counterparty")}</th>
                   <th className="px-3 py-2 font-medium">{t("Company")}</th>
                   <th className="px-3 py-2 font-medium">{t("Date")}</th>
-                  <th className="py-2 pl-3 pr-16 font-medium">{t("Status")}</th>
+                  <th className="px-3 py-2 font-medium">{t("Status")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -184,7 +185,7 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
                         <span className={cn("truncate", d.numberReleased && "line-through text-muted-foreground")}>{d.number || "—"}</span>
                       </div>
                       {d.status === "VOID" && d.numberReusedBy && (
-                        <div className="truncate font-sans text-[11px] text-muted-foreground" title={t("Number reused by {number}", { number: d.numberReusedBy.number })}>
+                        <div className="font-sans text-[11px] text-muted-foreground [overflow-wrap:anywhere]" title={t("Number reused by {number}", { number: d.numberReusedBy.number })}>
                           {t("Number reused by {number}", { number: d.numberReusedBy.number })}
                         </div>
                       )}
@@ -203,7 +204,7 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
                     <td className="px-3 py-2 align-top"><span className="block truncate" title={d.counterparty || undefined}>{d.counterparty || "—"}</span></td>
                     <td className="px-3 py-2 align-top"><span className="block truncate" title={d.company.name}>{d.company.name}</span></td>
                     <td className="whitespace-nowrap px-3 py-2 align-top">{fmtDay(d.docDate, lang)}</td>
-                    <td className="py-2 pl-3 pr-16 align-top">
+                    <td className="px-3 py-2 align-top">
                       <StatusChip status={d.status} />
                       <SignedLine d={d} />
                     </td>
@@ -279,8 +280,11 @@ function DocCard({ d, lang, onOpen, onShowChain }: { d: ArchiveDoc; lang: "id" |
       </div>
       <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
         <DocKind d={d} />
-        {d.status === "VOID" && d.numberReusedBy && <> · {t("Number reused by {number}", { number: d.numberReusedBy.number })}</>}
       </div>
+      {/* Its own line, wrapping inside the number if it must (UI tour run 11, WM-10: cut mid-number). */}
+      {d.status === "VOID" && d.numberReusedBy && (
+        <div className="mt-0.5 text-xs text-muted-foreground [overflow-wrap:anywhere]">{t("Number reused by {number}", { number: d.numberReusedBy.number })}</div>
+      )}
       {(d.addendaCount > 0 || d.parent) && onShowChain && (
         <button type="button" className="mt-1 text-xs font-medium text-primary hover:underline" onClick={(e) => { e.stopPropagation(); onShowChain(); }}>
           {d.addendaCount > 0 ? t("{n} addenda", { n: d.addendaCount }) : t("Show the chain")}
@@ -294,16 +298,18 @@ function DocCard({ d, lang, onOpen, onShowChain }: { d: ArchiveDoc; lang: "id" |
 /** From and to as one control, so the pair never wraps apart ("To" alone on the next line, UI tour run 10). */
 function DateRange({ from, to, onChange, block }: { from?: string; to?: string; onChange: (from: string | undefined, to: string | undefined) => void; block?: boolean }) {
   const { t } = useLang();
-  const field = "h-full min-w-0 bg-transparent px-1 text-sm outline-none [color-scheme:inherit]";
+  // The app's date picker (UI tour run 11, WD-7/WM-11): the browser's field showed "dd/mm/yyyy" and its own
+  // calendar icon in the middle of the control.
+  const field = "min-h-7 min-w-0 px-1 py-0.5 text-sm text-foreground";
   return (
     <div role="group" aria-label={t("Document date")}
       className={cn("flex h-9 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-input px-2 text-xs text-muted-foreground shadow-sm focus-within:ring-1 focus-within:ring-ring", block ? "w-full" : "w-auto")}>
       <span>{t("Date")}</span>
-      <input type="date" aria-label={t("From")} className={cn(field, "text-foreground", block ? "flex-1" : "w-[7.75rem]")} value={from ?? ""} max={to || undefined}
-        onChange={(e) => onChange(e.target.value || undefined, to)} />
+      <DateField ariaLabel={t("From")} placeholder={t("From")} className={cn(field, block ? "flex-1" : "w-[6.5rem]")} value={from ?? null} max={to || undefined}
+        onChange={(v) => onChange(v || undefined, to)} />
       <span aria-hidden>–</span>
-      <input type="date" aria-label={t("To")} className={cn(field, "text-foreground", block ? "flex-1" : "w-[7.75rem]")} value={to ?? ""} min={from || undefined}
-        onChange={(e) => onChange(from, e.target.value || undefined)} />
+      <DateField ariaLabel={t("To")} placeholder={t("To")} className={cn(field, block ? "flex-1" : "w-[6.5rem]")} value={to ?? null} min={from || undefined}
+        onChange={(v) => onChange(from, v || undefined)} />
     </div>
   );
 }

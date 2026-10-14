@@ -330,10 +330,6 @@ function Messages() {
                 members={threadMembers}
                 kind={active.type}
                 jump={jump}
-                // The floating GIDEON button sits over the composer's right end (bottom-32 right-4 on a
-                // phone, bottom-6 right-6 from md): keep Send clear of it. With the info panel open the
-                // thread is covered (phone, tablet) or no longer at the screen's edge (wide).
-                composerClassName={infoOpen ? undefined : "pr-[4.75rem] md:pr-[5.25rem]"}
               /></div>
             </>
           ) : goneId ? (

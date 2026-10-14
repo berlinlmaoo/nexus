@@ -401,7 +401,9 @@ function ProjectsPage() {
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder={tr("Search projects, owners, sections…")}
+                placeholder={tr("Search projects…")}
+                aria-label={tr("Search projects, owners, sections…")}
+                title={tr("Search projects, owners, sections…")}
                 variant="secondary"
                 className="w-full pl-7 text-sm"
               />

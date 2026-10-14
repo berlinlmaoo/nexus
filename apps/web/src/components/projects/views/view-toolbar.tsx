@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, Lock, Plus, Search, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Lock, Plus, Search, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
@@ -44,12 +44,19 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
   const [overId, setOverId] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  // The active tab is brought into view with room on both sides (scroll-padding), never flush against a cut
+  // edge (UI tour run 11, WM-15: the leading tab sat half under the fade on a phone).
   useEffect(() => {
-    const el = scroller.current?.querySelector<HTMLElement>("[data-active-tab='true']");
-    el?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const box = scroller.current;
+    const el = box?.querySelector<HTMLElement>("[data-active-tab='true']");
+    if (!box || !el) return;
+    const pad = 36;
+    const l = el.offsetLeft - pad, r = el.offsetLeft + el.offsetWidth + pad;
+    if (l < box.scrollLeft) box.scrollLeft = Math.max(0, l);
+    else if (r > box.scrollLeft + box.clientWidth) box.scrollLeft = r - box.clientWidth;
   }, [activeKey]);
-  // Tabs that don't fit scroll sideways; a soft fade on the cut edge(s) says there is more (was a hard
-  // clip that looked like a broken icon, audit 12 Oct 2026).
+  // Tabs that don't fit scroll sideways. The cut edge gets an arrow on a solid fade (UI tour run 11, WD-13/WM-15):
+  // a see-through mask alone left a half-visible ghost icon there, which read as a broken button.
   const [edges, setEdges] = useState({ left: false, right: false });
   useEffect(() => {
     const el = scroller.current;
@@ -64,7 +71,8 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
     ro.observe(el);
     return () => { el.removeEventListener("scroll", read); ro.disconnect(); };
   }, [tabs.length]);
-  const fade = edges.left && edges.right ? "[mask-image:linear-gradient(to_right,transparent,black_28px,black_calc(100%-28px),transparent)]" : edges.right ? "[mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)]" : edges.left ? "[mask-image:linear-gradient(to_right,transparent,black_28px)]" : "";
+  const nudge = (dir: 1 | -1) => scroller.current?.scrollBy({ left: dir * Math.max(140, (scroller.current?.clientWidth ?? 0) * 0.6), behavior: "smooth" });
+  const edgeBtn = "absolute inset-y-0 z-10 flex w-9 items-center text-muted-foreground transition-colors hover:text-foreground";
   const viewIds = tabs.filter((x) => x.view).map((x) => x.view!.id);
   const drop = (targetId: string) => {
     if (!dragId || dragId === targetId) return;
@@ -75,7 +83,14 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
   // `relative` makes this scroller the containing block of the compact tabs' sr-only labels (position:absolute);
   // without it they escaped to the sticky header and stretched the phone page to ~720px (audit 12 Oct 2026).
   return (
-    <div ref={scroller} role="tablist" aria-label={t("Views")} className={cn("relative flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", fade)}>
+    <div className="relative flex min-w-0 flex-1">
+    {edges.left && (
+      <button type="button" tabIndex={-1} aria-label={t("Show earlier tabs")} onClick={() => nudge(-1)} className={cn(edgeBtn, "left-0 justify-start bg-gradient-to-r from-card from-60% to-transparent")}><ChevronLeft className="h-4 w-4" /></button>
+    )}
+    {edges.right && (
+      <button type="button" tabIndex={-1} aria-label={t("Show more tabs")} onClick={() => nudge(1)} className={cn(edgeBtn, "right-0 justify-end bg-gradient-to-l from-card from-60% to-transparent")}><ChevronRight className="h-4 w-4" /></button>
+    )}
+    <div ref={scroller} role="tablist" aria-label={t("Views")} className="relative flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {tabs.map((tab) => {
         const active = tab.key === activeKey;
         const v = tab.view;
@@ -135,6 +150,7 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
         );
       })}
       {!divideAfter && addView}
+    </div>
     </div>
   );
 }

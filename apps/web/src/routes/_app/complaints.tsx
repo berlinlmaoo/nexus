@@ -228,6 +228,20 @@ function StatusChip({ status }: { status: string }) {
   return <span className={cn("inline-flex w-fit shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1", st.cls)}>{t(st.label)}</span>;
 }
 
+/**
+ * "Correction awaiting decision": the attendance fix proposed on a ticket still waits for the BoD. One style
+ * wherever it shows (the row on desktop and on a phone): a secondary chip like "GIDEON replied", so beside
+ * "Closed" it reads as a detail, not as a second status.
+ */
+function CorrectionPendingChip() {
+  const { t } = useLang();
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-muted px-1.5 py-px text-[11px] font-medium text-muted-foreground">
+      <CalendarClock className="h-3 w-3" /> {t("Correction awaiting decision")}
+    </span>
+  );
+}
+
 /** One ticket as a table row on desktop, a two-line row on a phone. The whole row opens the thread. */
 function TicketRow({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: boolean; onOpen: () => void }) {
   const { t, tn } = useLang();
@@ -238,15 +252,13 @@ function TicketRow({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: bool
   // The two things a row has to say beyond its status: GIDEON has been in here, and a decision is
   // sitting unmade. Both come straight off /api/complaints and are independent of the status chip.
   // "Awaiting decision" is ONE label (run 9): the status chip and this marker used to say it two ways.
-  // When the status chip already says it, the marker would only repeat it, so it stays off.
+  // When the status chip already says it, the marker would only repeat it, so it stays off. A CLOSED ticket
+  // whose correction still waits stays in "In review" (owner, 13 Oct 2026); it reads "Closed" plus the
+  // secondary chip "Correction awaiting decision", not two statuses side by side (UI tour run 11, WM-1).
   const decisionMark = c.pendingCorrection && c.status !== "AWAITING_DECISION";
   const markers = (decisionMark || c.gideonReplied) && (
     <span className="inline-flex shrink-0 items-center gap-1.5">
-      {decisionMark && (
-        <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-1.5 py-px text-[11px] font-medium text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
-          <CalendarClock className="h-3 w-3" /> {t("Awaiting decision")}
-        </span>
-      )}
+      {decisionMark && <CorrectionPendingChip />}
       {c.gideonReplied && (
         <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-px text-[11px] font-medium text-muted-foreground">
           <GideonMark className="h-3 w-3" /> {t("GIDEON replied")}
@@ -262,7 +274,7 @@ function TicketRow({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: bool
         {/* Desktop: the same two markers as small labelled icons, so a long subject never pushes them into the next column. */}
         {(decisionMark || c.gideonReplied) && (
           <span className="hidden shrink-0 items-center gap-1 xl:inline-flex">
-            {decisionMark && <span title={t("Awaiting decision")} aria-label={t("Awaiting decision")} className="grid h-5 w-5 place-items-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"><CalendarClock className="h-3 w-3" /></span>}
+            {decisionMark && <CorrectionPendingChip />}
             {c.gideonReplied && <span title={t("GIDEON replied")} aria-label={t("GIDEON replied")} className="grid h-5 w-5 place-items-center rounded-full bg-muted text-muted-foreground"><GideonMark className="h-3 w-3" /></span>}
           </span>
         )}

@@ -153,6 +153,8 @@ const MAX_PAGES = Number(process.env.TOUR_MAX_PAGES) || 6;
  * viewport-sized shots; between them every scroller on screen (the document, and each inner content scroll
  * area that covers at least a fifth of the viewport, not the navigation) moves on by 85% of its height, but never past its last
  * visible content, so an empty tail is not photographed. Stops when nothing moves any more.
+ * With a drawer, sheet or dialog open, only the scrollers inside the topmost one move (run 11: on web
+ * `legal-document-2..4` the archive list scrolled behind the document drawer, which stayed put).
  */
 async function capture(page, dir, id) {
   const shot = (n) => page.screenshot({ path: path.join(dir, n === 1 ? `${id}.png` : `${id}-${n}.png`) });
@@ -182,8 +184,16 @@ async function capture(page, dir, id) {
       const bottom = s === doc ? r.bottom + scrollY : r.bottom - s.getBoundingClientRect().top + s.scrollTop;
       if (bottom > end.get(s)) end.set(s, bottom);
     }
+    // The topmost open overlay (a drawer, sheet or modal dialog) that is on screen: what the person looks at.
+    const overlays = [...document.querySelectorAll("[role='dialog'], [aria-modal='true'], [data-sheet-panel], [data-vaul-drawer]")].filter((el) => {
+      const r = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.display !== "none";
+    });
+    const overlay = overlays[overlays.length - 1] ?? null;
     let moved = false;
     for (const [s, bottom] of end) {
+      if (overlay && (s === doc || !overlay.contains(s))) continue;
       const height = s === doc ? vh : s.clientHeight;
       if (s !== doc) {
         const r = s.getBoundingClientRect();

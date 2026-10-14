@@ -65,6 +65,8 @@ export function PropIcon({ def, className }: { def?: PropDef; className?: string
   if (def.key === "priority") return <Flag className={cls} />;
   if (def.key === "subtasks") return <ListChecks className={cls} />;
   if (def.key === "comments") return <MessageSquare className={cls} />;
+  // "Created by" fields hold who made the task (and when): a person icon, not a calendar (UI tour run 11, WD-2).
+  if (def.fieldType === "CREATED") return <User className={cls} />;
   switch (def.kind) {
     case "title":
     case "text":

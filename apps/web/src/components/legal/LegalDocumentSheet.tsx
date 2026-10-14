@@ -201,7 +201,7 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
               </div>
               <ul className="divide-y divide-border rounded-md border border-border">
                 {doc.versions.map((v) => (
-                  <li key={v.version} className="flex flex-wrap items-center gap-3 px-3 py-2 text-sm">
+                  <li key={v.version} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2 text-sm">
                     <span className="w-8 shrink-0 font-medium">v{v.version}</span>
                     <div className="min-w-0 flex-1">
                       <div className="truncate">
@@ -212,6 +212,9 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
                       </div>
                       <div className="truncate text-xs text-muted-foreground">{v.author?.name ?? "—"} · {fmtDate(v.createdAt)} · {formatBytes(v.size)}</div>
                     </div>
+                    {/* Phones: the file buttons go on a line of their own under the version (UI tour run 11, WM-2);
+                        beside it they squeezed "Generated…" and its date to a few letters. */}
+                    <div className="flex w-full flex-wrap items-center gap-1.5 pl-11 sm:w-auto sm:pl-0">
                     <FileButtons doc={doc} v={v} compact onMakePdf={() => makePdf.mutate(v.version)} making={makePdf.isPending} />
                     {!locked && doc.status !== "VOID" && doc.finalVersion !== v.version && (
                       <Button variant="ghost" size="sm" className="gap-1.5" title={t("Final DOCX/PDF come from this version")}
@@ -224,6 +227,7 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
                         <RotateCcw className="h-4 w-4" /> <span className="max-sm:hidden">{t("Restore")}</span>
                       </Button>
                     )}
+                    </div>
                   </li>
                 ))}
               </ul>

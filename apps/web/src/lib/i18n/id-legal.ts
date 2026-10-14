@@ -140,14 +140,14 @@ export const ID_LEGAL: Record<string, string> = {
 
   // Settings
   "Only the owner or a BoD member with Legal can change these.": "Hanya owner atau anggota BoD yang punya akses Legal yang bisa mengubah ini.",
-  "Kop uploaded": "Kop diunggah",
+  "Letterhead uploaded": "Kop diunggah",
   "Legal name (PT) not filled in": "Nama PT belum diisi",
   "Code in numbers ({CO})": "Kode di nomor ({CO})",
   "Legal name, as printed in contracts": "Nama PT, seperti tertulis di kontrak",
-  "Kop": "Kop",
+  "Letterhead": "Kop",
   "{file}, uploaded {date}": "{file}, diunggah {date}",
   "Not uploaded: documents get no letterhead.": "Belum diunggah: dokumen tanpa kop surat.",
-  "Upload kop": "Unggah kop",
+  "Upload letterhead": "Unggah kop",
   "Numbering series": "Seri penomoran",
   "Add numbering series": "Tambah seri penomoran",
   "Numbering format": "Format penomoran",

@@ -107,12 +107,14 @@ export function LegalRequests({ openId, onOpen, onOpenDocument }: {
           message={filters.q || filtered ? t("Try other words or fewer filters.") : t("People ask Legal for a document through a request link. Share one from Request links; their requests land here.")}
           action={!(filters.q || filtered) ? <Button size="sm" onClick={() => setLinksOpen(true)} className="gap-1.5"><Link2 className="h-4 w-4" /> {t("Request links")}</Button> : undefined} />
       ) : view === "board" ? (
-        <div className="flex snap-x gap-3 overflow-x-auto pb-3">
+        // Phones: the columns snap one at a time and the next one peeks in from the screen edge (UI tour run 11,
+        // WM-6); the row runs to the edges so the peek is not cut by the page gutter.
+        <div className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-3 sm:mx-0 sm:snap-none sm:px-0">
           {REQUEST_COLUMNS.map((col) => {
             const items = rows.filter((r) => r.column === col);
             return (
               <div key={col}
-                className={cn("flex w-[85vw] max-w-[22rem] shrink-0 snap-start flex-col rounded-xl bg-muted/50 sm:w-80", dragOver === col && "ring-2 ring-primary/50")}
+                className={cn("flex w-[82vw] max-w-[22rem] shrink-0 snap-start flex-col rounded-xl bg-muted/50 sm:w-80", dragOver === col && "ring-2 ring-primary/50")}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(col); }}
                 onDragLeave={() => setDragOver((c) => (c === col ? null : c))}
                 onDrop={(e) => { e.preventDefault(); setDragOver(null); const id = e.dataTransfer.getData("text/x-legal-request"); const r = rows.find((x) => x.id === id); if (r && r.column !== col) move.mutate({ id, column: col }); }}>
@@ -191,10 +193,10 @@ function RequestCard({ r, onOpen }: { r: BoardRequest; onOpen: () => void }) {
         {r.deadline && <span className={cn("inline-flex items-center gap-1", isOverdue(r) && "font-semibold text-rose-600 dark:text-rose-400")}><CalendarDays className="h-3 w-3" />{fmtDay(r.deadline, lang)}</span>}
         {r.attachments.length > 0 && <span className="inline-flex items-center gap-1"><Paperclip className="h-3 w-3" />{r.attachments.length}</span>}
       </div>
-      <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px]">
-        <span className="truncate text-muted-foreground">{r.pic ? `PIC · ${r.pic.name}` : t("No PIC yet")}</span>
-        {r.document && <DocChip d={r.document} />}
-      </div>
+      {/* PIC and the document number on lines of their own (UI tour run 11, WD-4): side by side the number
+          cut the name down to "PIC…". */}
+      <div className="mt-1.5 truncate text-[11px] text-muted-foreground" title={r.pic?.name}>{r.pic ? `PIC · ${r.pic.name}` : t("No PIC yet")}</div>
+      {r.document && <div className="mt-1 flex min-w-0 text-[11px]"><DocChip d={r.document} /></div>}
     </button>
   );
 }

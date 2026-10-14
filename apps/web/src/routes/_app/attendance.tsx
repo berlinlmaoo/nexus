@@ -577,22 +577,22 @@ function Attendance() {
                           <button
                             onClick={() => setDeductionsFor({ id: u.id, name: u.name ?? null })}
                             title={tr("See {name}'s XP and day-off deductions", { name: u.name ?? tr("this person") })}
-                            className="flex min-w-0 items-center gap-2 rounded-lg px-1 py-0.5 text-left transition hover:bg-primary/10"
+                            className="flex min-w-0 items-center gap-1.5 rounded-lg py-0.5 text-left transition hover:bg-primary/10 sm:gap-2 sm:px-1"
                           >
                             <MemberAvatar user={u} />
                             <div className="min-w-0">
                               {/* Phone: first name only, so the pinned column stays narrow (UI tour run 9). */}
-                              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-medium sm:hidden" title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
+                              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-[13px] font-medium tracking-tight sm:hidden" title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
                               <div className="hidden truncate text-[10px] text-muted-foreground sm:block">{memberSubtitle(u)}</div>
                               <PhoneMemberSummary d={canManage ? dayOffOf(u.id) : null} />
                             </div>
                           </button>
                         ) : (
-                          <div className="flex min-w-0 items-center gap-2 px-1 py-0.5">
+                          <div className="flex min-w-0 items-center gap-1.5 py-0.5 sm:gap-2 sm:px-1">
                             <MemberAvatar user={u} />
                             <div className="min-w-0">
                               {/* Phone: first name only, so the pinned column stays narrow (UI tour run 9). */}
-                              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-medium sm:hidden" title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
+                              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-[13px] font-medium tracking-tight sm:hidden" title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
                               <div className="hidden truncate text-[10px] text-muted-foreground sm:block">{memberSubtitle(u)}</div>
                               <PhoneMemberSummary d={canManage ? dayOffOf(u.id) : null} />
                             </div>
@@ -947,9 +947,9 @@ function PhoneMemberSummary({ d }: { d: { remaining: number; quota: number; xp: 
 function MemberAvatar({ user }: { user: { id: string; avatar?: string | null } }) {
   const [failed, setFailed] = useState(false);
   if (user.avatar && !failed) {
-    return <img src={user.avatar} alt="" onError={() => setFailed(true)} className="h-6 w-6 rounded-full object-cover" />;
+    return <img src={user.avatar} alt="" onError={() => setFailed(true)} className="h-6 w-6 shrink-0 rounded-full object-cover" />;
   }
-  return <Avatar userId={user.id} size={24} />;
+  return <Avatar userId={user.id} size={24} className="shrink-0" />;
 }
 
 // One evidence card (selfie + location) for a check-in or check-out leg — the audit view.
@@ -1781,7 +1781,7 @@ function EmploymentStartSection() {
             />
             <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold",
               m.eligible ? "bg-success/10 text-success" : "bg-muted text-muted-foreground")}>
-              {m.eligible ? tr("eligible") : tr("not yet")}
+              {m.eligible ? tr("Eligible") : tr("Not yet")}
             </span>
           </div>
         ))}
@@ -2274,7 +2274,7 @@ function FunMetric({ icon, label, value, helper, tone, onClick }: { icon: React.
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/70 dark:bg-background/60">{icon}</span>
         <div className="min-w-0 flex-1">
           <p className="line-clamp-2 text-xs font-semibold uppercase leading-4 tracking-wide opacity-70">{label}</p>
-          <h3 title={value} className="line-clamp-2 text-xl font-black leading-7 tracking-tight text-foreground [overflow-wrap:anywhere] xl:text-2xl">{value}</h3>
+          <h3 title={value} className="line-clamp-2 text-xl font-black leading-7 tracking-tight text-foreground [overflow-wrap:anywhere] [text-wrap:balance] xl:text-2xl">{value}</h3>
         </div>
         {onClick && <ChevronRight className="mt-3 h-4 w-4 shrink-0 opacity-40" />}
       </div>

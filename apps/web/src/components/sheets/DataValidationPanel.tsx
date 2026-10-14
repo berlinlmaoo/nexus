@@ -8,7 +8,6 @@ import { newRuleId, rangeFromA1, rangeToA1, type ValidationKind, type Validation
 import { chipClass, chipStyle } from "./sheet-dropdown";
 import { Floating } from "./sheet-float";
 import { COLOR_NAME, STYLE_COLORS, SWATCH_CLASS, type StyleColor } from "./sheet-style";
-import { HideGideonButton } from "./sheet-shell";
 import { SelectPicker } from "@/components/SelectPicker";
 
 /** A rule as the panel edits it: ranges as typed text, a column-backed rule flagged. */
@@ -180,7 +179,6 @@ export function DataValidationPanel({ rules, shape, sheetName, selectionRange, e
 
   return (
     <aside data-sheet-panel="" aria-label={t("Data validation rules")} className="flex w-[320px] shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-card">
-      <HideGideonButton />
       <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
         <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{t("Data validation rules")}</h2>
         <button onClick={onClose} aria-label={t("Close")} className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><X className="h-4 w-4" /></button>

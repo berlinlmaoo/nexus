@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DateField } from "@/components/DateField";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -79,7 +80,8 @@ export function UploadDocumentDialog({ open, onOpenChange, onCreated }: { open: 
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="legal-up-date">{t("Date")}</Label>
-              <Input id="legal-up-date" type="date" value={f.docDate} onChange={(e) => setF({ ...f, docDate: e.target.value })} />
+              <DateField value={f.docDate || null} onChange={(v) => setF({ ...f, docDate: v ?? "" })} ariaLabel={t("Date")} placeholder={t("Pick a date")} yearPicker
+                className="h-9 w-full rounded-md border border-input bg-transparent px-3 shadow-sm hover:bg-transparent" />
             </div>
             <div className="space-y-1.5">
               <Label>{t("Status")}</Label>

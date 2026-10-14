@@ -12,6 +12,7 @@ import { LeaderboardCard } from "@/components/ui/leaderboard-card";
 import { XpAuditLog } from "@/components/XpAuditLog";
 import { UserXpLogModal } from "@/components/UserXpLogModal";
 import { useLang } from "@/lib/lang";
+import { levelLabel } from "@/lib/levels";
 import { competitionRank } from "@/lib/competition-rank";
 
 export const Route = createFileRoute("/_app/leaderboard")({ component: Leaderboard });
@@ -42,7 +43,7 @@ function Leaderboard() {
     userId: r.userId,
     rank: r.rank,
     userName: r.name ?? "—",
-    byline: `${t("Level {n}", { n: r.level })}${r.levelName ? ` – ${r.levelName}` : ""}`,
+    byline: levelLabel(r.level, r.levelName, t),
     value: r.totalXp,
     avatarUrl: r.avatar,
     displayed: true,

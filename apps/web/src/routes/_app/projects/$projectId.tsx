@@ -81,6 +81,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import {
   Activity,
   Calendar as CalIcon,
+  CalendarX2,
   Check,
   ClipboardList,
   CheckCircle2,
@@ -723,7 +724,7 @@ function ProjectDetail() {
     <div className="min-h-dvh bg-card max-md:-mb-28 max-md:pb-28">
       <PageHeader
         compact
-        className="bg-card/95"
+        className="bg-card md:bg-card max-md:bg-card max-md:before:bg-card"
         icon={<span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted/60 text-[28px] leading-none"><ProjectMark icon={data?.icon} color={data?.color} className="max-h-9 max-w-9 rounded-lg object-cover" /></span>}
         title={data?.name || tr("Project")}
         subtitle={data?.description || (project.isLoading ? tr("Loading…") : projectFailed ? (projectOffline ? tr("No connection. Check your internet and try again.") : projectMissing ? tr("This project was deleted, or the link is wrong.") : tr("Couldn't open this project. You may not be a member.")) : undefined)}
@@ -1607,7 +1608,7 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
       {/* Phone: the properties wrap onto a second line under the title instead of disappearing (UI tour
           13 Oct 2026: at 440 px the list showed titles only; the desktop row shows amount, person, dates,
           priority and status). From sm up they sit right-aligned on the same line, as before. */}
-      <PropLine task={task} keys={keys} defs={defs} ctx={ctx} className="basis-full pl-[26px] sm:basis-auto sm:shrink-0 sm:flex-nowrap sm:justify-end sm:pl-0 sm:[&>*]:shrink-0" />
+      <PropLine slots task={task} keys={keys} defs={defs} ctx={ctx} className="basis-full pl-[26px] sm:basis-auto sm:shrink-0 sm:flex-nowrap sm:justify-end sm:pl-0 sm:[&>*]:shrink-0" />
       <ChevronRight className="hidden h-4 w-4 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground sm:block" />
     </button>
   );
@@ -1715,6 +1716,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
   // null = untouched: open while the tray is short, folded once it would bury the page (> 8).
   const [undatedOpen, setUndatedOpen] = useState<boolean | null>(null);
   const showUndated = undatedOpen ?? undated.length <= 8;
+  const undatedRef = useRef<HTMLDivElement>(null);
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
   const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -1792,6 +1794,17 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
         <button type="button" onClick={() => shiftMonth(-1)} aria-label={t("Previous month")} className="grid h-8 w-8 pointer-coarse:size-11 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><ChevronLeft className="h-4 w-4" /></button>
         <button type="button" onClick={() => shiftMonth(1)} aria-label={t("Next month")} className="grid h-8 w-8 pointer-coarse:size-11 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><ChevronRight className="h-4 w-4" /></button>
       </div>
+
+      {/* An empty month says why, when the tasks are waiting for a date (UI tour run 11, WD-9: an empty
+          October, the 84 undated tasks below the fold). */}
+      {byDay.size === 0 && undated.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+          <CalendarX2 className="h-4 w-4 shrink-0" aria-hidden />
+          <span>{tn(undated.length, "{n} task has no date", "{n} tasks have no date")} <span aria-hidden>—</span></span>
+          <button type="button" onClick={() => { setUndatedOpen(true); requestAnimationFrame(() => undatedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })); }}
+            className="font-medium text-foreground underline-offset-2 hover:underline">{t("Show them")}</button>
+        </div>
+      )}
 
       {isMobile ? (
         // Phone (UI tour run 7, 14 Oct 2026): the month grid like the desktop and the iPhone app, a dot per
@@ -1930,7 +1943,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
         </div>
       )}
       {undated.length > 0 && (
-        <div className="rounded-lg border border-dashed border-border">
+        <div ref={undatedRef} className="scroll-mt-24 rounded-lg border border-dashed border-border">
           {/* Notion's "No date" tray (UI tour run 9: 84 truncated chips made a wall under the month). A count
               header that opens and closes, folded by default once there are more than 8, and a list that
               scrolls inside its own box instead of stretching the page. */}
@@ -2058,6 +2071,13 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   const [ghost, setGhost] = useState<{ id: string; day: number } | null>(null);
   // The click that ends a drag must not open the task.
   const justDragged = useRef(0);
+  // What the scroller shows (px of the timeline, after the frozen column), for "N tasks outside this range".
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const [port, setPort] = useState<{ left: number; width: number } | null>(null);
+  const readPort = (el: HTMLDivElement) => {
+    const next = { left: el.scrollLeft, width: Math.max(0, el.clientWidth - leftW) };
+    setPort((p) => (p && p.left === next.left && p.width === next.width ? p : next));
+  };
 
   if (taskCount === 0) {
     return <div className="px-4 py-10 md:px-8"><EmptyState icon={GanttChart} tone="muted" title={t("Nothing on the timeline")} message={t("Tasks show here as bars from their start date to their due date.")} /></div>;
@@ -2138,15 +2158,33 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   const single = !groupBy;
   void ctx;
 
+  // No bar in the visible days (UI tour run 11, WD-10/WM-18: the default window around today was blank while
+  // every task sat months back): say so, with a jump to the first one.
+  const inView = port ? allWins.filter((w) => xOf(w.end) + GANTT_DAY_W > port.left && xOf(w.start) < port.left + port.width).length : allWins.length;
+  const firstWin = allWins.length ? allWins.reduce((a, w) => (w.start < a.start ? w : a), allWins[0]) : null;
+  const jumpToFirst = () => {
+    const el = scrollerRef.current;
+    if (el && firstWin) el.scrollTo({ left: Math.max(0, xOf(firstWin.start) - GANTT_DAY_W * 2), behavior: "smooth" });
+  };
+
   return (
     <div className="px-4 py-3 md:px-8">
+      {port && inView === 0 && firstWin && (
+        <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+          <GanttChart className="h-4 w-4 shrink-0" aria-hidden />
+          <span>{tn(allWins.length, "{n} task outside this range", "{n} tasks outside this range")} <span aria-hidden>—</span></span>
+          <button type="button" onClick={jumpToFirst} className="font-medium text-foreground underline-offset-2 hover:underline">{t("Jump to first")}</button>
+        </div>
+      )}
       {/* Opens on today (Notion does), not on the oldest task's month. The range can still grow after the
           first paint (more tasks arrive, a bar is dragged before the first day): the content then shifts
           right by the added days, so the scroll shifts with it and the same days stay in view. UI tour run 7
           (14 Oct 2026): the first scroll landed on today, the range then grew and the view showed mid
           September with no bars. */}
-      <div ref={(el) => {
+      <div onScroll={(e) => readPort(e.currentTarget)} ref={(el) => {
+        scrollerRef.current = el;
         if (!el) return;
+        requestAnimationFrame(() => readPort(el));
         const first = min.getTime();
         const prev = el.dataset.tlMin ? Number(el.dataset.tlMin) : null;
         if (prev === first) return;

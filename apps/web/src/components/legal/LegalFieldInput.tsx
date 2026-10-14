@@ -1,4 +1,5 @@
 import { Plus, Trash2 } from "lucide-react";
+import { DateField } from "@/components/DateField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -90,7 +91,9 @@ export function LegalFieldInput({ field, value, onChange, errors, path, hideName
       control = <Textarea id={id} rows={3} value={str} onChange={(e) => onChange(e.target.value)} aria-invalid={!!error} />;
       break;
     case "date":
-      control = <Input id={id} type="date" value={str.slice(0, 10)} onChange={(e) => onChange(e.target.value)} aria-invalid={!!error} />;
+      // The app's date picker, not the browser's "dd/mm/yyyy" field (UI tour run 11, WD-7/WM-11).
+      control = <DateField value={str.slice(0, 10) || null} onChange={(v) => onChange(v ?? "")} ariaLabel={field.label} placeholder={t("Pick a date")} yearPicker
+        className={cn("h-9 w-full rounded-md border border-input bg-transparent px-3 shadow-sm hover:bg-transparent", error && "border-destructive")} />;
       break;
     case "money":
       control = (
