@@ -237,11 +237,17 @@ export function Meter({ pct, label }: { pct: number | null; label: string }) {
  * One label and its value. Figures sit in one right-aligned column whatever their depth: a part is indented
  * by its label only, so its number lines up under its total's (UI tour run 13, W-B13).
  */
-function Row({ label, children, strong, depth = 0, text }: { label: string; children: ReactNode; strong?: boolean; depth?: 0 | 1 | 2; text?: boolean }) {
+function Row({ label, children, strong, depth = 0, text, besideFigures }: { label: string; children: ReactNode; strong?: boolean; depth?: 0 | 1 | 2; text?: boolean; besideFigures?: boolean }) {
+  // A written answer goes under its question, so the one value column stays the right-aligned figures
+  // (UI tour run 14, R14-WM-13: "Not filled" sat left-aligned in the middle of that column on a phone). Only
+  // where the answers have a column of their own beside the figures (a wide card from lg up) do they keep the
+  // label / answer grid.
+  const stack = text && (besideFigures ? "max-lg:grid-cols-1 max-lg:gap-y-0.5" : "grid-cols-1 gap-y-0.5");
+  const stackIndent = text && cn(depth === 1 && (besideFigures ? "max-lg:pl-3" : "pl-3"), depth === 2 && (besideFigures ? "max-lg:pl-6" : "pl-6"));
   return (
-    <div className="grid grid-cols-[minmax(7.5rem,40%)_1fr] gap-x-3 py-1.5 text-sm">
+    <div className={cn("grid gap-x-3 py-1.5 text-sm", stack || "grid-cols-[minmax(7.5rem,40%)_1fr]", text && besideFigures && "lg:grid-cols-[minmax(7.5rem,40%)_1fr]")}>
       <dt className={cn("text-muted-foreground", depth === 1 && "pl-3", depth === 2 && "pl-6", strong && "font-medium text-foreground")}>{label}</dt>
-      <dd className={cn("min-w-0 break-words tabular-nums", !text && "text-right", strong && "font-semibold")}>{children}</dd>
+      <dd className={cn("min-w-0 break-words tabular-nums", !text && "text-right", stackIndent, strong && "font-semibold")}>{children}</dd>
     </div>
   );
 }
@@ -313,7 +319,7 @@ export function EventDetail({
       <div className="border-t border-border/70 py-1">
         <p className="pt-1.5 text-sm font-medium">{pick(s.title, lang)}</p>
         <dl>
-          {s.fields.map((f) => <Row key={f.key} depth={1} text label={pick(f.label, lang)}><Answer text={String(event[f.key] ?? "")} /></Row>)}
+          {s.fields.map((f) => <Row key={f.key} depth={1} text besideFigures={wide} label={pick(f.label, lang)}><Answer text={String(event[f.key] ?? "")} /></Row>)}
         </dl>
       </div>
     );

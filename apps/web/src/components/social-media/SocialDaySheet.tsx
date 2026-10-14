@@ -176,7 +176,8 @@ export function SocialDaySheet({
                             value={f[m]}
                             disabled={!editable}
                             onChange={(e) => set(p.id, m, e.target.value)}
-                            placeholder={editable ? "0" : "—"}
+                            // "—", not "0": an empty box stays empty and 0 is a real zero (UI tour run 14, R14-WB-11).
+                            placeholder="—"
                             className={cn(input, "mt-1")}
                           />
                         </label>

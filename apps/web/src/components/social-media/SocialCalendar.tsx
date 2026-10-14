@@ -31,7 +31,6 @@ export function SocialCalendar({ data, onOpen }: { data: SocialMonthResponse; on
   const cells = useMemo(() => monthGrid(data.month), [data.month]);
   const byDate = useMemo(() => new Map(data.days.map((d) => [d.date, d])), [data.days]);
   const custom = useMemo(() => new Set(data.dayTargets.map((d) => d.date)), [data.dayTargets]);
-  const compact = useMemo(() => new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 }), [locale]);
   const weekdays = useMemo(
     () => Array.from({ length: 7 }, (_, i) => new Date(`2026-10-${String(5 + i).padStart(2, "0")}T00:00:00`).toLocaleDateString(locale, { weekday: "short" })),
     [locale],
@@ -86,7 +85,8 @@ export function SocialCalendar({ data, onOpen }: { data: SocialMonthResponse; on
                 </span>
                 {day && day.engagement !== null && (
                   <span aria-hidden className="truncate text-center text-xs font-semibold tabular-nums text-foreground sm:text-left sm:text-sm">
-                    {compact.format(day.engagement)}
+                    {/* Plain dotted count, never "3k" / "2.2k" (UI tour run 14, R14-WB-2). */}
+                    {num(day.engagement, lang)}
                   </span>
                 )}
                 {/* On a phone too (UI tour run 13, W-M14): the posts were dropped below sm. */}

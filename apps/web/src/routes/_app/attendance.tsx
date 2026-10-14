@@ -7,7 +7,7 @@ import { AndroidAppCheckInNote, IosAppCheckInCard, browserMayTakeAttendance, isU
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { DateField } from "@/components/DateField";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadError } from "@/components/LoadError";
@@ -34,6 +34,7 @@ import { LeftTag, leftAtOf } from "@/components/LeftTag";
 import { localeOf, t as tr, useLang } from "@/lib/lang";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
 import { formatCount } from "@/lib/number-format";
+import { useStickyHeaderOffset } from "@/hooks/use-sticky-header-offset";
 
 type HistRow = NonNullable<NexusAttendanceHistory["rows"]>[number];
 
@@ -99,6 +100,8 @@ const REQ_LABEL: Record<string, string> = { LEAVE: "Leave", SICK: "Sick", PERMIT
 const PHOTO_EXT = /\.(jpe?g|png|gif|webp|heic|heif|avif|bmp)$/i;
 /** Width of the attendance board's right-edge fade on a phone (w-10); landing keeps today clear of it. */
 const BOARD_FADE = 40;
+/** The board's header cells follow --board-head-shift (set while the page scrolls, see pageHeaderBottom). */
+const HEAD_SHIFT: CSSProperties = { transform: "translateY(var(--board-head-shift, 0px))" };
 function isPhotoDocument(url?: string | null, name?: string | null) {
   const path = (url ?? "").split(/[?#]/)[0];
   // The stored file keeps the uploaded extension (see POST /api/attendance/requests); the original
@@ -362,6 +365,34 @@ function Attendance() {
     setBoardEdge();
     landedPeriod.current = monthKey;
   }, [viewMode, history.isLoading, monthKey, todayKey, periodDays.length]);
+  // The day header stays in view while the PAGE scrolls too (UI tour run 14, R14-WM-16: scrolling the page past
+  // the board's top took MON 12…FRI 16 away and the dots lost their dates). The header row is sticky inside the
+  // board's own scroll box; once the box's top has gone under the page's sticky header, the row is pushed down
+  // by the same distance (never past the box's last row), so it sits right under the page header.
+  const pageHeaderBottom = useStickyHeaderOffset();
+  useEffect(() => {
+    if (viewMode !== "grid") return;
+    const box = boardScrollRef.current;
+    if (!box) return;
+    let frame = 0;
+    const place = () => {
+      frame = 0;
+      const head = box.querySelector<HTMLElement>("thead");
+      const headH = head?.offsetHeight ?? 0;
+      const room = Math.max(0, box.clientHeight - headH - 56);
+      const shift = Math.min(room, Math.max(0, pageHeaderBottom - box.getBoundingClientRect().top));
+      box.style.setProperty("--board-head-shift", `${Math.round(shift)}px`);
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(place); };
+    place();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+    };
+  }, [viewMode, pageHeaderBottom, history.isLoading, history.data]);
   // Cut-off aware: past the 27th we're already in NEXT month's payroll period, so the board's
   // "current period" (and the Next-button guard) must roll over on the 28th, not on the 1st.
   const nowKey = (() => { const d = new Date(); const a = new Date(d.getFullYear(), d.getMonth() + (d.getDate() > CUTOFF_DAY ? 1 : 0), 1); return `${a.getFullYear()}-${String(a.getMonth() + 1).padStart(2, "0")}`; })();
@@ -570,16 +601,16 @@ function Attendance() {
             <table className="w-full min-w-max text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr>
-                  <th data-member-col className="sticky left-0 top-0 z-30 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] bg-muted px-2 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:max-w-[20rem] sm:px-4">{tr("Member")}</th>
+                  <th data-member-col style={HEAD_SHIFT} className="sticky left-0 top-0 z-30 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] bg-muted px-2 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:max-w-[20rem] sm:px-4">{tr("Member")}</th>
                   {periodDays.map((pd) => (
-                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} className={cn("sticky top-0 z-20 snap-start bg-muted px-1 py-1.5 font-medium text-[10px] leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
+                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} style={HEAD_SHIFT} className={cn("sticky top-0 z-20 snap-start bg-muted px-1 py-1.5 font-medium text-[10px] leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
                       <span className={cn("block text-[9px] uppercase", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" })}</span>
                       {pd.key === todayKey
                         ? <span className="inline-grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 font-bold text-primary-foreground">{pd.day}</span>
                         : pd.day}
                     </th>
                   ))}
-                  <th className="sticky top-0 z-20 bg-muted text-right px-4 py-2 font-medium text-xs text-muted-foreground uppercase">{tr("Score")}</th>
+                  <th style={HEAD_SHIFT} className="sticky top-0 z-20 bg-muted text-right px-4 py-2 font-medium text-xs text-muted-foreground uppercase">{tr("Score")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -658,7 +689,7 @@ function Attendance() {
                                 className={cn(pill, d.redDate.quota === 0 ? "bg-muted/50 text-muted-foreground/70 ring-border" : quotaTone(d.redDate.remaining))}>
                                 {tr("{left}/{quota} holidays", { left: d.redDate.remaining, quota: d.redDate.quota })}
                               </span>
-                              <span title={`${d.xp.score} XP · ${d.xp.levelName} (Lv.${d.xp.level}) — ${tr("the XP period is the calendar month, not the 28→27 attendance period")}`}
+                              <span title={`${formatCount(d.xp.score)} XP · ${d.xp.levelName} (Lv.${d.xp.level}) — ${tr("the XP period is the calendar month, not the 28→27 attendance period")}`}
                                 className={cn(pill, xpTone)}>
                                 {formatCount(d.xp.score)} XP
                               </span>
@@ -685,7 +716,11 @@ function Attendance() {
                       const rec = recMap.get(`${u.id}:${pd.key}`);
                       const tone = rec ? recTone(rec) : "none";
                       return (
-                        <td key={pd.key} className={cn("relative px-1 py-2.5 text-center", pd.day === 1 && "border-l border-border/70")}>
+                        <td key={pd.key} className={cn("px-1 py-2.5 text-center", pd.day === 1 && "border-l border-border/70")}>
+                          {/* The marks below sit on the day's dot, not on the cell's corner: in a tall row the cell's
+                              corner is far above the dot, so a mark floated there on its own, and on a phone it
+                              showed as a sliver beside the pinned name column (UI tour run 14, R14-WM-17). */}
+                          <span className="relative inline-block align-middle leading-none">
                           {rec ? (
                             tone === "absent" && canManage ? (
                               <button
@@ -724,14 +759,15 @@ function Attendance() {
                             <span className="inline-block h-5 w-5 rounded-lg pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding bg-muted/30" />
                           )}
                           {rec?.locationTrackingState === "denied" && (
-                            <span title={tr("Location off")} aria-label={tr("Location off")} className="pointer-events-none absolute right-0 top-1 grid h-3 w-3 place-items-center rounded-full bg-card text-slate-500 ring-1 ring-border dark:text-slate-400"><MapPinOff className="h-2 w-2" /></span>
+                            <span title={tr("Location off")} aria-label={tr("Location off")} className="pointer-events-none absolute -right-1.5 -top-1.5 grid h-3 w-3 place-items-center rounded-full bg-card text-slate-500 ring-1 ring-border pointer-coarse:right-0.5 pointer-coarse:top-0.5 dark:text-slate-400"><MapPinOff className="h-2 w-2" /></span>
                           )}
                           {rec?.locationTrackingState === "web" && (
-                            <span title={tr("Web check-in · location not tracked")} aria-label={tr("Web check-in · location not tracked")} className="pointer-events-none absolute right-0 top-1 grid h-3 w-3 place-items-center rounded-full bg-card text-sky-600 ring-1 ring-border dark:text-sky-400"><Globe className="h-2 w-2" /></span>
+                            <span title={tr("Web check-in · location not tracked")} aria-label={tr("Web check-in · location not tracked")} className="pointer-events-none absolute -right-1.5 -top-1.5 grid h-3 w-3 place-items-center rounded-full bg-card text-sky-600 ring-1 ring-border pointer-coarse:right-0.5 pointer-coarse:top-0.5 dark:text-sky-400"><Globe className="h-2 w-2" /></span>
                           )}
                           {pd.key === todayKey && rec?.outsideSince && !rec.checkOutAt && (
-                            <span title={tr("Outside since {time}", { time: fmtTime(rec.outsideSince) })} className="pointer-events-none absolute bottom-0.5 left-1/2 h-1 w-3 -translate-x-1/2 rounded-full bg-amber-500" />
+                            <span title={tr("Outside since {time}", { time: fmtTime(rec.outsideSince) })} className="pointer-events-none absolute -bottom-2 left-1/2 h-1 w-3 -translate-x-1/2 rounded-full bg-amber-500 pointer-coarse:bottom-1" />
                           )}
+                          </span>
                         </td>
                       );
                     })}
@@ -837,7 +873,7 @@ function DeductionLogModal({ userId, name, monthKey, onClose }: { userId: string
         <div className="text-[11px] text-muted-foreground">{fmtDate(e.dateKey)}{e.detail ? ` · ${attendanceReasonText(e.detail)}` : ""}</div>
       </div>
       <span className={cn("shrink-0 text-sm font-black tabular-nums", e.cleared ? "text-muted-foreground" : "text-rose-600 dark:text-rose-400")}>
-        {e.unit === "XP" ? `${e.amount} XP` : tr("{n} day off", { n: e.amount })}
+        {e.unit === "XP" ? `${formatCount(e.amount)} XP` : tr("{n} day off", { n: e.amount })}
       </span>
       {!e.cleared && (
         <button aria-label={tr("Remove this day's deduction")}
@@ -962,13 +998,18 @@ function xpPillTone(score: number): string {
   return "bg-muted text-muted-foreground ring-border";
 }
 
-/** Phone: day off and XP on their own lines, so the narrow pinned column never cuts the XP (UI tour run 10, WM-3). */
-function PhoneMemberSummary({ d }: { d: { remaining: number; quota: number; xp: { score: number } } | null }) {
+/**
+ * Phone: day off, public holidays and XP on their own lines, so the narrow pinned column never cuts the XP (UI
+ * tour run 10, WM-3). Spelled out as on the desktop pills, and the XP with a true minus (UI tour run 14,
+ * R14-WM-14 / R14-WM-15: "0/4 DO", "0/0 PH" and "-590 XP").
+ */
+function PhoneMemberSummary({ d }: { d: { remaining: number; quota: number; redDate?: { remaining: number; quota: number } | null; xp: { score: number } } | null }) {
   if (!d) return null;
   return (
     <div className="text-[10px] leading-tight tabular-nums text-muted-foreground sm:hidden">
-      <div className="whitespace-nowrap">{d.remaining}/{d.quota} DO</div>
-      <div className={cn("whitespace-nowrap", d.xp.score < 0 && "font-medium text-rose-600 dark:text-rose-400")}>{d.xp.score} XP</div>
+      <div className="whitespace-nowrap">{tr("{left}/{quota} days off", { left: d.remaining, quota: d.quota })}</div>
+      {d.redDate && <div className="whitespace-nowrap">{tr("{left}/{quota} holidays", { left: d.redDate.remaining, quota: d.redDate.quota })}</div>}
+      <div className={cn("whitespace-nowrap", d.xp.score < 0 && "font-medium text-rose-600 dark:text-rose-400")}>{formatCount(d.xp.score)} XP</div>
     </div>
   );
 }
@@ -1723,8 +1764,8 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
             <EmptyState icon={ClipboardCheck} compact title={canReview ? tr("Nothing to review yet") : tr("No requests yet")}
               message={canReview
                 ? tr("Leave, sick days, permits and offsite check-outs from your people appear here as soon as they're filed, with Approve and Reject right on the row.")
-                : tr("Leave, sick days, permits and days off you file show up here with their status, and your approver is told as soon as you send one.")}
-              action={<EmptyAction onClick={() => setComposerOpen(true)}>{tr("New request")}</EmptyAction>} />
+                : tr("Leave, sick days, permits and days off you file show up here with their status, and your approver is told as soon as you send one.")} />
+            {/* No second "New request" here: the section header's button is right above (UI tour run 14, R14-WM-18). */}
           </div>
         )}
         {!requestsQuery.isLoading && entries.length > 0 && shown.length === 0 && (
@@ -1806,8 +1847,10 @@ function EmploymentStartSection() {
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold">{m.name || m.email}</div>
               <div className="text-xs text-muted-foreground">
+                {/* Short enough for one line beside the date picker on a phone; the empty picker already says the date
+                    is missing (UI tour run 14, R14-WM-19: "…can't request leave / yet" left "yet" on its own line). */}
                 {!m.employmentStartDate
-                  ? tr("Not filled in — can't request leave yet")
+                  ? tr("Can't request leave yet")
                   : m.eligible
                     ? tr("Eligible for annual leave")
                     : tr("Eligible from {date}", { date: m.eligibleFrom ? new Date(m.eligibleFrom).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" }) : "—" })}

@@ -348,12 +348,12 @@ function TargetEditor({ projectId, data, onClose }: { projectId: string; data: O
         {t("Sales target for {month}", { month: monthLabel(data.month, locale) })}
         <span className="relative mt-1 block">
           <span aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs">Rp</span>
-          <input inputMode="numeric" value={sales} onChange={(e) => setSales(fmt(digitsOf(e.target.value)))} placeholder="0" className={cn(input, "pl-9")} />
+          <input inputMode="numeric" value={sales} onChange={(e) => setSales(fmt(digitsOf(e.target.value)))} className={cn(input, "pl-9")} />
         </span>
       </label>
       <label className="text-xs font-medium text-muted-foreground">
         {t("Pax target for {month}", { month: monthLabel(data.month, locale) })}
-        <input inputMode="numeric" value={pax} onChange={(e) => setPax(fmt(digitsOf(e.target.value)))} placeholder="0" className={cn(input, "mt-1")} />
+        <input inputMode="numeric" value={pax} onChange={(e) => setPax(fmt(digitsOf(e.target.value)))} placeholder="—" className={cn(input, "mt-1")} />
       </label>
       <div className="flex gap-2">
         <button type="button" onClick={onClose} className="h-10 rounded-xl px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:h-11">{t("Cancel")}</button>
