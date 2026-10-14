@@ -8,6 +8,15 @@
 //   {{HONOR | terbilang_rupiah | upper}}   → DUA PULUH LIMA JUTA RUPIAH
 // Repeating rows: {{#BARANG}} … {{NAMA_BARANG}} … {{/BARANG}} (a table row or paragraphs).
 // A section with no placeholders inside ({{#PAKAI_MATERAI}} … {{/PAKAI_MATERAI}}) is a yes/no switch.
+// A section that prints its own field ({{#NPWP}}, NPWP {{NPWP}}{{/NPWP}}) shows only when that field has a
+// value; empty or just a dash ("-") hides it, and the field becomes optional.
+//
+// Computed values: a filter with an argument works out a new value, and the filters after it see that value.
+//   {{HONOR | persen:50}}                          → 50% of HONOR                    (6.250.000)
+//   {{NILAI_TERMIN | persen_dari:NILAI_LISENSI}}   → NILAI_TERMIN as % of NILAI_LISENSI (16,67)
+//   {{TANGGAL_DOKUMEN | tambah_bulan:DURASI_BULAN}} → the date DURASI_BULAN months on (also tambah_bulan:6)
+//   {{KALENDER | jumlah:JUMLAH_EVENT}}             → the sum of one column of a list
+// A field named as an argument is asked in the form like any other.
 
 export const FIELD_TYPES = ["text", "longtext", "date", "number", "money", "select", "boolean", "list"] as const
 export type FieldType = (typeof FIELD_TYPES)[number]
@@ -25,8 +34,12 @@ export type TemplateField = {
   columns?: TemplateField[]
 }
 
-/** Filled by the server, never asked in the form. */
-export const AUTO_FIELDS = ["NOMOR", "NAMA_PERUSAHAAN", "PT_PERUSAHAAN", "ALAMAT_PERUSAHAAN", "KODE_PERUSAHAAN"] as const
+/** Filled by the server, never asked in the form. The *_INDUK ones and KE only on an addendum: they describe
+ *  the signed document it amends (KE = "Pertama", "Kedua", … for ADD-1, ADD-2, …). */
+export const AUTO_FIELDS = [
+  "NOMOR", "NAMA_PERUSAHAAN", "PT_PERUSAHAAN", "ALAMAT_PERUSAHAAN", "KODE_PERUSAHAAN",
+  "NOMOR_INDUK", "JENIS_DOKUMEN_INDUK", "JUDUL_INDUK", "TANGGAL_INDUK", "KE",
+] as const
 /** Asked in every form (it decides the number's month and year); a template may print it. */
 export const DOC_DATE_FIELD = "TANGGAL_DOKUMEN"
 
@@ -38,20 +51,69 @@ const NAME = /^[A-Za-z][A-Za-z0-9_]*$/
 
 export type ParsedTag = { name: string; filters: string[] }
 
-/** "TGL | hari | upper" → { name: "TGL", filters: ["hari", "upper"] }. Null when the name is not valid. */
+/** "TGL | hari | upper" → { name: "TGL", filters: ["hari", "upper"] }. Null when the name is not valid. A filter's
+ *  name is lower-cased, its argument kept as written ("persen_dari:NILAI_LISENSI"). */
 export function parseTag(raw: string): ParsedTag | null {
   const [head, ...rest] = raw.split("|").map((s) => s.trim())
   if (!head || !NAME.test(head)) return null
-  return { name: head, filters: rest.map((f) => f.toLowerCase()).filter(Boolean) }
+  const filters = rest.filter(Boolean).map((f) => {
+    const { name, arg } = splitFilter(f)
+    return arg === null ? name : `${name}:${arg}`
+  })
+  return { name: head, filters }
+}
+
+/** "persen_dari: NILAI_LISENSI" → { name: "persen_dari", arg: "NILAI_LISENSI" }; no colon → arg null. */
+export function splitFilter(filter: string): { name: string; arg: string | null } {
+  const i = filter.indexOf(":")
+  if (i < 0) return { name: filter.trim().toLowerCase(), arg: null }
+  return { name: filter.slice(0, i).trim().toLowerCase(), arg: filter.slice(i + 1).trim() }
 }
 
 const DATE_FILTERS = ["hari", "tanggal", "tgl", "tgl_terbilang", "bulan", "bulan_romawi", "tahun", "tahun_terbilang", "dmy"]
 const MONEY_FILTERS = ["rupiah", "angka", "terbilang", "terbilang_rupiah"]
 const TEXT_FILTERS = ["upper", "lower", "title"]
-export const FILTERS = [...DATE_FILTERS, ...MONEY_FILTERS, ...TEXT_FILTERS]
+/** Filters that compute a new value, and what their argument is. */
+const COMPUTED_FILTERS: Record<string, "number" | "field" | "field-or-number"> = {
+  persen: "number",
+  persen_dari: "field",
+  tambah_bulan: "field-or-number",
+  jumlah: "field",
+}
+export const FILTERS = [...DATE_FILTERS, ...MONEY_FILTERS, ...TEXT_FILTERS, ...Object.keys(COMPUTED_FILTERS)]
 
+const NUMBER_ARG = /^-?\d+([.,]\d+)?$/
+
+/** The filters that don't exist, or whose argument is missing or of the wrong kind. */
 export function unknownFilters(filters: string[]): string[] {
-  return filters.filter((f) => !FILTERS.includes(f))
+  return filters.filter((f) => {
+    const { name, arg } = splitFilter(f)
+    const kind = COMPUTED_FILTERS[name]
+    if (!kind) return !FILTERS.includes(name) || arg !== null
+    if (!arg) return true
+    if (kind === "number") return !NUMBER_ARG.test(arg)
+    if (kind === "field") return !NAME.test(arg)
+    return !NAME.test(arg) && !/^-?\d+$/.test(arg)
+  })
+}
+
+/** Form fields that filters name as their argument ("persen_dari:NILAI_LISENSI" → NILAI_LISENSI). A list's
+ *  column (jumlah) is not one. */
+export function filterFieldRefs(filters: string[]): string[] {
+  const out: string[] = []
+  for (const f of filters) {
+    const { name, arg } = splitFilter(f)
+    if (!arg || !NAME.test(arg)) continue
+    if (name === "persen_dari" || name === "tambah_bulan") out.push(arg)
+  }
+  return out
+}
+
+/** A value that counts as given for a {{#FIELD}}…{{/FIELD}} section: not empty and not just a dash. */
+export function hasPrintableValue(v: unknown): boolean {
+  if (v == null || v === false) return false
+  if (Array.isArray(v)) return v.length > 0
+  return !/^[\s\-–—]*$/.test(String(v))
 }
 
 /** "NAMA_PIHAK_KEDUA" → "Nama Pihak Kedua" */
@@ -65,6 +127,16 @@ export function humanizeFieldName(name: string): string {
 
 /** The type a field most likely has, from how the template uses it and then from its name. */
 export function inferFieldType(name: string, filters: string[]): FieldType {
+  // Only the filters that read the field itself: after a computed one, they read the computed value.
+  const own: string[] = []
+  for (const f of filters) {
+    const n = splitFilter(f).name
+    if (n === "tambah_bulan") return "date"
+    if (n === "persen" || n === "persen_dari") return /(NILAI|HARGA|HONOR|FEE|BIAYA|NOMINAL|TOTAL|DENDA|UPAH|GAJI)/.test(name.toUpperCase()) ? "money" : "number"
+    if (n in COMPUTED_FILTERS) break
+    own.push(n)
+  }
+  filters = own
   if (filters.some((f) => DATE_FILTERS.includes(f))) return "date"
   if (filters.some((f) => f === "rupiah" || f === "terbilang_rupiah")) return "money"
   if (filters.some((f) => f === "angka" || f === "terbilang")) return "number"
@@ -214,10 +286,72 @@ export function applyFilter(filter: string, current: string, raw: unknown): stri
   }
 }
 
-export function renderTagValue(tag: ParsedTag, raw: unknown, type: FieldType | undefined): string {
+/** The value of another form field, for a filter's argument. */
+export type FieldLookup = (name: string) => unknown
+
+/** "2026-01-31" + 1 month → "2026-02-28": a day the next month doesn't have becomes its last day. */
+export function addMonths(iso: string, months: number): string | null {
+  const d = parseIsoDate(iso)
+  if (!d) return null
+  const total = d.y * 12 + (d.m - 1) + months
+  const y = Math.floor(total / 12)
+  const m = total - y * 12 + 1
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate()
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${String(y).padStart(4, "0")}-${pad(m)}-${pad(Math.min(d.d, last))}`
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100
+
+/** A computed filter's result: the new value (what later filters read) and how it prints. Null: not one. */
+function computeFilter(filter: string, raw: unknown, lookup: FieldLookup): { value: unknown; text: string } | null {
+  const { name, arg } = splitFilter(filter)
+  if (!(name in COMPUTED_FILTERS) || arg == null) return null
+  const amount = (v: unknown, what: string) => {
+    const n = parseAmount(v)
+    if (n == null) throw new FilterError(`"${name}" needs ${what} as a number`)
+    return n
+  }
+  switch (name) {
+    case "persen": {
+      const n = round2((amount(raw, "the value") * Number(arg.replace(",", "."))) / 100)
+      return { value: n, text: formatThousands(n) }
+    }
+    case "persen_dari": {
+      const whole = amount(lookup(arg), arg)
+      if (whole === 0) throw new FilterError(`"${name}": ${arg} is 0`)
+      const n = round2((amount(raw, "the value") / whole) * 100)
+      return { value: n, text: formatThousands(n) }
+    }
+    case "tambah_bulan": {
+      const months = /^-?\d+$/.test(arg) ? Number(arg) : amount(lookup(arg), arg)
+      if (!Number.isInteger(months) || Math.abs(months) > 1200) throw new FilterError(`"${name}" needs a whole number of months`)
+      const iso = addMonths(String(raw ?? ""), months)
+      if (!iso) throw new FilterError(`"${name}" needs a date`)
+      return { value: iso, text: displayValue("date", iso) }
+    }
+    case "jumlah": {
+      if (!Array.isArray(raw)) throw new FilterError(`"${name}" needs a list`)
+      const n = round2(raw.reduce((sum: number, row) => sum + (parseAmount((row as Record<string, unknown> | null)?.[arg]) ?? 0), 0))
+      return { value: n, text: formatThousands(n) }
+    }
+  }
+  return null
+}
+
+export function renderTagValue(tag: ParsedTag, raw: unknown, type: FieldType | undefined, lookup: FieldLookup = () => undefined): string {
   let out = displayValue(type, raw)
   if (raw == null || raw === "") return out
-  for (const f of tag.filters) out = applyFilter(f, out, raw)
+  let value: unknown = raw
+  for (const f of tag.filters) {
+    const computed = computeFilter(f, value, lookup)
+    if (computed) {
+      value = computed.value
+      out = computed.text
+    } else {
+      out = applyFilter(f, out, value)
+    }
+  }
   return out
 }
 

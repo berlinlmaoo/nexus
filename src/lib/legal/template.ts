@@ -4,8 +4,8 @@ import { DOCX_MAX_UNZIPPED_BYTES, zipUnpackedSize } from "@/lib/legal/storage"
 import Docxtemplater from "docxtemplater"
 import InspectModule from "docxtemplater/js/inspect-module.js"
 import {
-  DOC_DATE_FIELD, FilterError, humanizeFieldName, inferFieldType, isAutoField, parseTag, renderTagValue, unknownFilters,
-  type FieldType, type TemplateField,
+  DOC_DATE_FIELD, FilterError, filterFieldRefs, hasPrintableValue, humanizeFieldName, inferFieldType, isAutoField, parseTag,
+  renderTagValue, unknownFilters, type FieldType, type TemplateField,
 } from "@/lib/legal/filters"
 
 // Reading and filling a Legal .docx template (docxtemplater, MIT). The placeholder language and value
@@ -89,8 +89,15 @@ export function inspectTemplate(buf: Buffer): TemplateField[] {
   return fields
 }
 
-function collect(parts: Part[], problems: string[], top: boolean): TemplateField[] {
-  const byName = new Map<string, { filters: string[]; field?: TemplateField }>()
+/** A section that prints its own field inside ({{#NPWP}}, NPWP {{NPWP}}{{/NPWP}}): shown only when that field
+ *  has a value, instead of being a list. */
+function isConditionalSection(part: Part, name: string): boolean {
+  return (part.subparsed ?? []).some((p) => p.type === "placeholder" && p.module !== "loop" && !p.subparsed && parseTag(p.value)?.name === name)
+}
+
+/** `refs` (inside a list): the fields its filters name that are not columns of its row; they are form fields. */
+function collect(parts: Part[], problems: string[], top: boolean, refs: string[] = []): TemplateField[] {
+  const byName = new Map<string, { filters: string[]; field?: TemplateField; optional?: boolean; ref?: boolean }>()
   const order: string[] = []
   const add = (name: string) => {
     if (!byName.has(name)) {
@@ -99,35 +106,60 @@ function collect(parts: Part[], problems: string[], top: boolean): TemplateField
     }
     return byName.get(name)!
   }
-  for (const part of parts) {
-    if (part.type !== "placeholder") continue
-    const tag = parseTag(part.value)
-    if (!tag) {
-      problems.push(`“{{${part.value}}}” is not a valid placeholder: use letters, digits and _ (e.g. {{NAMA_LENGKAP}})`)
+  const pendingRefs: string[] = []
+  const visit = (list: Part[]) => {
+    for (const part of list) {
+      if (part.type !== "placeholder") continue
+      const tag = parseTag(part.value)
+      if (!tag) {
+        problems.push(`“{{${part.value}}}” is not a valid placeholder: use letters, digits and _ (e.g. {{NAMA_LENGKAP}})`)
+        continue
+      }
+      if (part.module === "rawxml") {
+        problems.push(`{{@${part.value}}} inserts raw Word XML, which a form value must never do; write {{${tag.name}}}`)
+        continue
+      }
+      const bad = unknownFilters(tag.filters)
+      if (bad.length) problems.push(`{{${part.value}}}: unknown filter ${bad.map((b) => `“${b}”`).join(", ")}`)
+      if (part.module === "loop" || part.subparsed) {
+        if (tag.filters.length) problems.push(`Section {{#${part.value}}} can't have filters`)
+        if (isConditionalSection(part, tag.name)) {
+          add(tag.name).optional = true
+          visit(part.subparsed ?? [])
+          continue
+        }
+        const inner: string[] = []
+        const columns = collect(part.subparsed ?? [], problems, false, inner)
+        const slot = add(tag.name)
+        pendingRefs.push(...inner)
+        slot.field = columns.length
+          ? { name: tag.name, label: humanizeFieldName(tag.name), type: "list", required: true, columns }
+          : { name: tag.name, label: humanizeFieldName(tag.name), type: "boolean", required: false }
+        continue
+      }
+      add(tag.name).filters.push(...tag.filters)
+      for (const ref of filterFieldRefs(tag.filters)) {
+        if (!top) pendingRefs.push(ref)
+        else if (!byName.has(ref)) add(ref).ref = true
+      }
+    }
+  }
+  visit(parts)
+  for (const ref of pendingRefs) {
+    if (byName.has(ref)) continue
+    if (!top) {
+      if (!refs.includes(ref)) refs.push(ref)
       continue
     }
-    if (part.module === "rawxml") {
-      problems.push(`{{@${part.value}}} inserts raw Word XML, which a form value must never do; write {{${tag.name}}}`)
-      continue
-    }
-    const bad = unknownFilters(tag.filters)
-    if (bad.length) problems.push(`{{${part.value}}}: unknown filter ${bad.map((b) => `“${b}”`).join(", ")}`)
-    if (part.module === "loop" || part.subparsed) {
-      if (tag.filters.length) problems.push(`Section {{#${part.value}}} can't have filters`)
-      const columns = collect(part.subparsed ?? [], problems, false)
-      const slot = add(tag.name)
-      slot.field = columns.length
-        ? { name: tag.name, label: humanizeFieldName(tag.name), type: "list", required: true, columns }
-        : { name: tag.name, label: humanizeFieldName(tag.name), type: "boolean", required: false }
-      continue
-    }
-    add(tag.name).filters.push(...tag.filters)
+    add(ref).ref = true
   }
   const out: TemplateField[] = []
   for (const name of order) {
     if (top && isAutoField(name)) continue
     const slot = byName.get(name)!
-    out.push(slot.field ?? { name, label: humanizeFieldName(name), type: inferFieldType(name, slot.filters), required: true })
+    // A field only named by a filter's argument (tambah_bulan:DURASI_BULAN) is a number unless its name says more.
+    const type = slot.ref && !slot.filters.length && inferFieldType(name, []) === "text" ? "number" : inferFieldType(name, slot.filters)
+    out.push(slot.field ?? { name, label: humanizeFieldName(name), type, required: !slot.optional })
   }
   // The document date is asked in every form; put it first.
   if (top) {
@@ -147,7 +179,7 @@ function typeIndex(fields: TemplateField[], into = new Map<string, FieldType>())
   return into
 }
 
-const AUTO_TYPES: Record<string, FieldType> = { NOMOR: "text" }
+const AUTO_TYPES: Record<string, FieldType> = { NOMOR: "text", TANGGAL_INDUK: "date" }
 
 /**
  * Fill a template. `data` holds the form values (dates as YYYY-MM-DD, lists as arrays of row objects) and
@@ -157,9 +189,12 @@ export function fillTemplate(buf: Buffer, fields: TemplateField[], data: Record<
   const zip = openZip(buf)
   const types = typeIndex(fields)
   const problems: string[] = []
+  // A filter's argument names a field of the row it sits in, else of the whole form.
+  const lookupIn = (scope: Record<string, unknown>) => (name: string) => (scope[name] !== undefined ? scope[name] : (data as Record<string, unknown>)[name])
   const doc = compile(zip, {
-    parser: (raw: string) => {
+    parser: (raw: string, meta?: { tag?: Part }) => {
       const tag = parseTag(raw)
+      const isSection = meta?.tag?.module === "loop"
       return {
         get(scope: unknown) {
           if (raw === ".") return scope
@@ -167,9 +202,11 @@ export function fillTemplate(buf: Buffer, fields: TemplateField[], data: Record<
           const value = (scope as Record<string, unknown>)[tag.name]
           if (value === undefined) return undefined
           // Lists and switches go to docxtemplater as they are; it loops / shows the section.
-          if (Array.isArray(value) || typeof value === "boolean") return value
+          if (typeof value === "boolean" || (Array.isArray(value) && (isSection || !tag.filters.length))) return value
+          // {{#NPWP}}…{{/NPWP}}: shown when the field has a value ("-" doesn't count).
+          if (isSection) return hasPrintableValue(value)
           try {
-            return renderTagValue(tag, value, types.get(tag.name) ?? AUTO_TYPES[tag.name])
+            return renderTagValue(tag, value, types.get(tag.name) ?? AUTO_TYPES[tag.name], lookupIn(scope as Record<string, unknown>))
           } catch (error) {
             if (error instanceof FilterError) problems.push(`{{${raw}}}: ${error.message}`)
             else throw error

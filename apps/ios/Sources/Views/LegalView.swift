@@ -197,8 +197,17 @@ struct LegalDocumentsPane: View {
                                 noneLabel: T("All types"), compact: true)
                 LegalMenuPicker(options: LegalLabels.statuses.map { ($0, LegalLabels.status($0)) }, selection: binding(\.status),
                                 noneLabel: T("All statuses"), compact: true)
+                LegalMenuPicker(options: [("1", T("Signed copy uploaded"))], selection: binding(\.signed),
+                                noneLabel: T("Signed or not"), compact: true)
                 LegalMenuPicker(options: [("GENERATED", T("Made here")), ("UPLOADED", T("Uploaded"))], selection: binding(\.source),
                                 noneLabel: T("Made or uploaded"), compact: true)
+                if query.parentId != nil {
+                    Button { query.parentId = nil; query.page = 1 } label: {
+                        Label(T("One document and its addenda"), systemImage: "xmark.circle.fill")
+                    }
+                    .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+                    .accessibilityHint(T("Clear filters"))
+                }
                 Button { sheet = .dates } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "calendar").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
@@ -263,6 +272,13 @@ struct LegalDocumentsPane: View {
                     }
                     .buttonStyle(.plain)
                     .hoverEffect(.highlight)
+                    .contextMenu {
+                        if d.parent != nil || d.addendaCount > 0 {
+                            Button { query.parentId = d.parent?.id ?? d.id; query.page = 1 } label: {
+                                Label(T("Show the chain"), systemImage: "arrow.triangle.branch")
+                            }
+                        }
+                    }
                 }
             }
             .opacity(loading ? 0.6 : 1)
@@ -288,13 +304,17 @@ struct LegalDocumentsPane: View {
         var s = LegalLabels.docType(d.docType)
         if d.source == "UPLOADED" { s += " · " + T("Uploaded") }
         if let deal = d.deal { s += " · " + deal.code } else if let p = d.project { s += " · " + p.name }
+        if let parent = d.parent { s += " · " + String(format: T("Addendum to %@"), parent.number) }
+        if d.addendaCount > 0 { s += " · " + String(format: T("%d addenda"), d.addendaCount) }
+        if d.status == "VOID", let by = d.numberReusedBy { s += " · " + String(format: T("Number reused by %@"), by.number) }
+        if let at = d.signedAt { s += " · " + String(format: T("Signed %@ by %@"), LegalLabels.date(at), d.signedBy?.name ?? "—") }
         return s
     }
 
     private func wideRow(_ d: LegalDocumentSummary) -> some View {
         HStack(spacing: 12) {
             Text(d.number.isEmpty ? "—" : d.number).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.foreground)
-                .lineLimit(1).frame(width: 170, alignment: .leading)
+                .strikethrough(d.numberReleased).lineLimit(1).frame(width: 170, alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {
                 Text(d.title).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
                 Text(subtitle(d)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
@@ -314,14 +334,14 @@ struct LegalDocumentsPane: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 8) {
                 Text(d.number.isEmpty ? T("No number") : d.number).font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(NX.mutedFg).lineLimit(1)
+                    .foregroundStyle(NX.mutedFg).strikethrough(d.numberReleased).lineLimit(1)
                 Spacer(minLength: 4)
                 LegalStatusChip(status: d.status)
             }
             Text(d.title).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(2).multilineTextAlignment(.leading)
             Text([d.counterparty.isEmpty ? nil : d.counterparty, d.company?.name, LegalLabels.day(d.docDate)].compactMap { $0 }.joined(separator: " · "))
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
-            Text(subtitle(d)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            Text(subtitle(d)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2)
         }
         .padding(.horizontal, 14).padding(.vertical, 11)
         .frame(maxWidth: .infinity, alignment: .leading)

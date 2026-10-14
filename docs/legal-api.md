@@ -74,13 +74,13 @@ series: Series[]}`. `Series`: `{id, key, docType, label, format, resetPeriod: "Y
 
 | Method | Path | Body / query | Answer |
 |---|---|---|---|
-| GET | `/api/legal/documents` | `q, companyId, docType, status, source, projectId, dealId, from, to, sort (date\|created\|number), page, limit` | `{documents: Summary[], total, page, pageSize}` |
-| POST | `/api/legal/documents/prepare` | `{templateId, companyId?, values?}` | `{template, company{…, hasKop}, series{…, format}, fields: Field[], numberPreview}` |
-| POST | `/api/legal/documents` | `{templateId, companyId?, values, title?, counterparty?, projectId?, dealId?}` | 201 `{id, number, pdfError}`; 422 with `fieldErrors` / `problems` |
+| GET | `/api/legal/documents` | `q, companyId, docType, status, source, projectId, dealId, from, to, signed (1), parentId, sort (date\|created\|number), page, limit` | `{documents: Summary[], total, page, pageSize}` |
+| POST | `/api/legal/documents/prepare` | `{templateId, companyId?, values?, parentDocumentId?}` | `{template, company{…, hasKop}, series{…, format}?, fields: Field[], numberPreview, parent?, prefill}` |
+| POST | `/api/legal/documents` | `{templateId, companyId?, values, title?, counterparty?, projectId?, dealId?, parentDocumentId?}` | 201 `{id, number, pdfError}`; 422 with `fieldErrors` / `problems` |
 | POST | `/api/legal/documents/upload` | multipart `file` (PDF/DOCX/JPG/PNG), `companyId`, `docType`, `title`, `number?`, `counterparty?`, `docDate?`, `status?` (default SIGNED), `projectId?`, `dealId?`, `notes?` | 201 `{id, pdfError}` |
 | GET | `/api/legal/documents/:id` | | `{document: Document}` |
-| PATCH | `/api/legal/documents/:id` | `{title?, counterparty?, status?, notes?, projectId?, dealId?, finalVersion?}`; for an UPLOADED document also `number?, docType?, docDate?` | `{document}` |
-| DELETE | `/api/legal/documents/:id` | | `{ok}` (uploaded only; a numbered document answers 409: set it to VOID) |
+| PATCH | `/api/legal/documents/:id` | `{title?, counterparty?, status?, notes?, projectId?, dealId?, finalVersion?}`; for an UPLOADED document also `number?, docType?, docDate?` | `{document}`; 409 `{code: "LEGAL_STATUS_LOCKED"}` for a status move the rules refuse |
+| DELETE | `/api/legal/documents/:id` | | `{ok}` (uploaded only; a generated or numbered document answers 409: set it to VOID) |
 | GET | `/api/legal/documents/:id/versions/:v/file` | `?format=docx\|pdf\|original&inline=1` | the file |
 | POST | `/api/legal/documents/:id/versions/:v/pdf` | | `{ok}`; 502 `{error}` when the PDF service fails |
 | GET | `/api/legal/links` | `?q=` | `{projects: [{id,name}], deals: [{id, code, name, brand, projectId}]}` (only what the viewer can open) |
@@ -89,15 +89,35 @@ series: Series[]}`. `Series`: `{id, key, docType, label, format, resetPeriod: "Y
   format reads, plus `TANGGAL_DOKUMEN`, to refresh `numberPreview`. Default `TANGGAL_DOKUMEN` to today in
   Jakarta.
 - `Summary`: `{id, number, docType, title, counterparty, docDate, status, source, company{id,code,name},
-  project{id,name}?, deal{id,code,name,projectId}?, linkHidden, currentVersion, createdBy, createdAt, updatedAt}`.
+  project{id,name}?, deal{id,code,name,projectId}?, linkHidden, currentVersion, createdBy, createdAt, updatedAt,
+  signedAt?, signedBy?, voidedAt?, numberReleased, numberReusedBy{id,number,title}?, parent{id,number,title,status,docType}?,
+  addendumNo?, addendaCount}`.
   `linkHidden: true` = linked to a project or deal this viewer can't open (its name is withheld).
-- `Document`: `Summary` + `{notes, series?, template{id,name,version}?, fieldValues, finalVersion, hasNumber,
-  updatedBy, versions: Version[]}`.
+- `Document`: `Summary` + `{notes, series?, template{id,name,version}?, fieldValues, finalVersion, signedVersion?,
+  hasNumber, numberReusedFrom: [{id,number,title}], addenda: [{id, number, title, status, docDate, signedAt,
+  addendumSeq, numberReleased}], updatedBy, versions: Version[]}`.
 - `Version`: `{version, kind: GENERATED|MANUAL|GIDEON|UPLOAD|RESTORE, fileName, mimeType, size, hasDocx,
-  hasPdf, hasFile, note, changes, author, createdAt}`.
-- The shown file is `finalVersion ?? currentVersion`.
-- Statuses: `DRAFT FINAL SENT SIGNED VOID`.
-- Types: `SURAT SP SK PKS SPK NDA MOU INVOICE PJM PGB OTHER`. Labels are in
+  hasPdf, hasFile, note, changes, author, createdAt, label, downloadName}`.
+  - `label`: `REV n` (a version of a document that is not final), `FINAL` (the final version once the status is
+    FINAL, SENT or SIGNED), `SIGNED` (the signed copy). `downloadName` = `<number> - <title> <label>` without
+    extension; the file endpoint sends the same name (with an ASCII fallback). Name shared/saved files with it.
+    Nothing is printed inside the document.
+- The shown file is `signedVersion ?? finalVersion ?? currentVersion`.
+- Statuses: `DRAFT FINAL SENT SIGNED VOID` (owner, 14 Oct 2026):
+  - VOID is one-way. Voiding a document that holds a number and was never signed gives the number back to
+    its series (`numberReleased`); the series' next document takes the lowest given-back number first and
+    then shows on the voided one as `numberReusedBy`. A signed document can be voided, but its number is
+    never given back. Ask before voiding: the web and iOS say which of the two happens.
+  - SIGNED is reached only by uploading the signed copy on a FINAL or SENT document (multipart version with
+    `status=SIGNED`, a PDF or JPG/PNG). An UPLOADED document may still be PATCHed to SIGNED.
+  - A SIGNED document is locked: paragraph edits, GIDEON, restore, new versions and "Make PDF" answer 409.
+    Its status can only move to VOID.
+- Addenda: `parentDocumentId` (a SIGNED document) with a template of type `ADD`. The addendum takes the
+  parent's company and kop; its number is the parent's + `/ADD-n`, gap-free per parent (a voided unsigned
+  addendum gives its n back). `prepare` answers `parent{id, number, title, docType, addendumNo}` and `prefill`
+  (the parties, from the parent) to start the form with. Auto fields of an addendum template: `NOMOR_INDUK`,
+  `JENIS_DOKUMEN_INDUK`, `JUDUL_INDUK`, `TANGGAL_INDUK`, `KE` (Pertama, Kedua, …).
+- Types: `SURAT SP SK PKS SPK NDA MOU ADD INVOICE PJM PGB OTHER`. Labels are in
   `apps/web/src/components/legal/legal-labels.ts`.
 
 ## Review, versions, GIDEON
@@ -106,7 +126,7 @@ series: Series[]}`. `Series`: `{id, key, docType, label, format, resetPeriod: "Y
 |---|---|---|---|
 | GET | `/api/legal/documents/:id/paragraphs` | `?version=` (default current) | `{version, current, paragraphs: [{index, text, editable, lockReason?: "number"\|"complex", style?, inTable}]}`; 409 for a non-Word version |
 | POST | `/api/legal/documents/:id/versions` | JSON `{baseVersion, edits: [{index, text}], note?}` | 201 `{version, pdfError}` |
-| POST | `/api/legal/documents/:id/versions` | multipart `file`, `baseVersion`, `note?`, `status?` | 201 `{version, pdfError}` (e.g. the signed scan) |
+| POST | `/api/legal/documents/:id/versions` | multipart `file`, `baseVersion`, `note?`, `status?` | 201 `{version, pdfError, signed}`; `status=SIGNED` = the signed copy (FINAL/SENT only, PDF or photo) |
 | POST | `/api/legal/documents/:id/versions/:v/restore` | `{baseVersion}` | 201 `{version}` |
 | GET | `/api/legal/documents/:id/compare` | `?a=&b=` | `{a, b, diff: ParagraphDiff[]}` |
 | GET | `/api/legal/documents/:id/gideon` | | `{proposals: Proposal[]}` (newest first) |

@@ -1,13 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CheckCircle2, Download, FileDown, Loader2, RefreshCw, RotateCcw, Upload } from "lucide-react";
+import { CheckCircle2, CornerDownRight, Download, FileDown, FilePlus2, FileSignature, GitBranch, Loader2, Lock, RefreshCw, RotateCcw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { NewDocumentDialog } from "@/components/legal/NewDocumentDialog";
 import { Segmented } from "@/components/PageLayout";
 import { LegalDocumentEditor } from "@/components/legal/LegalDocumentEditor";
 import { LegalGideonPanel } from "@/components/legal/LegalGideonPanel";
@@ -19,8 +24,23 @@ import { LEGAL_STATUSES, legalDocsApi, legalVersionsApi, type LegalDocument, typ
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 
+/** The statuses a person may pick for a document now (owner, 14 Oct 2026): VOID is one-way, SIGNED is locked
+ *  and only voided, and a generated document becomes SIGNED only by uploading its signed copy. */
+export function statusChoices(doc: Pick<LegalDocument, "status" | "source">): LegalStatus[] {
+  if (doc.status === "VOID") return ["VOID"];
+  if (doc.status === "SIGNED") return ["SIGNED", "VOID"];
+  return LEGAL_STATUSES.filter((s) => s !== "SIGNED" || doc.source === "UPLOADED");
+}
+
 /** One legal document: its archive fields, its files, and every version of it. */
-export function LegalDocumentSheet({ documentId, onClose }: { documentId: string | null; onClose: () => void }) {
+export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }: {
+  documentId: string | null;
+  onClose: () => void;
+  /** Open another document (its parent, an addendum, the one that reused its number). */
+  onOpen?: (id: string) => void;
+  /** Show this chain (a document and its addenda) in the archive. */
+  onShowChain?: (parentId: string) => void;
+}) {
   const { t, lang } = useLang();
   const qc = useQueryClient();
   const q = useQuery({
@@ -38,6 +58,8 @@ export function LegalDocumentSheet({ documentId, onClose }: { documentId: string
   const [draft, setDraft] = useState({ title: "", counterparty: "", notes: "" });
   const [view, setView] = useState<"overview" | "edit" | "compare">("overview");
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [confirmVoid, setConfirmVoid] = useState(false);
+  const [addendumOpen, setAddendumOpen] = useState(false);
   useEffect(() => { setView("overview"); setSelected(new Set()); }, [documentId]);
   useEffect(() => { setSelected(new Set()); }, [doc?.currentVersion]);
   const toggle = (i: number) => setSelected((cur) => { const n = new Set(cur); if (n.has(i)) n.delete(i); else n.add(i); return n; });
@@ -65,7 +87,17 @@ export function LegalDocumentSheet({ documentId, onClose }: { documentId: string
   });
 
   const dirty = !!doc && (draft.title !== doc.title || draft.counterparty !== doc.counterparty || draft.notes !== doc.notes);
-  const shownVersion = doc ? doc.versions.find((v) => v.version === (doc.finalVersion ?? doc.currentVersion)) ?? doc.versions[0] : undefined;
+  // Once signed, the signed copy is the primary file; the generated FINAL stays in the list below.
+  const shownVersion = doc ? doc.versions.find((v) => v.version === (doc.signedVersion ?? doc.finalVersion ?? doc.currentVersion)) ?? doc.versions[0] : undefined;
+  const locked = doc?.status === "SIGNED";
+  useEffect(() => { if ((locked || doc?.status === "VOID") && view === "edit") setView("overview"); }, [locked, doc?.status, view]);
+  const changeStatus = (s: LegalStatus) => {
+    if (!doc || s === doc.status) return;
+    if (s === "VOID") setConfirmVoid(true);
+    else update.mutate({ status: s });
+  };
+  // Voiding gives the number back only when the document holds one and was never signed.
+  const releasesNumber = !!doc && doc.hasNumber && !doc.signedAt;
 
   return (
     <Sheet open={!!documentId} onOpenChange={(o) => !o && onClose()}>
@@ -77,7 +109,7 @@ export function LegalDocumentSheet({ documentId, onClose }: { documentId: string
         ) : (
           <div className="space-y-5">
             <SheetHeader>
-              <div className="font-mono text-xs text-muted-foreground">{doc.number || t("No number")}</div>
+              <div className={cn("font-mono text-xs text-muted-foreground", doc.numberReleased && "line-through")}>{doc.number || t("No number")}</div>
               <SheetTitle className="pr-6">{doc.title}</SheetTitle>
               <SheetDescription>
                 {docTypeLabel(doc.docType)} · {doc.company.name} · {fmtDay(doc.docDate, lang)}
@@ -87,12 +119,19 @@ export function LegalDocumentSheet({ documentId, onClose }: { documentId: string
 
             <div className="flex flex-wrap items-center gap-2">
               <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", statusClass(doc.status))}>{statusLabel(doc.status)}</span>
-              <Select value={doc.status} onValueChange={(v) => update.mutate({ status: v as LegalStatus })}>
-                <SelectTrigger className="h-8 w-40" aria-label={t("Status")}><SelectValue /></SelectTrigger>
-                <SelectContent>{LEGAL_STATUSES.map((s) => <SelectItem key={s} value={s}>{statusLabel(s)}</SelectItem>)}</SelectContent>
-              </Select>
+              {doc.status !== "VOID" && (
+                <Select value={doc.status} onValueChange={(v) => changeStatus(v as LegalStatus)}>
+                  <SelectTrigger className="h-8 w-40" aria-label={t("Status")}><SelectValue /></SelectTrigger>
+                  <SelectContent>{statusChoices(doc).map((s) => <SelectItem key={s} value={s}>{statusLabel(s)}</SelectItem>)}</SelectContent>
+                </Select>
+              )}
               {shownVersion && <FileButtons doc={doc} v={shownVersion} onMakePdf={() => makePdf.mutate(shownVersion.version)} making={makePdf.isPending} />}
+              {(doc.status === "FINAL" || doc.status === "SENT") && <SignedCopyButton doc={doc} onDone={() => { void q.refetch(); void qc.invalidateQueries({ queryKey: ["legal", "documents"] }); }} />}
+              {doc.status === "SIGNED" && (
+                <Button variant="outline" size="default" className="gap-1.5" onClick={() => setAddendumOpen(true)}><FilePlus2 className="h-4 w-4" /> {t("Create addendum")}</Button>
+              )}
             </div>
+            <DocumentFacts doc={doc} onOpen={onOpen} onShowChain={onShowChain} />
 
             <Segmented
               label={t("Document view")}
@@ -100,7 +139,7 @@ export function LegalDocumentSheet({ documentId, onClose }: { documentId: string
               onChange={setView}
               options={[
                 { key: "overview" as const, label: t("Overview") },
-                ...(doc.versions.some((v) => v.hasDocx) ? [{ key: "edit" as const, label: t("Review & edit") }] : []),
+                ...(doc.versions.some((v) => v.hasDocx) && !locked && doc.status !== "VOID" ? [{ key: "edit" as const, label: t("Review & edit") }] : []),
                 ...(doc.versions.filter((v) => v.hasDocx).length > 1 ? [{ key: "compare" as const, label: t("Compare") }] : []),
               ]}
             />
@@ -148,7 +187,11 @@ export function LegalDocumentSheet({ documentId, onClose }: { documentId: string
             <div className="space-y-2 border-t border-border pt-4">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold">{t("Versions")}</h3>
-                <UploadVersionButton doc={doc} onDone={() => { void q.refetch(); void qc.invalidateQueries({ queryKey: ["legal", "documents"] }); }} />
+                {locked ? (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><Lock className="h-3.5 w-3.5" /> {t("Signed: locked")}</span>
+                ) : doc.status !== "VOID" && (
+                  <UploadVersionButton doc={doc} onDone={() => { void q.refetch(); void qc.invalidateQueries({ queryKey: ["legal", "documents"] }); }} />
+                )}
               </div>
               <ul className="divide-y divide-border rounded-md border border-border">
                 {doc.versions.map((v) => (
@@ -157,18 +200,20 @@ export function LegalDocumentSheet({ documentId, onClose }: { documentId: string
                     <div className="min-w-0 flex-1">
                       <div className="truncate">
                         {versionKindLabel(v.kind)}{v.note ? ` — ${v.note}` : ""}
+                        <span className="ml-1.5 rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground" title={v.downloadName}>{v.label}</span>
+                        {doc.signedVersion === v.version && <span className="ml-1.5 rounded bg-emerald-500/10 px-1.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">{t("Signed copy")}</span>}
                         {doc.finalVersion === v.version && <span className="ml-1.5 rounded bg-primary/10 px-1.5 text-[10px] font-medium text-primary">{t("Final")}</span>}
                       </div>
                       <div className="truncate text-xs text-muted-foreground">{v.author?.name ?? "—"} · {fmtDate(v.createdAt)} · {formatBytes(v.size)}</div>
                     </div>
                     <FileButtons doc={doc} v={v} compact onMakePdf={() => makePdf.mutate(v.version)} making={makePdf.isPending} />
-                    {doc.finalVersion !== v.version && (
+                    {!locked && doc.status !== "VOID" && doc.finalVersion !== v.version && (
                       <Button variant="ghost" size="sm" className="gap-1.5" title={t("Final DOCX/PDF come from this version")}
                         onClick={() => update.mutate({ finalVersion: v.version, ...(doc.status === "DRAFT" ? { status: "FINAL" as LegalStatus } : {}) })}>
                         <CheckCircle2 className="h-4 w-4" /> <span className="max-sm:hidden">{t("Mark final")}</span>
                       </Button>
                     )}
-                    {v.version !== doc.currentVersion && (
+                    {!locked && doc.status !== "VOID" && v.version !== doc.currentVersion && (
                       <Button variant="ghost" size="sm" className="gap-1.5" disabled={restore.isPending} onClick={() => restore.mutate(v.version)}>
                         <RotateCcw className="h-4 w-4" /> <span className="max-sm:hidden">{t("Restore")}</span>
                       </Button>
@@ -180,8 +225,100 @@ export function LegalDocumentSheet({ documentId, onClose }: { documentId: string
             </>}
           </div>
         )}
+        {doc && (
+          <AlertDialog open={confirmVoid} onOpenChange={setConfirmVoid}>
+            <AlertDialogContent lang={lang}>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t("Void {number}?", { number: doc.number || doc.title })}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {releasesNumber
+                    ? t("Void can't be undone. The number {number} will be reused by the next document of this series.", { number: doc.number })
+                    : doc.signedAt
+                      ? t("Void can't be undone. This document was signed, so its number stays retired and is never reused.")
+                      : t("Void can't be undone.")}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t("Cancel")}</AlertDialogCancel>
+                <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => update.mutate({ status: "VOID" })}>{t("Void document")}</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
+        {doc && (
+          <NewDocumentDialog open={addendumOpen} onOpenChange={setAddendumOpen} parent={{ id: doc.id, number: doc.number, title: doc.title }}
+            onCreated={(id) => { void q.refetch(); onOpen?.(id); }} />
+        )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** Signed by whom and when, the void and its number, the parent and the addenda. */
+function DocumentFacts({ doc, onOpen, onShowChain }: { doc: LegalDocument; onOpen?: (id: string) => void; onShowChain?: (parentId: string) => void }) {
+  const { t, lang } = useLang();
+  const link = (d: { id: string; number: string; title: string }) => (
+    <button type="button" className="font-mono text-primary hover:underline" onClick={() => onOpen?.(d.id)}>{d.number || d.title}</button>
+  );
+  const rows: ReactNode[] = [];
+  if (doc.signedAt) {
+    rows.push(<span key="signed" className="inline-flex items-center gap-1.5"><FileSignature className="h-3.5 w-3.5 text-emerald-600" /> {t("Signed copy uploaded {date} by {name}", { date: fmtDate(doc.signedAt), name: doc.signedBy?.name ?? "—" })}</span>);
+  }
+  if (doc.status === "VOID") {
+    rows.push(
+      <span key="void">
+        {doc.numberReusedBy ? <>{t("Void — number reused by")} {link(doc.numberReusedBy)}</>
+          : doc.numberReleased ? t("Void — the number is free for the next document of this series")
+            : doc.signedAt ? t("Void — signed, so the number is never reused") : t("Void")}
+      </span>,
+    );
+  }
+  for (const from of doc.numberReusedFrom) rows.push(<span key={`from-${from.id}`}>{t("Number reused from void document")} {link(from)}</span>);
+  if (doc.parent) {
+    rows.push(
+      <span key="parent" className="inline-flex flex-wrap items-center gap-1.5">
+        <CornerDownRight className="h-3.5 w-3.5" /> {t("Addendum {n} to", { n: doc.addendumNo ?? "—" })} {link(doc.parent)}
+        {onShowChain && <button type="button" className="text-primary hover:underline" onClick={() => onShowChain(doc.parent!.id)}>· {t("Show the chain")}</button>}
+      </span>,
+    );
+  }
+  return (
+    <div className="space-y-2 text-xs text-muted-foreground">
+      {rows.length > 0 && <div className="flex flex-col gap-1">{rows}</div>}
+      {doc.addenda.length > 0 && (
+        <div className="space-y-1 rounded-md border border-border p-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-1.5 font-medium text-foreground"><GitBranch className="h-3.5 w-3.5" /> {t("Addenda")}</span>
+            {onShowChain && <button type="button" className="text-primary hover:underline" onClick={() => onShowChain(doc.id)}>{t("Show the chain")}</button>}
+          </div>
+          <ul className="space-y-1">
+            {doc.addenda.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-center gap-2">
+                <button type="button" className={cn("font-mono text-primary hover:underline", a.numberReleased && "line-through")} onClick={() => onOpen?.(a.id)}>{a.number}</button>
+                <span className="min-w-0 flex-1 truncate">{a.title} · {fmtDay(a.docDate, lang)}</span>
+                <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", statusClass(a.status))}>{statusLabel(a.status)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** "Upload signed copy" on a FINAL / SENT document: a PDF or photo; it becomes SIGNED and is locked. */
+function SignedCopyButton({ doc, onDone }: { doc: LegalDocument; onDone: () => void }) {
+  const { t } = useLang();
+  const upload = useMutation({
+    mutationFn: (file: File) => legalVersionsApi.uploadVersion(doc.id, doc.currentVersion, file, "", "SIGNED"),
+    onSuccess: () => { toast.success(t("Signed copy uploaded. The document is now signed and locked.")); onDone(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return (
+    <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-border px-3 text-sm hover:bg-accent" title={t("A PDF or a photo of the signed document")}>
+      {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />} {t("Upload signed copy")}
+      <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ""; }} />
+    </label>
   );
 }
 
@@ -192,12 +329,12 @@ function FileButtons({ doc, v, compact, onMakePdf, making }: { doc: LegalDocumen
     <div className="flex flex-wrap items-center gap-1.5">
       {v.hasDocx && (
         <Button asChild variant="outline" size={size} className="gap-1.5">
-          <a href={legalDocsApi.fileUrl(doc.id, v.version, "docx")}><Download className="h-4 w-4" /> DOCX</a>
+          <a href={legalDocsApi.fileUrl(doc.id, v.version, "docx")} download={`${v.downloadName}.docx`}><Download className="h-4 w-4" /> DOCX</a>
         </Button>
       )}
       {v.hasPdf ? (
         <Button asChild variant="outline" size={size} className="gap-1.5">
-          <a href={legalDocsApi.fileUrl(doc.id, v.version, "pdf")}><FileDown className="h-4 w-4" /> PDF</a>
+          <a href={legalDocsApi.fileUrl(doc.id, v.version, "pdf")} download={`${v.downloadName}.pdf`}><FileDown className="h-4 w-4" /> PDF</a>
         </Button>
       ) : v.hasDocx ? (
         <Button variant="ghost" size={size} className="gap-1.5" disabled={making} onClick={onMakePdf}>
@@ -206,7 +343,7 @@ function FileButtons({ doc, v, compact, onMakePdf, making }: { doc: LegalDocumen
       ) : null}
       {v.hasFile && (
         <Button asChild variant="outline" size={size} className="gap-1.5">
-          <a href={legalDocsApi.fileUrl(doc.id, v.version, "original")}><Download className="h-4 w-4" /> {t("File")}</a>
+          <a href={legalDocsApi.fileUrl(doc.id, v.version, "original")} download={v.downloadName}><Download className="h-4 w-4" /> {t("File")}</a>
         </Button>
       )}
     </div>
@@ -239,12 +376,12 @@ function CompareVersions({ doc }: { doc: LegalDocument }) {
 function UploadVersionButton({ doc, onDone }: { doc: LegalDocument; onDone: () => void }) {
   const { t } = useLang();
   const upload = useMutation({
-    mutationFn: (file: File) => legalVersionsApi.uploadVersion(doc.id, doc.currentVersion, file, "", /\.pdf$|\.jpe?g$|\.png$/i.test(file.name) ? "SIGNED" : undefined),
+    mutationFn: (file: File) => legalVersionsApi.uploadVersion(doc.id, doc.currentVersion, file, ""),
     onSuccess: (res) => { toast.success(t("Uploaded as version {n}", { n: res.version })); onDone(); },
     onError: (e: Error) => toast.error(e.message),
   });
   return (
-    <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs hover:bg-accent" title={t("A signed scan, or the file edited in Word")}>
+    <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs hover:bg-accent" title={t("The file edited in Word, or a scan")}>
       {upload.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} {t("Upload new version")}
       <input type="file" accept=".pdf,.docx,.jpg,.jpeg,.png" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ""; }} />
     </label>

@@ -11,6 +11,7 @@ export function docTypeLabel(type: string): string {
     SPK: t("Work agreement (SPK)"),
     NDA: t("Non-disclosure agreement (NDA)"),
     MOU: t("Memorandum of understanding (MOU)"),
+    ADD: t("Addendum"),
     INVOICE: t("Invoice"),
     PJM: t("Loan of goods"),
     PGB: t("Return of goods"),

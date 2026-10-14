@@ -120,5 +120,52 @@ test("Jakarta month: 31 Oct 20:00 UTC is already November", () => {
   assert.deepEqual(R.jakartaYearMonth(new Date("2026-12-31T16:59:00Z")), { year: 2026, month: 12 })
   assert.deepEqual(R.jakartaYearMonth(new Date("2026-12-31T17:00:00Z")), { year: 2027, month: 1 })
 })
+test("status: VOID is one-way, SIGNED only by the signed copy and then locked", () => {
+  for (const to of ["DRAFT", "FINAL", "SENT", "SIGNED"]) assert.match(R.statusChangeProblem("VOID", to), /Void is final/)
+  assert.equal(R.statusChangeProblem("VOID", "VOID"), null)
+  for (const from of ["DRAFT", "FINAL", "SENT", "SIGNED"]) assert.equal(R.statusChangeProblem(from, "VOID"), null)
+  for (const to of ["DRAFT", "FINAL", "SENT"]) assert.match(R.statusChangeProblem("SIGNED", to), /locked/)
+  assert.match(R.statusChangeProblem("FINAL", "SIGNED", { source: "GENERATED" }), /Upload the signed copy/)
+  assert.equal(R.statusChangeProblem("FINAL", "SIGNED", { source: "UPLOADED" }), null)
+  assert.equal(R.statusChangeProblem("FINAL", "SIGNED", { viaSignedUpload: true }), null)
+  assert.equal(R.statusChangeProblem("SENT", "SIGNED", { viaSignedUpload: true }), null)
+  assert.match(R.statusChangeProblem("DRAFT", "SIGNED", { viaSignedUpload: true }), /final or sent/)
+  assert.equal(R.statusChangeProblem("DRAFT", "FINAL"), null)
+  assert.match(R.lockProblem("SIGNED"), /locked/)
+  assert.equal(R.lockProblem("FINAL"), null)
+})
+test("void releases the number only when it was never signed", () => {
+  assert.equal(R.releasesNumberOnVoid({ documentNumberId: "n1", signedAt: null, status: "FINAL" }), true)
+  assert.equal(R.releasesNumberOnVoid({ documentNumberId: "n1", signedAt: "2026-10-14", status: "SIGNED" }), false)
+  assert.equal(R.releasesNumberOnVoid({ documentNumberId: "n1", signedAt: null, status: "SIGNED" }), false)
+  assert.equal(R.releasesNumberOnVoid({ documentNumberId: null, signedAt: null, status: "DRAFT" }), false)
+})
+test("numbers: the lowest released first, then max + 1", () => {
+  assert.deepEqual(R.pickSeq([]), { seq: 1, reuse: false })
+  const rows = [1, 2, 3, 4, 5].map((seq) => ({ seq, released: false }))
+  assert.deepEqual(R.pickSeq(rows), { seq: 6, reuse: false })
+  rows[3].released = true
+  rows[1].released = true
+  assert.deepEqual(R.pickSeq(rows), { seq: 2, reuse: true })
+  rows[1].released = false // 2 reused
+  assert.deepEqual(R.pickSeq(rows), { seq: 4, reuse: true })
+  rows[3].released = false // 4 reused
+  assert.deepEqual(R.pickSeq(rows), { seq: 6, reuse: false })
+})
+test("addenda: number and ordinal", () => {
+  assert.equal(R.addendumNumber("PKS/PATS-UNIV/YOGYAKARTA/OKT/2026/001", 2), "PKS/PATS-UNIV/YOGYAKARTA/OKT/2026/001/ADD-2")
+  assert.deepEqual([1, 2, 3, 4, 10, 11, 12, 20, 21].map(R.ordinalWord), ["Pertama", "Kedua", "Ketiga", "Keempat", "Kesepuluh", "Kesebelas", "Kedua Belas", "Kedua Puluh", "Kedua Puluh Satu"])
+  assert.ok(R.isLegalDocType("ADD"))
+})
+test("file names carry the revision", () => {
+  const d = (status, extra = {}) => ({ status, currentVersion: 3, finalVersion: null, signedVersion: null, ...extra })
+  assert.deepEqual([1, 2, 3].map((v) => R.revisionLabel(d("DRAFT"), v)), ["REV 1", "REV 2", "REV 3"])
+  assert.deepEqual([1, 2, 3].map((v) => R.revisionLabel(d("FINAL"), v)), ["REV 1", "REV 2", "FINAL"])
+  assert.deepEqual([1, 2, 3].map((v) => R.revisionLabel(d("SENT", { finalVersion: 2 }), v)), ["REV 1", "FINAL", "REV 3"])
+  assert.deepEqual([1, 2, 3, 4].map((v) => R.revisionLabel(d("SIGNED", { currentVersion: 4, signedVersion: 4 }), v)), ["REV 1", "REV 2", "FINAL", "SIGNED"])
+  assert.deepEqual([1, 2, 3].map((v) => R.revisionLabel(d("VOID"), v)), ["REV 1", "REV 2", "REV 3"])
+  assert.equal(R.downloadBaseName("PKS/PATS/2026/001", "Kontrak: Venue", "REV 2"), "PKS-PATS-2026-001 - Kontrak- Venue REV 2")
+  assert.equal(R.downloadBaseName("", "Surat", "FINAL"), "Surat FINAL")
+})
 
 console.log(`legal rules: ${passed} passed`)

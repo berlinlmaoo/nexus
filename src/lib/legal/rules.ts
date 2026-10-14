@@ -51,7 +51,17 @@ export function parseRootEmails(raw: string | undefined | null): string[] {
 
 // ── Document types ──────────────────────────────────────────────────────────────────────────────────
 
-export const LEGAL_DOC_TYPES = ["SURAT", "SP", "SK", "PKS", "SPK", "NDA", "MOU", "INVOICE", "PJM", "PGB", "OTHER"] as const
+export const LEGAL_DOC_TYPES = ["SURAT", "SP", "SK", "PKS", "SPK", "NDA", "MOU", "ADD", "INVOICE", "PJM", "PGB", "OTHER"] as const
+
+/** An addendum: made from a signed document, numbered after it (parent number + "/ADD-n"). */
+export const ADDENDUM_DOC_TYPE = "ADD"
+
+/** How an addendum names the document it amends ("ADDENDUM PERTAMA ATAS PERJANJIAN KERJA SAMA NOMOR …"). */
+export const DOC_TYPE_FULL_NAMES: Record<string, string> = {
+  SURAT: "Surat", SP: "Surat Peringatan", SK: "Surat Kuasa", PKS: "Perjanjian Kerja Sama", SPK: "Surat Perjanjian Kerja",
+  NDA: "Perjanjian Kerahasiaan", MOU: "Nota Kesepahaman", ADD: "Addendum", INVOICE: "Invoice", PJM: "Surat Perjanjian Peminjaman Barang",
+  PGB: "Berita Acara Pengembalian Barang", OTHER: "Dokumen",
+}
 export type LegalDocType = (typeof LEGAL_DOC_TYPES)[number]
 export const isLegalDocType = (v: unknown): v is LegalDocType =>
   typeof v === "string" && (LEGAL_DOC_TYPES as readonly string[]).includes(v)
@@ -60,6 +70,65 @@ export const LEGAL_STATUSES = ["DRAFT", "FINAL", "SENT", "SIGNED", "VOID"] as co
 export type LegalStatus = (typeof LEGAL_STATUSES)[number]
 export const isLegalStatus = (v: unknown): v is LegalStatus =>
   typeof v === "string" && (LEGAL_STATUSES as readonly string[]).includes(v)
+
+/**
+ * Why a document may not move from `from` to `to`, or null (owner, 14 Oct 2026):
+ *   - VOID is one-way: never back to DRAFT or any other status.
+ *   - SIGNED is locked: it can only be voided.
+ *   - A generated document becomes SIGNED only by uploading its signed copy (`viaSignedUpload`).
+ */
+export function statusChangeProblem(from: string, to: string, opts: { source?: string; viaSignedUpload?: boolean } = {}): string | null {
+  if (from === to) return null
+  if (from === "VOID") return "A void document can't change status. Void is final."
+  if (from === "SIGNED" && to !== "VOID") return "A signed document is locked. It can only be voided."
+  if (to === "SIGNED" && opts.source !== "UPLOADED" && !opts.viaSignedUpload) return "Upload the signed copy to mark this document signed."
+  if (to === "SIGNED" && opts.viaSignedUpload && from !== "FINAL" && from !== "SENT") return "Only a final or sent document can get its signed copy."
+  return null
+}
+
+/** Why a document can't get a new version (edit, GIDEON, upload, restore, PDF remake), or null. */
+export function lockProblem(status: string): string | null {
+  if (status === "SIGNED") return "A signed document is locked: no more edits."
+  return null
+}
+
+/** Voiding gives the number back only when the document holds a series number and was never signed — a
+ *  number that is on a signed paper is never printed again. */
+export function releasesNumberOnVoid(doc: { documentNumberId: string | null; signedAt: Date | string | null; status: string }): boolean {
+  return !!doc.documentNumberId && !doc.signedAt && doc.status !== "SIGNED"
+}
+
+/**
+ * The next running number of a counter: the lowest number a voided document gave back, else max + 1
+ * (owner, 14 Oct 2026). `rows`: every number of the counter, with whether it is released.
+ */
+export function pickSeq(rows: { seq: number; released: boolean }[]): { seq: number; reuse: boolean } {
+  let lowestFree = Infinity
+  let max = 0
+  for (const r of rows) {
+    if (r.released && r.seq < lowestFree) lowestFree = r.seq
+    if (r.seq > max) max = r.seq
+  }
+  return Number.isFinite(lowestFree) ? { seq: lowestFree, reuse: true } : { seq: max + 1, reuse: false }
+}
+
+/** The printed number of a parent's n-th addendum. */
+export const addendumNumber = (parentNumber: string, n: number) => `${parentNumber}/ADD-${n}`
+
+const KE_WORDS = ["", "satu", "dua", "tiga", "empat", "lima", "enam", "tujuh", "delapan", "sembilan", "sepuluh", "sebelas"]
+
+/** 1 → "Pertama", 2 → "Kedua", 12 → "Kedua Belas", 21 → "Kedua Puluh Satu" (for "ADDENDUM KEDUA"). */
+export function ordinalWord(n: number): string {
+  if (n === 1) return "Pertama"
+  const words = (k: number): string => {
+    if (k < 12) return KE_WORDS[k]
+    if (k < 20) return `${KE_WORDS[k - 10]} belas`
+    if (k < 100) return `${KE_WORDS[Math.floor(k / 10)]} puluh${k % 10 ? ` ${KE_WORDS[k % 10]}` : ""}`
+    return String(k)
+  }
+  const w = `ke${words(n)}`
+  return w.replace(/(^|\s)\p{Ll}/gu, (m) => m.toUpperCase())
+}
 
 // ── Number formats ──────────────────────────────────────────────────────────────────────────────────
 //
@@ -178,4 +247,28 @@ export function jakartaYearMonth(d: Date): { year: number; month: number } {
     year: Number(parts.find((p) => p.type === "year")?.value),
     month: Number(parts.find((p) => p.type === "month")?.value),
   }
+}
+
+// ── File names (owner, 14 Oct 2026) ─────────────────────────────────────────────────────────────────
+// Only the file NAME carries the revision; nothing is printed inside the document:
+//   "<number> - <title> REV 2.pdf"  a saved version of a document that is not final yet (REV = version)
+//   "<number> - <title> FINAL.pdf"  the final version, once the status is FINAL, SENT or SIGNED
+//   "<number> - <title> SIGNED.pdf" the uploaded signed copy
+
+const FINAL_OR_LATER = new Set(["FINAL", "SENT", "SIGNED"])
+
+export function revisionLabel(doc: { status: string; currentVersion: number; finalVersion: number | null; signedVersion: number | null }, version: number): string {
+  if (doc.signedVersion && version === doc.signedVersion) return "SIGNED"
+  if (FINAL_OR_LATER.has(doc.status)) {
+    const final = doc.finalVersion ?? (doc.signedVersion ? doc.signedVersion - 1 : doc.currentVersion)
+    if (version === final) return "FINAL"
+  }
+  return `REV ${version}`
+}
+
+/** "PKS/PATS/2026/001" + "Kontrak Venue" + "REV 2" → "PKS-PATS-2026-001 - Kontrak Venue REV 2" (no extension). */
+export function downloadBaseName(number: string, title: string, label: string): string {
+  const head = number ? `${number.replace(/\//g, "-")} - ` : ""
+  const name = `${head}${title}`.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 140)
+  return `${name || "document"} ${label}`
 }

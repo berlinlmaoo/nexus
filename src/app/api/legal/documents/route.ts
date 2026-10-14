@@ -19,7 +19,8 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Make a document from a template: `{ templateId, companyId?, values, title?, counterparty?, projectId?, dealId? }`.
+ * Make a document from a template: `{ templateId, companyId?, values, title?, counterparty?, projectId?, dealId?,
+ * parentDocumentId? }` (parentDocumentId: an addendum to that signed document; its template is type ADD).
  * 422 carries `fieldErrors` (by field name) or `problems` (the template); nothing is numbered then.
  */
 export async function POST(request: NextRequest) {
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest) {
       counterparty: typeof body.counterparty === "string" ? body.counterparty : undefined,
       projectId: typeof body.projectId === "string" ? body.projectId : null,
       dealId: typeof body.dealId === "string" ? body.dealId : null,
+      parentDocumentId: typeof body.parentDocumentId === "string" ? body.parentDocumentId : null,
     })
     await logAudit({
       action: "create",
@@ -43,7 +45,7 @@ export async function POST(request: NextRequest) {
       entityId: made.id,
       entityName: made.number,
       userId: gate.actor.userId,
-      metadata: { templateId: body.templateId, number: made.number },
+      metadata: { templateId: body.templateId, number: made.number, ...(body.parentDocumentId ? { parentDocumentId: body.parentDocumentId } : {}) },
       request,
     })
     return NextResponse.json({ id: made.id, number: made.number, pdfError: made.pdfError }, { status: 201 })

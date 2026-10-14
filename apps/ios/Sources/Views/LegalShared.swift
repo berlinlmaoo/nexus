@@ -8,7 +8,9 @@ import UniformTypeIdentifiers
 // ─────────────────────────────────────────────────────────────────────────────
 
 enum LegalLabels {
-    static let docTypes = ["SURAT", "SP", "SK", "PKS", "SPK", "NDA", "MOU", "INVOICE", "PJM", "PGB", "OTHER"]
+    static let docTypes = ["SURAT", "SP", "SK", "PKS", "SPK", "NDA", "MOU", "ADD", "INVOICE", "PJM", "PGB", "OTHER"]
+    /// An addendum: made from a signed document, numbered after it (…/ADD-n).
+    static let addendumType = "ADD"
     static let statuses = ["DRAFT", "FINAL", "SENT", "SIGNED", "VOID"]
 
     /// Document types as people call them. The codes (SPK, PKS, …) are what the numbers print.
@@ -21,6 +23,7 @@ enum LegalLabels {
         case "SPK": return T("Work agreement (SPK)")
         case "NDA": return T("Non-disclosure agreement (NDA)")
         case "MOU": return T("Memorandum of understanding (MOU)")
+        case "ADD": return T("Addendum")
         case "INVOICE": return T("Invoice")
         case "PJM": return T("Loan of goods")
         case "PGB": return T("Return of goods")
@@ -116,10 +119,8 @@ enum LegalFileTypes {
     /// A document made elsewhere, or a new version: PDF, Word, or a photo of it.
     static let documents: [UTType] = [.pdf, docx, .jpeg, .png]
 
-    /// A scan or a PDF upload becomes the signed copy (web UploadVersionButton).
-    static func isSignedCopy(_ url: URL) -> Bool {
-        ["pdf", "jpg", "jpeg", "png"].contains(url.pathExtension.lowercased())
-    }
+    /// The signed copy of a final document: a PDF or a photo (owner, 14 Oct 2026: "Upload signed copy").
+    static let signedCopy: [UTType] = [.pdf, .jpeg, .png]
 }
 
 // MARK: - Toasts

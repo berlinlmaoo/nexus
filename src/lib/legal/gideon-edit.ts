@@ -5,7 +5,7 @@ import type { LegalActor } from "@/lib/legal/access"
 import { diffWords } from "@/lib/legal/diff"
 import { buildEditPrompt, checkProposal, parseEditReply, type ProposedChange, type ThreadTurn } from "@/lib/legal/gideon-edit-core"
 import { readParagraphs } from "@/lib/legal/paragraphs"
-import { asVersionError, LegalVersionError, loadDocForVersions, lockedTextsOf, saveParagraphEdits, versionDocx } from "@/lib/legal/versions"
+import { asVersionError, LegalVersionError, loadDocForChange, loadDocForVersions, lockedTextsOf, saveParagraphEdits, versionDocx } from "@/lib/legal/versions"
 
 // GIDEON's precise edit, the I/O half (rules and checks: gideon-edit-core.ts). A request becomes a
 // LegalEditProposal: PENDING with before → after per paragraph, or CLARIFY with GIDEON's question. Approving
@@ -62,7 +62,7 @@ export async function requestProposal(
 ) {
   const instruction = input.instruction.trim().slice(0, 2000)
   if (!instruction && !input.replyTo) throw new LegalGideonError("Tell GIDEON what to change", 400)
-  const doc = await loadDocForVersions(documentId)
+  const doc = await loadDocForChange(documentId)
   if (input.baseVersion !== doc.currentVersion) throw new LegalGideonError("Someone changed this document meanwhile. Reload first.", 409)
   const recent = await prisma.legalEditProposal.count({ where: { createdById: actor.userId, createdAt: { gte: new Date(Date.now() - 3600_000) } } })
   if (recent >= HOURLY_LIMIT) throw new LegalGideonError("That's a lot of GIDEON requests this hour. Try again later.", 429)

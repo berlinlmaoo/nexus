@@ -14,6 +14,8 @@ import { linkProblem, redactLinks } from "@/lib/legal/links"
 //   status      DRAFT | FINAL | SENT | SIGNED | VOID, comma-separated
 //   source      GENERATED | UPLOADED   projectId / dealId   linked to
 //   from / to   document date, YYYY-MM-DD, inclusive
+//   signed      1 = has its signed copy (signedAt set)
+//   parentId    one chain: that document and its addenda (PKS → ADD-1 → ADD-2), oldest first
 //   sort        date (default, newest first) | created | number
 //   page        1-based                limit     default 50, max 200
 
@@ -39,6 +41,9 @@ export function archiveWhere(sp: URLSearchParams): Prisma.LegalDocumentWhereInpu
   if (statuses.length) and.push({ status: { in: statuses } })
   const source = sp.get("source")
   if (source === "GENERATED" || source === "UPLOADED") and.push({ source })
+  if (sp.get("signed") === "1") and.push({ signedAt: { not: null } })
+  const parentId = sp.get("parentId")
+  if (parentId) and.push({ OR: [{ id: parentId }, { parentDocumentId: parentId }] })
   if (sp.get("projectId")) and.push({ projectId: sp.get("projectId")! })
   if (sp.get("dealId")) and.push({ dealId: sp.get("dealId")! })
   const from = day(sp.get("from"))
@@ -58,8 +63,9 @@ export async function listDocuments(actor: LegalActor, sp: URLSearchParams) {
     return { documents: [], total: 0, page, pageSize: limit }
   }
   const sort = sp.get("sort")
-  const orderBy: Prisma.LegalDocumentOrderByWithRelationInput[] =
-    sort === "created" ? [{ createdAt: "desc" }] : sort === "number" ? [{ number: "asc" }] : [{ docDate: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }]
+  const orderBy: Prisma.LegalDocumentOrderByWithRelationInput[] = sp.get("parentId")
+    ? [{ createdAt: "asc" }]
+    : sort === "created" ? [{ createdAt: "desc" }] : sort === "number" ? [{ number: "asc" }] : [{ docDate: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }]
   const [rows, total] = await Promise.all([
     prisma.legalDocument.findMany({ where, include: documentListInclude, orderBy, take: limit, skip: (page - 1) * limit }),
     prisma.legalDocument.count({ where }),

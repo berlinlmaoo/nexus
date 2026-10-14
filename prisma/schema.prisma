@@ -153,6 +153,7 @@ model User {
   legalTemplateVersions LegalTemplateVersion[] @relation("LegalTemplateVersionCreatedBy")
   legalDocsCreated     LegalDocument[]        @relation("LegalDocumentCreatedBy")
   legalDocsUpdated     LegalDocument[]        @relation("LegalDocumentUpdatedBy")
+  legalDocsSigned      LegalDocument[]        @relation("LegalDocumentSignedBy")
   legalDocVersions     LegalDocumentVersion[] @relation("LegalDocumentVersionAuthor")
   legalProposals       LegalEditProposal[]    @relation("LegalEditProposalCreatedBy")
   legalProposalsDecided LegalEditProposal[]   @relation("LegalEditProposalDecidedBy")
@@ -1818,6 +1819,12 @@ model DocumentNumber {
   issuedBy   User?   @relation(fields: [issuedById], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())
   legalDocument LegalDocument?
+  /// Legal only (owner, 14 Oct 2026): set when the document holding this number was voided before it was ever
+  /// signed. The number is free again: the series' next document takes the lowest released one first (the
+  /// row is then re-issued in place, so the unique indexes stay valid). Never set any other way.
+  releasedAt     DateTime?
+  /// The voided LegalDocument that gave this number back (cleared when the number is reused).
+  releasedFromId String?
 
   @@unique([series, year, month, seq])
   @@index([series, year, month])
@@ -1976,6 +1983,26 @@ model LegalDocument {
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
   deletedAt         DateTime?
+  /// Set when the signed copy is uploaded (status SIGNED). A document signed once never gives its number back.
+  signedAt          DateTime?
+  signedById        String?
+  signedBy          User?                 @relation("LegalDocumentSignedBy", fields: [signedById], references: [id], onDelete: SetNull)
+  /// The version that is the signed copy: the primary download from then on.
+  signedVersion     Int?
+  voidedAt          DateTime?
+  /// Voided before it was signed: its number went back to the series (documentNumberId is then null and
+  /// `number` keeps what was printed).
+  numberReleasedAt  DateTime?
+  /// The document that took this voided document's number.
+  numberReusedById  String?
+  numberReusedBy    LegalDocument?        @relation("LegalNumberReuse", fields: [numberReusedById], references: [id], onDelete: SetNull)
+  numberReusedFrom  LegalDocument[]       @relation("LegalNumberReuse")
+  /// An addendum's parent (a signed document); its number is the parent's + "/ADD-n".
+  parentDocumentId  String?
+  parentDocument    LegalDocument?        @relation("LegalAddendum", fields: [parentDocumentId], references: [id], onDelete: SetNull)
+  addenda           LegalDocument[]       @relation("LegalAddendum")
+  /// n of ADD-n (null once a voided addendum gave it back).
+  addendumSeq       Int?
 
   versions  LegalDocumentVersion[]
   proposals LegalEditProposal[]
@@ -1984,6 +2011,7 @@ model LegalDocument {
   @@index([docType])
   @@index([status])
   @@index([number])
+  @@index([parentDocumentId])
 }
 
 /// One state of a document's file. Every change (generate, manual edit, GIDEON, upload, restore) adds one.

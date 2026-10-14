@@ -36,6 +36,35 @@ Web: `apps/web/src/routes/_app/legal.tsx`, `apps/web/src/components/legal/*`.
   3. The PDF is made after the commit. If it fails, the DOCX stays and the PDF can be retried.
 - A numbered document is never deleted; it is set to **VOID**. Uploaded documents carry their own printed
   number and take nothing from a series.
+- **VOID gives the number back** (owner, 14 Oct 2026), only for a document that was never signed:
+  `releaseLegalNumber` marks its `DocumentNumber` row released (`releasedAt`, `releasedFromId`) and takes it off
+  the document (which keeps its printed `number`, struck through). The counter's next document takes the
+  LOWEST released number first and re-issues that row in place (same seq, text rendered again), so the unique
+  indexes stay valid; it is linked as `numberReusedBy`. Release and reuse run under the same advisory lock and
+  transaction as allocation. Nothing else frees a number: rows are never deleted (14 Oct review fix), and a
+  document that was ever signed (`signedAt`) keeps its number retired when voided.
+- VOID is one-way. SIGNED is reached by uploading the signed copy on a FINAL / SENT document and then locks it
+  (no edits, GIDEON, restore, new versions or PDF remake); it can only be voided. Rules: `rules.ts`
+  (`statusChangeProblem`, `lockProblem`, `releasesNumberOnVoid`, `pickSeq`).
+
+## Signed copies and file names
+
+- "Upload signed copy" stores a PDF or photo as a new version (`signedVersion`), sets SIGNED with `signedAt`
+  and `signedBy`, and writes an audit row. That file is the primary download; the generated FINAL stays.
+- The revision is in the file NAME only, never printed in the document: `<number> - <title> REV n`, `… FINAL`
+  (the final version once FINAL or later), `… SIGNED` (the signed copy). `revisionLabel` / `downloadBaseName`.
+- The archive filters `signed=1` and shows "signed <date> · <who>" on each row.
+
+## Addenda
+
+- "Create addendum" on a SIGNED document makes a new document of type `ADD` with `parentDocumentId`. Its
+  company and kop are the parent's; its number is the parent's + `/ADD-n`, gap-free per parent, from the
+  `DocumentNumber` counter `legal-add:<parentId>` (same lock; a voided unsigned addendum gives its n back to
+  that parent's next addendum).
+- The Addendum template (type Addendum, no company) is uploaded from the app like the others. Auto fields:
+  `NOMOR_INDUK`, `JENIS_DOKUMEN_INDUK`, `JUDUL_INDUK`, `TANGGAL_INDUK`, `KE`. The form starts with the parties
+  read from the parent's values (`addenda.ts`).
+- The archive filters one chain with `parentId` (the parent and its addenda, oldest first).
 
 ## Templates
 
@@ -45,6 +74,11 @@ Web: `apps/web/src/routes/_app/legal.tsx`, `apps/web/src/components/legal/*`.
 - The language is in `src/lib/legal/filters.ts`:
   - `{{TGL | hari | upper}}`, `{{HONOR | terbilang_rupiah}}`
   - `{{#ROWS}}…{{/ROWS}}` for tables, and a section with no placeholders inside is a yes/no switch
+  - `{{#NPWP}}, NPWP {{NPWP}}{{/NPWP}}`: a section that prints its own field shows only when it has a value
+    (empty or "-" hides it); the field is optional
+  - Computed values: `{{HONOR | persen:50}}`, `{{NILAI_TERMIN | persen_dari:NILAI_LISENSI}}`,
+    `{{TANGGAL_DOKUMEN | tambah_bulan:DURASI_BULAN}}`, `{{ROWS | jumlah:COLUMN}}`; later filters read the
+    computed value (`| terbilang_rupiah`, `| tanggal`)
   - Auto fields: `NOMOR`, `NAMA_PERUSAHAAN`, `PT_PERUSAHAAN`, `ALAMAT_PERUSAHAAN`, `KODE_PERUSAHAAN`
   - `TANGGAL_DOKUMEN` is asked in every form; it decides the number's month and year.
 - The owner's real templates are **not** in this repo, which is public. They are uploaded through the app.
@@ -64,7 +98,8 @@ bodies are left out of the middleware's body matchers, the same as `/api/vault/*
 
 ## Deploy
 
-1. Apply `prisma/sql/2026-10-14-legal.sql` before deploying the image. It is additive and idempotent, and
+1. Apply `prisma/sql/2026-10-14-legal.sql` (then `…-legal-docnum-issuer-setnull.sql` and
+   `…-legal-signed-void-addendum.sql`) before deploying the image. It is additive and idempotent, and
    seeds the four companies and their series. Legal names other than PATS are left empty, to be filled in
    **Legal → Companies & numbering**.
 2. Add a Gotenberg sidecar on the app's network, with no published port:

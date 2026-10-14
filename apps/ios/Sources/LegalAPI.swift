@@ -51,12 +51,16 @@ struct LegalArchiveQuery: Equatable {
     var dealId: String?
     var from: String?
     var to: String?
+    /// One chain: that document and its addenda.
+    var parentId: String?
+    /// "1" = only documents with their signed copy.
+    var signed: String?
     var page = 1
     var limit = 50
 
     /// Any filter other than the search text.
     var filtered: Bool {
-        [companyId, docType, status, source, projectId, dealId, from, to].contains { !($0 ?? "").isEmpty }
+        [companyId, docType, status, source, projectId, dealId, from, to, parentId, signed].contains { !($0 ?? "").isEmpty }
     }
 }
 
@@ -187,15 +191,17 @@ extension APIClient {
         add("q", q.q.trimmingCharacters(in: .whitespacesAndNewlines))
         add("companyId", q.companyId); add("docType", q.docType); add("status", q.status); add("source", q.source)
         add("projectId", q.projectId); add("dealId", q.dealId); add("from", q.from); add("to", q.to)
+        add("parentId", q.parentId); add("signed", q.signed)
         qs.append("page=\(q.page)"); qs.append("limit=\(q.limit)")
         return try await legalRun(makeRequest("/api/legal/documents?" + qs.joined(separator: "&")), as: LegalDocumentsPage.self)
     }
 
     /// The form for a template (and the number it would take). Re-called with the values the number
     /// format reads, plus TANGGAL_DOKUMEN, to refresh `numberPreview`.
-    func legalPrepare(templateId: String, companyId: String?, values: [String: LegalValue]? = nil) async throws -> LegalPrepared {
+    func legalPrepare(templateId: String, companyId: String?, values: [String: LegalValue]? = nil, parentDocumentId: String? = nil) async throws -> LegalPrepared {
         var body: [String: Any] = ["templateId": templateId]
         if let companyId { body["companyId"] = companyId }
+        if let parentDocumentId { body["parentDocumentId"] = parentDocumentId }
         if let values { body["values"] = LegalValue.json(values) }
         let data = try await legalSend("/api/legal/documents/prepare", method: "POST", body: body)
         return try legalDecode(data, as: LegalPrepared.self)
@@ -203,9 +209,10 @@ extension APIClient {
 
     /// Generate: takes the number. A 422 carries `fieldErrors` / `problems`.
     func legalGenerate(templateId: String, companyId: String?, values: [String: LegalValue], title: String,
-                       counterparty: String, projectId: String?, dealId: String?) async throws -> LegalGenerated {
+                       counterparty: String, projectId: String?, dealId: String?, parentDocumentId: String? = nil) async throws -> LegalGenerated {
         var body: [String: Any] = ["templateId": templateId, "values": LegalValue.json(values)]
         if let companyId { body["companyId"] = companyId }
+        if let parentDocumentId { body["parentDocumentId"] = parentDocumentId }
         if !title.isEmpty { body["title"] = title }
         if !counterparty.isEmpty { body["counterparty"] = counterparty }
         body["projectId"] = projectId ?? NSNull()
@@ -241,7 +248,9 @@ extension APIClient {
     }
 
     /// One version's file, saved to a temporary file for the share sheet, Quick Look or PDFKit.
-    func legalDownloadDocument(id: String, version: Int, format: LegalFileFormat, inline: Bool = false) async throws -> URL {
+    /// `name`: what the file is called ("<number> - <title> REV 2.pdf" / "FINAL" / "SIGNED"), which the share
+    /// sheet shows; without it the server's Content-Disposition name.
+    func legalDownloadDocument(id: String, version: Int, format: LegalFileFormat, inline: Bool = false, name: String? = nil) async throws -> URL {
         let path = "\(legalDoc(id))/versions/\(version)/file?format=\(format.rawValue)" + (inline ? "&inline=1" : "")
         let fallback: String
         switch format {
@@ -249,7 +258,7 @@ extension APIClient {
         case .pdf: fallback = "document-v\(version).pdf"
         case .original: fallback = "document-v\(version)"
         }
-        return try await legalDownload(path, fallbackName: fallback)
+        return try await legalDownload(path, fallbackName: fallback, preferredName: name)
     }
 
     /// Make (or retry) a version's PDF. 502 with the reason when the PDF service fails.
@@ -374,7 +383,7 @@ extension APIClient {
     }
 
     /// GET a file to a temporary folder, named as the server names it.
-    private func legalDownload(_ path: String, fallbackName: String) async throws -> URL {
+    private func legalDownload(_ path: String, fallbackName: String, preferredName: String? = nil) async throws -> URL {
         var req = makeRequest(path)
         req.setValue("*/*", forHTTPHeaderField: "Accept")
         req.timeoutInterval = 120
@@ -397,7 +406,7 @@ extension APIClient {
             try? FileManager.default.removeItem(at: dir)
             throw Self.legalRefusal(http.statusCode, data)
         }
-        var name = (response.suggestedFilename ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        var name = (preferredName ?? response.suggestedFilename ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if name.isEmpty || name == "download" { name = fallbackName }
         name = name.replacingOccurrences(of: "/", with: "-")
         let dest = dir.appendingPathComponent(name)
