@@ -282,10 +282,10 @@ END $$;
 
 -- ── Seed ─────────────────────────────────────────────────────────────────────────────────────────
 INSERT INTO "LegalCompany" ("id", "code", "name", "legalName", "address", "position", "updatedAt") VALUES
-  ('legalco_intoo', 'INTOO', 'Intoo', '', 'Jl. Mawar No.1, RT.5/RW.3, Cilandak Tim., Ps. Minggu, Jakarta Selatan, DKI Jakarta', 0, CURRENT_TIMESTAMP),
-  ('legalco_pats', 'PATS', 'PATS', 'PT PATS DARI SELATAN', 'Jl. Mawar No.1, RT.5/RW.3, Cilandak Tim., Ps. Minggu, Jakarta Selatan, DKI Jakarta', 1, CURRENT_TIMESTAMP),
-  ('legalco_swl', 'SWL', 'Suwara Lokal', '', 'Jl. Mawar No.1, RT.5/RW.3, Cilandak Tim., Ps. Minggu, Jakarta Selatan, DKI Jakarta', 2, CURRENT_TIMESTAMP),
-  ('legalco_tzn', 'TZN', 'The Z Networks', '', 'Jl. Mawar No.1, RT.5/RW.3, Cilandak Tim., Ps. Minggu, Jakarta Selatan, DKI Jakarta', 3, CURRENT_TIMESTAMP)
+  ('legalco_intoo', 'INTOO', 'Intoo', '', '', 0, CURRENT_TIMESTAMP),
+  ('legalco_pats', 'PATS', 'PATS', 'PT PATS DARI SELATAN', '', 1, CURRENT_TIMESTAMP),
+  ('legalco_swl', 'SWL', 'Suwara Lokal', '', '', 2, CURRENT_TIMESTAMP),
+  ('legalco_tzn', 'TZN', 'The Z Networks', '', '', 3, CURRENT_TIMESTAMP)
 ON CONFLICT ("code") DO NOTHING;
 
 INSERT INTO "LegalSeries" ("id", "key", "companyId", "docType", "label", "format", "resetPeriod", "position", "updatedAt")
