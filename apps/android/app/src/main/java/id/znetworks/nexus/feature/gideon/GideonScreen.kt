@@ -33,6 +33,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -62,6 +63,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -91,7 +94,8 @@ import kotlinx.coroutines.withContext
 @Composable
 fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     val context = LocalContext.current
-    val chat = (context.applicationContext as NexusApplication).container.gideon
+    val container = (context.applicationContext as NexusApplication).container
+    val chat = container.gideon
     val s by chat.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     val res = context.resources
@@ -106,6 +110,11 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
     // A fresh chat on every open (never the last one); a rotation keeps the one on screen.
     var started by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { if (!started) { started = true; chat.startNew(project) } }
+    // "Review before writing" is remembered on the device (iOS @AppStorage "gideon.approval", web localStorage).
+    val prefs = remember { context.getSharedPreferences(GIDEON_PREFS, android.content.Context.MODE_PRIVATE) }
+    LaunchedEffect(Unit) { chat.setApproval(GideonApprovalMode.of(prefs.getString(KEY_APPROVAL, null))) }
+    var decision by remember { mutableStateOf<Pair<GProposal, Boolean>?>(null) }
+    val focus = remember { FocusRequester() }
     BackHandler(enabled = showChats) { showChats = false }
 
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -133,13 +142,6 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
             HeaderIconButton(Icons.Outlined.History, stringResource(R.string.gx_chats), { showChats = !showChats; if (showChats) chat.loadChats() })
             HeaderIconButton(Icons.Outlined.EditNote, stringResource(R.string.gx_new_chat), { showChats = false; chat.startNew(); draft = ""; upload = null }, primary = true)
         }
-        // The project this chat is about (from "Ask GIDEON" on a project page), removable.
-        val ctx = s.project
-        if (!showChats && ctx != null) Row(Modifier.padding(start = 16.dp, top = 8.dp).clip(RoundedCornerShape(8.dp)).background(c.muted).padding(start = 10.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Text(ctx.second, fontSize = 13.sp, color = c.foreground, maxLines = 1)
-            IconButton(onClick = chat::dropProject, modifier = Modifier.size(32.dp)) { Icon(Icons.Filled.Close, stringResource(R.string.cancel), tint = c.mutedFg, modifier = Modifier.size(16.dp)) }
-        }
         if (showChats) {
             ChatList(s, indonesian, onPick = { id -> showChats = false; chat.open(id) }, onNew = { showChats = false; chat.startNew() },
                 onQuery = { q -> chat.setQuery(q) }, onSearch = { chat.loadChats() }, onRetry = { chat.loadChats() },
@@ -152,7 +154,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
                 s.openFailed != null -> EmptyState(Icons.Outlined.ErrorOutline, stringResource(R.string.gx_open_failed), problemText(s.openFailed!!),
                     stringResource(R.string.gx_try_again), { s.chatId?.let(chat::open) ?: chat.startNew() }, Modifier.fillMaxSize())
                 s.messages.isEmpty() && !s.thinking -> FreshChat { send(it) }
-                else -> Transcript(s, indonesian)
+                else -> Transcript(s, indonesian) { p, apply -> decision = p to apply }
             }
         }
         s.error?.let { p ->
@@ -168,23 +170,37 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
                 IconButton(onClick = { upload = null }) { Icon(Icons.Filled.Close, stringResource(R.string.cancel)) }
             }
         }
+        // Above the composer: the @ picker while the draft ends in "@…", then the context chips (web / iOS).
+        GideonMention.query(draft)?.let { q ->
+            MentionPicker(q, container.api) { ref -> chat.addRef(ref); draft = GideonMention.strip(draft); runCatching { focus.requestFocus() } }
+        }
+        ContextChips(s.project, s.refs, onDropProject = chat::dropProject, onRemove = chat::removeRef)
+        // The composer card (iOS / web): the field, then + · "Review before writing ▾" · send.
         Box(Modifier.fillMaxWidth().background(c.border).padding(top = 1.dp)) {
-            Row(Modifier.fillMaxWidth().background(c.card).padding(8.dp), verticalAlignment = Alignment.Bottom) {
-                Box {
-                    IconButton(onClick = { attachMenu = true }) { Icon(Icons.Filled.Add, stringResource(R.string.chat_attach), tint = c.mutedFg) }
-                    DropdownMenu(attachMenu, { attachMenu = false }) {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.gallery)) }, onClick = { attachMenu = false; gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.files)) }, onClick = { attachMenu = false; files.launch(arrayOf("*/*")) })
-                    }
-                }
+            Column(Modifier.fillMaxWidth().background(c.card).padding(horizontal = 8.dp, vertical = 6.dp)) {
                 OutlinedTextField(draft, { draft = it }, placeholder = { Text(stringResource(R.string.gx_placeholder)) }, maxLines = 6,
-                    shape = RoundedCornerShape(20.dp), modifier = Modifier.weight(1f))
-                IconButton(onClick = { send(draft) }, enabled = !s.thinking && (draft.isNotBlank() || upload != null)) {
-                    Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.td_send), tint = if (!s.thinking && (draft.isNotBlank() || upload != null)) c.foreground else c.mutedFg)
+                    shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().focusRequester(focus))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box {
+                        IconButton(onClick = { attachMenu = true }) { Icon(Icons.Filled.Add, stringResource(R.string.chat_attach), tint = c.mutedFg) }
+                        DropdownMenu(attachMenu, { attachMenu = false }) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.gallery)) }, onClick = { attachMenu = false; gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.files)) }, onClick = { attachMenu = false; files.launch(arrayOf("*/*")) })
+                            // "Add a page, task or project": starts an "@" at the end of the draft (web startMention).
+                            DropdownMenuItem(text = { Text(stringResource(R.string.gx_add_page)) }, leadingIcon = { Icon(Icons.Filled.AlternateEmail, null) },
+                                onClick = { attachMenu = false; draft = GideonMention.start(draft); scope.launch { delay(50); runCatching { focus.requestFocus() } } })
+                        }
+                    }
+                    ApprovalMenu(s.approval) { m -> chat.setApproval(m); prefs.edit().putString(KEY_APPROVAL, m.key).apply() }
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = { send(draft) }, enabled = !s.thinking && (draft.isNotBlank() || upload != null)) {
+                        Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.td_send), tint = if (!s.thinking && (draft.isNotBlank() || upload != null)) c.foreground else c.mutedFg)
+                    }
                 }
             }
         }
     }
+    decision?.let { (p, apply) -> DecisionDialog(p, apply, onConfirm = { chat.decide(p, apply) }, onDismiss = { decision = null }) }
     note?.let { AlertDialog(onDismissRequest = { note = null }, text = { Text(it) }, confirmButton = { TextButton(onClick = { note = null }) { Text("OK") } }) }
 }
 
@@ -216,7 +232,7 @@ private fun FreshChat(onAsk: (String) -> Unit) {
 }
 
 @Composable
-private fun Transcript(s: GideonChat.State, indonesian: Boolean) {
+private fun Transcript(s: GideonChat.State, indonesian: Boolean, onDecide: (GProposal, Boolean) -> Unit) {
     val c = Nx.colors
     val list = rememberLazyListState()
     LaunchedEffect(s.messages.size, s.thinking) { if (s.messages.isNotEmpty()) list.animateScrollToItem(s.messages.size) }
@@ -229,7 +245,10 @@ private fun Transcript(s: GideonChat.State, indonesian: Boolean) {
                 }
             } else Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 m.steps.forEach { st -> StepLine(st) }
-                SelectionContainer { GideonMarkdownText(m.content, c.foreground) }
+                if (m.content.isNotBlank()) SelectionContainer { GideonMarkdownText(m.content, c.foreground) }
+                // Review before writing: the changes waiting for Apply, then what GIDEON made directly.
+                m.proposals.forEach { p -> ProposalCard(p, deciding = p.id in s.deciding) { apply -> onDecide(p, apply) } }
+                m.cards.forEach { card -> ResultCard(card) }
             }
         }
         if (s.thinking) item {
@@ -351,6 +370,9 @@ private fun ChatList(s: GideonChat.State, indonesian: Boolean, onPick: (String) 
             dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.cancel)) } })
     }
 }
+
+private const val GIDEON_PREFS = "gideon"
+private const val KEY_APPROVAL = "approval"
 
 private fun tierNote(t: GideonTier) = when (t) {
     GideonTier.ASTRA -> R.string.gd_astra; GideonTier.LUNA -> R.string.gd_luna; GideonTier.TERRA -> R.string.gd_terra; GideonTier.EXPERIMENTAL -> R.string.gd_experimental

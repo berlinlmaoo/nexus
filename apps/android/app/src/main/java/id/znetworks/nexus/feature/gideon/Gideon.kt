@@ -4,6 +4,7 @@ import id.znetworks.nexus.core.i18n.AppLanguage
 import id.znetworks.nexus.core.net.ApiClient
 import id.znetworks.nexus.core.net.ApiClient.Companion.toJsonBody
 import id.znetworks.nexus.core.net.ApiError
+import id.znetworks.nexus.core.net.NexusJson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -33,7 +35,23 @@ import java.time.ZoneId
 /** One tool step of an answer (server gideon-runs.ts): `tool` is never shown as is — see [GideonSteps]. */
 @Serializable data class GStep(val id: String = "", val tool: String = "", val arg: String? = null, val label: String? = null, val status: String? = null)
 
-@Serializable data class GMeta(val steps: List<GStep> = emptyList())
+/** Something GIDEON made or changed (with "Don't ask", or after Apply): server GideonCard. */
+@Serializable data class GCard(val kind: String? = null, val action: String? = null, val id: String = "", val title: String? = null,
+                               val projectName: String? = null, val status: String? = null)
+
+/** One row of a proposal's diff; `from` / `to` may arrive as a string, a number, a bool or null. */
+@Serializable data class GDiffRow(val field: String? = null, val from: JsonElement? = null, val to: JsonElement? = null) {
+    val fromText: String? get() = GideonReview.loose(from)
+    val toText: String? get() = GideonReview.loose(to)
+}
+
+/** A write GIDEON holds for the person's Apply / Discard (server proposalView; iOS GideonProposal). */
+@Serializable data class GProposal(val id: String, val action: String? = null, val summary: String? = null, val status: String = "PENDING",
+                                   val error: String? = null, val diff: List<GDiffRow> = emptyList(), val card: GCard? = null) {
+    val isPending: Boolean get() = status == "PENDING"
+}
+
+@Serializable data class GMeta(val steps: List<GStep> = emptyList(), val cards: List<GCard> = emptyList(), val proposals: List<GProposal> = emptyList())
 
 @Serializable
 data class GMessage(
@@ -44,7 +62,11 @@ data class GMessage(
     val meta: GMeta? = null,
 ) {
     val steps: List<GStep> get() = meta?.steps.orEmpty()
+    val cards: List<GCard> get() = meta?.cards.orEmpty()
+    val proposals: List<GProposal> get() = meta?.proposals.orEmpty()
 }
+
+@Serializable data class GProposalEnvelope(val proposal: GProposal? = null, val error: String? = null)
 
 @Serializable data class GChatRef(val id: String, val title: String? = null)
 @Serializable data class GHistory(val messages: List<GMessage> = emptyList(), val chat: GChatRef? = null)
@@ -63,7 +85,11 @@ sealed interface GUpload {
 }
 
 /** What one streamed answer amounted to (all frames read). */
-data class GStream(val text: String, val steps: List<GStep>, val chatId: String?, val chatTitle: String?, val error: String?)
+data class GStream(val text: String, val steps: List<GStep>, val chatId: String?, val chatTitle: String?, val error: String?,
+                   val cards: List<GCard> = emptyList(), val proposals: List<GProposal> = emptyList()) {
+    /** Text, a change made, or a change waiting for Apply: anything else is "GIDEON didn't answer". */
+    val answered: Boolean get() = text.isNotBlank() || cards.isNotEmpty() || proposals.isNotEmpty()
+}
 
 object GideonRules {
     const val MAX_DOC = 10L shl 20
@@ -81,6 +107,8 @@ object GideonRules {
         val text = StringBuilder(); var error: String? = null
         val steps = LinkedHashMap<String, GStep>()
         var chatId: String? = null; var chatTitle: String? = null
+        val cards = ArrayList<GCard>()
+        val proposals = LinkedHashMap<String, GProposal>()
         fun JsonObject.s(k: String) = (this[k] as? JsonPrimitive)?.contentOrNull
         loop@ for (line in raw.lineSequence()) {
             val l = line.trim()
@@ -94,6 +122,10 @@ object GideonRules {
                     val id = st.s("id") ?: "s${steps.size}"
                     steps[id] = GStep(id, st.s("tool").orEmpty(), st.s("arg"), st.s("label"), st.s("status"))
                 }
+                "card" -> (o["card"] as? JsonObject)?.let { j -> runCatching { NexusJson.decodeFromJsonElement(GCard.serializer(), j) }.getOrNull() }?.let(cards::add)
+                // Review before writing: a write held for Apply / Discard; a later frame for the same id replaces it.
+                "proposal" -> (o["proposal"] as? JsonObject)?.let { j -> runCatching { NexusJson.decodeFromJsonElement(GProposal.serializer(), j) }.getOrNull() }
+                    ?.let { proposals[it.id] = it }
                 "chat" -> { chatId = o.s("id") ?: chatId; chatTitle = chatTitle ?: o.s("title") }
                 "error" -> error = o.s("content").orEmpty()
                 "done" -> break@loop
@@ -102,7 +134,7 @@ object GideonRules {
         // A run that finished has no step left running.
         val done = steps.values.map { if (it.status == "running") it.copy(status = "done") else it }
         val answer = text.toString().let { if (GideonProblem.isEmptyPlaceholder(it)) "" else it }
-        return GStream(answer, done, chatId, chatTitle, error)
+        return GStream(answer, done, chatId, chatTitle, error, cards, proposals.values.toList())
     }
 }
 
@@ -270,19 +302,67 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
         val query: String = "",
         /** The project GIDEON was opened from ("Ask GIDEON" on a project page): sent as context until removed. */
         val project: Pair<String, String>? = null,
+        /** Pages, tasks and projects added with @ (web chips, at most 8): sent as `context.refs` until removed. */
+        val refs: List<GRef> = emptyList(),
+        /** "Review before writing": which writes wait for Apply (sent as `approvalMode` with every question). */
+        val approval: GideonApprovalMode = GideonApprovalMode.fallback,
+        /** Proposals with an Apply / Discard on its way (their buttons wait). */
+        val deciding: Set<String> = emptySet(),
     )
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
     private var generation = 0
     /** The question that failed, for Try again (nothing is stored server-side for a failed turn). */
-    private var failed: Pair<String, GUpload?>? = null
+    private var failed: Outgoing? = null
+
+    /** A question as it was asked: its @ pages and approval mode go with it, not whatever the chips say later. */
+    private data class Outgoing(val text: String, val upload: GUpload?, val refs: List<GRef>, val approval: GideonApprovalMode)
 
     /** A fresh conversation: every time GIDEON opens, and from "New chat". */
     fun startNew(project: Pair<String, String>? = null) {
         generation++
         failed = null
-        _state.update { it.copy(chatId = null, chatTitle = null, messages = emptyList(), thinking = false, opening = false, error = null, openFailed = null, project = project) }
+        _state.update { it.copy(chatId = null, chatTitle = null, messages = emptyList(), thinking = false, opening = false, error = null, openFailed = null,
+            project = project, refs = emptyList(), deciding = emptySet()) }
+    }
+
+    /** A page picked in the @ picker (once; at most [GideonMention.MAX_REFS]). */
+    fun addRef(ref: GRef) = _state.update { it.copy(refs = GideonMention.add(it.refs, ref)) }
+
+    /** A chip's x. */
+    fun removeRef(ref: GRef) = _state.update { it.copy(refs = it.refs.filterNot { r -> r.kind == ref.kind && r.id == ref.id }) }
+
+    fun setApproval(mode: GideonApprovalMode) = _state.update { it.copy(approval = mode) }
+
+    /**
+     * Apply or Discard a proposal (POST /api/gideon/proposals/:id {decision}); the card shows what came back. The
+     * server re-checks access when applying, and a double tap applies once (409 still carries the proposal).
+     */
+    fun decide(p: GProposal, apply: Boolean) {
+        if (p.id in _state.value.deciding) return
+        _state.update { it.copy(deciding = it.deciding + p.id, error = null) }
+        scope.launch {
+            try {
+                val updated = try {
+                    api.send(Request.Builder().url(api.url("/api/gideon/proposals/" + URLEncoder.encode(p.id, "UTF-8")))
+                        .post(GideonReview.body(apply).toString().toJsonBody()).build(), GProposalEnvelope.serializer()).proposal
+                } catch (e: ApiError.Http) {
+                    val carried = if (GideonReview.carriesProposal(e.status)) (e.body?.get("proposal") as? JsonObject)
+                        ?.let { j -> runCatching { api.json.decodeFromJsonElement(GProposal.serializer(), j) }.getOrNull() } else null
+                    carried ?: throw e
+                }
+                if (updated != null) {
+                    _state.update { it.copy(messages = GideonReview.replace(it.messages, updated)) }
+                    if (apply && !updated.error.isNullOrBlank()) _state.update { it.copy(error = GideonProblem(GideonProblem.Kind.OTHER, false, updated.error)) }
+                }
+            } catch (e: ApiError) {
+                // Not a question to ask again: Try again would re-send the last failed question instead.
+                _state.update { it.copy(error = GideonProblem.from(e).copy(retryable = false)) }
+            } finally {
+                _state.update { it.copy(deciding = it.deciding - p.id) }
+            }
+        }
     }
 
     /** The context chip's ×: ask without the project. */
@@ -292,7 +372,7 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
         val gen = ++generation
         failed = null
         _state.update { it.copy(chatId = chatId, chatTitle = it.chats?.firstOrNull { c -> c.id == chatId }?.title, messages = emptyList(),
-            opening = true, thinking = false, error = null, openFailed = null) }
+            opening = true, thinking = false, error = null, openFailed = null, refs = emptyList(), deciding = emptySet()) }
         scope.launch {
             try {
                 val h = api.get("/api/gideon/history?chatId=" + URLEncoder.encode(chatId, "UTF-8"), GHistory.serializer())
@@ -308,7 +388,10 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
     fun setTier(t: GideonTier) = _state.update { it.copy(tier = t) }
     fun dismissError() = _state.update { it.copy(error = null) }
 
-    fun ask(text: String, upload: GUpload?) {
+    fun ask(text: String, upload: GUpload?) = ask(Outgoing(text, upload, _state.value.refs, _state.value.approval))
+
+    private fun ask(out: Outgoing) {
+        val (text, upload) = out
         if (_state.value.thinking || (text.isBlank() && upload == null)) return
         val q = GMessage("user", text.trim(), attachments = when (upload) {
             is GUpload.Image -> listOf(GAttachment("image", name = "image"))
@@ -328,9 +411,11 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
                     put("stream", true)
                     // The interface language, so the answer comes back in it.
                     put("uiLang", AppLanguage.serverCode(AppLanguage.current))
+                    // "Review before writing" (web default review; a client that sends nothing gets "don't ask").
+                    put("approvalMode", out.approval.key)
                     if (chatId != null) put("chatId", chatId) else put("newChat", true)
-                    // Opened about a project (web openGideon({projectId})): the server reads it as context.
-                    _state.value.project?.let { (pid, _) -> put("context", buildJsonObject { put("projectId", pid) }) }
+                    // The project GIDEON was opened about plus the @ pages (web streamGideon `context`).
+                    GideonMention.context(_state.value.project?.first, out.refs)?.let { put("context", it) }
                     when (upload) {
                         is GUpload.Image -> put("image", "data:image/jpeg;base64," + java.util.Base64.getEncoder().encodeToString(upload.jpeg))
                         is GUpload.Document -> put("file", buildJsonObject { put("name", upload.name); put("type", upload.mime); put("data", java.util.Base64.getEncoder().encodeToString(upload.bytes)) })
@@ -341,16 +426,16 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
                     .post(body.toString().toJsonBody()).build(), readTimeoutMs = 180_000)
                 val r = GideonRules.parse(raw) { runCatching { api.json.parseToJsonElement(it).jsonObject }.getOrNull() }
                 if (gen != generation) return@launch
-                problem = r.error?.let(GideonProblem::stream) ?: if (r.text.isBlank()) GideonProblem.noAnswer else null
+                problem = r.error?.let(GideonProblem::stream) ?: if (!r.answered) GideonProblem.noAnswer else null
                 _state.update { s ->
                     s.copy(chatId = r.chatId ?: s.chatId, chatTitle = s.chatTitle ?: r.chatTitle,
-                        messages = if (r.text.isNotBlank()) s.messages + GMessage("assistant", r.text, meta = GMeta(r.steps)) else s.messages)
+                        messages = if (r.answered) s.messages + GMessage("assistant", r.text, meta = GMeta(r.steps, r.cards, r.proposals)) else s.messages)
                 }
             } catch (e: ApiError) {
                 problem = GideonProblem.from(e)
             }
             if (gen != generation) return@launch
-            failed = if (problem != null) text to upload else null
+            failed = if (problem != null) out else null
             _state.update { it.copy(thinking = false, error = problem) }
             loadChats()
         }
@@ -358,13 +443,13 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
 
     /** Try again: the failed question once more (its turn leaves the transcript first, so it is not doubled). */
     fun retry() {
-        val (text, upload) = failed ?: return
+        val out = failed ?: return
         _state.update { s ->
             val i = s.messages.indexOfLast { it.role == "user" }
             s.copy(error = null, messages = if (i >= 0 && s.messages.drop(i + 1).none { it.role == "assistant" }) s.messages.take(i) else s.messages)
         }
         failed = null
-        ask(text, upload)
+        ask(out)
     }
 
     fun setQuery(q: String) { _state.update { it.copy(query = q) } }

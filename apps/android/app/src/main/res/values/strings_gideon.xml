@@ -33,7 +33,7 @@
     <string name="gx_chip_overdue">What\'s overdue for me?</string>
     <string name="gx_chip_week">Summarize my week across projects</string>
     <string name="gx_chip_decide">What did my team decide recently? Cite the sources.</string>
-    <string name="gx_placeholder">Ask anything</string>
+    <string name="gx_placeholder">Ask anything. Type @ to add a page</string>
     <string name="gx_working">Working…</string>
     <string name="gx_step_list_projects">Listing projects</string>
     <string name="gx_step_people">Looking up people</string>
@@ -63,4 +63,33 @@
     <string name="gx_step_write_doc_n">Writing doc %1$s</string>
     <string name="gx_step_image">Looking at the image</string>
     <string name="gx_model">Model</string>
+    <!-- @ pages and Review before writing (web GideonPanel, iOS GideonPanel 13 Oct 2026). -->
+    <string name="gx_add_page">Add a page, task or project</string>
+    <string name="gx_mention_hint">Type to search projects, tasks and docs you can see.</string>
+    <string name="gx_mention_searching">Searching…</string>
+    <string name="gx_mention_none">Nothing you can see matches “%1$s”.</string>
+    <string name="gx_kind_project">Project</string>
+    <string name="gx_kind_task">Task</string>
+    <string name="gx_kind_doc">Doc</string>
+    <string name="gx_untitled_doc">Untitled</string>
+    <string name="gx_remove_context">Remove this context</string>
+    <string name="gx_mode_header">Before GIDEON changes something</string>
+    <string name="gx_mode_always">Always ask</string>
+    <string name="gx_mode_review">Review before writing</string>
+    <string name="gx_mode_dont">Don\'t ask</string>
+    <string name="gx_mode_always_sub">Every change GIDEON wants to make waits for you.</string>
+    <string name="gx_mode_review_sub">Edits, comments and tasks for other people wait for you. Your own new tasks and docs are made directly.</string>
+    <string name="gx_mode_dont_sub">GIDEON makes changes right away, as you.</string>
+    <string name="gx_change_default">GIDEON wants to make a change</string>
+    <string name="gx_apply">Apply</string>
+    <string name="gx_discard">Discard</string>
+    <string name="gx_applied">Applied</string>
+    <string name="gx_discarded">Discarded</string>
+    <string name="gx_applying">Applying…</string>
+    <string name="gx_apply_failed">Couldn\'t apply it.</string>
+    <string name="gx_apply_q">Apply this change?</string>
+    <string name="gx_discard_q">Discard this change?</string>
+    <string name="gx_card_created">Created</string>
+    <string name="gx_card_updated">Updated</string>
+    <string name="gx_card_commented">Commented</string>
 </resources>

@@ -32,7 +32,7 @@
     <string name="gx_chip_overdue">Apa saja task-ku yang terlambat?</string>
     <string name="gx_chip_week">Ringkas mingguku di semua project</string>
     <string name="gx_chip_decide">Apa yang baru diputuskan timku? Sebutkan sumbernya.</string>
-    <string name="gx_placeholder">Tanya apa saja</string>
+    <string name="gx_placeholder">Tanya apa saja. Ketik @ untuk menambah halaman</string>
     <string name="gx_working">Sedang mengerjakan…</string>
     <string name="gx_step_list_projects">Melihat daftar project</string>
     <string name="gx_step_people">Mencari orang</string>
@@ -62,4 +62,33 @@
     <string name="gx_step_write_doc_n">Menulis dokumen %1$s</string>
     <string name="gx_step_image">Melihat gambar</string>
     <string name="gx_model">Model</string>
+    <!-- @ pages and Review before writing (web GideonPanel, iOS GideonPanel 13 Oct 2026). -->
+    <string name="gx_add_page">Tambah halaman, task, atau project</string>
+    <string name="gx_mention_hint">Ketik untuk mencari project, task, dan dokumen yang bisa kamu lihat.</string>
+    <string name="gx_mention_searching">Mencari…</string>
+    <string name="gx_mention_none">Tidak ada yang bisa kamu lihat yang cocok dengan “%1$s”.</string>
+    <string name="gx_kind_project">Proyek</string>
+    <string name="gx_kind_task">Task</string>
+    <string name="gx_kind_doc">Dokumen</string>
+    <string name="gx_untitled_doc">Tanpa judul</string>
+    <string name="gx_remove_context">Hapus konteks ini</string>
+    <string name="gx_mode_header">Sebelum GIDEON mengubah sesuatu</string>
+    <string name="gx_mode_always">Selalu tanya</string>
+    <string name="gx_mode_review">Tinjau sebelum menulis</string>
+    <string name="gx_mode_dont">Jangan tanya</string>
+    <string name="gx_mode_always_sub">Setiap perubahan dari GIDEON menunggu persetujuanmu.</string>
+    <string name="gx_mode_review_sub">Ubahan, komentar, dan task untuk orang lain menunggu persetujuanmu. Task dan dokumen baru untukmu sendiri langsung dibuat.</string>
+    <string name="gx_mode_dont_sub">GIDEON langsung membuat perubahan, sebagai kamu.</string>
+    <string name="gx_change_default">GIDEON ingin membuat perubahan</string>
+    <string name="gx_apply">Terapkan</string>
+    <string name="gx_discard">Buang</string>
+    <string name="gx_applied">Diterapkan</string>
+    <string name="gx_discarded">Dibuang</string>
+    <string name="gx_applying">Menerapkan…</string>
+    <string name="gx_apply_failed">Gagal diterapkan.</string>
+    <string name="gx_apply_q">Terapkan perubahan ini?</string>
+    <string name="gx_discard_q">Buang perubahan ini?</string>
+    <string name="gx_card_created">Dibuat</string>
+    <string name="gx_card_updated">Diperbarui</string>
+    <string name="gx_card_commented">Dikomentari</string>
 </resources>
