@@ -254,6 +254,8 @@ struct LegalDocumentsPane: View {
                 }
             }
             .padding(.vertical, 1)
+            // Room past the last chip, so it scrolls clear of the edge fade (I-21).
+            .padding(.trailing, 32)
         }
         .nxEdgeFade(40)
     }
@@ -326,7 +328,8 @@ struct LegalDocumentsPane: View {
         if d.source == "UPLOADED" { s += " · " + T("Uploaded") }
         if let deal = d.deal { s += " · " + deal.code } else if let p = d.project { s += " · " + p.name }
         if let parent = d.parent { s += " · " + String(format: T("Addendum to %@"), parent.number) }
-        if d.addendaCount > 0 { s += " · " + String(format: T("%d addenda"), d.addendaCount) }
+        // "1 addendum" / "2 addenda" (F-28).
+        if d.addendaCount > 0 { s += " · " + (d.addendaCount == 1 ? T("1 addendum") : String(format: T("%d addenda"), d.addendaCount)) }
         if let at = d.signedAt { s += " · " + String(format: T("Signed %@ by %@"), LegalLabels.date(at), d.signedBy?.name ?? "—") }
         return s
     }

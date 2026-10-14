@@ -27,6 +27,10 @@ struct ProjectDetailView: View {
     /// The tab row is wider than the screen: a "…" menu lists every tab (Notion, UI tour run 9).
     @State private var tabsOverflow = false
     @State private var tabsWidth: CGFloat = 0
+    /// The wide tab bar's width and its tools' width: when the tabs and the tools don't share one row,
+    /// the tools move under the tabs (UI tour run 13, I-18 / M-7: "verview", "ategori", "Cal" cut).
+    @State private var barWidth: CGFloat = 0
+    @State private var toolsWidth: CGFloat = 0
     /// A filter opened from a count on the Overview (owner, 11 Oct 2026): open top-level tasks only,
     /// shown as a chip above the task tabs until it is cleared.
     @State private var drill: OverviewDrill?
@@ -593,28 +597,48 @@ struct ProjectDetailView: View {
             if let d = detail {
                 // iPad / Mac (web header): the members' faces, then Ask GIDEON and Project settings.
                 if wide { ProjectMemberStack(members: d.members ?? []) { if !cover.isCovered { showSettings = true } }.padding(.trailing, 4) }
-                // Ask GIDEON about this project: a new chat scoped to it (web header, 12 Oct 2026).
-                AskGideonButton(context: GideonContext(projectId: projectId, projectName: displayName), labelled: wide)
-                ProjectHeaderButton(title: T("Project settings"), icon: "slider.horizontal.3", labelled: wide) { if !cover.isCovered { showSettings = true } }
-                    .keyboardShortcut(",", modifiers: .command)
+                if wide {
+                    // Words while they fit on one line, icons when they don't: a portrait iPad wrapped
+                    // "Ask GIDEON" onto two lines and cut "Project sett…" (UI tour run 13, I-10).
+                    ViewThatFits(in: .horizontal) {
+                        headerActions(labelled: true)
+                        headerActions(labelled: false)
+                    }
+                } else {
+                    headerActions(labelled: false)
+                }
+            } else if !wideBar {
+                addButton
             }
-            // iPad / Mac: Add task lives on the tab row (split button), not in the header (web 267).
-            if !wideBar { addButton }
         }
         .padding(.leading, isPresented ? 6 : (wide ? 24 : 14))
         .padding(.trailing, wide ? 24 : 14)
         .padding(.top, wide ? 12 : 4).padding(.bottom, 4)
     }
 
+    /// Ask GIDEON, Project settings and (outside the wide tab row) the add button.
+    @ViewBuilder private func headerActions(labelled: Bool) -> some View {
+        HStack(spacing: 10) {
+            // Ask GIDEON about this project: a new chat scoped to it (web header, 12 Oct 2026).
+            AskGideonButton(context: GideonContext(projectId: projectId, projectName: displayName), labelled: labelled)
+            ProjectHeaderButton(title: T("Project settings"), icon: "slider.horizontal.3", labelled: labelled) { if !cover.isCovered { showSettings = true } }
+                .keyboardShortcut(",", modifiers: .command)
+            // iPad / Mac: Add task lives on the tab row (split button), not in the header (web 267).
+            if !wideBar { addButton(labelled: labelled) }
+        }
+    }
+
+    private var addButton: some View { addButton(labelled: wide) }
+
     /// On the Forms tab "+" means New form, as on the web's Forms tab; on every other tab it is New task.
     /// A Pipeline Dashboard has no task header (web): "+" is New deal on Pipeline and absent on its other
     /// tabs. An outlet's "Add event" sits in its own header row, next to the month.
-    @ViewBuilder private var addButton: some View {
+    @ViewBuilder private func addButton(labelled: Bool) -> some View {
         if tab == .pipeline {
-            ProjectHeaderButton(title: T("New deal"), icon: "plus", labelled: wide, prominent: true) { newDealRequest += 1 }
+            ProjectHeaderButton(title: T("New deal"), icon: "plus", labelled: labelled, prominent: true) { newDealRequest += 1 }
         } else if !isPipeline && !isTypedDashboard && canEdit {
             // Can view / Can comment: no Add task / New form (access levels round 2).
-            ProjectHeaderButton(title: tab == .forms ? T("New form") : T("Add task"), icon: "plus", labelled: wide,
+            ProjectHeaderButton(title: tab == .forms ? T("New form") : T("Add task"), icon: "plus", labelled: labelled,
                                 prominent: true, enabled: tab == .forms || canCreate) {
                 if tab == .forms { newFormOpen = true } else { newTask(in: nil) }
             }
@@ -775,7 +799,38 @@ struct ProjectDetailView: View {
         return out
     }
 
-    private var wideTabBar: some View {
+    /// The tabs need more room than the row leaves beside the tools.
+    private var toolsBelowTabs: Bool {
+        barWidth > 0 && tabsWidth > 0 && tabsWidth + toolsWidth + 18 + 24 + 16 > barWidth
+    }
+
+    @ViewBuilder private var wideTabBar: some View {
+        Group {
+            if toolsBelowTabs {
+                VStack(alignment: .trailing, spacing: 0) {
+                    HStack(spacing: 8) { wideTabs; if tabsOverflow { tabOverflowMenu(wideMenuItems) } }
+                        .padding(.trailing, 24)
+                    measuredTools
+                }
+            } else {
+                HStack(spacing: 8) {
+                    wideTabs
+                    if tabsOverflow { tabOverflowMenu(wideMenuItems) }
+                    measuredTools
+                }
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
+    }
+
+    private var measuredTools: some View {
+        wideTools
+            .fixedSize()
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { toolsWidth = $0 }
+            .padding(.trailing, 24)
+    }
+
+    private var wideTabs: some View {
         HStack(spacing: 8) {
             ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
@@ -809,10 +864,6 @@ struct ProjectDetailView: View {
             // The inset sits OUTSIDE the scroll view: inside it, it scrolled away with the tabs and a
             // scrolled row put its first tab flush against the sidebar (UI tour run 10, MAC-1).
             .padding(.leading, 18)
-            if tabsOverflow { tabOverflowMenu(wideMenuItems) }
-            wideTools
-                .fixedSize()
-                .padding(.trailing, 24)
         }
     }
 

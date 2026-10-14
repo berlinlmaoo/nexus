@@ -272,8 +272,8 @@ struct NotificationRow: View {
         HStack(alignment: .top, spacing: 12) {
             mark.accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
-                Text(notification.title ?? notification.typeLabel).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
-                Text(notification.message ?? T("New notification")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                Text(Self.keepSeparators(notification.title ?? notification.typeLabel)).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
+                Text(Self.keepSeparators(notification.message ?? T("New notification"))).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(2)
                 Text(metaText).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }
             Spacer(minLength: 4)
@@ -318,7 +318,7 @@ struct NotificationRow: View {
     /// The sender's avatar with the kind as a small badge (web inbox, 13 Oct 2026, from `actor`); system
     /// signals and rows from before the server kept the sender show the kind's mark instead.
     @ViewBuilder private var mark: some View {
-        if let actor = notification.actor {
+        if let actor = notification.actor, !NotificationMark.isLegal(notification.type) {
             AvatarView(url: actor.avatar, initial: actor.initial, size: 38)
                 .overlay(alignment: .bottomTrailing) {
                     kindMark(size: 18)
@@ -339,9 +339,19 @@ struct NotificationRow: View {
             // On the card colour first, so the small badge is not see-through over the avatar.
             Circle().fill(NX.card)
             Circle().fill(mark.color.opacity(0.14))
-            Image(systemName: mark.symbol).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(mark.color)
+            if let asset = mark.asset {
+                Image(asset).renderingMode(.template).resizable().scaledToFit()
+                    .frame(width: size * 0.46, height: size * 0.46).foregroundStyle(mark.color)
+            } else {
+                Image(systemName: mark.symbol).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(mark.color)
+            }
         }
         .frame(width: size, height: size)
+    }
+
+    /// " · " joined to the word before it, so a wrapped line never starts with "· PATS" (F-32).
+    static func keepSeparators(_ s: String) -> String {
+        s.replacingOccurrences(of: " · ", with: "\u{00A0}·\u{00A0}")
     }
 
     /// The web's own meta line, hint included: a row that opens something says so, and a row that

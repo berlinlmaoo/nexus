@@ -104,7 +104,8 @@ struct RootView: View {
                         }
                             .toolbar {
                                 ToolbarItem(placement: .cancellationAction) {
-                                    Button(T("Close")) { router.formRequest = nil }
+                                    // A form to fill: "Cancel", as on every other sheet that edits (F-30).
+                                    Button(T("Cancel")) { router.formRequest = nil }
                                 }
                             }
                     }
@@ -353,7 +354,7 @@ struct AccountFooter: View {
                 .buttonStyle(.plain)
             }
             Button { if !auth.signOutIfAllowed() { signOutBlocked = true } } label: {
-                Label(T("Logout"), systemImage: "rectangle.portrait.and.arrow.right")
+                Label(T("Log out"), systemImage: "rectangle.portrait.and.arrow.right")
                     .font(NXFont.text(14, .semibold)).foregroundStyle(NX.danger)
                     .frame(maxWidth: .infinity).padding(.vertical, 13)
                     .background(NX.danger.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))

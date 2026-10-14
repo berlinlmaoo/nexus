@@ -21,6 +21,14 @@ enum GalleryPick: Hashable {
     }
 }
 
+extension ProjectKind {
+    /// The kind's icon where it is drawn large (New project): the Pipeline wears the web's funnel, which
+    /// SF Symbols does not have (UI tour run 13, F-07).
+    var glyph: Image {
+        self == .pipeline ? Image("FunnelGlyph").renderingMode(.template) : Image(systemName: symbol)
+    }
+}
+
 struct TemplateGallery: View {
     let onPick: (GalleryPick) -> Void
     @State private var viewer = Viewer.shared
@@ -73,13 +81,16 @@ struct TemplateGallery: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
+                Text(T("The project starts with default sections and opens when it's ready."))
+                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(T("What is this project for?")).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
                 searchField
                 categoryChips
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 10)], spacing: 10) {
                     if showBlank {
                         Button { onPick(.blank) } label: {
-                            GalleryCard(symbol: "plus", tint: NX.violet, title: T("Blank project"),
+                            GalleryCard(glyph: Image(systemName: "plus"), tint: NX.violet, title: T("Blank project"),
                                         blurb: T("Start empty: To Do, In Progress and Done. You pick the tabs.")) { BlankPreview() }
                         }
                         .buttonStyle(PressableCardStyle())
@@ -92,14 +103,14 @@ struct TemplateGallery: View {
                     }
                     ForEach(shownTemplates) { tp in
                         Button { onPick(.template(tp)) } label: {
-                            GalleryCard(symbol: TemplateTint.symbol(tp.icon), tint: TemplateTint.color(tp.tint),
+                            GalleryCard(glyph: Image(systemName: TemplateTint.symbol(tp.icon)), tint: TemplateTint.color(tp.tint),
                                         title: tp.name.text, blurb: tp.blurb.text) { TemplatePreview(template: tp) }
                         }
                         .buttonStyle(PressableCardStyle())
                     }
                     ForEach(shownDashboards) { k in
                         Button { onPick(.type(k)) } label: {
-                            GalleryCard(symbol: k.symbol, tint: NX.violet, title: k.title, blurb: k.blurb) {
+                            GalleryCard(glyph: k.glyph, tint: NX.violet, title: k.title, blurb: k.blurb) {
                                 DashboardPreview(kind: k)
                             }
                         }
@@ -152,8 +163,9 @@ struct TemplateGallery: View {
     }
 
     private var categoryChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+        // Wrapped, not a sideways strip: the strip opened scrolled, with "All" cut on the left and the picked
+        // "Dashboards" cut to "D" on the right (UI tour run 13, I-11 / M-8).
+        FlowLayout(spacing: 6) {
                 ForEach(["all"] + categories, id: \.self) { c in
                     Button { category = c } label: {
                         Text(c == "all" ? T("All") : Self.categoryLabel(c))
@@ -164,15 +176,15 @@ struct TemplateGallery: View {
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(category == c ? .isSelected : [])
                 }
-            }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(T("Template categories"))
     }
 }
 
 /// One gallery card: tinted header (icon, name, blurb) above a framed mini preview.
 private struct GalleryCard<Preview: View>: View {
-    let symbol: String
+    let glyph: Image
     let tint: Color
     let title: String
     let blurb: String
@@ -181,7 +193,8 @@ private struct GalleryCard<Preview: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: symbol).font(.system(size: 14, weight: .semibold)).foregroundStyle(tint)
+                glyph.resizable().scaledToFit().fontWeight(.semibold).foregroundStyle(tint)
+                    .frame(width: 16, height: 16)
                     .frame(width: 32, height: 32)
                     .background(tint.opacity(0.15), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
@@ -402,6 +415,14 @@ private struct DashboardPreview: View {
                 }
             }
             .frame(maxHeight: .infinity)
+        } else if kind == .social {
+            // A line, like the report's engagement trend (the web draws this card as a line chart, F-07 / I-11).
+            VStack(spacing: 6) {
+                HStack(spacing: 6) {
+                    ForEach(0..<2, id: \.self) { _ in RoundedRectangle(cornerRadius: 4).fill(NX.foreground.opacity(0.07)).frame(height: 20) }
+                }
+                SocialSparkline(values: [3, 5, 4, 7, 6, 9, 8, 11])
+            }
         } else {
             VStack(spacing: 6) {
                 HStack(spacing: 6) {
@@ -432,7 +453,7 @@ struct GalleryChosenHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
+                glyph.resizable().scaledToFit().fontWeight(.semibold).frame(width: 14, height: 14)
                 Text(title).font(NXFont.text(13, .semibold)).lineLimit(1)
                 Spacer(minLength: 4)
                 Button(T("Change template"), action: onChange).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
@@ -455,11 +476,11 @@ struct GalleryChosenHeader: View {
         .background(NX.violet.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    private var symbol: String {
+    private var glyph: Image {
         switch pick {
-        case .blank: return "plus"
-        case .template(let t): return TemplateTint.symbol(t.icon)
-        case .type(let k): return k.symbol
+        case .blank: return Image(systemName: "plus")
+        case .template(let t): return Image(systemName: TemplateTint.symbol(t.icon))
+        case .type(let k): return k.glyph
         }
     }
     private var title: String {

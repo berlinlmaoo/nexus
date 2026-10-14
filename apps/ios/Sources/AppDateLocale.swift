@@ -47,12 +47,31 @@ enum AppDateLocale {
     }
 }
 
-/// Numbers in the language the app is set to, not the device's region: English "1,000" and "18.5 MB",
-/// Indonesian "1.000" and "18,5 MB" (UI tour run 5: an English app showed "1.000 XP" on an Indonesian
-/// iPhone, and ByteCountFormatter followed the region too). Same locales as AppDateLocale.
+/// Numbers as the app shows them. Whole numbers always use Indonesian dot grouping, in English too
+/// ("2.597", "3.800 / 18.000"; owner rule, UI tour run 13), and never follow the device's region.
+/// Fractions keep the app language's decimal mark ("18.5 MB" / "18,5 MB").
 enum AppNumber {
-    static func int(_ n: Int) -> String {
-        n.formatted(.number.locale(AppDateLocale.current))
+    private static let groupedFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.locale = Locale(identifier: "id_ID")
+        f.maximumFractionDigits = 0
+        f.usesGroupingSeparator = true
+        return f
+    }()
+
+    /// "2.597", "−32" (a true minus, as the web prints negatives).
+    static func int(_ n: Int) -> String { int64(Int64(n)) }
+
+    static func int64(_ n: Int64) -> String {
+        let digits = groupedFormatter.string(from: NSNumber(value: n.magnitude)) ?? String(n.magnitude)
+        return n < 0 ? "\u{2212}" + digits : digits
+    }
+
+    /// "Rp 6.000.000", a space after "Rp", in both languages; "−Rp 5.000" below zero.
+    static func rupiah(_ n: Int64) -> String {
+        let digits = groupedFormatter.string(from: NSNumber(value: n.magnitude)) ?? String(n.magnitude)
+        return (n < 0 ? "\u{2212}" : "") + "Rp " + digits
     }
 
     static func decimal(_ x: Double, digits: Int = 1) -> String {

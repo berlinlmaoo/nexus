@@ -149,7 +149,7 @@ struct LegalRequestFormView: View {
         Text(subtitle(info)).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
         NXCard(padding: 16) {
             VStack(alignment: .leading, spacing: 14) {
-                LegalFormRow(label: T("Company"), error: errors["companyId"]) {
+                LegalFormRow(label: T("Company"), required: info.lockedCompany == nil, error: errors["companyId"]) {
                     if let locked = info.lockedCompany {
                         Text(locked.name).font(NXFont.text(14)).foregroundStyle(NX.foreground)
                             .frame(maxWidth: .infinity, alignment: .leading).legalInput()
@@ -159,7 +159,7 @@ struct LegalRequestFormView: View {
                                         placeholder: T("Pick a company"))
                     }
                 }
-                LegalFormRow(label: T("Document type"), error: errors["templateId"]) {
+                LegalFormRow(label: T("Document type"), required: true, error: errors["templateId"]) {
                     if companyId == nil {
                         Text(T("Pick the company first")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
                             .frame(maxWidth: .infinity, alignment: .leading).legalInput()
@@ -265,6 +265,8 @@ struct LegalRequestFormView: View {
             if let formError {
                 Text(formError).font(NXFont.text(13)).foregroundStyle(NX.danger)
             }
+            let missing = templateId == nil || companyId == nil
+                || (template?.isAddendum == true && parentNumber.trimmingCharacters(in: .whitespaces).isEmpty)
             Button { Task { await send() } } label: {
                 HStack(spacing: 6) {
                     if sending { ProgressView().tint(NX.background) }
@@ -273,7 +275,12 @@ struct LegalRequestFormView: View {
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.nxPrimary)
-            .disabled(sending || templateId == nil || companyId == nil || (template?.isAddendum == true && parentNumber.trimmingCharacters(in: .whitespaces).isEmpty))
+            .disabled(sending || missing)
+            // Why Send is greyed out (UI tour run 13, F-30 / W-B23).
+            if missing && !sending {
+                Text(T("Fill in the required fields (*) to send")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    .frame(maxWidth: .infinity)
+            }
         }
         .padding(.horizontal, 20).padding(.vertical, 12)
         .frame(maxWidth: 720)
@@ -666,6 +673,8 @@ struct LegalRequestsPane: View {
                 }
             }
             .padding(.vertical, 1)
+            // Room past the last pill, so it can scroll clear of the edge fade ("Any deadlin…", F-31).
+            .padding(.trailing, 32)
         }
         .nxEdgeFade(40)
     }
@@ -814,8 +823,13 @@ struct LegalRequestCard: View {
             // A narrow board column (iPad portrait) cut "PIC · Q…" and "Sig…" and wrapped the date (UI tour
             // run 10, IPD-3): the date and the count keep their width, the PIC has its own line, and the
             // document's number truncates in the middle beside a status chip that is never squeezed.
+            // The requester on a line of their own (I-22: "QA D…" beside the date), then when it was sent and
+            // when it is needed (F-31: the card had no date).
+            Text(r.requester?.name ?? "—").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
             HStack(spacing: 8) {
-                Text(r.requester?.name ?? "—").lineLimit(1)
+                if r.createdAt != nil {
+                    Text(String(format: T("Sent %@"), LegalLabels.date(r.createdAt))).lineLimit(1).fixedSize()
+                }
                 if let d = r.deadline {
                     Label(LegalLabels.day(d), systemImage: "calendar").lineLimit(1).fixedSize()
                         .foregroundStyle(r.overdue ? NX.danger : NX.mutedFg).fontWeight(r.overdue ? .semibold : .regular)
@@ -829,7 +843,14 @@ struct LegalRequestCard: View {
                     Text(doc.number).font(.system(size: 10, design: .monospaced)).foregroundStyle(NX.mutedFg)
                         .lineLimit(1).truncationMode(.middle)
                     Spacer(minLength: 4)
-                    LegalStatusChip(status: doc.status)
+                    // A live request whose earlier number was voided: say so, not a struck "Void" chip
+                    // that reads as a broken request (M-21 / W-D23).
+                    if doc.status == "VOID" {
+                        Text(T("Previous number voided")).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                            .lineLimit(1).fixedSize()
+                    } else {
+                        LegalStatusChip(status: doc.status)
+                    }
                 }
             }
         }

@@ -1031,8 +1031,12 @@ struct APIClient {
     }
 
     func leaderboard() async throws -> [LeaderboardRow] {
-        (try await run(makeRequest("/api/gamification/leaderboard"), decode: LeaderboardResponse.self,
-                       cache: "leaderboard")).rows ?? []
+        try await leaderboardResponse().rows ?? []
+    }
+
+    /// The ranking with what it says about the viewer (`viewer`, nil from older servers).
+    func leaderboardResponse() async throws -> LeaderboardResponse {
+        try await run(makeRequest("/api/gamification/leaderboard"), decode: LeaderboardResponse.self, cache: "leaderboard")
     }
 
     /// A workspace peer's XP ledger for the current period. Peer-scoped by the server — it answers
@@ -3140,7 +3144,10 @@ extension APIClient {
         // That is the edge, not the app, so it is not a server sentence to show verbatim: returning
         // nil lets the status fall through to `unreachableText` like any other edge page.
         if (obj["code"] as? String) == "NEXUS_DOWN" || (obj["down"] as? Bool) == true { return nil }
-        let text = (obj["error"] as? String) ?? (obj["message"] as? String)
+        // Routes that word their refusal in both languages send `errorEn` beside the Indonesian `error`
+        // (REPORT_NOT_OPEN, a night after today): the app's language picks one.
+        let english = AppLanguage.shared.lang != .id ? (obj["errorEn"] as? String) : nil
+        let text = english ?? (obj["error"] as? String) ?? (obj["message"] as? String)
         // Access-level refusals (NEEDS_EDIT_ACCESS / NEEDS_COMMENT_ACCESS / NEEDS_FULL_ACCESS) read as a
         // sentence for a person instead of "Forbidden: you need Can edit access…" (access levels round 2).
         if let readable = AccessRefusal.readable(code: obj["code"] as? String, message: text) { return readable }

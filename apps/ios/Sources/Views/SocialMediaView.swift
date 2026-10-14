@@ -54,6 +54,10 @@ final class SocialMediaStore {
     }
     func hasOwnTarget(_ d: String) -> Bool { current?.dayTargets.contains { $0.date == d } ?? false }
     func monthTarget(_ platformId: String) -> SocialMonthTarget? { current?.targets.first { $0.platformId == platformId } }
+    /// Some day of the month has its own engagement target for this platform.
+    func hasOwnEngagementTarget(_ platformId: String) -> Bool {
+        current?.dayTargets.contains { $0.platformId == platformId && $0.engagementTarget != nil } ?? false
+    }
 
     /// The first load and every quiet reload. A reload that fails leaves what is drawn alone.
     func load() async {
@@ -214,18 +218,31 @@ struct SocialHeader: View {
     @Environment(\.horizontalSizeClass) private var hSize
 
     var body: some View {
+        if hSize == .regular {
+            // Words while they fit on one line, icons when they don't: a portrait iPad wrapped "Report
+            // settings" and "Copy form link" onto two lines (UI tour run 13, I-10).
+            ViewThatFits(in: .horizontal) {
+                row(labelled: true)
+                row(labelled: false)
+            }
+        } else {
+            row(labelled: false)
+        }
+    }
+
+    private func row(labelled: Bool) -> some View {
         let wide = hSize == .regular
-        HStack(spacing: wide ? 10 : 6) {
+        return HStack(spacing: wide ? 10 : 6) {
             monthSwitcher(large: wide)
             Spacer(minLength: 4)
             if store.canManage {
                 Button { store.settingsOpen = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "slider.horizontal.3").font(.system(size: 14, weight: .semibold))
-                        if wide { Text(T("Platforms & targets")).font(NXFont.text(14, .semibold)) }
+                        if labelled { Text(T("Platforms & targets")).font(NXFont.text(14, .semibold)).lineLimit(1).fixedSize() }
                     }
                     .foregroundStyle(NX.foreground)
-                    .padding(.horizontal, wide ? 14 : 0)
+                    .padding(.horizontal, labelled ? 14 : 0)
                     .frame(minWidth: 40, minHeight: 40)
                     .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
@@ -239,10 +256,10 @@ struct SocialHeader: View {
                 Button { store.open(store.today) } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "square.and.pencil").font(.system(size: 14, weight: .bold))
-                        if wide { Text(T("Record today")).font(NXFont.text(14, .semibold)) }
+                        if labelled { Text(T("Record today")).font(NXFont.text(14, .semibold)).lineLimit(1).fixedSize() }
                     }
                     .foregroundStyle(.white)
-                    .padding(.horizontal, wide ? 14 : 0)
+                    .padding(.horizontal, labelled ? 14 : 0)
                     .frame(minWidth: 40, minHeight: 40)
                     .background(NX.violetFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -347,7 +364,8 @@ struct SocialOverviewView: View {
 
     @ViewBuilder private func summary(_ o: SocialOverview) -> some View {
         HStack(spacing: 4) {
-            Text(T("Month to date")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            Text(o.cutoff.map { String(format: T("Month to date · %@"), OutletFormat.monthSpan(store.month, to: $0)) } ?? T("Month to date"))
+                .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             SocialEngagementInfoButton()
             Spacer(minLength: 0)
             if store.targets.allSatisfy({ $0.engagementTarget == nil && $0.postsTarget == nil }) && store.canManage {
@@ -386,10 +404,21 @@ struct SocialOverviewView: View {
             }
             .lineLimit(1).minimumScaleFactor(0.7)
             OutletMeter(pct: p.engagementPct)
-            Text(p.engagementTargetToDate == nil
-                 ? T("No engagement target")
-                 : String(format: T("Target to date · month target %@"), SocialFormat.count(p.engagementTargetMonth)))
-                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            if p.engagementTargetToDate == nil {
+                // No target: the next step, not a dead end (W-B15 / M-15).
+                HStack(spacing: 8) {
+                    Text(T("No engagement target")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    if store.canManage {
+                        Button { store.settingsOpen = true } label: {
+                            Label(T("Set a target"), systemImage: "target").font(NXFont.text(12, .semibold))
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(NX.violetText)
+                    }
+                }
+            } else {
+                Text(monthTargetLine(p)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            }
             if let trend = p.trend, trend.count > 1, trend.contains(where: { $0 > 0 }) {
                 SocialSparkline(values: trend)
                     .frame(height: 36)
@@ -403,6 +432,18 @@ struct SocialOverviewView: View {
                 stat(SocialMetric.shares.label, p.shares)
             }
         }
+    }
+
+    /// The overview's month target is the sum of every day's target. When a day has its own target that sum
+    /// differs from the base target in Platforms & targets, so it says so (F-20 / W-B3).
+    private func monthTargetLine(_ p: SocialPlatformOverview) -> String {
+        let base = store.monthTarget(p.id)?.engagementTarget
+        let month = p.engagementTargetMonth
+        let hasDayTargets = store.hasOwnEngagementTarget(p.id)
+        if let month, hasDayTargets, base?.rounded() != month.rounded() {
+            return String(format: T("Target to date · month target %@ (incl. day targets)"), SocialFormat.count(month))
+        }
+        return String(format: T("Target to date · month target %@"), SocialFormat.count(month))
     }
 
     private func stat(_ label: String, _ value: Double?) -> some View {
@@ -428,7 +469,7 @@ struct SocialOverviewView: View {
                                 Text("(\(pct)%)").font(NXFont.text(13)).foregroundStyle(NX.mutedFg).monospacedDigit()
                             }
                         } else {
-                            Text(String(format: T("%@ posts"), SocialFormat.count(p.posts)))
+                            Text(SocialFormat.posts(p.posts))
                                 .font(NXFont.text(13)).monospacedDigit()
                         }
                     }
@@ -487,7 +528,10 @@ struct SocialCalendarView: View {
             VStack(alignment: .leading, spacing: wide ? 20 : 14) {
                 SocialHeader(store: store)
                 grid
-                Text(T("Each day shows its engagement (likes + comments + shares) across platforms, and the posts published. Tap a day to record it."))
+                OutletCalendarLegend(notes: true)
+                Text(PlatformWording.tapOrClick(
+                    tap: "Each day shows its engagement (likes + comments + shares) across platforms, and the posts published. Tap a day to record it.",
+                    click: "Each day shows its engagement (likes + comments + shares) across platforms, and the posts published. Click a day to record it."))
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }
             .outletPage(wide: wide)
@@ -538,7 +582,7 @@ struct SocialCalendarView: View {
                         .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
                 }
                 if wide, let posts = day?.posts {
-                    Text(posts == 1 ? T("1 post") : String(format: T("%@ posts"), SocialFormat.count(posts)))
+                    Text(SocialFormat.posts(posts))
                         .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -558,7 +602,7 @@ struct SocialCalendarView: View {
     private func cellLabel(_ d: String, day: SocialDay?) -> String {
         var parts = [OutletFormat.dayLong(d, thisYear: store.thisYear)]
         if let e = day?.engagement { parts.append(String(format: T("%@ engagement"), SocialFormat.count(e))) }
-        if let p = day?.posts { parts.append(String(format: T("%@ posts"), SocialFormat.count(p))) }
+        if let p = day?.posts { parts.append(SocialFormat.posts(p)) }
         if day?.hasNotes == true { parts.append(T("Has notes")) }
         if d == store.today { parts.append(T("Today")) }
         return parts.joined(separator: ", ")
@@ -715,7 +759,7 @@ struct SocialDaySheet: View {
                 HStack {
                     Text(m.label).foregroundStyle(NX.foreground)
                     Spacer(minLength: 12)
-                    TextField(editable ? "0" : "—", text: figureBinding(p.id, m))
+                    TextField("—", text: figureBinding(p.id, m))
                         .keyboardType(.numberPad)
                         .multilineTextAlignment(.trailing)
                         .monospacedDigit()
@@ -737,8 +781,12 @@ struct SocialDaySheet: View {
         } footer: {
             if let info, info.engagementTarget != nil || info.postsTarget != nil {
                 let parts = [info.engagementTarget.map { String(format: T("%@ engagement"), SocialFormat.count($0)) },
-                             info.postsTarget.map { String(format: T("%@ posts"), SocialFormat.count($0)) }].compactMap { $0 }
-                Text("\(T("Day target")): \(parts.joined(separator: " · ")) · \(info.ownTarget ? T("Own target") : T("Month's target ÷ days"))")
+                             info.postsTarget.map(SocialFormat.posts)].compactMap { $0 }
+                // The source on its own line, so "÷ days" never wraps alone (F-18).
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(T("Day target")): \(parts.joined(separator: " · "))")
+                    Text(info.ownTarget ? T("Own target") : T("Month's target ÷ days"))
+                }
             }
         }
     }
@@ -998,7 +1046,7 @@ struct SocialSettingsSheet: View {
                 }
                 HStack {
                     Image(systemName: "plus").foregroundStyle(NX.mutedFg)
-                    TextField(T("Add platform, e.g. YouTube"), text: $newName)
+                    TextField(T("Add platform, e.g. LinkedIn"), text: $newName)
                         .onSubmit(add)
                     if !newName.trimmingCharacters(in: .whitespaces).isEmpty {
                         Button(T("Add platform"), action: add).buttonStyle(.borderless)

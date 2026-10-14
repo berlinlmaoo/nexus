@@ -6,6 +6,8 @@ struct LeaderboardView: View {
     @Environment(AppRouter.self) private var router
     @Environment(\.horizontalSizeClass) private var hSize
     @State private var rows: [LeaderboardRow] = []
+    /// The signed-in person is left out of the ranking (BoD / One-Above-All, W-B4); false from older servers.
+    @State private var viewerLeftOut = false
     @State private var loading = true
     @State private var error: String?
     /// When what is on screen was fetched. Non-nil only while showing a cached copy that has not
@@ -93,6 +95,7 @@ struct LeaderboardView: View {
             // skeleton, then refresh underneath.
             if rows.isEmpty, let hit = ResponseCache.decoded("leaderboard", as: LeaderboardResponse.self) {
                 rows = hit.value.rows ?? []
+                viewerLeftOut = hit.value.viewer?.leftOutAsManagement ?? false
                 showingCacheFrom = hit.savedAt
                 loading = false
             }
@@ -121,6 +124,14 @@ struct LeaderboardView: View {
                     Text(T("XP ranking for everyone"))
                         .font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                    // Why the viewer is missing from the list (UI tour run 13, W-B4).
+                    if viewerLeftOut {
+                        Label(T("You're not on this ranking: the BoD is left out, so management doesn't compete with staff."),
+                              systemImage: "info.circle")
+                            .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
 
                     if ranked.count >= 1 {
                         Podium(rows: Array(ranked.prefix(3)), labels: Array(ranks.prefix(3))) { row in
@@ -165,7 +176,9 @@ struct LeaderboardView: View {
     private func load() async {
         error = nil
         do {
-            rows = try await APIClient.shared.leaderboard()
+            let response = try await APIClient.shared.leaderboardResponse()
+            rows = response.rows ?? []
+            viewerLeftOut = response.viewer?.leftOutAsManagement ?? false
             showingCacheFrom = nil
         }
         catch APIError.unauthorized { auth.logout() }
@@ -226,7 +239,7 @@ struct Podium: View {
                             if label(rank) == 1 { Image(systemName: "crown.fill").font(.system(size: 18)).foregroundStyle(crown).offset(y: -avatar/2 - 6) }
                         }
                         Text(row.name ?? "—").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Text(row.totalXp.formatted(.number.locale(AppDateLocale.current))).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                        Text(AppNumber.int(row.totalXp)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     }
                     .contentShape(Rectangle())
                 }
@@ -269,7 +282,7 @@ struct RankRow: View {
                     Text("Level \(row.level)\(row.levelName.map { " · \($0)" } ?? "")").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
                 Spacer()
-                Text(row.totalXp.formatted(.number.locale(AppDateLocale.current)))
+                Text(AppNumber.int(row.totalXp))
                     .font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
             }
             .padding(.horizontal, 14).padding(.vertical, 11)

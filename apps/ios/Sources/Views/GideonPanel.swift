@@ -1408,6 +1408,7 @@ struct AskGideonButton: View {
                 HStack(spacing: 6) {
                     logo(15)
                     Text(T("Ask GIDEON")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                        .lineLimit(1).fixedSize()
                 }
                 .padding(.horizontal, 12).frame(height: 36)
                 .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))

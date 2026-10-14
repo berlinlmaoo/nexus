@@ -462,16 +462,19 @@ struct AttendanceView: View {
     /// Allowances belong to each person and come from the API. When the server doesn't send one,
     /// show a dash rather than a default number: "0/4" for someone whose quota was never set is a
     /// convincing-looking lie.
+    /// A quota of 0 says so in words: "0/0 used" carried no information (UI tour run 13, F-17 / I-24 / M-19).
     private static func quotaValue(_ used: Int?, _ quota: Int?) -> String {
         guard let quota else { return "\u{2014}" }
-        return "\(used ?? 0)/\(quota) used"
+        if quota == 0 && (used ?? 0) == 0 { return T("None this month") }
+        return String(format: T("%@/%@ used"), AppNumber.int(used ?? 0), AppNumber.int(quota))
     }
 
     private var todayStatusValue: String {
         if forcePending { return T("Finish yesterday's attendance") }
         if let s = rec?.status, !s.isEmpty { return Self.humanize(s) }
         if let req = today?.todayRequest, let t = req.type { return "\(Self.humanize(t)) \(Self.humanize(req.status ?? ""))".trimmingCharacters(in: .whitespaces) }
-        return "Ready to check in"
+        // The hero above already says "Ready to check in"; the tile says the state, not the prompt again (F-17).
+        return T("Not checked in yet")
     }
     /// Once checked in this is the office on the record. Before that it used to say "5 active
     /// offices", which is a fact about the company and not about the person holding the phone —
@@ -1435,7 +1438,9 @@ struct FunMetricCard: View {
                     in: RoundedRectangle(cornerRadius: 13, style: .continuous)
                 )
                 .contentTransition(.symbolEffect(.replace))
-            Spacer(minLength: 10)
+                // A fixed gap: a Spacer grew with the card on the Mac and left the icon far above its
+                // label (UI tour run 13, M-19); the spare height now sits under the text.
+                .padding(.bottom, 10)
             // The label first and small, the answer second and large: the eye lands on the number,
             // and the word above it says what the number is about.
             Text(label.uppercased()).font(NXFont.text(10, .bold)).tracking(0.6).foregroundStyle(NX.mutedFg)
@@ -1580,7 +1585,10 @@ struct StreakBoardCard: View {
 
     private let cell: CGFloat = 24
     private let gap: CGFloat = 3
-    private let nameW: CGFloat = 76
+    @Environment(\.horizontalSizeClass) private var hSize
+    /// Wide enough that "Muhammad …" rows can be told apart (UI tour run 13, F-16 / I-24: 76 pt cut every
+    /// name to about ten characters); more on an iPad or Mac, where the board has room.
+    private var nameW: CGFloat { hSize == .regular ? 150 : 104 }
 
     // ProjDate's shared Calendar and DateFormatter cache instead of fresh ones. These are read from
     // `body`, and constructing a DateFormatter there is about the most expensive thing you can do:
@@ -1738,6 +1746,12 @@ struct StreakBoardCard: View {
                     // used to name only the month it ended in.
                     Text(periodLabel)
                         .font(NXFont.text(10)).foregroundStyle(NX.mutedFg.opacity(0.85)).lineLimit(1)
+                    // Who the board covers: a manager's board is their team only, which looked like the
+                    // whole company's had shrunk to one row (UI tour run 13, F-15).
+                    if !canManage && canReview {
+                        Text(T("You and your direct reports"))
+                            .font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    }
                 }
                 Spacer()
                 HStack(spacing: 2) {
@@ -1966,6 +1980,7 @@ struct StreakBoardCard: View {
     static func nameLabel(_ m: Member) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(m.name).font(NXFont.text(11, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+                .minimumScaleFactor(0.85)
             if m.leftAt != nil {
                 Text(LeftTag.label(m.leftAt)).font(NXFont.text(7, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     .accessibilityLabel(LeftTag.accessibilityText(m.leftAt))

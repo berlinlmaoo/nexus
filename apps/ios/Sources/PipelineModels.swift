@@ -843,7 +843,8 @@ enum PipelineFormat {
     }
     private static let fmtID0 = formatter(digits: 0, id: true)
     private static let fmtID1 = formatter(digits: 1, id: true)
-    private static let fmtEN0 = formatter(digits: 0, id: false)
+    // Whole numbers use dot grouping in English too (owner rule, UI tour run 13).
+    private static let fmtEN0 = formatter(digits: 0, id: true)
     private static let fmtEN1 = formatter(digits: 1, id: false)
 
     private static func number(_ v: Double, digits: Int) -> String {
@@ -851,7 +852,7 @@ enum PipelineFormat {
         return f.string(from: NSNumber(value: v)) ?? String(Int(v))
     }
 
-    /// Compact: Rp950Jt / Rp1,2M (Indonesian) or Rp950M / Rp1.2B (English) — the GM's fmtIDR.
+    /// Compact: Rp 950Jt / Rp 1,2M (Indonesian) or Rp 950M / Rp 1.2B (English) — the GM's fmtIDR.
     static func idr(_ n: Double?) -> String {
         guard let n, n.isFinite else { return "–" }
         let abs = Swift.abs(n)
@@ -862,13 +863,13 @@ enum PipelineFormat {
         else if abs >= 1e6 { v = abs / 1e6; s = suffix.1 }
         else if abs >= 1e3 { v = abs / 1e3; s = suffix.2 }
         let digits = (!s.isEmpty && v < 10) ? 1 : 0
-        return "\(n < 0 ? "-" : "")Rp\(number(v, digits: digits))\(s)"
+        return "\(n < 0 ? "\u{2212}" : "")Rp \(number(v, digits: digits))\(s)"
     }
 
-    /// Full: Rp950.000.000.
+    /// Full: Rp 950.000.000.
     static func idrFull(_ n: Double?) -> String {
         guard let n, n.isFinite else { return "–" }
-        return "\(n < 0 ? "-" : "")Rp\(number(Swift.abs(n).rounded(), digits: 0))"
+        return AppNumber.rupiah(Int64(n.rounded()))
     }
 
     /// A plain number as typed into a money field: digits with the language's grouping.

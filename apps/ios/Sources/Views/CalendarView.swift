@@ -986,8 +986,9 @@ struct CalendarView: View {
                 }
             }
         }
-        // The last chip ran into the screen edge cut ("PATS 5", UI tour run 11 IP-11): fade where more lies.
-        .nxEdgeFade()
+        // The last chip ran into the screen edge cut ("PATS 5", UI tour run 11 IP-11): fade where more lies,
+        // wide enough to read as a fade on an iPad (UI tour run 13, I-16).
+        .nxEdgeFade(44)
     }
 
     private func legendChip(_ e: CalLegendEntry, on: Bool) -> some View {

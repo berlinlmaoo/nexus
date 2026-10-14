@@ -57,7 +57,8 @@ enum ProjectKind: String, CaseIterable, Identifiable {
         case .outlet: return "storefront"
         case .content: return "calendar.badge.clock"
         case .pipeline: return "line.3.horizontal.decrease.circle"
-        case .social: return "heart.text.square"
+        // A megaphone, as the web's template card (UI tour run 13, F-07 / I-11).
+        case .social: return "megaphone"
         }
     }
 }

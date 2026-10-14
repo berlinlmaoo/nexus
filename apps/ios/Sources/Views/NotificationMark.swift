@@ -5,9 +5,15 @@ import SwiftUI
 struct NotificationMark {
     let symbol: String
     let color: Color
+    /// An asset glyph instead of the SF symbol (Legal's scales).
+    var asset: String? = nil
+
+    /// Legal requests: the Legal module's scales, never a sender's face (UI tour run 13, W-B10 / F-32).
+    static func isLegal(_ type: String?) -> Bool { (type ?? "").lowercased().hasPrefix("legal") }
 
     static func of(_ type: String?) -> NotificationMark {
         let t = (type ?? "").lowercased()
+        if isLegal(t) { return .init(symbol: "doc.text", color: Color(hex: "#475569"), asset: "LegalScaleGlyph") }
         if t.contains("mention") { return .init(symbol: "at", color: Color(hex: "#0284c7")) }
         if t == "task_assigned" || t == "project_invite" || t == "members_added" {
             return .init(symbol: "person.badge.plus", color: NX.foreground)

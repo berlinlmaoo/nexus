@@ -492,18 +492,31 @@ struct OutletHeader: View {
     @Environment(\.horizontalSizeClass) private var hSize
 
     var body: some View {
+        if hSize == .regular {
+            // Words while they fit on one line, icons when they don't: a portrait iPad wrapped "Report
+            // settings" and "Copy form link" onto two lines (UI tour run 13, I-10).
+            ViewThatFits(in: .horizontal) {
+                row(labelled: true)
+                row(labelled: false)
+            }
+        } else {
+            row(labelled: false)
+        }
+    }
+
+    private func row(labelled: Bool) -> some View {
         let wide = hSize == .regular
-        HStack(spacing: wide ? 10 : 6) {
+        return HStack(spacing: wide ? 10 : 6) {
             OutletMonthSwitcher(store: store, large: wide)
             Spacer(minLength: 4)
             if store.canManageSettings {
                 Button { store.settingsOpen = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "slider.horizontal.3").font(.system(size: 14, weight: .semibold))
-                        if wide { Text(T("Report settings")).font(NXFont.text(14, .semibold)) }
+                        if labelled { Text(T("Report settings")).font(NXFont.text(14, .semibold)).lineLimit(1).fixedSize() }
                     }
                     .foregroundStyle(NX.foreground)
-                    .padding(.horizontal, wide ? 14 : 0)
+                    .padding(.horizontal, labelled ? 14 : 0)
                     .frame(minWidth: 40, minHeight: 40)
                     .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
@@ -516,10 +529,10 @@ struct OutletHeader: View {
             Button { store.copyFormLink() } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "link").font(.system(size: 14, weight: .semibold))
-                    if wide { Text(T("Copy form link")).font(NXFont.text(14, .semibold)) }
+                    if labelled { Text(T("Copy form link")).font(NXFont.text(14, .semibold)).lineLimit(1).fixedSize() }
                 }
                 .foregroundStyle(NX.foreground)
-                .padding(.horizontal, wide ? 14 : 0)
+                .padding(.horizontal, labelled ? 14 : 0)
                 .frame(minWidth: 40, minHeight: 40)
                 .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
@@ -534,10 +547,10 @@ struct OutletHeader: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "plus").font(.system(size: 14, weight: .bold))
-                    if hSize == .regular { Text(T("Add event")).font(NXFont.text(14, .semibold)) }
+                    if labelled { Text(T("Add event")).font(NXFont.text(14, .semibold)).lineLimit(1).fixedSize() }
                 }
                 .foregroundStyle(.white)
-                .padding(.horizontal, hSize == .regular ? 14 : 0)
+                .padding(.horizontal, labelled ? 14 : 0)
                 .frame(minWidth: 40, minHeight: 40)
                 .background(NX.violetFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -582,6 +595,34 @@ struct OutletMonthSwitcher: View {
         .buttonStyle(.plain)
         .hoverEffect(.highlight)
         .accessibilityLabel(label)
+    }
+}
+
+/// What the small markers in a calendar cell mean, with the glyphs the cells draw (W-B11 / F-21):
+/// "◎ Day target · ✎ Note". Outlet cells only mark day targets; Social Media cells mark notes too.
+struct OutletCalendarLegend: View {
+    var notes = false
+    var body: some View {
+        HStack(spacing: 14) {
+            Label(T("Day target"), systemImage: "target")
+                .labelStyle(LegendLabelStyle(tint: NX.violetText))
+            if notes {
+                Label(T("Note"), systemImage: "note.text")
+                    .labelStyle(LegendLabelStyle(tint: NX.mutedFg))
+            }
+        }
+        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+        .accessibilityElement(children: .combine)
+    }
+
+    private struct LegendLabelStyle: LabelStyle {
+        let tint: Color
+        func makeBody(configuration: Configuration) -> some View {
+            HStack(spacing: 4) {
+                configuration.icon.font(.system(size: 11, weight: .semibold)).foregroundStyle(tint)
+                configuration.title
+            }
+        }
     }
 }
 
@@ -977,19 +1018,35 @@ struct OutletEventCard: View {
     let thisYear: String
     /// The outlet's own breakdown (owner, 14 Oct 2026): RSVP, Hosting and Communities come from it.
     var config: OutletReportConfig = .standard
-    /// Drawn in a side panel (the calendar's day beside the month on Mac/iPad): phone-width labels.
-    var narrow = false
+    /// The company's day (WIB, "2026-10-14"): a night after it cannot be reported yet (W-B5).
+    var today: String? = nil
     var onEdit: (() -> Void)? = nil
 
     @Environment(\.horizontalSizeClass) private var hSize
-    private var labelWidth: CGFloat { hSize == .regular && !narrow ? 200 : 132 }
+    private var labelWidth: CGFloat { hSize == .regular ? 200 : 132 }
+    /// A night still to come: its report opens on the night itself.
+    private var future: Bool { today.map { event.date.prefix(10) > $0.prefix(10) } ?? false }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 10) {
                 OutletStatusPill(status: event.status)
                 Spacer(minLength: 0)
-                if let onEdit {
+                if let onEdit, future && event.status != .reported {
+                    Label(T("Reports open on the night itself"), systemImage: "clock")
+                        .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                        .multilineTextAlignment(.trailing)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button(action: onEdit) {
+                        Label(T("Fill report"), systemImage: "square.and.pencil")
+                            .font(NXFont.text(13, .semibold)).foregroundStyle(.white)
+                            .padding(.horizontal, 12).frame(minHeight: 40)
+                            .background(NX.violetFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(true)
+                    .opacity(0.45)
+                } else if let onEdit {
                     let reported = event.status == .reported
                     Button(action: onEdit) {
                         Label(reported ? T("Edit report") : T("Fill report"), systemImage: "square.and.pencil")
@@ -1005,8 +1062,8 @@ struct OutletEventCard: View {
             .padding(.bottom, 6)
             row(form.label("name", "Event name"), Text(event.name).fontWeight(.semibold))
             row(form.label("date", "Day/Date"), Text(OutletFormat.dayLong(event.date, thisYear: thisYear)))
-            row(form.label("sales", "Sales"), Text(OutletFormat.vsTarget(event.sales, event.salesTarget, event.salesPct, money: true)))
-            row(form.label("pax", "Pax"), Text(OutletFormat.vsTarget(event.pax, event.paxTarget, event.paxPct, money: false)))
+            row(form.label("sales", "Sales"), Text(OutletFormat.vsTarget(event.sales, event.salesTarget, event.salesPct, money: true)), number: true)
+            row(form.label("pax", "Pax"), Text(OutletFormat.vsTarget(event.pax, event.paxTarget, event.paxPct, money: false)), number: true)
             total("rsvp", event.rsvpTotal)
             total("hosting", event.hostingTotal)
             communities
@@ -1035,18 +1092,22 @@ struct OutletEventCard: View {
         return nil
     }
 
-    private func row(_ label: String, _ value: Text, strong: Bool = false, indent: Bool = false) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
+    /// One label and its value. `indent` levels move the label in without moving the value, and figures
+    /// (`number`) sit in one right-aligned column, children under their parents (F-22 / W-B13).
+    private func row(_ label: String, _ value: Text, strong: Bool = false, indent: Int = 0, number: Bool = false) -> some View {
+        let inset = CGFloat(indent) * 12
+        return HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(label)
-                .font(strong ? NXFont.text(11, .bold) : NXFont.text(13))
+                .font(NXFont.text(13, strong ? .semibold : .regular))
                 .foregroundStyle(strong ? NX.foreground : NX.mutedFg)
-                .frame(width: labelWidth - (indent ? 12 : 0), alignment: .leading)
+                .frame(width: labelWidth - inset, alignment: .leading)
             value.font(NXFont.text(13, strong ? .semibold : .regular)).foregroundStyle(NX.foreground)
                 .monospacedDigit()
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .multilineTextAlignment(number ? .trailing : .leading)
+                .frame(maxWidth: .infinity, alignment: number ? .trailing : .leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.leading, indent ? 12 : 0)
+        .padding(.leading, inset)
         .padding(.vertical, 5)
         .accessibilityElement(children: .combine)
     }
@@ -1061,11 +1122,12 @@ struct OutletEventCard: View {
     }
 
     @ViewBuilder private func total(_ key: String, _ value: Int64?) -> some View {
-        let title = form.section(key)?.title.text ?? (key == "rsvp" ? "RSVP – TOTAL" : "HOSTING – TOTAL")
+        // "RSVP total", sentence case like "Communities total" (W-B13; the form's title said "RSVP – TOTAL").
+        let title = key == "rsvp" ? T("RSVP total") : T("Hosting total")
         Divider().overlay(NX.border).padding(.vertical, 4)
-        row(title, Text(OutletFormat.count(value)), strong: true)
+        row(title, Text(OutletFormat.count(value)), strong: true, number: true)
         ForEach(shown(key == "rsvp" ? config.rsvp : config.hosting), id: \.rowId) { i in
-            row(itemLabel(i.label, archived: i.archived), Text(OutletFormat.count(event.values[i.id])), indent: true)
+            row(itemLabel(i.label, archived: i.archived), Text(OutletFormat.count(event.values[i.id])), indent: 1, number: true)
         }
     }
 
@@ -1074,16 +1136,15 @@ struct OutletEventCard: View {
         let list = config.communities.filter { !$0.archived || event.communityTotals[$0.id] != nil }
         if !list.isEmpty {
             Divider().overlay(NX.border).padding(.vertical, 4)
-            row(T("Communities – TOTAL"), Text(OutletFormat.count(event.communityTotal)), strong: true)
+            row(T("Communities total"), Text(OutletFormat.count(event.communityTotal)), strong: true, number: true)
             ForEach(list, id: \.rowId) { c in
-                row(itemLabel(c.name, archived: c.archived), Text(OutletFormat.count(event.communityTotals[c.id])), indent: true)
+                row(itemLabel(c.name, archived: c.archived), Text(OutletFormat.count(event.communityTotals[c.id])), indent: 1, number: true)
                 if c.isBreakdown {
                     ForEach(shown(c.items), id: \.rowId) { i in
-                        row(itemLabel(i.label, archived: i.archived), Text(OutletFormat.count(event.values[i.id])), indent: true)
-                            .padding(.leading, 12)
+                        row(itemLabel(i.label, archived: i.archived), Text(OutletFormat.count(event.values[i.id])), indent: 2, number: true)
                     }
                     if let own = event.values[c.id] {
-                        row(T("Total only"), Text(OutletFormat.count(own)), indent: true).padding(.leading, 12)
+                        row(T("Total only"), Text(OutletFormat.count(own)), indent: 2, number: true)
                     }
                 }
             }
@@ -1097,7 +1158,7 @@ struct OutletEventCard: View {
                 .padding(.vertical, 5)
             ForEach(s.fields, id: \.key) { f in
                 let answer = event.texts[f.key] ?? ""
-                row(f.label.text, answer.isEmpty ? Text(T("Not filled")).foregroundColor(NX.mutedFg) : Text(answer), indent: true)
+                row(f.label.text, answer.isEmpty ? Text(T("Not filled")).foregroundColor(NX.mutedFg) : Text(answer), indent: 1)
             }
         }
     }
@@ -1119,7 +1180,7 @@ struct OutletEventSheet: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text(T("The night's report, as the team filled it."))
                                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                            OutletEventCard(event: e, form: store.form, thisYear: store.thisYear, config: store.config) { onEdit(e.id) }
+                            OutletEventCard(event: e, form: store.form, thisYear: store.thisYear, config: store.config, today: store.today) { onEdit(e.id) }
                         }
                         .padding(16)
                         .frame(maxWidth: 720, alignment: .leading)

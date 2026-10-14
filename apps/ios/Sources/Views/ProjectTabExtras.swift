@@ -81,6 +81,10 @@ struct ProjectTableTab: View {
     @State private var draftLane: String?
     @State private var draftTitle = ""
     @FocusState private var draftFocused: Bool
+    /// How far the columns are scrolled sideways: the Name column and the group titles move back by it,
+    /// so they stay at the leading edge (UI tour run 13, F-05 / I-7 / M-6: scrolled right, the rows had no
+    /// name and the group headers were blank bands). iOS 18+; earlier systems scroll the column away.
+    @State private var stickyX: CGFloat = 0
 
     private var compact: Bool { hSize != .regular }
     /// Date fields that hold names ("Request by" from a Notion import): a person icon, not a calendar.
@@ -110,7 +114,7 @@ struct ProjectTableTab: View {
     private func grid(_ cols: TableColumns, visibleWidth: CGFloat) -> some View {
         ScrollView(.horizontal, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 0) {
-                TableHeaderRow(cols: cols, fields: fields, nameFields: nameFields)
+                TableHeaderRow(cols: cols, fields: fields, nameFields: nameFields, stickyX: stickyX)
                 ScrollView(.vertical, showsIndicators: true) {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(lanes) { lane in group(lane, cols) }
@@ -121,6 +125,7 @@ struct ProjectTableTab: View {
             .frame(width: cols.total)
             .frame(maxHeight: .infinity, alignment: .top)
         }
+        .modifier(HorizontalOffsetTracker(offsetX: $stickyX))
         .background(NX.card)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         // More columns to the right: the edge fades instead of cutting a label clean (UI tour run 9, I5).
@@ -153,6 +158,7 @@ struct ProjectTableTab: View {
                         Text(String(format: T("Show %d more"), more))
                             .font(NXFont.text(14, .medium)).foregroundStyle(NX.mutedFg)
                             .padding(.horizontal, 14)
+                            .offset(x: stickyX)
                             .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
                             .contentShape(Rectangle())
                     }
@@ -188,10 +194,11 @@ struct ProjectTableTab: View {
                 } else {
                     Text(lane.name).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                 }
-                Text("\(count)").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).monospacedDigit()
+                Text(AppNumber.int(count)).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).monospacedDigit()
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 12)
+            .offset(x: stickyX)
             .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
             .contentShape(Rectangle())
         }
@@ -207,7 +214,7 @@ struct ProjectTableTab: View {
             ? allLanes.first { $0.id == laneId }.map { RowStatus(name: $0.name, colorKey: $0.colorKey) }
             : nil
         return ProjectTableRow(
-            task: t, laneId: laneId, cols: cols, fields: fields,
+            task: t, laneId: laneId, cols: cols, fields: fields, stickyX: stickyX,
             status: laneStatus ?? RowStatus.plain(t), statusOptions: statusOptions,
             allLanes: allLanes, members: members, selection: selection, order: order,
             onOpen: onOpen, onDrop: onDrop, onMoveTo: onMoveTo, onSetStatus: onSetStatus,
@@ -233,6 +240,7 @@ struct ProjectTableTab: View {
             }
             .padding(.horizontal, 14)
             .frame(maxWidth: 640, minHeight: 42, alignment: .leading)
+            .offset(x: stickyX)
             .frame(maxWidth: .infinity, alignment: .leading)
             .overlay(alignment: .bottom) { TableHairline() }
         } else {
@@ -247,6 +255,7 @@ struct ProjectTableTab: View {
                 }
                 .foregroundStyle(NX.mutedFg)
                 .padding(.horizontal, 14)
+                .offset(x: stickyX)
                 .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
                 .contentShape(Rectangle())
             }
@@ -267,6 +276,29 @@ struct ProjectTableTab: View {
     }
 }
 
+/// Reports a horizontal ScrollView's offset, never below 0 (iOS 18; a no-op before).
+struct HorizontalOffsetTracker: ViewModifier {
+    @Binding var offsetX: CGFloat
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: CGFloat.self) { max(0, $0.contentOffset.x) } action: { _, x in
+                if abs(x - offsetX) > 0.5 { offsetX = x }
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/// The frozen Name column's edge while the other columns scroll under it.
+struct StickyColumnEdge: View {
+    let active: Bool
+    var body: some View {
+        Rectangle().fill(NX.border).frame(width: 1)
+            .shadow(color: .black.opacity(active ? 0.08 : 0), radius: 3, x: 2)
+    }
+}
+
 /// The Table's 1pt grid line under a row.
 struct TableHairline: View {
     var body: some View { Rectangle().fill(NX.border).frame(height: 1) }
@@ -278,10 +310,16 @@ struct TableHeaderRow: View {
     let fields: [CustomField]
     /// Date fields holding names (cfFieldHoldsNames).
     var nameFields: Set<String> = []
+    /// The horizontal scroll: the Name header stays at the leading edge.
+    var stickyX: CGFloat = 0
 
     var body: some View {
         HStack(spacing: 0) {
             cell(T("Name"), icon: "textformat", width: cols.name, first: true)
+                .background(NX.card)
+                .overlay(alignment: .trailing) { StickyColumnEdge(active: stickyX > 0) }
+                .offset(x: stickyX)
+                .zIndex(1)
             cell(T("Assignee"), icon: "person", width: cols.col)
             cell(T("Due date"), icon: "calendar", width: cols.col)
             // The project's fields come right after the dates, as on the web's table (Harga, Request by,
@@ -292,7 +330,7 @@ struct TableHeaderRow: View {
             }
             cell(T("Priority"), icon: "flag", width: cols.col)
             cell(T("Status"), icon: "rectangle.split.3x1", width: cols.col)
-            Color.clear.frame(width: cols.open, height: 40)
+            Color.clear.frame(width: cols.open, height: 44)
                 .overlay(alignment: .leading) { Rectangle().fill(NX.border).frame(width: 1) }
         }
         .background(NX.card)
@@ -302,11 +340,13 @@ struct TableHeaderRow: View {
     private func cell(_ title: String, icon: String, width: CGFloat, first: Bool = false) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon).font(.system(size: 12))
-            Text(title).font(NXFont.text(13)).lineLimit(1).truncationMode(.tail)
+            // Two lines before an ellipsis: "Tanggal Penggunaan" was cut to "Tanggal P…" (F-06).
+            Text(title).font(NXFont.text(13)).lineLimit(2).truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .foregroundStyle(NX.mutedFg)
         .padding(.horizontal, 12)
-        .frame(width: width, height: 40, alignment: .leading)
+        .frame(width: width, height: 44, alignment: .leading)
         .clipped()
         .overlay(alignment: .leading) { if !first { Rectangle().fill(NX.border).frame(width: 1) } }
         // A long name is cut ("Tanggal Peng…"): the pointer shows it whole (UI tour run 11, MC-10).
@@ -336,6 +376,8 @@ struct ProjectTableRow: View {
     let laneId: String
     let cols: TableColumns
     let fields: [CustomField]
+    /// The horizontal scroll: the name cell stays at the leading edge (F-05).
+    var stickyX: CGFloat = 0
     let status: RowStatus
     let statusOptions: Bool
     let allLanes: [ProjectDetail.Lane]
@@ -356,6 +398,15 @@ struct ProjectTableRow: View {
     var body: some View {
         HStack(spacing: 0) {
             nameCell
+                .background {
+                    ZStack {
+                        NX.card
+                        if selecting && selected { NX.violet.opacity(0.10) }
+                    }
+                }
+                .overlay(alignment: .trailing) { StickyColumnEdge(active: stickyX > 0) }
+                .offset(x: stickyX)
+                .zIndex(1)
             assigneeCell.modifier(TableCell(width: cols.col, height: rowH))
             dueCell.modifier(TableCell(width: cols.col, height: rowH))
             ForEach(fields) { f in

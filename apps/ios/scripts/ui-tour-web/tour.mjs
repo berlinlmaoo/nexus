@@ -146,6 +146,8 @@ async function dismissAttendanceReminder(page) {
 }
 
 const MAX_PAGES = Number(process.env.TOUR_MAX_PAGES) || 6;
+/** The least a scroll step must move (fraction of the viewport) to be worth a page of its own. */
+const MIN_PAGE_STEP = Number(process.env.TOUR_MIN_PAGE_STEP) || 0.5;
 
 /**
  * The screenshot(s) of one screen: `<id>.png`, then `<id>-2.png` … like the app tour (TOUR_MAX_PAGES, default 6).
@@ -194,7 +196,8 @@ async function capture(page, dir, id) {
       return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.display !== "none";
     });
     const overlay = overlays[overlays.length - 1] ?? null;
-    let moved = false;
+    // How far the furthest-moving scroller went, as a fraction of its own height.
+    let moved = 0;
     for (const [s, bottom] of end) {
       if (overlay && (s === doc || !overlay.contains(s))) continue;
       const height = s === doc ? vh : s.clientHeight;
@@ -210,13 +213,15 @@ async function capture(page, dir, id) {
       const before = s.scrollTop;
       if (before >= limit) continue;
       s.scrollTop = Math.min(limit, before + Math.round(height * 0.85));
-      if (s.scrollTop > before + 1) moved = true;
+      if (s.scrollTop > before + 1) moved = Math.max(moved, (s.scrollTop - before) / height);
     }
     return moved;
-  }).catch(() => false);
+  }).catch(() => 0);
   await shot(1);
   let pages = 1;
-  while (pages < MAX_PAGES && (await step())) {
+  // A step that moved less than half a viewport shows mostly the previous page again (UI tour run 13, W-M24:
+  // dashboard-3 and projects-2 were 50-77 px further down): no page for it, and the paging ends there.
+  while (pages < MAX_PAGES && (await step()) >= MIN_PAGE_STEP) {
     await page.waitForTimeout(700);
     pages += 1;
     await shot(pages);
@@ -580,6 +585,7 @@ async function main() {
           const errors = [];
           page.on("pageerror", (e) => errors.push(String(e).slice(0, 300)));
           for (const s of list) {
+            if (s.webVariants && !s.webVariants.includes(name)) continue;
             const started = Date.now();
             errors.length = 0;
             let status = "ok";
@@ -612,6 +618,11 @@ async function main() {
               status = `no screenshot: ${e.message}`;
             }
             const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth).catch(() => null);
+            // Undo what the screen changed for the ones after it (the collapsed sidebar is kept in a cookie).
+            if (s.webAfterTaps?.length) {
+              const problem = await pressSteps(page, s.webAfterTaps).catch((e) => String(e.message || e));
+              if (problem) console.log(`${variant.dir} ${s.id}: after-steps: ${problem}`);
+            }
             results.push({ variant: variant.dir, id: s.id, status, pages, seconds: (Date.now() - started) / 1000, horizontalOverflowPx: overflow, pageErrors: [...errors] });
             console.log(`${variant.dir} ${s.id}: ${status}`);
           }

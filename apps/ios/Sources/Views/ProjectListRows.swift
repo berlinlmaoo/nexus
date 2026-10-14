@@ -139,15 +139,29 @@ struct ListPropLine: View {
     /// left out for every row alike: those blanks pushed the date and Kategori columns off the Mac row
     /// (UI tour run 12, MC2).
     private func columns(_ layout: ListColumns.Layout) -> some View {
-        HStack(spacing: 12) {
+        let repeated = repeatedDateFields(layout)
+        return HStack(spacing: 12) {
             ForEach(layout.fields, id: \.id) { field in
-                ListSlot(width: field.width) { fieldSlot(field.id) }
+                ListSlot(width: field.width) { if !repeated.contains(field.id) { fieldSlot(field.id) } }
             }
             if layout.due { ListSlot(width: ListColumns.dueW) { dueSlot } }
             if layout.priority { ListSlot(width: ListColumns.priorityW) { prioritySlot } }
             if layout.status { ListSlot(width: ListColumns.statusW) { statusSlot } }
             if layout.people { ListSlot(width: ListColumns.peopleW, alignment: .trailing) { people } }
         }
+    }
+
+    /// Date columns that would repeat a day this row already shows (the due date, or an earlier date
+    /// column): left blank, so "24 May 24 May ⏱ 26 May" reads "24 May ⏱ 26 May" (UI tour run 13, M-5).
+    private func repeatedDateFields(_ layout: ListColumns.Layout) -> Set<String> {
+        var seen = Set(dueDay.map { [ProjDate.dayLabel($0)] } ?? [])
+        var out = Set<String>()
+        for field in layout.fields {
+            guard let cfv = (task.customFieldValues ?? []).first(where: { $0.customFieldId == field.id }),
+                  let chip = customFieldChip(cfv), chip.isDate else { continue }
+            if !seen.insert(chip.label).inserted { out.insert(field.id) }
+        }
+        return out
     }
 
     @ViewBuilder private func fieldSlot(_ id: String) -> some View {
@@ -298,7 +312,7 @@ struct ListTaskRow: View {
     private func wideRow(_ layout: ListColumns.Layout) -> some View {
         HStack(spacing: 10) {
             leading
-            titleLine.frame(minWidth: 200, idealWidth: 200, maxWidth: .infinity, alignment: .leading)
+            titleLine.frame(minWidth: 180, idealWidth: 180, maxWidth: .infinity, alignment: .leading)
             ListPropLine(task: task, status: status, columnLayout: layout, hidePriority: hidePriority)
         }
     }
@@ -353,17 +367,23 @@ enum ListColumns {
 
     /// The columns of one List, the same for every row.
     struct Layout: Equatable {
-        struct Field: Equatable { let id: String; let width: CGFloat }
+        /// `keep`: an option field (Kategori), the column a narrow window gives up last.
+        struct Field: Equatable { let id: String; let width: CGFloat; var keep = false }
         var fields: [Field] = []
         var due = true
         var priority = true
         var status = true
         var people = true
 
-        /// The same layout with the last `n` field columns left out (a narrow window).
+        /// The same layout with `n` field columns left out (a narrow window): plain values from the end
+        /// first, option fields (Kategori) last. Kategori went first before, so a Mac List never showed it
+        /// (UI tour run 13, M-1 / I-6).
         func droppingFields(_ n: Int) -> Layout {
             var copy = self
-            copy.fields = Array(fields.dropLast(n))
+            var drop = Set<String>()
+            let order = fields.filter { !$0.keep }.reversed() + fields.filter(\.keep).reversed()
+            for f in order.prefix(n) { drop.insert(f.id) }
+            copy.fields = fields.filter { !drop.contains($0.id) }
             return copy
         }
     }
@@ -380,7 +400,11 @@ enum ListColumns {
         }
         // The project's order when the fields are known; else the order they first appear in.
         let ordered = fields.isEmpty ? seen : fields.map(\.id).filter { used.contains($0) }
-        return Array(ordered.prefix(max))
+        guard ordered.count > max else { return ordered }
+        // More than fit: option fields (Kategori) first in line, still drawn in the project's order.
+        let options = Set(fields.filter { ["SELECT", "MULTI_SELECT", "STATUS"].contains($0.type.uppercased()) }.map(\.id))
+        let picked = Set((ordered.filter { options.contains($0) } + ordered.filter { !options.contains($0) }).prefix(max))
+        return ordered.filter { picked.contains($0) }
     }
 
     /// The layout a List draws. `statusShown` / `priorityShown`: whether any row carries that chip (a List
@@ -390,7 +414,8 @@ enum ListColumns {
         let tasks = lanes.flatMap { $0.tasks ?? [] }
         let types = Dictionary(fields.map { ($0.id, $0.type.uppercased()) }, uniquingKeysWith: { a, _ in a })
         let cols = fieldIds(fields: fields, lanes: lanes).map { id in
-            Layout.Field(id: id, width: types[id] == "DATE" ? dateFieldW : fieldW)
+            Layout.Field(id: id, width: types[id] == "DATE" ? dateFieldW : fieldW,
+                         keep: ["SELECT", "MULTI_SELECT", "STATUS"].contains(types[id] ?? ""))
         }
         return Layout(
             fields: cols,
@@ -434,7 +459,7 @@ struct ProjectHeaderButton: View {
         if labelled {
             HStack(spacing: 6) {
                 Image(systemName: icon).font(.system(size: 13, weight: .semibold))
-                Text(title).font(NXFont.text(14, .semibold)).lineLimit(1)
+                Text(title).font(NXFont.text(14, .semibold)).lineLimit(1).fixedSize()
             }
             .padding(.horizontal, 12).frame(height: 36)
         } else {

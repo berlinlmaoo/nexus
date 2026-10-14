@@ -319,7 +319,7 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             Button(role: .destructive) { if !auth.signOutIfAllowed() { signOutBlocked = true } } label: {
                 HStack {
-                    Label(T("Logout"), systemImage: "rectangle.portrait.and.arrow.right")
+                    Label(T("Log out"), systemImage: "rectangle.portrait.and.arrow.right")
                         .font(NXFont.text(15, .semibold)).foregroundStyle(NX.danger)
                     Spacer()
                 }
@@ -484,12 +484,12 @@ struct SettingsView: View {
         NXCard(padding: 20) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(T("Logout")).font(NXFont.text(16, .semibold)).foregroundStyle(NX.foreground)
+                    Text(T("Log out")).font(NXFont.text(16, .semibold)).foregroundStyle(NX.foreground)
                     Text(T("Sign out of NEXUS on this device.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer(minLength: 8)
                 Button { if !auth.signOutIfAllowed() { signOutBlocked = true } } label: {
-                    Label(T("Logout"), systemImage: "rectangle.portrait.and.arrow.right").foregroundStyle(NX.danger)
+                    Label(T("Log out"), systemImage: "rectangle.portrait.and.arrow.right").foregroundStyle(NX.danger)
                 }
                 .buttonStyle(.nxBordered)
             }
@@ -697,11 +697,11 @@ private struct WebEmailField: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            // Shrinks, then wraps, before it cuts: "qa5...invalid" told nobody which address it was
-            // (UI tour run 9, P9).
+            // Wraps before it cuts: "qa5...invalid" told nobody which address it was (UI tour run 9, P9).
+            // It no longer shrinks: a smaller font than Full name beside it looked broken (run 13, I-23).
             Text(email.isEmpty ? "—" : email)
                 .font(NXFont.text(15)).foregroundStyle(NX.mutedFg)
-                .lineLimit(2).minimumScaleFactor(0.75).truncationMode(.middle)
+                .lineLimit(2).truncationMode(.middle)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 12).padding(.vertical, 6)
                 .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)

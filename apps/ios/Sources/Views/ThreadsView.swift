@@ -267,7 +267,7 @@ struct ThreadsView: View {
                 .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
-                .frame(maxWidth: isRoot ? 720 : .infinity)
+                .frame(maxWidth: isRoot ? 900 : .infinity)   // wider on a Mac window (M-26: 720 left a quarter empty)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, NXSidebarPage.gutter(isRoot))
                 .padding(.vertical, isRoot ? 24 : 16)
@@ -395,14 +395,15 @@ struct ThreadsView: View {
         picking = []
     }
 
-    /// Web timeAgo: "just now", "5m", "3h", "5d", then the date ("30 Jun").
+    /// "now", "5m ago", "3h ago", "6d ago", then the date ("30 Jun"): a relative time reads as one next to
+    /// a date (UI tour run 13, F-36 / W-B9: "6d" beside "30 Jun").
     private static func timeAgo(_ iso: String) -> String? {
         guard let d = ProjDate.parse(iso) else { return nil }
         let secs = Int(Date().timeIntervalSince(d))
-        if secs < 45 { return T("just now") }
-        let m = secs / 60; if m < 60 { return String(format: T("%dm"), m) }
-        let h = m / 60; if h < 24 { return String(format: T("%dh"), h) }
-        let days = h / 24; if days < 7 { return String(format: T("%dd"), days) }
+        if secs < 60 { return T("now") }
+        let m = secs / 60; if m < 60 { return String(format: T("%dm ago"), m) }
+        let h = m / 60; if h < 24 { return String(format: T("%dh ago"), h) }
+        let days = h / 24; if days < 7 { return String(format: T("%dd ago"), days) }
         return ProjDate.dayLabel(d)
     }
 
