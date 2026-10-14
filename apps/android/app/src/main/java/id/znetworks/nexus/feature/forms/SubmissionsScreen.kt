@@ -86,15 +86,24 @@ private fun formsApi(): FormsApi {
  * after one of ours for what nobody processed yet; each card shows the item's own title, not the form's.
  */
 @Composable
-fun SubmissionsScreen(onBack: () -> Unit, onOpen: (String) -> Unit, onOpenForms: () -> Unit = {}) {
+fun SubmissionsScreen(onBack: () -> Unit, onOpen: (String) -> Unit, onOpenForms: () -> Unit = {}, onOpenLegal: (String) -> Unit = {}) {
     val api = formsApi()
+    val legalApi = id.znetworks.nexus.feature.legal.rememberLegalApi()
     val c = Nx.colors
     val res = LocalContext.current.resources
     var data by remember { mutableStateOf<Submissions?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var tick by remember { mutableStateOf(0) }
+    // My Legal requests (owner, 14 Oct 2026) sit above the board; a failure there never hides the board.
+    var legal by remember { mutableStateOf<List<id.znetworks.nexus.feature.legal.LgMyRequest>>(emptyList()) }
     LaunchedEffect(tick) {
         try { data = api.mySubmissions().value; error = null } catch (e: ApiError) { error = e.describe(res) }
+        runCatching { legal = legalApi.myRequests() }
+    }
+    // Live: the server pings my room with workspace-changed {kind: "submissions"} when a Legal request moves.
+    id.znetworks.nexus.core.realtime.LiveRefresh(Unit, liveMs = null, fallbackMs = 60_000,
+        matches = { it.name == id.znetworks.nexus.core.realtime.RealtimeEvents.WORKSPACE_CHANGED && it.kind == "submissions" }) {
+        runCatching { legal = legalApi.myRequests() }
     }
     Column(Modifier.fillMaxSize().background(c.background)) {
         id.znetworks.nexus.ui.components.PageHeader(stringResource(R.string.mt_submissions), subtitle = stringResource(R.string.sub_submissions), onBack = onBack)
@@ -102,9 +111,13 @@ fun SubmissionsScreen(onBack: () -> Unit, onOpen: (String) -> Unit, onOpenForms:
         when {
             d == null && error == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             d == null -> EmptyState(Icons.Filled.Assignment, stringResource(R.string.form_load_failed), error!!, stringResource(R.string.try_again), { tick++ }, Modifier.fillMaxSize())
-            d.submissions.isEmpty() -> EmptyState(Icons.Filled.Inbox, stringResource(R.string.sub_empty_title), stringResource(R.string.sub_empty_body),
+            // The empty state only when both lists are empty.
+            d.submissions.isEmpty() && legal.isEmpty() -> EmptyState(Icons.Filled.Inbox, stringResource(R.string.sub_empty_title), stringResource(R.string.sub_empty_body),
                 stringResource(R.string.sub_open_forms), onOpenForms, Modifier.fillMaxSize())
-            else -> SubmissionBoardView(d, onOpen)
+            else -> Column(Modifier.fillMaxSize()) {
+                if (legal.isNotEmpty()) id.znetworks.nexus.feature.legal.MyLegalRequestsStrip(legal, onOpenLegal)
+                if (d.submissions.isNotEmpty()) SubmissionBoardView(d, onOpen)
+            }
         }
     }
 }
