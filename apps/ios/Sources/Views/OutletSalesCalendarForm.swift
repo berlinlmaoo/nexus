@@ -492,7 +492,8 @@ struct OutletReportFormView: View {
     }
 
     private func sectionTitle(_ s: OutletFormSection) -> String {
-        let title = s.title.text
+        // The server still titles the totals "RSVP – TOTAL"; the app says "RSVP total" as the web does.
+        let title = s.key == "rsvp" ? T("RSVP total") : s.key == "hosting" ? T("Hosting total") : s.title.text
         guard s.total != nil else { return title.uppercased() }
         return "\(title): \(OutletFormat.count(draft.total(of: s.fields)))"
     }

@@ -117,7 +117,18 @@ struct LeaderboardRow: Decodable, Identifiable, Sendable {
     var id: String { userId }
     var initial: String { String((name ?? "?").first ?? "?").uppercased() }
 }
-struct LeaderboardResponse: Decodable, Sendable { let rows: [LeaderboardRow]? }
+struct LeaderboardResponse: Decodable, Sendable {
+    let rows: [LeaderboardRow]?
+    /// Whether the signed-in person is on this ranking (servers since 14 Oct 2026; nil before). The BoD
+    /// and One-Above-All are left out by rule: reason "MANAGEMENT".
+    let viewer: LeaderboardViewer?
+}
+struct LeaderboardViewer: Decodable, Sendable {
+    let ranked: Bool?
+    let reason: String?
+    /// Left out because management doesn't compete with staff.
+    var leftOutAsManagement: Bool { ranked == false && reason == "MANAGEMENT" }
+}
 
 /// One movement in somebody's XP ledger (GET /api/gamification/xp-log?userId=).
 ///

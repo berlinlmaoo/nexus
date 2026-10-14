@@ -42,5 +42,7 @@ extension AppLanguage {
         "%dd ago": "%d hr lalu",
         // Form builder (I-12)
         "Tap a question to change its type, make it required, add logic or choose where its answer goes.": "Ketuk pertanyaan untuk mengganti jenisnya, menjadikannya wajib, menambah logika, atau memilih ke mana jawabannya masuk.",
+        // Leaderboard: the viewer left out of the ranking (W-B4)
+        "You're not on this ranking: the BoD is left out, so management doesn't compete with staff.": "Kamu tidak masuk peringkat ini: BoD tidak diikutkan agar manajemen tidak bersaing dengan staf.",
     ]
 }
