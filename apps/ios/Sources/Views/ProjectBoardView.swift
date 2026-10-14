@@ -733,7 +733,11 @@ struct ProjectDetailView: View {
                     }
                 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { tabsWidth = $0 }
+                .scrollTargetLayout()
             }
+            // A swipe comes to rest with a whole tab at the leading edge, never "tegori" / "3oard" (UI tour run
+            // 14, N-09 / P-I11); the trailing edge fades over whatever lies beyond.
+            .scrollTargetBehavior(.viewAligned)
             .modifier(NXTabRowScroller(activeId: activeTabItemId, itemIds: chipItems.map(\.id), proxy: proxy,
                                        overflowing: $tabsOverflow, contentWidth: tabsWidth))
             }
@@ -865,7 +869,11 @@ struct ProjectDetailView: View {
                     }
                 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { tabsWidth = $0 }
+                .scrollTargetLayout()
             }
+            // A swipe comes to rest with a whole tab at the leading edge, never "tegori" / "3oard" (UI tour run
+            // 14, N-09 / P-I11); the trailing edge fades over whatever lies beyond.
+            .scrollTargetBehavior(.viewAligned)
             .modifier(NXTabRowScroller(activeId: activeTabItemId, itemIds: wideMenuItems.map(\.id), proxy: proxy,
                                        overflowing: $tabsOverflow, contentWidth: tabsWidth))
             }

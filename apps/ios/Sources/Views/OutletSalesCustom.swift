@@ -433,6 +433,8 @@ struct OutletReportSettingsView: View {
         // One even gap between the item cards and the communities (run 14, P-M21: the default spacing
         // left wide, uneven bands on a Mac).
         .listSectionSpacing(.compact)
+        // The intro sits right under the bar, not below an empty band (run 14, P-M21).
+        .contentMargins(.top, 8, for: .scrollContent)
         // The sheet goes on below its edge (Communities): the indicator shows once (I-5), and on an iPad /
         // Mac the sheet is page sized (see `tallSheet`), so Communities start inside the first screen.
         .scrollIndicatorsFlash(onAppear: true)

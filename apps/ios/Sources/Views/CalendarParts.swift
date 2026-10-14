@@ -1104,8 +1104,11 @@ struct CalItemRow: View {
                 }
             }
             if !others.isEmpty {
+                // Every name in full: cut at two lines the overdue card read "…WILLIAM ERSAN (Multimedia),
+                // Moha…" (UI tour run 14, P-M8).
                 Text(here.isEmpty ? othersText : "\(T("with")) \(othersText)")
-                    .font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg).lineLimit(2)
+                    .font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

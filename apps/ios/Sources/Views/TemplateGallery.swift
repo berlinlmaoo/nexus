@@ -31,6 +31,7 @@ extension ProjectKind {
 
 struct TemplateGallery: View {
     let onPick: (GalleryPick) -> Void
+    @Environment(\.horizontalSizeClass) private var hSize
     @State private var viewer = Viewer.shared
     @State private var templates: [ProjectTemplate] = []
     @State private var loading = true
@@ -78,6 +79,13 @@ struct TemplateGallery: View {
         }
     }
 
+    /// Three across on an iPad / Mac (the sheet is page sized there), as the web; as many as fit on a phone.
+    private var gridColumns: [GridItem] {
+        hSize == .regular
+            ? Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: 3)
+            : [GridItem(.adaptive(minimum: 200), spacing: 10, alignment: .top)]
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
@@ -89,7 +97,7 @@ struct TemplateGallery: View {
                 categoryChips
                 // Three across where the sheet allows, as the web: at 250 pt a Mac sheet held two, with an
                 // empty slot beside the last card (UI tour run 13 M-8, run 14 P-M18).
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 10)], spacing: 10) {
+                LazyVGrid(columns: gridColumns, spacing: 10) {
                     if showBlank {
                         Button { onPick(.blank) } label: {
                             GalleryCard(glyph: Image(systemName: "plus"), tint: NX.violet, title: T("Blank project"),

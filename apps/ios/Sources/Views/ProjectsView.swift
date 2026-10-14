@@ -1221,6 +1221,9 @@ struct CreateProjectSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
         }
+        // Page sized on an iPad / Mac, so the gallery has room for three cards across like the web
+        // (UI tour run 13 M-8, run 14 P-M18: the form sheet held two, with an empty slot).
+        .tallSheet()
     }
 
     private func field<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
