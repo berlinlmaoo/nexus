@@ -943,7 +943,9 @@ struct SidebarCountBadge: View {
     var onSelection = false
 
     var body: some View {
-        Text(count > 9 ? "9+" : "\(count)")
+        // The real count up to "99+", like the web sidebar and the bell (UI tour run 15, Q-IB17 / Q-M3: "9+"
+        // beside a page that said 47).
+        Text(count > 99 ? "99+" : AppNumber.int(count))
             .font(NXFont.text(11, .bold)).monospacedDigit()
             .foregroundStyle(warning ? Color.white : (onSelection ? Color.white : NX.foreground))
             .padding(.horizontal, 6).padding(.vertical, 1)

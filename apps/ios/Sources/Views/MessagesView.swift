@@ -65,7 +65,9 @@ struct MessagesView: View {
             }
         }
         .sheet(isPresented: $showNewChat) {
+            // The sheet reads AuthStore: a Mac Catalyst sheet does not inherit it (crash fix dfb02517).
             NewConversationSheet { _ in Task { await load() } }
+                .environment(auth).environment(router)
         }
         .alert(T("That chat isn't in your list"), isPresented: $focusMissing) { Button("OK") {} } message: {
             Text(T("You may have been removed from it, or the list hasn't loaded yet — pull to refresh."))
