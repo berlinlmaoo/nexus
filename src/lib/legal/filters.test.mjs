@@ -136,4 +136,30 @@ test("form values: checked and normalized before anything is allocated", () => {
   assert.equal(F.validateFormValues(fields, { BARANG: [] }).errors.BARANG, "Add at least one row")
 })
 
+test("computed filters: percentages, months, column sums", () => {
+  assert.deepEqual(F.parseTag("A | persen_dari: NILAI_LISENSI | ANGKA"), { name: "A", filters: ["persen_dari:NILAI_LISENSI", "angka"] })
+  assert.deepEqual(F.unknownFilters(["persen:50", "persen:abc", "persen", "persen_dari:X", "persen_dari:1x", "tambah_bulan:6", "tambah_bulan:DURASI", "jumlah:COL", "hari:2"]), ["persen:abc", "persen", "persen_dari:1x", "hari:2"])
+  assert.deepEqual(F.filterFieldRefs(["persen_dari:NILAI_LISENSI", "tambah_bulan:DURASI_BULAN", "tambah_bulan:6", "jumlah:JUMLAH", "persen:50"]), ["NILAI_LISENSI", "DURASI_BULAN"])
+  const look = (v) => (n) => v[n]
+  const r = (filters, raw, type, vals = {}) => F.renderTagValue({ name: "X", filters }, raw, type, look(vals))
+  assert.equal(r(["persen:50"], 12500000, "money"), "6.250.000")
+  assert.equal(r(["persen:50", "terbilang_rupiah"], 12500000, "money"), "Enam Juta Dua Ratus Lima Puluh Ribu Rupiah")
+  assert.equal(r(["persen_dari:L"], 100000000, "money", { L: 600000000 }), "16,67")
+  assert.equal(r(["persen_dari:L"], 300000000, "money", { L: 600000000 }), "50")
+  assert.throws(() => r(["persen_dari:L"], 1, "money", { L: 0 }), F.FilterError)
+  assert.throws(() => r(["persen_dari:L"], 1, "money", {}), F.FilterError)
+  assert.equal(r(["tambah_bulan:D"], "2026-10-14", "date", { D: 6 }), "14 April 2027")
+  assert.equal(r(["tambah_bulan:1", "dmy"], "2026-01-31", "date"), "28-02-2026")
+  assert.equal(r(["tambah_bulan:12"], "2024-02-29", "date"), "28 Februari 2025")
+  assert.equal(r(["jumlah:N"], [{ N: 4 }, { N: "3" }, { N: null }], "list"), "7")
+  assert.equal(r(["jumlah:N"], [], "list"), "0")
+  assert.equal(F.addMonths("2026-11-30", -12), "2025-11-30")
+  assert.equal(F.inferFieldType("TANGGAL_X", ["tambah_bulan:D", "tanggal"]), "date")
+  assert.equal(F.inferFieldType("HONOR", ["persen:50", "terbilang_rupiah"]), "money")
+})
+test("a section on its own field shows only with a value", () => {
+  for (const v of [undefined, null, "", "  ", "-", " – ", "—", false, []]) assert.equal(F.hasPrintableValue(v), false, String(v))
+  for (const v of ["01.234.567.8-901.000", "0", 0, true, [1]]) assert.equal(F.hasPrintableValue(v), true, String(v))
+})
+
 console.log(`legal filters: ${passed} passed`)
