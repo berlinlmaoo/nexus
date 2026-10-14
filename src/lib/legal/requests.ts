@@ -12,7 +12,7 @@ import { linkProblem, redactLinks, type LinkViewer } from "@/lib/legal/links"
 import { deleteLegalFile } from "@/lib/legal/storage"
 import { storeUpload, type StoredUpload } from "@/lib/legal/uploads"
 import {
-  autoColumn, cleanParentNumber, linkPath, PUSHED_STAGES, requestStage, requesterFileVersion, type LinkedDoc, type RequestStage,
+  autoColumn, cleanParentNumber, linkPath, shouldPushStage, requestStage, requesterFileVersion, type LinkedDoc, type RequestStage,
 } from "@/lib/legal/request-rules"
 
 // Legal requests (owner, 14 Oct 2026). Anyone who has a request link (/f/legal-<token>) and signs in can ask
@@ -293,7 +293,7 @@ export async function applyStage(
 ) {
   if (r.stage === stage) return
   await prisma.legalRequest.update({ where: { id: r.id }, data: { stage } })
-  if (r.requesterId && (PUSHED_STAGES as readonly string[]).includes(stage)) {
+  if (r.requesterId && shouldPushStage(r.stage, stage)) {
     await notifyLegalRequestStage({
       requesterId: r.requesterId, requestId: r.id, subject: r.templateName || "Legal",
       stage: stage as "IN_PROGRESS" | "REVISION" | "FINAL" | "SIGNED" | "REJECTED", reason, actorId,

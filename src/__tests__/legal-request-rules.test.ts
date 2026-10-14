@@ -1,10 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { autoColumn, requestStage, requesterFileVersion, tokenFromLinkId } from '@/lib/legal/request-rules'
+import { autoColumn, requestStage, requesterFileVersion, shouldPushStage, tokenFromLinkId } from '@/lib/legal/request-rules'
 
 const doc = (status: string, currentVersion = 1, finalVersion: number | null = null, signedVersion: number | null = null) =>
   ({ status, currentVersion, finalVersion, signedVersion })
 
 describe('Legal request rules', () => {
+  it('pushes a stage only when the request moves forward into it', () => {
+    expect(shouldPushStage('RECEIVED', 'IN_PROGRESS')).toBe(true)
+    expect(shouldPushStage('REJECTED', 'IN_PROGRESS')).toBe(true)
+    expect(shouldPushStage('FINAL', 'IN_PROGRESS')).toBe(false) // document voided, a new one follows
+    expect(shouldPushStage('REVISION', 'IN_PROGRESS')).toBe(false)
+    expect(shouldPushStage('IN_PROGRESS', 'REVISION')).toBe(true)
+    expect(shouldPushStage('FINAL', 'SIGNED')).toBe(true)
+    expect(shouldPushStage('IN_PROGRESS', 'RECEIVED')).toBe(false)
+  })
   it('tells the requester where the request stands', () => {
     expect(requestStage({ column: 'TODO', rejectedAt: null }, null)).toBe('RECEIVED')
     expect(requestStage({ column: 'IN_PROGRESS', rejectedAt: null }, null)).toBe('IN_PROGRESS')

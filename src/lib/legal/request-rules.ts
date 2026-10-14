@@ -24,6 +24,17 @@ export type RequestStage = (typeof REQUEST_STAGES)[number]
 /** The stages that are pushed to the requester when a request reaches them (owner, 14 Oct 2026). */
 export const PUSHED_STAGES: readonly RequestStage[] = ["IN_PROGRESS", "REVISION", "FINAL", "SIGNED", "REJECTED"]
 
+/**
+ * Whether moving from `prev` to `next` is news for the requester: a pushed stage reached by moving FORWARD.
+ * Stepping back to In Progress (the document was voided and Legal makes a new one) shows in My Submissions
+ * but is not pushed again: "Legal is working on it" was already said.
+ */
+export function shouldPushStage(prev: string, next: RequestStage): boolean {
+  if (!PUSHED_STAGES.includes(next)) return false
+  if (next === "IN_PROGRESS") return prev === "RECEIVED" || prev === "REJECTED"
+  return true
+}
+
 export type LinkedDoc = { status: string; currentVersion: number; finalVersion: number | null; signedVersion: number | null } | null
 
 export function requestStage(r: { column: string; rejectedAt: Date | string | null }, doc: LinkedDoc): RequestStage {
