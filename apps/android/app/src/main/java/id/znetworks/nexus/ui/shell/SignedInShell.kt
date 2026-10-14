@@ -84,6 +84,19 @@ import id.znetworks.nexus.feature.forms.FormFillScreen
 import id.znetworks.nexus.feature.forms.FormsScreen
 import id.znetworks.nexus.feature.forms.SubmissionsScreen
 import id.znetworks.nexus.feature.forms.SubmissionDetailScreen
+import id.znetworks.nexus.feature.legal.LegalDocumentScreen
+import id.znetworks.nexus.feature.legal.LegalInviteScreen
+import id.znetworks.nexus.feature.legal.LegalNav
+import id.znetworks.nexus.feature.legal.LegalNewDocumentScreen
+import id.znetworks.nexus.feature.legal.LegalOnly
+import id.znetworks.nexus.feature.legal.LegalRequestFormScreen
+import id.znetworks.nexus.feature.legal.LegalRequestLinksScreen
+import id.znetworks.nexus.feature.legal.LegalRequestScreen
+import id.znetworks.nexus.feature.legal.LegalScreen
+import id.znetworks.nexus.feature.legal.LegalTemplateScreen
+import id.znetworks.nexus.feature.legal.LegalUploadDocumentScreen
+import id.znetworks.nexus.feature.legal.LegalUploadTemplateScreen
+import id.znetworks.nexus.feature.legal.MyLegalRequestScreen
 import id.znetworks.nexus.core.files.FileOpener
 import id.znetworks.nexus.feature.tickets.TicketDetailScreen
 import id.znetworks.nexus.feature.tickets.TicketsScreen
@@ -271,7 +284,17 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             is Target.Threads -> { container.router.consumed(t); nav.navigate(t.postId?.let { "threads?post=${enc(it)}" } ?: "threads") }
             is Target.Tickets -> { container.router.consumed(t); nav.navigate(t.ticketId?.let { "ticket/${enc(it)}" } ?: "tickets") }
             is Target.Form -> { container.router.consumed(t); nav.navigate("form/${enc(t.idOrSlug)}") }
-            is Target.Submissions -> { container.router.consumed(t); nav.navigate(t.submissionId?.let { "submission/${enc(it)}" } ?: "submissions") }
+            is Target.Submissions -> {
+                container.router.consumed(t)
+                // `?legal=<id>`: one of my Legal requests (the legal_request_status notification links here).
+                nav.navigate(t.legalId?.let { "my-legal-request/${enc(it)}" } ?: t.submissionId?.let { "submission/${enc(it)}" } ?: "submissions")
+            }
+            is Target.Legal -> {
+                container.router.consumed(t)
+                if (t.docId != null) nav.navigate("legal-doc/${enc(t.docId)}")
+                else nav.navigate("legal?tab=${enc(t.tab.orEmpty())}&request=${enc(t.requestId.orEmpty())}")
+            }
+            is Target.LegalRequestForm -> { container.router.consumed(t); nav.navigate("legal-request-form/${enc(t.linkId)}") }
             is Target.Docs -> { container.router.consumed(t); nav.navigate(t.docId?.let { "doc/${enc(it)}" } ?: "docs") }
             is Target.Vault -> { container.router.consumed(t); nav.navigate("vault?folder=${enc(t.folderId.orEmpty())}&trash=") }
             is Target.VaultShare -> { container.router.consumed(t); nav.navigate("vault-share/${enc(t.slug)}") }
@@ -419,7 +442,9 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable("tickets") { TicketsScreen(onBack = { nav.popBackStack() }, onOpenTicket = { nav.navigate("ticket/$it") }) }
             composable("ticket/{id}") { TicketDetailScreen(onBack = { nav.popBackStack() }) }
             composable("form/{id}") { FormFillScreen(onBack = { nav.popBackStack() }, onOpenSubmissions = { nav.navigate("submissions") }) }
-            composable("submissions") { SubmissionsScreen(onBack = { nav.popBackStack() }, onOpen = { nav.navigate("submission/${enc(it)}") }, onOpenForms = { nav.navigate("forms") }) }
+            composable("submissions") { SubmissionsScreen(onBack = { nav.popBackStack() }, onOpen = { nav.navigate("submission/${enc(it)}") }, onOpenForms = { nav.navigate("forms") },
+                onOpenLegal = { nav.navigate("my-legal-request/${enc(it)}") }) }
+            legalRoutes(nav)
             composable("submission/{id}") { e ->
                 val scope = androidx.compose.runtime.rememberCoroutineScope()
                 SubmissionDetailScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
@@ -676,6 +701,63 @@ object ShellLayout {
  * route and crash the navigation. Navigation decodes the argument again for the screen.
  */
 internal fun enc(id: String): String = android.net.Uri.encode(id)
+
+/**
+ * Legal (owner, 14 Oct 2026; invitation only): the home with its five tabs, a document, New document / Create addendum
+ * / Create document from a request, uploads, a template, a request on the board, the request links and Invite. Every
+ * Legal-member route sits behind [LegalOnly]; the request form (`/f/legal-…`) and my own requests are for anyone signed in.
+ */
+private fun androidx.navigation.NavGraphBuilder.legalRoutes(nav: androidx.navigation.NavHostController) {
+    val back: () -> Unit = { nav.popBackStack() }
+    val legalNav = LegalNav(
+        back = back,
+        openDoc = { nav.navigate("legal-doc/${enc(it)}") },
+        newDoc = { parent, request -> nav.navigate("legal-new?parent=${enc(parent.orEmpty())}&request=${enc(request.orEmpty())}") },
+        uploadDoc = { nav.navigate("legal-upload") },
+        openTemplate = { nav.navigate("legal-template/${enc(it)}") },
+        newTemplate = { nav.navigate("legal-template-new") },
+        openRequest = { nav.navigate("legal-request/${enc(it)}") },
+        requestLinks = { nav.navigate("legal-request-links") },
+        invite = { nav.navigate("legal-invite") },
+    )
+    fun opt(vararg names: String) = names.map { a -> androidx.navigation.navArgument(a) { nullable = true; defaultValue = null } }
+    fun arg(e: androidx.navigation.NavBackStackEntry, k: String) = e.arguments?.getString(k)?.takeIf { it.isNotEmpty() }
+    // A screen that made something is replaced by what it made (back goes to where it was opened from).
+    fun replace(route: String, pattern: String) = nav.navigate(route) { popUpTo(pattern) { inclusive = true } }
+
+    composable("legal?tab={tab}&request={request}", arguments = opt("tab", "request")) { e ->
+        LegalScreen(legalNav, arg(e, "tab"), arg(e, "request"))
+    }
+    composable("legal-doc/{id}") { e ->
+        LegalOnly(back) {
+            LegalDocumentScreen(arg(e, "id").orEmpty(), onBack = back, onOpenDoc = legalNav.openDoc, onCreateAddendum = { legalNav.newDoc(it, null) })
+        }
+    }
+    composable("legal-new?parent={parent}&request={request}", arguments = opt("parent", "request")) { e ->
+        LegalOnly(back) {
+            LegalNewDocumentScreen(arg(e, "parent"), arg(e, "request"), onBack = back,
+                onCreated = { replace("legal-doc/${enc(it)}", "legal-new?parent={parent}&request={request}") })
+        }
+    }
+    composable("legal-upload") { LegalOnly(back) { LegalUploadDocumentScreen(back) { replace("legal-doc/${enc(it)}", "legal-upload") } } }
+    composable("legal-template-new") { LegalOnly(back) { LegalUploadTemplateScreen(back) { replace("legal-template/${enc(it)}", "legal-template-new") } } }
+    composable("legal-template/{id}") { e -> LegalOnly(back) { LegalTemplateScreen(arg(e, "id").orEmpty(), back) } }
+    composable("legal-request/{id}") { e ->
+        LegalOnly(back) {
+            LegalRequestScreen(arg(e, "id").orEmpty(), onBack = back, onOpenDoc = legalNav.openDoc, onCreateDoc = { legalNav.newDoc(null, it) })
+        }
+    }
+    composable("legal-request-links") { LegalOnly(back) { LegalRequestLinksScreen(back) } }
+    composable("legal-invite") { LegalOnly(back) { LegalInviteScreen(back) } }
+    // The request form behind a link: any signed-in person, not only Legal.
+    composable("legal-request-form/{id}") { e ->
+        LegalRequestFormScreen(arg(e, "id").orEmpty(), onBack = back, onOpenMine = { id ->
+            nav.navigate("submissions") { popUpTo("legal-request-form/{id}") { inclusive = true } }
+            nav.navigate("my-legal-request/${enc(id)}")
+        })
+    }
+    composable("my-legal-request/{id}") { e -> MyLegalRequestScreen(arg(e, "id").orEmpty(), back) }
+}
 
 @Composable
 private fun NotYet(tab: Tab) {

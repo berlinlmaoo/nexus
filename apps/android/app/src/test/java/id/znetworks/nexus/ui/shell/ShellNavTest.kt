@@ -25,6 +25,12 @@ class ShellNavTest {
         assertTrue(ShellNav.Item.VAULT in items(true, false))
         // Control Room: Manager and above only.
         assertFalse(ShellNav.Item.CONTROL_ROOM in items(true, false)); assertTrue(ShellNav.Item.CONTROL_ROOM in items(true, true))
+        // Legal (owner, 14 Oct 2026): invitation only, drawn after Projects in Work.
+        assertFalse(ShellNav.Item.LEGAL in items(true, true))
+        val work = ShellNav.groups(true, true, true, legal = true).first { it.first == ShellNav.Group.WORK }.second
+        assertEquals(listOf(ShellNav.Item.PROJECTS, ShellNav.Item.LEGAL), work.take(2))
+        assertEquals(ShellNav.Item.LEGAL, ShellNav.itemOf("legal-doc/{id}"))
+        assertEquals(ShellNav.Item.LEGAL, ShellNav.itemOf("legal?tab={tab}&request={request}"))
         // The calendar flag off: no Calendar entry.
         assertFalse(ShellNav.Item.CALENDAR in items(true, true, cal = false))
     }

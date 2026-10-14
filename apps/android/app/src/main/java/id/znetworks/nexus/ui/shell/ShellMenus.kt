@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Balance
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.NewReleases
@@ -93,6 +94,7 @@ internal fun ShellNav.Item.icon(): ImageVector = when (this) {
     ShellNav.Item.CALENDAR -> Icons.Outlined.CalendarMonth
     ShellNav.Item.ROOMS -> Icons.Outlined.EventAvailable
     ShellNav.Item.PROJECTS -> Icons.Outlined.Folder
+    ShellNav.Item.LEGAL -> Icons.Outlined.Balance
     ShellNav.Item.LEADERBOARD -> Icons.Outlined.EmojiEvents
     ShellNav.Item.REPORTS -> Icons.Outlined.BarChart
     ShellNav.Item.FORMS -> Icons.AutoMirrored.Outlined.Assignment
@@ -115,7 +117,9 @@ private fun rememberMenuState(): MenuState {
     val chatUnread by container.badges.chatUnread.collectAsStateWithLifecycle()
     // Control Room is drawn for MANAGER and above only (the server re-checks every call).
     val canAdmin by produceState(container.viewer.canAdminister) { container.viewer.load(); value = container.viewer.canAdminister }
-    return MenuState(ShellNav.groups(company, canAdmin, calendarOn)) { item ->
+    // Legal is drawn only for the people invited to it (the server refuses everyone else).
+    val legal by produceState(container.viewer.canAccessLegal) { container.viewer.load(); value = container.viewer.canAccessLegal }
+    return MenuState(ShellNav.groups(company, canAdmin, calendarOn, legal)) { item ->
         when (item.badge) {
             ShellNav.Badge.INBOX -> Badges.label(inboxUnread)
             ShellNav.Badge.CHAT -> Badges.label(chatUnread)

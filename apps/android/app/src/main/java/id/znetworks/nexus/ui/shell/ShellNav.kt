@@ -20,7 +20,7 @@ internal object ShellNav {
      * entries that are bottom-bar tabs, so they are switched to rather than pushed.
      */
     enum class Item(val group: Group, val label: Int, val route: String, val tab: Boolean = false, val companyOnly: Boolean = false,
-                    val managersOnly: Boolean = false, val badge: Badge = Badge.NONE) {
+                    val managersOnly: Boolean = false, val badge: Badge = Badge.NONE, val legalOnly: Boolean = false) {
         DASHBOARD(Group.HOME, R.string.nav_dashboard, "home", tab = true),
         MESSAGES(Group.HOME, R.string.mt_messages, "messages", tab = true, badge = Badge.CHAT),
         GIDEON(Group.HOME, R.string.nav_gideon, "gideon"),
@@ -32,6 +32,8 @@ internal object ShellNav {
         CALENDAR(Group.HOME, R.string.mt_calendar, "calendar", tab = true),
         ROOMS(Group.HOME, R.string.mt_rooms, "rooms"),
         PROJECTS(Group.WORK, R.string.nav_projects, "projects", tab = true),
+        // Invitation only (owner, 14 Oct 2026): drawn when the roster says canAccessLegal; the server refuses the rest.
+        LEGAL(Group.WORK, R.string.lg_title, "legal", legalOnly = true),
         LEADERBOARD(Group.WORK, R.string.mt_leaderboard, "leaderboard"),
         REPORTS(Group.WORK, R.string.mt_reports, "reports"),
         FORMS(Group.WORK, R.string.mt_forms, "forms"),
@@ -45,11 +47,13 @@ internal object ShellNav {
     /**
      * What this person sees, grouped in order. Company-only entries wait until the workspace is known
      * ([company] null = not known yet, hidden); Control Room is for Manager and above (the server re-checks).
-     * With the server's calendar flag off the Calendar is not offered and Notifications is a tab.
+     * With the server's calendar flag off the Calendar is not offered and Notifications is a tab. Legal is drawn
+     * only for the people invited to it ([legal]).
      */
-    fun groups(company: Boolean?, canAdmin: Boolean, calendarOn: Boolean): List<Pair<Group, List<Item>>> =
+    fun groups(company: Boolean?, canAdmin: Boolean, calendarOn: Boolean, legal: Boolean = false): List<Pair<Group, List<Item>>> =
         Item.entries
             .filter { !it.companyOnly || company == true }
+            .filter { !it.legalOnly || legal }
             .filter { !it.managersOnly || canAdmin }
             .filter { it != Item.CALENDAR || calendarOn }
             .groupBy { it.group }
@@ -69,6 +73,8 @@ internal object ShellNav {
             "team-calendar", "calendar-list" -> Item.CALENDAR
             "admin-user", "admin-chart", "org-chart", "admin-att", "admin-offices", "audit", "admin-team" -> Item.CONTROL_ROOM
             "vault-share" -> Item.VAULT
+            "legal-doc", "legal-new", "legal-upload", "legal-template", "legal-template-new", "legal-request", "legal-request-links", "legal-invite" -> Item.LEGAL
+            "legal-request-form", "my-legal-request" -> Item.SUBMISSIONS
             else -> Item.entries.firstOrNull { it.route.isNotEmpty() && it.route.substringBefore('?') == base }
         }
     }
