@@ -23,8 +23,18 @@ enum AppDateLocale {
         f.dateFormat = pattern
         f.locale = locale
         if let timeZone { f.timeZone = timeZone }
+        useShortMonths(f)
         cache[key] = f
         return f
+    }
+
+    /// en_GB abbreviates September "Sept"; the app (and the web) write "Sep" (owner rule). Applied to every
+    /// English formatter this file hands out, and to the Calendar's template formatters.
+    static let englishShortMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    static func useShortMonths(_ f: DateFormatter) {
+        guard f.locale?.identifier.hasPrefix("en") == true else { return }
+        f.shortMonthSymbols = englishShortMonths
+        f.shortStandaloneMonthSymbols = englishShortMonths
     }
 
     /// A short date that leaves the year out when it is the current year: "14 Oct", "3 Mar 2025" (UI tour

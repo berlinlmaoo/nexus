@@ -197,12 +197,12 @@ struct SettingsView: View {
         }
     }
 
-    /// Regular width: Profile is the web's Profile card, Password card, Delete account card (and Logout,
-    /// which the web has in its sidebar footer); the other sections are the same cards as on the phone.
+    /// Regular width: Profile is the web's Profile card, Delete account card (and Logout, which the web
+    /// has in its sidebar footer); the other sections are the same cards as on the phone. The Password
+    /// card lives in Security only: it was in both tabs (UI tour run 14, N-08 / fix13 F-37).
     @ViewBuilder private var webTabContent: some View {
         if tab == .profile {
             webProfileCard
-            SecurityCard()
             webDeleteCard
             webLogoutCard
         } else {
@@ -216,8 +216,7 @@ struct SettingsView: View {
         switch tab {
         case .profile:
             profileSection
-            // The web shows the Password card under Profile (Security keeps it too, with passkeys and sessions).
-            SecurityCard()
+            // Password is in Security only, with passkeys and sessions (UI tour run 14, N-08).
             accountSection
         case .members:
             if let wsId = workspaceId {
@@ -352,6 +351,14 @@ struct SettingsView: View {
 
     // MARK: Web cards (regular width)
 
+    private var nameField: some View {
+        webField(T("Full name")) {
+            TextField(T("Your name"), text: $name)
+                .textContentType(.name)
+                .modifier(WebInputStyle())
+        }
+    }
+
     /// The web's Profile card: "Visible to your teammates", the photo with Change photo / Remove and its
     /// hint, Full name | Email side by side, Google Workspace, Phone number, and Save at the right.
     private var webProfileCard: some View {
@@ -362,13 +369,17 @@ struct SettingsView: View {
                     Spacer(minLength: 8)
                 }
                 webPhotoRow
-                HStack(alignment: .top, spacing: 16) {
-                    webField(T("Full name")) {
-                        TextField(T("Your name"), text: $name)
-                            .textContentType(.name)
-                            .modifier(WebInputStyle())
+                // Side by side while the whole address fits on one line beside the name; stacked otherwise.
+                // In an iPad column the address wrapped mid-word, "qa5@dev.in / valid" (UI tour run 14, P-I7).
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 16) {
+                        nameField
+                        webField(T("Email")) { WebEmailField(email: $email, wholeLine: true) }
                     }
-                    webField(T("Email")) { WebEmailField(email: $email) }
+                    VStack(alignment: .leading, spacing: 22) {
+                        nameField
+                        webField(T("Email")) { WebEmailField(email: $email) }
+                    }
                 }
                 webField(T("Google Workspace")) {
                     HStack(spacing: 8) {
@@ -533,7 +544,7 @@ struct SettingsView: View {
             googleEmail = p.user.googleWorkspaceEmail ?? ""
         }
         if let info = try? await APIClient.shared.workspaceInfo() { role = info.role; workspaceId = info.workspaceId }
-        if let number = try? await APIClient.shared.profilePhoneNumber() { phone = number }
+        if let number = try? await APIClient.shared.profilePhoneNumber() { phone = PhoneDisplay.grouped(number) }
         loading = false
     }
     /// The library hands back whatever the camera produced - often HEIC, which the server
@@ -582,7 +593,7 @@ struct SettingsView: View {
         do {
             // Name and phone number together, as the web's Save; the field shows the number as stored.
             let stored = try await APIClient.shared.updateProfile(name: v, phoneNumber: phone)
-            phone = stored ?? ""
+            phone = PhoneDisplay.grouped(stored ?? "")
             savedOK = true
         } catch APIError.unauthorized {
             auth.logout()
@@ -693,16 +704,19 @@ private struct WebInputStyle: ViewModifier {
 /// its one `.sheet`.
 private struct WebEmailField: View {
     @Binding var email: String
+    /// Asks for the whole address on one line (the profile card's side-by-side layout, which steps
+    /// down to a stacked one when it does not fit).
+    var wholeLine = false
     @State private var changing = false
 
     var body: some View {
         HStack(spacing: 8) {
-            // Wraps before it cuts: "qa5...invalid" told nobody which address it was (UI tour run 9, P9).
-            // It no longer shrinks: a smaller font than Full name beside it looked broken (run 13, I-23).
+            // One line, never shrunk (run 13, I-23: a smaller font than Full name looked broken) and
+            // never broken mid-address (run 14, P-I7); the card stacks the fields when it needs the room.
             Text(email.isEmpty ? "—" : email)
                 .font(NXFont.text(15)).foregroundStyle(NX.mutedFg)
-                .lineLimit(2).truncationMode(.middle)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(1).truncationMode(.middle)
+                .fixedSize(horizontal: wholeLine, vertical: true)
                 .padding(.horizontal, 12).padding(.vertical, 6)
                 .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
                 .background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -714,5 +728,22 @@ private struct WebEmailField: View {
         .sheet(isPresented: $changing) {
             ChangeEmailSheet(current: email) { email = $0 }
         }
+    }
+}
+
+/// A stored Indonesian number grouped for reading: "+6281200000000" → "+62 812-0000-0000" (UI tour run 14,
+/// N-41). The server keeps only the digits (and the "+"), so the grouping never reaches what is stored.
+/// Numbers from other countries are shown as they are.
+enum PhoneDisplay {
+    static func grouped(_ raw: String) -> String {
+        let t = raw.trimmingCharacters(in: .whitespaces)
+        guard t.hasPrefix("+62") else { return t }
+        let national = String(t.dropFirst(3).filter(\.isNumber))
+        guard national.count >= 9, national.count <= 12 else { return t }
+        let a = national.prefix(3)
+        let rest = national.dropFirst(3)
+        let b = rest.prefix(4)
+        let c = rest.dropFirst(4)
+        return "+62 \(a)-\(b)" + (c.isEmpty ? "" : "-\(c)")
     }
 }

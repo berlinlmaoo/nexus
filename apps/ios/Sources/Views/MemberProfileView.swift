@@ -399,6 +399,13 @@ struct MemberProfileView: View {
                     factRow("sparkles", "XP",
                             String(format: T("+%d gained · %d lost"), xp.gained ?? 0, xp.lost ?? 0)
                             + ((xp.removed ?? 0) > 0 ? " · " + String(format: T("%d removed by the BoD"), xp.removed ?? 0) : ""))
+                    // Absences on the tiles and nothing lost read as a contradiction (UI tour run 14, N-32):
+                    // say when an absence costs XP and when it does not.
+                    if (c?.absent ?? 0) > 0 && (xp.lost ?? 0) == 0 {
+                        Text(T("No XP was taken for these absences. An absence costs XP once the nightly check has run; a day excused by a permit, or lost to an outage, costs nothing."))
+                            .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
             if let score, let days = r.period.days {
@@ -406,11 +413,11 @@ struct MemberProfileView: View {
                     // Joined during the period: the score counts from their first day, with a prorated
                     // allowance (QA S-20, the board's rule too).
                     if let owedDays = score.days, owedDays < days, let from = score.from, !from.isEmpty {
-                        Text(String(format: T("Days worked (present or permit) out of %d working days, from %@: %d days minus %d day-off allowance."),
+                        Text(String(format: T("Days worked (present or permit) out of %d working days, from %@: %d days minus %d days-off allowance."),
                                     score.working, AgendaRange.dayLabel(from), owedDays, score.allowance ?? 0))
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
-                        Text(String(format: T("Days worked (present or permit) out of %d working days: %d days minus %d day-off allowance."), score.working, days, d?.quota ?? 4))
+                        Text(String(format: T("Days worked (present or permit) out of %d working days: %d days minus %d days-off allowance."), score.working, days, d?.quota ?? 4))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 } icon: {

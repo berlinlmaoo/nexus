@@ -53,23 +53,21 @@ struct LeaderboardView: View {
         guard let start = cal.date(from: cal.dateComponents([.year, .month], from: now)),
               let next = cal.date(byAdding: .month, value: 1, to: start),
               let last = cal.date(byAdding: .day, value: -1, to: next) else { return "" }
-        let f = DateFormatter()
-        f.calendar = cal
-        f.timeZone = cal.timeZone
-        f.locale = Locale(identifier: AppLanguage.shared.lang == .id ? "id_ID" : "en_GB")
-        f.dateFormat = "d MMM"
+        // AppDateLocale: the app language, and "Sep" rather than en_GB's "Sept".
+        let f = AppDateLocale.formatter("d MMM", timeZone: cal.timeZone)
         return "\(f.string(from: start)) – \(f.string(from: last))"
     }
 
-    /// Web leaderboard.tsx PageHeader: the current period sits at the right.
-    private static var periodSuffix: String { " · " + periodText }
+
+    /// The period is part of the subtitle, as on the web (leaderboard.tsx): "Everyone's XP for 1 Oct – 31 Oct.
+    /// It resets on the 1st." It floated top-right above the title's baseline on the iPad and Mac, and was a
+    /// separate line on the phone (UI tour run 14, P-I34 / P-M29).
+    private static var subtitle: String {
+        T("Everyone's XP for {range}. It resets on the 1st.").replacingOccurrences(of: "{range}", with: periodText)
+    }
 
     private var pageHeader: some View {
-        NXPageHeader(title: T("Leaderboard"), subtitle: T("Everyone's XP this month. It resets on the 1st.")) {
-            (Text(T("Current period")).font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground)
-             + Text(Self.periodSuffix).font(NXFont.text(13)).foregroundStyle(NX.mutedFg))
-                .accessibilityHint(T("XP resets on the 1st at 00:00 WIB"))
-        }
+        NXPageHeader(title: T("Leaderboard"), subtitle: Self.subtitle) { EmptyView() }
     }
 
     var body: some View {
@@ -77,7 +75,7 @@ struct LeaderboardView: View {
             NX.background.ignoresSafeArea()
             content
         }
-        .nxSidebarPageChrome(isRoot, phoneSubtitle: T("Everyone's XP this month. It resets on the 1st.")) { pageHeader }
+        .nxSidebarPageChrome(isRoot, phoneSubtitle: Self.subtitle) { pageHeader }
         .safeAreaInset(edge: .top) {
             if let at = showingCacheFrom {
                 Text(T("Showing saved data") + " · " + Self.ago(at))
@@ -111,26 +109,18 @@ struct LeaderboardView: View {
         } else {
             ScrollView {
                 VStack(spacing: 16) {
-                    // The period line went through T() (it was hard-coded Indonesian); on the iPad / Mac
-                    // page it is in the header instead.
-                    // A plain line as on the web phone ("Current period · 1 Oct – 31 Oct"); the reset rule is in
-                    // the subtitle above (UI tour 13 Oct 2026: it was a bordered banner).
-                    if !isRoot {
-                        (Text(T("Current period")).foregroundStyle(NX.foreground).fontWeight(.medium)
-                            + Text(" · " + Self.periodText).foregroundStyle(NX.mutedFg))
-                            .font(NXFont.text(13))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    Text(T("XP ranking for everyone"))
-                        .font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    // Why the viewer is missing from the list (UI tour run 13, W-B4).
+                    // No "XP ranking for everyone" line: the subtitle above already says it (UI tour run 14, N-36).
+                    // Why the viewer is missing from the list (UI tour run 13, W-B4), in the web's bordered
+                    // info banner rather than plain text (run 14, P-I34 / P-M29).
                     if viewerLeftOut {
                         Label(T("You're not on this ranking: the BoD is left out, so management doesn't compete with staff."),
                               systemImage: "info.circle")
                             .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 14).padding(.vertical, 11)
+                            .background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
                     }
 
                     if ranked.count >= 1 {

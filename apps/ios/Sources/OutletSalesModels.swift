@@ -688,7 +688,7 @@ enum OutletFormat {
     }
 
     // Names written out rather than asked of DateFormatter: en_GB has started to say "Sept", and the
-    // web and this app must print the same "Min, 4 Okt" / "Sun, 4 Oct".
+    // web and this app must print the same "Min 4 Okt" / "Sun 4 Oct".
     private static let weekdaysID = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"]
     private static let weekdaysEN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     private static let weekdaysShortID = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"]
@@ -755,13 +755,13 @@ enum OutletFormat {
         return end.d <= 1 ? "1 \(mn)" : "1–\(end.d) \(mn)"
     }
 
-    /// "Min, 4 Okt" / "Sun, 4 Oct" — on a card; the year too when it is not `thisYear`.
+    /// "Min 4 Okt" / "Sun 4 Oct" (no comma: UI tour run 14, N-35) — on a card; the year too when it is not `thisYear`.
     static func dayShort(_ iso: String, thisYear: String? = nil) -> String {
         guard let p = parts(iso), let w = weekdayIndex(iso) else { return iso }
         let wd = (isID ? weekdaysShortID : weekdaysShortEN)[w]
         let mn = (isID ? monthsShortID : monthsShortEN)[p.m - 1]
         let year = (thisYear != nil && String(iso.prefix(4)) != thisYear) ? " \(p.y)" : ""
-        return "\(wd), \(p.d) \(mn)\(year)"
+        return "\(wd) \(p.d) \(mn)\(year)"
     }
 
     /// "Oktober 2026" / "October 2026" for "2026-10".

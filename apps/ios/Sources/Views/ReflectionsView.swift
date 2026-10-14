@@ -50,7 +50,7 @@ struct ReflectionsView: View {
     private func dayLabel(_ iso: String) -> String {
         let p = DateFormatter(); p.dateFormat = "yyyy-MM-dd"; p.timeZone = ProjDate.cal.timeZone; p.locale = Locale(identifier: "en_US_POSIX")
         guard let d = p.date(from: iso) else { return iso }
-        let f = DateFormatter(); f.calendar = ProjDate.cal; f.timeZone = ProjDate.cal.timeZone; f.dateFormat = "EEE, d MMM"
+        let f = DateFormatter(); f.calendar = ProjDate.cal; f.timeZone = ProjDate.cal.timeZone; f.locale = AppDateLocale.current; f.dateFormat = "EEE d MMM"
         return f.string(from: d)
     }
     private var days: [ReflectionDay] { data?.days ?? [] }

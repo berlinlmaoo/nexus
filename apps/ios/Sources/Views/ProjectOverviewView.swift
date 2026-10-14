@@ -618,10 +618,8 @@ private struct OverviewDeadlinesCard: View {
         if d == 0 { return T("Today") }
         if d == 1 { return T("Tomorrow") }
         guard let date = ProjDate.parse(t.dueDate) else { return "" }
-        let f = DateFormatter()
-        f.locale = OverviewMath.locale
-        f.setLocalizedDateFormatFromTemplate("EEEdMMM")
-        return f.string(from: date)
+        // "Thu 15 Oct": no comma, day before month in both languages (UI tour run 14, N-35).
+        return AppDateLocale.formatter("EEE d MMM", timeZone: ProjDate.cal.timeZone).string(from: date)
     }
 
     var body: some View {

@@ -27,7 +27,6 @@ extension AppLanguage {
         "You and your direct reports": "Kamu dan bawahan langsungmu",
         // Attendance tiles (F-17)
         "None this month": "Tidak ada bulan ini",
-        "%@/%@ used": "%@/%@ terpakai",
         // Home and Settings wording (F-26, F-37)
         "Edit profile": "Ubah profil",
         // Legal (F-28)

@@ -304,10 +304,11 @@ struct SecurityCard: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text(T("Password")).font(NXFont.text(17, .semibold)).foregroundStyle(NX.foreground)
                     .accessibilityAddTraits(.isHeader)
-                HStack(alignment: .top, spacing: 16) {
-                    webSecure(T("Current password"), $current)
-                    webSecure(T("New password (min 8)"), $new1)
-                    webSecure(T("Repeat new password"), $new2)
+                // Side by side while every label fits on one line, stacked otherwise: in a narrow iPad column
+                // the labels wrapped and the three fields sat at different heights (UI tour run 14, P-I8).
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 16) { passwordFields }
+                    VStack(alignment: .leading, spacing: 12) { passwordFields }
                 }
                 HStack(spacing: 10) {
                     Spacer(minLength: 0)
@@ -331,9 +332,16 @@ struct SecurityCard: View {
         }
     }
 
+    @ViewBuilder private var passwordFields: some View {
+        webSecure(T("Current password"), $current)
+        webSecure(T("New password (min 8)"), $new1)
+        webSecure(T("Repeat new password"), $new2)
+    }
+
     private func webSecure(_ label: String, _ text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label).font(NXFont.text(13, .medium)).foregroundStyle(NX.mutedFg)
+                .lineLimit(1).fixedSize(horizontal: true, vertical: false)
             SecureField("", text: text)
                 .font(NXFont.text(15))
                 .textFieldStyle(.plain)
@@ -379,7 +387,9 @@ struct PasskeyCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(T("PASSKEYS")).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violetText)
+            // A card title like "Password" and "Active sessions", not a small caps label (UI tour run 14, P-I9).
+            Text(T("Passkeys")).font(NXFont.text(17, .semibold)).foregroundStyle(NX.foreground)
+                .accessibilityAddTraits(.isHeader)
             Text(PlatformWording.biometric(
                 faceID: "Sign in with Face ID or Touch ID instead of typing your password. Your password keeps working.",
                 touchID: "Sign in with Touch ID instead of typing your password. Your password keeps working.",

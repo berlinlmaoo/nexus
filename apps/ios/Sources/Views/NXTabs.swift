@@ -32,7 +32,11 @@ struct NXUnderlineTabs<ID: Hashable>: View {
                     }
                 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
+                .scrollTargetLayout()
             }
+            // A swipe comes to rest with a whole tab at the leading edge, never a fragment like "ers"
+            // (UI tour run 14, N-07).
+            .scrollTargetBehavior(.viewAligned)
             // The active tab is scrolled into view and the row fades where more lies
             // (UI tour run 11: the Settings tabs' fifth icon and Legal's "Companie" were cut hard).
             .modifier(NXTabRowScroller(activeId: Self.key(selection), itemIds: items.map { Self.key($0.id) },
@@ -212,10 +216,14 @@ struct NXTabRowScroller: ViewModifier {
         if #unavailable(iOS 18.0) { moreAfter = overflows }
     }
 
-    /// Centre the active tab: it is then whole, with its neighbours (faded at the edges) on either side.
+    /// Brings the active tab into view with the tab before it lined up whole against the leading edge,
+    /// so the row never opens on a cut fragment there ("ers" of Members, UI tour run 14, N-07); only the
+    /// trailing edge can hold a partial tab, under its fade. Centring the active tab left a fragment on
+    /// both sides. Near the row's end the scroll clamps, and the last tab sits whole at the trailing edge.
     private func reveal(animated: Bool) {
-        guard itemIds.contains(activeId) else { return }
-        if animated { withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(activeId, anchor: .center) } }
-        else { proxy.scrollTo(activeId, anchor: .center) }
+        guard let i = itemIds.firstIndex(of: activeId) else { return }
+        let target = itemIds[max(0, i - 1)]
+        if animated { withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(target, anchor: .leading) } }
+        else { proxy.scrollTo(target, anchor: .leading) }
     }
 }

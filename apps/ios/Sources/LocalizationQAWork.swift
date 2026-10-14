@@ -113,6 +113,6 @@ extension AppLanguage {
         "Check the date and times, then try again.": "Cek tanggal dan jamnya, lalu coba lagi.",
         "Add a title to book the room.": "Isi judul untuk membooking ruangan.",
         // Attendance Score
-        "Days worked (present or permit) out of %d working days, from %@: %d days minus %d day-off allowance.": "Hari masuk (hadir atau izin) dari %d hari kerja, sejak %@: %d hari dikurangi %d jatah day off.",
+        "Days worked (present or permit) out of %d working days, from %@: %d days minus %d days-off allowance.": "Hari masuk (hadir atau izin) dari %d hari kerja, sejak %@: %d hari dikurangi %d jatah day off.",
     ]
 }

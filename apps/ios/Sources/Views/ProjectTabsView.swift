@@ -58,7 +58,7 @@ enum ProjDate {
         return isoFractional.date(from: iso) ?? isoPlain.date(from: iso)
     }
     static func dayLabel(_ d: Date) -> String { fmt("d MMM").string(from: d) }
-    static func longLabel(_ d: Date) -> String { fmt("EEEE, d MMM yyyy").string(from: d) }
+    static func longLabel(_ d: Date) -> String { fmt("EEEE d MMM yyyy").string(from: d) }
 
     /// In the UI language (AppDateLocale): this was always id_ID, so an English app read "13 Okt" in
     /// Notifications, Threads and the project screens (UI tour 13 Oct 2026).

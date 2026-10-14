@@ -946,49 +946,56 @@ struct CalendarView: View {
     /// The focus path, then one chip per unit at the focus level (tap = focus the calendar on it, or
     /// filter by a unit with nothing below it). The two kinds look different: the focus mark where the
     /// tap narrows the calendar to that division, a check where a filter is on.
-    private var legendRow: some View {
+    /// iPad / Mac: the chips wrap onto a second line instead of running off the edge, so none is ever
+    /// cut ("No division 1…", UI tour run 14, P-I17). The phone keeps one scrolling row with its fade.
+    @ViewBuilder private var legendRow: some View {
+        if hSize == .regular {
+            FlowLayout(spacing: 6) { legendItems }
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) { legendItems }
+            }
+            // The last chip ran into the screen edge cut ("PATS 5", UI tour run 11 IP-11): fade where more lies.
+            .nxEdgeFade(44)
+        }
+    }
+
+    @ViewBuilder private var legendItems: some View {
         let entries = legendEntries
         let picked = Set(filters.units)
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                if let top = ix.top, focus != top.id {
-                    let path = Array(ix.ancestors(focus).reversed()) + [focus]
-                    ForEach(Array(path.enumerated()), id: \.offset) { i, id in
-                        if i > 0 {
-                            Image(systemName: "chevron.right").font(NXFont.text(CalType.size(9), .bold)).foregroundStyle(NX.mutedFg)
-                                .accessibilityHidden(true)
-                        }
-                        let name = i == 0 ? T("All divisions") : (ix.byId[id]?.name ?? "")
-                        if i == path.count - 1 {
-                            // Where you are: plain text, a marker. It used to be the violet capsule of
-                            // the filter chips and the banner buttons, and was tapped as one.
-                            Text(name).font(NXFont.text(CalType.size(12), .semibold)).foregroundStyle(NX.foreground)
-                                .lineLimit(1)
-                                .padding(.horizontal, 6)
-                                .frame(minHeight: 44)
-                                .accessibilityValue(rangeLoaded ? CalFormat.tasks(monthVisibleCount) : "")
-                                .accessibilityAddTraits(.isSelected)
-                                .accessibilityFocused($a11yTarget, equals: .crumb)
-                        } else {
-                            let child = path[i + 1]
-                            Button { climb(to: id, from: child, top: top.id) } label: {
-                                Text(name).font(NXFont.text(CalType.size(12), .semibold)).foregroundStyle(NX.mutedFg)
-                                    .padding(.horizontal, 8)
-                                    .frame(minHeight: 44)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
+        if let top = ix.top, focus != top.id {
+            let path = Array(ix.ancestors(focus).reversed()) + [focus]
+            ForEach(Array(path.enumerated()), id: \.offset) { i, id in
+                if i > 0 {
+                    Image(systemName: "chevron.right").font(NXFont.text(CalType.size(9), .bold)).foregroundStyle(NX.mutedFg)
+                        .accessibilityHidden(true)
                 }
-                ForEach(entries, id: \.unitId) { e in
-                    legendChip(e, on: picked.contains(e.unitId))
+                let name = i == 0 ? T("All divisions") : (ix.byId[id]?.name ?? "")
+                if i == path.count - 1 {
+                    // Where you are: plain text, a marker. It used to be the violet capsule of
+                    // the filter chips and the banner buttons, and was tapped as one.
+                    Text(name).font(NXFont.text(CalType.size(12), .semibold)).foregroundStyle(NX.foreground)
+                        .lineLimit(1)
+                        .padding(.horizontal, 6)
+                        .frame(minHeight: 44)
+                        .accessibilityValue(rangeLoaded ? CalFormat.tasks(monthVisibleCount) : "")
+                        .accessibilityAddTraits(.isSelected)
+                        .accessibilityFocused($a11yTarget, equals: .crumb)
+                } else {
+                    let child = path[i + 1]
+                    Button { climb(to: id, from: child, top: top.id) } label: {
+                        Text(name).font(NXFont.text(CalType.size(12), .semibold)).foregroundStyle(NX.mutedFg)
+                            .padding(.horizontal, 8)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
-        // The last chip ran into the screen edge cut ("PATS 5", UI tour run 11 IP-11): fade where more lies,
-        // wide enough to read as a fade on an iPad (UI tour run 13, I-16).
-        .nxEdgeFade(44)
+        ForEach(entries, id: \.unitId) { e in
+            legendChip(e, on: picked.contains(e.unitId))
+        }
     }
 
     private func legendChip(_ e: CalLegendEntry, on: Bool) -> some View {
@@ -1492,7 +1499,7 @@ struct CalendarView: View {
     private func dayHeading(tree: CalDayTree, rel: Int, holiday: String?) -> some View {
         // The two-pane rail (iPad, Mac) is narrow: "Wednesday, 14…" was cut there (UI tour run 11, MC-3), so it
         // writes the short "Wed, 14 Oct"; the phone has the width for the whole date.
-        let date = Text(twoPane ? AppDateLocale.formatter("EEE, d MMM", timeZone: TimeZone(identifier: "UTC")).string(from: CalDays.date(selected))
+        let date = Text(twoPane ? AppDateLocale.formatter("EEE d MMM", timeZone: TimeZone(identifier: "UTC")).string(from: CalDays.date(selected))
                                 : AppDateLocale.weekdayDate(CalDays.date(selected), timeZone: TimeZone(identifier: "UTC"))).font(NXFont.display(CalType.size(twoPane ? 19 : 17), .bold)).foregroundStyle(NX.foreground)
         let tag: String? = rel == 0 ? T("Today") : rel == 1 ? T("Tomorrow") : rel == -1 ? T("Yesterday") : nil
         return VStack(alignment: .leading, spacing: 3) {
