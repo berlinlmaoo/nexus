@@ -1,6 +1,7 @@
 package id.znetworks.nexus.core.nav
 
 import id.znetworks.nexus.core.net.NexusConfig
+import id.znetworks.nexus.feature.legal.LegalLogic
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,9 +24,13 @@ sealed interface Target {
     data class Threads(val postId: String?) : Target
     /** Tickets to the BoD, optionally one ticket. */
     data class Tickets(val ticketId: String?) : Target
-    /** A form to fill (`/f/<slug-or-id>`), or my submissions. */
+    /** A form to fill (`/f/<slug-or-id>`), or my submissions ([legalId]: one of my Legal requests, `?legal=`). */
     data class Form(val idOrSlug: String) : Target
-    data class Submissions(val submissionId: String?) : Target
+    data class Submissions(val submissionId: String?, val legalId: String? = null) : Target
+    /** Legal (invitation only): a tab (`?tab=requests`), a request on the board, or a document. */
+    data class Legal(val tab: String? = null, val requestId: String? = null, val docId: String? = null) : Target
+    /** A Legal request link (`/f/legal-<24 letters/digits>`): the request form, not a project form. */
+    data class LegalRequestForm(val linkId: String) : Target
     /** The Knowledge Library, or one doc. */
     data class Docs(val docId: String?) : Target
     /** Z Vault (a folder), and a `/v/<slug>` share link (members only). `/s/` is never claimed. */
@@ -125,8 +130,11 @@ object Links {
             p == "/messages" -> Target.Chat(q["c"])
             p == "/threads" || p == "/social" -> Target.Threads(q["post"])
             p == "/complaints" -> Target.Tickets(q["id"] ?: q["c"])
-            Regex("^/f/([^/]+)$").matches(p) -> Target.Form(path.trimEnd('/').substringAfterLast('/'))
-            p == "/submissions" -> Target.Submissions(q["id"])
+            Regex("^/f/([^/]+)$").matches(p) -> path.trimEnd('/').substringAfterLast('/').let { slug ->
+                if (LegalLogic.isRequestLinkId(slug)) Target.LegalRequestForm(slug) else Target.Form(slug)
+            }
+            p == "/submissions" -> Target.Submissions(q["id"], q["legal"])
+            p == "/legal" -> Target.Legal(q["tab"], q["request"], q["doc"])
             p == "/docs" -> Target.Docs(null)
             p == "/vault" -> Target.Vault(q["folder"] ?: q["id"])
             p == "/reports" -> Target.Reports(null)

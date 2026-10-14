@@ -34,6 +34,16 @@ class ViewerTest {
         viewer.load(); assertFalse(viewer.isCompanyMember)
     }
 
+    // Legal is by invitation (owner, 14 Oct 2026): the roster's canAccessLegal draws the entry; absent = no entry.
+    @Test fun legalFlagFromTheRoster() = runTest {
+        assertFalse(viewer.canAccessLegal)
+        server.enqueue(MockResponse.Builder().code(200).body("""{"role":"STAFF","isCompany":true,"canAccessLegal":true}""").build())
+        viewer.load(); assertTrue(viewer.canAccessLegal)
+        viewer.reset(); assertFalse(viewer.canAccessLegal)
+        server.enqueue(MockResponse.Builder().code(200).body("""{"role":"BOD","isCompany":true}""").build())
+        viewer.load(); assertFalse(viewer.canAccessLegal)
+    }
+
     @Test fun olderServerWithoutTheFieldKeepsThemHidden() = runTest {
         server.enqueue(MockResponse.Builder().code(200).body("""{"role":"BOD"}""").build())
         viewer.load()

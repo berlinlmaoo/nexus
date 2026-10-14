@@ -27,6 +27,12 @@ class Viewer(private val api: ApiClient) {
      */
     @Volatile var canAccessPipeline: Boolean = false
         private set
+    /**
+     * Invited to Legal (owner, 14 Oct 2026: invitation only). Draws the Legal entry and nothing else: every
+     * /api/legal call is refused for the others. Absent on an older server = no entry.
+     */
+    @Volatile var canAccessLegal: Boolean = false
+        private set
     private val lock = Mutex()
 
     /** The server's own isBoD(), mirrored once so call sites cannot drift apart. */
@@ -39,10 +45,11 @@ class Viewer(private val api: ApiClient) {
             role = (o["role"] as? JsonPrimitive)?.content ?: role
             isCompany = (o["isCompany"] as? JsonPrimitive)?.booleanOrNull ?: isCompany
             canAccessPipeline = (o["canAccessPipeline"] as? JsonPrimitive)?.booleanOrNull ?: false
+            canAccessLegal = (o["canAccessLegal"] as? JsonPrimitive)?.booleanOrNull ?: false
         }
         role
     }
 
     /** A new session must not inherit the last person's role. */
-    fun reset() { role = null; isCompany = null; canAccessPipeline = false }
+    fun reset() { role = null; isCompany = null; canAccessPipeline = false; canAccessLegal = false }
 }

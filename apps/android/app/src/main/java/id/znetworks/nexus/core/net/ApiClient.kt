@@ -141,6 +141,8 @@ class ApiClient(
         etag: String?,
         /** Told the version as soon as the headers arrive, so a download cut mid-way can resume (audit S7). */
         onEtag: (String?) -> Unit = {},
+        /** The response headers of a successful answer (Legal names a saved file from its Content-Disposition). */
+        onHeaders: (okhttp3.Headers) -> Unit = {},
         onProgress: (Long, Long) -> Unit = { _, _ -> },
     ): String? {
         // A malformed absolute URL from the server is a failed download, not a crash (audit S8).
@@ -161,6 +163,7 @@ class ApiClient(
             } else it.body.contentLength()
             var done = if (partial) have else 0L
             onEtag(it.header("ETag"))
+            onHeaders(it.headers)
             try {
                 it.body.byteStream().use { input ->
                     java.io.FileOutputStream(target, partial).use { out ->
