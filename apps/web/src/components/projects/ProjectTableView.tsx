@@ -1,6 +1,6 @@
 import { DateField } from "@/components/DateField";
 import { EscClose } from "@/hooks/use-escape";
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useEdgeFade } from "@/hooks/use-edge-fade";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -192,7 +192,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   const row = (task: NexusTask, handle: ReactNode = null) => (
     // One row height for every row (UI tour run 14, WD-11: a link or file cell made some rows taller): two
     // lines of name fit, and a cell never grows the row.
-    <div key={task.id} {...bulk.bindRow(task)} className={cn("group grid h-12 items-stretch border-b border-border text-sm hover:bg-muted/40", bulk.isSelected(task.id) && "bg-accent")} style={{ gridTemplateColumns: gridTemplate }}>
+    <div key={task.id} {...bulk.bindRow(task)} className={cn("group grid h-12 snap-start items-stretch border-b border-border text-sm hover:bg-muted/40", bulk.isSelected(task.id) && "bg-accent")} style={{ gridTemplateColumns: gridTemplate }}>
       <NameCell key={task.title} task={task} handle={handle} onRename={(title) => patchTask(task.id, { title })} onOpen={() => onOpen(task)} />
       {columns.map((key) => (
         <div key={key} className="relative flex min-w-0 items-center overflow-hidden border-l border-border px-1.5 py-1 [&>*]:min-w-0 [&>*]:flex-1">
@@ -208,7 +208,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   const scrollRef = useRef<HTMLDivElement>(null);
   const edgeFade = useEdgeFade(scrollRef, [columns.length], true);
   const groupRow = (g: TaskGroup, by: string | null, key: string, depth: number) => (
-    <div className={cn("sticky left-0 flex items-center border-b border-border bg-card px-1.5 py-1", depth > 0 && "pl-6")}>
+    <div className={cn("sticky left-0 flex snap-start items-center border-b border-border bg-card px-1.5 py-1", depth > 0 && "pl-6")}>
       <GroupHeader group={g} groupBy={by} defs={defs} cfg={cfg} collapsed={collapsed.has(key)} onToggle={() => onToggleGroup(key)} />
     </div>
   );
@@ -222,12 +222,14 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
       {/* Desktop too (UI tour run 13, W-D1): the table scrolls inside a box as tall as the screen under the
           project header, so the column names stay pinned past the first screen. The edge that has more columns
           fades (W-D2: "Kategori" ended hard at the edge). Phone: the box runs down to the tab bar (W-M23). */}
-      <div ref={scrollRef} className={cn("overflow-auto overscroll-x-contain rounded-lg border border-border max-h-[max(20rem,calc(100dvh-10rem))] max-md:max-h-[max(16rem,calc(100dvh-var(--tabbar-room)-8rem))]", edgeFade)}>
+      {/* Rows snap whole under the pinned column names (UI tour run 15, R15-WB-1 / R15-WM-3); the header row
+          has a set height so the snap offset is exact. */}
+      <div ref={scrollRef} data-snap-box style={{ "--snap-box-head": "36px" } as CSSProperties} className={cn("overflow-auto overscroll-x-contain rounded-lg border border-border max-h-[max(20rem,calc(100dvh-10rem))] max-md:max-h-[max(16rem,calc(100dvh-var(--tabbar-room)-8rem))]", edgeFade)}>
         {/* Width from the columns' minimums, never from cell contents (perf pass, 12 Oct 2026): with min-w-max a
             row that loaded wider content widened every column and the header jumped. */}
         <div className="w-full" style={{ minWidth: nameW + columns.reduce((n, k) => n + colMin(k), 0) + 40 }}>
           {/* Header row */}
-          <div className="sticky top-0 z-[1] grid items-stretch border-b border-border bg-card text-xs text-muted-foreground" style={{ gridTemplateColumns: gridTemplate }}>
+          <div className="sticky top-0 z-[1] grid h-9 items-stretch border-b border-border bg-card text-xs text-muted-foreground" style={{ gridTemplateColumns: gridTemplate }}>
             <div className="flex items-center gap-1.5 px-3 py-2"><PropIcon def={propDef(defs, "title")} />{t("Name")}</div>
             {columns.map((key) => {
               const def = propDef(defs, key);
@@ -287,7 +289,8 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
           })}
 
           {/* Footer: a calculation per column (Notion's "Calculate"). Sum, Average… keep the number's format. */}
-          <div className="sticky bottom-0 z-[1] grid items-stretch border-t border-border bg-card text-xs text-muted-foreground" style={{ gridTemplateColumns: gridTemplate }}>
+          {/* A short fade above it, so a row cut by the footer fades out instead of ending in half a line (R15-WM-3). */}
+          <div className="sticky bottom-0 z-[1] grid items-stretch border-t border-border bg-card text-xs text-muted-foreground before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-4 before:bg-gradient-to-t before:from-card before:to-transparent before:content-['']" style={{ gridTemplateColumns: gridTemplate }}>
             <div />
             {columns.map((key) => (
               <FooterCalc key={key} def={propDef(defs, key)} tasks={viewTasks} calc={cfg.columnCalcs?.[key]} readOnly={!onCalcsChange || !canEditColumns}
@@ -345,7 +348,7 @@ function NameCell({ task, handle, onRename, onOpen }: { task: NexusTask; handle?
           type="button"
           onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey) return; setEditing(true); }}
           title={task.title}
-          className={cn("line-clamp-2 min-w-0 flex-1 break-words rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm font-medium leading-snug hover:border-border", done && "text-muted-foreground line-through")}
+          className={cn("line-clamp-2 min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm font-medium leading-snug [overflow-wrap:anywhere] hover:border-border", done && "text-muted-foreground line-through")}
         >
           {title}
         </button>
@@ -430,11 +433,11 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
   }
   if (colKey === "dueDate" || colKey === "due") {
     const d = task.dueDate ? localYmd(task.dueDate) : "";
-    return <DateField value={d || null} onChange={(v) => patchTask(task.id, { dueDate: v })} ariaLabel={t("Due date")} />;
+    return <DateField value={d || null} onChange={(v) => patchTask(task.id, { dueDate: v })} ariaLabel={t("Due date")} placeholder="—" />;
   }
   if (colKey === "start") {
     const d = task.startDate ? localYmd(task.startDate) : "";
-    return <DateField value={d || null} onChange={(v) => patchTask(task.id, { startDate: v } as Parameters<typeof nexusApi.updateTask>[1])} ariaLabel={t("Start date")} />;
+    return <DateField value={d || null} onChange={(v) => patchTask(task.id, { startDate: v } as Parameters<typeof nexusApi.updateTask>[1])} ariaLabel={t("Start date")} placeholder="—" />;
   }
   if (colKey === "section") {
     const current = task.taskListId ?? task.taskList?.id ?? "";

@@ -1653,6 +1653,7 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
     <button
       type="button"
       data-morph-id={morph ? `list-taskcard-${task.id}` : undefined}
+      data-snap-row
       style={{ borderRadius: 6, ...tint }}
       {...cardProps}
       className={cn("group flex min-h-9 w-full flex-wrap items-center gap-x-2.5 gap-y-1 border-b sm:flex-nowrap sm:gap-y-0 border-border/70 px-2 py-1.5 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--accent-foreground)]/40", selected && "bg-accent", task.parentId && "pl-7")}
@@ -1957,7 +1958,8 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
           onTouchEnd={onSwipeEnd}
         >
           <div className="grid grid-cols-7 border-b border-border text-muted-foreground">
-            {weekdays.map((d, i) => <div key={i} className={cn("px-2 py-1.5 text-right", CAPS)}>{d}</div>)}
+            {/* Left, as every month grid has it (UI tour run 15, R15-WB-3); the date sits top-left under it. */}
+            {weekdays.map((d, i) => <div key={i} className={cn("px-2 py-1.5 text-left", CAPS)}>{d}</div>)}
           </div>
           <div className="grid grid-cols-7">
             {days.map((day, idx) => {
@@ -1976,7 +1978,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
                   onClick={(e) => { if (inMonth && !(e.target as HTMLElement).closest("button")) setPickedDay(key); }}
                   className={cn("group/cal relative min-h-28 border-border p-1", inMonth && "cursor-pointer", idx % 7 !== 6 && "border-r", idx >= 7 && "border-t", !inMonth && "bg-muted/30", dropKey === key && "bg-accent", inMonth && key === pickedKey && "ring-2 ring-inset ring-cal-accent")}
                 >
-                  <div className="mb-1 flex items-center justify-between">
+                  <div className="mb-1 flex flex-row-reverse items-center justify-between">
                     {inMonth ? <button type="button" onClick={() => onCreate(ymd(day))} aria-label={t("Add a task on this date")} title={t("Add a task on this date")} className="grid h-6 w-6 place-items-center rounded text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/cal:opacity-100"><Plus className="h-3.5 w-3.5" /></button> : <span />}
                     {inMonth ? (
                       <button type="button" onClick={() => setPickedDay(key)} aria-pressed={key === pickedKey} aria-label={new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long" }).format(day)}

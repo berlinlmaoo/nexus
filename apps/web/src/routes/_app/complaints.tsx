@@ -95,7 +95,9 @@ const countFor = (counts: Record<string, number>, tab: Tab) =>
 // Desktop row grid: subject · from · category · status · replies · last activity. Header and rows share it.
 // From xl, not lg: at 1024 with the sidebar open the fixed columns took all ~700px and the Subject column
 // collapsed to 0 (QA 13 Oct 2026, iPad portrait). Below xl every ticket is the two-line row.
-const ROW_GRID = "xl:grid xl:grid-cols-[minmax(0,1fr)_10.5rem_7.5rem_8rem_4rem_7rem] xl:items-center xl:gap-4";
+// From is wider and wraps to two lines; Category gave up the width it did not use (UI tour run 15, R15-WD-6:
+// "Mohamad Okta Fir…" beside ~60 px of free Category column).
+const ROW_GRID = "xl:grid xl:grid-cols-[minmax(0,1fr)_13rem_6.5rem_8rem_4rem_7rem] xl:items-center xl:gap-4";
 const ROW_GRID_MINE = "xl:grid xl:grid-cols-[minmax(0,1fr)_7.5rem_8rem_4rem_7rem] xl:items-center xl:gap-4";
 
 function ComplaintsPage() {
@@ -196,7 +198,7 @@ function ComplaintsPage() {
               : <EmptyAction onClick={() => setComposing(true)}><Plus className="h-4 w-4" /> {t("New ticket")}</EmptyAction>} />
         )}
         {!loading && complaints.length > 0 && (
-          <div className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="overflow-clip rounded-xl border border-border bg-card">
             <div aria-hidden className={cn("hidden border-b border-border bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground", viewerIsBod ? ROW_GRID : ROW_GRID_MINE)}>
               <span>{t("Subject")}</span>
               {viewerIsBod && <span>{t("From")}</span>}
@@ -205,7 +207,8 @@ function ComplaintsPage() {
               <span className="text-right">{t("Replies")}</span>
               <span className="text-right">{t("Last activity")}</span>
             </div>
-            <ul className="divide-y divide-border">
+            {/* Rows snap whole under the page header (UI tour run 15, R15-WB-1). */}
+            <ul data-snap-rows className="divide-y divide-border">
               {complaints.map((c) => <li key={c.id}><TicketRow c={c} viewerIsBod={viewerIsBod} onOpen={() => setOpenId(c.id)} /></li>)}
             </ul>
           </div>
@@ -270,22 +273,23 @@ function TicketRow({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: bool
     <button onClick={onOpen} className={cn("block w-full px-4 py-3 text-left transition-colors hover:bg-accent/50 focus-visible:bg-accent/50 focus-visible:outline-none", viewerIsBod ? ROW_GRID : ROW_GRID_MINE)}>
       {/* Subject (+ markers). On a phone the date rides on this line. */}
       <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+        <div className="flex min-w-0 items-start gap-2 overflow-hidden xl:items-center">
           {/* Desktop: the subject has the whole column (up to two lines); the markers moved under it, labelled
               (UI tour run 14, R14-WD-14: beside them the subject was cut to "Day Off terpotong ka…" and the
               GIDEON mark was a bare glyph). */}
-          <span className="min-w-0 truncate text-sm font-medium text-foreground xl:line-clamp-2 xl:whitespace-normal xl:break-words">{c.subject}</span>
-          <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground xl:hidden">{fmtWhen(c.lastMessageAt)}</span>
+          {/* Two lines on a phone too (UI tour run 15, R15-WM-7: cut to one line there while the desktop wrapped). */}
+          <span className="line-clamp-2 min-w-0 break-words text-sm font-medium text-foreground">{c.subject}</span>
+          <span className="ml-auto mt-0.5 shrink-0 text-xs tabular-nums text-muted-foreground xl:hidden">{fmtWhen(c.lastMessageAt)}</span>
         </div>
         {markers && <div className="mt-1 hidden xl:flex">{markers}</div>}
       </div>
       {viewerIsBod && (
         <div className="hidden min-w-0 items-center gap-2 xl:flex">
           {c.reporter ? <Avatar userId={c.reporter.id} name={c.reporter.name} avatar={c.reporter.avatar ?? null} size={20} /> : null}
-          <span className="truncate text-sm text-muted-foreground">{who}</span>
+          <span className="line-clamp-2 min-w-0 break-words text-sm leading-snug text-muted-foreground">{who}</span>
         </div>
       )}
-      <span className="hidden truncate text-sm text-muted-foreground xl:block">{cat ? t(cat.label) : "—"}</span>
+      <span className="hidden text-sm leading-snug text-muted-foreground xl:line-clamp-2">{cat ? t(cat.label) : "—"}</span>
       <span className="hidden xl:flex"><StatusChip status={c.status} /></span>
       <span className="hidden items-center justify-end gap-1 text-sm tabular-nums text-muted-foreground xl:flex"><MessageSquare className="h-3.5 w-3.5" />{c.messageCount}</span>
       <span className="hidden text-right text-xs tabular-nums text-muted-foreground xl:block">{fmtWhen(c.lastMessageAt)}</span>
