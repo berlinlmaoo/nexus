@@ -482,7 +482,10 @@ private fun DuplicateDialog(name: String, load: suspend () -> List<Named>, onDis
                     else -> Column(Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
                         list!!.forEach { p ->
                             Row(Modifier.fillMaxWidth().clickable { target = p }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                androidx.compose.material3.RadioButton(target == p, { target = p }); Text(p.name, fontSize = 14.sp, color = c.foreground)
+                                androidx.compose.material3.RadioButton(target == p, { target = p })
+                                // Each project's own mark, as iOS's "Duplicate to another project".
+                                id.znetworks.nexus.feature.projects.ProjectMark(null, 22.dp, projectId = p.id); Spacer(Modifier.width(10.dp))
+                                Text(p.name, fontSize = 14.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
                     }

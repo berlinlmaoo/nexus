@@ -56,7 +56,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
 import id.znetworks.nexus.core.net.ApiError
-import id.znetworks.nexus.feature.projects.parseColor
+import id.znetworks.nexus.feature.projects.ProjectMark
 import id.znetworks.nexus.ui.components.describe
 import id.znetworks.nexus.ui.theme.Nx
 import kotlinx.coroutines.Job
@@ -72,7 +72,7 @@ import java.util.Locale
 // GET /api/search?q= (API.md §2.4): scoped to the caller's workspaces.
 
 @Serializable data class TaskHit(val id: String, val title: String = "")
-@Serializable data class ProjectHit(val id: String, val name: String = "", val color: String? = null)
+@Serializable data class ProjectHit(val id: String, val name: String = "", val color: String? = null, val icon: String? = null)
 @Serializable data class DocHit(val id: String, val title: String = "")
 @Serializable data class FormHit(val id: String, val name: String = "")
 @Serializable data class MemberHit(val id: String, val name: String? = null, val email: String? = null, val avatar: String? = null)
@@ -153,7 +153,8 @@ fun SearchScreen(
             r == null -> Centered { CircularProgressIndicator() }
             r.isEmpty -> Placeholder(Icons.Filled.Search, stringResource(R.string.search_none, s.query.trim()))
             else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                group(R.string.search_projects, r.projects) { p -> Hit(Icons.Filled.ViewKanban, parseColor(p.color, c.violet), p.name, null) { onOpenProject(p.id) } }
+                // The project's own mark (its photo, else the grey page), as iOS SearchView; it follows a photo change live.
+                group(R.string.search_projects, r.projects) { p -> Hit(Icons.Filled.ViewKanban, c.violet, p.name, null, mark = { ProjectMark(p.icon, 34.dp, projectId = p.id) }) { onOpenProject(p.id) } }
                 group(R.string.search_tasks, r.tasks) { t -> Hit(Icons.Filled.Checklist, c.success, t.title, null) { onOpenTask(t.id) } }
                 // Docs and forms open on the web until Phase 3 builds them here.
                 group(R.string.search_docs, r.docs) { d -> Hit(Icons.Filled.Description, c.violetText, d.title, null) { onOpenDoc(d.id) } }
@@ -174,14 +175,15 @@ private fun <T> androidx.compose.foundation.lazy.LazyListScope.group(label: Int,
 }
 
 @Composable
-private fun Hit(icon: ImageVector, tint: Color, title: String, sub: String?, onClick: (() -> Unit)?) {
+private fun Hit(icon: ImageVector, tint: Color, title: String, sub: String?, mark: (@Composable () -> Unit)? = null, onClick: (() -> Unit)?) {
     val c = Nx.colors
     Row(
         Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(14.dp)).border(1.dp, c.border, RoundedCornerShape(14.dp))
             .let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(34.dp).background(tint.copy(alpha = 0.14f), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
+        if (mark != null) mark()
+        else Box(Modifier.size(34.dp).background(tint.copy(alpha = 0.14f), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = tint, modifier = Modifier.size(18.dp))
         }
         Spacer(Modifier.width(12.dp))

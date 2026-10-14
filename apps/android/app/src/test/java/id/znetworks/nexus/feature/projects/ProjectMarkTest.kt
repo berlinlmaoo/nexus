@@ -55,4 +55,16 @@ class ProjectMarkTest {
         assertTrue(settings.contains("ps_photo_add") && settings.contains("ps_photo_change") && settings.contains("ps_photo_remove"))
         assertTrue(api.contains("/api/upload/project-icon"))
     }
+
+    @Test fun everyPlaceThatNamesAProjectDrawsItsMark() {
+        // iOS ProjectMark call sites (14 Oct): search, member profile, form duplicate, submissions filter, and the rest.
+        mapOf(
+            "feature/search/SearchScreen.kt" to "ProjectMark(p.icon, 34.dp, projectId = p.id)",
+            "feature/people/PeopleScreens.kt" to "ProjectMark(p.icon, 18.dp, projectId = p.id)",
+            "feature/forms/FormBuilderScreen.kt" to "ProjectMark(null, 22.dp, projectId = p.id)",
+            "feature/forms/SubmissionsScreen.kt" to "ProjectMark(null, 13.dp, projectId = board.project)",
+            "feature/chat/MessagesScreen.kt" to "ProjectMark(null, 30.dp, projectId = conv.projectId)",
+            "feature/home/HomeScreen.kt" to "ProjectMark(ref.icon, 32.dp, projectId = ref.id)",
+        ).forEach { (f, call) -> assertTrue(f, src(f).contains(call)) }
+    }
 }

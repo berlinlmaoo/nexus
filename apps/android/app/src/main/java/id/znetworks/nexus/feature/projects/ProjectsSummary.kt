@@ -75,7 +75,7 @@ object ProjectsLogic {
 }
 
 @Composable
-private fun statusLabel(k: String) = stringResource(when (k) {
+internal fun projectStatusLabel(k: String) = stringResource(when (k) {
     "ACTIVE" -> R.string.psum_active; "PLANNING" -> R.string.psum_planning; "ON_HOLD" -> R.string.psum_on_hold
     "COMPLETED" -> R.string.psum_completed; "ARCHIVED" -> R.string.psum_archived; else -> R.string.psum_all
 })
@@ -102,7 +102,7 @@ fun ProjectsSummaryCard(shown: Int, total: Int, sum: ProjectsLogic.Summary, stat
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(Icons.Outlined.Tune, null, tint = c.mutedFg, modifier = Modifier.size(16.dp))
             Text(stringResource(R.string.psum_filters), fontSize = 13.sp, color = c.mutedFg)
-            MenuPill(statusLabel(status), ProjectsLogic.STATUSES, { statusLabel(it) }, status, onStatus)
+            MenuPill(projectStatusLabel(status), ProjectsLogic.STATUSES, { projectStatusLabel(it) }, status, onStatus)
             MenuPill(sortLabel(sort), ProjectsLogic.SORTS, { sortLabel(it) }, sort, onSort)
         }
     }

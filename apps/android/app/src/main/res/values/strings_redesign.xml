@@ -340,4 +340,9 @@
     <string name="rb_next_month">Next month</string>
     <string name="rb_nothing_in">Nothing booked in %1$s</string>
     <string name="rb_by">by %1$s</string>
+    <string name="pf_teams">Teams</string>
+    <string name="pf_no_team_me">Not on a team yet.</string>
+    <string name="pf_no_team">No team you can both see.</string>
+    <string name="pf_projects">Projects</string>
+    <string name="pf_no_project">No project you can both see.</string>
 </resources>

@@ -327,7 +327,7 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
                     }
                 }
             }
-            if (hidden || r == null) return@Column
+            if (hidden || r == null) { MembershipCards(userId, isMe); return@Column }
             // Period bar
             // A little more room above: everything below is that period's record.
             Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -453,6 +453,7 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
                     }
                 }
             }
+            MembershipCards(userId, isMe)
         }
     }
     notice?.let { AlertDialog(onDismissRequest = { notice = null }, text = { Text(it) }, confirmButton = { TextButton(onClick = { notice = null }) { Text("OK") } }) }
@@ -564,4 +565,53 @@ private fun Modifier.joinedRowOutline(color: Color, first: Boolean, last: Boolea
     // The top edge is left out below the first row: the row above already drew it as its bottom.
     if (first) drawPath(path, color, style = androidx.compose.ui.graphics.drawscope.Stroke(w))
     else clipRect(top = w) { drawPath(path, color, style = androidx.compose.ui.graphics.drawscope.Stroke(w)) }
+}
+
+/** The person's teams and projects you can both see (iOS MemberProfileView teamsCard / projectsCard). */
+object MembershipLogic {
+    fun teams(all: List<id.znetworks.nexus.feature.admin.Team>, userId: String) = all.filter { t -> t.members.any { it.uid == userId } }
+    fun projects(all: List<id.znetworks.nexus.feature.projects.Project>, userId: String) = all.filter { p -> p.members.any { it.uid == userId } }
+    /** The status only when it is not Active, so it isn't repeated on every row (iOS, UI tour run 7). */
+    fun showStatus(status: String?) = (status ?: "ACTIVE").uppercase() != "ACTIVE"
+}
+
+@Composable
+private fun MembershipCards(userId: String, isMe: Boolean) {
+    val c = Nx.colors
+    val container = (LocalContext.current.applicationContext as NexusApplication).container
+    var teams by remember(userId) { mutableStateOf<List<id.znetworks.nexus.feature.admin.Team>?>(null) }
+    var projects by remember(userId) { mutableStateOf<List<id.znetworks.nexus.feature.projects.Project>?>(null) }
+    LaunchedEffect(userId) {
+        teams = runCatching { MembershipLogic.teams(id.znetworks.nexus.feature.admin.TeamsApi(container.api).teams(), userId) }.getOrNull()
+        projects = runCatching { MembershipLogic.projects(id.znetworks.nexus.feature.projects.ProjectsApi(container.api).projects().value, userId) }.getOrNull()
+    }
+    // Nothing to say while loading or when the lists could not be read (the record above still shows).
+    teams?.let { list ->
+        Card {
+            Text(stringResource(R.string.pf_teams).uppercase(), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
+            if (list.isEmpty()) Text(stringResource(if (isMe) R.string.pf_no_team_me else R.string.pf_no_team), fontSize = 12.sp, color = c.mutedFg)
+            list.forEach { t ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(10.dp).background(id.znetworks.nexus.feature.projects.parseColor(t.color, c.violet), RoundedCornerShape(4.dp)))
+                    Spacer(Modifier.width(10.dp))
+                    Text(t.name, fontSize = 14.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+    projects?.let { list ->
+        Card {
+            Text(stringResource(R.string.pf_projects).uppercase(), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
+            if (list.isEmpty()) Text(stringResource(if (isMe) R.string.home_no_projects else R.string.pf_no_project), fontSize = 12.sp, color = c.mutedFg)
+            list.forEach { p ->
+                // The project's own mark (photo or the grey page), not a colour dot.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    id.znetworks.nexus.feature.projects.ProjectMark(p.icon, 18.dp, projectId = p.id)
+                    Spacer(Modifier.width(10.dp))
+                    Text(p.name, fontSize = 14.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    if (MembershipLogic.showStatus(p.status)) Text(id.znetworks.nexus.feature.projects.projectStatusLabel((p.status ?: "").uppercase()), fontSize = 11.sp, color = c.mutedFg)
+                }
+            }
+        }
+    }
 }

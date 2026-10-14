@@ -135,7 +135,9 @@ internal fun SubmissionBoardView(d: Submissions, onOpen: (String) -> Unit) {
             if ("multimedia" in board.kinds) FilterPill(stringResource(R.string.sub_f_multimedia), kind == "multimedia") { kind = "multimedia" }
             if (board.projects.isNotEmpty()) Box {
                 var open by remember { mutableStateOf(false) }
-                FilterPill((board.projects.firstOrNull { it.id == board.project }?.name ?: stringResource(R.string.sub_f_all_projects)) + " ▾", board.project != null) { open = true }
+                // The chosen project's mark in the chip (iOS SubmissionsView); the grey page for "All projects".
+                FilterPill((board.projects.firstOrNull { it.id == board.project }?.name ?: stringResource(R.string.sub_f_all_projects)) + " ▾", board.project != null,
+                    lead = { id.znetworks.nexus.feature.projects.ProjectMark(null, 13.dp, projectId = board.project) }) { open = true }
                 androidx.compose.material3.DropdownMenu(open, { open = false }) {
                     androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.sub_f_all_projects)) }, onClick = { open = false; pickProject(null) },
                         leadingIcon = { if (board.project == null) Icon(Icons.Filled.Check, null) })
@@ -175,11 +177,14 @@ internal fun SubmissionBoardView(d: Submissions, onOpen: (String) -> Unit) {
 }
 
 @Composable
-private fun FilterPill(text: String, on: Boolean, onClick: () -> Unit) {
+private fun FilterPill(text: String, on: Boolean, lead: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
     val c = Nx.colors
-    Text(text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (on) c.foreground else c.mutedFg, maxLines = 1,
-        modifier = Modifier.clip(CircleShape).background(if (on) c.muted else c.card).border(1.dp, if (on) c.foreground.copy(alpha = 0.25f) else c.border, CircleShape)
-            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp))
+    Row(Modifier.clip(CircleShape).background(if (on) c.muted else c.card).border(1.dp, if (on) c.foreground.copy(alpha = 0.25f) else c.border, CircleShape)
+            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        lead?.invoke()
+        Text(text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (on) c.foreground else c.mutedFg, maxLines = 1)
+    }
 }
 
 /** Grouping for the board: kept pure so it is tested on the JVM. */

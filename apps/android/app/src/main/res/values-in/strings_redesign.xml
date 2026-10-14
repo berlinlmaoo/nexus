@@ -322,4 +322,9 @@
     <string name="rb_next_month">Bulan berikutnya</string>
     <string name="rb_nothing_in">Belum ada booking di bulan %1$s</string>
     <string name="rb_by">oleh %1$s</string>
+    <string name="pf_teams">Tim</string>
+    <string name="pf_no_team_me">Belum masuk tim mana pun.</string>
+    <string name="pf_no_team">Tidak ada tim yang bisa kalian berdua lihat.</string>
+    <string name="pf_projects">Project</string>
+    <string name="pf_no_project">Tidak ada project yang bisa kalian berdua lihat.</string>
 </resources>
