@@ -68,8 +68,8 @@ struct ListPropLine: View {
     let status: RowStatus?
     /// Compact width: the properties wrap under the title instead of running off the edge.
     var wrap = false
-    /// Wide: the custom fields shown as columns, in this order (ListColumns). nil = chips as they come.
-    var fieldColumns: [String]? = nil
+    /// Wide: the columns every row of this List draws (ListColumns.Layout). nil = chips as they come.
+    var columnLayout: ListColumns.Layout? = nil
     /// The List is grouped by priority: its header says it, the row does not repeat it.
     var hidePriority = false
 
@@ -125,8 +125,8 @@ struct ListPropLine: View {
     }
 
     var body: some View {
-        if let fieldColumns {
-            columns(fieldColumns)
+        if let columnLayout {
+            columns(columnLayout)
         } else {
             chips
         }
@@ -135,15 +135,18 @@ struct ListPropLine: View {
     /// Fixed slots, always in this order: the fields, due date, priority, status, people. A slot with no
     /// value stays as wide, blank: an empty `if` with a frame on it collapsed in the HStack, so a row
     /// without a due date or an assignee slid its other values over (UI tour run 11, MC-1 / PD-6).
-    private func columns(_ ids: [String]) -> some View {
+    /// A slot no row of the List can fill (no task has a due date, the groups already say the status) is
+    /// left out for every row alike: those blanks pushed the date and Kategori columns off the Mac row
+    /// (UI tour run 12, MC2).
+    private func columns(_ layout: ListColumns.Layout) -> some View {
         HStack(spacing: 12) {
-            ForEach(ids, id: \.self) { id in
-                ListSlot(width: ListColumns.fieldW) { fieldSlot(id) }
+            ForEach(layout.fields, id: \.id) { field in
+                ListSlot(width: field.width) { fieldSlot(field.id) }
             }
-            ListSlot(width: ListColumns.dueW) { dueSlot }
-            ListSlot(width: ListColumns.priorityW) { prioritySlot }
-            ListSlot(width: ListColumns.statusW) { statusSlot }
-            ListSlot(width: ListColumns.peopleW, alignment: .trailing) { people }
+            if layout.due { ListSlot(width: ListColumns.dueW) { dueSlot } }
+            if layout.priority { ListSlot(width: ListColumns.priorityW) { prioritySlot } }
+            if layout.status { ListSlot(width: ListColumns.statusW) { statusSlot } }
+            if layout.people { ListSlot(width: ListColumns.peopleW, alignment: .trailing) { people } }
         }
     }
 
@@ -235,8 +238,8 @@ struct ListTaskRow: View {
     let task: BoardTask
     let status: RowStatus?
     let wide: Bool
-    /// Wide: the custom-field columns every row of this List draws (same order, same width).
-    var fieldColumns: [String] = []
+    /// Wide: the columns every row of this List draws (same order, same width).
+    var columnLayout = ListColumns.Layout()
     /// Grouped by priority: the row leaves the priority pill out.
     var hidePriority = false
     let onOpen: (String) -> Void
@@ -276,14 +279,14 @@ struct ListTaskRow: View {
         if wide {
             // The property columns are fixed widths (up to ~830 pt with three fields). On a portrait iPad
             // with the sidebar open that left the title NO width at all — rows of amounts and pills with
-            // no names (UI tour run 5). Keep at least 220 pt for the title: drop field columns one by one,
+            // no names (UI tour run 5). Keep at least 200 pt for the title: drop field columns one by one,
             // then fall back to the two-line row. Every row sees the same width and the title's ideal is
             // fixed, so all rows of a List pick the same layout.
             // Never down to zero field columns when the project has fields: that row showed only priority
             // and status on a portrait iPad (UI tour run 9, P6). The two-line row shows them all instead.
             ViewThatFits(in: .horizontal) {
-                ForEach(0...max(0, fieldColumns.count - 1), id: \.self) { dropped in
-                    wideRow(Array(fieldColumns.dropLast(dropped)))
+                ForEach(0...max(0, columnLayout.fields.count - 1), id: \.self) { dropped in
+                    wideRow(columnLayout.droppingFields(dropped))
                 }
                 compactRow
             }
@@ -292,11 +295,11 @@ struct ListTaskRow: View {
         }
     }
 
-    private func wideRow(_ fields: [String]) -> some View {
+    private func wideRow(_ layout: ListColumns.Layout) -> some View {
         HStack(spacing: 10) {
             leading
-            titleLine.frame(minWidth: 220, idealWidth: 220, maxWidth: .infinity, alignment: .leading)
-            ListPropLine(task: task, status: status, fieldColumns: fields, hidePriority: hidePriority)
+            titleLine.frame(minWidth: 200, idealWidth: 200, maxWidth: .infinity, alignment: .leading)
+            ListPropLine(task: task, status: status, columnLayout: layout, hidePriority: hidePriority)
         }
     }
 
@@ -336,16 +339,36 @@ struct ListTaskRow: View {
     }
 }
 
-/// The wide List's property columns: their widths, and which custom fields get one (the project's fields
-/// in their own order that hold a value on any task shown, at most three — the rest are in the task).
+/// The wide List's property columns: their widths, which custom fields get one (the project's fields in
+/// their own order that hold a value on any task shown, at most four like the web row), and which fixed
+/// slots the List draws at all.
 enum ListColumns {
-    static let fieldW: CGFloat = 120
+    static let fieldW: CGFloat = 108
+    /// A date field's column: a day label ("25 Sep", "5 Jan 2027") is narrower than an amount or a name.
+    static let dateFieldW: CGFloat = 76
     static let dueW: CGFloat = 84
     static let priorityW: CGFloat = 92
     static let statusW: CGFloat = 140
     static let peopleW: CGFloat = 64
 
-    static func fieldIds(fields: [CustomField], lanes: [ProjectDetail.Lane], max: Int = 3) -> [String] {
+    /// The columns of one List, the same for every row.
+    struct Layout: Equatable {
+        struct Field: Equatable { let id: String; let width: CGFloat }
+        var fields: [Field] = []
+        var due = true
+        var priority = true
+        var status = true
+        var people = true
+
+        /// The same layout with the last `n` field columns left out (a narrow window).
+        func droppingFields(_ n: Int) -> Layout {
+            var copy = self
+            copy.fields = Array(fields.dropLast(n))
+            return copy
+        }
+    }
+
+    static func fieldIds(fields: [CustomField], lanes: [ProjectDetail.Lane], max: Int = 4) -> [String] {
         var used = Set<String>()
         var seen: [String] = []
         for lane in lanes {
@@ -358,6 +381,24 @@ enum ListColumns {
         // The project's order when the fields are known; else the order they first appear in.
         let ordered = fields.isEmpty ? seen : fields.map(\.id).filter { used.contains($0) }
         return Array(ordered.prefix(max))
+    }
+
+    /// The layout a List draws. `statusShown` / `priorityShown`: whether any row carries that chip (a List
+    /// grouped by status or priority says it in the group headers, so no row does).
+    static func layout(fields: [CustomField], lanes: [ProjectDetail.Lane],
+                       statusShown: Bool, priorityShown: Bool) -> Layout {
+        let tasks = lanes.flatMap { $0.tasks ?? [] }
+        let types = Dictionary(fields.map { ($0.id, $0.type.uppercased()) }, uniquingKeysWith: { a, _ in a })
+        let cols = fieldIds(fields: fields, lanes: lanes).map { id in
+            Layout.Field(id: id, width: types[id] == "DATE" ? dateFieldW : fieldW)
+        }
+        return Layout(
+            fields: cols,
+            due: tasks.contains { ProjDate.parse($0.dueDate) != nil },
+            priority: priorityShown && tasks.contains { ($0.priority ?? "NONE").uppercased() != "NONE" },
+            status: statusShown,
+            people: tasks.contains { !$0.assigneeAvatars.isEmpty }
+        )
     }
 }
 

@@ -23,7 +23,8 @@ enum ProjectTab: String, CaseIterable, Identifiable {
         case .table:    return "tablecells"
         case .sheet:    return "tablecells.badge.ellipsis"
         case .calendar: return "calendar"
-        case .timeline: return "chart.bar.xaxis"
+        // The web's GanttChart lines, as the iPad / Mac tab row draws it (UI tour run 12, IP6: a bar chart).
+        case .timeline: return "text.alignleft"
         case .automations: return "bolt.fill"
         case .pages:    return "doc.text.fill"
         case .forms:    return "list.clipboard.fill"
@@ -156,6 +157,36 @@ struct ProjectTaskRow: View {
     }
 }
 
+/// The web's muted hint above a project Calendar or Timeline that shows nothing while its tasks sit
+/// elsewhere: "84 tasks have no date — Show them", "22 tasks outside this range — Jump to first"
+/// (UI tour run 12, IP5 / IP7 / PD4).
+struct ProjectRangeHint: View {
+    let icon: String
+    let text: String
+    let actionTitle: String
+    let action: () -> Void
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: icon).font(.system(size: 13)).foregroundStyle(NX.mutedFg)
+                .accessibilityHidden(true)
+            FlowLayout(spacing: 6) {
+                Text(text + " —").font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                Button(action: action) {
+                    Text(actionTitle).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground)
+                        .underline()
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
 struct TabEmpty: View {
     let icon: String
     let text: String
@@ -190,7 +221,7 @@ struct ListTab: View {
 
     var body: some View {
         // Computed once per render: every row of the List draws the same columns.
-        let columns = hSize == .regular ? ListColumns.fieldIds(fields: fields, lanes: lanes) : []
+        let columns = hSize == .regular ? columnLayout : ListColumns.Layout()
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 14) {
                 ForEach(lanes) { lane in
@@ -202,7 +233,21 @@ struct ListTab: View {
         }
     }
 
-    private func group(_ lane: ProjectDetail.Lane, columns: [String]) -> some View {
+    /// Grouped by status (or priority), the group header already says it: the row leaves that chip out
+    /// instead of repeating it on every row (UI tour run 11, IP-8).
+    private func groupedBy(_ laneId: String) -> (status: Bool, priority: Bool) {
+        let groupProp = ViewEngine.groupTarget(laneId)?.prop
+        return (groupProp == "status" || (groupProp == nil && statusStyle), groupProp == "priority")
+    }
+
+    /// The wide List's columns, the same for every row.
+    private var columnLayout: ListColumns.Layout {
+        ListColumns.layout(fields: fields, lanes: lanes,
+                           statusShown: lanes.contains { !groupedBy($0.id).status },
+                           priorityShown: lanes.contains { !groupedBy($0.id).priority })
+    }
+
+    private func group(_ lane: ProjectDetail.Lane, columns: ListColumns.Layout) -> some View {
         let isCollapsed = collapsed.contains(lane.id)
         return VStack(alignment: .leading, spacing: 0) {
             ListGroupHeader(lane: lane, statusStyle: statusStyle, collapsed: isCollapsed) {
@@ -232,13 +277,10 @@ struct ListTab: View {
         }
     }
 
-    @ViewBuilder private func row(_ t: BoardTask, laneId: String, columns: [String], order: @escaping () -> [String]) -> some View {
-        // Grouped by status (or priority), the group header already says it: the row leaves that chip out
-        // instead of repeating it on every row (UI tour run 11, IP-8).
-        let groupProp = ViewEngine.groupTarget(laneId)?.prop
-        let byStatus = groupProp == "status" || (groupProp == nil && statusStyle)
-        let base = ListTaskRow(task: t, status: byStatus ? nil : (statusOf(t) ?? RowStatus.plain(t)), wide: hSize == .regular,
-                               fieldColumns: columns, hidePriority: groupProp == "priority",
+    @ViewBuilder private func row(_ t: BoardTask, laneId: String, columns: ListColumns.Layout, order: @escaping () -> [String]) -> some View {
+        let by = groupedBy(laneId)
+        let base = ListTaskRow(task: t, status: by.status ? nil : (statusOf(t) ?? RowStatus.plain(t)), wide: hSize == .regular,
+                               columnLayout: columns, hidePriority: by.priority,
                                onOpen: onOpen, selection: selection, order: order)
         if onDrop == nil {
             // Read-only (Can view / Can comment): rows open, nothing drags.
@@ -281,6 +323,8 @@ struct TimelineTab: View {
     @State private var shown: [String: Int] = [:]
     /// The chart's horizontal scroll (iOS 18): drives the sticky day header above it.
     @State private var offsetX: CGFloat = 0
+    /// Bumped by "Jump to first": the chart scrolls to the first bar.
+    @State private var jumpToFirst = 0
 
     private let dayW: CGFloat = 40
     private let rowH: CGFloat = 48
@@ -350,7 +394,7 @@ struct TimelineTab: View {
     var body: some View {
         let gs = groups
         if gs.allSatisfy({ $0.rows.isEmpty }) {
-            EmptyState(icon: "chart.bar.xaxis", title: T("Nothing on the timeline"),
+            EmptyState(icon: "text.alignleft", title: T("Nothing on the timeline"),
                        subtitle: T("Tasks show here as bars from their start date to their due date."))
         } else {
             GeometryReader { geo in
@@ -404,9 +448,40 @@ struct TimelineTab: View {
         if #available(iOS 18.0, *) { return true } else { return false }
     }
 
+    /// The day index of the first bar, where "Jump to first" lands.
+    private func firstBarIndex(_ gs: [Group], ax: Axis) -> Int? {
+        gs.flatMap { $0.rows.compactMap(\.win) }.map(\.start).min().map { days(ax.start, $0) }
+    }
+
+    /// How many bars sit outside the days in view, when none is in it (web: "N tasks outside this range").
+    /// Only where the chart's scroll offset is known (iOS 18); iOS 17 opens on today and says nothing.
+    private func barsOutOfView(_ gs: [Group], ax: Axis, viewport: CGFloat) -> Int? {
+        guard stickyHeader, viewport > 0 else { return nil }
+        let wins = gs.flatMap { $0.rows.compactMap(\.win) }
+        guard !wins.isEmpty else { return nil }
+        let inView = wins.contains { w in
+            let x0 = CGFloat(days(ax.start, w.start)) * dayW
+            let x1 = CGFloat(days(ax.start, w.end)) * dayW + dayW
+            return x1 > offsetX && x0 < offsetX + viewport
+        }
+        return inView ? nil : wins.count
+    }
+
     private func chart(_ gs: [Group], width: CGFloat) -> some View {
         let leftW = leftWidth(width)
         let ax = axis(gs, chartWidth: max(0, width - leftW))
+        let outside = barsOutOfView(gs, ax: ax, viewport: width - leftW)
+        return VStack(spacing: 8) {
+            if let outside {
+                ProjectRangeHint(icon: "text.alignleft",
+                                 text: outside == 1 ? T("1 task outside this range") : String(format: T("%d tasks outside this range"), outside),
+                                 actionTitle: T("Jump to first")) { jumpToFirst += 1 }
+            }
+            chartCard(gs, ax: ax, leftW: leftW)
+        }
+    }
+
+    private func chartCard(_ gs: [Group], ax: Axis, leftW: CGFloat) -> some View {
         let ls = lines(gs)
         let sticky = stickyHeader
         return VStack(spacing: 0) {
@@ -430,7 +505,7 @@ struct TimelineTab: View {
                     leftColumn(ls, width: leftW, header: !sticky)
                         .frame(width: leftW)
                         .overlay(alignment: .trailing) { Rectangle().fill(NX.border).frame(width: 1) }
-                    rightPane(ls, ax: ax, header: !sticky)
+                    rightPane(ls, ax: ax, header: !sticky, firstBar: firstBarIndex(gs, ax: ax))
                 }
             }
         }
@@ -588,7 +663,7 @@ struct TimelineTab: View {
 
     // MARK: right: the axis and the bars
 
-    private func rightPane(_ ls: [Line], ax: Axis, header: Bool) -> some View {
+    private func rightPane(_ ls: [Line], ax: Axis, header: Bool, firstBar: Int?) -> some View {
         let timelineW = CGFloat(ax.days.count) * dayW
         let todayX: CGFloat? = ax.todayIndex.map { CGFloat($0) * dayW + dayW / 2 }
         let landing = max(0, (ax.todayIndex ?? 0) - (compact ? 1 : 3))
@@ -623,6 +698,11 @@ struct TimelineTab: View {
             .modifier(TimelineOffsetTracker(offsetX: $offsetX))
             // Opens around today (web: today minus three days at the left edge).
             .onAppear { DispatchQueue.main.async { proxy.scrollTo("day-\(landing)", anchor: .leading) } }
+            // "Jump to first": two days before the first bar at the leading edge (web jumpToFirst).
+            .onChange(of: jumpToFirst) { _, _ in
+                guard let firstBar else { return }
+                withAnimation(.snappy) { proxy.scrollTo("day-\(max(0, firstBar - 2))", anchor: .leading) }
+            }
         }
     }
 
@@ -852,56 +932,67 @@ struct CalendarTab: View {
     private var undated: [BoardTask] { tasks.filter { plotDate($0) == nil } }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 14) {
-                if !plotChoices.isEmpty, let onPlotBy {
-                    HStack {
-                        Menu {
-                            ForEach(plotChoices) { c in
-                                Button { onPlotBy(c.id) } label: {
-                                    if c.id == dateFieldId { Label(c.name, systemImage: "checkmark") } else { Text(c.name) }
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 5) {
-                                Image(systemName: "calendar.badge.clock").font(.system(size: 12, weight: .semibold))
-                                Text("\(T("Plot by")): \(plotName)").font(NXFont.text(12, .semibold)).lineLimit(1)
-                                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
-                            }
-                            .foregroundStyle(NX.violetText)
-                            .padding(.horizontal, 10).padding(.vertical, 6)
-                            .background(NX.violet.opacity(0.10), in: Capsule())
-                        }
-                        Spacer(minLength: 0)
-                    }
-                }
-                header
-                weekdayRow
-                grid
-                if let sel = selected {
-                    VStack(alignment: .leading, spacing: 8) {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 14) {
+                    if !plotChoices.isEmpty, let onPlotBy {
                         HStack {
-                            Text("\(T("Date")) \(sel)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
-                            Spacer()
-                            if canCreate {
-                                Button { onCreate(dateFor(sel)) } label: {
-                                    Label(T("Add task"), systemImage: "plus").font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+                            Menu {
+                                ForEach(plotChoices) { c in
+                                    Button { onPlotBy(c.id) } label: {
+                                        if c.id == dateFieldId { Label(c.name, systemImage: "checkmark") } else { Text(c.name) }
+                                    }
                                 }
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "calendar.badge.clock").font(.system(size: 12, weight: .semibold))
+                                    Text("\(T("Plot by")): \(plotName)").font(NXFont.text(12, .semibold)).lineLimit(1)
+                                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+                                }
+                                .foregroundStyle(NX.violetText)
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .background(NX.violet.opacity(0.10), in: Capsule())
                             }
-                        }
-                        if let items = tasksByDay[sel], !items.isEmpty {
-                            ForEach(items) { ProjectTaskRow(task: $0, onOpen: onOpen) }
-                        } else {
-                            Text(T("No tasks on this date.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                            Spacer(minLength: 0)
                         }
                     }
-                } else {
-                    Text(canCreate ? PlatformWording.tapOrClick(tap: "Pick a date to see its tasks, or tap + to create one.", click: "Pick a date to see its tasks, or click + to create one.") : T("Pick a date to see its tasks."))
-                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.top, 4)
-                }
-                let rest = undated
-                if !rest.isEmpty { undatedBox(rest) }
-            }.padding(16)
+                    header
+                    // An empty month says why when the tasks are waiting for a date, as the web does (UI tour
+                    // run 12, IP5: the phone only had the "No date · 84" box far below).
+                    if tasksByDay.isEmpty, !undated.isEmpty {
+                        ProjectRangeHint(icon: "calendar.badge.exclamationmark",
+                                         text: undated.count == 1 ? T("1 task has no date") : String(format: T("%d tasks have no date"), undated.count),
+                                         actionTitle: T("Show them")) {
+                            withAnimation(.snappy) { proxy.scrollTo("undated", anchor: .top) }
+                        }
+                    }
+                    weekdayRow
+                    grid
+                    if let sel = selected {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("\(T("Date")) \(sel)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
+                                Spacer()
+                                if canCreate {
+                                    Button { onCreate(dateFor(sel)) } label: {
+                                        Label(T("Add task"), systemImage: "plus").font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+                                    }
+                                }
+                            }
+                            if let items = tasksByDay[sel], !items.isEmpty {
+                                ForEach(items) { ProjectTaskRow(task: $0, onOpen: onOpen) }
+                            } else {
+                                Text(T("No tasks on this date.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                            }
+                        }
+                    } else {
+                        Text(canCreate ? PlatformWording.tapOrClick(tap: "Pick a date to see its tasks, or tap + to create one.", click: "Pick a date to see its tasks, or click + to create one.") : T("Pick a date to see its tasks."))
+                            .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.top, 4)
+                    }
+                    let rest = undated
+                    if !rest.isEmpty { undatedBox(rest).id("undated") }
+                }.padding(16)
+            }
         }
     }
 

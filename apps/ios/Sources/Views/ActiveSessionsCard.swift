@@ -84,7 +84,8 @@ enum DeviceLabel {
     var name: String {
         switch self {
         case .app(let ios, let version, let build, _):
-            let app = ios ? T("NEXUS app for iOS") : T("NEXUS app for Android")
+            // The Mac app is the iOS build under Mac Catalyst; its User-Agent says Macintosh (APIClient.userAgent).
+            let app = !ios ? T("NEXUS app for Android") : kind == .desktop ? T("NEXUS app for macOS") : T("NEXUS app for iOS")
             if let version { return build.map { "\(app) \(version) (\($0))" } ?? "\(app) \(version)" }
             return build.map { "\(app) (" + T("build {n}").replacingOccurrences(of: "{n}", with: $0) + ")" } ?? app
         case .browser(let name, let os, _):

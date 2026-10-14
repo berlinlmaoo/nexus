@@ -38,8 +38,10 @@ struct NXUnderlineTabs<ID: Hashable>: View {
             .modifier(NXTabRowScroller(activeId: Self.key(selection), itemIds: items.map { Self.key($0.id) },
                                        proxy: proxy, contentWidth: contentWidth))
         }
-        // The inset sits outside the scroller, so a scrolled row never puts a tab flush against the edge.
-        .padding(.leading, 12)
+        // The insets sit outside the scroller, so a scrolled row never puts a tab flush against either edge:
+        // the trailing one ran into the screen edge, a hard "Compani…" behind a faint fade (UI tour run 12,
+        // IP11: Legal and Settings).
+        .padding(.horizontal, 12)
         .overlay(alignment: .bottom) { Rectangle().fill(NX.border).frame(height: 1).allowsHitTesting(false) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityName)

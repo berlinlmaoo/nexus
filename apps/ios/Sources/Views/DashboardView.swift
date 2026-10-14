@@ -1197,6 +1197,11 @@ if !XpRules.tiers.isEmpty {
                     ForEach(calDays, id: \.self) { d in dayChip(d) }
                 }
             }
+            // iPad / Mac: the floating GIDEON button sits at the window's bottom-right, and while the page
+            // scrolls past it the strip's last day ran under it ("Sun 25", UI tour runs 11 and 12, PD3). The
+            // page's bottom margin clears it at the end; this trailing margin lets the strip's last day
+            // scroll clear of it anywhere. The phone's button is bottom-left: its Home is unchanged.
+            .contentMargins(.trailing, hSize == .regular ? 64 : 0, for: .scrollContent)
             let items = tasksDue(on: selectedDay)
             if items.isEmpty {
                 Text(T("Nothing due on this date."))

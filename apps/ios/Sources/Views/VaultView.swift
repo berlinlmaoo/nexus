@@ -665,9 +665,10 @@ struct VaultView: View {
             // Not while selecting: a tap anywhere on the row chooses it then.
             if !trash && !selecting {
                 Button { sheet = .shareLink(item) } label: {
-                    // Web's share-nodes glyph, grey (UI tour run 7).
-                    Image(systemName: "point.3.connected.trianglepath.dotted")
-                        .font(.system(size: 15, weight: .medium))
+                    // The web's own share glyph (lucide Share2), grey: SF Symbols has none like it, and the
+                    // stand-in read as a graph (UI tour runs 7 and 12, IP4).
+                    Image("ShareNodesGlyph").renderingMode(.template).resizable().scaledToFit()
+                        .frame(width: 16, height: 16)
                         .foregroundStyle(NX.mutedFg)
                         .frame(width: 40, height: 44)
                         .contentShape(Rectangle())

@@ -1492,7 +1492,7 @@ struct CalendarView: View {
         // The two-pane rail (iPad, Mac) is narrow: "Wednesday, 14…" was cut there (UI tour run 11, MC-3), so it
         // writes the short "Wed, 14 Oct"; the phone has the width for the whole date.
         let date = Text(twoPane ? AppDateLocale.formatter("EEE, d MMM", timeZone: TimeZone(identifier: "UTC")).string(from: CalDays.date(selected))
-                                : CalFormat.day(selected, "EEEEdMMMyyyy")).font(NXFont.display(CalType.size(twoPane ? 19 : 17), .bold)).foregroundStyle(NX.foreground)
+                                : AppDateLocale.weekdayDate(CalDays.date(selected), timeZone: TimeZone(identifier: "UTC"))).font(NXFont.display(CalType.size(twoPane ? 19 : 17), .bold)).foregroundStyle(NX.foreground)
         let tag: String? = rel == 0 ? T("Today") : rel == 1 ? T("Tomorrow") : rel == -1 ? T("Yesterday") : nil
         return VStack(alignment: .leading, spacing: 3) {
             if typeSize.isAccessibilitySize {

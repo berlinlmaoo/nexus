@@ -159,6 +159,7 @@ struct APIClient {
         // about it. A server that knows the client version can hold each build to the rules that
         // build can actually meet, instead of every rule being a gamble on who has updated.
         req.setValue(Self.clientTag, forHTTPHeaderField: "X-Nexus-Client")
+        req.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
         // The in-app language (never the phone's): the server stores and pushes notifications in it
         // (13 Oct 2026: English unless the person chose Indonesian). Read from defaults, not from
         // AppLanguage, so building a request never touches observable UI state off the main thread.
@@ -3071,6 +3072,23 @@ struct APIClient {
 extension APIClient {
     /// `ios/<marketing version>/<build>`, e.g. `ios/0.1.6/12`. Read once; it cannot change while
     /// the app is running.
+    /// URLSession's own `NEXUS/<build> CFNetwork/… Darwin/…` names no device, so Settings › Active sessions
+    /// called the Mac app "NEXUS app for iOS" (UI tour run 12, MC3). This keeps the `NEXUS/<build>` start
+    /// the server's legacy rules key on, and adds the device the way the web's device-label.ts reads it:
+    /// "Macintosh; Mac OS X" (a desktop), "iPad" (a tablet), "iPhone". The X-Nexus-Client tag stays
+    /// `ios/…` on all three: the version gate and the attendance rules read that, not this.
+    static let userAgent: String = {
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
+        let v = ProcessInfo.processInfo.operatingSystemVersion
+        let os = "\(v.majorVersion)_\(v.minorVersion)"
+        #if targetEnvironment(macCatalyst)
+        let device = "Macintosh; Mac OS X \(os)"
+        #else
+        let device = UIDevice.current.userInterfaceIdiom == .pad ? "iPad; CPU OS \(os) like Mac OS X" : "iPhone; CPU iPhone OS \(os) like Mac OS X"
+        #endif
+        return "NEXUS/\(build) (\(device)) CFNetwork Darwin"
+    }()
+
     static let clientTag: String = {
         let info = Bundle.main.infoDictionary
         let version = info?["CFBundleShortVersionString"] as? String ?? "0"

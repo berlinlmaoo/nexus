@@ -52,6 +52,7 @@ extension GideonClient {
                     var request = URLRequest(url: Config.baseURL.appendingPathComponent("/api/gideon/write"))
                     if let session = Keychain.load() { request.setValue(session.cookieHeader, forHTTPHeaderField: "Cookie") }
                     request.setValue(APIClient.clientTag, forHTTPHeaderField: "X-Nexus-Client")
+                    request.setValue(APIClient.userAgent, forHTTPHeaderField: "User-Agent")
                     request.httpMethod = "POST"
                     request.timeoutInterval = 120
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")

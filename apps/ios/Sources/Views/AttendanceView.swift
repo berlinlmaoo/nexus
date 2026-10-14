@@ -444,7 +444,7 @@ struct AttendanceView: View {
                           tint: NX.success)
             FunMetricCard(icon: nearby?.inside == true && dispRec?.officeLocation?.name == nil ? "checkmark.circle.fill" : "mappin.circle.fill",
                           label: officeLabel, value: officeValue, helper: officeHelper, tint: officeTint)
-            FunMetricCard(icon: "sparkles", label: T("Days off left"), value: Self.quotaValue(today?.dayOffUsedThisMonth, today?.dayOffQuota),
+            FunMetricCard(icon: "sparkles", label: T("Days off"), value: Self.quotaValue(today?.dayOffUsedThisMonth, today?.dayOffQuota),
                           helper: dayOffHelper, tint: NX.warning)
             FunMetricCard(icon: "calendar", label: T("Public holidays"), value: Self.quotaValue(today?.redDateUsedThisMonth, today?.redDateQuota),
                           helper: T("This month's public-holiday allowance"), tint: Color(hex: "#fb7185"))

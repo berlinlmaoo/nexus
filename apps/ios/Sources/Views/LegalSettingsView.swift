@@ -238,19 +238,24 @@ private struct LegalSeriesRow: View {
         if editing { editor } else { summary }
     }
 
-    /// Web-mobile's compact row (UI tour run 10, IP-5): the name in the foreground and the type · period
-    /// quiet beside it on one line, the pattern whole on its own monospaced line (it may wrap at its
-    /// slashes, never cut), and on a phone the switch without its "In use" words (still its VoiceOver label).
+    /// Web-mobile's compact row (UI tour run 10, IP-5), one line each (UI tour run 12, IP10: the meta wrapped
+    /// an orphan "· Yearly" line and the pattern broke mid-token): the name; the type · period, where the
+    /// type gives way and the period is never cut (run 11, PD-10); the pattern, ellipsized, whole in its
+    /// VoiceOver label and pointer tooltip and in the editor. On a phone the switch has no "In use" words
+    /// (still its VoiceOver label).
     private var summary: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                (Text(series.label).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground)
-                 + Text("  ·  \(LegalLabels.docType(series.docType))  ·  \(LegalLabels.resetPeriod(series.resetPeriod))")
-                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg))
-                    // Wraps instead of cutting the period to "Yea…" on a narrow row (UI tour run 11, PD-10).
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(verbatim: LegalText.wrappable(series.format)).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.mutedFg)
-                    .fixedSize(horizontal: false, vertical: true)
+                Text(series.label).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+                HStack(spacing: 0) {
+                    Text(LegalLabels.docType(series.docType)).lineLimit(1)
+                    Text("  ·  \(LegalLabels.resetPeriod(series.resetPeriod))").lineLimit(1).fixedSize()
+                }
+                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                Text(verbatim: series.format).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.mutedFg)
+                    .lineLimit(1).truncationMode(.tail)
+                    .help(series.format)
+                    .accessibilityLabel(series.format)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if canEdit {

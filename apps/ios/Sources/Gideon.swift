@@ -605,6 +605,7 @@ enum GideonClient {
         }
         // Who is asking, like every other request in the app (it was missing here).
         request.setValue(APIClient.clientTag, forHTTPHeaderField: "X-Nexus-Client")
+        request.setValue(APIClient.userAgent, forHTTPHeaderField: "User-Agent")
         return request
     }
 
@@ -1135,6 +1136,7 @@ extension GideonClient {
         var request = URLRequest(url: Config.baseURL.appendingPathComponent(path))
         if let session = Keychain.load() { request.setValue(session.cookieHeader, forHTTPHeaderField: "Cookie") }
         request.setValue(APIClient.clientTag, forHTTPHeaderField: "X-Nexus-Client")
+        request.setValue(APIClient.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.httpMethod = method
         if let body {
