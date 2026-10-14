@@ -148,7 +148,8 @@ function index(outDir) {
     if (fs.existsSync(path.join(outDir, dir, "login-error.png")) && !extra.length) extra.push(["login-error", "Login error"]);
   }
   const rows = [...extra, ...ids]
-    .filter(([id]) => columns.some(([dir]) => fs.existsSync(path.join(outDir, dir, `${id}.png`))))
+    // A screen with no picture anywhere still gets its row when a column has a status for it ("skipped: …").
+    .filter(([id]) => columns.some(([dir]) => fs.existsSync(path.join(outDir, dir, `${id}.png`)) || status[`${dir}/${id}`]))
     .map(([id, title]) => {
       const cells = columns.map(([dir]) => {
         const file = `${dir}/${id}.png`;
@@ -169,7 +170,7 @@ function index(outDir) {
             + (pages.length > 1 ? `<small>${pages.length} pages</small>` : "")
           : `<div class="none">—</div>`;
         const extraText = fs.existsSync(txt) ? `<pre>${esc(fs.readFileSync(txt, "utf8"))}</pre>` : "";
-        const cls = s && /^(wrong-screen|timeout|no-session|bounced|error)/.test(s) ? "bad" : "warn";
+        const cls = s && /^(wrong-screen|timeout|no-session|bounced|error|FAILED)/.test(s) ? "bad" : "warn";
         return `<td>${s ? `<div class="${cls}">${esc(s)}</div>` : ""}${body}${extraText}</td>`;
       }).join("");
       return `<tr id="${esc(id)}"><th><a href="#${esc(id)}">${esc(title)}</a><small>${esc(id)}</small></th>${cells}</tr>`;

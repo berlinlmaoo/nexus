@@ -17,6 +17,14 @@ import XCTest
 ///   TOUR_SERVER                 optional: "dev" (default) or "production"
 ///   TOUR_LANG                   optional: "en" (default) or "id"
 ///   TOUR_WEB_BASE               optional: the web the Safari tour opens (default: the DEV server)
+///   TOUR_LEGAL_DOC_ID / TOUR_LEGAL_FORM_PATH   optional: the Legal document / request form to show
+///
+/// Legal screens (14 Oct 2026): `{legalDoc}` / `{legalForm}` in a route are looked up once per run with
+/// the QA account over the API (LegalLookup, GET only): the newest [TEST] document and the general request
+/// link. One that cannot be found turns its screens into "skipped: <reason>" instead of failing the run.
+/// `appTab` names the Legal tab tapped after landing, `appOpen: legalDoc` taps that document's row: the
+/// app has no route to either. Screens with an `account` (legal-hidden, the account without Legal) are
+/// the web tour's (tour.mjs) and skipped here.
 ///
 /// testWebSafariTour is the web's MOBILE reference: the same screens in real Safari on the same
 /// simulator (owner, 13 Oct 2026: not Chrome emulation). It runs after testTour (alphabetical order),
@@ -32,6 +40,12 @@ final class NEXUSUITour: XCTestCase {
         let id: String
         let app: String?
         let web: String?
+        /// Shot as another account by the web tour only ("nonmember": legal-hidden).
+        let account: String?
+        /// The tab to tap once the screen is up (Legal: Templates, Requests, Companies & numbering).
+        let appTab: String?
+        /// "legalDoc": tap the row of the looked-up Legal document.
+        let appOpen: String?
     }
 
     private struct Outcome: Encodable {
@@ -109,20 +123,45 @@ final class NEXUSUITour: XCTestCase {
 
         // 3. Every screen, each on a fresh launch.
         for screen in config.screens {
-            guard let route = screen.app, route.hasPrefix("nexus://"), wanted(screen.id) else { continue }
-            let resolved = route
+            guard screen.account == nil, let route = screen.app, wanted(screen.id) else { continue }
+            var resolved = route
                 .replacingOccurrences(of: "{project}", with: setting("TOUR_PROJECT_ID") ?? config.projectId)
                 .replacingOccurrences(of: "{form}", with: setting("TOUR_FORM_ID") ?? config.formId)
+                .replacingOccurrences(of: "{webBase}", with: webBase)
+            let needsDoc = screen.appOpen == "legalDoc" || resolved.contains("{legalDoc}")
+            if needsDoc || resolved.contains("{legalForm}") {
+                let legal = LegalLookup.values(base: webBase, email: email, password: password,
+                                               docOverride: setting("TOUR_LEGAL_DOC_ID"), formOverride: setting("TOUR_LEGAL_FORM_PATH"))
+                let missing = needsDoc && legal.docId == nil ? legal.docProblem
+                    : resolved.contains("{legalForm}") && legal.formPath == nil ? legal.formProblem : nil
+                if let missing {
+                    outcomes.append(Outcome(id: screen.id, status: "skipped: \(missing)", pages: 0, settled: false, seconds: 0))
+                    continue
+                }
+                resolved = resolved
+                    .replacingOccurrences(of: "{legalDoc}", with: legal.docId ?? "")
+                    .replacingOccurrences(of: "{legalForm}", with: legal.formPath ?? "")
+            }
+            guard resolved.hasPrefix("nexus://") || resolved.hasPrefix("https://") else { continue }
             XCTContext.runActivity(named: "Screen \(screen.id)") { _ in
                 let started = Date()
                 launch(step: "screen", screen: screen.id, route: resolved)
-                let status = waitForMarker(timeout: 60) {
+                var status = waitForMarker(timeout: 60) {
                     $0.hasPrefix("ready:") || $0.hasPrefix("no-session") || $0.hasPrefix("wrong-screen")
+                }
+                // Legal's tabs and documents have no route of their own: the test taps there, as a person would.
+                if status == "ready:\(screen.id)", let problem = tapThrough(screen, email: email, password: password) {
+                    status = problem
                 }
                 // A route that did not land (TourDriver checks the project / tab / form actually on screen)
                 // is a failure of that screen, not a picture of whatever happened to be there.
                 if status.hasPrefix("wrong-screen") || status.hasPrefix("timeout") {
                     XCTFail("\(screen.id): \(status)")
+                }
+                if status.hasPrefix("skipped") {
+                    outcomes.append(Outcome(id: screen.id, status: status, pages: 0, settled: false,
+                                            seconds: Date().timeIntervalSince(started)))
+                    return
                 }
                 dismissSystemAlerts()
                 let settled = waitForSpinnersToStop(timeout: 25)
@@ -232,10 +271,23 @@ final class NEXUSUITour: XCTestCase {
 
         // 3. Every screen with a web route, at the same address the desktop run uses.
         for screen in config.screens {
-            guard let route = screen.web, screen.id != "login", wanted(screen.id) else { continue }
-            let path = route
+            guard screen.account == nil, let route = screen.web, screen.id != "login", wanted(screen.id) else { continue }
+            var path = route
                 .replacingOccurrences(of: "{project}", with: setting("TOUR_PROJECT_ID") ?? config.projectId)
                 .replacingOccurrences(of: "{form}", with: setting("TOUR_FORM_ID") ?? config.formId)
+            if path.contains("{legalDoc}") || path.contains("{legalForm}") {
+                let legal = LegalLookup.values(base: base, email: email, password: password,
+                                               docOverride: setting("TOUR_LEGAL_DOC_ID"), formOverride: setting("TOUR_LEGAL_FORM_PATH"))
+                let missing = path.contains("{legalDoc}") && legal.docId == nil ? legal.docProblem
+                    : path.contains("{legalForm}") && legal.formPath == nil ? legal.formProblem : nil
+                if let missing {
+                    outcomes.append(Outcome(id: screen.id, status: "skipped: \(missing)", pages: 0, settled: false, seconds: 0))
+                    continue
+                }
+                path = path
+                    .replacingOccurrences(of: "{legalDoc}", with: legal.docId ?? "")
+                    .replacingOccurrences(of: "{legalForm}", with: legal.formPath ?? "")
+            }
             XCTContext.runActivity(named: "Safari \(screen.id)") { _ in
                 let started = Date()
                 open(base + path)
@@ -359,6 +411,65 @@ final class NEXUSUITour: XCTestCase {
     #endif
 
     // MARK: - Pieces
+
+    /// The dev web's origin: the Safari tour's base, and the host of `https://…/f/<id>` app routes
+    /// (the app opens only links of its own server's host, Config.isNexusHost).
+    private var webBase: String {
+        (setting("TOUR_WEB_BASE") ?? "https://nexus-prod.tail765d02.ts.net:8443")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    /// The taps a screen's `appTab` / `appOpen` ask for, after the route landed. nil when done, else the
+    /// status for that screen ("wrong-screen: …", or "skipped: …" when the thing to open is not there).
+    @MainActor
+    private func tapThrough(_ screen: Screen, email: String, password: String) -> String? {
+        if let tab = screen.appTab {
+            // The English label, or the Indonesian one when the tour runs in Indonesian.
+            let names = [tab, Self.indonesian[tab]].compactMap { $0 }
+            let match = NSPredicate(format: "label IN %@ OR label ENDSWITH %@ OR label ENDSWITH %@",
+                                    names, ", " + names[0], ", " + (names.last ?? names[0]))
+            let bar = app.descendants(matching: .any)
+                .matching(NSPredicate(format: "label IN %@", ["Legal sections", "Bagian Legal"])).firstMatch
+            var button = bar.buttons.matching(match).firstMatch
+            if !(bar.waitForExistence(timeout: 15) && button.waitForExistence(timeout: 5)) {
+                button = app.buttons.matching(match).firstMatch   // tabs drawn without their container label
+            }
+            guard button.waitForExistence(timeout: 5) else { return "wrong-screen: \(screen.id) (no \"\(tab)\" tab found)" }
+            button.tap()
+            pause(1.2)
+        }
+        if screen.appOpen == "legalDoc" {
+            let legal = LegalLookup.values(base: webBase, email: email, password: password,
+                                           docOverride: setting("TOUR_LEGAL_DOC_ID"), formOverride: setting("TOUR_LEGAL_FORM_PATH"))
+            // The row is a button whose label holds the document's title; [TEST] when only the id was given.
+            let title = legal.docTitle ?? "[TEST]"
+            let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
+            if !row.waitForExistence(timeout: 20) {
+                // Not on the first page of the archive: search for it, as a person would (typing saves nothing).
+                let search = app.textFields.firstMatch
+                if search.waitForExistence(timeout: 5) {
+                    search.tap()
+                    search.typeText(title)
+                    pause(1.5)
+                }
+            }
+            guard row.waitForExistence(timeout: 15) else {
+                return "skipped: Legal document \"\(title)\" not in the app's archive"
+            }
+            row.tap()
+            pause(2.0)
+        }
+        return nil
+    }
+
+    /// The Indonesian labels of the tabs named in ui-tour-screens.json (LocalizationLegal.swift).
+    private static let indonesian = [
+        "Templates": "Template",
+        "Requests": "Pengajuan",
+        "Companies & numbering": "Perusahaan & penomoran",
+        "Documents": "Dokumen",
+        "Members": "Member",
+    ]
 
     private func loadConfig() throws -> Config {
         var data: Data?
@@ -649,5 +760,92 @@ final class NEXUSUITour: XCTestCase {
 
     private func pause(_ seconds: TimeInterval) {
         RunLoop.current.run(until: Date().addingTimeInterval(seconds))
+    }
+}
+
+/// The run-time values of the Legal screens, looked up once per test process with the QA account:
+/// POST /api/auth/app-login (the app's own sign-in), GET /api/legal/documents?q=[TEST] and GET
+/// /api/legal/request-links, then POST /api/auth/app-logout, which ends that one session only. Nothing
+/// else is written. The password stays in memory; nothing here is logged.
+enum LegalLookup {
+    struct Values {
+        var docId: String?
+        var docTitle: String?
+        var docProblem = "no [TEST] Legal document on dev"
+        var formPath: String?
+        var formProblem = "no general Legal request link"
+    }
+
+    nonisolated(unsafe) private static var cached: Values?
+
+    static func values(base: String, email: String, password: String,
+                       docOverride: String?, formOverride: String?) -> Values {
+        if let cached { return cached }
+        var v = Values()
+        v.docId = docOverride
+        v.formPath = formOverride
+        defer { cached = v }
+        if docOverride != nil && formOverride != nil { return v }
+
+        guard let login = call(base + "/api/auth/app-login", method: "POST",
+                               body: ["email": email, "password": password], cookie: nil),
+              login.status == 200,
+              let token = login.json["token"] as? String, let name = login.json["cookieName"] as? String else {
+            v.docProblem = "Legal lookup: QA sign-in over the API failed"
+            v.formProblem = v.docProblem
+            return v
+        }
+        let cookie = "\(name)=\(token)"
+        defer { _ = call(base + "/api/auth/app-logout", method: "POST", body: nil, cookie: cookie) }
+
+        if docOverride == nil {
+            let q = "[TEST]".addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+            if let r = call(base + "/api/legal/documents?q=\(q)&limit=20", method: "GET", body: nil, cookie: cookie), r.status == 200 {
+                let docs = (r.json["documents"] as? [[String: Any]]) ?? []
+                if let doc = docs.first(where: { (($0["title"] as? String) ?? "").contains("[TEST]") }) {
+                    v.docId = doc["id"] as? String
+                    v.docTitle = doc["title"] as? String
+                }
+            } else {
+                v.docProblem = "Legal documents not readable by the QA account"
+            }
+        }
+        if formOverride == nil {
+            if let r = call(base + "/api/legal/request-links", method: "GET", body: nil, cookie: cookie), r.status == 200 {
+                let links = (r.json["links"] as? [[String: Any]]) ?? []
+                v.formPath = links.first(where: { ($0["scope"] as? String) == "general" })?["path"] as? String
+            } else {
+                v.formProblem = "Legal request links not readable by the QA account"
+            }
+        }
+        return v
+    }
+
+    /// One blocking request (the tour test is sequential by nature); nil on a transport error.
+    private static func call(_ address: String, method: String, body: [String: String]?,
+                             cookie: String?) -> (status: Int, json: [String: Any])? {
+        guard let url = URL(string: address) else { return nil }
+        var request = URLRequest(url: url, timeoutInterval: 30)
+        request.httpMethod = method
+        if let cookie { request.setValue(cookie, forHTTPHeaderField: "Cookie") }
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        }
+        let done = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var result: (Int, [String: Any])?
+        let config = URLSessionConfiguration.ephemeral
+        config.httpShouldSetCookies = false
+        let session = URLSession(configuration: config)
+        session.dataTask(with: request) { data, response, _ in
+            if let http = response as? HTTPURLResponse {
+                let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+                result = (http.statusCode, json)
+            }
+            done.signal()
+        }.resume()
+        _ = done.wait(timeout: .now() + 35)
+        session.finishTasksAndInvalidate()
+        return result.map { (status: $0.0, json: $0.1) }
     }
 }
