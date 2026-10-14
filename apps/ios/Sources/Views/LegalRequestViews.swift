@@ -82,7 +82,7 @@ struct LegalRequestFormView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Image(systemName: "scale.3d").font(.system(size: 20)).foregroundStyle(NX.mutedFg)
+                Image(NX.legalSymbol).font(.system(size: 20)).foregroundStyle(NX.mutedFg)
                     .frame(width: 44, height: 44).background(NX.muted, in: Circle())
                 Text(T("Legal request")).font(NXFont.display(26)).foregroundStyle(NX.foreground)
                 content
@@ -331,7 +331,7 @@ struct MyLegalRequestsStrip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Image(systemName: "scale.3d").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
+                Image(NX.legalSymbol).font(.system(size: 12)).foregroundStyle(NX.mutedFg)
                 Text(T("Legal requests")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                 Text("\(requests.count)").font(NXFont.text(12)).foregroundStyle(NX.mutedFg).monospacedDigit()
             }

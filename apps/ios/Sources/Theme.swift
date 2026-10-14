@@ -141,6 +141,20 @@ enum NX {
                                             startPoint: .topLeading, endPoint: .bottomTrailing)
 }
 
+extension NX {
+    /// Legal's scales glyph: lucide "scale" (the web icon) as a custom symbol in Assets.xcassets,
+    /// because SF Symbols has no scales of justice (`scale.3d` is a resize arrow).
+    static let legalSymbol = "legal.scale"
+}
+
+extension Image {
+    /// `Image(systemName:)` for names that may also be one of the app's custom symbols. Custom
+    /// symbols live in the asset catalog, so they load with `Image(_:)` but still follow `.font`.
+    static func nxSymbol(_ name: String) -> Image {
+        name == NX.legalSymbol ? Image(name) : Image(systemName: name)
+    }
+}
+
 /// Back-compat alias (old views referenced `Brand.*`).
 enum Brand {
     static let violet = NX.violet

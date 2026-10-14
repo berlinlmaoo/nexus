@@ -199,7 +199,7 @@ struct MoreView: View {
                             LazyVGrid(columns: cols, spacing: 12) {
                                 // Invitation only (owner, 14 Oct 2026): the roster's canAccessLegal.
                                 if viewer.canAccessLegal {
-                                    MoreTile(T("Legal"), "scale.3d", NX.blue) { LegalView() }
+                                    MoreTile(T("Legal"), NX.legalSymbol, NX.blue) { LegalView() }
                                 }
                                 MoreTile(T("Leaderboard"), "trophy.fill", NX.warning) { LeaderboardView() }
                                 MoreTile(T("Reports"), "chart.bar.fill", NX.success) { ReportsView() }
@@ -290,7 +290,7 @@ struct MoreTile<Destination: View>: View {
     var body: some View {
         NavigationLink { destination() } label: {
             VStack(alignment: .leading, spacing: 12) {
-                Image(systemName: systemImage)
+                Image.nxSymbol(systemImage)
                     .font(.system(size: 20, weight: .semibold)).foregroundStyle(tint)
                     .frame(width: 46, height: 46)
                     .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
