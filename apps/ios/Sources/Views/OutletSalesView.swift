@@ -31,16 +31,36 @@ struct OutletDraft: Equatable {
     var values: [String: String]
     var originalDate: String
     var original: [String: String]
+    /// The outlet's breakdown figures by item id (owner, 14 Oct 2026), as typed; "" = not filled.
+    var figures: [String: String] = [:]
+    var originalFigures: [String: String] = [:]
 
     static func new(date: String) -> OutletDraft {
         OutletDraft(eventId: nil, date: date, values: [:], originalDate: date, original: [:])
     }
 
-    static func from(_ e: OutletEvent) -> OutletDraft {
+    static func from(_ e: OutletEvent, config: OutletReportConfig) -> OutletDraft {
         var v: [String: String] = ["name": e.name]
         for k in OutletEvent.numberKeys { v[k] = e.numbers[k].map(OutletFormat.grouped) ?? "" }
         for k in OutletEvent.textKeys { v[k] = e.texts[k] ?? "" }
-        return OutletDraft(eventId: e.id, date: e.date, values: v, originalDate: e.date, original: v)
+        var f: [String: String] = [:]
+        for id in Set(config.allIds).union(e.values.keys) { f[id] = e.values[id].map(OutletFormat.grouped) ?? "" }
+        return OutletDraft(eventId: e.id, date: e.date, values: v, originalDate: e.date, original: v, figures: f, originalFigures: f)
+    }
+
+    func figure(_ id: String) -> Int64? { OutletFormat.parse(figures[id] ?? "") }
+
+    /// The breakdown ids whose figure differs from when the report was opened.
+    var changedFigures: [String] {
+        Set(figures.keys).union(originalFigures.keys)
+            .filter { OutletFormat.parse(figures[$0] ?? "") != OutletFormat.parse(originalFigures[$0] ?? "") }
+            .sorted()
+    }
+
+    /// A live total while typing: the sum of the filled figures of `ids`, nil when none is.
+    func figureTotal(_ ids: [String]) -> Int64? {
+        let filled = ids.compactMap { figure($0) }
+        return filled.isEmpty ? nil : filled.reduce(0, +)
     }
 
     func text(_ key: String) -> String { values[key] ?? "" }
@@ -57,7 +77,7 @@ struct OutletDraft: Equatable {
         return keys.filter { !Self.same($0, values[$0], original[$0]) }.sorted()
     }
 
-    var dirty: Bool { date != originalDate || !changedKeys.isEmpty }
+    var dirty: Bool { date != originalDate || !changedKeys.isEmpty || !changedFigures.isEmpty }
 
     /// The body to send: for a new event everything filled, for an existing one only what changed.
     /// A cleared number goes as null, a cleared answer as "".
@@ -73,6 +93,12 @@ struct OutletDraft: Equatable {
             }
         }
         if eventId == nil || date != originalDate { out["date"] = date }
+        // The breakdown goes as `values` by item id; null clears one (owner, 14 Oct 2026).
+        var vals: [String: Any] = [:]
+        for id in (eventId == nil ? Array(figures.keys) : changedFigures) {
+            if let n = figure(id) { vals[id] = NSNumber(value: n) } else if eventId != nil { vals[id] = NSNull() }
+        }
+        if !vals.isEmpty { out["values"] = vals }
         return out
     }
 
@@ -127,6 +153,17 @@ final class OutletSalesStore {
     var summary: OutletSummary { response?.month == month ? response?.summary ?? OutletSummary() : OutletSummary() }
     var target: OutletTarget? { response?.month == month ? response?.target : nil }
     var canManageTargets: Bool { response?.canManageTargets ?? false }
+    var canManageSettings: Bool { response?.canManageSettings ?? canManageTargets }
+    /// The outlet's own breakdown (Report settings); the original seven items until the server says.
+    var config: OutletReportConfig { response?.config ?? .standard }
+    var guests: OutletGuests? { response?.month == month ? response?.guests : nil }
+    /// The Report settings sheet.
+    var settingsOpen = false
+
+    /// A day of the shown month with its target in force and its actuals.
+    func day(_ d: String) -> OutletDay? { response?.month == month ? response?.days.first { $0.date == d } : nil }
+    /// The date's own target, when it set one.
+    func ownTarget(_ d: String) -> OutletDayTarget? { response?.month == month ? response?.dayTargets.first { $0.date == d } : nil }
     /// True while the answer on screen is for a month other than the one picked.
     var switching: Bool { loaded && response?.month != month }
 
@@ -219,12 +256,12 @@ final class OutletSalesStore {
         pendingForm = nil
         if let id = request.eventId {
             if let e = event(id) {
-                draft = .from(e)
+                draft = .from(e, config: config)
             } else {
                 // Another month's event: shown as soon as it arrives.
                 draft = .new(date: request.date ?? calendarDay)
                 Task {
-                    if let e = await fetchEvent(id), pendingForm == nil, !draft.dirty { draft = .from(e) }
+                    if let e = await fetchEvent(id), pendingForm == nil, !draft.dirty { draft = .from(e, config: config) }
                 }
             }
         } else {
@@ -245,7 +282,7 @@ final class OutletSalesStore {
                 saved = try await APIClient.shared.outletCreateEvent(projectId: projectId, fields: body)
             }
             loose[saved.id] = saved
-            draft = .from(saved)
+            draft = .from(saved, config: config)
             if saved.status == .reported {
                 notice = String(format: T("Report for %@ saved."), saved.name)
             } else if isNew {
@@ -290,6 +327,19 @@ final class OutletSalesStore {
         do {
             _ = try await APIClient.shared.outletSetTarget(projectId: projectId, month: month, salesTarget: sales, paxTarget: pax)
             notice = String(format: T("Target for %@ saved."), OutletFormat.monthLabel(month))
+            await load()
+            return true
+        } catch {
+            fail(error, T("The target wasn't saved. Try again."))
+            return false
+        }
+    }
+
+    /// A date's own target. nil = that part goes back to the month's target split over its days.
+    func setDayTarget(date: String, sales: Int64?, pax: Int64?) async -> Bool {
+        do {
+            try await APIClient.shared.outletSetDayTarget(projectId: projectId, date: date, salesTarget: sales, paxTarget: pax)
+            notice = String(format: T("Target for %@ saved."), OutletFormat.dayLong(date, thisYear: thisYear))
             await load()
             return true
         } catch {
@@ -356,12 +406,17 @@ struct OutletSalesTab: View {
                         .accessibilityLabel(T("Loading the outlet"))
                 }
             } else {
-                switch tab {
-                case .calendar:   OutletCalendarView(store: store, tab: $tab)
-                case .board:      OutletBoardView(store: store, tab: $tab)
-                case .reportForm: OutletReportFormView(store: store, tab: $tab)
-                default:          OutletOverviewView(store: store, tab: $tab)
+                Group {
+                    switch tab {
+                    case .calendar:   OutletCalendarView(store: store, tab: $tab)
+                    case .board:      OutletBoardView(store: store, tab: $tab)
+                    case .reportForm: OutletReportFormView(store: store, tab: $tab)
+                    default:          OutletOverviewView(store: store, tab: $tab)
+                    }
                 }
+                // Report settings (owner, 14 Oct 2026). On this inner view, not next to the event sheet
+                // below: two .sheet modifiers on one view leave one of them dead.
+                .sheet(isPresented: $store.settingsOpen) { OutletReportSettingsView(store: store) }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -441,6 +496,23 @@ struct OutletHeader: View {
         HStack(spacing: wide ? 10 : 6) {
             OutletMonthSwitcher(store: store, large: wide)
             Spacer(minLength: 4)
+            if store.canManageSettings {
+                Button { store.settingsOpen = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "slider.horizontal.3").font(.system(size: 14, weight: .semibold))
+                        if wide { Text(T("Report settings")).font(NXFont.text(14, .semibold)) }
+                    }
+                    .foregroundStyle(NX.foreground)
+                    .padding(.horizontal, wide ? 14 : 0)
+                    .frame(minWidth: 40, minHeight: 40)
+                    .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityLabel(T("Report settings"))
+            }
             Button { store.copyFormLink() } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "link").font(.system(size: 14, weight: .semibold))
@@ -580,9 +652,9 @@ struct OutletOverviewView: View {
                     cards
                     targetLine
                 }
-                strip
                 waitingBox
-                eventsList
+                // Owner, 14 Oct 2026: one Guest overview replaces the counts strip and the month's list.
+                OutletGuestOverview(store: store, tab: $tab)
                     .padding(.top, wide ? 8 : 4)
             }
             .outletPage(wide: wide)
@@ -718,43 +790,6 @@ struct OutletOverviewView: View {
         editingTarget = true
     }
 
-    // MARK: Events · Reported · Waiting report · RSVP · Hosting
-
-    /// The five counts as one evenly sized row on Mac/iPad; on iPhone three over two, never squeezed.
-    @ViewBuilder private var strip: some View {
-        let s = store.summary
-        let events = tile(T("Events"), OutletFormat.count(s.eventCount))
-        let reported = tile(T("Reported"), OutletFormat.count(s.reportedCount))
-        let waiting = tile(T("Waiting report"), OutletFormat.count(s.waitingCount), warn: s.waitingCount > 0)
-        let rsvp = tile(T("RSVP"), OutletFormat.count(s.rsvpTotal))
-        let hosting = tile(T("Hosting"), OutletFormat.count(s.hostingTotal))
-        if wide {
-            HStack(spacing: 12) { events; reported; waiting; rsvp; hosting }
-        } else {
-            VStack(spacing: 8) {
-                HStack(spacing: 8) { events; reported; waiting }
-                HStack(spacing: 8) { rsvp; hosting }
-            }
-        }
-    }
-
-    private func tile(_ label: String, _ value: String, warn: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: wide ? 6 : 4) {
-            Text(value)
-                .font(NXFont.display(wide ? 28 : 22, .bold))
-                .foregroundStyle(warn ? ChipTone.warning.fg : NX.foreground)
-                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
-            Text(label)
-                .font(NXFont.text(wide ? 13 : 12, .medium)).foregroundStyle(NX.mutedFg)
-                .lineLimit(1).minimumScaleFactor(0.8)
-        }
-        .padding(.horizontal, wide ? 18 : 12).padding(.vertical, wide ? 16 : 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(warn ? NX.warning.opacity(0.45) : NX.border))
-        .accessibilityElement(children: .combine)
-    }
-
     // MARK: the nights still owed a report (this month and older ones)
 
     @ViewBuilder private var waitingBox: some View {
@@ -790,125 +825,6 @@ struct OutletOverviewView: View {
             .background(NX.warning.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.warning.opacity(0.35)))
         }
-    }
-
-    // MARK: the month's nights
-
-    @ViewBuilder private var eventsList: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(String(format: T("Events in %@"), monthName))
-                    .font(NXFont.display(wide ? 18 : 16, .bold)).foregroundStyle(NX.foreground)
-                Spacer(minLength: 8)
-                if !store.events.isEmpty {
-                    Text(store.events.count == 1 ? T("1 event") : String(format: T("%d events"), store.events.count))
-                        .font(NXFont.text(13, .medium)).foregroundStyle(NX.mutedFg)
-                }
-            }
-            if store.events.isEmpty {
-                EmptyState(icon: "calendar.badge.plus", title: T("No events this month yet"),
-                           subtitle: T("Add the nights you have planned. After each one, the team fills its report and the totals above update."),
-                           actionTitle: T("Add event"),
-                           action: { store.openForm(eventId: nil, date: nil); tab = .reportForm },
-                           compact: true)
-                    .padding(.vertical, 18)
-                    .frame(maxWidth: .infinity)
-            } else {
-                VStack(spacing: 0) {
-                    if wide { tableHeader; Divider().overlay(NX.border) }
-                    ForEach(Array(store.events.enumerated()), id: \.element.id) { i, e in
-                        if i > 0 { Divider().overlay(NX.border).padding(.horizontal, wide ? 20 : 14) }
-                        if wide { tableRow(e) } else { row(e) }
-                    }
-                }
-                .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
-            }
-        }
-    }
-
-    // Mac/iPad: a real table. Date · Event · Status · Sales · Pax, the figures right-aligned.
-    private static let dateCol: CGFloat = 150
-    private static let statusCol: CGFloat = 150
-    private static let salesCol: CGFloat = 220
-    private static let paxCol: CGFloat = 150
-
-    private var tableHeader: some View {
-        HStack(spacing: 16) {
-            Text(T("Date")).frame(width: Self.dateCol, alignment: .leading)
-            Text(T("Event")).frame(maxWidth: .infinity, alignment: .leading)
-            Text(T("Status")).frame(width: Self.statusCol, alignment: .leading)
-            Text(T("Sales")).frame(width: Self.salesCol, alignment: .trailing)
-            Text(T("Pax")).frame(width: Self.paxCol, alignment: .trailing)
-        }
-        .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
-        .padding(.horizontal, 20).padding(.vertical, 11)
-        .background(NX.muted.opacity(0.5))
-        .accessibilityHidden(true)
-    }
-
-    private func tableRow(_ e: OutletEvent) -> some View {
-        Button { store.sheetEventId = e.id } label: {
-            HStack(spacing: 16) {
-                Text(OutletFormat.dayShort(e.date))
-                    .font(NXFont.text(14, .medium)).foregroundStyle(NX.mutedFg)
-                    .frame(width: Self.dateCol, alignment: .leading)
-                Text(e.name)
-                    .font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                OutletStatusPill(status: e.status)
-                    .frame(width: Self.statusCol, alignment: .leading)
-                figure(OutletFormat.rupiah(e.sales), pct: e.salesTarget == nil ? nil : e.salesPct)
-                    .frame(width: Self.salesCol, alignment: .trailing)
-                figure(OutletFormat.count(e.pax), pct: e.paxTarget == nil ? nil : e.paxPct)
-                    .frame(width: Self.paxCol, alignment: .trailing)
-            }
-            .padding(.horizontal, 20).padding(.vertical, 14)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .hoverEffect(.highlight)
-        .accessibilityElement(children: .combine)
-    }
-
-    /// A figure with its share of the night's own target under it, when it has one.
-    private func figure(_ value: String, pct: Int64?) -> some View {
-        VStack(alignment: .trailing, spacing: 2) {
-            Text(value).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
-                .lineLimit(1).minimumScaleFactor(0.7)
-            if let pct {
-                Text(String(format: T("%@ of target"), "\(pct)%"))
-                    .font(NXFont.text(12, .medium))
-                    .foregroundStyle(pct >= 100 ? ChipTone.success.fg : NX.mutedFg)
-            }
-        }
-        .monospacedDigit()
-    }
-
-    /// iPhone: date over a name and status, the figures on a line under it.
-    private func row(_ e: OutletEvent) -> some View {
-        Button { store.sheetEventId = e.id } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(OutletFormat.dayShort(e.date))
-                        .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
-                    Spacer(minLength: 4)
-                    OutletStatusPill(status: e.status)
-                }
-                Text(e.name).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(2)
-                HStack(spacing: 8) {
-                    Text(OutletFormat.vsTarget(e.sales, e.salesTarget, e.salesPct, money: true))
-                        .lineLimit(1).minimumScaleFactor(0.8)
-                    Text("·")
-                    Text(String(format: T("%@ pax"), OutletFormat.count(e.pax))).lineLimit(1)
-                }
-                .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).monospacedDigit()
-            }
-            .padding(.horizontal, 14).padding(.vertical, 13)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }
 
@@ -1059,6 +975,8 @@ struct OutletEventCard: View {
     let event: OutletEvent
     let form: OutletForm
     let thisYear: String
+    /// The outlet's own breakdown (owner, 14 Oct 2026): RSVP, Hosting and Communities come from it.
+    var config: OutletReportConfig = .standard
     /// Drawn in a side panel (the calendar's day beside the month on Mac/iPad): phone-width labels.
     var narrow = false
     var onEdit: (() -> Void)? = nil
@@ -1091,6 +1009,7 @@ struct OutletEventCard: View {
             row(form.label("pax", "Pax"), Text(OutletFormat.vsTarget(event.pax, event.paxTarget, event.paxPct, money: false)))
             total("rsvp", event.rsvpTotal)
             total("hosting", event.hostingTotal)
+            communities
             story("success")
             story("fail")
             if let footer {
@@ -1132,12 +1051,41 @@ struct OutletEventCard: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// The active items, and an archived one only when this report holds a figure for it.
+    private func shown(_ items: [OutletItem]) -> [OutletItem] {
+        items.filter { !$0.archived || event.values[$0.id] != nil }
+    }
+
+    private func itemLabel(_ label: String, archived: Bool) -> String {
+        archived ? "\(label) · \(T("archived"))" : label
+    }
+
     @ViewBuilder private func total(_ key: String, _ value: Int64?) -> some View {
-        if let s = form.section(key) {
+        let title = form.section(key)?.title.text ?? (key == "rsvp" ? "RSVP – TOTAL" : "HOSTING – TOTAL")
+        Divider().overlay(NX.border).padding(.vertical, 4)
+        row(title, Text(OutletFormat.count(value)), strong: true)
+        ForEach(shown(key == "rsvp" ? config.rsvp : config.hosting), id: \.rowId) { i in
+            row(itemLabel(i.label, archived: i.archived), Text(OutletFormat.count(event.values[i.id])), indent: true)
+        }
+    }
+
+    /// Communities: the grand total, each community's, a Breakdown community's own items under it.
+    @ViewBuilder private var communities: some View {
+        let list = config.communities.filter { !$0.archived || event.communityTotals[$0.id] != nil }
+        if !list.isEmpty {
             Divider().overlay(NX.border).padding(.vertical, 4)
-            row(s.title.text, Text(OutletFormat.count(value)), strong: true)
-            ForEach(s.fields, id: \.key) { f in
-                row(f.label.text, Text(OutletFormat.count(event.numbers[f.key])), indent: true)
+            row(T("Communities – TOTAL"), Text(OutletFormat.count(event.communityTotal)), strong: true)
+            ForEach(list, id: \.rowId) { c in
+                row(itemLabel(c.name, archived: c.archived), Text(OutletFormat.count(event.communityTotals[c.id])), indent: true)
+                if c.isBreakdown {
+                    ForEach(shown(c.items), id: \.rowId) { i in
+                        row(itemLabel(i.label, archived: i.archived), Text(OutletFormat.count(event.values[i.id])), indent: true)
+                            .padding(.leading, 12)
+                    }
+                    if let own = event.values[c.id] {
+                        row(T("Total only"), Text(OutletFormat.count(own)), indent: true).padding(.leading, 12)
+                    }
+                }
             }
         }
     }
@@ -1171,7 +1119,7 @@ struct OutletEventSheet: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text(T("The night's report, as the team filled it."))
                                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                            OutletEventCard(event: e, form: store.form, thisYear: store.thisYear) { onEdit(e.id) }
+                            OutletEventCard(event: e, form: store.form, thisYear: store.thisYear, config: store.config) { onEdit(e.id) }
                         }
                         .padding(16)
                         .frame(maxWidth: 720, alignment: .leading)

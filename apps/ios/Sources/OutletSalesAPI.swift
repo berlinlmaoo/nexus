@@ -68,6 +68,35 @@ extension APIClient {
         return try await outletRun(req, as: OutletTarget.self)
     }
 
+    /// PUT a date's own target (owner, 14 Oct 2026): sales only, pax only or both. nil sends null, which
+    /// clears that part, so it falls back to the month's target split over its days.
+    func outletSetDayTarget(projectId: String, date: String, salesTarget: Int64?, paxTarget: Int64?) async throws {
+        var req = makeRequest("\(outletBase(projectId))/day-targets", method: "PUT")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: Any] = [
+            "date": date,
+            "salesTarget": salesTarget.map { NSNumber(value: $0) } ?? NSNull(),
+            "paxTarget": paxTarget.map { NSNumber(value: $0) } ?? NSNull(),
+        ]
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        _ = try await outletRun(req, as: OutletDayTarget.self)
+    }
+
+    /// The outlet's Report settings with, per item, how many reports hold a figure for it.
+    func outletConfig(projectId: String) async throws -> OutletConfigResponse {
+        try await outletRun(makeRequest("\(outletBase(projectId))/config"), as: OutletConfigResponse.self)
+    }
+
+    /// PUT the whole list in order. 403 SETTINGS_FORBIDDEN for anyone but the outlet's managers. A removed
+    /// item that holds figures comes back archived (the server decides).
+    func outletSaveConfig(projectId: String, config: OutletReportConfig) async throws -> OutletConfigResponse {
+        var req = makeRequest("\(outletBase(projectId))/config", method: "PUT")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        struct Body: Encodable { let config: OutletReportConfig }
+        req.httpBody = try JSONEncoder().encode(Body(config: config))
+        return try await outletRun(req, as: OutletConfigResponse.self)
+    }
+
     /// New project → Outlet Sales Dashboard: an ordinary project of type OUTLET_SALES (any number of
     /// them, one per outlet; the creator is its lead). Answers the new project, so the sheet can open it
     /// ("Create project + open dashboard").
