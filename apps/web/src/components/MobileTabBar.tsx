@@ -272,7 +272,9 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
             className="glass-sheet absolute inset-x-0 bottom-0 max-h-[82vh] overflow-hidden rounded-t-[28px]"
           >
             {/* grab handle */}
-            <div className="relative flex items-center justify-between px-5 pt-3">
+            {/* As tall as the close button, so the X has a row of its own above the search field instead of
+                touching it (UI tour run 13, W-M19). */}
+            <div className="relative flex min-h-12 items-start justify-between px-5 pt-3">
               <div className="mx-auto h-1.5 w-10 rounded-full bg-foreground/15" />
               <button onClick={onClose} aria-label={t("Close")} className="absolute right-2 top-1 grid h-11 w-11 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><X className="h-4 w-4" /></button>
             </div>

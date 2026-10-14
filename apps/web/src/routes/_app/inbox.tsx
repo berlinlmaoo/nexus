@@ -12,7 +12,7 @@ import {
 } from "@/lib/nexus-api";
 import { NotificationFilterTabs } from "@/components/NotificationFilterTabs";
 import { PageBody } from "@/components/PageLayout";
-import { AtSign, UserPlus, MessageCircle, AlarmClock, Activity, Check, Trash2, Loader2, Inbox, Filter, Lock, CheckCircle2, CalendarCheck, Megaphone, LifeBuoy, FileText, Trophy, DoorOpen, Bell, type LucideIcon } from "lucide-react";
+import { Scale, AtSign, UserPlus, MessageCircle, AlarmClock, Activity, Check, Trash2, Loader2, Inbox, Filter, Lock, CheckCircle2, CalendarCheck, Megaphone, LifeBuoy, FileText, Trophy, DoorOpen, Bell, type LucideIcon } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
 import { Reveal } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,6 +32,8 @@ export const Route = createFileRoute("/_app/inbox")({ component: InboxPage });
  */
 function notificationMark(type?: string | null): { Icon: LucideIcon; tone: string } {
   const t = (type ?? "").toLowerCase();
+  // Legal requests carry the Legal mark, as in the sidebar (UI tour run 13, W-B10: a generic bell).
+  if (t.startsWith("legal")) return { Icon: Scale, tone: "bg-indigo-500/12 text-indigo-600 dark:text-indigo-400" };
   if (t.includes("mention")) return { Icon: AtSign, tone: "bg-sky-500/12 text-sky-600 dark:text-sky-400" };
   if (t === "task_assigned" || t === "project_invite" || t === "members_added") return { Icon: UserPlus, tone: "bg-primary/10 text-primary" };
   if (t === "task_completed") return { Icon: CheckCircle2, tone: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" };
@@ -179,7 +181,7 @@ function NotificationRow({ notification }: { notification: NexusNotification }) 
     >
       {/* The sender's avatar with the kind as a small badge; system rows (and rows from before the server
           kept the sender) show the kind's icon instead. */}
-      {actor?.id ? (
+      {actor?.id && !(notification.type ?? "").toLowerCase().startsWith("legal") ? (
         <div className="relative shrink-0" data-notification-actor={actor.id} aria-hidden>
           <Avatar userId={actor.id} name={actor.name} avatar={actor.avatar} size={36} />
           <span className="absolute -bottom-1 -right-1 grid h-[18px] w-[18px] place-items-center rounded-full border-2 border-card bg-card">
@@ -192,14 +194,15 @@ function NotificationRow({ notification }: { notification: NexusNotification }) 
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <p className="line-clamp-2 break-words text-sm font-semibold">{notificationTitle(notification)}</p>
+        <p className="line-clamp-2 break-words text-sm font-semibold"><KeepIds text={notificationTitle(notification)} /></p>
         <p className="line-clamp-3 max-w-3xl break-words text-sm text-muted-foreground mt-0.5">{notificationMessage(notification) || t("New notification")}</p>
         <p className="text-xs text-muted-foreground mt-1">{fmtDay(notification.createdAt, locale)}</p>
         {(markRead.isError || remove.isError) && <p className="mt-1 text-xs font-semibold text-destructive">{t("That didn't work. Check your connection and try again.")}</p>}
       </div>
       <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-        {/* Phone: icon-only, so the title keeps the row's width (QA B21). */}
-        {!notification.read && <button disabled={busy} onClick={() => markRead.mutate()} aria-label={t("Mark as read")} title={t("Mark as read")} className="inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-md pointer-coarse:min-h-9 border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50"><Check className="h-3 w-3 sm:hidden" /><span className="max-sm:hidden">{t("Mark as read")}</span></button>}
+        {/* Icon-only everywhere, with its name on hover: a full "Mark as read" on every desktop row was noise
+            (UI tour run 13, W-D21); on a phone it keeps the title's width (QA B21). */}
+        {!notification.read && <button disabled={busy} onClick={() => markRead.mutate()} aria-label={t("Mark as read")} title={t("Mark as read")} className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-md pointer-coarse:min-h-9 pointer-coarse:min-w-9 border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50"><Check className="h-3 w-3" /></button>}
         <button disabled={busy} onClick={() => remove.mutate()} className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-md pointer-coarse:min-h-9 pointer-coarse:min-w-9 border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-50" title={t("Delete notification")} aria-label={t("Delete notification")}>
           {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
         </button>
@@ -215,3 +218,11 @@ function fmtDay(value: string | null | undefined, locale: string) {
   return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString(locale, { day: "numeric", month: "short" });
 }
 
+/**
+ * A title with request and task ids ("RT6-mef518", "PKS/PATS-UNIV") kept whole: a line breaks around an id,
+ * never at its hyphen (UI tour run 13, W-M21: "RT6-" / "mef518").
+ */
+function KeepIds({ text }: { text: string }) {
+  const parts = text.split(/(\S*\w-\w\S*)/);
+  return <>{parts.map((p, i) => (i % 2 === 1 ? <span key={i} className="whitespace-nowrap">{p}</span> : p))}</>;
+}

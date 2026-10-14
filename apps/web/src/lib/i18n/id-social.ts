@@ -38,6 +38,7 @@ export const ID_SOCIAL: Record<string, string> = {
   "{n} posts": "{n} postingan",
   "1 post": "1 postingan",
   "{n} / {target} posts": "{n} / {target} postingan",
+  "{n} / {target} post": "{n} / {target} postingan",
   "{name} posts against target": "Postingan {name} dibanding target",
   "{name} engagement against target": "Engagement {name} dibanding target",
   "{name} engagement per day": "Engagement {name} per hari",
@@ -45,14 +46,18 @@ export const ID_SOCIAL: Record<string, string> = {
     "Target sampai hari ini = jumlah target tiap hari sampai hari ini. Hari tanpa target sendiri memakai target bulanan dibagi rata.",
   "No engagement target": "Belum ada target engagement",
   "Target to date · month target {target}": "Target sampai hari ini · target sebulan {target}",
+  "Target to date · month target {target} (incl. day targets)": "Target sampai hari ini · target bulan {target} (termasuk target harian)",
+  "Set a target": "Atur target",
   "Likes": "Likes",
 
   // Calendar
   "{n} engagement": "{n} engagement",
   "Has notes": "Ada catatan",
   "Not recorded": "Belum diisi",
-  "Each day shows its engagement (likes + comments + shares) across platforms, and the posts published. Tap a day to record it.":
-    "Tiap hari menampilkan engagement (likes + komentar + share) semua platform dan jumlah postingan. Ketuk tanggal untuk mengisinya.",
+  "Each day shows its engagement (likes + comments + shares) across platforms, and the posts published.":
+    "Tiap hari menampilkan engagement (likes + komentar + share) semua platform dan jumlah postingan.",
+  "Tap a day to record it.": "Ketuk tanggal untuk mengisinya.",
+  "Click a day to record it.": "Klik tanggal untuk mengisinya.",
 
   // Day sheet
   "Shares": "Share",
@@ -88,7 +93,7 @@ export const ID_SOCIAL: Record<string, string> = {
   "Platform name": "Nama platform",
   "Archive {name}": "Arsipkan {name}",
   "Add platform": "Tambah platform",
-  "Add platform, e.g. YouTube": "Tambah platform, mis. YouTube",
+  "Add platform, e.g. LinkedIn": "Tambah platform, mis. LinkedIn",
   "A new platform gets its targets after you save.": "Platform baru bisa diberi target setelah disimpan.",
   "It leaves the day form and the overview. Its past figures and targets stay, and you can restore it later.":
     "Platform ini hilang dari form harian dan ringkasan. Angka dan target sebelumnya tetap ada, dan bisa dipulihkan nanti.",

@@ -11,7 +11,7 @@ export async function GET() {
     // Users who share a workspace with the caller.
     const myWorkspaces = await prisma.workspaceMember.findMany({ where: { userId: session.user.id }, select: { workspaceId: true } })
     const workspaceIds = myWorkspaces.map((m) => m.workspaceId)
-    if (workspaceIds.length === 0) return NextResponse.json({ rows: [] })
+    if (workspaceIds.length === 0) return NextResponse.json({ rows: [], viewer: { ranked: false, reason: null } })
 
     const memberships = await prisma.workspaceMember.findMany({
       where: { workspaceId: { in: workspaceIds } },
@@ -58,8 +58,12 @@ export async function GET() {
       // Rank by score, then name.
       .sort((a, b) => b.totalXp - a.totalXp || (a.name ?? "").localeCompare(b.name ?? ""))
 
+    // The caller left out by that rule is told so, instead of silently missing from the list (UI tour run 13,
+    // W-B4: a BoD saw their own Level 6 on the dashboard but no row here).
+    const viewerExcluded = excluded.has(session.user.id)
     return NextResponse.json({
       rows,
+      viewer: { ranked: !viewerExcluded, reason: viewerExcluded ? "MANAGEMENT" : null },
       period: { start: periodStart.toISOString(), end: periodEnd.toISOString(), resetDay: 28, timezone: "Asia/Jakarta" },
     })
   } catch (error) {

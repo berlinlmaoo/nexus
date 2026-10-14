@@ -229,7 +229,8 @@ function ItemList({
               onChange={(e) => setActive(active.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
               className={inputCls}
             />
-            <div className="flex items-center opacity-100 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
+            {/* Always shown, as on the community rows: one rule for every row (UI tour run 13, W-D18). */}
+            <div className="flex items-center">
               <button type="button" className={iconBtn} disabled={i === 0} onClick={() => setActive(move(active, i, i - 1))} aria-label={t("Move up")}>
                 <ArrowUp className="h-3.5 w-3.5" />
               </button>
@@ -321,7 +322,9 @@ function CommunityList({
               value={c.name}
               maxLength={60}
               onChange={(e) => setActive(active.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
-              className={cn(inputCls, "font-medium")}
+              // A phone: the name gets its own line, the count switch and the arrows go below it, so the name is
+              // never cut to "Art Collec" (UI tour run 13, W-M5).
+              className={cn(inputCls, "font-medium max-sm:basis-full")}
             />
             <div role="radiogroup" aria-label={t("How it is counted")} className="flex rounded-lg bg-muted p-0.5">
               {modes.map((m) => (
@@ -340,7 +343,7 @@ function CommunityList({
                 </button>
               ))}
             </div>
-            <div className="flex items-center">
+            <div className="flex items-center max-sm:ml-auto">
               <button type="button" className={iconBtn} disabled={i === 0} onClick={() => setActive(move(active, i, i - 1))} aria-label={t("Move up")}>
                 <ArrowUp className="h-3.5 w-3.5" />
               </button>

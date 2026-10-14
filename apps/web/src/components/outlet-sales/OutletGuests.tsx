@@ -116,9 +116,12 @@ function Communities({ guests }: { guests: OutletGuests }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const list = guests.communities.items;
   const total = guests.communities.total;
+  // The disclosure chevron has a gutter of its own on every row once one community opens up, so the names,
+  // figures and bars all start on the same lines (UI tour run 13, W-D19).
+  const gutter = list.some((c) => c.mode === "breakdown" && c.items.length > 0);
   return (
     <div className="flex min-w-0 flex-col gap-3 p-4">
-      <Total title={t("Communities")} value={count(total, lang)} />
+      <Total title={t("Communities total")} value={count(total, lang)} />
       {list.length === 0 ? (
         <p className="text-xs text-muted-foreground">{t("No communities yet. Add the ones that come in Report settings.")}</p>
       ) : (
@@ -134,18 +137,20 @@ function Communities({ guests }: { guests: OutletGuests }) {
                     type="button"
                     aria-expanded={isOpen}
                     onClick={() => setOpen((o) => ({ ...o, [c.id]: !o[c.id] }))}
-                    className="-mx-1.5 flex w-[calc(100%+0.75rem)] items-baseline justify-between gap-3 rounded-md px-1.5 py-0.5 text-left text-sm transition-colors hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[40px] pointer-coarse:items-center"
+                    className="-mx-1.5 flex w-[calc(100%+0.75rem)] items-baseline justify-between gap-3 rounded-md px-1.5 text-left text-sm transition-colors hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[40px] pointer-coarse:items-center"
                   >
-                    <span className={cn("flex min-w-0 items-center gap-1", c.archived && "text-muted-foreground")}>
-                      <ChevronRight aria-hidden className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-150", isOpen && "rotate-90")} />
+                    <span className={cn("flex min-w-0 items-baseline", c.archived && "text-muted-foreground")}>
+                      <span aria-hidden className="w-[1.125rem] shrink-0 self-center">
+                        <ChevronRight className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform duration-150", isOpen && "rotate-90")} />
+                      </span>
                       <span className="truncate">{c.name}</span>
-                      {c.archived && <span className="text-xs text-muted-foreground">· {t("archived")}</span>}
+                      {c.archived && <span className="ml-1 text-xs text-muted-foreground">· {t("archived")}</span>}
                     </span>
                     <span className="shrink-0 font-medium tabular-nums">{count(c.total, lang)}</span>
                   </button>
                 ) : (
                   <div className="flex items-baseline justify-between gap-3 text-sm">
-                    <span className={cn("min-w-0 truncate", c.archived && "text-muted-foreground")}>
+                    <span className={cn("min-w-0 truncate", gutter && "pl-[1.125rem]", c.archived && "text-muted-foreground")}>
                       {c.name}
                       {c.archived && <span className="ml-1.5 text-xs text-muted-foreground">· {t("archived")}</span>}
                     </span>

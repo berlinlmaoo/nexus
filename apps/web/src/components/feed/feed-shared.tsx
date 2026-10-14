@@ -7,16 +7,20 @@ import type { FeedImage } from "@/lib/nexus-api";
 import type { MentionUser } from "@/hooks/useMentionAutocomplete";
 import { localeOf, t as tr, useLang } from "@/lib/lang";
 
-/** Compact relative time: "just now", "5m", "3h", "2d", then a date. */
+/**
+ * Relative time, one rule on every platform (UI tour run 13, W-B9: "6d" next to "30 Jun" read as two
+ * systems): "now", "5m ago", "3h ago", "6d ago", then the date ("30 Jun"; the year only when it isn't this one).
+ */
 export function timeAgo(iso: string): string {
   // Called while rendering, so the current language applies.
-  const ts = new Date(iso).getTime();
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 45) return tr("just now");
-  const m = Math.floor(s / 60); if (m < 60) return tr("{n}m", { n: m });
-  const h = Math.floor(m / 60); if (h < 24) return tr("{n}h", { n: h });
-  const d = Math.floor(h / 24); if (d < 7) return tr("{n}d", { n: d });
-  return new Date(iso).toLocaleDateString(localeOf(), { day: "numeric", month: "short" });
+  const date = new Date(iso);
+  const s = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (s < 60) return tr("now");
+  const m = Math.floor(s / 60); if (m < 60) return tr("{n}m ago", { n: m });
+  const h = Math.floor(m / 60); if (h < 24) return tr("{n}h ago", { n: h });
+  const d = Math.floor(h / 24); if (d < 7) return tr("{n}d ago", { n: d });
+  const otherYear = date.getFullYear() !== new Date().getFullYear();
+  return date.toLocaleDateString(localeOf(), { day: "numeric", month: "short", ...(otherYear ? { year: "numeric" } : {}) });
 }
 
 const MENTION_RE = /(@[\p{L}\p{N}._-]+)/gu;

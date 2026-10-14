@@ -136,9 +136,14 @@ function AppLayout() {
         {/* overflow-x-clip: a guard so nothing in a page can widen the phone's layout viewport (it zoomed every
             project page out to ~720px, audit 12 Oct 2026). `clip`, not `hidden`: no scroll box, so sticky headers keep working. */}
         <SidebarInset className="min-w-0 overflow-x-clip">
-          <div className="pb-28 md:pb-0">
+          <div>
             <Outlet />
           </div>
+          {/* Room for the phone's floating tab bar: its height plus its gap above the safe area, so the last
+              thing on every scrolling page clears the bar at full scroll (UI tour run 13, W-M1). An element of
+              its own, not padding on the page wrapper, so anything that measures where the content ends
+              (and a page ending in a full-bleed card) counts the room too. */}
+          <div aria-hidden data-tabbar-room="" className="h-(--tabbar-room) md:hidden" />
           <MobileTabBar />
         </SidebarInset>
         <GlobalSearch />

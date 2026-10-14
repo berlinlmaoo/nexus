@@ -101,14 +101,19 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
 
   return (
     <Sheet open={!!documentId} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent lang={lang} className="w-full overflow-y-auto sm:max-w-3xl">
+      {/* Opens with the drawer itself focused, not its close button: a ring on the X before anyone used the
+          keyboard read as an error, and was cut at the corner (UI tour run 13, W-B17). */}
+      <SheetContent lang={lang} className="w-full overflow-y-auto outline-none sm:max-w-3xl" onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus(); }}>
         {!doc ? (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
             {q.isError ? <span className="text-destructive">{(q.error as Error).message}</span> : <><Loader2 className="h-4 w-4 animate-spin" /> {t("Loading…")}</>}
           </div>
         ) : (
           <div className="space-y-5">
-            <SheetHeader>
+            {/* Number, title and status stay in view while the drawer scrolls (UI tour run 13, W-D12); left-aligned
+                on a phone too (W-M22: it was centred there). */}
+            <div className="sticky -top-6 z-10 -mx-6 -mt-6 space-y-3 border-b border-border bg-background px-6 pb-3 pt-6">
+            <SheetHeader className="text-left">
               <div className={cn("font-mono text-xs text-muted-foreground", doc.numberReleased && "line-through")}>{doc.number || t("No number")}</div>
               <SheetTitle className="pr-6">{doc.title}</SheetTitle>
               <SheetDescription>
@@ -136,6 +141,7 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
               {doc.status === "SIGNED" && (
                 <Button variant="outline" size="default" className="gap-1.5" onClick={() => setAddendumOpen(true)}><FilePlus2 className="h-4 w-4" /> {t("Create addendum")}</Button>
               )}
+            </div>
             </div>
             <DocumentFacts doc={doc} onOpen={onOpen} onShowChain={onShowChain} />
 
@@ -167,8 +173,12 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>{t("Title")}</Label>
-                <Input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
+                <Label htmlFor="ld-title">{t("Title")}</Label>
+                {/* Wraps instead of cutting a long title mid-word or mid-extension ("…University.d", UI tour run 13,
+                    W-B24); still one line of text: Enter does not add a line break. */}
+                <Textarea id="ld-title" rows={1} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value.replace(/\n/g, " ") })}
+                  onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+                  className="min-h-9 resize-none py-1.5 [field-sizing:content]" />
               </div>
               <div className="space-y-1.5">
                 <Label>{t("Counterparty")}</Label>
@@ -202,7 +212,7 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
               <ul className="divide-y divide-border rounded-md border border-border">
                 {doc.versions.map((v) => (
                   <li key={v.version} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2 text-sm">
-                    <span className="w-8 shrink-0 font-medium">v{v.version}</span>
+                    <span className="w-8 shrink-0 self-start pt-px font-medium tabular-nums">v{v.version}</span>
                     <div className="min-w-0 flex-1">
                       <div className="truncate">
                         {versionKindLabel(v.kind)}{v.note ? ` — ${v.note}` : ""}
@@ -219,12 +229,13 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
                     {!locked && doc.status !== "VOID" && doc.finalVersion !== v.version && (
                       <Button variant="ghost" size="sm" className="gap-1.5" title={t("Final DOCX/PDF come from this version")}
                         onClick={() => update.mutate({ finalVersion: v.version, ...(doc.status === "DRAFT" ? { status: "FINAL" as LegalStatus } : {}) })}>
-                        <CheckCircle2 className="h-4 w-4" /> <span className="max-sm:hidden">{t("Mark final")}</span>
+                        {/* Labelled on a phone too: the buttons have their own line there (W-M22: a bare check glyph). */}
+                        <CheckCircle2 className="h-4 w-4" /> {t("Mark final")}
                       </Button>
                     )}
                     {!locked && doc.status !== "VOID" && v.version !== doc.currentVersion && (
                       <Button variant="ghost" size="sm" className="gap-1.5" disabled={restore.isPending} onClick={() => restore.mutate(v.version)}>
-                        <RotateCcw className="h-4 w-4" /> <span className="max-sm:hidden">{t("Restore")}</span>
+                        <RotateCcw className="h-4 w-4" /> {t("Restore")}
                       </Button>
                     )}
                     </div>

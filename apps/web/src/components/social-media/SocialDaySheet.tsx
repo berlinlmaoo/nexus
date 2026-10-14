@@ -57,7 +57,7 @@ export function SocialDaySheet({
   onClose: () => void;
   onMonth: (month: string) => void;
 }) {
-  const { t, lang, locale } = useLang();
+  const { t, tn, lang, locale } = useLang();
   const qc = useQueryClient();
   useEffect(() => { if (date) onMonth(date.slice(0, 7)); }, [date, onMonth]);
   const loaded = !!date && data.month === date.slice(0, 7);
@@ -128,7 +128,8 @@ export function SocialDaySheet({
 
   return (
     <Sheet open={!!date} onOpenChange={close}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-xl [&>button:first-of-type]:hidden">
+      {/* Opens with the sheet itself focused, not its close button (UI tour run 13, W-B17: a heavy ring on the X). */}
+      <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-hidden p-0 outline-none sm:max-w-xl [&>button:first-of-type]:hidden" onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus(); }}>
         <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-3.5">
           <div className="min-w-0">
             <SheetTitle className="truncate text-base font-semibold">{date ? dayLong(date, locale, data.today.slice(0, 4)) : ""}</SheetTitle>
@@ -185,10 +186,10 @@ export function SocialDaySheet({
                       <p className="mt-2 text-xs text-muted-foreground">
                         {t("Day target")}: {[
                           info.engagementTarget !== null ? t("{n} engagement", { n: num(info.engagementTarget, lang) }) : null,
-                          info.postsTarget !== null ? t("{n} posts", { n: num(info.postsTarget, lang) }) : null,
+                          info.postsTarget !== null ? tn(info.postsTarget, "1 post", "{n} posts", { n: num(info.postsTarget, lang) }) : null,
                         ].filter(Boolean).join(" · ")}
                         {" · "}
-                        {info.engagementTargetSource === "day" || info.postsTargetSource === "day" ? t("Own target") : t("Month's target ÷ days")}
+                        <span className="whitespace-nowrap">{info.engagementTargetSource === "day" || info.postsTargetSource === "day" ? t("Own target") : t("Month's target ÷ days")}</span>
                       </p>
                     )}
                   </section>

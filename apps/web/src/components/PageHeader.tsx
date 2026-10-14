@@ -76,7 +76,9 @@ export function PageHeader({
           a project opened on the phone had no icon beside its name). */}
       {icon && <div className="shrink-0 text-2xl sm:mt-0.5">{icon}</div>}
       <div className="min-w-0">
-        <h1 className="text-xl md:text-2xl font-semibold tracking-tight truncate">{title}</h1>
+        {/* Compact (project) header on a phone: a long name takes two lines instead of being cut beside the
+            icon buttons (UI tour run 13, W-M15). */}
+        <h1 className={cn("text-xl md:text-2xl font-semibold tracking-tight truncate", compact && "max-sm:line-clamp-2 max-sm:whitespace-normal max-sm:break-words max-sm:text-lg max-sm:leading-snug")}>{title}</h1>
         {subtitle && <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground max-md:hidden">{subtitle}</p>}
       </div>
     </div>
@@ -89,7 +91,9 @@ export function PageHeader({
         data-page-header-sticky={compact ? "" : undefined}
         className={cn(
           "px-4 md:px-8 md:pt-6 md:flex md:flex-row md:items-start md:justify-between md:gap-6 md:pb-3",
-          compact ? cn("flex flex-row items-center justify-between gap-2 pt-3 pb-1", pinnedBar, barEdge, className) : "max-md:contents",
+          // The top padding comes after pinnedBar's safe-area padding, which otherwise replaced it and left the
+          // icon buttons touching the top edge (UI tour run 13, W-M6).
+          compact ? cn("flex flex-row items-center justify-between gap-2 pt-3 pb-1", pinnedBar, "max-md:pt-[calc(env(safe-area-inset-top)+0.75rem)]", barEdge, className) : "max-md:contents",
         )}
       >
         {titleBlock}
@@ -109,7 +113,11 @@ export function PageHeader({
           data-page-header-sticky=""
           // A variable, not `top` itself: from md up the strip is `relative`, where a `top` would shift it down.
           style={{ "--page-header-bar-h": `${barH}px` } as CSSProperties}
-          className={cn("relative overflow-x-auto px-4 md:px-8 max-md:sticky max-md:top-[var(--page-header-bar-h)] max-md:z-30 max-md:border-b max-md:border-border max-md:bg-background", className)}
+          // Phone: an opaque band of the header's colour (a shadow, which the strip's own overflow does not clip)
+          // reaches up from the strip to the title bar, so no sliver of a scrolled row shows between the two
+          // pinned parts (UI tour run 13, W-M2: an avatar and cut text showed under the title). Over the bar
+          // itself it is the same colour. A header on another surface sets --page-header-bg.
+          className={cn("relative overflow-x-auto px-4 md:px-8 max-md:sticky max-md:top-[var(--page-header-bar-h)] max-md:z-30 max-md:border-b max-md:border-border max-md:bg-background max-md:shadow-[0_-0.75rem_0_0_var(--page-header-bg,var(--background))]", className)}
         >
           {tabs}
         </div>

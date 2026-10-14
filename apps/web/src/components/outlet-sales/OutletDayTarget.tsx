@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, Loader2, Target } from "lucide-react";
+import { Check, Loader2, PencilLine, Target } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
@@ -63,7 +63,9 @@ export function DayTargetPanel({ projectId, data, day }: { projectId: string; da
           <Target aria-hidden className="h-4 w-4 text-muted-foreground" /> {t("Day target")}
         </h4>
         {data.canManageTargets && !editing && (
-          <button type="button" onClick={start} className="rounded-lg px-2.5 py-1 text-sm font-semibold text-primary transition-colors hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[40px]">
+          // An outlined button, not bare bold text: it has to read as something to click (UI tour run 13, W-B12).
+          <button type="button" onClick={start} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[40px]">
+            <PencilLine aria-hidden className="h-3.5 w-3.5 text-muted-foreground" />
             {own ? t("Change day target") : t("Set day target")}
           </button>
         )}

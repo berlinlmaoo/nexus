@@ -16,7 +16,7 @@ export const ID_QAFIX_WORK: Record<string, string> = {
   "Only the person who booked it or a manager can change this booking.": "Hanya pembuat booking atau manager yang bisa mengubah booking ini.",
   "Check the date and times, then try again.": "Cek tanggal dan jamnya, lalu coba lagi.",
   "Add a title to book the room.": "Isi judul untuk membooking ruangan.",
-  "from {date}: {days} days, {working} working days ({days} − {quota} day-off allowance)": "sejak {date}: {days} hari, {working} hari kerja ({days} − {quota} jatah day off)",
+  "from {date}: {days} days, {working} working days ({days} − {quota} days off allowance)": "sejak {date}: {days} hari, {working} hari kerja ({days} − {quota} jatah day off)",
   "GIDEON isn't connected on this server. Write the update yourself.": "GIDEON tidak terhubung di server ini. Tulis update-nya sendiri.",
   "Check in, ask for leave or a permission, and see your attendance history.": "Absen, ajukan cuti atau izin, dan lihat riwayat absensimu.",
 };

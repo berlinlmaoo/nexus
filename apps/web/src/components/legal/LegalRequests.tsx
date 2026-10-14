@@ -107,13 +107,26 @@ export function LegalRequests({ openId, onOpen, onOpenDocument }: {
           message={filters.q || filtered ? t("Try other words or fewer filters.") : t("People ask Legal for a document through a request link. Share one from Request links; their requests land here.")}
           action={!(filters.q || filtered) ? <Button size="sm" onClick={() => setLinksOpen(true)} className="gap-1.5"><Link2 className="h-4 w-4" /> {t("Request links")}</Button> : undefined} />
       ) : view === "board" ? (
-        // Phones: the columns snap one at a time and the next one peeks in from the screen edge (UI tour run 11,
-        // WM-6); the row runs to the edges so the peek is not cut by the page gutter.
-        <div className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-3 sm:mx-0 sm:snap-none sm:px-0">
+        <>
+        {/* Phones: one chip per column, with its count, that brings the column in; the board shows one column at
+            a time and the others were only cut names at the edge (UI tour run 13, W-M10). */}
+        <div role="group" aria-label={t("Columns")} className="-mt-1 mb-2 flex gap-1.5 overflow-x-auto sm:hidden">
+          {REQUEST_COLUMNS.map((col) => (
+            <button key={col} type="button"
+              onClick={() => document.getElementById(`lr-col-${col}`)?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" })}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium pointer-coarse:min-h-9">
+              {columnLabel(col)}<span className="tabular-nums text-muted-foreground">{rows.filter((r) => r.column === col).length}</span>
+            </button>
+          ))}
+        </div>
+        {/* Phones: the columns snap one at a time and the next one peeks in from the screen edge (UI tour run 11,
+            WM-6); the row runs to the edges so the peek is not cut by the page gutter. A column is as tall as its
+            cards, not a tall empty grey body (W-M10). */}
+        <div className="-mx-4 flex snap-x snap-mandatory scroll-px-4 items-start gap-3 overflow-x-auto overscroll-x-contain px-4 pb-3 sm:mx-0 sm:snap-none sm:px-0">
           {REQUEST_COLUMNS.map((col) => {
             const items = rows.filter((r) => r.column === col);
             return (
-              <div key={col}
+              <div key={col} id={`lr-col-${col}`}
                 className={cn("flex w-[82vw] max-w-[22rem] shrink-0 snap-start flex-col rounded-xl bg-muted/50 sm:w-80", dragOver === col && "ring-2 ring-primary/50")}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(col); }}
                 onDragLeave={() => setDragOver((c) => (c === col ? null : c))}
@@ -127,6 +140,7 @@ export function LegalRequests({ openId, onOpen, onOpenDocument }: {
             );
           })}
         </div>
+        </>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full min-w-[820px] text-sm">
@@ -170,6 +184,17 @@ function RejectedLabel() {
 }
 
 function DocChip({ d }: { d: NonNullable<BoardRequest["document"]> }) {
+  const { t } = useLang();
+  // A request whose number was voided is still being worked on: say what happened in words, not with a
+  // struck-through "Void" chip that read as broken (UI tour run 13, W-D23).
+  if (d.status === "VOID") {
+    return (
+      <span className="flex min-w-0 max-w-full flex-col">
+        <span className="truncate font-mono text-[11px] text-muted-foreground" title={d.number ?? undefined}>{d.number}</span>
+        <span className="text-[11px] text-muted-foreground">{t("Previous number voided")}</span>
+      </span>
+    );
+  }
   return (
     <span className="inline-flex max-w-full items-center gap-1.5">
       <span className="truncate font-mono text-[11px] text-muted-foreground">{d.number}</span>

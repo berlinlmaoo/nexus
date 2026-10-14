@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * Outlet Sales Dashboard, owner's revisions of 14 Oct 2026 (after the meeting with Ryan): the per-outlet
@@ -56,7 +56,9 @@ import {
   mergeReportConfig,
   monthShare,
   readReportConfig,
+  reportOpen,
   summarizeGuests,
+  writesReport,
   type OutletReportConfig,
 } from '@/lib/outlet-sales'
 import { createOutletEvent, parseValues, serializeEvent, updateOutletEvent, valuesOf } from '@/lib/outlet-sales-server'
@@ -244,5 +246,52 @@ describe('legacy mapping', () => {
     expect(e.rsvpEo).toBe(2)
     expect(e.values).toEqual({ i_vip: 1, rsvpEo: 2 })
     expect(e.rsvpTotal).toBe(1) // rsvpEo is not in this outlet's RSVP items any more, VIP list is
+  })
+})
+
+describe('future nights (UI tour run 13, W-B5)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    // 14 Oct 2026, 21:00 WIB.
+    vi.setSystemTime(new Date('2026-10-14T14:00:00Z'))
+    h.event = { ...baseRow(), date: new Date('2026-10-15T00:00:00Z') }
+    h.updates = []
+    h.creates = []
+    h.config = custom
+  })
+  afterEach(() => vi.useRealTimers())
+
+  it('a report opens on the night itself (WIB), not before', () => {
+    expect(reportOpen('2026-10-14', '2026-10-14')).toBe(true)
+    expect(reportOpen('2026-10-13', '2026-10-14')).toBe(true)
+    expect(reportOpen('2026-10-15', '2026-10-14')).toBe(false)
+  })
+  it('only report keys with something in them count as a report', () => {
+    expect(writesReport({ name: 'Night', date: '2026-10-15', salesTarget: 5_000_000, paxTarget: 40 })).toBe(false)
+    expect(writesReport({ sales: null, successWhat: '', i_vip: null })).toBe(false)
+    expect(writesReport({ pax: 0 })).toBe(true)
+    expect(writesReport({ i_vip: 2 })).toBe(true)
+  })
+  it("refuses a report for tomorrow's night, on create and on update", async () => {
+    const c = await createOutletEvent('u1', 'p1', { name: 'Night', date: '2026-10-15', sales: 6_000_000, pax: 45 })
+    expect(c.ok === false && c.body.code).toBe('REPORT_NOT_OPEN')
+    const u = await updateOutletEvent('u1', 'p1', 'e1', { values: { rsvpTeam: 3 } })
+    expect(u.ok === false && u.body.code).toBe('REPORT_NOT_OPEN')
+    expect(h.updates).toHaveLength(0)
+    expect(h.creates).toHaveLength(0)
+  })
+  it("still plans tomorrow's night: name, targets, and clearing a report made too early", async () => {
+    expect((await createOutletEvent('u1', 'p1', { name: 'Night', date: '2026-10-15', salesTarget: 5_000_000 })).ok).toBe(true)
+    expect((await updateOutletEvent('u1', 'p1', 'e1', { name: 'Renamed' })).ok).toBe(true)
+    h.event = { ...baseRow(), date: new Date('2026-10-15T00:00:00Z'), sales: 6_000_000, pax: 45 }
+    expect((await updateOutletEvent('u1', 'p1', 'e1', { sales: null, pax: null })).ok).toBe(true)
+  })
+  it("tonight's report goes through; a reported night cannot move into the future", async () => {
+    h.event = { ...baseRow(), date: new Date('2026-10-14T00:00:00Z') }
+    expect((await updateOutletEvent('u1', 'p1', 'e1', { sales: 1_000_000 })).ok).toBe(true)
+    const moved = await updateOutletEvent('u1', 'p1', 'e1', { date: '2026-10-20' })
+    expect(moved.ok === false && moved.body.code).toBe('REPORT_NOT_OPEN')
+    h.event = { ...baseRow(), date: new Date('2026-10-14T00:00:00Z') }
+    expect((await updateOutletEvent('u1', 'p1', 'e1', { date: '2026-10-20' })).ok).toBe(true)
   })
 })

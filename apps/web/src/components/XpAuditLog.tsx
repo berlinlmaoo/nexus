@@ -10,6 +10,7 @@ import { celebrate } from "@/components/Celebration";
 import { ApiError, fmtDate, fmtTime, nexusApi } from "@/lib/nexus-api";
 import { xpReasonInfo } from "@/lib/xp-reason";
 import { useLang } from "@/lib/lang";
+import { formatCount, formatSigned } from "@/lib/number-format";
 
 type Sign = "all" | "pos" | "neg";
 type Scope = "period" | "all";
@@ -136,7 +137,7 @@ export function XpAuditLog() {
                       </div>
                     </div>
                     <div className={cn("shrink-0 text-sm font-black tabular-nums", pos ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
-                      {pos ? `+${r.amount}` : r.amount} XP
+                      {formatSigned(r.amount)} XP
                     </div>
                   </div>
                 );
@@ -260,7 +261,7 @@ function XpAdjustModal({ onClose }: { onClose: () => void }) {
 
           {amount !== 0 && selected && (
             <div className={cn("rounded-xl px-3 py-2 text-sm font-semibold", sign > 0 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-rose-500/10 text-rose-700 dark:text-rose-300")}>
-              {selected.name}: {sign > 0 ? "+" : ""}{amount} XP → {tr("now {n} XP", { n: selected.totalXp + amount })}
+              {selected.name}: {formatSigned(amount)} XP → {tr("now {n} XP", { n: formatCount(selected.totalXp + amount) })}
             </div>
           )}
           {adjust.isError && <p className="text-sm text-destructive">{adjust.error instanceof ApiError ? adjust.error.message : tr("Something went wrong. Check your access and connection.")}</p>}

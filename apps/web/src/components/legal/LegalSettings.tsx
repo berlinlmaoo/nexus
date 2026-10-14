@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AlertTriangle, Check, Download, Loader2, Pencil, Plus, Upload, X } from "lucide-react";
@@ -28,6 +28,19 @@ export function LegalSettings() {
   return (
     <div className="space-y-4">
       {!canEdit && <p className="text-sm text-muted-foreground">{t("Only the owner or a BoD member with Legal can change these.")}</p>}
+      {/* A long page (a company each with its letterhead and ~11 series): a row of its companies to jump to
+          (UI tour run 13, W-B26). */}
+      {(companies.data?.companies.length ?? 0) > 2 && (
+        <nav aria-label={t("Companies")} className="flex flex-wrap gap-1.5">
+          {companies.data!.companies.map((c) => (
+            <button key={c.id} type="button"
+              onClick={() => document.getElementById(`legal-co-${c.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-9">
+              {c.name}<span className="font-mono text-[10px] text-muted-foreground">{c.code}</span>
+            </button>
+          ))}
+        </nav>
+      )}
       {(companies.data?.companies ?? []).map((c) => <CompanyCard key={c.id} company={c} canEdit={canEdit} />)}
       <TokenHelp />
     </div>
@@ -53,7 +66,7 @@ function CompanyCard({ company, canEdit }: { company: LegalCompany; canEdit: boo
   const dirty = draft.name !== company.name || draft.code !== company.code || draft.legalName !== company.legalName || draft.address !== company.address;
 
   return (
-    <section className="space-y-4 rounded-lg border border-border p-4">
+    <section id={`legal-co-${company.id}`} className="scroll-mt-32 space-y-4 rounded-lg border border-border p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-semibold">{company.name} <span className="font-mono text-xs font-normal text-muted-foreground">{company.code}</span></h2>
         {!company.legalName && <span className="flex items-center gap-1 text-xs text-amber-600"><AlertTriangle className="h-3.5 w-3.5" /> {t("Legal name (PT) not filled in")}</span>}
@@ -168,9 +181,14 @@ function SeriesRow({ s, canEdit }: { s: LegalSeries; canEdit: boolean }) {
     <li className={`flex flex-wrap items-center gap-3 px-3 py-2 text-sm ${s.active ? "" : "opacity-60"}`}>
       <div className="min-w-0 flex-1">
         {/* Nothing truncated (UI tour run 11, WM-3): the type wraps under the name on a phone, and the number
-            pattern has a monospace line of its own that wraps at any character. */}
+            pattern has a monospace line of its own. It wraps after a "/" only, never inside a token such as
+            {SEQ:3} (UI tour run 13, W-M4: "{YY / YY}"). */}
         <div className="font-medium [overflow-wrap:anywhere]">{s.label} <span className="text-xs font-normal text-muted-foreground">· {docTypeLabel(s.docType)} · {s.resetPeriod === "MONTH" ? t("Monthly") : t("Yearly")}</span></div>
-        <div className="mt-0.5 font-mono text-xs text-muted-foreground [overflow-wrap:anywhere]">{s.format}</div>
+        <div className="mt-0.5 font-mono text-xs text-muted-foreground [overflow-wrap:anywhere]">
+          {s.format.split("/").map((part, i, all) => (
+            <Fragment key={i}>{part}{i < all.length - 1 && <>/<wbr /></>}</Fragment>
+          ))}
+        </div>
       </div>
       {canEdit && (
         <>

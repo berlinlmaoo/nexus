@@ -15,6 +15,7 @@
 import type { NexusCustomField, NexusProjectView, NexusTask } from "./nexus-api";
 import { groupIndex, orderedOptions, usesStatusOptions } from "./status-options.ts";
 import { normalizeNumberFieldValue, numberFieldFormat, rupiah } from "./custom-field-number.ts";
+import { formatCount } from "./number-format.ts";
 
 export type ViewLayout = NexusProjectView["layout"];
 export const VIEW_LAYOUTS: ViewLayout[] = ["board", "list", "table", "calendar", "timeline", "gallery"];
@@ -167,10 +168,13 @@ export function propDefs(ctx: ViewCtx): PropDef[] {
   return defs;
 }
 
-/** A number property for display: Rupiah fields as "Rp 1.500.000", other numbers grouped in the UI locale. */
-export function formatNumberProp(n: number, format: PropDef["numberFormat"], maxFractionDigits = 2, locale = "id-ID"): string {
+/**
+ * A number property for display: Rupiah fields as "Rp 1.500.000", other numbers with Indonesian grouping
+ * ("1.500") in both languages (UI tour run 13). `_locale` stays for the callers.
+ */
+export function formatNumberProp(n: number, format: PropDef["numberFormat"], maxFractionDigits = 2, _locale = "id-ID"): string {
   if (format === "currency-idr") return rupiah(n);
-  return new Intl.NumberFormat(locale, { maximumFractionDigits: maxFractionDigits }).format(n);
+  return formatCount(n, maxFractionDigits);
 }
 
 export function propDef(defs: PropDef[], key: string | null | undefined): PropDef | undefined {
@@ -591,11 +595,11 @@ export function groupTasks<T extends NexusTask>(tasks: T[], key: string, defs: P
 }
 
 /** The number in a group header. */
-export function groupCalcValue(tasks: NexusTask[], calc: GroupCalc, defs: PropDef[]): { value: string; label: string } {
+export function groupCalcValue(tasks: NexusTask[], calc: GroupCalc, defs: PropDef[]): { value: string; label: string; hint?: { done: number; total: number } } {
   switch (calc.kind) {
     case "done": {
       const done = tasks.filter((t) => isDoneStatus(t.status)).length;
-      return { value: `${done}/${tasks.length}`, label: "Done" };
+      return { value: `${done}/${tasks.length}`, label: "Done", hint: { done, total: tasks.length } };
     }
     case "percent_done": {
       const done = tasks.filter((t) => isDoneStatus(t.status)).length;
@@ -648,8 +652,9 @@ export function defaultConfig(layout: ViewLayout): ViewConfig {
     subGroupBy: null,
     hiddenGroups: [],
     collapsedGroups: [],
-    // The List used to hide sections a filter emptied; it still does by default.
-    hideEmptyGroups: layout === "list",
+    // Every layout shows an empty group by default, as the Board does ("To Do 0"): the List hid it, so the two
+    // views of one project disagreed (UI tour run 13, W-B20). "Hide empty groups" in Group still hides them.
+    hideEmptyGroups: false,
     groupCalc: { kind: layout === "list" ? "done" : "count" },
     visibleProps: null,
     cardSize: "medium",

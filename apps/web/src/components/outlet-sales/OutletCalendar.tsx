@@ -3,7 +3,7 @@ import { CalendarPlus, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import type { OutletEvent, OutletMonthResponse } from "@/lib/outlet-sales-api";
-import { EventDetail, STATUS_DOT, dayLong, monthLabel } from "./outlet-ui";
+import { EventDetail, MarkerLegend, STATUS_DOT, STATUS_LABEL, STATUS_ORDER, dayLong, monthLabel } from "./outlet-ui";
 import { DayTargetPanel } from "./OutletDayTarget";
 
 function addDays(iso: string, n: number): string {
@@ -133,6 +133,13 @@ export function OutletCalendar({
         </div>
       </div>
 
+      <MarkerLegend
+        items={[
+          { mark: <Target className="h-3 w-3 text-primary" />, label: t("Day target") },
+          ...STATUS_ORDER.map((s) => ({ mark: <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[s])} />, label: t(STATUS_LABEL[s]) })),
+        ]}
+      />
+
       <section ref={panelRef} aria-labelledby="os-day" className="scroll-mt-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 id="os-day" className="text-base font-semibold">{dayLong(day, locale, data.today.slice(0, 4))}</h3>
@@ -150,8 +157,10 @@ export function OutletCalendar({
             {t("No event on this day. Add one to fill its report after the night.")}
           </p>
         ) : (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {dayEvents.map((e) => <EventDetail key={e.id} event={e} form={data.form} config={data.config} today={data.today} onEdit={() => onEdit(e)} />)}
+          // One night uses the full width, its figures and stories side by side; two or more sit in two columns
+          // (UI tour run 13, W-D17: a single report was half width with an empty right half).
+          <div className={cn("grid gap-3", dayEvents.length > 1 && "lg:grid-cols-2")}>
+            {dayEvents.map((e) => <EventDetail key={e.id} event={e} form={data.form} config={data.config} today={data.today} onEdit={() => onEdit(e)} wide={dayEvents.length === 1} />)}
           </div>
         )}
       </section>

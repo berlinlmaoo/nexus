@@ -9,6 +9,7 @@ import { fmtDate, fmtTime, nexusApi } from "@/lib/nexus-api";
 import { xpReasonInfo } from "@/lib/xp-reason";
 import { MorphPanel } from "@/components/motion/MorphPanel";
 import { useLang } from "@/lib/lang";
+import { formatSigned } from "@/lib/number-format";
 
 type Scope = "period" | "all";
 type XpUser = { id: string; name?: string | null; avatar?: string | null };
@@ -74,7 +75,7 @@ export function UserXpLogModal({ user, layoutId, onClose }: { user: XpUser; layo
                       <div className="truncate text-sm font-semibold">{info.label}</div>
                       <div className="truncate text-[11px] text-muted-foreground">{info.sub ? `${info.sub} · ` : ""}{fmtDate(r.createdAt)} {fmtTime(r.createdAt)}</div>
                     </div>
-                    <div className={cn("shrink-0 text-sm font-black tabular-nums", pos ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>{pos ? `+${r.amount}` : r.amount} XP</div>
+                    <div className={cn("shrink-0 text-sm font-black tabular-nums", pos ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>{formatSigned(r.amount)} XP</div>
                   </div>
                 );
               })}

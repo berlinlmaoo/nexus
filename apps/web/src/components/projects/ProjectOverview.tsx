@@ -299,6 +299,10 @@ export function ProjectOverview({
         <DeadlinesCard overdue={m.overdue} upcoming={m.upcoming} noDue={m.noDue} openCount={m.open.length} dueLabel={dueLabel} onOpenTask={onOpenTask} onDrill={onDrill} />
 
         <TeamCard people={m.people} memberById={memberById} unassigned={m.unassigned} onDrill={onDrill} />
+
+        {/* In the wide column: on the right it made that column much longer than this one, which ended in a
+            large empty hole (UI tour run 13, W-D13). */}
+        <StatusUpdatesCard projectId={project.id} />
       </div>
 
       <div className="min-w-0 space-y-4 md:space-y-6 lg:col-span-4">
@@ -344,8 +348,6 @@ export function ProjectOverview({
         )}
 
         <RecentlyDoneCard completed={m.completed} memberById={memberById} onOpenTask={onOpenTask} />
-
-        <StatusUpdatesCard projectId={project.id} />
       </div>
     </div>
   );

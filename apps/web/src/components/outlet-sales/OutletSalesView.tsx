@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Info, Link2, Loader2, Plus, Settings2, Store, X } from "lucide-react";
+import { Check, Info, Link2, Loader2, PencilLine, Plus, Settings2, Store, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
@@ -114,7 +114,8 @@ export function OutletSalesView({
   const toolbar = (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <MonthSwitcher month={month} today={today} onChange={(m) => { setMonth(m); setSelected(null); }} />
-      <div className="flex items-center gap-2">
+      {/* Labelled on a phone too (UI tour run 13, W-M13: bare icons); the row wraps when it must. */}
+      <div className="flex flex-wrap items-center gap-2">
         {(data.canManageSettings ?? data.canManageTargets) && (
           <button
             type="button"
@@ -122,8 +123,7 @@ export function OutletSalesView({
             className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:h-11"
           >
             <Settings2 aria-hidden className="h-4 w-4" />
-            <span className="hidden sm:inline">{t("Report settings")}</span>
-            <span className="sr-only sm:hidden">{t("Report settings")}</span>
+            {t("Report settings")}
           </button>
         )}
         <button
@@ -132,8 +132,7 @@ export function OutletSalesView({
           className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:h-11"
         >
           <Link2 aria-hidden className="h-4 w-4" />
-          <span className="hidden sm:inline">{t("Copy form link")}</span>
-          <span className="sr-only sm:hidden">{t("Copy form link")}</span>
+          {t("Copy form link")}
         </button>
         <button
           type="button"
@@ -252,7 +251,9 @@ function Overview({
           {!data.canManageTargets && !data.target && t("The Project Owner or a BoD sets it.")}
         </p>
         {data.canManageTargets && !editing && (
-          <button type="button" onClick={() => setEditing(true)} className="rounded-lg px-2.5 py-1.5 font-semibold text-primary transition-colors hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[40px]">
+          // An outlined button, not bare bold text: it has to read as something to click (UI tour run 13, W-B12).
+          <button type="button" onClick={() => setEditing(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[40px]">
+            <PencilLine aria-hidden className="h-3.5 w-3.5 text-muted-foreground" />
             {data.target ? t("Change target") : t("Set target")}
           </button>
         )}

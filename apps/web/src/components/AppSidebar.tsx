@@ -5,7 +5,7 @@ import {
   Search, PanelLeftClose, PanelLeftOpen, LogOut, Loader2, AtSign, Ticket, Sun, Moon,
  HardDrive, Languages, Keyboard, Scale,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SidebarProjectTree } from "@/components/SidebarProjectTree";
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { GideonAskButton } from "@/components/gideon/GideonLauncher";
@@ -72,6 +72,19 @@ export function AppSidebar() {
   const { isDark, toggle: toggleTheme } = useTheme();
   const { lang, setLang, t } = useLang();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
+  const navRef = useRef<HTMLDivElement>(null);
+  const [navMore, setNavMore] = useState(false);
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const read = () => setNavMore(el.scrollTop + el.clientHeight < el.scrollHeight - 2);
+    read();
+    el.addEventListener("scroll", read, { passive: true });
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    for (const child of Array.from(el.children)) ro.observe(child);
+    return () => { el.removeEventListener("scroll", read); ro.disconnect(); };
+  }, []);
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
   const profileQuery = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 });
   const me = profileQuery.data?.user;
@@ -159,7 +172,9 @@ export function AppSidebar() {
 
       {/* Short desktop screens (≤960px tall, mouse): a denser nav, so the last entry (Control Room) is not
           hidden under the footer at 1440×900 (QA 13 Oct 2026). Touch keeps its 32px+ rows. */}
-      <SidebarContent className="[@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group]]:py-1 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group-label]]:h-6 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu]]:gap-0.5 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu-button]]:h-7">
+      {/* While more of the nav lies below, its bottom edge fades into the footer instead of cutting a label in
+          half ("Folders", UI tour run 13, W-D7). */}
+      <SidebarContent ref={navRef} className={cn(navMore && "[mask-image:linear-gradient(to_bottom,black_calc(100%-2rem),transparent)]", "[@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group]]:py-1 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group-label]]:h-6 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu]]:gap-0.5 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu-button]]:h-7")}>
         {visibleGroups.map((g) => (
           <SidebarGroup key={g.label}>
             <SidebarGroupLabel>{t(g.label)}</SidebarGroupLabel>

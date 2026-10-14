@@ -11,7 +11,7 @@ import { useEdgeFade } from "@/hooks/use-edge-fade";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bug, CalendarRange, FileText, Filter, Flag, Images, Lightbulb, ListChecks, Map as MapIcon, Megaphone, Package,
-  PartyPopper, Plus, Search, StickyNote, Store, Target, Users, X, Heart,
+  PartyPopper, Plus, Search, StickyNote, Store, Target, Users, X,
 } from "lucide-react";
 import { nexusApi, type NexusL, type NexusProjectTemplate, type NexusTemplateColor } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
@@ -71,7 +71,8 @@ const DASHBOARDS: { type: DashboardType; icon: typeof Store; title: string; body
   // Owner, 10 Oct 2026 (for Ryan). One project = one outlet.
   { type: "OUTLET_SALES", icon: Store, title: "Outlet Sales Dashboard", body: "One outlet: sales and pax against the month's target, a calendar of events, and a report form for every night." },
   // Owner, 14 Oct 2026: per day and platform the team's views, likes, comments, shares and posts.
-  { type: "SOCIAL_MEDIA_REPORT", icon: Heart, title: "Social Media Report", body: "Daily views, likes, comments, shares and posts per platform, against monthly and daily targets." },
+  // A megaphone, as in the apps (UI tour run 13, W-B18: a heart read as "likes" only).
+  { type: "SOCIAL_MEDIA_REPORT", icon: Megaphone, title: "Social Media Report", body: "Daily views, likes, comments, shares and posts per platform, against monthly and daily targets." },
   { type: "PIPELINE", icon: Filter, title: "Pipeline Dashboard", body: "Follow every deal from first contact to paid." },
 ];
 
@@ -213,7 +214,8 @@ function Card({ onClick, wash, icon, iconClass, title, body, preview }: { onClic
         <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-xl", iconClass)}>{icon}</span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-bold text-foreground">{title}</span>
-          <span className="line-clamp-2 text-xs leading-snug text-muted-foreground">{body}</span>
+          {/* The whole description: cut at two lines it ended mid-phrase ("a calendar of…", W-B18). */}
+          <span className="block text-xs leading-snug text-muted-foreground">{body}</span>
         </span>
       </div>
       <div className={cn("w-full flex-1 px-3.5 pb-3", wash)} aria-hidden>

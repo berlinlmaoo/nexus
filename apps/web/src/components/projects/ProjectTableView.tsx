@@ -1,6 +1,7 @@
 import { DateField } from "@/components/DateField";
 import { EscClose } from "@/hooks/use-escape";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEdgeFade } from "@/hooks/use-edge-fade";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, Plus, Sparkles, X } from "lucide-react";
 import { useAutofillMarks } from "@/components/gideon/AutofillPanel";
@@ -192,6 +193,8 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
       </div>
     </div>
   );
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const edgeFade = useEdgeFade(scrollRef, [columns.length]);
   const groupRow = (g: TaskGroup, by: string | null, key: string, depth: number) => (
     <div className={cn("sticky left-0 flex items-center border-b border-border bg-card px-1.5 py-1", depth > 0 && "pl-6")}>
       <GroupHeader group={g} groupBy={by} defs={defs} cfg={cfg} collapsed={collapsed.has(key)} onToggle={() => onToggleGroup(key)} />
@@ -204,7 +207,10 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
           and the tab bar. A sticky header row only sticks inside the box that scrolls, and this box already
           scrolls sideways, so with the page doing the vertical scrolling the column names left with the first
           rows (UI tour run 12, WM3). */}
-      <div className="overflow-x-auto overscroll-x-contain rounded-lg border border-border max-md:max-h-[calc(100dvh-14rem)] max-md:overflow-y-auto">
+      {/* Desktop too (UI tour run 13, W-D1): the table scrolls inside a box as tall as the screen under the
+          project header, so the column names stay pinned past the first screen. The edge that has more columns
+          fades (W-D2: "Kategori" ended hard at the edge). Phone: the box runs down to the tab bar (W-M23). */}
+      <div ref={scrollRef} className={cn("overflow-auto overscroll-x-contain rounded-lg border border-border max-h-[max(20rem,calc(100dvh-10rem))] max-md:max-h-[max(16rem,calc(100dvh-var(--tabbar-room)-8rem))]", edgeFade)}>
         {/* Width from the columns' minimums, never from cell contents (perf pass, 12 Oct 2026): with min-w-max a
             row that loaded wider content widened every column and the header jumped. */}
         <div className="w-full" style={{ minWidth: 240 + columns.reduce((n, k) => n + (colW[k] ?? 160), 0) + 40 }}>

@@ -933,6 +933,9 @@ export type NexusLeaderboardRow = {
   levelName?: string;
 };
 
+/** Whether the caller is on the ranking; "MANAGEMENT" = left out by rule (BoD and One-Above-All). */
+export type NexusLeaderboardViewer = { ranked: boolean; reason: "MANAGEMENT" | null };
+
 export type NexusLeaderboardPeriod = {
   start: string;
   end: string;
@@ -2604,7 +2607,7 @@ export const nexusApi = {
     apiFetch<{ ok: boolean; refund: { id: string; transactionId: string; userId: string; amount: number; refunded: number; label: string; dateKey: string | null }; totalXp: number | null }>(
       `/api/gamification/xp-transactions/${encodeURIComponent(transactionId)}/refund`, { method: "POST", body: JSON.stringify(note ? { note } : {}) }),
   claimQuest: (questKey: string) => apiFetch<{ xp?: NexusXp }>("/api/gamification/quests/claim", { method: "POST", body: JSON.stringify({ questKey }) }),
-  leaderboard: () => apiFetch<{ rows: NexusLeaderboardRow[]; period?: NexusLeaderboardPeriod }>("/api/gamification/leaderboard"),
+  leaderboard: () => apiFetch<{ rows: NexusLeaderboardRow[]; period?: NexusLeaderboardPeriod; viewer?: NexusLeaderboardViewer }>("/api/gamification/leaderboard"),
   xpAuditLog: (params?: { sign?: "all" | "pos" | "neg"; scope?: "period" | "all"; userId?: string; offset?: number; limit?: number }) => {
     const qs = new URLSearchParams();
     if (params?.sign && params.sign !== "all") qs.set("sign", params.sign);

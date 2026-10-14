@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, TrendingDown, X } from "lucide-react";
 import { fmtDate, fmtTime, nexusApi, type NexusXpPenalty } from "@/lib/nexus-api";
 import { t as tr, tn } from "@/lib/lang";
+import { formatSigned } from "@/lib/number-format";
 
 /**
  * Global "your XP got cut" alert. On app open (and after check-in, via ["my-penalties"] invalidation),
@@ -100,12 +101,12 @@ export function XpPenaltyModal() {
                     <div className="truncate text-sm font-semibold">{penaltyLabel(p)}</div>
                     <div className="text-[11px] text-muted-foreground">{fmtDate(p.createdAt)} {fmtTime(p.createdAt)}</div>
                   </div>
-                  <div className="shrink-0 text-sm font-black tabular-nums text-rose-600 dark:text-rose-400">{p.amount} XP</div>
+                  <div className="shrink-0 text-sm font-black tabular-nums text-rose-600 dark:text-rose-400">{formatSigned(p.amount)} XP</div>
                 </div>
               ))}
               {fresh.length > 1 && (
                 <div className="flex items-center justify-between rounded-2xl bg-rose-500/10 px-3 py-2 text-sm font-bold text-rose-700 dark:text-rose-300">
-                  <span>{tr("Total")}</span><span className="tabular-nums">{total} XP</span>
+                  <span>{tr("Total")}</span><span className="tabular-nums">{formatSigned(total)} XP</span>
                 </div>
               )}
               <button onClick={dismiss} className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.99]">{tr("Got it")}</button>
