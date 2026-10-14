@@ -263,7 +263,7 @@ struct ViewChipsBar: View {
         case "list": return "list.bullet"
         case "table": return "tablecells"
         case "calendar": return "calendar"
-        case "timeline": return "chart.bar.xaxis"
+        case "timeline": return "text.alignleft"
         default: return "rectangle.split.3x1"
         }
     }

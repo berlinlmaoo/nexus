@@ -144,6 +144,7 @@ final class RealtimeClient {
         // getToken. No Origin is sent and none is needed: the server's CORS list only governs browsers.
         req.setValue(session.cookieHeader, forHTTPHeaderField: "Cookie")
         req.setValue(APIClient.clientTag, forHTTPHeaderField: "X-Nexus-Client")
+        req.setValue(APIClient.userAgent, forHTTPHeaderField: "User-Agent")
         req.httpShouldHandleCookies = false
         // Above the server's ping window (25 s + 20 s) on purpose: on Apple's stack this also bounds
         // how long the open socket may sit idle. The engine's own 15 s deadline covers connecting.

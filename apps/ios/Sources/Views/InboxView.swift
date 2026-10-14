@@ -98,47 +98,59 @@ struct InboxView: View {
         } else if let error {
             errorState(error)
         } else {
-            ScrollView {
-                VStack(spacing: 12) {
-                    // A plain line, and only when something is unread (web: an empty inbox had a
-                    // "0 unread" bar over its empty state).
-                    if unread > 0 {
-                        Text(unread == 1 ? T("1 unread notification") : String(format: T("%d unread notifications"), unread))
-                            .font(NXFont.text(14, .medium)).foregroundStyle(NX.mutedFg)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+            VStack(spacing: 0) {
+                // The phone's filter tabs stay under the title while the list scrolls, as on the web's
+                // mobile inbox (UI tour run 12, IP2: they scrolled away). On the iPad / Mac page the tabs
+                // sit in the header.
+                if !isRoot, !items.isEmpty, tabs.count > 2 {
+                    // Full width under the subtitle, like the Settings and Legal tab rows.
+                    NotificationFilterBar(tabs: tabs, group: $group)
+                        .background(NX.background)
+                }
+                list
+            }
+        }
+    }
 
-                    if items.isEmpty {
-                        EmptyState(icon: "tray", title: T("Inbox clean"),
-                                   subtitle: T("Requests to approve, replies to your tickets, mentions and announcements land here the moment they happen. Nothing needs you right now."),
-                                   tint: NX.success, compact: true)
+    private var list: some View {
+        ScrollView {
+            VStack(spacing: 12) {
+                // A plain line, and only when something is unread (web: an empty inbox had a
+                // "0 unread" bar over its empty state).
+                if unread > 0 {
+                    Text(unread == 1 ? T("1 unread notification") : String(format: T("%d unread notifications"), unread))
+                        .font(NXFont.text(14, .medium)).foregroundStyle(NX.mutedFg)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                if items.isEmpty {
+                    EmptyState(icon: "tray", title: T("Inbox clean"),
+                               subtitle: T("Requests to approve, replies to your tickets, mentions and announcements land here the moment they happen. Nothing needs you right now."),
+                               tint: NX.success, compact: true)
+                } else {
+                    if shown.isEmpty {
+                        EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("Nothing of this kind"),
+                                   subtitle: T("This filter only shows one type of notification. Everything else is still in All."),
+                                   actionTitle: T("Show all"), actionIcon: nil, action: { group = .all }, compact: true)
                     } else {
-                        // On the iPad / Mac page the tabs sit in the header.
-                        if !isRoot { NotificationFilterBar(tabs: tabs, group: $group) }
-                        if shown.isEmpty {
-                            EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("Nothing of this kind"),
-                                       subtitle: T("This filter only shows one type of notification. Everything else is still in All."),
-                                       actionTitle: T("Show all"), actionIcon: nil, action: { group = .all }, compact: true)
-                        } else {
-                            VStack(spacing: 0) {
-                                ForEach(Array(shown.enumerated()), id: \.element.id) { idx, n in
-                                    if idx > 0 { Divider().overlay(NX.border) }
-                                    NotificationRow(notification: n, onDelete: { Task { await delete(n) } },
-                                                    onMarkRead: { Task { await markRead(n) } }) { open(n) }
-                                }
+                        VStack(spacing: 0) {
+                            ForEach(Array(shown.enumerated()), id: \.element.id) { idx, n in
+                                if idx > 0 { Divider().overlay(NX.border) }
+                                NotificationRow(notification: n, onDelete: { Task { await delete(n) } },
+                                                onMarkRead: { Task { await markRead(n) } }) { open(n) }
                             }
-                            // Hairline card like the web's (rounded-xl border bg-card), no drop shadow.
-                            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
+                        // Hairline card like the web's (rounded-xl border bg-card), no drop shadow.
+                        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                 }
-                .padding(.horizontal, NXSidebarPage.gutter(isRoot))
-                .padding(.vertical, isRoot ? 24 : 16)
             }
-            .refreshable { await load() }
+            .padding(.horizontal, NXSidebarPage.gutter(isRoot))
+            .padding(.vertical, isRoot ? 24 : 16)
         }
+        .refreshable { await load() }
     }
 
     private var shown: [NexusNotification] {

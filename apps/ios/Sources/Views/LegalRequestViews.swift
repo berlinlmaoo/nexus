@@ -92,6 +92,15 @@ struct LegalRequestFormView: View {
             .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
+        // The sheet is shorter than the form on a Mac: Attachments and Send sat below its edge with nothing
+        // saying the page went on (UI tour run 12, MC4). The indicator shows once on open, and Send stays
+        // pinned under the scrolling fields.
+        .scrollIndicatorsFlash(onAppear: true)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let info = formInfo {
+                sendBar(info)
+            }
+        }
         .background(NX.background.ignoresSafeArea())
         .navigationTitle(T("Legal request"))
         .navigationBarTitleDisplayMode(.inline)
@@ -241,18 +250,36 @@ struct LegalRequestFormView: View {
                 }
             }
         }
-        if let formError {
-            Text(formError).font(NXFont.text(13)).foregroundStyle(NX.danger)
-        }
-        Button { Task { await send() } } label: {
-            HStack(spacing: 6) {
-                if sending { ProgressView().tint(NX.background) }
-                Text(T("Send request"))
+    }
+
+    /// The form on screen (ready, accepting, not sent yet): the pinned Send bar shows only then.
+    private var formInfo: LegalRequestFormInfo? {
+        guard case .ready(let info) = phase, info.accepting, sentId == nil else { return nil }
+        return info
+    }
+
+    /// Send, pinned under the fields with the form's error above it.
+    private func sendBar(_ info: LegalRequestFormInfo) -> some View {
+        let template = templates(info).first { $0.id == templateId }
+        return VStack(alignment: .leading, spacing: 8) {
+            if let formError {
+                Text(formError).font(NXFont.text(13)).foregroundStyle(NX.danger)
             }
-            .frame(maxWidth: .infinity)
+            Button { Task { await send() } } label: {
+                HStack(spacing: 6) {
+                    if sending { ProgressView().tint(NX.background) }
+                    Text(T("Send request"))
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.nxPrimary)
+            .disabled(sending || templateId == nil || companyId == nil || (template?.isAddendum == true && parentNumber.trimmingCharacters(in: .whitespaces).isEmpty))
         }
-        .buttonStyle(.nxPrimary)
-        .disabled(sending || templateId == nil || companyId == nil || (template?.isAddendum == true && parentNumber.trimmingCharacters(in: .whitespaces).isEmpty))
+        .padding(.horizontal, 20).padding(.vertical, 12)
+        .frame(maxWidth: 720)
+        .frame(maxWidth: .infinity)
+        .background(NX.background)
+        .overlay(alignment: .top) { Rectangle().fill(NX.border).frame(height: 1) }
     }
 
     private func sent(_ id: String) -> some View {
@@ -359,11 +386,19 @@ struct MyLegalRequestsStrip: View {
             Text([r.company?.name, r.isAddendum && !r.parentNumberText.isEmpty ? String(format: T("Amends %@"), r.parentNumberText) : nil]
                     .compactMap { $0 }.joined(separator: " · "))
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
-            if let deadline = r.deadline {
-                Label(LegalLabels.day(deadline), systemImage: "calendar").font(NXFont.text(11))
-                    .foregroundStyle(overdue(r) ? NX.danger : NX.mutedFg)
+            // When it was sent, then the deadline and the number, as the web card's meta line (UI tour
+            // run 12, IP3: the app left "Sent 14 Oct" out).
+            FlowLayout(spacing: 10) {
+                if let at = r.createdAt {
+                    Text(String(format: T("Sent %@"), LegalLabels.date(at))).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                }
+                if let deadline = r.deadline {
+                    Label(LegalLabels.day(deadline), systemImage: "calendar").font(NXFont.text(11, overdue(r) ? .semibold : .regular))
+                        .foregroundStyle(overdue(r) ? NX.danger : NX.mutedFg)
+                }
+                if let doc = r.document { Text(doc.number).font(.system(size: 11, design: .monospaced)).foregroundStyle(NX.mutedFg).lineLimit(1) }
             }
-            if let doc = r.document { Text(doc.number).font(.system(size: 11, design: .monospaced)).foregroundStyle(NX.mutedFg).lineLimit(1) }
+            .padding(.top, 2)
             if r.stage == "REJECTED", let reason = r.rejectReason, !reason.isEmpty {
                 Text(reason).font(NXFont.text(12)).foregroundStyle(NX.danger).lineLimit(2)
             }

@@ -794,6 +794,13 @@ struct SidebarRoot: View {
                 Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
                     .frame(width: 15, height: 15)
                     .foregroundStyle(glyph)
+            } else if screen == .legal {
+                // The custom scales symbol drew NOTHING in the sidebar's icon slot (iPad and Mac, UI tour
+                // run 12, PD1 / MC1) though it draws in the phone's tiles: the row read like a section
+                // header. The same lucide glyph as a template image, sized like GIDEON's mark above.
+                Image("LegalScaleGlyph").renderingMode(.template).resizable().scaledToFit()
+                    .frame(width: 17, height: 17)
+                    .foregroundStyle(glyph)
             } else {
                 Image.nxSymbol(screen.sidebarIcon)
                     .font(.system(size: 15, weight: .regular))

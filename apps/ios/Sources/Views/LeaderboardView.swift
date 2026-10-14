@@ -266,7 +266,7 @@ struct RankRow: View {
                 AvatarView(url: row.avatar, initial: row.initial, size: 36)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.name ?? "—").font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    Text("Level \(row.level)\(row.levelName.map { " – \($0)" } ?? "")").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    Text("Level \(row.level)\(row.levelName.map { " · \($0)" } ?? "")").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
                 Spacer()
                 Text(row.totalXp.formatted(.number.locale(AppDateLocale.current)))

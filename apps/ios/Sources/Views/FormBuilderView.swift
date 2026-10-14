@@ -286,6 +286,9 @@ struct FormBuilderView: View {
     @State private var customFields: [CustomField] = []
 
     @State private var tab: FormStudioTab = .questions
+    /// The form's own heading (name) is on screen in the Questions canvas: the phone's bar then leaves the
+    /// name out instead of showing it twice (UI tour run 12, IP12). iOS 17 cannot tell, and keeps it.
+    @State private var headOnScreen = false
     /// Regular width: the question whose settings fill the side panel.
     @State private var selectedId: String?
     /// Compact width: the question whose settings screen is pushed.
@@ -394,12 +397,15 @@ struct FormBuilderView: View {
                     }
                 }
             } else {
-                // Phone: a smaller inline title, cut in the middle, so a long form name keeps its start and its
-                // end beside the three bar buttons ("Pengajuan Financ…", UI tour run 11 IP-13). The form's
-                // name is also the page's own heading right under the bar.
+                // Phone: a smaller inline title beside the three bar buttons, cut at its end. While the form's
+                // own heading is in view under the bar the title is left out: it said "Pengajua…ance PATS" right
+                // above the whole name (UI tour run 12, IP12).
                 ToolbarItem(placement: .principal) {
                     Text(displayName).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
-                        .lineLimit(1).truncationMode(.middle)
+                        .lineLimit(1).truncationMode(.tail)
+                        .opacity(headOnScreen && tab == .questions ? 0 : 1)
+                        .animation(.easeInOut(duration: 0.15), value: headOnScreen)
+                        .accessibilityHidden(headOnScreen && tab == .questions)
                         .accessibilityAddTraits(.isHeader)
                 }
             }
@@ -541,6 +547,7 @@ struct FormBuilderView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     FormStudioHead(name: $draft.name, description: $draft.description, branding: $draft.branding,
                                    isPublic: draft.isPublic, large: regular, onChangeAccess: { tab = .settings })
+                        .modifier(ScrollVisibilityFlag(visible: $headOnScreen))
                     questionList.padding(.top, 28)
                 }
                 .frame(maxWidth: 720, alignment: .leading)
@@ -1730,5 +1737,17 @@ struct FormProjectPickerView: View {
             error = (failure as? LocalizedError)?.errorDescription ?? T("Couldn't load projects.")
         }
         loading = false
+    }
+}
+
+/// Sets `visible` while the view is (mostly) on screen inside its ScrollView (iOS 18; a no-op before).
+private struct ScrollVisibilityFlag: ViewModifier {
+    @Binding var visible: Bool
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollVisibilityChange(threshold: 0.3) { visible = $0 }
+        } else {
+            content
+        }
     }
 }

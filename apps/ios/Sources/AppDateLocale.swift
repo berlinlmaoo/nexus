@@ -35,6 +35,16 @@ enum AppDateLocale {
         let thisYear = cal.component(.year, from: d) == cal.component(.year, from: Date())
         return formatter(thisYear ? "d MMM" : "d MMM yyyy", timeZone: timeZone).string(from: d)
     }
+
+    /// The weekday before the short date, the year again only outside the current one: "Wednesday 14 Oct",
+    /// "Rabu 14 Okt", "Friday 5 Jan 2027" (UI tour run 12, IP1: the phone's Calendar day said
+    /// "Wednesday, 14 Oct 2026"; the web writes "Wednesday 14 Oct").
+    static func weekdayDate(_ d: Date, timeZone: TimeZone? = TimeZone(identifier: "Asia/Jakarta")) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        if let timeZone { cal.timeZone = timeZone }
+        let thisYear = cal.component(.year, from: d) == cal.component(.year, from: Date())
+        return formatter(thisYear ? "EEEE d MMM" : "EEEE d MMM yyyy", timeZone: timeZone).string(from: d)
+    }
 }
 
 /// Numbers in the language the app is set to, not the device's region: English "1,000" and "18.5 MB",
