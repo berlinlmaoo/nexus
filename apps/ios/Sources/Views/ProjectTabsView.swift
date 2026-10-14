@@ -477,11 +477,25 @@ struct TimelineTab: View {
                                  text: outside == 1 ? T("1 task outside this range") : String(format: T("%d tasks outside this range"), outside),
                                  actionTitle: T("Jump to first")) { jumpToFirst += 1 }
             }
-            chartCard(gs, ax: ax, leftW: leftW)
+            chartCard(gs, ax: ax, leftW: leftW, viewport: width - leftW)
         }
     }
 
-    private func chartCard(_ gs: [Group], ax: Axis, leftW: CGFloat) -> some View {
+    /// Where the chart opens: around today, or at the first bar when no bar falls in those days, so the
+    /// first view is never an empty chart (UI tour run 13, M-24).
+    private func openingDay(_ gs: [Group], ax: Axis, viewport: CGFloat) -> Int {
+        let today = max(0, (ax.todayIndex ?? 0) - (compact ? 1 : 3))
+        let visible = max(1, Int(viewport / dayW))
+        let wins = gs.flatMap { $0.rows.compactMap(\.win) }
+        let near = wins.contains { w in
+            let a = days(ax.start, w.start), b = days(ax.start, w.end)
+            return b >= today && a < today + visible
+        }
+        guard !near, let first = firstBarIndex(gs, ax: ax) else { return today }
+        return max(0, first - 2)
+    }
+
+    private func chartCard(_ gs: [Group], ax: Axis, leftW: CGFloat, viewport: CGFloat) -> some View {
         let ls = lines(gs)
         let sticky = stickyHeader
         return VStack(spacing: 0) {
@@ -505,7 +519,8 @@ struct TimelineTab: View {
                     leftColumn(ls, width: leftW, header: !sticky)
                         .frame(width: leftW)
                         .overlay(alignment: .trailing) { Rectangle().fill(NX.border).frame(width: 1) }
-                    rightPane(ls, ax: ax, header: !sticky, firstBar: firstBarIndex(gs, ax: ax))
+                    rightPane(ls, ax: ax, header: !sticky, firstBar: firstBarIndex(gs, ax: ax),
+                              landing: openingDay(gs, ax: ax, viewport: viewport))
                 }
             }
         }
@@ -610,9 +625,17 @@ struct TimelineTab: View {
                     if t.isSubtask {
                         Image(systemName: "arrow.turn.down.right").font(.system(size: 11)).foregroundStyle(NX.mutedFg)
                     }
-                    Text(t.title).font(NXFont.text(15, .medium))
-                        .foregroundStyle(t.isDone ? NX.mutedFg : NX.foreground)
-                        .strikethrough(t.isDone).lineLimit(1)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(t.title).font(NXFont.text(15, .medium))
+                            .foregroundStyle(t.isDone ? NX.mutedFg : NX.foreground)
+                            .strikethrough(t.isDone).lineLimit(1)
+                        // The phone has no Duration column: the dates under the name, so a row whose bar
+                        // is out of view still says when it is (UI tour run 13, F-09).
+                        if compact {
+                            Text(r.win.map(Self.spanLabel) ?? T("No date"))
+                                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                        }
+                    }
                     Spacer(minLength: 0)
                 }
                 .padding(.leading, compact ? 12 : 14)
@@ -663,10 +686,9 @@ struct TimelineTab: View {
 
     // MARK: right: the axis and the bars
 
-    private func rightPane(_ ls: [Line], ax: Axis, header: Bool, firstBar: Int?) -> some View {
+    private func rightPane(_ ls: [Line], ax: Axis, header: Bool, firstBar: Int?, landing: Int) -> some View {
         let timelineW = CGFloat(ax.days.count) * dayW
         let todayX: CGFloat? = ax.todayIndex.map { CGFloat($0) * dayW + dayW / 2 }
-        let landing = max(0, (ax.todayIndex ?? 0) - (compact ? 1 : 3))
         return ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -696,7 +718,7 @@ struct TimelineTab: View {
                 }
             }
             .modifier(TimelineOffsetTracker(offsetX: $offsetX))
-            // Opens around today (web: today minus three days at the left edge).
+            // Opens around today (web: today minus three days at the left edge), or at the first bar.
             .onAppear { DispatchQueue.main.async { proxy.scrollTo("day-\(landing)", anchor: .leading) } }
             // "Jump to first": two days before the first bar at the leading edge (web jumpToFirst).
             .onChange(of: jumpToFirst) { _, _ in
@@ -761,10 +783,6 @@ struct TimelineTab: View {
                 Color.clear
                 if let w = r.win {
                     bar(r, w, ax: ax)
-                } else if compact {
-                    // Wide screens say "No date" in the Duration column; the phone has none, so here.
-                    Text(T("No date")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                        .padding(.leading, (todayX ?? 0) + 8)
                 }
             }
             .frame(height: rowH)
@@ -827,6 +845,13 @@ struct TimelineTab: View {
         case "LOW":    return Color(hex: "#8b5cf6")
         default:       return Color(hex: "#14b8a6")
         }
+    }
+
+    /// "3 Sep", or "3 Sep → 5 Sep" (the year only outside the current one).
+    static func spanLabel(_ w: Win) -> String {
+        let tz = ProjDate.cal.timeZone
+        let a = AppDateLocale.shortDate(w.start, timeZone: tz), b = AppDateLocale.shortDate(w.end, timeZone: tz)
+        return a == b ? a : "\(a) → \(b)"
     }
 
     static func dayCount(_ n: Int) -> String { n == 1 ? T("1 day") : String(format: T("%d days"), n) }

@@ -218,18 +218,31 @@ struct SocialHeader: View {
     @Environment(\.horizontalSizeClass) private var hSize
 
     var body: some View {
+        if hSize == .regular {
+            // Words while they fit on one line, icons when they don't: a portrait iPad wrapped "Report
+            // settings" and "Copy form link" onto two lines (UI tour run 13, I-10).
+            ViewThatFits(in: .horizontal) {
+                row(labelled: true)
+                row(labelled: false)
+            }
+        } else {
+            row(labelled: false)
+        }
+    }
+
+    private func row(labelled: Bool) -> some View {
         let wide = hSize == .regular
-        HStack(spacing: wide ? 10 : 6) {
+        return HStack(spacing: wide ? 10 : 6) {
             monthSwitcher(large: wide)
             Spacer(minLength: 4)
             if store.canManage {
                 Button { store.settingsOpen = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "slider.horizontal.3").font(.system(size: 14, weight: .semibold))
-                        if wide { Text(T("Platforms & targets")).font(NXFont.text(14, .semibold)) }
+                        if labelled { Text(T("Platforms & targets")).font(NXFont.text(14, .semibold)).lineLimit(1).fixedSize() }
                     }
                     .foregroundStyle(NX.foreground)
-                    .padding(.horizontal, wide ? 14 : 0)
+                    .padding(.horizontal, labelled ? 14 : 0)
                     .frame(minWidth: 40, minHeight: 40)
                     .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
@@ -243,10 +256,10 @@ struct SocialHeader: View {
                 Button { store.open(store.today) } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "square.and.pencil").font(.system(size: 14, weight: .bold))
-                        if wide { Text(T("Record today")).font(NXFont.text(14, .semibold)) }
+                        if labelled { Text(T("Record today")).font(NXFont.text(14, .semibold)).lineLimit(1).fixedSize() }
                     }
                     .foregroundStyle(.white)
-                    .padding(.horizontal, wide ? 14 : 0)
+                    .padding(.horizontal, labelled ? 14 : 0)
                     .frame(minWidth: 40, minHeight: 40)
                     .background(NX.violetFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))

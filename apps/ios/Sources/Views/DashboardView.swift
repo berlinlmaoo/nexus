@@ -38,6 +38,8 @@ struct DashboardView: View {
     @State private var activeStat: Int?
     @State private var activeLevel = false
     @State private var activeBell = false
+    /// iPad / Mac: GIDEON from the search row (the floating button covered the agenda, UI tour run 13, I-4).
+    @State private var gideonOpen = false
     @State private var morphReady = false   // detail body fades in AFTER the card morphs (web: delay ~0.15)
     /// Passkey nudge. Only shown to someone who has none, and only until they dismiss it once —
     /// a prompt that keeps coming back after being answered stops being a prompt and becomes noise.
@@ -196,6 +198,7 @@ struct DashboardView: View {
             // no margin it covered the agenda's last day ("Sun 25", UI tour run 11 PD-19). 92 pt lets every
             // card scroll clear of it. The phone's 72 is unchanged.
             .contentMargins(.bottom, hSize == .regular ? 92 : 72, for: .scrollContent)
+            .modifier(StatusBarScrollEdge())
             .background(NX.background.ignoresSafeArea())
             .overlay { statModal }
             .overlay { levelModal }
@@ -452,9 +455,10 @@ struct DashboardView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
-                        Text(game?.xp.levelName ?? "—").font(NXFont.display(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        // "Level 6 · Diamond", as everywhere else (UI tour run 13, F-24: "Diamond Lv.6").
                         // "…" until the numbers are in. "Lv.0 / 0 XP" looked like a fact.
-                        Text(game.map { "Lv.\($0.xp.level)" } ?? "…").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                        Text(game.map { Self.levelText($0.xp.level, $0.xp.levelName) } ?? "…")
+                            .font(NXFont.display(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
                         if (game?.streakCurrent ?? 0) > 0 {
                             HStack(spacing: 2) {
                                 Image(systemName: "flame.fill").font(.system(size: 10))
@@ -506,6 +510,23 @@ struct DashboardView: View {
                 .overlay(Capsule().strokeBorder(NX.border, lineWidth: 1))
             }
             .buttonStyle(.plain)
+
+            // iPad / Mac: GIDEON sits in this row instead of floating over the page, where it covered
+            // the agenda card at any scroll position (UI tour runs 12 and 13, PD3 / I-4). The phone keeps
+            // its floating button bottom-left.
+            if hSize == .regular {
+                Button { Haptics.tap(); gideonOpen = true } label: {
+                    Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
+                        .frame(width: 22, height: 22).foregroundStyle(NX.foreground)
+                        .frame(width: 48, height: 48)
+                        .background(NX.card, in: Circle())
+                        .overlay(Circle().strokeBorder(NX.border))
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.lift)
+                .accessibilityLabel("GIDEON")
+                .sheet(isPresented: $gideonOpen) { GideonPanel().environment(auth).environment(router) }
+            }
 
             Button { Haptics.tap(); toggleBell(true) } label: {
                 ZStack(alignment: .topTrailing) {
@@ -1079,7 +1100,7 @@ if !XpRules.tiers.isEmpty {
             quickTile(T("Leaderboard"), "trophy.fill", NX.warning) { LeaderboardView() }
             quickTile(T("Room Booking"), "door.left.hand.open", NX.coral) { RoomBookingView() }
             quickTile(T("Threads"), "text.bubble.fill", NX.violetText) { ThreadsView() }
-            quickTile(T("Ticket"), "ticket.fill", NX.blue) { TicketsView() }
+            quickTile(T("Tickets"), "ticket.fill", NX.blue) { TicketsView() }
         }
     }
 
@@ -1197,11 +1218,9 @@ if !XpRules.tiers.isEmpty {
                     ForEach(calDays, id: \.self) { d in dayChip(d) }
                 }
             }
-            // iPad / Mac: the floating GIDEON button sits at the window's bottom-right, and while the page
-            // scrolls past it the strip's last day ran under it ("Sun 25", UI tour runs 11 and 12, PD3). The
-            // page's bottom margin clears it at the end; this trailing margin lets the strip's last day
-            // scroll clear of it anywhere. The phone's button is bottom-left: its Home is unchanged.
-            .contentMargins(.trailing, hSize == .regular ? 64 : 0, for: .scrollContent)
+            // The card's edges fade where more days lie, so the last day reads as "scroll for more" instead
+            // of a chip cut at the card's edge (UI tour run 13, I-17 / M-18).
+            .nxEdgeFade(20)
             let items = tasksDue(on: selectedDay)
             if items.isEmpty {
                 Text(T("Nothing due on this date."))
@@ -1256,14 +1275,14 @@ if !XpRules.tiers.isEmpty {
             HStack(spacing: 14) {
                 AvatarView(url: profile?.avatar, initial: String(name.first ?? "?").uppercased(), size: 64)
                 VStack(alignment: .leading, spacing: 8) {
-                    row("LEVEL", "\(game?.xp.level ?? 0) · \(game?.xp.levelName ?? "—")")
+                    if let game { NexusChip(text: Self.levelText(game.xp.level, game.xp.levelName), tone: .accent) }
                     row(T("POINTS THIS PERIOD"), AppNumber.int(game?.xp.totalXp ?? 0))
                 }
                 Spacer()
             }
             // Tuning Room is where name/password/members actually live — this used to be a no-op button.
             NavigationLink { SettingsView() } label: {
-                HStack(spacing: 6) { Image(systemName: "pencil"); Text(T("Edit Profile")) }
+                HStack(spacing: 6) { Image(systemName: "pencil"); Text(T("Edit profile")) }
                     .font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(NX.border, lineWidth: 1))
@@ -1272,6 +1291,11 @@ if !XpRules.tiers.isEmpty {
             Text(name).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
         }
         .nexusCard()
+    }
+
+    /// "Level 6 · Diamond".
+    static func levelText(_ level: Int, _ name: String?) -> String {
+        "\(T("Level")) \(level)" + ((name?.isEmpty == false) ? " · \(name!)" : "")
     }
 
     private func row(_ label: String, _ value: String) -> some View {
@@ -1376,4 +1400,19 @@ enum XpRules {
     ]
     /// Empty on purpose — see `bonuses`. The section that draws these hides itself when there are none.
     static let tiers: [Tier] = []
+}
+
+/// Home has no navigation bar, so cards scrolled under the status bar with nothing between them and the
+/// clock (UI tour run 13, F-25). An empty bar at the top edge gives the scroll view the system's scroll-edge
+/// effect there, as under every other screen's bar; the layout itself is untouched. iOS 26+.
+struct StatusBarScrollEdge: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+                .safeAreaBar(edge: .top, spacing: 0) { Color.clear.frame(height: 0) }
+                .scrollEdgeEffectStyle(.soft, for: .top)
+        } else {
+            content
+        }
+    }
 }

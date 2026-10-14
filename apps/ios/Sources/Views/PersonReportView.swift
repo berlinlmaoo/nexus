@@ -514,7 +514,7 @@ struct PersonReportSections: View {
                     stat(T("Leave"), ReportFormat.number(a.leave ?? 0))
                     stat(T("Sick"), ReportFormat.number(a.sick ?? 0))
                     stat(T("Permit"), ReportFormat.number(a.permit ?? 0))
-                    stat(T("Day off"), ReportFormat.number(a.dayOff ?? 0))
+                    stat(T("Days off"), ReportFormat.number(a.dayOff ?? 0))
                     stat(T("Avg worked"), ReportFormat.hours(fromMinutes: a.avgWorkedMinutes))
                     stat(T("Reflections"), reflectionText(a.reflectionRate))
                     stat(T("Attendance rate"), ReportFormat.percent(a.attendanceRate))

@@ -311,7 +311,7 @@ struct MemberProfileView: View {
         HStack(spacing: 8) {
             periodArrow("chevron.left", label: T("Previous period"), key: r.period.previousKey)
             VStack(spacing: 2) {
-                Text(r.period.label ?? r.period.key).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground)
+                Text(Self.periodLabel(r.period.label ?? r.period.key)).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground)
                     .multilineTextAlignment(.center)
                 Text(T("Attendance period · 28th to 27th")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     .multilineTextAlignment(.center)
@@ -321,6 +321,16 @@ struct MemberProfileView: View {
             periodArrow("chevron.right", label: T("Next period"), key: r.period.nextKey)
         }
         .foregroundStyle(NX.foreground)
+    }
+
+    /// The server's "28 Sep – 27 Oct 2026" without the current year, as every other date in the app
+    /// (UI tour run 13, F-14); another year stays ("28 Dec 2026 – 27 Jan 2027").
+    static func periodLabel(_ label: String) -> String {
+        let year = String(Calendar(identifier: .gregorian).component(.year, from: Date()))
+        guard label.hasSuffix(" " + year) else { return label }
+        let trimmed = String(label.dropLast(year.count + 1))
+        // Any other four-digit year left means the period spans two years: keep the label whole.
+        return trimmed.range(of: #"\b\d{4}\b"#, options: .regularExpression) == nil ? trimmed : label
     }
 
     private func periodArrow(_ icon: String, label: String, key: String?) -> some View {
@@ -365,8 +375,9 @@ struct MemberProfileView: View {
                 countTile(T("Permit"), c?.permit, AttTone.permit)
                 countTile(T("Leave"), c?.leave, AttTone.leave)
                 countTile(T("Sick"), c?.sick, AttTone.sick)
-                countTile(T("Day off"), c?.dayOff, AttTone.dayoff)
-                countTile(T("Absent (TK)"), c?.absent, AttTone.absent)
+                // One wording on every screen (UI tour run 13, F-12 / F-13): "Days off", "Absent" (TK stays Indonesian).
+                countTile(T("Days off"), c?.dayOff, AttTone.dayoff)
+                countTile(T("Absent"), c?.absent, AttTone.absent)
             }
             Divider().overlay(NX.border)
             // Name on the left, value on the right; the card already says which period, so the
@@ -380,7 +391,7 @@ struct MemberProfileView: View {
                         : T("Never"))
                 if let d {
                     // "Allowance", not "Day off": the tile above already counts the days off taken.
-                    factRow("calendar.badge.minus", T("Day-off allowance"),
+                    factRow("calendar.badge.minus", T("Days off allowance"),
                             String(format: T("%d of %d used · %d left"), d.usedRaw ?? d.used ?? 0, d.quota ?? 4, d.remaining ?? 0)
                             + ((d.bonusDays ?? 0) > 0 ? " · " + String(format: T("incl. %d extra"), d.bonusDays ?? 0) : ""))
                 }
@@ -481,7 +492,9 @@ struct MemberProfileView: View {
                     if let today = days.first(where: { $0.isToday == true }) { proxy.scrollTo(today.date, anchor: .center) }
                 }
             }
-            Text(PlatformWording.tapOrClick(tap: "Tap a day for its detail. A red dot means XP was deducted for that day.", click: "Click a day for its detail. A red dot means XP was deducted for that day."))
+            // The tiles are coloured by the day's status (red = absent); the small dot on a tile is the XP
+            // deduction. The old line only named the dot, so red tiles read as deductions (F-11).
+            Text(PlatformWording.tapOrClick(tap: "Tap a day for its detail. The colour is the day's status; a small red dot means XP was deducted for that day.", click: "Click a day for its detail. The colour is the day's status; a small red dot means XP was deducted for that day."))
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -837,7 +850,7 @@ private struct RecordXpCard: View {
             if current.isEmpty {
                 EmptyState(icon: "sparkles",
                            title: T("No XP moved this period"),
-                           subtitle: T("XP comes from quests and goes on attendance penalties — late, no check-out, TK."),
+                           subtitle: T("XP comes from quests and goes on attendance penalties — late, no check-out, absent."),
                            actionTitle: canWalkBack ? T("Load older") : nil,
                            actionIcon: "clock.arrow.circlepath",
                            action: walkBack,

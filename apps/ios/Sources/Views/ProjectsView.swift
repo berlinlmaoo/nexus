@@ -1215,7 +1215,7 @@ struct CreateProjectSheet: View {
                     TemplateGallery { choose($0) }
                 }
             }
-            .navigationTitle(T("New project"))
+            .navigationTitle(T("Create a new project"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
         }

@@ -353,7 +353,7 @@ struct AccountFooter: View {
                 .buttonStyle(.plain)
             }
             Button { if !auth.signOutIfAllowed() { signOutBlocked = true } } label: {
-                Label(T("Logout"), systemImage: "rectangle.portrait.and.arrow.right")
+                Label(T("Log out"), systemImage: "rectangle.portrait.and.arrow.right")
                     .font(NXFont.text(14, .semibold)).foregroundStyle(NX.danger)
                     .frame(maxWidth: .infinity).padding(.vertical, 13)
                     .background(NX.danger.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))

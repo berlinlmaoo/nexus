@@ -459,7 +459,7 @@ struct ProjectHeaderButton: View {
         if labelled {
             HStack(spacing: 6) {
                 Image(systemName: icon).font(.system(size: 13, weight: .semibold))
-                Text(title).font(NXFont.text(14, .semibold)).lineLimit(1)
+                Text(title).font(NXFont.text(14, .semibold)).lineLimit(1).fixedSize()
             }
             .padding(.horizontal, 12).frame(height: 36)
         } else {
