@@ -152,3 +152,23 @@ Copy and layout follow the web (`components/legal/LegalRequestForm.tsx`, `MyLega
      Regenerate (confirm first: the old link stops working).
 5. Strings in `values/strings.xml` + `values-in/strings.xml`; unit tests for the decoding of `MyRequest` /
    `BoardRequest` and for the `/f/legal-…` link detection.
+
+## UI tour: Legal screen ids (14 Oct 2026)
+
+The iOS/web tour (`apps/ios/scripts/ui-tour-screens.json`, `apps/ios/docs/UI-TOUR.md`) now photographs Legal.
+When the Android tour (`apps/android/scripts/ui-tour-android.sh`, its own `id|title` list) gets Legal, use the
+same ids, in this order, between `tickets` and `settings`, so the screenshots line up in `index.html`:
+
+| id | screen | how the iOS/web tour reaches it |
+|---|---|---|
+| `legal-archive` | Legal home, Documents tab (the archive) | `/legal` · `nexus://legal` |
+| `legal-document` | a document's detail with its versions | newest `[TEST]` document from `GET /api/legal/documents?q=[TEST]`; web `/legal?tab=documents&doc=<id>`, app taps its row |
+| `legal-templates` | Templates tab | `/legal?tab=templates` · app taps the tab |
+| `legal-requests` | Requests board (To Do / In Progress / Done) | `/legal?tab=requests` · app taps the tab |
+| `legal-request-form` | the request form `/f/legal-<token>` | general link's `path` from `GET /api/legal/request-links`, looked up at run time (never hardcoded) |
+| `legal-settings` | Companies & numbering tab | `/legal?tab=settings` · app taps the tab |
+| `legal-hidden` | signed in as qa6 (not invited): no Legal in the navigation, `/legal` shows "Legal is by invitation only" | web only, needs qa6's password; skipped without it |
+
+The QA account qa5@dev.invalid is a Legal root on dev. A screen whose value cannot be found (no `[TEST]`
+document, no link) is recorded as `skipped: <reason>`, not a failure. This is documentation only; the Android
+code has no Legal tour steps yet.

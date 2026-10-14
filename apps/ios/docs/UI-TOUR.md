@@ -71,3 +71,44 @@ Pakai id layar dari `scripts/ui-tour-screens.json`:
 ```
 
 Opsi lain: `--no-web`, `--no-upload`, `--no-pull`, `--no-open`, `--keep-xcresult`.
+
+## Layar Legal
+
+Tour memotret tujuh layar Legal (14 Okt 2026). Akun QA `qa5@dev.invalid` adalah root Legal di dev, jadi ia
+bisa membuka semuanya.
+
+| id | Layar |
+|---|---|
+| `legal-archive` | Beranda Legal, tab Documents (arsip) |
+| `legal-document` | Detail satu dokumen beserta versinya: dokumen `[TEST]` terbaru di dev |
+| `legal-templates` | Tab Templates |
+| `legal-requests` | Papan Requests (To Do / In Progress / Done) |
+| `legal-request-form` | Form pengajuan `/f/legal-<token>` dari link umum |
+| `legal-settings` | Tab Companies & numbering |
+| `legal-hidden` | Cek negatif: akun yang tidak diundang ke Legal (qa6). Hanya di web |
+
+- Dokumen `[TEST]` dan token link form dicari saat tour jalan lewat API dengan akun QA, hanya membaca
+  (`GET /api/legal/documents?q=[TEST]`, `GET /api/legal/request-links`), jadi tidak ada id yang ditanam di
+  repo. Untuk memaksa yang lain: `TOUR_LEGAL_DOC_ID=<id>` atau `TOUR_LEGAL_FORM_PATH=/f/legal-<token>`.
+- Kalau dokumen `[TEST]` atau link-nya tidak ada, layar itu tercatat `skipped: <alasan>` di `index.html` dan
+  ringkasan. Layar lain tetap jalan.
+- Di app, tab Legal dan baris dokumen tidak punya route sendiri. Tour membuka `nexus://legal` lalu mengetuk
+  tab atau barisnya, seperti orang memakai app.
+
+### Mengaktifkan cek negatif (`legal-hidden`)
+
+Cek ini masuk sebagai `qa6@dev.invalid` (tidak diundang ke Legal) lewat API sign-in, lalu memastikan tiga hal:
+server menjawab `canAccessLegal: false` dan `/api/legal/me` 403, menu Legal tidak ada (sidebar desktop, dan
+sheet More di mobile, dipotret sebagai `legal-hidden-2`), dan `/legal` menampilkan "Legal is by invitation
+only". Sesinya ditutup lagi (`/api/auth/app-logout`) setelah selesai. Hasil mobile-nya dari emulasi Chrome,
+karena Safari di simulator hanya memegang akun QA.
+
+Tanpa password qa6, layar ini tercatat `skipped: no password for qa6@dev.invalid`. Untuk menyalakannya, simpan
+password qa6 di Keychain sekali, di Terminal biasa:
+
+```
+TOUR_EMAIL=qa6@dev.invalid ~/nexus-ios/scripts/ui-tour.sh --set-password
+```
+
+Setelah itu tour biasa (akun qa5) otomatis membaca password qa6 dari Keychain dan hanya memberikannya ke
+bagian web. Cara lain: `TOUR_NONMEMBER_PASSWORD=…` di environment (akun lain: `TOUR_NONMEMBER_EMAIL`).

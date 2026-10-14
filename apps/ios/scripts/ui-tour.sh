@@ -11,6 +11,8 @@
 #   --no-web | --web-only | --no-upload | --no-pull | --no-open | --keep-xcresult
 #   --chrome-mobile                     web mobile from Chrome emulation (440x956@3x) instead of Safari
 #   --set-password                      store the QA password in the macOS Keychain, check it, stop
+#                                       (TOUR_EMAIL=qa6@dev.invalid … --set-password: the account NOT invited to
+#                                       Legal, for the web's legal-hidden check; optional, skipped without it)
 #
 # Order of work: iPhone (app, then Safari), web desktop, iPad, Mac. Results: ~/nexus-ui-tour/<timestamp>/index.html, then copied to
 # the agents VM (~/ui-tour/<timestamp>/) over Tailscale so Claude can look at them.
@@ -44,13 +46,16 @@ while [ $# -gt 0 ]; do
     --headless) TOUR_HEADLESS=1 ;;   # no Chrome window
     --keep-xcresult) KEEP_XCRESULT=1 ;;
     --set-password) SET_PASSWORD=1 ;;
-    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
     *) echo "unknown option: $1 (see --help)"; exit 2 ;;
   esac
   shift
 done
 
 TOUR_EMAIL="${TOUR_EMAIL:-qa5@dev.invalid}"
+# The second account, not invited to Legal (legal-hidden, web only). Its password is optional: Keychain entry
+# of the same service under its own email, or TOUR_NONMEMBER_PASSWORD. Never asked for interactively.
+TOUR_NONMEMBER_EMAIL="${TOUR_NONMEMBER_EMAIL:-qa6@dev.invalid}"
 # Owner: watch the web half in a real Chrome window by default (--headless hides it).
 if [ "${TOUR_HEADLESS:-0}" = 1 ]; then unset TOUR_WATCH; else export TOUR_WATCH=1; fi
 KC_SERVICE="nexus-ui-tour"
@@ -94,6 +99,7 @@ if [ -z "$TOUR_PASSWORD" ]; then
   }
 fi
 export TOUR_EMAIL TOUR_PASSWORD
+TOUR_NONMEMBER_PASSWORD="${TOUR_NONMEMBER_PASSWORD:-$(security find-generic-password -s "$KC_SERVICE" -a "$TOUR_NONMEMBER_EMAIL" -w 2>/dev/null)}"
 
 mkdir -p "$OUT/logs" "$WORK"
 say "results → $OUT"
@@ -281,7 +287,9 @@ run_web() {
   if [ "$(uname)" != "Darwin" ] || [ ! -d "/Applications/Google Chrome.app" ]; then
     (cd "$dir" && npx --no-install playwright install chromium) >>"$log" 2>&1 || { SUMMARY+=("web: playwright install chromium failed — logs/web.log"); return; }
   fi
-  if node "$dir/tour.mjs" --out "$OUT" --only "$ONLY" --variants "$variants" >>"$log" 2>&1; then
+  # The second account's password goes to the web half only (environment, never the command line).
+  if TOUR_NONMEMBER_EMAIL="$TOUR_NONMEMBER_EMAIL" TOUR_NONMEMBER_PASSWORD="$TOUR_NONMEMBER_PASSWORD" \
+     node "$dir/tour.mjs" --out "$OUT" --only "$ONLY" --variants "$variants" >>"$log" 2>&1; then
     local bad
     bad=$(grep -vE ": ok$" "$log" | grep -E "^web-(desktop|mobile) " | head -10 | tr '\n' ';')
     local mobile=""
