@@ -49,13 +49,23 @@ Four tabs, like the web: **Documents · Templates · Companies & numbering · Me
    - Generate with `POST …/documents`. A 422 has `fieldErrors` keyed by field name (`ROWS.0.CELL` for a cell)
      and `problems`; show both. A non-null `pdfError` is only a warning.
 3. **Document**
-   - Header: number, title, type · company · date · template vN. Status selector (PATCH `status`).
+   - Header: number (struck through when `numberReleased`), title, type · company · date · template vN.
+     Status selector (PATCH `status`) offering only what the rules allow: nothing once VOID, only VOID once
+     SIGNED, and SIGNED only for an UPLOADED document. VOID asks first in a centred dialog that says whether
+     the number goes to the next document (`hasNumber && !signedAt`) or stays retired (signed).
+   - **Upload signed copy** on FINAL / SENT (PDF or photo, multipart version with `status=SIGNED`), and
+     **Create addendum** on SIGNED (the New document flow with `parentDocumentId`, addendum templates only,
+     the form started from `prefill`). Show signed by / when, the parent link, the addenda list with their
+     status, and on a void "number reused by …". A SIGNED or VOID document hides editing, GIDEON, Restore,
+     Mark final and Upload new version.
    - **Overview**:
-     - Preview the PDF of `finalVersion ?? currentVersion`.
-     - Download DOCX / PDF / original. Offer "Make PDF" when it is missing.
+     - Preview the PDF of `signedVersion ?? finalVersion ?? currentVersion`.
+     - Download DOCX / PDF / original, saved and shared as `Version.downloadName` + extension
+       ("… REV 2.pdf", "… FINAL.pdf", "… SIGNED.pdf"). Offer "Make PDF" when it is missing.
      - Edit title, counterparty and notes; set "Belongs to".
      - Versions list with the Final badge, **Mark final** (PATCH `finalVersion`, plus `status FINAL` if it
-       was a draft), **Restore**, and **Upload new version** (a PDF or photo sends `status SIGNED`).
+       was a draft), **Restore**, and **Upload new version** (no status: only the signed-copy action signs).
+     - Each version shows its `label` (REV n / FINAL / SIGNED).
    - **Review & edit** (only when a version has a DOCX):
      - Paragraph list from `GET …/paragraphs`. Tap an editable one to edit it, with a live word diff.
      - Locked paragraphs (the number; fields, images, links) are greyed out with the reason.

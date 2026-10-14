@@ -292,5 +292,45 @@ expect(json["B"] as? Bool ?? false, true, "value bool json")
 expect(((json["ROWS"] as? [[String: Any]])?.first?["C"] as? String) ?? "", "1", "value rows json")
 expect(JSONSerialization.isValidJSONObject(json), true, "values serialise")
 
+// MARK: Signed copies, void, addenda (owner, 14 Oct 2026)
+
+let signedDocJSON = #"""
+{"document": {"id": "d1", "number": "PKS/PATS-UNIV/YOGYAKARTA/OKT/2026/001", "docType": "PKS", "title": "PKS Venue", "status": "SIGNED",
+ "source": "GENERATED", "currentVersion": 3, "finalVersion": 2, "signedVersion": 3, "hasNumber": true,
+ "signedAt": "2026-10-14T09:00:00.000Z", "signedBy": {"id": "u1", "name": "Bagas", "avatar": null},
+ "addenda": [{"id": "a1", "number": "PKS/PATS-UNIV/YOGYAKARTA/OKT/2026/001/ADD-1", "title": "Addendum Pertama", "status": "DRAFT",
+   "docDate": "2026-10-20", "signedAt": null, "addendumSeq": 1, "numberReleased": false}],
+ "versions": [
+  {"version": 3, "kind": "UPLOAD", "fileName": "scan.pdf", "hasPdf": true, "label": "SIGNED", "downloadName": "PKS-PATS - PKS Venue SIGNED"},
+  {"version": 2, "kind": "MANUAL", "fileName": "x.docx", "hasDocx": true, "hasPdf": true, "label": "FINAL", "downloadName": "PKS-PATS - PKS Venue FINAL"}]}}
+"""#
+if let r = decode(LegalDocumentResponse.self, signedDocJSON, "signed document") {
+    let d = r.document
+    expect(d.isLocked, true, "signed is locked")
+    expect(d.shownVersion?.version ?? 0, 3, "signed copy is the primary file")
+    expect(d.signedBy?.name ?? "", "Bagas", "signed by")
+    expect(d.addenda.first?.number ?? "", "PKS/PATS-UNIV/YOGYAKARTA/OKT/2026/001/ADD-1", "addendum number")
+    expect(d.statusChoices, ["SIGNED", "VOID"], "signed: only void")
+    expect(d.voidReleasesNumber, false, "a signed void keeps its number retired")
+    expect(d.canUploadSignedCopy, false, "no second signed copy")
+    expect(d.versions[0].shareName("pdf") ?? "", "PKS-PATS - PKS Venue SIGNED.pdf", "share name")
+    expect(d.versions[1].shareName("docx") ?? "", "PKS-PATS - PKS Venue FINAL.docx", "share name docx")
+}
+expect(LegalDocument.statusChoices(status: "VOID", source: "GENERATED"), ["VOID"], "void is one-way")
+expect(LegalDocument.statusChoices(status: "FINAL", source: "GENERATED"), ["DRAFT", "FINAL", "SENT", "VOID"], "generated: signed only by upload")
+expect(LegalDocument.statusChoices(status: "FINAL", source: "UPLOADED"), ["DRAFT", "FINAL", "SENT", "SIGNED", "VOID"], "uploaded may be marked signed")
+if let r = decode(LegalDocumentsPage.self, #"{"documents": [{"id": "v1", "number": "SP/1", "status": "VOID", "numberReleased": true, "numberReusedBy": {"id": "n2", "number": "SP/1", "title": "New"}, "addendaCount": 0}, {"id": "a1", "number": "P/1/ADD-1", "parent": {"id": "p", "number": "P/1", "title": "PKS", "status": "SIGNED", "docType": "PKS"}, "addendumNo": 1}], "total": 2}"#, "archive v2") {
+    expect(r.documents[0].numberReleased, true, "released")
+    expect(r.documents[0].numberReusedBy?.id ?? "", "n2", "reused by")
+    expect(r.documents[1].parent?.number ?? "", "P/1", "parent")
+    expect(r.documents[1].addendumNo ?? 0, 1, "addendum no")
+}
+if let p = decode(LegalPrepared.self, #"{"fields": [], "numberPreview": "P/1/ADD-2", "series": null, "parent": {"id": "p", "number": "P/1", "title": "PKS", "addendumNo": 2}, "prefill": {"NAMA_PIHAK_KEDUA": "PT X", "JUMLAH": 3}}"#, "prepare addendum") {
+    expect(p.parent?.addendumNo ?? 0, 2, "addendum n")
+    expect(p.prefill["NAMA_PIHAK_KEDUA"] ?? "", "PT X", "prefill text")
+    expect(p.prefill["JUMLAH"] ?? "", "3", "prefill number")
+    expect(p.series == nil, true, "no series for an addendum")
+}
+
 print("\(checks) checks, \(failures) failures")
 exit(failures == 0 ? 0 : 1)

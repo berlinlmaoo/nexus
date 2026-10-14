@@ -5,6 +5,8 @@ import { pdfLater } from "@/lib/legal/generate"
 import { applyParagraphEdits, paragraphTexts, ParagraphEditError, readParagraphs, type ParagraphChange } from "@/lib/legal/paragraphs"
 import { deleteLegalFile, readLegalFile, storeLegalFile } from "@/lib/legal/storage"
 import { storeUpload, type StoredUpload } from "@/lib/legal/uploads"
+import { downloadBaseName, lockProblem, statusChangeProblem } from "@/lib/legal/rules"
+import { PDF_MIME } from "@/lib/legal/storage"
 
 // Review after generation (owner, 14 Oct 2026): every change — a manual edit, an approved GIDEON proposal, an
 // uploaded file, a restore — is a new version with its author and time. Versions are never changed or
@@ -19,6 +21,14 @@ export class LegalVersionError extends Error {
 export async function loadDocForVersions(documentId: string) {
   const doc = await prisma.legalDocument.findFirst({ where: { id: documentId, deletedAt: null } })
   if (!doc) throw new LegalVersionError("Document not found", 404)
+  return doc
+}
+
+/** The document, refused when it is locked (SIGNED: no edits, no GIDEON, no new files, no PDF remake). */
+export async function loadDocForChange(documentId: string) {
+  const doc = await loadDocForVersions(documentId)
+  const locked = lockProblem(doc.status)
+  if (locked) throw new LegalVersionError(locked, 409)
   return doc
 }
 
@@ -56,6 +66,8 @@ type NewVersion = {
   note: string
   changes?: Prisma.InputJsonValue
   status?: string
+  /** The signed copy: status SIGNED, signedAt/By, and this version becomes the primary download. */
+  signed?: boolean
 }
 
 /**
@@ -67,8 +79,16 @@ async function addVersion(actorId: string, documentId: string, baseVersion: numb
   try {
     await prisma.$transaction(async (tx) => {
       const moved = await tx.legalDocument.updateMany({
-        where: { id: documentId, currentVersion: baseVersion, deletedAt: null },
-        data: { currentVersion: next, updatedById: actorId, ...(v.status ? { status: v.status } : {}) },
+        // Never on a document that got locked (signed) or voided meanwhile; a signed copy only on FINAL / SENT.
+        where: {
+          id: documentId, currentVersion: baseVersion, deletedAt: null,
+          status: v.signed ? { in: ["FINAL", "SENT"] } : v.status && v.status !== "VOID" ? { notIn: ["SIGNED", "VOID"] } : { not: "SIGNED" },
+        },
+        data: {
+          currentVersion: next, updatedById: actorId,
+          ...(v.status ? { status: v.status } : {}),
+          ...(v.signed ? { status: "SIGNED", signedAt: new Date(), signedById: actorId, signedVersion: next } : {}),
+        },
       })
       if (moved.count !== 1) throw new LegalVersionError("Someone changed this document meanwhile. Reload to see their version.", 409)
       await tx.legalDocumentVersion.create({
@@ -101,7 +121,7 @@ export async function saveParagraphEdits(
   documentId: string,
   input: { baseVersion: number; edits: { index: number; text: string }[]; note?: string; kind?: "MANUAL" | "GIDEON"; extraChanges?: Record<string, unknown> },
 ): Promise<{ version: number; changes: ParagraphChange[]; pdfError: string | null }> {
-  const doc = await loadDocForVersions(documentId)
+  const doc = await loadDocForChange(documentId)
   if (input.baseVersion !== doc.currentVersion) throw new LegalVersionError("Someone changed this document meanwhile. Reload to see their version.", 409)
   if (!Array.isArray(input.edits) || !input.edits.length) throw new LegalVersionError("Nothing to save", 400)
   const base = await prisma.legalDocumentVersion.findUniqueOrThrow({ where: { documentId_version: { documentId, version: doc.currentVersion } } })
@@ -113,32 +133,44 @@ export async function saveParagraphEdits(
     throw error
   }
   if (!edited.changes.length) throw new LegalVersionError("Nothing changed", 400)
-  const docxKey = await storeLegalFile(base.fileName, edited.docx)
+  const fileName = `${downloadBaseName(doc.number, doc.title, `REV ${doc.currentVersion + 1}`)}.docx`
+  const docxKey = await storeLegalFile(fileName, edited.docx)
   const version = await addVersion(actorId, documentId, doc.currentVersion, {
     kind: input.kind ?? "MANUAL",
-    files: { docxKey, pdfKey: null, fileKey: null, fileName: base.fileName, mimeType: base.mimeType, size: edited.docx.length },
+    files: { docxKey, pdfKey: null, fileKey: null, fileName, mimeType: base.mimeType, size: edited.docx.length },
     note: input.note?.trim() ?? "",
     changes: { paragraphs: edited.changes, ...(input.extraChanges ?? {}) } as Prisma.InputJsonValue,
   })
-  return { version, changes: edited.changes, pdfError: pdfLater(documentId, version, edited.docx, base.fileName) }
+  return { version, changes: edited.changes, pdfError: pdfLater(documentId, version, edited.docx, fileName) }
 }
 
-/** Upload a file as the new version — the signed scan of a generated contract, or a Word file edited outside. */
+/**
+ * Upload a file as the new version — a Word file edited outside, or (status SIGNED) the signed copy of a
+ * FINAL / SENT document: a PDF or a photo, which then is the primary download and locks the document.
+ */
 export async function uploadVersion(actorId: string, documentId: string, form: FormData) {
-  const doc = await loadDocForVersions(documentId)
+  const doc = await loadDocForChange(documentId)
   const baseVersion = Number(form.get("baseVersion"))
   if (baseVersion !== doc.currentVersion) throw new LegalVersionError("Someone changed this document meanwhile. Reload to see their version.", 409)
-  const status = typeof form.get("status") === "string" ? String(form.get("status")) : undefined
+  const status = typeof form.get("status") === "string" && form.get("status") ? String(form.get("status")) : undefined
   if (status && !["DRAFT", "FINAL", "SENT", "SIGNED", "VOID"].includes(status)) throw new LegalVersionError("Unknown status", 400)
+  if (status === "VOID") throw new LegalVersionError("Void the document from its status instead", 400)
+  const signed = status === "SIGNED"
+  const problem = status ? statusChangeProblem(doc.status, status, { source: doc.source, viaSignedUpload: signed }) : null
+  if (problem) throw new LegalVersionError(problem, 409)
   const stored = await storeUpload(form.get("file"))
+  if (signed && stored.mimeType !== PDF_MIME && !stored.mimeType.startsWith("image/")) {
+    await Promise.all([deleteLegalFile(stored.docxKey), deleteLegalFile(stored.pdfKey), deleteLegalFile(stored.fileKey)])
+    throw new LegalVersionError("The signed copy must be a PDF or a photo (JPG, PNG)", 400)
+  }
   const note = typeof form.get("note") === "string" ? String(form.get("note")) : ""
-  const version = await addVersion(actorId, documentId, baseVersion, { kind: "UPLOAD", files: stored, note, status })
-  return { version, pdfError: stored.docx ? pdfLater(documentId, version, stored.docx, stored.fileName) : null }
+  const version = await addVersion(actorId, documentId, baseVersion, { kind: "UPLOAD", files: stored, note, status: signed ? undefined : status, signed })
+  return { version, signed, pdfError: stored.docx ? pdfLater(documentId, version, stored.docx, stored.fileName) : null }
 }
 
 /** Bring back an old version as a new one on top (its files are copied: versions never share a file). */
 export async function restoreVersion(actorId: string, documentId: string, fromVersion: number, baseVersion: number) {
-  const doc = await loadDocForVersions(documentId)
+  const doc = await loadDocForChange(documentId)
   if (baseVersion !== doc.currentVersion) throw new LegalVersionError("Someone changed this document meanwhile. Reload to see their version.", 409)
   if (fromVersion === doc.currentVersion) throw new LegalVersionError("That is already the current version", 400)
   const from = await prisma.legalDocumentVersion.findUnique({ where: { documentId_version: { documentId, version: fromVersion } } })

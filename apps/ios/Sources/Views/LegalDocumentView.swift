@@ -60,6 +60,9 @@ struct LegalDocumentView: View {
     @State private var editor = LegalEditorModel()
     @State private var pane: Pane = .overview
     @State private var route: LegalFileRoute?
+    @State private var confirmVoid = false
+    @State private var addendumOpen = false
+    @State private var other: LegalOpenID?
 
     init(documentId: String) {
         self.documentId = documentId
@@ -87,8 +90,37 @@ struct LegalDocumentView: View {
         // PDFs are made in the background after generate / save / upload / approve: while a recent Word
         // version has none yet, ask again every 4 s, for at most 3 minutes after it was made.
         .task(id: pdfPollKey) { await pollForPdf() }
-        .legalFileSheet($route) { _, url in Task { await uploadVersion(url) } }
+        .legalFileSheet($route) { tag, url in Task { await uploadVersion(url, signed: tag == "signed") } }
+        // Owner, 9 Oct: confirmations are centred alerts, never a confirmationDialog.
+        .alert(voidTitle, isPresented: $confirmVoid) {
+            Button(T("Cancel"), role: .cancel) {}
+            Button(T("Void document"), role: .destructive) { Task { await model.patch(["status": "VOID"]) } }
+        } message: {
+            Text(voidMessage)
+        }
+        .sheet(isPresented: $addendumOpen) {
+            if let doc = model.doc {
+                LegalNewDocumentSheet(parent: LegalNewDocumentSheet.Parent(id: doc.id, number: doc.number, title: doc.title)) { id in
+                    Task { await model.load() }
+                    other = LegalOpenID(id: id)
+                }
+            }
+        }
+        .navigationDestination(item: $other) { o in LegalDocumentView(documentId: o.id) }
+        .onChange(of: model.doc?.status) { _, s in if (s == "SIGNED" || s == "VOID") && pane == .edit { pane = .overview } }
         .legalToasts()
+    }
+
+    private var voidTitle: String {
+        String(format: T("Void %@?"), model.doc.map { $0.number.isEmpty ? $0.title : $0.number } ?? "")
+    }
+
+    /// Says what happens to the number (owner, 14 Oct 2026: VOID frees an unsigned document's number).
+    private var voidMessage: String {
+        guard let doc = model.doc else { return "" }
+        if doc.voidReleasesNumber { return String(format: T("Void can't be undone. The number %@ will be reused by the next document of this series."), doc.number) }
+        if doc.signedAt != nil { return T("Void can't be undone. This document was signed, so its number stays retired and is never reused.") }
+        return T("Void can't be undone.")
     }
 
     /// The versions still waiting for their PDF; a change restarts the poll.
@@ -109,6 +141,7 @@ struct LegalDocumentView: View {
             VStack(alignment: .leading, spacing: 18) {
                 header(doc)
                 statusRow(doc)
+                LegalDocumentFacts(doc: doc) { other = LegalOpenID(id: $0) }
                 panePicker(doc)
                 switch pane {
                 case .overview: LegalDocumentOverview(model: model, doc: doc, wide: hSize == .regular, route: $route)
@@ -135,6 +168,7 @@ struct LegalDocumentView: View {
         VStack(alignment: .leading, spacing: 5) {
             Text(doc.number.isEmpty ? T("No number") : doc.number)
                 .font(.system(size: 13, design: .monospaced)).foregroundStyle(NX.mutedFg).textSelection(.enabled)
+                .strikethrough(doc.numberReleased)
             Text(doc.title).font(NXFont.text(hSize == .regular ? 24 : 21, .semibold)).foregroundStyle(NX.foreground)
                 .fixedSize(horizontal: false, vertical: true)
             Text(headerLine(doc)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
@@ -148,13 +182,38 @@ struct LegalDocumentView: View {
     }
 
     private func statusRow(_ doc: LegalDocument) -> some View {
-        HStack(spacing: 10) {
-            LegalStatusChip(status: doc.status)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) { statusControls(doc); docActions(doc); Spacer(minLength: 0) }
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) { statusControls(doc); Spacer(minLength: 0) }
+                HStack(spacing: 8) { docActions(doc); Spacer(minLength: 0) }
+            }
+        }
+    }
+
+    /// Upload signed copy (FINAL / SENT) and Create addendum (SIGNED).
+    @ViewBuilder private func docActions(_ doc: LegalDocument) -> some View {
+        if doc.canUploadSignedCopy {
+            Button { route = .pick(LegalFileTypes.signedCopy, tag: "signed") } label: {
+                Label(T("Upload signed copy"), systemImage: "signature")
+            }
+            .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+            .accessibilityHint(T("A PDF or a photo of the signed document"))
+        }
+        if doc.status == "SIGNED" {
+            Button { addendumOpen = true } label: { Label(T("Create addendum"), systemImage: "doc.badge.plus") }
+                .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+        }
+    }
+
+    @ViewBuilder private func statusControls(_ doc: LegalDocument) -> some View {
+        LegalStatusChip(status: doc.status)
+        if doc.status != "VOID" {
             Menu {
-                ForEach(LegalLabels.statuses, id: \.self) { s in
+                ForEach(doc.statusChoices, id: \.self) { s in
                     Button {
                         guard s != doc.status else { return }
-                        Task { await model.patch(["status": s]) }
+                        if s == "VOID" { confirmVoid = true } else { Task { await model.patch(["status": s]) } }
                     } label: {
                         if s == doc.status { Label(LegalLabels.status(s), systemImage: "checkmark") } else { Text(LegalLabels.status(s)) }
                     }
@@ -170,12 +229,11 @@ struct LegalDocumentView: View {
             }
             .menuIndicator(.hidden)
             .accessibilityLabel(T("Status"))
-            Spacer(minLength: 0)
         }
     }
 
     @ViewBuilder private func panePicker(_ doc: LegalDocument) -> some View {
-        let hasWord = doc.versions.contains(where: \.hasDocx)
+        let hasWord = doc.versions.contains(where: \.hasDocx) && !doc.isLocked && doc.status != "VOID"
         let canCompare = doc.wordVersions.count >= 2
         if hasWord {
             Picker(T("Document view"), selection: $pane) {
@@ -214,12 +272,14 @@ struct LegalDocumentView: View {
         }
     }
 
-    private func uploadVersion(_ file: URL) async {
+    /// `signed`: the signed copy of a final document — it becomes SIGNED and locked.
+    private func uploadVersion(_ file: URL, signed: Bool) async {
         guard let doc = model.doc else { return }
         do {
             let res = try await APIClient.shared.legalUploadVersion(id: doc.id, baseVersion: doc.currentVersion, file: file, note: "",
-                                                                    status: LegalFileTypes.isSignedCopy(file) ? "SIGNED" : nil)
-            LegalToasts.shared.success(String(format: T("Uploaded as version %d"), res.version))
+                                                                    status: signed ? "SIGNED" : nil)
+            LegalToasts.shared.success(signed ? T("Signed copy uploaded. The document is now signed and locked.")
+                                              : String(format: T("Uploaded as version %d"), res.version))
             LegalToasts.shared.pdfWarning(res.pdfError)
             await model.load()
         } catch {
@@ -344,11 +404,15 @@ private struct LegalDocumentOverview: View {
     private var versionsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             LegalSectionHeader(title: T("Versions")) {
-                Button { route = .pick(LegalFileTypes.documents, tag: "version") } label: {
-                    Label(T("Upload new version"), systemImage: "arrow.up.doc")
+                if doc.isLocked {
+                    Label(T("Signed: locked"), systemImage: "lock").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                } else if doc.status != "VOID" {
+                    Button { route = .pick(LegalFileTypes.documents, tag: "version") } label: {
+                        Label(T("Upload new version"), systemImage: "arrow.up.doc")
+                    }
+                    .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+                    .accessibilityHint(T("The file edited in Word, or a scan"))
                 }
-                .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
-                .accessibilityHint(T("A signed scan, or the file edited in Word"))
             }
             LegalListCard {
                 ForEach(Array(doc.versions.enumerated()), id: \.element.id) { i, v in
@@ -367,9 +431,10 @@ private struct LegalDocumentOverview: View {
                     HStack(spacing: 6) {
                         Text(LegalLabels.versionKind(v.kind) + (v.note.isEmpty ? "" : " — \(v.note)"))
                             .font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(2)
+                        if doc.signedVersion == v.version { NexusChip(text: T("Signed copy"), tone: .success) }
                         if doc.finalVersion == v.version { NexusChip(text: T("Final"), tone: .accent) }
                     }
-                    Text([v.author?.name ?? "—", LegalLabels.date(v.createdAt), LegalLabels.bytes(v.size)].joined(separator: " · "))
+                    Text([v.label, v.author?.name ?? "—", LegalLabels.date(v.createdAt), LegalLabels.bytes(v.size)].joined(separator: " · "))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -377,7 +442,7 @@ private struct LegalDocumentOverview: View {
             HStack(spacing: 6) {
                 LegalFileButtons(doc: doc, version: v, model: model, route: $route, compact: true)
                 Spacer(minLength: 0)
-                if doc.finalVersion != v.version {
+                if doc.finalVersion != v.version && !doc.isLocked && doc.status != "VOID" {
                     Button {
                         var fields: [String: Any] = ["finalVersion": v.version]
                         if doc.status == "DRAFT" { fields["status"] = "FINAL" }
@@ -386,7 +451,7 @@ private struct LegalDocumentOverview: View {
                         .buttonStyle(NXButtonStyle(kind: .ghost, compact: true))
                         .accessibilityHint(T("Final DOCX/PDF come from this version"))
                 }
-                if v.version != doc.currentVersion {
+                if v.version != doc.currentVersion && !doc.isLocked && doc.status != "VOID" {
                     Button { Task { await restore(v.version) } } label: {
                         if restoring == v.version { ProgressView() } else { Label(T("Restore"), systemImage: "arrow.counterclockwise") }
                     }
@@ -435,7 +500,7 @@ struct LegalFileButtons: View {
                 }
                 .font(NXFont.text(compact ? 13 : 14, .medium)).foregroundStyle(NX.mutedFg)
                 .padding(.horizontal, compact ? 10 : 14).frame(minHeight: compact ? 30 : 36)
-            } else if version.hasDocx {
+            } else if version.hasDocx && !doc.isLocked {
                 Button { Task { await makePdf() } } label: {
                     HStack(spacing: 5) {
                         if making { ProgressView() } else { Image(systemName: "arrow.clockwise") }
@@ -464,7 +529,8 @@ struct LegalFileButtons: View {
         busy = format
         defer { busy = nil }
         do {
-            let file = try await APIClient.shared.legalDownloadDocument(id: doc.id, version: version.version, format: format)
+            let file = try await APIClient.shared.legalDownloadDocument(id: doc.id, version: version.version, format: format,
+                                                                        name: version.shareName(format.rawValue))
             route = .share(file)
         } catch {
             LegalToasts.shared.failure(error)
@@ -480,6 +546,73 @@ struct LegalFileButtons: View {
             await model.load()
         } catch {
             LegalToasts.shared.failure(error)
+        }
+    }
+}
+
+// MARK: - Signed, void, parent and addenda
+
+/// Who uploaded the signed copy and when, what became of a void number, the parent of an addendum and the
+/// addenda of a document (web DocumentFacts).
+private struct LegalDocumentFacts: View {
+    let doc: LegalDocument
+    let open: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let at = doc.signedAt {
+                Label(String(format: T("Signed copy uploaded %@ by %@"), LegalLabels.date(at), doc.signedBy?.name ?? "—"), systemImage: "signature")
+                    .foregroundStyle(ChipTone.success.fg)
+            }
+            if doc.status == "VOID" {
+                if let by = doc.numberReusedBy {
+                    linkRow(T("Void — number reused by"), by)
+                } else {
+                    Text(doc.numberReleased ? T("Void — the number is free for the next document of this series")
+                         : doc.signedAt != nil ? T("Void — signed, so the number is never reused") : T("Void"))
+                }
+            }
+            ForEach(doc.numberReusedFrom) { from in linkRow(T("Number reused from void document"), from) }
+            if let parent = doc.parent {
+                linkRow(String(format: T("Addendum %d to"), doc.addendumNo ?? 0), parent)
+            }
+            if !doc.addenda.isEmpty { addendaList }
+        }
+        .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+    }
+
+    private func linkRow(_ text: String, _ ref: LegalDocRef) -> some View {
+        Button { open(ref.id) } label: {
+            HStack(spacing: 4) {
+                Text(text)
+                Text(ref.number.isEmpty ? ref.title : ref.number).font(.system(size: 13, design: .monospaced)).foregroundStyle(NX.violetText)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var addendaList: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(T("Addenda"), systemImage: "arrow.triangle.branch").font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+            LegalListCard {
+                ForEach(Array(doc.addenda.enumerated()), id: \.element.id) { i, a in
+                    if i > 0 { Divider().overlay(NX.border) }
+                    Button { open(a.id) } label: {
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(a.number).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.foreground)
+                                    .strikethrough(a.numberReleased).lineLimit(1)
+                                Text([a.title, LegalLabels.day(a.docDate)].joined(separator: " · ")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                            }
+                            Spacer(minLength: 4)
+                            LegalStatusChip(status: a.status ?? "DRAFT")
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 9)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
     }
 }

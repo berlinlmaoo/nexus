@@ -6,10 +6,13 @@ import type { Prisma } from "@/generated/prisma/client"
 import { logAudit } from "@/lib/audit"
 import { legalGate } from "@/lib/legal/access"
 import { dateFromDay, documentInclude, serializeDocument } from "@/lib/legal/documents"
-import { isLegalDocType, isLegalStatus } from "@/lib/legal/rules"
+import { isLegalDocType, isLegalStatus, releasesNumberOnVoid, statusChangeProblem } from "@/lib/legal/rules"
+import { releaseLegalNumber } from "@/lib/legal/numbering"
 import { linkProblem, redactLinks } from "@/lib/legal/links"
 
 type Ctx = { params: Promise<{ documentId: string }> }
+
+class StatusRace extends Error {}
 
 const notFound = () => NextResponse.json({ error: "Document not found" }, { status: 404 })
 
@@ -54,7 +57,13 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     if (str("notes", 5000) !== undefined) data.notes = str("notes", 5000)
     if (body.status !== undefined) {
       if (!isLegalStatus(body.status)) return NextResponse.json({ error: "Unknown status" }, { status: 400 })
-      data.status = body.status
+      const problem = statusChangeProblem(doc.status, body.status, { source: doc.source })
+      if (problem) return NextResponse.json({ error: problem, code: "LEGAL_STATUS_LOCKED" }, { status: 409 })
+      if (body.status !== doc.status) {
+        data.status = body.status
+        if (body.status === "VOID") data.voidedAt = new Date()
+        if (body.status === "SIGNED") Object.assign(data, { signedAt: new Date(), signedById: gate.actor.userId })
+      }
     }
     if (body.projectId !== undefined) {
       const id = typeof body.projectId === "string" && body.projectId ? body.projectId : null
@@ -85,14 +94,32 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
         data.docDate = d ? dateFromDay(d) : null
       }
     }
-    const updated = await prisma.legalDocument.update({ where: { id: documentId }, data, include: documentInclude })
+    // VOID gives an unsigned document's number back to its series (owner, 14 Oct 2026), in the same
+    // transaction and under the same lock as allocation. Only when the status still is what we read.
+    let released = false
+    const updated = await prisma.$transaction(async (tx) => {
+      if (data.status) {
+        const moved = await tx.legalDocument.updateMany({ where: { id: documentId, status: doc.status }, data: { status: data.status } })
+        if (moved.count !== 1) throw new StatusRace()
+      }
+      if (data.status === "VOID" && releasesNumberOnVoid(doc)) {
+        await releaseLegalNumber(tx, { id: doc.id, documentNumberId: doc.documentNumberId! })
+        if (doc.parentDocumentId) data.addendumSeq = null
+        released = true
+      }
+      return tx.legalDocument.update({ where: { id: documentId }, data, include: documentInclude })
+    }).catch((error) => {
+      if (error instanceof StatusRace) return null
+      throw error
+    })
+    if (!updated) return NextResponse.json({ error: "Someone changed this document meanwhile. Reload to see it." }, { status: 409 })
     await logAudit({
       action: "update",
       entityType: "legal_document",
       entityId: documentId,
       entityName: updated.number || updated.title,
       userId: gate.actor.userId,
-      metadata: { changed: Object.keys(body), ...(data.status ? { status: { from: doc.status, to: data.status } } : {}) },
+      metadata: { changed: Object.keys(body), ...(data.status ? { status: { from: doc.status, to: data.status } } : {}), ...(released ? { numberReleased: doc.number } : {}) },
       request,
     })
     const [document] = await redactLinks(gate.actor, [serializeDocument(updated)])
@@ -112,7 +139,8 @@ export async function DELETE(request: NextRequest, { params }: Ctx) {
     const { documentId } = await params
     const doc = await prisma.legalDocument.findFirst({ where: { id: documentId, deletedAt: null } })
     if (!doc) return notFound()
-    if (doc.documentNumberId) {
+    // A generated document had a number even after voiding gave it back: it stays in the archive.
+    if (doc.documentNumberId || doc.source === "GENERATED" || doc.parentDocumentId) {
       return NextResponse.json({ error: "A numbered document can't be deleted. Set its status to Void instead." }, { status: 409 })
     }
     await prisma.legalDocument.update({ where: { id: documentId }, data: { deletedAt: new Date(), updatedById: gate.actor.userId } })

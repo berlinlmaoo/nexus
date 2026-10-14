@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { LegalFieldInput, type FieldValues } from "@/components/legal/LegalFieldInput";
 import { LegalLinkPicker, type LegalLink } from "@/components/legal/LegalLinkPicker";
 import { docTypeLabel } from "@/components/legal/legal-labels";
-import { fieldErrorsOf, legalDocsApi, legalTemplatesApi, templateProblems, type LegalTemplate } from "@/lib/legal-api";
+import { ADDENDUM_DOC_TYPE, fieldErrorsOf, legalDocsApi, legalTemplatesApi, templateProblems, type LegalTemplate } from "@/lib/legal-api";
 import { useLang } from "@/lib/lang";
 
 const todayJakarta = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date());
@@ -22,7 +22,14 @@ const formatFields = (format: string) => [...format.matchAll(/\{([A-Z][A-Z0-9_]*
  * New document (owner, 14 Oct 2026): pick a template (and the company, when the template is for any
  * company) → the form made from its {{PLACEHOLDERS}} → the number is taken only when it is generated.
  */
-export function NewDocumentDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (o: boolean) => void; onCreated: (id: string) => void }) {
+export function NewDocumentDialog({ open, onOpenChange, onCreated, parent }: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onCreated: (id: string) => void;
+  /** Create addendum: the signed document it amends. Only addendum templates are offered; company, kop
+   *  and number follow the parent, and the form starts filled from it. */
+  parent?: { id: string; number: string; title: string } | null;
+}) {
   const { t, lang } = useLang();
   const qc = useQueryClient();
   const [template, setTemplate] = useState<LegalTemplate | null>(null);
@@ -45,31 +52,31 @@ export function NewDocumentDialog({ open, onOpenChange, onCreated }: { open: boo
   const effectiveCompany = template?.company?.id ?? companyId;
   const form = useQuery({
     queryKey: ["legal", "prepare", template?.id, effectiveCompany],
-    queryFn: () => legalDocsApi.prepare({ templateId: template!.id, companyId: effectiveCompany }),
-    enabled: step === "form" && !!template && !!effectiveCompany,
+    queryFn: () => legalDocsApi.prepare({ templateId: template!.id, companyId: effectiveCompany, parentDocumentId: parent?.id ?? null }),
+    enabled: step === "form" && !!template && (!!effectiveCompany || !!parent),
   });
   const fields = form.data?.fields ?? [];
 
-  // Default the document date to today once the form is known.
+  // Default the document date to today once the form is known (and an addendum's parties from its parent).
   useEffect(() => {
-    if (form.data && values.TANGGAL_DOKUMEN === undefined) setValues((v) => ({ ...v, TANGGAL_DOKUMEN: todayJakarta() }));
+    if (form.data && values.TANGGAL_DOKUMEN === undefined) setValues((v) => ({ ...(form.data.prefill as FieldValues), ...v, TANGGAL_DOKUMEN: todayJakarta() }));
   }, [form.data, values.TANGGAL_DOKUMEN]);
 
   const numberInputs = useMemo(() => {
-    const names = ["TANGGAL_DOKUMEN", ...formatFields(form.data?.series.format ?? "")];
+    const names = ["TANGGAL_DOKUMEN", ...formatFields(form.data?.series?.format ?? "")];
     return Object.fromEntries(names.map((n) => [n, values[n]]));
-  }, [form.data?.series.format, values]);
+  }, [form.data?.series?.format, values]);
   const [debounced, setDebounced] = useState(numberInputs);
   useEffect(() => { const h = setTimeout(() => setDebounced(numberInputs), 400); return () => clearTimeout(h); }, [numberInputs]);
   const preview = useQuery({
     queryKey: ["legal", "number-preview", template?.id, effectiveCompany, debounced],
-    queryFn: () => legalDocsApi.prepare({ templateId: template!.id, companyId: effectiveCompany, values: debounced }),
+    queryFn: () => legalDocsApi.prepare({ templateId: template!.id, companyId: effectiveCompany, values: debounced, parentDocumentId: parent?.id ?? null }),
     enabled: step === "form" && !!form.data,
     placeholderData: (prev) => prev,
   });
 
   const generate = useMutation({
-    mutationFn: () => legalDocsApi.generate({ templateId: template!.id, companyId: effectiveCompany, values, title: title.trim() || undefined, counterparty: counterparty.trim() || undefined, projectId: link?.kind === "project" ? link.id : null, dealId: link?.kind === "deal" ? link.id : null }),
+    mutationFn: () => legalDocsApi.generate({ templateId: template!.id, companyId: effectiveCompany, values, title: title.trim() || undefined, counterparty: counterparty.trim() || undefined, projectId: link?.kind === "project" ? link.id : null, dealId: link?.kind === "deal" ? link.id : null, parentDocumentId: parent?.id ?? null }),
     onSuccess: (res) => {
       toast.success(t("Document {number} made", { number: res.number }));
       if (res.pdfError) toast.warning(t("The PDF couldn't be made yet: {reason}", { reason: res.pdfError }));
@@ -87,18 +94,22 @@ export function NewDocumentDialog({ open, onOpenChange, onCreated }: { open: boo
     },
   });
 
-  const list = templates.data?.templates ?? [];
+  // Addendum templates only from a signed document; the rest only from New document.
+  const list = (templates.data?.templates ?? []).filter((tpl) => (tpl.docType === ADDENDUM_DOC_TYPE) === !!parent);
+  useEffect(() => { if (parent && open && !template && list.length === 1) setTemplate(list[0]); }, [parent, open, template, list]);
   const activeCompanies = (companies.data?.companies ?? []).filter((c) => c.active);
-  const canContinue = !!template && !!(template.company?.id ?? companyId);
+  const canContinue = !!template && (!!parent || !!(template.company?.id ?? companyId));
   const extraErrors = Object.entries(errors).filter(([k]) => !fields.some((f) => k === f.name || k.startsWith(`${f.name}.`)));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent lang={lang} className="max-h-[92vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{t("New document")}</DialogTitle>
+          <DialogTitle>{parent ? t("Create addendum") : t("New document")}</DialogTitle>
           <DialogDescription>
-            {step === "pick" ? t("Pick the template and the company that issues it.") : `${template?.name} · ${form.data?.company.name ?? ""}`}
+            {step === "pick"
+              ? parent ? t("Addendum to {number}. Pick the addendum template.", { number: parent.number }) : t("Pick the template and the company that issues it.")
+              : `${template?.name} · ${form.data?.company.name ?? ""}`}
           </DialogDescription>
         </DialogHeader>
 
@@ -107,7 +118,7 @@ export function NewDocumentDialog({ open, onOpenChange, onCreated }: { open: boo
             {templates.isLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {t("Loading…")}</div>
             ) : list.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t("No templates yet. Upload one in the Templates tab first.")}</p>
+              <p className="text-sm text-muted-foreground">{parent ? t("No addendum template yet. Upload one with the type Addendum in the Templates tab first.") : t("No templates yet. Upload one in the Templates tab first.")}</p>
             ) : (
               <ul className="max-h-72 divide-y divide-border overflow-y-auto rounded-md border border-border">
                 {list.map((tpl) => (
@@ -124,7 +135,7 @@ export function NewDocumentDialog({ open, onOpenChange, onCreated }: { open: boo
                 ))}
               </ul>
             )}
-            {template && !template.company && (
+            {template && !template.company && !parent && (
               <div className="space-y-1.5">
                 <Label>{t("Issuing company")}</Label>
                 <Select value={companyId ?? undefined} onValueChange={setCompanyId}>
@@ -144,7 +155,11 @@ export function NewDocumentDialog({ open, onOpenChange, onCreated }: { open: boo
               <Hash className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0">
                 <div className="font-mono">{preview.data?.numberPreview ?? form.data?.numberPreview}</div>
-                <div className="text-xs text-muted-foreground">{t("Next number in {series}. It is taken only when you generate.", { series: form.data?.series.label ?? "" })}</div>
+                <div className="text-xs text-muted-foreground">
+                  {form.data?.parent
+                    ? t("Addendum {n} to {number}. The number is taken only when you generate.", { n: form.data.parent.addendumNo, number: form.data.parent.number })
+                    : t("Next number in {series}. It is taken only when you generate.", { series: form.data?.series?.label ?? "" })}
+                </div>
               </div>
             </div>
             {!form.data?.company.hasKop && (

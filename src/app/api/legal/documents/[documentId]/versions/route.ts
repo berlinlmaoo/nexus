@@ -20,7 +20,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     if (!gate.ok) return gate.response
     const { documentId } = await params
     const multipart = (request.headers.get("content-type") ?? "").includes("multipart/form-data")
-    let result: { version: number; pdfError: string | null }
+    let result: { version: number; pdfError: string | null; signed?: boolean }
     if (multipart) {
       const form = await readLegalForm(request, LEGAL_MAX_UPLOAD_BYTES)
       if (!form) return NextResponse.json({ error: "Expected a file upload" }, { status: 400 })
@@ -35,9 +35,9 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       action: multipart ? "upload" : "update",
       entityType: "legal_document",
       entityId: documentId,
-      entityName: `v${result.version}`,
+      entityName: result.signed ? `Signed copy (v${result.version})` : `v${result.version}`,
       userId: gate.actor.userId,
-      metadata: { version: result.version, kind: multipart ? "UPLOAD" : "MANUAL" },
+      metadata: { version: result.version, kind: result.signed ? "SIGNED_COPY" : multipart ? "UPLOAD" : "MANUAL", ...(result.signed ? { status: { to: "SIGNED" } } : {}) },
       request,
     })
     return NextResponse.json(result, { status: 201 })

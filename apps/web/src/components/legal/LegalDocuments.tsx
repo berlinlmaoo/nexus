@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { FilePlus2, FileText, Loader2, Search, Upload, X } from "lucide-react";
+import { CornerDownRight, FilePlus2, FileSignature, FileText, GitBranch, Loader2, Search, Upload, X } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { LegalLinkPicker, type LegalLink } from "@/components/legal/LegalLinkPic
 import { docTypeLabel, fmtDay, statusClass, statusLabel } from "@/components/legal/legal-labels";
 import { LEGAL_DOC_TYPES, LEGAL_STATUSES, legalDocsApi, legalTemplatesApi, type ArchiveQuery } from "@/lib/legal-api";
 import { useLang } from "@/lib/lang";
+import { fmtDate } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 
 const ALL = "__all";
@@ -62,6 +63,8 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
           options={LEGAL_DOC_TYPES.map((d) => [d, docTypeLabel(d)])} />
         <FilterSelect value={filters.status} onChange={(v) => set({ status: v })} all={t("All statuses")}
           options={LEGAL_STATUSES.map((s) => [s, statusLabel(s)])} />
+        <FilterSelect value={filters.signed} onChange={(v) => set({ signed: v })} all={t("Signed or not")}
+          options={[["1", t("Signed copy uploaded")]]} />
         <FilterSelect value={filters.source} onChange={(v) => set({ source: v })} all={t("Made or uploaded")}
           options={[["GENERATED", t("Made here")], ["UPLOADED", t("Uploaded")]]} />
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -72,6 +75,12 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
         </label>
         <LegalLinkPicker value={link} placeholder={t("Any project or deal")}
           onChange={(v) => { setLink(v); set({ projectId: v?.kind === "project" ? v.id : undefined, dealId: v?.kind === "deal" ? v.id : undefined }); }} />
+        {filters.parentId && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
+            <GitBranch className="h-3.5 w-3.5" /> {t("One document and its addenda")}
+            <button type="button" aria-label={t("Clear filters")} onClick={() => set({ parentId: undefined })}><X className="h-3.5 w-3.5" /></button>
+          </span>
+        )}
         {filtered && (
           <Button variant="ghost" size="sm" className="gap-1" onClick={() => { setFilters((f) => ({ q: f.q })); setLink(null); setPage(1); }}>
             <X className="h-3.5 w-3.5" /> {t("Clear filters")}
@@ -103,15 +112,34 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
               <tbody className="divide-y divide-border">
                 {rows.map((d) => (
                   <tr key={d.id} className="cursor-pointer hover:bg-accent/40" onClick={() => onOpen(d.id)}>
-                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{d.number || "—"}</td>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">
+                      {d.parent && <CornerDownRight className="mr-1 inline h-3 w-3 text-muted-foreground" aria-hidden />}
+                      <span className={cn(d.numberReleased && "line-through text-muted-foreground")}>{d.number || "—"}</span>
+                      {d.status === "VOID" && d.numberReusedBy && <div className="font-sans text-[11px] text-muted-foreground">{t("Number reused by {number}", { number: d.numberReusedBy.number })}</div>}
+                    </td>
                     <td className="px-3 py-2">
                       <div className="line-clamp-1 font-medium">{d.title}</div>
-                      <div className="text-xs text-muted-foreground">{docTypeLabel(d.docType)}{d.source === "UPLOADED" ? ` · ${t("Uploaded")}` : ""}{d.deal ? ` · ${d.deal.code}` : d.project ? ` · ${d.project.name}` : ""}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {docTypeLabel(d.docType)}{d.source === "UPLOADED" ? ` · ${t("Uploaded")}` : ""}{d.deal ? ` · ${d.deal.code}` : d.project ? ` · ${d.project.name}` : ""}
+                        {d.parent && <> · {t("Addendum to {number}", { number: d.parent.number })}</>}
+                        {(d.addendaCount > 0 || d.parent) && !filters.parentId && (
+                          <button type="button" className="ml-1.5 text-primary hover:underline" onClick={(e) => { e.stopPropagation(); set({ parentId: d.parent?.id ?? d.id }); }}>
+                            {d.addendaCount > 0 ? t("{n} addenda", { n: d.addendaCount }) : t("Show the chain")}
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-2"><span className="line-clamp-1">{d.counterparty || "—"}</span></td>
                     <td className="whitespace-nowrap px-3 py-2">{d.company.name}</td>
                     <td className="whitespace-nowrap px-3 py-2">{fmtDay(d.docDate, lang)}</td>
-                    <td className="px-3 py-2"><span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", statusClass(d.status))}>{statusLabel(d.status)}</span></td>
+                    <td className="px-3 py-2">
+                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", statusClass(d.status))}>{statusLabel(d.status)}</span>
+                      {d.signedAt && (
+                        <div className="mt-1 flex items-center gap-1 whitespace-nowrap text-[11px] text-muted-foreground" title={t("Signed copy uploaded {date} by {name}", { date: fmtDate(d.signedAt), name: d.signedBy?.name ?? "—" })}>
+                          <FileSignature className="h-3 w-3 text-emerald-600" /> {fmtDate(d.signedAt)} · {d.signedBy?.name ?? "—"}
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -131,7 +159,8 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
 
       <NewDocumentDialog open={newOpen} onOpenChange={setNewOpen} onCreated={(id) => onOpen(id)} />
       <UploadDocumentDialog open={uploadOpen} onOpenChange={setUploadOpen} onCreated={(id) => onOpen(id)} />
-      <LegalDocumentSheet documentId={openId} onClose={() => onOpen(null)} />
+      <LegalDocumentSheet documentId={openId} onClose={() => onOpen(null)} onOpen={(id) => onOpen(id)}
+        onShowChain={(parentId) => { set({ parentId }); onOpen(null); }} />
     </section>
   );
 }

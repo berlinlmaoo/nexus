@@ -57,7 +57,9 @@ export type LegalCompany = {
 };
 
 // ── Templates ──
-export const LEGAL_DOC_TYPES = ["SURAT", "SP", "SK", "PKS", "SPK", "NDA", "MOU", "INVOICE", "PJM", "PGB", "OTHER"] as const;
+export const LEGAL_DOC_TYPES = ["SURAT", "SP", "SK", "PKS", "SPK", "NDA", "MOU", "ADD", "INVOICE", "PJM", "PGB", "OTHER"] as const;
+/** An addendum: made from a signed document ("Create addendum"), numbered after it (…/ADD-n). */
+export const ADDENDUM_DOC_TYPE = "ADD";
 export type LegalDocType = (typeof LEGAL_DOC_TYPES)[number];
 
 export type FieldType = "text" | "longtext" | "date" | "number" | "money" | "select" | "boolean" | "list";
@@ -149,6 +151,18 @@ export type LegalDocumentSummary = {
   createdBy: LegalPerson | null;
   createdAt: string;
   updatedAt: string;
+  /** When the signed copy was uploaded, and by whom. */
+  signedAt: string | null;
+  signedBy: LegalPerson | null;
+  voidedAt: string | null;
+  /** Voided before it was signed: its number went back to the series. */
+  numberReleased: boolean;
+  /** The document that took that number again. */
+  numberReusedBy: { id: string; number: string; title: string } | null;
+  /** An addendum: the signed document it amends. */
+  parent: { id: string; number: string; title: string; status: LegalStatus; docType: LegalDocType } | null;
+  addendumNo: number | null;
+  addendaCount: number;
 };
 
 export type LegalDocumentVersion = {
@@ -164,6 +178,9 @@ export type LegalDocumentVersion = {
   changes: unknown;
   author: LegalPerson | null;
   createdAt: string;
+  /** "REV n" / "FINAL" / "SIGNED" — the download is named "<number> - <title> <label>". */
+  label: string;
+  downloadName: string;
 };
 
 export type LegalDocument = LegalDocumentSummary & {
@@ -172,7 +189,11 @@ export type LegalDocument = LegalDocumentSummary & {
   template: { id: string; name: string; version: number } | null;
   fieldValues: Record<string, unknown>;
   finalVersion: number | null;
+  /** The signed copy's version: the primary download once signed. */
+  signedVersion: number | null;
   hasNumber: boolean;
+  numberReusedFrom: { id: string; number: string; title: string }[];
+  addenda: { id: string; number: string; title: string; status: LegalStatus; docDate: string | null; signedAt: string | null; addendumSeq: number | null; numberReleased: boolean }[];
   updatedBy: LegalPerson | null;
   versions: LegalDocumentVersion[];
 };
@@ -180,14 +201,22 @@ export type LegalDocument = LegalDocumentSummary & {
 export type PreparedDocument = {
   template: { id: string; name: string; docType: LegalDocType; version: number };
   company: { id: string; code: string; name: string; hasKop: boolean };
-  series: { id: string; key: string; label: string; format: string; resetPeriod: "YEAR" | "MONTH" };
+  /** null for an addendum: its number follows its parent's. */
+  series: { id: string; key: string; label: string; format: string; resetPeriod: "YEAR" | "MONTH" } | null;
   fields: TemplateField[];
   numberPreview: string;
+  parent: { id: string; number: string; title: string; docType: LegalDocType; addendumNo: number } | null;
+  /** Starting values (an addendum's parties, from its parent). */
+  prefill: Record<string, unknown>;
 };
 
 export type ArchiveQuery = {
   q?: string; companyId?: string; docType?: string; status?: string; source?: string;
   projectId?: string; dealId?: string; from?: string; to?: string; sort?: string; page?: number; limit?: number;
+  /** One chain: that document and its addenda. */
+  parentId?: string;
+  /** "1" = only documents with their signed copy. */
+  signed?: string;
 };
 
 /** A 422 from generating carries `fieldErrors` by field name ("ROWS.0.CELL" for a table cell). */
@@ -205,9 +234,9 @@ export const legalDocsApi = {
     return apiFetch<{ documents: LegalDocumentSummary[]; total: number; page: number; pageSize: number }>(`/api/legal/documents?${qs}`);
   },
   get: (id: string) => apiFetch<{ document: LegalDocument }>(docUrl(id)),
-  prepare: (input: { templateId: string; companyId?: string | null; values?: Record<string, unknown> }) =>
+  prepare: (input: { templateId: string; companyId?: string | null; values?: Record<string, unknown>; parentDocumentId?: string | null }) =>
     apiFetch<PreparedDocument>("/api/legal/documents/prepare", { method: "POST", body: JSON.stringify(input) }),
-  generate: (input: { templateId: string; companyId?: string | null; values: Record<string, unknown>; title?: string; counterparty?: string; projectId?: string | null; dealId?: string | null }) =>
+  generate: (input: { templateId: string; companyId?: string | null; values: Record<string, unknown>; title?: string; counterparty?: string; projectId?: string | null; dealId?: string | null; parentDocumentId?: string | null }) =>
     apiFetch<{ id: string; number: string; pdfError: string | null }>("/api/legal/documents", { method: "POST", body: JSON.stringify(input) }),
   update: (id: string, patch: Partial<{ title: string; counterparty: string; status: LegalStatus; notes: string; projectId: string | null; dealId: string | null; finalVersion: number | null; number: string; docType: string; docDate: string | null }>) =>
     apiFetch<{ document: LegalDocument }>(docUrl(id), { method: "PATCH", body: JSON.stringify(patch) }),
@@ -262,7 +291,7 @@ export const legalVersionsApi = {
     fd.set("baseVersion", String(baseVersion));
     if (note) fd.set("note", note);
     if (status) fd.set("status", status);
-    return apiFetch<{ version: number; pdfError: string | null }>(`${docUrl(id)}/versions`, { method: "POST", body: fd });
+    return apiFetch<{ version: number; pdfError: string | null; signed?: boolean }>(`${docUrl(id)}/versions`, { method: "POST", body: fd });
   },
   restore: (id: string, version: number, baseVersion: number) =>
     apiFetch<{ version: number }>(`${docUrl(id)}/versions/${version}/restore`, { method: "POST", body: JSON.stringify({ baseVersion }) }),

@@ -9,6 +9,10 @@ import UniformTypeIdentifiers
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct LegalNewDocumentSheet: View {
+    /// Create addendum: the signed document it amends. Only addendum templates are offered; company, kop and
+    /// number follow the parent, and the form starts filled from it (owner, 14 Oct 2026).
+    struct Parent: Equatable { let id: String; let number: String; let title: String }
+    var parent: Parent? = nil
     let onCreated: (String) -> Void
 
     private enum Step { case pick, form }
@@ -35,7 +39,9 @@ struct LegalNewDocumentSheet: View {
 
     private var template: LegalTemplate? { templates?.first { $0.id == templateId } }
     private var effectiveCompany: String? { template?.company?.id ?? companyId }
-    private var canContinue: Bool { template != nil && effectiveCompany != nil }
+    private var canContinue: Bool { template != nil && (parent != nil || effectiveCompany != nil) }
+    /// Addendum templates only from a signed document; the rest only from New document.
+    private var offered: [LegalTemplate]? { templates?.filter { ($0.docType == LegalLabels.addendumType) == (parent != nil) } }
     private var fields: [LegalField] { prepared?.fields ?? [] }
 
     /// The values the number reads: the document date plus every field the series format names.
@@ -56,8 +62,9 @@ struct LegalNewDocumentSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text(step == .pick ? T("Pick the template and the company that issues it.")
-                                       : "\(template?.name ?? "") · \(prepared?.company?.name ?? "")")
+                    Text(step == .pick
+                         ? (parent.map { String(format: T("Addendum to %@. Pick the addendum template."), $0.number) } ?? T("Pick the template and the company that issues it."))
+                         : "\(template?.name ?? "") · \(prepared?.company?.name ?? "")")
                         .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     if step == .pick { pickStep } else { formStep }
                 }
@@ -67,7 +74,7 @@ struct LegalNewDocumentSheet: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(NX.background.ignoresSafeArea())
-            .navigationTitle(T("New document"))
+            .navigationTitle(parent == nil ? T("New document") : T("Create addendum"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { dismiss() } }
@@ -91,6 +98,7 @@ struct LegalNewDocumentSheet: View {
                 async let c = APIClient.shared.legalCompanies()
                 do { templates = try await t } catch { listError = error.legalMessage; templates = [] }
                 companies = (try? await c) ?? []
+                if parent != nil, templateId == nil, let only = offered, only.count == 1 { templateId = only[0].id }
             }
             .task(id: numberKey) { await refreshPreview() }
         }
@@ -105,9 +113,11 @@ struct LegalNewDocumentSheet: View {
             LegalLoadingRow()
         } else if let listError {
             Text(listError).font(NXFont.text(13)).foregroundStyle(NX.danger)
-        } else if let templates, templates.isEmpty {
-            Text(T("No templates yet. Upload one in the Templates tab first.")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-        } else if let templates {
+        } else if let templates = offered, templates.isEmpty {
+            Text(parent == nil ? T("No templates yet. Upload one in the Templates tab first.")
+                               : T("No addendum template yet. Upload one with the type Addendum in the Templates tab first."))
+                .font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+        } else if let templates = offered {
             LegalListCard {
                 ForEach(Array(templates.enumerated()), id: \.element.id) { i, tpl in
                     if i > 0 { Divider().overlay(NX.border) }
@@ -135,7 +145,7 @@ struct LegalNewDocumentSheet: View {
                     .accessibilityAddTraits(templateId == tpl.id ? .isSelected : [])
                 }
             }
-            if let template, template.company == nil {
+            if let template, template.company == nil, parent == nil {
                 LegalFormRow(label: T("Issuing company")) {
                     LegalMenuPicker(options: companies.filter(\.active).map { ($0.id, $0.name) }, selection: $companyId,
                                     placeholder: T("Pick a company"))
@@ -215,7 +225,8 @@ struct LegalNewDocumentSheet: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(preview ?? p.numberPreview).font(.system(size: 15, weight: .medium, design: .monospaced))
                     .foregroundStyle(NX.foreground).textSelection(.enabled)
-                Text(String(format: T("Next number in %@. It is taken only when you generate."), p.series?.label ?? ""))
+                Text(p.parent.map { String(format: T("Addendum %d to %@. The number is taken only when you generate."), $0.addendumNo, $0.number) }
+                     ?? String(format: T("Next number in %@. It is taken only when you generate."), p.series?.label ?? ""))
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
@@ -228,9 +239,11 @@ struct LegalNewDocumentSheet: View {
     private func prepare() async {
         guard let templateId else { return }
         do {
-            let p = try await APIClient.shared.legalPrepare(templateId: templateId, companyId: effectiveCompany)
+            let p = try await APIClient.shared.legalPrepare(templateId: templateId, companyId: effectiveCompany, parentDocumentId: parent?.id)
             prepared = p
             preview = p.numberPreview
+            // An addendum's parties start from its parent.
+            for (k, v) in p.prefill where values[k] == nil { values[k] = .text(v) }
             // The document date defaults to today in Jakarta.
             if values[LegalField.documentDate] == nil { values[LegalField.documentDate] = .text(LegalText.todayJakarta()) }
         } catch {
@@ -243,7 +256,7 @@ struct LegalNewDocumentSheet: View {
         guard step == .form, prepared != nil, let templateId else { return }
         try? await Task.sleep(nanoseconds: 400_000_000)
         guard !Task.isCancelled else { return }
-        if let p = try? await APIClient.shared.legalPrepare(templateId: templateId, companyId: effectiveCompany, values: numberInputs),
+        if let p = try? await APIClient.shared.legalPrepare(templateId: templateId, companyId: effectiveCompany, values: numberInputs, parentDocumentId: parent?.id),
            !Task.isCancelled {
             preview = p.numberPreview
         }
@@ -259,7 +272,7 @@ struct LegalNewDocumentSheet: View {
                 templateId: templateId, companyId: effectiveCompany, values: values,
                 title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                 counterparty: counterparty.trimmingCharacters(in: .whitespacesAndNewlines),
-                projectId: link?.projectId, dealId: link?.dealId)
+                projectId: link?.projectId, dealId: link?.dealId, parentDocumentId: parent?.id)
             LegalToasts.shared.success(String(format: T("Document %@ made"), res.number))
             LegalToasts.shared.pdfWarning(res.pdfError)
             dismiss()

@@ -7,9 +7,10 @@ import {
 } from "@/lib/legal/filters"
 import { assertWellFormed, fillTemplate, TemplateFileError } from "@/lib/legal/template"
 import { applyKop, KopError } from "@/lib/legal/kop"
-import { allocateLegalNumber, LegalNumberError, peekLegalNumber } from "@/lib/legal/numbering"
-import { formatFieldNames, NumberFormatError, renderNumber } from "@/lib/legal/rules"
-import { deleteLegalFile, DOCX_MIME, readLegalFile, safeFileName, storeLegalFile } from "@/lib/legal/storage"
+import { allocateAddendumNumber, allocateLegalNumber, LegalNumberError, peekAddendum, peekLegalNumber, type IssuedLegalNumber } from "@/lib/legal/numbering"
+import { ADDENDUM_DOC_TYPE, downloadBaseName, formatFieldNames, NumberFormatError, ordinalWord, renderNumber } from "@/lib/legal/rules"
+import { addendumPrefill, parentAutoValues, type AddendumParent } from "@/lib/legal/addenda"
+import { deleteLegalFile, DOCX_MIME, readLegalFile, storeLegalFile } from "@/lib/legal/storage"
 import { docxToPdf, pdfConfigured } from "@/lib/legal/pdf"
 import { dateFromDay } from "@/lib/legal/documents"
 import { linkProblem } from "@/lib/legal/links"
@@ -37,10 +38,26 @@ type GenerateInput = {
   counterparty?: string
   projectId?: string | null
   dealId?: string | null
+  /** An addendum: the signed document it amends. */
+  parentDocumentId?: string | null
 }
 
-/** The template, its company and the series its number comes from. */
-async function resolve(templateId: string, companyId: string | null | undefined) {
+const parentSelect = {
+  id: true, number: true, title: true, docType: true, docDate: true, status: true, counterparty: true, companyId: true,
+  fieldValues: true, projectId: true, dealId: true, deletedAt: true,
+} as const
+
+/** The signed document an addendum amends. */
+async function resolveParent(parentDocumentId: string): Promise<AddendumParent> {
+  const parent = await prisma.legalDocument.findUnique({ where: { id: parentDocumentId }, select: parentSelect })
+  if (!parent || parent.deletedAt) throw new LegalGenerateError("The document this addendum amends was not found", 404)
+  if (parent.status !== "SIGNED") throw new LegalGenerateError("An addendum is made from a signed document. Upload its signed copy first.", 409)
+  if (!parent.number) throw new LegalGenerateError("The document this addendum amends has no number", 409)
+  return parent
+}
+
+/** The template, its company and the series its number comes from (an addendum: its parent instead). */
+async function resolve(templateId: string, companyId: string | null | undefined, parentDocumentId?: string | null) {
   const template = await prisma.legalTemplate.findUnique({
     where: { id: templateId },
     include: { versions: true, series: true },
@@ -48,6 +65,15 @@ async function resolve(templateId: string, companyId: string | null | undefined)
   if (!template || template.archivedAt) throw new LegalGenerateError("Template not found", 404)
   const version = template.versions.find((v) => v.version === template.currentVersion)
   if (!version) throw new LegalGenerateError("Template has no file", 409)
+  if (template.docType === ADDENDUM_DOC_TYPE || parentDocumentId) {
+    if (template.docType !== ADDENDUM_DOC_TYPE) throw new LegalGenerateError("Only an addendum template makes an addendum", 400)
+    if (!parentDocumentId) throw new LegalGenerateError("An addendum is made from its signed document: open it and choose Create addendum.", 400)
+    const parent = await resolveParent(parentDocumentId)
+    // The parent's company (and so its kop), whatever the template or the request says.
+    const company = await prisma.legalCompany.findUnique({ where: { id: parent.companyId } })
+    if (!company) throw new LegalGenerateError("Company not found", 404)
+    return { template, version, company, series: null, parent }
+  }
   const coId = template.companyId ?? companyId
   if (!coId) throw new LegalGenerateError("Pick the issuing company", 400)
   if (template.companyId && companyId && companyId !== template.companyId) {
@@ -63,7 +89,7 @@ async function resolve(templateId: string, companyId: string | null | undefined)
           orderBy: [{ position: "asc" }, { label: "asc" }],
         })
   if (!series) throw new LegalGenerateError(`${company.name} has no numbering series for ${template.docType}. Add one in Settings.`, 409)
-  return { template, version, company, series }
+  return { template, version, company, series, parent: null }
 }
 
 /** The form: the template's fields, plus any field the number format needs that the template doesn't ask. */
@@ -85,25 +111,29 @@ function autoValues(company: { code: string; name: string; legalName: string; ad
   }
 }
 
-/** What the New document form needs: its fields, the series, and the number it would get now. */
-export async function prepareDocument(input: { templateId: string; companyId?: string | null; values?: unknown }) {
-  const { template, version, company, series } = await resolve(input.templateId, input.companyId)
-  const fields = formFields(version.fields as unknown as TemplateField[], series.format)
+/** What the New document form needs: its fields, the series, and the number it would get now. For an
+ *  addendum also its parent and `prefill` (the parties, from the parent; the person may change them). */
+export async function prepareDocument(input: { templateId: string; companyId?: string | null; values?: unknown; parentDocumentId?: string | null }) {
+  const { template, version, company, series, parent } = await resolve(input.templateId, input.companyId, input.parentDocumentId)
+  const fields = formFields(version.fields as unknown as TemplateField[], series?.format ?? "")
   const { values } = validateFormValues(fields, input.values ?? {})
   const day = typeof values[DOC_DATE_FIELD] === "string" ? (values[DOC_DATE_FIELD] as string) : null
-  const numberPreview = await peekLegalNumber(series, company.code, values, day ? dateFromDay(day) : new Date())
+  const peekAdd = parent ? await peekAddendum(parent) : null
+  const numberPreview = series ? await peekLegalNumber(series, company.code, values, day ? dateFromDay(day) : new Date()) : peekAdd!.number
   return {
     template: { id: template.id, name: template.name, docType: template.docType, version: version.version },
     company: { id: company.id, code: company.code, name: company.name, hasKop: !!company.kopStorageKey },
-    series: { id: series.id, key: series.key, label: series.label, format: series.format, resetPeriod: series.resetPeriod },
+    series: series ? { id: series.id, key: series.key, label: series.label, format: series.format, resetPeriod: series.resetPeriod } : null,
     fields,
     numberPreview,
+    parent: parent ? { id: parent.id, number: parent.number, title: parent.title, docType: parent.docType, addendumNo: peekAdd!.seq } : null,
+    prefill: parent ? addendumPrefill(parent, fields) : {},
   }
 }
 
 export async function generateLegalDocument(actor: LegalActor, input: GenerateInput) {
-  const { template, version, company, series } = await resolve(input.templateId, input.companyId)
-  const fields = formFields(version.fields as unknown as TemplateField[], series.format)
+  const { template, version, company, series, parent } = await resolve(input.templateId, input.companyId, input.parentDocumentId)
+  const fields = formFields(version.fields as unknown as TemplateField[], series?.format ?? "")
 
   // 1. Checks.
   const { values, errors } = validateFormValues(fields, input.values)
@@ -111,23 +141,32 @@ export async function generateLegalDocument(actor: LegalActor, input: GenerateIn
   const day = values[DOC_DATE_FIELD] as string
   const docDate = dateFromDay(day)
   try {
-    renderNumber({ format: series.format, seq: 1, year: 2000, month: 1, companyCode: company.code, fields: values })
+    if (series) renderNumber({ format: series.format, seq: 1, year: 2000, month: 1, companyCode: company.code, fields: values })
   } catch (error) {
     if (error instanceof NumberFormatError) {
       throw new LegalGenerateError("The document number needs more fields", 422, Object.fromEntries(error.missing.map((m) => [m, "Required"])))
     }
     throw error
   }
-  const counterparty = (input.counterparty ?? "").trim().slice(0, 200)
-  const title = ((input.title ?? "").trim() || `${template.name}${counterparty ? ` — ${counterparty}` : ""}`).slice(0, 200)
-  const projectId = input.projectId || null
-  const dealId = input.dealId || null
+  const counterparty = ((input.counterparty ?? "").trim() || parent?.counterparty || "").slice(0, 200)
+  const peek = parent ? await peekAddendum(parent) : null
+  const title = (
+    (input.title ?? "").trim() ||
+    (parent ? `${template.name} ${ordinalWord(peek!.seq)} — ${parent.title}` : `${template.name}${counterparty ? ` — ${counterparty}` : ""}`)
+  ).slice(0, 200)
+  // An addendum stays with its parent's project / deal unless told otherwise (and only one this person can open).
+  let projectId = input.projectId || null
+  let dealId = input.dealId || null
+  if (parent && !projectId && !dealId && (parent.projectId || parent.dealId) && !(await linkProblem(actor, parent.projectId, parent.dealId))) {
+    projectId = parent.projectId
+    dealId = parent.dealId
+  }
   const badLink = await linkProblem(actor, projectId, dealId)
   if (badLink) throw new LegalGenerateError(badLink, 404)
   const templateBytes = await readLegalFile(version.storageKey)
   const kopBytes = company.kopStorageKey ? await readLegalFile(company.kopStorageKey) : null
   try {
-    const dry = fillTemplate(templateBytes, fields, { ...values, ...autoValues(company, "000/DRY-RUN") })
+    const dry = fillTemplate(templateBytes, fields, { ...values, ...autoValues(company, "000/DRY-RUN"), ...(parent ? parentAutoValues(parent, peek!.seq) : {}) })
     assertWellFormed(kopBytes ? applyKop(dry, kopBytes) : dry)
   } catch (error) {
     if (error instanceof TemplateFileError) throw new LegalGenerateError(error.message, 422, {}, error.problems)
@@ -141,22 +180,19 @@ export async function generateLegalDocument(actor: LegalActor, input: GenerateIn
   try {
     created = await prisma.$transaction(
       async (tx) => {
-        const issued = await allocateLegalNumber(tx, {
-          series,
-          companyCode: company.code,
-          fields: values,
-          at: docDate,
-          issuedById: actor.userId,
-          subject: title,
-        })
-        let docx = fillTemplate(templateBytes, fields, { ...values, ...autoValues(company, issued.number) })
+        const issued: IssuedLegalNumber = series
+          ? await allocateLegalNumber(tx, { series, companyCode: company.code, fields: values, at: docDate, issuedById: actor.userId, subject: title })
+          : await allocateAddendumNumber(tx, { parent: parent!, issuedById: actor.userId, subject: title })
+        let docx = fillTemplate(templateBytes, fields, { ...values, ...autoValues(company, issued.number), ...(parent ? parentAutoValues(parent, issued.seq) : {}) })
         if (kopBytes) docx = applyKop(docx, kopBytes)
-        const fileName = safeFileName(`${issued.number.replace(/\//g, "-")} ${title}`.slice(0, 140)) + ".docx"
+        const fileName = `${downloadBaseName(issued.number, title, "REV 1")}.docx`
         storedKey = await storeLegalFile(fileName, docx)
         const doc = await tx.legalDocument.create({
           data: {
             companyId: company.id,
-            seriesId: series.id,
+            seriesId: series?.id ?? null,
+            parentDocumentId: parent?.id ?? null,
+            addendumSeq: parent ? issued.seq : null,
             documentNumberId: issued.id,
             number: issued.number,
             docType: template.docType,
@@ -178,6 +214,10 @@ export async function generateLegalDocument(actor: LegalActor, input: GenerateIn
           },
           select: { id: true },
         })
+        // A number a voided document gave back: show on the voided one who took it.
+        if (issued.reusedFromDocumentId) {
+          await tx.legalDocument.updateMany({ where: { id: issued.reusedFromDocumentId }, data: { numberReusedById: doc.id } })
+        }
         return { id: doc.id, number: issued.number, docx, fileName }
       },
       { timeout: 30_000, maxWait: 15_000 },

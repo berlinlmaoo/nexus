@@ -314,6 +314,24 @@ struct LegalDealRef: Decodable, Hashable {
     }
 }
 
+/// Another document a document points at: its parent, an addendum, the one that took its number.
+struct LegalDocRef: Decodable, Hashable, Identifiable {
+    let id: String
+    let number: String
+    let title: String
+    let status: String?
+    let docType: String?
+    let docDate: String?
+    let signedAt: String?
+    let numberReleased: Bool
+    private enum K: String, CodingKey { case id, number, title, status, docType, docDate, signedAt, numberReleased }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: K.self)
+        id = c.lv(.id, ""); number = c.lv(.number, ""); title = c.lv(.title, ""); status = c.lo(.status); docType = c.lo(.docType)
+        docDate = c.lo(.docDate); signedAt = c.lo(.signedAt); numberReleased = c.lv(.numberReleased, false)
+    }
+}
+
 /// One archive row.
 struct LegalDocumentSummary: Decodable, Identifiable {
     let id: String
@@ -335,7 +353,20 @@ struct LegalDocumentSummary: Decodable, Identifiable {
     let updatedAt: String?
     /// Linked to a project or deal this viewer can't open (project / deal then come back null).
     let linkHidden: Bool
-    private enum K: String, CodingKey { case id, number, docType, title, counterparty, docDate, status, source, company, project, deal, currentVersion, createdBy, createdAt, updatedAt, linkHidden }
+    /// The signed copy: when it was uploaded and by whom.
+    let signedAt: String?
+    let signedBy: LegalPerson?
+    /// Voided before it was signed: the number went back to its series (and maybe to `numberReusedBy`).
+    let numberReleased: Bool
+    let numberReusedBy: LegalDocRef?
+    /// An addendum: the signed document it amends.
+    let parent: LegalDocRef?
+    let addendumNo: Int?
+    let addendaCount: Int
+    private enum K: String, CodingKey {
+        case id, number, docType, title, counterparty, docDate, status, source, company, project, deal, currentVersion, createdBy, createdAt, updatedAt, linkHidden
+        case signedAt, signedBy, numberReleased, numberReusedBy, parent, addendumNo, addendaCount
+    }
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: K.self)
         id = c.lv(.id, ""); number = c.lv(.number, ""); docType = c.lv(.docType, "OTHER"); title = c.lv(.title, "")
@@ -343,6 +374,8 @@ struct LegalDocumentSummary: Decodable, Identifiable {
         source = c.lv(.source, "GENERATED"); company = c.lo(.company); project = c.lo(.project); deal = c.lo(.deal)
         currentVersion = c.lv(.currentVersion, 1); createdBy = c.lo(.createdBy); createdAt = c.lo(.createdAt); updatedAt = c.lo(.updatedAt)
         linkHidden = c.lv(.linkHidden, false)
+        signedAt = c.lo(.signedAt); signedBy = c.lo(.signedBy); numberReleased = c.lv(.numberReleased, false)
+        numberReusedBy = c.lo(.numberReusedBy); parent = c.lo(.parent); addendumNo = c.lo(.addendumNo); addendaCount = c.lv(.addendaCount, 0)
     }
 }
 
@@ -371,13 +404,29 @@ struct LegalDocVersion: Decodable, Identifiable {
     let note: String
     let author: LegalPerson?
     let createdAt: String?
+    /// "REV n" / "FINAL" / "SIGNED"; the download is named "<number> - <title> <label>" (owner, 14 Oct 2026).
+    let label: String
+    let downloadName: String
     var id: Int { version }
-    private enum K: String, CodingKey { case version, kind, fileName, mimeType, size, hasDocx, hasPdf, hasFile, note, author, createdAt }
+    private enum K: String, CodingKey { case version, kind, fileName, mimeType, size, hasDocx, hasPdf, hasFile, note, author, createdAt, label, downloadName }
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: K.self)
         version = c.lv(.version, 0); kind = c.lv(.kind, "GENERATED"); fileName = c.lv(.fileName, ""); mimeType = c.lv(.mimeType, "")
         size = c.lv(.size, 0); hasDocx = c.lv(.hasDocx, false); hasPdf = c.lv(.hasPdf, false); hasFile = c.lv(.hasFile, false)
         note = c.lv(.note, ""); author = c.lo(.author); createdAt = c.lo(.createdAt)
+        label = c.lv(.label, "REV \(version)"); downloadName = c.lv(.downloadName, "")
+    }
+
+    /// What the share sheet calls this file: the server's name for it, with the format's extension.
+    func shareName(_ format: String) -> String? {
+        guard !downloadName.isEmpty else { return nil }
+        let ext: String
+        switch format {
+        case "docx": ext = "docx"
+        case "pdf": ext = "pdf"
+        default: ext = (fileName as NSString).pathExtension.lowercased()
+        }
+        return ext.isEmpty ? downloadName : "\(downloadName).\(ext)"
     }
 }
 
@@ -418,9 +467,20 @@ struct LegalDocument: Decodable, Identifiable {
     let versions: [LegalDocVersion]
     /// Linked to a project or deal this viewer can't open (project / deal then come back null).
     let linkHidden: Bool
+    let signedAt: String?
+    let signedBy: LegalPerson?
+    /// The signed copy's version: the primary download once signed.
+    let signedVersion: Int?
+    let numberReleased: Bool
+    let numberReusedBy: LegalDocRef?
+    let numberReusedFrom: [LegalDocRef]
+    let parent: LegalDocRef?
+    let addendumNo: Int?
+    let addenda: [LegalDocRef]
     private enum K: String, CodingKey {
         case id, number, docType, title, counterparty, docDate, status, source, company, project, deal, currentVersion, createdBy, createdAt, updatedAt
         case notes, series, template, finalVersion, hasNumber, updatedBy, versions, linkHidden
+        case signedAt, signedBy, signedVersion, numberReleased, numberReusedBy, numberReusedFrom, parent, addendumNo, addenda
     }
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: K.self)
@@ -431,11 +491,32 @@ struct LegalDocument: Decodable, Identifiable {
         notes = c.lv(.notes, ""); series = c.lo(.series); template = c.lo(.template); finalVersion = c.lo(.finalVersion)
         hasNumber = c.lv(.hasNumber, false); updatedBy = c.lo(.updatedBy); versions = c.lv(.versions, [])
         linkHidden = c.lv(.linkHidden, false)
+        signedAt = c.lo(.signedAt); signedBy = c.lo(.signedBy); signedVersion = c.lo(.signedVersion)
+        numberReleased = c.lv(.numberReleased, false); numberReusedBy = c.lo(.numberReusedBy); numberReusedFrom = c.lv(.numberReusedFrom, [])
+        parent = c.lo(.parent); addendumNo = c.lo(.addendumNo); addenda = c.lv(.addenda, [])
     }
 
-    /// The version whose files the document shows: the final one once marked, else the newest.
+    /// SIGNED: no edits, no GIDEON, no new versions (the server refuses them too).
+    var isLocked: Bool { status == "SIGNED" }
+    /// Voiding gives the number back to its series only when the document holds one and was never signed.
+    var voidReleasesNumber: Bool { hasNumber && signedAt == nil && status != "SIGNED" }
+    /// The statuses a person may pick now (owner, 14 Oct 2026): VOID is one-way, SIGNED is locked and only
+    /// voided, and a generated document becomes SIGNED only by uploading its signed copy.
+    var statusChoices: [String] { LegalDocument.statusChoices(status: status, source: source) }
+    static func statusChoices(status: String, source: String) -> [String] {
+        switch status {
+        case "VOID": return ["VOID"]
+        case "SIGNED": return ["SIGNED", "VOID"]
+        default: return ["DRAFT", "FINAL", "SENT", "SIGNED", "VOID"].filter { $0 != "SIGNED" || source == "UPLOADED" }
+        }
+    }
+    /// "Upload signed copy" is offered on a final or sent document.
+    var canUploadSignedCopy: Bool { status == "FINAL" || status == "SENT" }
+
+    /// The version whose files the document shows: the signed copy once there is one, else the final one
+    /// once marked, else the newest.
     var shownVersion: LegalDocVersion? {
-        let v = finalVersion ?? currentVersion
+        let v = signedVersion ?? finalVersion ?? currentVersion
         return versions.first { $0.version == v } ?? versions.first
     }
     var current: LegalDocVersion? { versions.first { $0.version == currentVersion } }
@@ -488,16 +569,42 @@ struct LegalPrepared: Decodable {
             id = c.lv(.id, ""); key = c.lv(.key, ""); label = c.lv(.label, ""); format = c.lv(.format, ""); resetPeriod = c.lv(.resetPeriod, "YEAR")
         }
     }
+    /// An addendum's parent and the n it would get.
+    struct Parent: Decodable {
+        let id: String; let number: String; let title: String; let addendumNo: Int
+        private enum K: String, CodingKey { case id, number, title, addendumNo }
+        init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: K.self)
+            id = c.lv(.id, ""); number = c.lv(.number, ""); title = c.lv(.title, ""); addendumNo = c.lv(.addendumNo, 1)
+        }
+    }
+    /// A prefilled value: text or a number, read as the text the form edits.
+    private struct Scalar: Decodable {
+        let text: String?
+        init(from d: Decoder) throws {
+            let c = try d.singleValueContainer()
+            if let s = try? c.decode(String.self) { text = s }
+            else if let i = try? c.decode(Int.self) { text = String(i) }
+            else if let n = try? c.decode(Double.self) { text = String(n) }
+            else { text = nil }
+        }
+    }
     let template: Template?
     let company: Company?
     let series: Series?
     let fields: [LegalField]
     let numberPreview: String
-    private enum K: String, CodingKey { case template, company, series, fields, numberPreview }
+    let parent: Parent?
+    /// Starting values (an addendum's parties, from its parent).
+    let prefill: [String: String]
+    private enum K: String, CodingKey { case template, company, series, fields, numberPreview, parent, prefill }
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: K.self)
         template = c.lo(.template); company = c.lo(.company); series = c.lo(.series)
         fields = c.lv(.fields, []); numberPreview = c.lv(.numberPreview, "")
+        parent = c.lo(.parent)
+        let raw: [String: Scalar] = c.lv(.prefill, [:])
+        prefill = raw.compactMapValues(\.text)
     }
 }
 
