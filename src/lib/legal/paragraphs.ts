@@ -2,6 +2,7 @@ import PizZip from "pizzip"
 import { DOMParser, XMLSerializer, type Element as XElement, type Document as XDocument } from "@xmldom/xmldom"
 import { diffWords } from "@/lib/legal/diff"
 import { DOCX_MAX_UNZIPPED_BYTES, zipUnpackedSize } from "@/lib/legal/storage"
+import { keepManualBreaksUnstretched } from "@/lib/legal/template"
 
 // A generated document, paragraph by paragraph, for review (owner, 14 Oct 2026: "edit lines/paragraphs
 // manually; GIDEON can edit precisely"). Only the body is listed — the kop and the headers/footers are not
@@ -225,5 +226,6 @@ export function applyParagraphEdits(docx: Buffer, edits: { index: number; text: 
   }
   if (!changes.length) return { docx, changes }
   zip.file("word/document.xml", new XMLSerializer().serializeToString(dom))
+  if (changes.some((c) => c.after.includes("\n"))) keepManualBreaksUnstretched(zip)
   return { docx: zip.generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer, changes }
 }

@@ -36,7 +36,7 @@ export function LegalDiffView({ diff }: { diff: ParagraphDiff[] }) {
       node:
         d.type === "changed" ? <div className={cn(box, "border-amber-500/40")}><SegmentsView segments={d.segments} /></div>
           : d.type === "added" ? <div className={cn(box, "border-emerald-500/40 bg-emerald-500/5")}><span className="mr-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">{t("Added")}</span><span className="whitespace-pre-wrap">{d.text}</span></div>
-            : <div className={cn(box, "border-red-500/40 bg-red-500/5")}><span className="mr-1.5 text-xs font-medium text-red-700 dark:text-red-300">{t("Removed")}</span><del className="whitespace-pre-wrap">{d.text}</del></div>,
+            : <div className={cn(box, "border-red-500/40 bg-red-500/5")}><span className="mr-1.5 text-xs font-medium text-red-700 dark:text-red-300">{t("Deleted")}</span><del className="whitespace-pre-wrap">{d.text}</del></div>,
     });
   });
   flush(diff.length);
