@@ -27,7 +27,7 @@ const PAGE = 50;
  * date and where it came from.
  */
 export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOpen: (id: string | null) => void }) {
-  const { t, lang } = useLang();
+  const { t, tn, lang } = useLang();
   const [newOpen, setNewOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [text, setText] = useState("");
@@ -157,14 +157,15 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
             {/* Fixed columns (UI tour run 10, WD-1): the number column took a third of the row and cut the
                 title; it is now a set width with an ellipsis (the full number on hover), and the title gets
                 the room. */}
-            <table className="w-full min-w-[860px] table-fixed text-sm">
+            <table className="w-full min-w-[900px] table-fixed text-sm">
               <colgroup>
-                <col className="w-[12.5rem]" />
+                {/* Status gave up width it did not use to the number and the counterparty (UI tour run 13, W-D11). */}
+                <col className="w-[14rem]" />
                 <col />
-                <col className="w-[10rem]" />
+                <col className="w-[13rem]" />
                 <col className="w-[8.5rem]" />
                 <col className="w-[6.5rem]" />
-                <col className="w-[13rem]" />
+                <col className="w-[10rem]" />
               </colgroup>
               <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                 <tr>
@@ -180,16 +181,16 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
                 {rows.map((d) => (
                   <tr key={d.id} className="cursor-pointer hover:bg-accent/40" onClick={() => onOpen(d.id)}>
                     <td className="px-3 py-2 align-top font-mono text-xs">
-                      <div className="flex min-w-0 items-center" title={d.number || undefined}>
+                      <div className="flex min-w-0 items-center">
                         {d.parent && <CornerDownRight className="mr-1 h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />}
-                        <span className={cn("truncate", d.numberReleased && "line-through text-muted-foreground")}>{d.number || "—"}</span>
+                        {d.number ? <DocNumber number={d.number} className={cn(d.numberReleased && "line-through text-muted-foreground")} /> : "—"}
                       </div>
                       {d.status === "VOID" && d.numberReusedBy && (
                         // The label on its own line, the number whole on one line under it, cut with an ellipsis and
                         // shown in full on hover (UI tour run 12, WD1: it wrapped mid-number in the narrow column).
                         <div className="min-w-0 text-[11px] text-muted-foreground" title={t("Number reused by {number}", { number: d.numberReusedBy.number })}>
                           <div className="font-sans">{t("Number reused by")}</div>
-                          <div className="truncate whitespace-nowrap">{d.numberReusedBy.number}</div>
+                          <DocNumber number={d.numberReusedBy.number} />
                         </div>
                       )}
                     </td>
@@ -197,12 +198,13 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
                       <div className="truncate font-medium" title={d.title}>{d.title}</div>
                       <div className="line-clamp-2 text-xs text-muted-foreground">
                         <DocKind d={d} />
-                        {(d.addendaCount > 0 || d.parent) && !filters.parentId && (
-                          <button type="button" className="ml-1.5 text-primary hover:underline" onClick={(e) => { e.stopPropagation(); showChain(d); }}>
-                            {d.addendaCount > 0 ? t("{n} addenda", { n: d.addendaCount }) : t("Show the chain")}
-                          </button>
-                        )}
                       </div>
+                      {/* Its own line: inside the clamped kind line it was cut off on most addenda (UI tour run 13, W-D10). */}
+                      {(d.addendaCount > 0 || d.parent) && !filters.parentId && (
+                        <button type="button" className="text-xs text-primary hover:underline" onClick={(e) => { e.stopPropagation(); showChain(d); }}>
+                          {d.addendaCount > 0 ? tn(d.addendaCount, "1 addendum", "{n} addenda") : t("Show the chain")}
+                        </button>
+                      )}
                     </td>
                     <td className="px-3 py-2 align-top"><span className="block truncate" title={d.counterparty || undefined}>{d.counterparty || "—"}</span></td>
                     <td className="px-3 py-2 align-top"><span className="block truncate" title={d.company.name}>{d.company.name}</span></td>
@@ -266,14 +268,14 @@ function SignedLine({ d }: { d: ArchiveDoc }) {
 
 /** Phone: number / title / counterparty · company · date / type, with the status chip on the number's line. */
 function DocCard({ d, lang, onOpen, onShowChain }: { d: ArchiveDoc; lang: "id" | "en"; onOpen: () => void; onShowChain?: () => void }) {
-  const { t } = useLang();
+  const { t, tn } = useLang();
   return (
     <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }}
       className="block w-full cursor-pointer px-4 py-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
       <div className="flex items-start gap-2">
         <div className="flex min-w-0 flex-1 items-center font-mono text-xs text-muted-foreground">
           {d.parent && <CornerDownRight className="mr-1 h-3 w-3 shrink-0" aria-hidden />}
-          <span className={cn("truncate", d.numberReleased && "line-through")}>{d.number || t("No number")}</span>
+          {d.number ? <DocNumber number={d.number} className={cn(d.numberReleased && "line-through")} /> : <span className="truncate">{t("No number")}</span>}
         </div>
         <StatusChip status={d.status} />
       </div>
@@ -284,13 +286,17 @@ function DocCard({ d, lang, onOpen, onShowChain }: { d: ArchiveDoc; lang: "id" |
       <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
         <DocKind d={d} />
       </div>
-      {/* Its own line, wrapping inside the number if it must (UI tour run 11, WM-10: cut mid-number). */}
+      {/* The label on one line, the number on the next, cut in the middle like on the desktop (UI tour run 13,
+          W-M7: it ran on as text and broke at a hyphen). */}
       {d.status === "VOID" && d.numberReusedBy && (
-        <div className="mt-0.5 text-xs text-muted-foreground [overflow-wrap:anywhere]">{t("Number reused by {number}", { number: d.numberReusedBy.number })}</div>
+        <div className="mt-0.5 min-w-0 text-xs text-muted-foreground">
+          <div>{t("Number reused by")}</div>
+          <DocNumber number={d.numberReusedBy.number} className="font-mono" />
+        </div>
       )}
       {(d.addendaCount > 0 || d.parent) && onShowChain && (
         <button type="button" className="mt-1 text-xs font-medium text-primary hover:underline" onClick={(e) => { e.stopPropagation(); onShowChain(); }}>
-          {d.addendaCount > 0 ? t("{n} addenda", { n: d.addendaCount }) : t("Show the chain")}
+          {d.addendaCount > 0 ? tn(d.addendaCount, "1 addendum", "{n} addenda") : t("Show the chain")}
         </button>
       )}
       <SignedLine d={d} />
@@ -328,3 +334,21 @@ function FilterSelect({ value, onChange, all, options, block }: { value?: string
     </Select>
   );
 }
+
+/**
+ * A document number cut in the middle, never at its end: the last two parts ("/2026/003", "/002/ADD-1") stay
+ * whole, so numbers that share a long start stay told apart (UI tour run 13, W-D5: three rows all read
+ * "PKS/PATS-UNIV/YOGYAKART…"). The full number is on hover.
+ */
+function DocNumber({ number, className }: { number: string; className?: string }) {
+  const cut = number.split("/");
+  const tail = cut.length > 2 ? `/${cut.slice(-2).join("/")}` : "";
+  const head = tail ? number.slice(0, number.length - tail.length) : number;
+  return (
+    <span className={cn("flex min-w-0", className)} title={number}>
+      <span className="truncate">{head}</span>
+      {tail && <span className="shrink-0 whitespace-nowrap">{tail}</span>}
+    </span>
+  );
+}
+

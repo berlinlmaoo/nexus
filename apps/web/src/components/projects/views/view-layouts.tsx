@@ -160,6 +160,23 @@ export function PropLine({ task, keys, defs, ctx, className, slots }: { task: Ne
   // others (UI tour run 10, WD-4). Every row now reads in the same order.
   const isDateItem = (d: PropDef) => d.kind === "date" && taskValues(task, d.key).some((v) => !Number.isNaN(new Date(v).getTime()));
   const dateItems = items.filter(isDateItem);
+  if (slots) {
+    // List rows (sm and up): every property has a column of its own width, kept empty when the task has no
+    // value, so the dates, amounts, people, tags, priority and status line up from row to row (UI tour run 13,
+    // W-D14: the chips shifted with each row's content). On a phone the line stays one line (W-M16).
+    const firstDateKey = items.find((d) => d.kind === "date")?.key ?? null;
+    return (
+      <div className={cn("flex items-center gap-1.5 max-sm:flex-nowrap max-sm:overflow-hidden", className)}>
+        {items.map((d) => {
+          if (d.kind === "date" && d.key !== firstDateKey) return null;
+          const content = d.key === firstDateKey
+            ? <><DateChips task={task} items={dateItems} />{!isDateItem(d) && <PropValue task={task} def={d} ctx={ctx} />}</>
+            : <PropValue task={task} def={d} ctx={ctx} />;
+          return <span key={d.key} className={cn("inline-flex min-w-0 items-center gap-1 max-sm:shrink-0 max-sm:empty:hidden sm:overflow-hidden", listSlotWidth(d))}>{content}</span>;
+        })}
+      </div>
+    );
+  }
   const firstDate = dateItems.length ? (items.find((d) => d.kind === "date")?.key ?? null) : null;
   return (
     <div className={cn("flex flex-wrap items-center gap-1.5", className)}>
@@ -169,13 +186,21 @@ export function PropLine({ task, keys, defs, ctx, className, slots }: { task: Ne
           return <Fragment key="dates"><DateChips task={task} items={dateItems} />{!isDateItem(d) && <PropValue task={task} def={d} ctx={ctx} />}</Fragment>;
         }
         if (isDateItem(d)) return null;
-        if (slots && d.key === "assignee") {
-          return <span key={d.key} className="inline-flex max-sm:empty:hidden sm:w-[3.75rem] sm:justify-start"><PropValue task={task} def={d} ctx={ctx} /></span>;
-        }
         return <PropValue key={d.key} task={task} def={d} ctx={ctx} />;
       })}
     </div>
   );
+}
+
+/** A List row's column width for a property (sm and up), wide enough for its usual value. */
+function listSlotWidth(d: PropDef): string {
+  if (d.key === "assignee") return "sm:w-[3.75rem] sm:justify-start";
+  if (d.kind === "date") return "sm:w-[8.5rem] sm:justify-end";
+  if (d.kind === "number") return "sm:w-[6.5rem] sm:justify-end";
+  if (d.key === "priority") return "sm:w-[4.75rem]";
+  if (d.key === "status" || d.key === "section") return "sm:w-[7.5rem]";
+  if (d.kind === "person") return "sm:w-[7.5rem]";
+  return "sm:w-[7rem]";
 }
 
 /** A task's date properties as one ordered group: start → due, then every other date field, each day once. */
@@ -254,7 +279,7 @@ export function GroupHeader({ group, groupBy, defs, cfg, collapsed, onToggle, ch
         ) : (
           <span className="truncate text-sm font-semibold">{label}</span>
         )}
-        <span className="shrink-0 text-xs tabular-nums" style={{ color: tone?.text ?? "var(--muted-foreground)" }} title={t(calc.label)}>{calc.value}</span>
+        <span className="shrink-0 text-xs tabular-nums" style={{ color: tone?.text ?? "var(--muted-foreground)" }} title={calc.hint ? t("{done} of {total} tasks done", calc.hint) : t(calc.label)}>{calc.value}</span>
       </button>
       {children}
     </div>

@@ -677,6 +677,9 @@ function VaultPage() {
           !selecting && "opacity-0 group-hover:opacity-100 pointer-coarse:hidden",
           "tap-area",
           overlay && "absolute left-2 top-2 z-10 shadow-sm",
+          // A card out of Select mode: the box shows on hover in the icon's place instead of keeping an empty
+          // slot before it (UI tour run 13, W-D20: ~45 px of dead padding on every folder card).
+          !overlay && !selecting && "absolute left-3 top-1/2 z-10 -translate-y-1/2",
         )}
       >
         {on && <Check className="h-3.5 w-3.5" aria-hidden />}
@@ -761,7 +764,7 @@ function VaultPage() {
         {...dragProps(item)}
         {...(isFolder && !trash ? targetProps(k, { id: item.id, name: item.name }) : {})}
         className={cn(
-          "group flex items-center gap-3 rounded-xl border bg-card px-3 py-2.5 transition-colors",
+          "group relative flex items-center gap-3 rounded-xl border bg-card px-3 py-2.5 transition-colors",
           lit ? "border-primary ring-2 ring-primary/40 bg-primary/5"
             : on ? "border-primary bg-primary/10 ring-1 ring-primary/40"
             : "border-border hover:border-primary/50",
@@ -779,7 +782,7 @@ function VaultPage() {
           onMouseDown={noTextSelect}
           onKeyDown={activate(item)}
         >
-          <Icon className={cn("h-5 w-5 shrink-0", isFolder ? "text-primary" : "text-muted-foreground")} />
+          <Icon className={cn("h-5 w-5 shrink-0", isFolder ? "text-primary" : "text-muted-foreground", !selecting && !trash && "pointer-fine:group-hover:opacity-0")} />
           <span className="min-w-0">
             <span className="block truncate text-sm font-medium">{item.name}</span>
             <span className="block truncate text-xs text-muted-foreground">

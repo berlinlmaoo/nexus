@@ -292,11 +292,24 @@ function MySubmissions() {
 
   // Columns: the target projects' status options. Older servers send only names (statusColumns): those
   // become columns after "New", as before.
-  const columns: NexusSubmissionColumn[] = useMemo(() => {
-    if (q.data?.columns?.length) return q.data.columns;
-    return [{ key: "new", name: t("New"), group: "todo" as const }, ...(q.data?.statusColumns ?? []).map((n) => ({ key: n, name: n, group: "in_progress" as const }))];
-  }, [q.data, t]);
   const keyOf = (s: NexusMySubmission) => s.column?.key ?? (s.procStatus?.trim() || "new");
+  const columns: NexusSubmissionColumn[] = useMemo(() => {
+    const base: NexusSubmissionColumn[] = q.data?.columns?.length
+      ? q.data.columns
+      : [{ key: "new", name: t("New"), group: "todo" as const }, ...(q.data?.statusColumns ?? []).map((n) => ({ key: n, name: n, group: "in_progress" as const }))];
+    // A submission whose column the list does not have (a status renamed or removed on its project) gets a
+    // column of its own, instead of the board showing only empty lanes while it holds requests (UI tour run 13,
+    // W-B7).
+    const known = new Set(base.map((c) => c.key));
+    const extra: NexusSubmissionColumn[] = [];
+    for (const s of q.data?.submissions ?? []) {
+      const key = s.column?.key ?? (s.procStatus?.trim() || "new");
+      if (known.has(key)) continue;
+      known.add(key);
+      extra.push(s.column ?? { key, name: s.procStatus?.trim() || t("New"), group: "in_progress" });
+    }
+    return [...base, ...extra];
+  }, [q.data, t]);
 
   const shown = subs.filter((s) => (filter === "all" || s.kind === filter) && inProject(s) && (!mine || s.needsAction));
   const needCount = subs.filter((s) => (filter === "all" || s.kind === filter) && inProject(s) && s.needsAction).length;
@@ -339,6 +352,14 @@ function MySubmissions() {
         {q.isError && <EmptyState icon={AlertCircle} tone="muted" title={t("Couldn't load your submissions.")} action={<EmptyAction onClick={() => q.refetch()}>{t("Try again")}</EmptyAction>} />}
 
         {!q.isLoading && filter === "all" && <MyLegalRequestsSection requests={legal} onOpen={setOpenLegal} />}
+
+        {/* Only Legal requests so far: the form board says what it is for and where to start (W-B7). */}
+        {!q.isLoading && !q.isError && subs.length === 0 && legal.length > 0 && (
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
+            <span>{t("Requests you send through a form appear here, with where each one stands.")}</span>
+            <EmptyAction to="/forms">{t("Open forms")}</EmptyAction>
+          </div>
+        )}
 
         {!q.isLoading && !q.isError && subs.length === 0 && legal.length === 0 && (
           <EmptyState icon={Inbox} title={t("No submissions yet")}
@@ -390,7 +411,9 @@ function MySubmissions() {
             ) : (
               // Phone: the lanes run to the screen edges, snap one at a time and the next one peeks in (UI tour
               // run 11, WM-4).
-              <div ref={boardRef} className={cn("-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-4 sm:mx-0 sm:snap-none sm:px-0", boardFade)}>
+              // The trailing spacer keeps the last lane clear of the screen edge at full scroll (a scroller's end
+              // padding is not scrollable room in a flex row; UI tour run 13, W-M9).
+              <div ref={boardRef} className={cn("-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-4 after:block after:w-1 after:shrink-0 after:content-[''] sm:mx-0 sm:snap-none sm:px-0 sm:after:hidden", boardFade)}>
                 {visibleCols.map((col, i) => {
                   const items = shown.filter((s) => keyOf(s) === col.key);
                   const p = preset(col);

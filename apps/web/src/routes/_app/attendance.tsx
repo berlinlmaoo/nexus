@@ -33,6 +33,7 @@ import { StatusOverridePanel } from "@/components/attendance/StatusOverridePanel
 import { LeftTag, leftAtOf } from "@/components/LeftTag";
 import { localeOf, t as tr, useLang } from "@/lib/lang";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
+import { formatCount } from "@/lib/number-format";
 
 type HistRow = NonNullable<NexusAttendanceHistory["rows"]>[number];
 
@@ -96,8 +97,8 @@ const REQ_LABEL: Record<string, string> = { LEAVE: "Leave", SICK: "Sick", PERMIT
 // sick note. The type says what the photo is; the file name only ever said what the app guessed.
 // Anything that isn't an image (a PDF) keeps its name — there, the name is the person's own.
 const PHOTO_EXT = /\.(jpe?g|png|gif|webp|heic|heif|avif|bmp)$/i;
-/** Width of the attendance board's right-edge fade on a phone (w-6); landing keeps today clear of it. */
-const BOARD_FADE = 24;
+/** Width of the attendance board's right-edge fade on a phone (w-10); landing keeps today clear of it. */
+const BOARD_FADE = 40;
 function isPhotoDocument(url?: string | null, name?: string | null) {
   const path = (url ?? "").split(/[?#]/)[0];
   // The stored file keeps the uploaded extension (see POST /api/attendance/requests); the original
@@ -470,12 +471,15 @@ function Attendance() {
             </div>
             <div className="flex items-center gap-3">
               {viewMode === "grid" && (
-                <div className="hidden gap-2 text-xs text-muted-foreground sm:flex">
+                <div className="hidden flex-wrap justify-end gap-x-2 gap-y-1 text-xs text-muted-foreground sm:flex">
                   <Legend cls="bg-emerald-400/70" label={tr("Present / Permit")} />
                   <Legend cls="bg-amber-300/80" label={tr("Leave")} />
                   <Legend cls="bg-orange-400/80" label={tr("Sick")} />
-                  <Legend cls="bg-violet-400/70" label={tr("Day off")} />
+                  <Legend cls="bg-violet-400/70" label={tr("Days off")} />
                   <Legend cls="bg-rose-500/75" label={tr("Absent")} />
+                  {/* The small marks over a day's dot (UI tour run 13, W-D24: they had no key). */}
+                  <span className="inline-flex items-center gap-1.5"><span className="grid h-3 w-3 place-items-center rounded-full bg-card text-sky-600 ring-1 ring-border dark:text-sky-400"><Globe className="h-2 w-2" /></span>{tr("Web check-in")}</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="grid h-3 w-3 place-items-center rounded-full bg-card text-slate-500 ring-1 ring-border dark:text-slate-400"><MapPinOff className="h-2 w-2" /></span>{tr("Location off")}</span>
                 </div>
               )}
               <Segmented label={tr("Attendance view")} size="xs" value={viewMode} onChange={setViewMode} options={[{ key: "grid", label: tr("Board") }, { key: "log", label: tr("Log") }]} />
@@ -501,7 +505,7 @@ function Attendance() {
                     value={memberQuery}
                     onChange={(e) => setMemberQuery(e.target.value)}
                     aria-label={tr("Search people")}
-                    placeholder={tr("Search people…")}
+                    placeholder={tr("Search…")}
                     className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-8 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20"
                   />
                   {memberQuery && <button onClick={() => setMemberQuery("")} aria-label={tr("Clear search")} className="tap-area absolute right-2 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-3 w-3" /></button>}
@@ -645,17 +649,18 @@ function Attendance() {
                             <>
                               <span title={tr("Day off left this period: {left} of {quota} (used {used})", { left: d.remaining, quota: d.quota, used: d.used }) + (d.bonus && d.bonus.days > 0 ? "\n" + tr("Quota {base} + {n} extra ({reasons}) — expires on the 27th", { base: d.baseQuota ?? d.quota - d.bonus.days, n: d.bonus.days, reasons: d.bonus.grants.map((g) => `${g.days}: ${g.reason}`).join("; ") }) : "")}
                                 className={cn(pill, quotaTone(d.remaining), d.bonus && d.bonus.days > 0 && "ring-emerald-300 dark:ring-emerald-400/60")}>
-                                {d.remaining}/{d.quota} DO{d.bonus && d.bonus.days > 0 && <span className="ml-0.5 text-emerald-600 dark:text-emerald-400">+</span>}
+                                {/* Spelled out (UI tour run 13, W-D24: "0/4 DO" and "0/0 PH" were cryptic). */}
+                                {tr("{left}/{quota} days off", { left: d.remaining, quota: d.quota })}{d.bonus && d.bonus.days > 0 && <span className="ml-0.5 text-emerald-600 dark:text-emerald-400">+</span>}
                               </span>
                               <span title={d.redDate.quota === 0
                                   ? tr("The BoD hasn't set this month's public-holiday allowance yet")
                                   : tr("Public holidays left this calendar month: {left} of {quota} (used {used})", { left: d.redDate.remaining, quota: d.redDate.quota, used: d.redDate.used })}
                                 className={cn(pill, d.redDate.quota === 0 ? "bg-muted/50 text-muted-foreground/70 ring-border" : quotaTone(d.redDate.remaining))}>
-                                {d.redDate.remaining}/{d.redDate.quota} {tr("PH")}
+                                {tr("{left}/{quota} holidays", { left: d.redDate.remaining, quota: d.redDate.quota })}
                               </span>
                               <span title={`${d.xp.score} XP · ${d.xp.levelName} (Lv.${d.xp.level}) — ${tr("the XP period is the calendar month, not the 28→27 attendance period")}`}
                                 className={cn(pill, xpTone)}>
-                                {d.xp.score} XP
+                                {formatCount(d.xp.score)} XP
                               </span>
                               <button
                                 type="button"
@@ -745,7 +750,9 @@ function Attendance() {
               </tbody>
             </table>
           </div>
-          {boardMore && <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 z-30 w-6 bg-gradient-to-l from-card to-transparent sm:hidden" />}
+          {/* About a day column wide and solid at the edge, so a column cut there is covered instead of showing
+              "T" / "1" fragments (UI tour run 13, W-M3). */}
+          {boardMore && <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 z-30 w-10 bg-gradient-to-l from-card from-45% to-transparent sm:hidden" />}
           </div>
           )}
         </div>
@@ -1758,6 +1765,12 @@ function EmploymentStartSection() {
   const rows = q.data?.members ?? [];
   const filled = rows.filter((r) => r.employmentStartDate).length;
   const eligible = rows.filter((r) => r.eligible).length;
+  // The whole crew in one flat list ran over four screens: a search and "Not filled in only" find the people
+  // still to do (UI tour run 13, W-D25).
+  const [query, setQuery] = useState("");
+  const [missingOnly, setMissingOnly] = useState(false);
+  const needle = query.trim().toLowerCase();
+  const shownRows = rows.filter((m) => (!missingOnly || !m.employmentStartDate) && (!needle || `${m.name ?? ""} ${m.email ?? ""}`.toLowerCase().includes(needle)));
 
   return (
     <section className="rounded-3xl border border-border bg-card">
@@ -1772,9 +1785,23 @@ function EmploymentStartSection() {
           {tr("{filled}/{total} filled in · {eligible} eligible", { filled, total: rows.length, eligible })}
         </span>
       </div>
+      {rows.length > 8 && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-border px-5 py-3">
+          <div className="relative min-w-[12rem] flex-1 sm:max-w-xs">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/50" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} aria-label={tr("Search people")} placeholder={tr("Search…")}
+              className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-3 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20" />
+          </div>
+          <button type="button" aria-pressed={missingOnly} onClick={() => setMissingOnly((v) => !v)}
+            className={cn("rounded-full border px-3 py-1 text-xs font-semibold transition-colors pointer-coarse:min-h-9", missingOnly ? "border-foreground/25 bg-accent text-foreground" : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground")}>
+            {tr("Not filled in only")} <span className="tabular-nums">({rows.length - filled})</span>
+          </button>
+        </div>
+      )}
       <div className="divide-y divide-border">
         {q.isLoading && <p className="px-5 py-4 text-sm text-muted-foreground">{tr("Loading…")}</p>}
-        {rows.map((m) => (
+        {!q.isLoading && rows.length > 0 && shownRows.length === 0 && <p className="px-5 py-4 text-sm text-muted-foreground">{tr("No one matches.")}</p>}
+        {shownRows.map((m) => (
           <div key={m.userId} className="flex flex-wrap items-center gap-3 px-5 py-2.5">
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold">{m.name || m.email}</div>

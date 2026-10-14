@@ -205,8 +205,8 @@ function SummaryCard({ data }: { data: NexusMemberRecord }) {
   return (
     <Card title={data.period.isCurrent ? tr("This period") : tr("Attendance period")} hint={`${periodRangeText(data.period.from, data.period.to)} · ${score.days !== undefined && score.days < data.period.days && score.from
           // Joined during the period: the score counts from their first day (QA S-20).
-          ? tr("from {date}: {days} days, {working} working days ({days} − {quota} day-off allowance)", { date: periodRangeText(score.from, score.from).split(" – ")[0], days: score.days, working: score.working, quota: score.allowance ?? 0 })
-          : tr("{days} days, {working} working days ({days} − {quota} day-off allowance)", { days: data.period.days, working: score.working, quota: dayOff.quota })}`}>
+          ? tr("from {date}: {days} days, {working} working days ({days} − {quota} days off allowance)", { date: periodRangeText(score.from, score.from).split(" – ")[0], days: score.days, working: score.working, quota: score.allowance ?? 0 })
+          : tr("{days} days, {working} working days ({days} − {quota} days off allowance)", { days: data.period.days, working: score.working, quota: dayOff.quota })}`}>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,14rem)_1fr]">
         <div className="rounded-2xl bg-primary/5 p-4" title={tr("Days worked (present or permit) out of the period's working days — the board's Score column")}>
           <div className="text-[11px] font-bold uppercase tracking-wider text-primary">{tr("Score")}</div>
@@ -218,14 +218,15 @@ function SummaryCard({ data }: { data: NexusMemberRecord }) {
           <Stat label={tr("Permit")} value={counts.permit} tone={sCls.permit} />
           <Stat label={tr("Leave")} value={counts.leave} tone={sCls.leave} />
           <Stat label={tr("Sick")} value={counts.sick} tone={sCls.sick} />
-          <Stat label={tr("Day off")} value={counts.dayOff} tone={sCls.dayoff} />
-          <Stat label={tr("Absent (TK)")} value={counts.absent} tone={sCls.absent} />
+          {/* The shared labels (UI tour run 13): "Days off", and "Absent" in English ("TK" stays Indonesian). */}
+          <Stat label={tr("Days off")} value={counts.dayOff} tone={sCls.dayoff} />
+          <Stat label={tr("Absent")} value={counts.absent} tone={sCls.absent} />
           <Stat label={tr("Late")} value={counts.lateMinutes > 0 ? tr("{n} min", { n: counts.lateMinutes }) : "—"} hint={tr(counts.lateDays === 1 ? "{n} late day" : "{n} late days", { n: counts.lateDays })} />
           <Stat label={tr("Day-off balance")} value={tr("{n} left", { n: dayOff.remaining })} hint={tr("Used {used} of {quota}: {base} base{bonus}. Includes days cut automatically for TK or >120 min late.", { used: dayOff.usedRaw, quota: dayOff.quota, base: dayOff.baseQuota, bonus })} />
           <Stat label={tr("XP this period")} value={<span><span className="text-emerald-600 dark:text-emerald-400">+{xp.gained}</span> <span className="text-muted-foreground">·</span> <span className="text-rose-600 dark:text-rose-400">{xp.lost > 0 ? `−${xp.lost}` : xp.lost < 0 ? `−${Math.abs(xp.lost)}` : "−0"}</span></span>} hint={xp.removed > 0 ? tr("{n} XP of deductions removed by the BoD", { n: xp.removed }) : undefined} />
         </div>
       </div>
-      {dayOff.bonusDays > 0 && <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">{tr("Day-off allowance {quota} = {base} + {n} extra for this period ({reasons}).", { quota: dayOff.quota, base: dayOff.baseQuota, n: dayOff.bonusDays, reasons: dayOff.bonusGrants.map((g) => `${g.days}: ${g.reason}`).join("; ") })}</p>}
+      {dayOff.bonusDays > 0 && <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">{tr("Days off allowance {quota} = {base} + {n} extra for this period ({reasons}).", { quota: dayOff.quota, base: dayOff.baseQuota, n: dayOff.bonusDays, reasons: dayOff.bonusGrants.map((g) => `${g.days}: ${g.reason}`).join("; ") })}</p>}
     </Card>
   );
 }
@@ -387,7 +388,7 @@ function XpLog({ data }: { data: NexusMemberRecord }) {
             {s.xp.entries.length === 0 ? (
               i === 0 ? (
                 <EmptyState compact icon={ScrollText} tone="muted" className="mx-4 my-2 md:mx-5" title={tr("No XP moved this period")}
-                  message={`${tr("XP comes from quests and is taken by attendance penalties (late, no check-out, TK).")} ${data.person.isSelf ? tr("Nothing for you since {date}.", { date: dayLabel(data.period.from) }) : tr("Nothing for them since {date}.", { date: dayLabel(data.period.from) })}${s.xp.hasOlder ? ` ${tr("Older periods are below.")}` : ""}`} />
+                  message={`${tr("XP comes from quests and is taken by attendance penalties (late, no check-out, absent).")} ${data.person.isSelf ? tr("Nothing for you since {date}.", { date: dayLabel(data.period.from) }) : tr("Nothing for them since {date}.", { date: dayLabel(data.period.from) })}${s.xp.hasOlder ? ` ${tr("Older periods are below.")}` : ""}`} />
               ) : <p className="px-4 py-3 text-sm text-muted-foreground md:px-5">{tr("No XP moved in that period.")}</p>
             ) : (
               s.xp.entries.map((e) => <XpRow key={e.id} entry={e} data={data} />)

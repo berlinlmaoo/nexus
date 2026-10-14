@@ -144,16 +144,17 @@ function TopBar({ userName, unread }: { userName: string; unread: number }) {
         </div>
         <LevelChip />
       </div>
-      {/* rail zone: search + notifications */}
-      <div className="flex items-center gap-3">
-        {/* Opens the global search (⌘K), like the sidebar's box. It was an input with no handler (QA B12). */}
+      {/* rail zone: search (phone only) + notifications */}
+      <div className="flex items-center justify-end gap-3">
+        {/* Opens the global search (⌘K), like the sidebar's box. It was an input with no handler (QA B12). Only
+            where there is no sidebar: next to it there were two "Search… ⌘K" fields (UI tour run 13, W-D26). */}
         <button
           type="button"
           data-dashboard-search=""
           onClick={openGlobalSearch}
           aria-label={t("Search")}
           aria-haspopup="dialog"
-          className="flex h-12 min-w-0 flex-1 cursor-text items-center gap-2 rounded-full border border-border bg-card px-5 text-left text-sm text-muted-foreground transition-shadow hover:border-primary/40 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+          className="flex h-12 min-w-0 flex-1 cursor-text items-center gap-2 rounded-full border border-border bg-card px-5 text-left text-sm text-muted-foreground transition-shadow md:hidden hover:border-primary/40 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
         >
           <Search className="h-4 w-4 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{t("Search…")}</span>
@@ -670,8 +671,8 @@ function LevelChip() {
         <TierBadge level={info.level} size={40} />
         <div className="min-w-0 flex-1 sm:flex-initial">
           <div className="flex items-baseline gap-1.5">
-            <span className="font-display text-sm font-bold tracking-tight">{info.name}</span>
-            <span className="text-[11px] font-semibold text-muted-foreground">Lv.{info.level}</span>
+            {/* One level format everywhere: "Level 6 · Diamond" (UI tour run 13; it read "Diamond Lv.6"). */}
+            <span className="font-display text-sm font-bold tracking-tight">{levelLabel(info.level, info.name, t)}</span>
             {streak > 0 && (
               <span className="ml-1 inline-flex items-center gap-0.5 text-[11px] font-semibold text-warning-foreground dark:text-warning"><Flame className="h-3 w-3" />{streak}</span>
             )}
@@ -726,8 +727,7 @@ function LevelModal({ open, onClose, info, totalXp, streak }: { open: boolean; o
               <TierBadge level={info.level} size={52} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
-                  <span className="font-display text-xl font-bold tracking-tight">{info.name}</span>
-                  <span className="text-xs font-semibold text-muted-foreground">Lv. {info.level}</span>
+                  <span className="font-display text-xl font-bold tracking-tight">{levelLabel(info.level, info.name, t)}</span>
                   {streak > 0 && <span className="ml-auto mr-8 inline-flex items-center gap-1 text-xs font-semibold text-warning-foreground dark:text-warning"><Flame className="h-3.5 w-3.5" />{tn(streak, "{n} day", "{n} days")}</span>}
                 </div>
                 <AnimatedBar pct={info.pct} className="mt-2 h-2 rounded-full bg-muted" barClassName="h-full rounded-full bg-primary" />

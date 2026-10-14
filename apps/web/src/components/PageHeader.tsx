@@ -113,7 +113,11 @@ export function PageHeader({
           data-page-header-sticky=""
           // A variable, not `top` itself: from md up the strip is `relative`, where a `top` would shift it down.
           style={{ "--page-header-bar-h": `${barH}px` } as CSSProperties}
-          className={cn("relative overflow-x-auto px-4 md:px-8 max-md:sticky max-md:top-[var(--page-header-bar-h)] max-md:z-30 max-md:border-b max-md:border-border max-md:bg-background", className)}
+          // Phone: an opaque band of the header's colour (a shadow, which the strip's own overflow does not clip)
+          // reaches up from the strip to the title bar, so no sliver of a scrolled row shows between the two
+          // pinned parts (UI tour run 13, W-M2: an avatar and cut text showed under the title). Over the bar
+          // itself it is the same colour. A header on another surface sets --page-header-bg.
+          className={cn("relative overflow-x-auto px-4 md:px-8 max-md:sticky max-md:top-[var(--page-header-bar-h)] max-md:z-30 max-md:border-b max-md:border-border max-md:bg-background max-md:shadow-[0_-0.75rem_0_0_var(--page-header-bg,var(--background))]", className)}
         >
           {tabs}
         </div>

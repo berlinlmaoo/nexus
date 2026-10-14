@@ -112,6 +112,7 @@ import {
   Sparkles,
   Sheet as SheetIcon,
 } from "lucide-react";
+import { useEdgeFade } from "@/hooks/use-edge-fade";
 
 // Heavy tabs and dialogs load when first used, not with every project (perf pass, 12 Oct 2026). The task popup
 // and the composer are fetched in the background once the board is up (preloadProjectExtras), so opening a
@@ -744,7 +745,7 @@ function ProjectDetail() {
     <div className="min-h-dvh bg-card max-md:-mb-(--tabbar-room) max-md:pb-(--tabbar-room)">
       <PageHeader
         compact
-        className="bg-card md:bg-card max-md:bg-card max-md:before:bg-card"
+        className="bg-card md:bg-card max-md:bg-card max-md:before:bg-card [--page-header-bg:var(--card)]"
         icon={<span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted/60 text-[28px] leading-none"><ProjectMark icon={data?.icon} color={data?.color} className="max-h-9 max-w-9 rounded-lg object-cover" /></span>}
         title={data?.name || tr("Project")}
         subtitle={data?.description || (project.isLoading ? tr("Loading…") : projectFailed ? (projectOffline ? tr("No connection. Check your internet and try again.") : projectMissing ? tr("This project was deleted, or the link is wrong.") : tr("Couldn't open this project. You may not be a member.")) : undefined)}
@@ -1059,6 +1060,9 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   const statusOptions = usesStatusOptions(sections);
   const laneLabel = (g: TaskGroup) => (groupLabelIsBuiltin(groupBy, g.key, defs) ? t(g.label) : g.label);
   const laneW = LANE_W[cfg.cardSize];
+  // The edge with more columns fades (UI tour run 13, W-D4: "Done" ended hard at the screen edge).
+  const boardRef = useRef<HTMLDivElement>(null);
+  const boardFade = useEdgeFade(boardRef, [tasks.length, cfg.cardSize]);
   // Notion's coloured board (owner, 12 Oct 2026): each column takes its status option's colour (or the
   // group value's), a light tint behind white cards, the header as a pill with the count in its hue.
   const laneColor = (g: TaskGroup): string => {
@@ -1154,12 +1158,15 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
     return (
       <section
         key={id}
+        data-lane-key={g.key}
         aria-label={laneLabel(g)}
         style={{ backgroundColor: tone.lane, ...(over === id && dropOk ? { boxShadow: `inset 0 0 0 1.5px ${tone.dot}` } : {}) }}
         // Phone, one row of lanes: a lane is capped at the screen and scrolls inside itself (UI tour run 7,
         // 14 Oct 2026: scrolling the page down along a 90-card column left a short column on screen with
         // only blank page under it).
-        className={cn("group/lane flex shrink-0 flex-col rounded-lg p-1.5 transition-shadow", laneW, showHeader && "max-sm:max-h-[calc(100dvh-16rem)]", dragLaneId === g.key && "opacity-40")}
+        // Desktop too (UI tour run 13, W-D27): each column scrolls on its own under the project header, instead
+        // of the page scrolling down a long Done column past short ones into blank canvas.
+        className={cn("group/lane flex shrink-0 flex-col rounded-lg p-1.5 transition-shadow", laneW, showHeader && "max-h-[max(24rem,calc(100dvh-11rem))] max-sm:max-h-[calc(100dvh-16rem)]", dragLaneId === g.key && "opacity-40")}
         onDragOver={(e) => {
           if (!dropOk) return;
           e.preventDefault();
@@ -1218,7 +1225,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
             </div>
           </div>
         )}
-        <div data-lane-cards className={cn("relative flex min-h-16 flex-col gap-1.5", showHeader && "max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto max-sm:overscroll-y-contain")}>
+        <div data-lane-cards className={cn("relative flex min-h-16 flex-col gap-1.5", showHeader && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain")}>
           {slot?.lane === id && <div aria-hidden className="pointer-events-none absolute inset-x-1 z-10 h-0.5 rounded-full" style={{ top: slot.y, backgroundColor: tone.dot }} />}
           {/* "+ New task" sits at the TOP of the column (owner, 10 Oct 2026: "Add task di atas lane"). */}
           {!canEditHere ? null : draft === id ? (
@@ -1255,13 +1262,13 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   };
 
   const linkedLaneEls = linkedLanes.map((lane) => (
-    <section key={`linked-${lane.id}`} className={cn("flex shrink-0 flex-col rounded-lg border border-dashed border-border p-1.5 max-sm:max-h-[calc(100dvh-16rem)]", laneW)}>
+    <section key={`linked-${lane.id}`} className={cn("flex shrink-0 flex-col rounded-lg border border-dashed border-border p-1.5 max-h-[max(24rem,calc(100dvh-11rem))] max-sm:max-h-[calc(100dvh-16rem)]", laneW)}>
       <div className="mb-1 flex items-center gap-1.5 px-1.5 py-1">
         <span className="truncate text-sm font-semibold">{lane.name}</span>
         <span className="shrink-0 rounded bg-muted px-1.5 text-[11px] text-muted-foreground">{t("Linked")}</span>
         <span className="ml-auto text-xs tabular-nums text-muted-foreground">{lane.tasks.length}</span>
       </div>
-      <div className="flex flex-col gap-1.5 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto max-sm:overscroll-y-contain">
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overscroll-y-contain">
         <Incremental items={lane.tasks} keyOf={(task) => task.id} render={(task) => <TaskCard task={task} currentProjectId={project.id} keys={keys} cfg={cfg} defs={defs} ctx={ctx} onOpen={onOpen} onDrag={noDrag} onDragEnd={noop} lane={`linked-${lane.id}`} row={null} moving={false} />} />
       </div>
     </section>
@@ -1269,13 +1276,33 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
 
   if (!sub) {
     return (
-      <div data-touch-drag-root="" className="overflow-x-auto overscroll-x-contain px-4 pb-6 pt-3 md:px-8">
-        <div className="flex min-w-max items-start gap-2.5">
+      <>
+      {/* Phone: one chip per column with its count, which brings that column in; one column fills the screen
+          and the others had no sign at all (UI tour run 13, W-M11). */}
+      {lanes.length > 1 && (
+        <div role="group" aria-label={t("Columns")} className="flex gap-1.5 overflow-x-auto px-4 pt-3 [scrollbar-width:none] sm:hidden [&::-webkit-scrollbar]:hidden">
+          {lanes.map((g) => {
+            const tone = COLOR_PRESETS[laneColor(g)];
+            return (
+              <button key={g.key} type="button"
+                onClick={() => boardRef.current?.querySelector<HTMLElement>(`[data-lane-key="${CSS.escape(g.key)}"]`)?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" })}
+                className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium"
+                style={{ backgroundColor: tone.lane, color: tone.text }}>
+                <span className="max-w-[9rem] truncate">{laneLabel(g)}</span><span className="tabular-nums opacity-70">{g.tasks.length}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <div ref={boardRef} data-touch-drag-root="" className={cn("overflow-x-auto overscroll-x-contain px-4 pb-6 pt-3 md:px-8", boardFade)}>
+        {/* The trailing spacer keeps the last column clear of the edge at full scroll (W-D4). */}
+        <div className="flex min-w-max items-start gap-2.5 after:block after:w-2 after:shrink-0 after:content-[''] md:after:w-6">
           {linkedLaneEls}
           {lanes.map((g) => renderLane(g, null, g.tasks, true))}
           {isSection && canManageColumns && <AddListColumn projectId={project.id} statusOptions={statusOptions} />}
         </div>
       </div>
+      </>
     );
   }
 
@@ -1836,6 +1863,13 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
             className="font-medium text-foreground underline-offset-2 hover:underline">{t("Show them")}</button>
         </div>
       )}
+      {/* An empty month with every task dated elsewhere says so too, instead of a silent empty grid (W-D15). */}
+      {byDay.size === 0 && undated.length === 0 && tasks.length > 0 && (
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+          <CalendarX2 className="h-4 w-4 shrink-0" aria-hidden />
+          <span>{t("No task falls in this month. Use the arrows to go to another one.")}</span>
+        </div>
+      )}
 
       {isMobile ? (
         // Phone (UI tour run 7, 14 Oct 2026): the month grid like the desktop and the iPhone app, a dot per
@@ -2020,14 +2054,25 @@ const WD = ["S", "M", "T", "W", "T", "F", "S"];
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
 function daysBetween(a: Date, b: Date) { return Math.round((startOfDay(b).getTime() - startOfDay(a).getTime()) / DAY_MS); }
 
-function tlProgress(status?: string | null) {
-  switch ((status ?? "").toUpperCase()) {
-    case "DONE": return 100;
-    case "IN_REVIEW": return 75;
-    case "IN_PROGRESS": return 50;
-    case "CANCELLED": return 0;
-    default: return 0; // not started: an empty bar, not a red 8% sliver
-  }
+/**
+ * A task's progress when something measures it: its subtasks done, or 100 once it is done itself. null when
+ * nothing does: no bar then, rather than a 50% made up from the status beside "No date" (UI tour run 13, W-B22).
+ */
+function tlProgress(task: NexusTask): number | null {
+  const subs = task.subtasks ?? [];
+  if (subs.length) return Math.round((subs.filter((s) => isDone(s.status)).length * 100) / subs.length);
+  return isDone(task.status) ? 100 : null;
+}
+
+/** The Progress cell: a bar and its percent, or a quiet dash when the task's progress isn't measured. */
+function TlProgressCell({ pct }: { pct: number | null }) {
+  if (pct === null) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"><div className={cn("h-full rounded-full", pctTone(pct))} style={{ width: `${pct}%` }} /></div>
+      <span className="w-8 shrink-0 text-right text-xs font-bold tabular-nums">{pct}%</span>
+    </>
+  );
 }
 function pctTone(pct: number) {
   if (pct >= 100) return "bg-emerald-500";
@@ -2223,7 +2268,9 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
         el.scrollLeft = prev === null
           ? Math.max(0, xOf(today) - GANTT_DAY_W * (compact ? 1 : 3))
           : Math.max(0, el.scrollLeft + Math.round((prev - first) / DAY_MS) * GANTT_DAY_W);
-      }} className="relative overflow-x-auto rounded-lg border border-border bg-card">
+      }} className="relative max-h-[max(20rem,calc(100dvh-12rem))] overflow-auto overscroll-x-contain rounded-lg border border-border bg-card max-md:max-h-[max(16rem,calc(100dvh-var(--tabbar-room)-9rem))]">
+        {/* Its own vertical scroller too (UI tour run 13, W-B1): the Name / Duration / Progress header and the
+            date scale stay pinned while the rows scroll; the page scrolling them took the date axis away. */}
         <div style={{ width: leftW + timelineW }}>
           {/* HEADER */}
           <div className="sticky top-0 z-20 flex border-b border-border bg-card">
@@ -2264,7 +2311,8 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
               const gStart = wins.length ? wins.reduce((a, w) => (w.start < a ? w.start : a), wins[0].start) : null;
               const gEnd = wins.length ? wins.reduce((a, w) => (w.end > a ? w.end : a), wins[0].end) : null;
               const gDur = gStart && gEnd ? daysBetween(gStart, gEnd) + 1 : 0;
-              const gPct = g.tasks.length ? Math.round(g.tasks.reduce((s, t) => s + tlProgress(t.task.status), 0) / g.tasks.length) : 0;
+              const measured = g.tasks.map((t) => tlProgress(t.task)).filter((p): p is number => p !== null);
+              const gPct = measured.length ? Math.round(measured.reduce((s, p) => s + p, 0) / measured.length) : null;
               return (
                 <div key={g.list.id}>
                   {/* GROUP ROW */}
@@ -2276,8 +2324,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                       </button>
                       {!compact && <div className="w-[90px] px-2 text-xs text-muted-foreground">{gDur ? tn(gDur, "{n} day", "{n} days") : "—"}</div>}
                       {!compact && <div className="flex w-[150px] items-center gap-2 border-l border-border px-3">
-                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"><div className={cn("h-full rounded-full", pctTone(gPct))} style={{ width: `${gPct}%` }} /></div>
-                        <span className="w-8 shrink-0 text-right text-xs font-bold tabular-nums">{gPct}%</span>
+                        <TlProgressCell pct={gPct} />
                       </div>}
                     </div>
                     <div className="relative" style={{ width: timelineW }}>
@@ -2286,7 +2333,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                   </div>}
                   {/* TASK ROWS */}
                   {!isCollapsed && <Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.task.id} render={({ task, win: saved }) => {
-                    const pct = tlProgress(task.status);
+                    const pct = tlProgress(task);
                     const win = saved ? liveWin(task.id, saved) : null;
                     const dur = win ? daysBetween(win.start, win.end) + 1 : 0;
                     const left = win ? xOf(win.start) : 0;
@@ -2304,12 +2351,12 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                         <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-card" style={{ width: leftW }}>
                           <button {...cp} className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left">
                             {isDone ? <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />}
-                            <span className={cn("truncate text-sm font-medium", isDone && "text-muted-foreground line-through")}>{task.title}</span>
+                            {/* Phone: two lines, so names that start alike ("REIMBURSE Q…") stay told apart (W-M17). */}
+                            <span className={cn("text-sm font-medium", compact ? "line-clamp-2 break-words" : "truncate", isDone && "text-muted-foreground line-through")}>{task.title}</span>
                           </button>
                           {!compact && <div className="w-[90px] px-2 text-xs text-muted-foreground">{win ? tn(dur, "{n} day", "{n} days") : t("No date")}</div>}
                           {!compact && <div className="flex w-[150px] items-center gap-2 border-l border-border px-3">
-                            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"><div className={cn("h-full rounded-full", pctTone(pct))} style={{ width: `${pct}%` }} /></div>
-                            <span className="w-8 shrink-0 text-right text-xs font-bold tabular-nums">{pct}%</span>
+                            <TlProgressCell pct={pct} />
                           </div>}
                         </div>
                         <div

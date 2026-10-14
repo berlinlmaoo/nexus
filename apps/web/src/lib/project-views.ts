@@ -595,11 +595,11 @@ export function groupTasks<T extends NexusTask>(tasks: T[], key: string, defs: P
 }
 
 /** The number in a group header. */
-export function groupCalcValue(tasks: NexusTask[], calc: GroupCalc, defs: PropDef[]): { value: string; label: string } {
+export function groupCalcValue(tasks: NexusTask[], calc: GroupCalc, defs: PropDef[]): { value: string; label: string; hint?: { done: number; total: number } } {
   switch (calc.kind) {
     case "done": {
       const done = tasks.filter((t) => isDoneStatus(t.status)).length;
-      return { value: `${done}/${tasks.length}`, label: "Done" };
+      return { value: `${done}/${tasks.length}`, label: "Done", hint: { done, total: tasks.length } };
     }
     case "percent_done": {
       const done = tasks.filter((t) => isDoneStatus(t.status)).length;
@@ -652,8 +652,9 @@ export function defaultConfig(layout: ViewLayout): ViewConfig {
     subGroupBy: null,
     hiddenGroups: [],
     collapsedGroups: [],
-    // The List used to hide sections a filter emptied; it still does by default.
-    hideEmptyGroups: layout === "list",
+    // Every layout shows an empty group by default, as the Board does ("To Do 0"): the List hid it, so the two
+    // views of one project disagreed (UI tour run 13, W-B20). "Hide empty groups" in Group still hides them.
+    hideEmptyGroups: false,
     groupCalc: { kind: layout === "list" ? "done" : "count" },
     visibleProps: null,
     cardSize: "medium",

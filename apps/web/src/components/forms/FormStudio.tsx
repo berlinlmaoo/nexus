@@ -335,7 +335,8 @@ function QuestionCard({ field, index, total, selected, others, customFields, tas
         <GripVertical className="h-4 w-4" />
       </span>
 
-      <div className={cn("absolute right-2 top-2 z-10 flex items-center gap-0.5 rounded-lg bg-card transition-opacity", selected ? "opacity-100" : "opacity-0 group-hover/q:opacity-100 pointer-coarse:opacity-100")}>
+      {/* Also shown while the question has keyboard focus, not on hover only (W-D16). */}
+      <div className={cn("absolute right-2 top-2 z-10 flex items-center gap-0.5 rounded-lg bg-card transition-opacity", selected ? "opacity-100" : "opacity-0 group-hover/q:opacity-100 group-focus-within/q:opacity-100 pointer-coarse:opacity-100")}>
         <span className="mr-1 hidden items-center gap-1 text-[11px] text-muted-foreground @md:inline-flex"><meta.icon className="h-3 w-3" /> {t(meta.label)}</span>
         <button type="button" onClick={(e) => { e.stopPropagation(); onOpenPanel(); }} aria-label={t("Question settings")} title={t("Question settings")} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"><Settings2 className="h-3.5 w-3.5" /></button>
         <button type="button" onClick={(e) => { e.stopPropagation(); onDuplicate(); }} aria-label={t("Duplicate question")} title={t("Duplicate question")} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><Copy className="h-3.5 w-3.5" /></button>
@@ -1236,7 +1237,8 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
   const saveIndicator = (
     <span role="status" aria-live="polite" className={cn("inline-flex items-center gap-1.5 whitespace-nowrap text-xs", save === "error" ? "text-destructive" : "text-muted-foreground")}>
       {save === "saving" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : save === "error" ? <CircleAlert className="h-3.5 w-3.5" /> : save === "pending" ? <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> : <Check className="h-3.5 w-3.5" />}
-      <span className="max-sm:sr-only">{saveLabel}</span>
+      {/* The word on a phone too (UI tour run 13, W-M18: a bare check glyph). */}
+      <span className="whitespace-nowrap">{saveLabel}</span>
       {save === "error" && <button type="button" onClick={() => { dirty.current = true; void flush(); }} className="font-semibold underline-offset-2 hover:underline">{t("Retry")}</button>}
     </span>
   );
@@ -1347,7 +1349,8 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
           <div className="@container min-h-0 flex-1 overflow-y-auto" onClick={() => { setSelected(null); setSlashFor(null); }}>
             <div className="group/head relative">
               <FormHead branding={draft.branding}>
-                <div className={cn("flex flex-wrap gap-1 transition-opacity", draft.branding?.cover || draft.branding?.icon ? "mt-2" : "", "opacity-100 @lg:opacity-0 @lg:group-hover/head:opacity-100 @lg:focus-within:opacity-100")} onClick={(e) => e.stopPropagation()}>
+                {/* Shown on every size, as on a phone (UI tour run 13, W-D16: on a desktop they appeared on hover only). */}
+                <div className={cn("flex flex-wrap gap-1", draft.branding?.cover || draft.branding?.icon ? "mt-2" : "")} onClick={(e) => e.stopPropagation()}>
                   {!draft.branding?.icon && (
                     <IconPicker value={draft.branding?.icon} onChange={(v) => setBranding({ icon: v })}>
                       <button type="button" className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><SmilePlus className="h-3.5 w-3.5" /> {t("Add icon")}</button>

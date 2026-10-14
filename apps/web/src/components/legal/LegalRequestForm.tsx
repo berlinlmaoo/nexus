@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { DateField } from "@/components/DateField";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Clock, FileText, Link2Off, Loader2, LogIn, Paperclip, Scale, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, FileText, Link2Off, Loader2, LogIn, Paperclip, Scale, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,6 +41,12 @@ export function LegalRequestPage({ linkId, fallback }: { linkId: string; fallbac
   return (
     <div lang={lang} className="min-h-screen bg-background text-foreground">
       <div className="mx-auto w-full max-w-2xl px-5 pb-16 pt-10 sm:px-10 sm:pt-14">
+        {/* A way back for someone signed in: the page has no app chrome (UI tour run 13, W-D22). */}
+        {info.data?.signedIn && (
+          <Link to="/submissions" className="mb-6 inline-flex items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+            <ArrowLeft className="h-4 w-4" aria-hidden /> {t("My Submissions")}
+          </Link>
+        )}
         <div className="grid h-12 w-12 place-items-center rounded-full bg-muted text-muted-foreground" aria-hidden><Scale className="h-6 w-6" /></div>
         <h1 className="mt-4 font-display text-[28px] font-bold leading-tight tracking-tight sm:text-[34px]">{t("Legal request")}</h1>
         <p className="mt-2 text-[15px] text-muted-foreground">
@@ -154,8 +160,9 @@ function RequestForm({ linkId, info }: { linkId: string; info: RequestFormInfo }
   return (
     <form className="mt-8 space-y-6" onSubmit={(e) => { e.preventDefault(); if (canSend) send.mutate(); }}>
       <div className="grid gap-4 sm:grid-cols-2">
+        {/* Required fields carry "*" and the send button says what is missing (UI tour run 13, W-B23). */}
         <div className="space-y-1.5">
-          <Label>{t("Company")}</Label>
+          <Label>{t("Company")}{!locked && <span aria-hidden className="text-destructive"> *</span>}</Label>
           {locked ? (
             <div className="flex h-9 items-center rounded-md border border-border bg-muted/40 px-3 text-sm">{locked.name}</div>
           ) : (
@@ -166,7 +173,7 @@ function RequestForm({ linkId, info }: { linkId: string; info: RequestFormInfo }
           )}
         </div>
         <div className="space-y-1.5">
-          <Label>{t("Document type")}</Label>
+          <Label>{t("Document type")}<span aria-hidden className="text-destructive"> *</span></Label>
           <Select value={templateId ?? undefined} onValueChange={(v) => { setTemplateId(v); setValues({}); setErrors({}); }} disabled={!companyId}>
             <SelectTrigger aria-invalid={!!errors.templateId}><SelectValue placeholder={companyId ? t("Pick a document type") : t("Pick the company first")} /></SelectTrigger>
             <SelectContent>
@@ -252,9 +259,12 @@ function RequestForm({ linkId, info }: { linkId: string; info: RequestFormInfo }
       </section>
 
       {formError && <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">{formError}</p>}
-      <Button type="submit" disabled={!canSend} className="w-full gap-1.5 sm:w-auto">
-        {send.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Send request")}
-      </Button>
+      <div className="space-y-2">
+        <Button type="submit" disabled={!canSend} aria-describedby={!canSend && !send.isPending ? "lr-missing" : undefined} className="w-full gap-1.5 sm:w-auto">
+          {send.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Send request")}
+        </Button>
+        {!canSend && !send.isPending && <p id="lr-missing" className="text-xs text-muted-foreground">{t("Fill in the required fields (*) to send")}</p>}
+      </div>
     </form>
   );
 }

@@ -271,7 +271,8 @@ function FeedPage() {
           ))}
         </AnimatePresence>
 
-        <div ref={sentinel} className="h-8" />
+        {/* A hairline, not a 32px band: it left an empty strip under the last post (UI tour run 13, W-B9). */}
+        <div ref={sentinel} aria-hidden className="h-px" />
         {feed.isFetchingNextPage && <div className="flex justify-center py-4 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
       </div>
       </div>

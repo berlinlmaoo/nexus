@@ -62,7 +62,9 @@ function Settings() {
           tabs={sections.map((s) => ({ key: s.id, label: t(s.label), icon: s.icon }))} />
       } />
       <div className="p-4 md:p-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <aside className="hidden lg:col-span-1 lg:block lg:space-y-1">
+        {/* Pinned under the page header while a long section scrolls (UI tour run 13, W-D8: it slid under the
+            header and "Security" was cut). */}
+        <aside className="hidden lg:sticky lg:top-[6.5rem] lg:col-span-1 lg:block lg:space-y-1 lg:self-start">
           {sections.map((s) => (
             <button key={s.id} onClick={() => setActive(s.id)} aria-current={active === s.id ? "page" : undefined}
               className={`shrink-0 whitespace-nowrap min-h-11 lg:min-h-0 lg:w-full text-left flex items-center gap-2 px-3 py-2 rounded-md text-sm transition ${active === s.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-accent text-muted-foreground"}`}>
