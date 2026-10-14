@@ -227,10 +227,10 @@ function EngagementCard({ p }: { p: SocialPlatformOverview }) {
           : t("Target to date · month target {target}", { target: num(p.engagementTargetMonth, lang) })}
       </p>
       <Sparkline values={p.trend} label={t("{name} engagement per day", { name: p.name })} />
-      <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-border/70 pt-3 text-xs">
-        <div><dt className="text-muted-foreground">{viewsLabel(lang)}</dt><dd className="mt-0.5 font-semibold tabular-nums text-foreground">{num(p.views, lang)}</dd></div>
-        <div><dt className="text-muted-foreground">{t("Likes")}</dt><dd className="mt-0.5 font-semibold tabular-nums text-foreground">{num(p.likes, lang)}</dd></div>
-        <div><dt className="text-muted-foreground">{t("Comments + Shares")}</dt><dd className="mt-0.5 font-semibold tabular-nums text-foreground">{num(p.comments + p.shares, lang)}</dd></div>
+      <dl className="mt-3 grid grid-cols-4 gap-2 border-t border-border/70 pt-3 text-xs">
+        {([[viewsLabel(lang), p.views], [t("Likes"), p.likes], [t("Comments"), p.comments], [t("Shares"), p.shares]] as const).map(([label, v]) => (
+          <div key={label} className="min-w-0"><dt className="truncate text-muted-foreground">{label}</dt><dd className="mt-0.5 truncate font-semibold tabular-nums text-foreground">{num(v, lang)}</dd></div>
+        ))}
       </dl>
     </article>
   );
@@ -247,7 +247,7 @@ function Sparkline({ values, label }: { values: number[]; label: string }) {
   const H = 40;
   const max = Math.max(1, ...values);
   const pts = useMemo(() => values.map((v, i) => [values.length === 1 ? W / 2 : (i * W) / (values.length - 1), H - 3 - (v / max) * (H - 8)] as const), [values, max]);
-  if (values.length < 2) return null;
+  if (values.length < 2 || values.every((v) => v === 0)) return null;
   const line = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
   const area = `${line} L${W},${H} L0,${H} Z`;
   const last = pts[pts.length - 1];

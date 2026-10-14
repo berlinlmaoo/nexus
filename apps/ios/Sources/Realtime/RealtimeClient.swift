@@ -243,6 +243,12 @@ final class RealtimeClient {
             var info: [String: String] = [:]
             if let projectId = payload?["projectId"]?.string { info[RealtimeKey.projectId] = projectId }
             center.post(name: .nexusOutletSalesChanged, object: nil, userInfo: info)
+        case "social-media-changed":
+            // A Social Media Report changed (owner, 14 Oct 2026): a day recorded, a target or the platforms.
+            // `{ projectId, date | null, month | null, actorId }`; the open report refetches its month.
+            var info: [String: String] = [:]
+            if let projectId = payload?["projectId"]?.string { info[RealtimeKey.projectId] = projectId }
+            center.post(name: .nexusSocialMediaChanged, object: nil, userInfo: info)
         case "automations-changed":
             // A rule edited, toggled, deleted or run anywhere (12 Oct 2026): the open Automations tab and
             // run log refetch.

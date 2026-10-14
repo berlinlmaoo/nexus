@@ -72,7 +72,7 @@ struct ProjectSettingsView: View {
                     // A Pipeline Dashboard shows its pipeline, not task tabs: nothing to choose (owner,
                     // 9 Oct 2026, as on the web).
                     // A Pipeline or Outlet Sales Dashboard has fixed tabs (as on the web).
-                    if detail.type != "PIPELINE" && detail.type != "OUTLET_SALES" { tabsCard }
+                    if detail.type != "PIPELINE" && detail.type != "OUTLET_SALES" && detail.type != "SOCIAL_MEDIA_REPORT" { tabsCard }
                     fieldsCard
                     membersCard
                     if canManage || isBoD { dangerCard }

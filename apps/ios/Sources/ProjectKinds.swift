@@ -19,6 +19,9 @@ enum ProjectKind: String, CaseIterable, Identifiable {
     // order: Task Project · Outlet Sales Dashboard · Content Planner · Pipeline Dashboard. FINANCE stays a
     // type the server knows (and refuses to create, 400 TYPE_COMING_SOON); it is just no longer offered.
     case task = "TASK", outlet = "OUTLET_SALES", content = "CONTENT", pipeline = "PIPELINE"
+    // Social Media Report (owner, 14 Oct 2026): per day and platform views, likes, comments, shares and
+    // posts against monthly / daily targets (SocialMediaView.swift).
+    case social = "SOCIAL_MEDIA_REPORT"
 
     var id: String { rawValue }
 
@@ -33,6 +36,8 @@ enum ProjectKind: String, CaseIterable, Identifiable {
         case .outlet: return "Outlet Sales Dashboard"
         case .content: return "Content Planner"
         case .pipeline: return "Pipeline Dashboard"
+        // Named in both languages (owner, 14 Oct 2026: "Laporan Media Sosial").
+        case .social: return T("Social Media Report")
         }
     }
 
@@ -42,6 +47,7 @@ enum ProjectKind: String, CaseIterable, Identifiable {
         case .outlet: return T("One outlet: sales and pax against the month's target, a calendar of events, and a report form for every night.")
         case .content: return T("Plan and schedule content across your channels.")
         case .pipeline: return T("Follow every deal from first contact to paid.")
+        case .social: return T("Daily views, likes, comments, shares and posts per platform, against monthly and daily targets.")
         }
     }
 
@@ -51,6 +57,7 @@ enum ProjectKind: String, CaseIterable, Identifiable {
         case .outlet: return "storefront"
         case .content: return "calendar.badge.clock"
         case .pipeline: return "line.3.horizontal.decrease.circle"
+        case .social: return "heart.text.square"
         }
     }
 }

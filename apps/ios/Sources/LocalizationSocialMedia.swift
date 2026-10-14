@@ -1,0 +1,73 @@
+import Foundation
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Indonesian for the Social Media Report (owner, 14 Oct 2026; Views/SocialMediaView.swift). Wording follows
+// the web's apps/web/src/lib/i18n/id-social.ts; the iOS keys use %@ where the web writes {month} / {n}.
+// "Views" is not here: the shared tables already use it for saved views, so SocialMetric.views prints
+// "Tayangan" itself. Keys must not appear in any other Localization*.swift (scripts/check-localization.sh).
+// ─────────────────────────────────────────────────────────────────────────────
+
+extension AppLanguage {
+    static let indonesianSocialMedia: [String: String] = [
+        "Social Media Report": "Laporan Media Sosial",
+        "Daily views, likes, comments, shares and posts per platform, against monthly and daily targets.": "Tayangan, likes, komentar, share, dan postingan harian per platform, dibanding target bulanan dan harian.",
+        "This report is for its project members": "Laporan ini khusus anggota project",
+        "Loading the report": "Memuat laporan",
+        "Platforms & targets": "Platform & target",
+        "Record today": "Isi hari ini",
+        "What counts as engagement": "Apa yang dihitung sebagai engagement",
+        "Engagement = Likes + Comments + Shares": "Engagement = Likes + Komentar + Share",
+        "Views are counted on their own and are not part of engagement.": "Tayangan dihitung terpisah dan tidak termasuk engagement.",
+        "%@ hasn't started yet": "%@ belum dimulai",
+        "You can set its targets now. The overview fills in from its first day.": "Kamu bisa atur targetnya sekarang. Ringkasan terisi mulai hari pertamanya.",
+        "The overview fills in from its first day.": "Ringkasan terisi mulai hari pertamanya.",
+        "Set targets": "Atur target",
+        "Nothing recorded for %@ yet": "Belum ada laporan untuk %@",
+        "Record each day's views, likes, comments, shares and posts per platform. The totals and targets show up here.": "Isi tayangan, likes, komentar, share, dan postingan tiap hari per platform. Total dan targetnya muncul di sini.",
+        "The team records each day's figures per platform. They show up here once someone has.": "Tim mengisi angka harian per platform. Angkanya muncul di sini setelah ada yang mengisi.",
+        "Month to date": "Bulan ini sampai sekarang",
+        "Set this month's targets": "Atur target bulan ini",
+        "Engagement": "Engagement",
+        "No engagement target": "Belum ada target engagement",
+        "Target to date · month target %@": "Target sampai hari ini · target sebulan %@",
+        "%@ engagement per day": "Engagement %@ per hari",
+        "Likes": "Likes",
+        "Contents posted": "Konten yang diposting",
+        "%@ / %@ posts": "%@ / %@ postingan",
+        "%@ posts": "%@ postingan",
+        "1 post": "1 postingan",
+        "Target to date = each day's target up to today. A day without its own target takes the month's target split evenly.": "Target sampai hari ini = jumlah target tiap hari sampai hari ini. Hari tanpa target sendiri memakai target bulanan dibagi rata.",
+        "Each day shows its engagement (likes + comments + shares) across platforms, and the posts published. Tap a day to record it.": "Tiap hari menampilkan engagement (likes + komentar + share) semua platform dan jumlah postingan. Ketuk tanggal untuk mengisinya.",
+        "%@ engagement": "%@ engagement",
+        "Has notes": "Ada catatan",
+        "The day wasn't saved. Try again.": "Laporan hari ini tidak tersimpan. Coba lagi.",
+        "Day targets saved.": "Target harian tersimpan.",
+        "This day stays as it was.": "Laporan hari ini tetap seperti sebelumnya.",
+        "This day hasn't come yet. Record it once it's over.": "Hari ini belum tiba. Isi setelah harinya lewat.",
+        "You can view this report. Recording needs Can edit access.": "Kamu bisa melihat laporan ini. Untuk mengisi, butuh akses Bisa edit.",
+        "Fill what you have. An empty box stays empty, 0 is a real zero.": "Isi yang ada saja. Kotak kosong tetap kosong, 0 berarti nol.",
+        "What worked": "Yang berhasil",
+        "What didn't work": "Yang tidak berhasil",
+        "e.g. the 7 pm reel, a trending sound": "mis. reel jam 7 malam, sound yang lagi tren",
+        "e.g. carousel posted too late": "mis. carousel diposting terlalu malam",
+        "Engagement target": "Target engagement",
+        "Posts target": "Target postingan",
+        "Save targets": "Simpan target",
+        "This day's targets": "Target hari ini",
+        "Fill either, both or none. An empty box uses the month's target split over its days.": "Isi salah satu, keduanya, atau kosongkan. Kotak kosong memakai target bulanan dibagi jumlah harinya.",
+        "Set this day's targets": "Atur target hari ini",
+        "It leaves the day form and the overview. Its past figures and targets stay, and you can restore it later.": "Platform ini hilang dari form harian dan ringkasan. Angka dan target sebelumnya tetap ada, dan bisa dipulihkan nanti.",
+        "The platforms and targets stay as they were.": "Platform dan target tetap seperti sebelumnya.",
+        "Targets for %@": "Target %@",
+        "Each day's target is the month's split evenly, unless a day sets its own in the calendar. Leave a box empty for no target.": "Target tiap hari = target bulanan dibagi rata, kecuali harinya punya target sendiri di kalender. Kosongkan kotak kalau tidak ada target.",
+        "Platform name": "Nama platform",
+        "Archive %@": "Arsipkan %@",
+        "Add platform, e.g. YouTube": "Tambah platform, mis. YouTube",
+        "Add platform": "Tambah platform",
+        "Platforms": "Platform",
+        "Renaming keeps every figure. Archiving hides a platform from the form; its past days keep their numbers.": "Ganti nama tidak menghapus angka apa pun. Arsipkan menyembunyikan platform dari form; angka hari-hari sebelumnya tetap ada.",
+        "Platforms and targets saved.": "Platform dan target tersimpan.",
+        "Shares": "Share",
+        "Posts published": "Postingan terbit",
+    ]
+}

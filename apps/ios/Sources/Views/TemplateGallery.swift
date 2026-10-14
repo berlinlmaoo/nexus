@@ -43,9 +43,9 @@ struct TemplateGallery: View {
         }
     }
 
-    /// Outlet Sales for everyone; Pipeline for the company's own people (the server refuses it elsewhere).
+    /// Outlet Sales and Social Media Report for everyone; Pipeline for the company's own people (the server refuses it elsewhere).
     private var dashboards: [ProjectKind] {
-        [.outlet, .pipeline].filter { $0 != .pipeline || viewer.isCompanyMember }
+        [.outlet, .social, .pipeline].filter { $0 != .pipeline || viewer.isCompanyMember }
     }
 
     private var needle: String { query.trimmingCharacters(in: .whitespaces).lowercased() }

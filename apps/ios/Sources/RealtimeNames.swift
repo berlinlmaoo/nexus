@@ -46,6 +46,11 @@ extension Notification.Name {
     /// optional: `RealtimeKey.projectId`. A ping: the open outlet refetches the month it shows.
     static let nexusOutletSalesChanged = Notification.Name("nexus.outletSales.changed")
 
+    /// A day, target or the platforms of a Social Media Report changed (server since 14 Oct 2026:
+    /// `social-media-changed` to the project's room). userInfo, optional: `RealtimeKey.projectId`. A ping:
+    /// the open report refetches the month it shows.
+    static let nexusSocialMediaChanged = Notification.Name("nexus.socialMedia.changed")
+
     /// A project's automations changed: a rule created, edited, toggled, deleted or run, by anyone or by
     /// the clock (DEV server since 12 Oct 2026: `automations-changed` { projectId, automationId, actorId }
     /// to the project's room). userInfo, optional: `RealtimeKey.projectId`, `RealtimeKey.automationId`.
