@@ -424,7 +424,9 @@ export function SidebarProjectTree() {
   const showNoFolder = unfiled.length > 0 || (drag && canDropInto(drag, null, folders));
   return (
     <SidebarGroup>
-      <div className="flex items-center justify-between pr-1">
+      {/* Drawn over the nav's bottom fade (AppSidebar), so the header reads whole when it sits in it; faded it
+          looked disabled (UI tour run 15, R15-WD-10). */}
+      <div className="relative z-10 flex items-center justify-between pr-1">
         <SidebarGroupLabel className="m-0">{t("Projects")}</SidebarGroupLabel>
         <NewMenu canManage={canManage} onNewProject={() => actions.newProjectIn(null)} onNewFolder={() => actions.newFolder(null)} />
       </div>

@@ -178,7 +178,10 @@ export function AppSidebar() {
           half ("Folders", UI tour run 13, W-D7). The last 0.75rem is fully clear and the fade runs over the
           row above it: a 2rem fade still left the top half of the next row (or project icon, in the collapsed
           rail) readable right on the footer line (UI tour run 14, R14-WD-4 / R14-WD-15). */}
-      <SidebarContent ref={navRef} className={cn(navMore && "[mask-image:linear-gradient(to_bottom,black_calc(100%-3.5rem),transparent_calc(100%-0.75rem))]", "[@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group]]:py-1 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group-label]]:h-6 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu]]:gap-0.5 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu-button]]:h-7")}>
+      {/* The fade is a band of the sidebar's colour pinned to the nav's bottom (not a mask over everything), so a
+          section header can be drawn over it whole: "Projects" in the fade read as disabled (UI tour run 15,
+          R15-WD-10). */}
+      <SidebarContent ref={navRef} className={cn("[@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group]]:py-1 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group-label]]:h-6 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu]]:gap-0.5 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu-button]]:h-7")}>
         {visibleGroups.map((g) => (
           <SidebarGroup key={g.label}>
             <SidebarGroupLabel>{t(g.label)}</SidebarGroupLabel>
@@ -203,6 +206,7 @@ export function AppSidebar() {
         ))}
 
         <SidebarProjectTree />
+        {navMore && <div aria-hidden className="pointer-events-none sticky bottom-0 z-[5] -mt-14 h-14 shrink-0 bg-[linear-gradient(to_top,var(--sidebar)_0.75rem,transparent)]" />}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border">

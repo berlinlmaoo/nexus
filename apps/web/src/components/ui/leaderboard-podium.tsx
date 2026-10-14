@@ -91,9 +91,10 @@ function LeaderboardTie({ rankings, caption, className }: { rankings: Leaderboar
       </p>
       <ul className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-3">
         {rankings.map((item) => (
-          <li key={item.userId} className="flex w-20 min-w-0 flex-col items-center gap-1">
+          <li key={item.userId} className="flex w-[5.5rem] min-w-0 flex-col items-center gap-1">
             <PodiumAvatar item={item} size={44} ring={cn("ring-2", s.ring)} />
-            <span className={cn("max-w-full truncate text-xs font-semibold", s.barText)}>{item.userName}</span>
+            {/* Two lines, centred, broken between words (UI tour run 15, R15-WB-6: "Zaki Mahm…" with room to spare). */}
+            <span className={cn("line-clamp-2 max-w-full text-center text-xs font-semibold leading-tight [overflow-wrap:anywhere]", s.barText)}>{item.userName}</span>
           </li>
         ))}
       </ul>

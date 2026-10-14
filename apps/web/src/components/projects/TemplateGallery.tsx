@@ -216,7 +216,9 @@ function Card({ onClick, wash, icon, iconClass, title, body, preview }: { onClic
           <span className="block text-xs leading-snug text-muted-foreground">{body}</span>
         </span>
       </div>
-      <div className={cn("w-full flex-1 px-3.5 pb-3", wash)} aria-hidden>
+      {/* The preview sits at the card's bottom, so the previews of a row line up whatever the length of the
+          descriptions above them (UI tour run 15, R15-WD-8). */}
+      <div className={cn("flex w-full flex-1 flex-col justify-end px-3.5 pb-3", wash)} aria-hidden>
         <div className="h-[6.5rem] w-full overflow-hidden rounded-xl bg-background p-2 ring-1 ring-foreground/10 transition group-hover:ring-primary/30">
           {preview}
         </div>

@@ -119,6 +119,11 @@ function groupSessions(rows: NexusSession[], t: T): SessionGroup[] {
   return [...current, ...rest];
 }
 
+/** "NEXUS app for iOS 0.1.7 (14)": the version and its build never part across lines. */
+function keepVersion(name: string): string {
+  return name.replace(/(\d[\d.]*) \((\d+)\)/g, "$1\u00a0($2)");
+}
+
 /**
  * Settings → Security → Active sessions: every device signed in to this account (server:
  * src/lib/user-sessions.ts), this one first. Signing one out ends it on that device's next request.
@@ -160,7 +165,7 @@ export function ActiveSessions() {
         <div className="min-w-0 flex-1">
           {!nested && (
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-              <span className="text-sm font-medium [overflow-wrap:anywhere]" title={s.userAgent ?? undefined}>{name}</span>
+              <span className="text-sm font-medium [overflow-wrap:anywhere]" title={s.userAgent ?? undefined}>{keepVersion(name)}</span>
               {s.current && <span className="shrink-0 rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-semibold text-success">{t("This device")}</span>}
             </div>
           )}
@@ -222,10 +227,10 @@ export function ActiveSessions() {
                     <DeviceIcon kind={g.device.kind} />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span className="text-sm font-medium [overflow-wrap:anywhere]">{g.name}</span>
-                      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground tabular-nums">{t("{n} sessions", { n: formatCount(g.sessions.length) })}</span>
-                    </div>
+                    {/* The count always on its own line under the name (UI tour run 15, R15-WM-9: inline after a short
+                        name, on its own line after a long one), and a version stays whole: "0.1.7 (14)". */}
+                    <div className="text-sm font-medium [overflow-wrap:anywhere]">{keepVersion(g.name)}</div>
+                    <span className="mt-0.5 inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground tabular-nums">{t("{n} sessions", { n: formatCount(g.sessions.length) })}</span>
                     <Meta parts={[activeLabel(first.lastActiveAt, locale, t) || null]} />
                     <button
                       type="button"

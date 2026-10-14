@@ -132,7 +132,9 @@ export function AvatarStack({
       })}
       {extra > 0 && (
         <span
-          className="inline-flex items-center justify-center rounded-full bg-muted text-muted-foreground font-medium ring-2 ring-background"
+          // Positioned like the faces, so it is painted over the last one and its own ring separates them; as a
+          // plain box the face before it covered the "+" (UI tour run 15, R15-WM-10).
+          className="relative inline-flex shrink-0 items-center justify-center rounded-full bg-muted font-medium tabular-nums text-muted-foreground ring-2 ring-background"
           style={{ width: size, height: size, fontSize: size * 0.4 }}
         >
           +{extra}
