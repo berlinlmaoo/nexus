@@ -330,7 +330,7 @@ async function dashboardValues(browser, state) {
       // of today repeated outlet-calendar (run 14 tooling note / P-T1). The newest night waiting for its
       // report, else the newest reported one, else a day with its own target, else any event day.
       day: (d) => {
-        const today = String(d.today || "").slice(0, 10);
+        const today = String(d.today || new Date(Date.now() + 7 * 3600e3).toISOString()).slice(0, 10); // WIB day without a server `today`
         const day = (x) => String(x || "").slice(0, 10);
         const events = d.events || [];
         const of = (status) => events.filter((e) => !status || e.status === status).map((e) => day(e.date)).filter((x) => x && x !== today);

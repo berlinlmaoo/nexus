@@ -1258,7 +1258,15 @@ enum DashboardLookup {
     /// waiting for its report, else the newest reported one, else a day with its own target, else any
     /// event day; never today.
     private static func outletDay(_ json: [String: Any]) -> String? {
-        let today = String((json["today"] as? String ?? "").prefix(10))
+        var today = String((json["today"] as? String ?? "").prefix(10))
+        if today.isEmpty {
+            // An older server without `today`: the WIB calendar day, as the app's.
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "en_US_POSIX")
+            f.timeZone = TimeZone(identifier: "Asia/Jakarta")
+            f.dateFormat = "yyyy-MM-dd"
+            today = f.string(from: Date())
+        }
         let events = (json["events"] as? [[String: Any]]) ?? []
         func dates(_ status: String?) -> [String] {
             events.filter { status == nil || ($0["status"] as? String) == status }
