@@ -32,7 +32,11 @@ struct NXUnderlineTabs<ID: Hashable>: View {
                     }
                 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
+                .scrollTargetLayout()
             }
+            // A swipe comes to rest with a whole tab at the leading edge, never a fragment like "ers"
+            // (UI tour run 14, N-07).
+            .scrollTargetBehavior(.viewAligned)
             // The active tab is scrolled into view and the row fades where more lies
             // (UI tour run 11: the Settings tabs' fifth icon and Legal's "Companie" were cut hard).
             .modifier(NXTabRowScroller(activeId: Self.key(selection), itemIds: items.map { Self.key($0.id) },
@@ -168,6 +172,10 @@ struct NXTabRowScroller: ViewModifier {
     /// row overflows and the leading one never).
     @State private var moreBefore = false
     @State private var moreAfter = false
+    /// The scroll geometry has reported at least once. Its action fires on CHANGES only, so until then the
+    /// edges come from the widths: at rest the row starts at its leading edge (UI tour run 14, N-09 / N-07:
+    /// the row opened with no fade at all, "Tin" and "]" cut hard, because nothing had changed yet).
+    @State private var observed = false
 
     func body(content: Content) -> some View {
         tracked(content)
@@ -186,7 +194,9 @@ struct NXTabRowScroller: ViewModifier {
                 update()
             }
             .onChange(of: contentWidth) { _, _ in update(); reveal(animated: false) }
-            .onAppear { reveal(animated: false) }
+            // After the first layout, so the scroll to the active tab is a CHANGE the geometry reports (and
+            // the faded edges follow it) rather than part of the first value, which reports nothing.
+            .onAppear { DispatchQueue.main.async { reveal(animated: false) } }
             .onChange(of: activeId) { _, _ in reveal(animated: true) }
             .onChange(of: itemIds) { _, _ in reveal(animated: false) }
     }
@@ -197,6 +207,7 @@ struct NXTabRowScroller: ViewModifier {
                 [g.contentOffset.x > -g.contentInsets.leading + 1,
                  g.contentOffset.x < g.contentSize.width + g.contentInsets.trailing - g.containerSize.width - 1]
             } action: { _, edges in
+                observed = true
                 moreBefore = edges[0]
                 moreAfter = edges[1]
             }
@@ -209,13 +220,17 @@ struct NXTabRowScroller: ViewModifier {
 
     private func update() {
         if let overflowing, overflowing.wrappedValue != overflows { overflowing.wrappedValue = overflows }
-        if #unavailable(iOS 18.0) { moreAfter = overflows }
+        if #unavailable(iOS 18.0) { moreAfter = overflows } else if !observed { moreAfter = overflows }
     }
 
-    /// Centre the active tab: it is then whole, with its neighbours (faded at the edges) on either side.
+    /// Brings the active tab into view with the tab before it lined up whole against the leading edge,
+    /// so the row never opens on a cut fragment there ("ers" of Members, UI tour run 14, N-07); only the
+    /// trailing edge can hold a partial tab, under its fade. Centring the active tab left a fragment on
+    /// both sides. Near the row's end the scroll clamps, and the last tab sits whole at the trailing edge.
     private func reveal(animated: Bool) {
-        guard itemIds.contains(activeId) else { return }
-        if animated { withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(activeId, anchor: .center) } }
-        else { proxy.scrollTo(activeId, anchor: .center) }
+        guard let i = itemIds.firstIndex(of: activeId) else { return }
+        let target = itemIds[max(0, i - 1)]
+        if animated { withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(target, anchor: .leading) } }
+        else { proxy.scrollTo(target, anchor: .leading) }
     }
 }

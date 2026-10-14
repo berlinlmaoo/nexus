@@ -141,9 +141,14 @@ struct LegalDocumentView: View {
 
     private func content(_ doc: LegalDocument) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: hSize == .regular ? 14 : 18) {
                 header(doc)
-                statusRow(doc)
+                if hSize == .regular {
+                    // The status sits in the header's number row on an iPad / Mac; only the actions remain.
+                    HStack(spacing: 8) { docActions(doc); Spacer(minLength: 0) }
+                } else {
+                    statusRow(doc)
+                }
                 LegalDocumentFacts(doc: doc) { other = LegalOpenID(id: $0) }
                 panePicker(doc)
                 switch pane {
@@ -167,14 +172,29 @@ struct LegalDocumentView: View {
         .onChange(of: doc.currentVersion) { _, _ in editor.selected = [] }
     }
 
-    private func header(_ doc: LegalDocument) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(doc.number.isEmpty ? T("No number") : doc.number)
-                .font(.system(size: 13, design: .monospaced)).foregroundStyle(NX.mutedFg).textSelection(.enabled)
-                .strikethrough(doc.numberReleased)
-            Text(LegalText.wrappable(doc.title)).font(NXFont.text(hSize == .regular ? 24 : 21, .semibold)).foregroundStyle(NX.foreground)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(headerLine(doc)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+    /// iPhone: the number, the title in full (the bar cuts it) and what it is. iPad / Mac: the bar shows the
+    /// whole title, so the header is one compact block, the number with its status beside it and the line
+    /// below; the title is not repeated and the preview gets the window (run 14, P-I21 / P-M17 / P-M24).
+    @ViewBuilder private func header(_ doc: LegalDocument) -> some View {
+        let number = Text(doc.number.isEmpty ? T("No number") : doc.number)
+            .font(.system(size: 13, design: .monospaced)).foregroundStyle(NX.mutedFg)
+            .strikethrough(doc.numberReleased)
+        if hSize == .regular {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .center, spacing: 10) {
+                    number.textSelection(.enabled).lineLimit(1).minimumScaleFactor(0.7)
+                    statusControls(doc)
+                    Spacer(minLength: 0)
+                }
+                Text(headerLine(doc)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 5) {
+                number.textSelection(.enabled)
+                Text(LegalText.wrappable(doc.title)).font(NXFont.text(21, .semibold)).foregroundStyle(NX.foreground)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(headerLine(doc)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -251,8 +271,9 @@ struct LegalDocumentView: View {
                 Text(T("Review & edit")).tag(Pane.edit)
                 if canCompare { Text(T("Compare")).tag(Pane.compare) }
             }
+            // The page's full width, as the web's tab row (P-I21 / P-M17: it stopped at ⅓–⅔ of the width).
             .pickerStyle(.segmented)
-            .frame(maxWidth: 460)
+            .frame(maxWidth: .infinity)
             .onChange(of: canCompare) { _, can in if !can && pane == .compare { pane = .overview } }
         }
     }
@@ -346,7 +367,9 @@ private struct LegalDocumentOverview: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: wide ? 620 : 460)
+        // On an iPad / Mac the preview takes most of the window once it is scrolled to (P-M24: a fixed
+        // 620 pt left it in the bottom part of the window).
+        .modifier(LegalPreviewHeight(wide: wide))
         .background(NX.muted, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
@@ -403,8 +426,11 @@ private struct LegalDocumentOverview: View {
         }
     }
 
+    /// Grows onto more lines, so a long title is read in full (P-I21: "…City_Head_PATS_Un…").
     private var titleField: some View {
-        LegalFormRow(label: T("Title")) { TextField("", text: $title).font(NXFont.text(14)).legalInput() }
+        LegalFormRow(label: T("Title")) {
+            TextField("", text: $title, axis: .vertical).lineLimit(1...4).font(NXFont.text(14)).legalInput()
+        }
     }
 
     private var counterpartyField: some View {
@@ -444,7 +470,9 @@ private struct LegalDocumentOverview: View {
                         if doc.signedVersion == v.version { NexusChip(text: T("Signed copy"), tone: .success) }
                         if doc.finalVersion == v.version { NexusChip(text: T("Final"), tone: .accent) }
                     }
-                    Text([v.label, v.author?.name ?? "—", LegalLabels.date(v.createdAt), LegalLabels.bytes(v.size)].joined(separator: " · "))
+                    // "REV 1" says what "v1" beside it already says; only FINAL / SIGNED add something (N-39).
+                    Text(([v.label == "REV \(v.version)" ? nil : v.label, v.author?.name ?? "—", LegalLabels.date(v.createdAt), LegalLabels.bytes(v.size)] as [String?])
+                            .compactMap { $0 }.joined(separator: " · "))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -564,6 +592,18 @@ struct LegalFileButtons: View {
 
 /// Who uploaded the signed copy and when, what became of a void number, the parent of an addendum and the
 /// addenda of a document (web DocumentFacts).
+/// The PDF preview's height: 460 pt on a phone; on an iPad / Mac most of the visible window.
+private struct LegalPreviewHeight: ViewModifier {
+    let wide: Bool
+    func body(content: Content) -> some View {
+        if wide {
+            content.containerRelativeFrame(.vertical) { h, _ in max(480, h * 0.86) }
+        } else {
+            content.frame(height: 460)
+        }
+    }
+}
+
 private struct LegalDocumentFacts: View {
     let doc: LegalDocument
     let open: (String) -> Void

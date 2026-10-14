@@ -134,22 +134,17 @@ struct ActiveSessionsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(T("Active sessions")).font(NXFont.text(15, .bold))
-                    Text(T("Devices signed in to your account. Sign out any you don't recognise."))
-                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            // The button beside the title while it fits on one line, under it otherwise: on a phone
+            // "Sign out other sessions" wrapped into a two-line pill (UI tour run 14, N-41).
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 10) {
+                    header
+                    Spacer(minLength: 0)
+                    othersButton
                 }
-                Spacer(minLength: 0)
-                if others > 0 {
-                    Button { confirmOthers = true } label: {
-                        HStack(spacing: 5) {
-                            if busyOthers { ProgressView().controlSize(.mini) } else { Image(systemName: "rectangle.portrait.and.arrow.right") }
-                            Text(T("Sign out other sessions"))
-                        }
-                        .font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
-                    }
-                    .buttonStyle(.bordered).disabled(busyOthers)
+                VStack(alignment: .leading, spacing: 10) {
+                    header
+                    othersButton
                 }
             }
 
@@ -185,25 +180,52 @@ struct ActiveSessionsCard: View {
                 }
             }
             if failed {
-                Text(T("Couldn't sign that out. Try again.")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+                Text(T("Couldn't log that out. Try again.")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
             }
         }
         .nexusCard()
         .task { await load() }
-        .alert(T("Sign out this device?"), isPresented: Binding(get: { confirmOne != nil }, set: { if !$0 { confirmOne = nil } }), presenting: confirmOne) { s in
-            Button(T("Sign out"), role: .destructive) { Task { await revoke(s) } }
+        .alert(T("Log out this device?"), isPresented: Binding(get: { confirmOne != nil }, set: { if !$0 { confirmOne = nil } }), presenting: confirmOne) { s in
+            Button(T("Log out"), role: .destructive) { Task { await revoke(s) } }
             Button(T("Cancel"), role: .cancel) {}
         } message: { s in
-            Text(T("Sign out “{name}”? That device will need to sign in again.")
+            Text(T("Log out “{name}”? That device will need to sign in again.")
                 .replacingOccurrences(of: "{name}", with: DeviceLabel.describe(userAgent: s.userAgent, client: s.client).name))
         }
-        .alert(T("Sign out other sessions"), isPresented: $confirmOthers) {
-            Button(T("Sign out"), role: .destructive) { Task { await revokeOthers() } }
+        .alert(T("Log out other sessions"), isPresented: $confirmOthers) {
+            Button(T("Log out"), role: .destructive) { Task { await revokeOthers() } }
             Button(T("Cancel"), role: .cancel) {}
         } message: {
-            Text(T("Sign out of every other device? They will need to sign in again. This device stays signed in."))
+            Text(T("Log out of every other device? They will need to sign in again. This device stays signed in."))
         }
     }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(T("Active sessions")).font(NXFont.text(15, .bold))
+            Text(T("Devices signed in to your account. Log out any you don't recognise."))
+                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder private var othersButton: some View {
+        if others > 0 {
+            Button { confirmOthers = true } label: {
+                HStack(spacing: 5) {
+                    if busyOthers { ProgressView().controlSize(.mini) } else { Image(systemName: "rectangle.portrait.and.arrow.right") }
+                    Text(T("Log out other sessions")).lineLimit(1)
+                }
+                .font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+                .fixedSize()
+            }
+            .buttonStyle(.bordered).disabled(busyOthers)
+        }
+    }
+
+    /// One fact of a row's meta line with its spaces made non-breaking, so the line wraps only between
+    /// facts (at " · "), never inside "Signed in 15 Oct" (UI tour run 14, N-41 / P-I9).
+    private static func unbroken(_ s: String) -> String { s.replacingOccurrences(of: " ", with: "\u{00A0}") }
 
     private func row(_ s: UserSessionRow) -> some View {
         let device = DeviceLabel.describe(userAgent: s.userAgent, client: s.client)
@@ -212,7 +234,7 @@ struct ActiveSessionsCard: View {
             s.ipAddress.flatMap { $0.isEmpty ? nil : $0 },
             isCurrent ? nil : Self.activeLabel(s.lastActiveAt),
             T("Signed in {date}").replacingOccurrences(of: "{date}", with: Self.startedLabel(s.createdAt)),
-        ].compactMap { $0 }.joined(separator: " · ")
+        ].compactMap { $0 }.map(Self.unbroken).joined(separator: " · ")
         return HStack(spacing: 10) {
             Image(systemName: device.symbol)
                 .font(.system(size: 15, weight: .semibold))
@@ -235,8 +257,8 @@ struct ActiveSessionsCard: View {
                 Button { confirmOne = s } label: {
                     HStack(spacing: 4) {
                         if busyId == s.id { ProgressView().controlSize(.mini) }
-                        Text(T("Sign out"))
-                    }.font(NXFont.text(12, .semibold))
+                        Text(T("Log out"))
+                    }.font(NXFont.text(12, .semibold)).lineLimit(1).fixedSize()
                 }
                 .buttonStyle(.bordered).disabled(busyId == s.id)
             }

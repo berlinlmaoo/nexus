@@ -27,6 +27,11 @@ struct AttendanceView: View {
     /// Offices with their geofences, and which one the person is actually standing in.
     @State private var offices: [Office] = []
     @State private var nearby: (office: Office, distance: Double, inside: Bool)?
+    /// Why "Finding you…" stopped: no position within `locateTimeout`, or no office to measure
+    /// against. nil while still looking or once found (UI tour run 14, P-I23: it never resolved).
+    @State private var locateProblem: LocateProblem?
+    private enum LocateProblem { case noFix, noOffices }
+    private static let locateTimeout: Duration = .seconds(20)
     @State private var camera: MapCameraPosition = .userLocation(fallback: .automatic)
     @State private var showCamera = false
     @State private var pendingAction: Action?
@@ -193,8 +198,12 @@ struct AttendanceView: View {
                         AttendanceRequestsCard(canReview: canReview,
                                                canReviewOffsite: canReview,
                                                canGrant: today?.canManageAttendance ?? false)
+                        // `ready`: the board's scope comes with /attendance/today. Asked before that, a
+                        // manager's board was fetched as `scope=me` and could land over the whole crew
+                        // (UI tour run 14, N-04 / P-I4 / P-M4).
                         StreakBoardCard(canManage: today?.canManageAttendance ?? false,
-                                        canReview: today?.canReviewAttendanceRequests ?? false)
+                                        canReview: today?.canReviewAttendanceRequests ?? false,
+                                        ready: today != nil || !loading)
                             .id(Self.crewBoardAnchor)
                         if today?.canManageAttendance == true { OfficesCard() }
                     }
@@ -437,18 +446,30 @@ struct AttendanceView: View {
 
     // MARK: fun-metric cards (web FunMetric row)
 
+    /// A Grid, not a LazyVGrid: the two cards of a row take the taller one's height, so neither keeps a
+    /// fixed minimum with its lower half empty (UI tour run 14, P-M11).
     private var metricsGrid: some View {
-        let cols = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
-        return LazyVGrid(columns: cols, spacing: 12) {
-            FunMetricCard(icon: "cup.and.saucer.fill", label: T("Today's status"), value: todayStatusValue,
-                          tint: NX.success)
-            FunMetricCard(icon: nearby?.inside == true && dispRec?.officeLocation?.name == nil ? "checkmark.circle.fill" : "mappin.circle.fill",
-                          label: officeLabel, value: officeValue, helper: officeHelper, tint: officeTint)
-            FunMetricCard(icon: "sparkles", label: T("Days off"), value: Self.quotaValue(today?.dayOffUsedThisMonth, today?.dayOffQuota),
-                          helper: dayOffHelper, tint: NX.warning)
-            FunMetricCard(icon: "calendar", label: T("Public holidays"), value: Self.quotaValue(today?.redDateUsedThisMonth, today?.redDateQuota),
-                          helper: T("This month's public-holiday allowance"), tint: Color(hex: "#fb7185"))
+        Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+            GridRow {
+                FunMetricCard(icon: "cup.and.saucer.fill", label: T("Today's status"), value: todayStatusValue,
+                              helper: todayStatusHelper, tint: NX.success)
+                FunMetricCard(icon: nearby?.inside == true && dispRec?.officeLocation?.name == nil ? "checkmark.circle.fill" : "mappin.circle.fill",
+                              label: officeLabel, value: officeValue, helper: officeHelper, tint: officeTint)
+            }
+            GridRow {
+                FunMetricCard(icon: "sparkles", label: T("Days off"), value: Self.quotaValue(today?.dayOffUsedThisMonth, today?.dayOffQuota),
+                              helper: dayOffHelper, tint: NX.warning)
+                FunMetricCard(icon: "calendar", label: T("Public holidays"), value: Self.quotaValue(today?.redDateUsedThisMonth, today?.redDateQuota),
+                              helper: T("This month's public-holiday allowance"), tint: Color(hex: "#fb7185"))
+            }
         }
+    }
+
+    /// Under today's status: the schedule it is measured against.
+    private var todayStatusHelper: String {
+        guard let shift = today?.myShift else { return "" }
+        if shift.flexi == true { return "Flexi \(shift.startTime)–\(shift.endTime) · +9h" }
+        return T("My Work Schedule") + " \(shift.startTime) – \(shift.endTime)"
     }
 
     /// The quota above already counts extra days the BoD granted for this period; this says so,
@@ -466,7 +487,7 @@ struct AttendanceView: View {
     private static func quotaValue(_ used: Int?, _ quota: Int?) -> String {
         guard let quota else { return "\u{2014}" }
         if quota == 0 && (used ?? 0) == 0 { return T("None this month") }
-        return String(format: T("%@/%@ used"), AppNumber.int(used ?? 0), AppNumber.int(quota))
+        return String(format: T("%@ of %@ used"), AppNumber.int(used ?? 0), AppNumber.int(quota))
     }
 
     private var todayStatusValue: String {
@@ -503,7 +524,11 @@ struct AttendanceView: View {
         return T("On your phone")
         #else
         if locationOff { return T("Location is off") }
-        return T("Finding you…")
+        switch locateProblem {
+        case .noFix: return T("Location not found")
+        case .noOffices: return T("No office set up")
+        case nil: return T("Finding you…")
+        }
         #endif
     }
     private var officeLabel: String {
@@ -536,7 +561,12 @@ struct AttendanceView: View {
         return T("Check-in location is taken by the NEXUS app on your phone.")
         #else
         if locationOff { return T("Turn location on to see which office you're at") }
-        return T("Checking where you are…")
+        switch locateProblem {
+        case .noFix: return T("Couldn't get your position. Pull down to try again.")
+        case .noOffices: return T("Your workspace has no office to check in at yet.")
+        // Not a second "…" under "Finding you…" (run 14, N-33): the two fonts draw the ellipsis differently.
+        case nil: return T("Usually takes a few seconds.")
+        }
         #endif
     }
     private var officeTint: Color {
@@ -553,10 +583,19 @@ struct AttendanceView: View {
     private func locateWithinOffice() async {
         #if !targetEnvironment(macCatalyst)
         guard dispRec?.officeLocation?.name == nil, !loc.isDenied else { return }
+        locateProblem = nil
         if offices.isEmpty { offices = (try? await APIClient.shared.attendanceOffices()) ?? [] }
-        guard !offices.isEmpty, let fix = try? await loc.currentFix() else { return }
-        guard let best = nearestOffice(to: fix) else { return }
-        withAnimation(.easeInOut(duration: 0.25)) { nearby = best }
+        guard !offices.isEmpty else { locateProblem = .noOffices; return }
+        // The fix itself has no deadline (it waits on Core Location), so a timer says when to stop
+        // promising one; a fix that still arrives later replaces the message.
+        let deadline = Task { @MainActor in
+            try? await Task.sleep(for: Self.locateTimeout)
+            if !Task.isCancelled, nearby == nil { withAnimation { locateProblem = .noFix } }
+        }
+        defer { deadline.cancel() }
+        guard let fix = try? await loc.currentFix() else { locateProblem = .noFix; return }
+        guard let best = nearestOffice(to: fix) else { locateProblem = .noOffices; return }
+        withAnimation(.easeInOut(duration: 0.25)) { nearby = best; locateProblem = nil }
         #endif
     }
 
@@ -1078,7 +1117,13 @@ struct AttendanceView: View {
         if forcePending { return T("Finish yesterday's attendance") }
         if checkedOut { return T("Done for today") }
         if checkedIn { return T("Currently clocked-in") }
+        // A Mac cannot check in (the card under the map says so), so its chip must not invite one
+        // (UI tour run 14, P-M3).
+        #if targetEnvironment(macCatalyst)
+        return T("Check in on your phone")
+        #else
         return T("Ready to check in")
+        #endif
     }
     private var officeSuffix: String { "" }
 
@@ -1349,7 +1394,7 @@ struct AttendanceView: View {
         let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; f.timeZone = TimeZone(identifier: "Asia/Jakarta"); return f
     }()
     static func dateLabel(_ d: Date) -> String {
-        AppDateLocale.formatter("EEE, d MMM", timeZone: TimeZone(identifier: "Asia/Jakarta")).string(from: d)
+        AppDateLocale.formatter("EEE d MMM", timeZone: TimeZone(identifier: "Asia/Jakarta")).string(from: d)
     }
     static func parseISO(_ iso: String) -> Date? {
         let p = ISO8601DateFormatter(); p.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -1453,8 +1498,10 @@ struct FunMetricCard: View {
                     .lineLimit(2).fixedSize(horizontal: false, vertical: true).padding(.top, 3)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(13)
+        // Fills the Grid row (both cards as tall as the taller one).
+        .frame(maxHeight: .infinity, alignment: .top)
         .background {
             RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NX.card)
                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(tint.opacity(0.045)))
@@ -1555,6 +1602,11 @@ struct StreakBoardCard: View {
     /// 21 Sep 2026, to the manager too). Without this the card asked for `scope=me` and a manager
     /// never saw their people's month on the phone.
     var canReview: Bool = false
+    /// Whether the permissions above are known yet (the screen's /attendance/today has answered or
+    /// failed). Until then the board does not load: a `scope=me` fetch made on the default `false`
+    /// permissions used to finish — or fall back to its cached copy — after the crew board, and a
+    /// BoD's board shrank to their own row (UI tour run 14, N-04 / P-I4 / P-M4).
+    var ready: Bool = true
     private var wide: Bool { canManage || canReview }
     @Environment(AuthStore.self) private var auth
     // Month export — the same workbook the web's "Export" hands out, one sheet per month, everybody.
@@ -1565,8 +1617,6 @@ struct StreakBoardCard: View {
     /// Today as a whole date, so the marker lands on the real day rather than on whichever cell
     /// happens to share its number.
     private var todayKey: String? { monthOffset == 0 ? ProjDate.fmt("yyyy-MM-dd").string(from: Date()) : nil }
-    /// Only for the header line ("today 24").
-    private var todayDay: Int? { monthOffset == 0 ? ProjDate.cal.component(.day, from: Date()) : nil }
     /// Built once per load, not per read. It used to be a computed property — a `Dictionary(grouping:)`
     /// plus a `localizedCaseInsensitiveCompare` sort (ICU collation, the slowest comparator Foundation
     /// has) — and `body` reads it three times: the empty check, the name column and the cell grid.
@@ -1584,6 +1634,14 @@ struct StreakBoardCard: View {
     private var outsideKey: String? { cachedFrom == nil ? todayKey : nil }
 
     private let cell: CGFloat = 24
+    /// A day's width: 24 pt, or wider when the strip has room for the whole period, so an iPad or Mac
+    /// shows every day of it instead of cutting the last one at the edge ("MO 26", UI tour run 14,
+    /// P-M11). Rows keep their 24 pt height.
+    private var cellW: CGFloat {
+        guard stripWidth > 0, periodDays.count > 1 else { return cell }
+        let n = CGFloat(periodDays.count)
+        return min(40, max(cell, ((stripWidth - gap * (n - 1)) / n).rounded(.down)))
+    }
     private let gap: CGFloat = 3
     @Environment(\.horizontalSizeClass) private var hSize
     /// Wide enough that "Muhammad …" rows can be told apart (UI tour run 13, F-16 / I-24: 76 pt cut every
@@ -1740,7 +1798,9 @@ struct StreakBoardCard: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(wide ? T("Attendance board") : T("Your attendance history")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                    Text(todayDay.map { "\(monthLabel.capitalized) · \(T("today")) \($0)" } ?? monthLabel.capitalized)
+                    // The month alone: today is the highlighted column of the date row (run 14, N-34 read
+                    // "October 2026 · today 15" as odd).
+                    Text(monthLabel.capitalized)
                         .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     // The window this board actually covers — payroll counts 28→27, and the board
                     // used to name only the month it ended in.
@@ -1748,8 +1808,9 @@ struct StreakBoardCard: View {
                         .font(NXFont.text(10)).foregroundStyle(NX.mutedFg.opacity(0.85)).lineLimit(1)
                     // Who the board covers: a manager's board is their team only, which looked like the
                     // whole company's had shrunk to one row (UI tour run 13, F-15).
-                    if !canManage && canReview {
-                        Text(T("You and your direct reports"))
+                    // The BoD's board names its scope too, so a board of one is never a puzzle (run 14, N-04).
+                    if wide {
+                        Text(canManage ? T("Everyone in the workspace") : T("You and your direct reports"))
                             .font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     }
                 }
@@ -1802,14 +1863,15 @@ struct StreakBoardCard: View {
         .nexusCard()
         // Keyed on the permissions too: /attendance/today lands AFTER the first paint, and a board
         // fetched with `scope=me` before canManage flipped stayed that way until the month changed.
-        .task(id: "\(monthOffset)|\(wide)") {
+        .task(id: "\(monthOffset)|\(wide)|\(ready)") {
+            guard ready else { return }
             let days = buildPeriodDays()
             if days.first?.key != periodDays.first?.key { members = [] }
             periodDays = days
             await load()
         }
         .onReceive(NotificationCenter.default.publisher(for: .nexusAttendanceChanged)) { _ in
-            Task { await load() }
+            if ready { Task { await load() } }
         }
         // Every minute while on screen; cancelled with the view. The full-screen board, while it is
         // up, keeps its own minute instead (`FullBoard`).
@@ -1836,7 +1898,7 @@ struct StreakBoardCard: View {
     /// leaves the board as it was. A past month does not change by the minute, and a load already
     /// under way is not doubled.
     private func liveRefresh() async {
-        guard monthOffset == 0, !loading else { return }
+        guard monthOffset == 0, !loading, ready else { return }
         await load(silent: true)
     }
 
@@ -1876,7 +1938,7 @@ struct StreakBoardCard: View {
     /// width is unknown or the whole period fits.
     private func leadingDayKey(today: String) -> String? {
         guard stripWidth > 0, let i = periodDays.firstIndex(where: { $0.key == today }) else { return nil }
-        let fit = Int((stripWidth + gap) / (cell + gap))
+        let fit = Int((stripWidth + gap) / (cellW + gap))
         guard fit > 0, fit < periodDays.count else { return nil }
         let lead = min(max(0, i - fit / 2), periodDays.count - fit)
         return periodDays[lead].key
@@ -1922,7 +1984,7 @@ struct StreakBoardCard: View {
                 // fade where more days lie, so a cut column reads as "scroll for more" instead of a
                 // clipped "ION 28" (UI tour run 11: IP-10, MC-11).
                 .scrollTargetBehavior(.viewAligned)
-                .nxEdgeFade(14)
+                .nxEdgeFade(8)
                 // Opens on today, not on the 28th: the column that matters is the one being filled in
                 // (owner, 8 and 9 Oct 2026: "rata kiri", three times). Scrolling there after the fact
                 // — timed tries, then measuring where today's column was — never held on the phone, so
@@ -1955,7 +2017,7 @@ struct StreakBoardCard: View {
                         .foregroundStyle(isToday ? Color.white : NX.mutedFg).frame(width: cell, height: 13)
                         .background(isToday ? NX.violet : Color.clear, in: Capsule())
                 }
-                .frame(width: cell, height: headerH)
+                .frame(width: cellW, height: headerH)
                 .id("day-\(pd.key)")
                 // Where the month turns over, so 31 followed by 1 reads as a new
                 // month rather than as a gap.
@@ -1977,10 +2039,33 @@ struct StreakBoardCard: View {
 
     /// The name, and under it, for someone who left the company, a muted "Left · 10 Oct" (offboarding,
     /// 8 Oct 2026). Two short lines fit a row; the name keeps its size so the column stays even.
+    /// The full name, then shorter forms of it: the words after the first become initials one by
+    /// one from the end ("Muhammad Alvar Pratama" → "Muhammad Alvar P." → "Muhammad A. P.").
+    static func nameVariants(_ name: String) -> [String] {
+        let words = name.split(separator: " ").map(String.init)
+        guard words.count > 1 else { return [name] }
+        var out = [name]
+        var parts = words
+        for i in stride(from: parts.count - 1, through: 1, by: -1) {
+            if let c = parts[i].first { parts[i] = "\(c.uppercased())." }
+            out.append(parts.joined(separator: " "))
+        }
+        return out
+    }
+
     static func nameLabel(_ m: Member) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(m.name).font(NXFont.text(11, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
-                .minimumScaleFactor(0.85)
+            // One size for every row (run 14, N-05 / P-I23: a shrink-to-fit name came out in three sizes
+            // and was still cut). A name too long for the column keeps its first word and turns the
+            // rest into initials ("Ashley K. A."); only a name that still does not fit is cut.
+            ViewThatFits(in: .horizontal) {
+                ForEach(Array(nameVariants(m.name).enumerated()), id: \.offset) { _, v in
+                    Text(v).lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                }
+                Text(m.name).lineLimit(1)
+            }
+            .font(NXFont.text(11, .medium)).foregroundStyle(NX.foreground)
+            .accessibilityElement(children: .ignore).accessibilityLabel(m.name)
             if m.leftAt != nil {
                 Text(LeftTag.label(m.leftAt)).font(NXFont.text(7, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     .accessibilityLabel(LeftTag.accessibilityText(m.leftAt))
@@ -2008,7 +2093,7 @@ struct StreakBoardCard: View {
             ForEach(members) { m in
                 HStack(spacing: gap) {
                     ForEach(periodDays) { pd in
-                        let fill = RoundedRectangle(cornerRadius: 5, style: .continuous).fill((m.cells[pd.key] ?? .none).color).frame(width: cell, height: cell)
+                        let fill = RoundedRectangle(cornerRadius: 5, style: .continuous).fill((m.cells[pd.key] ?? .none).color).frame(width: cellW, height: cell)
                             .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(pd.key == todayKey ? NX.violet : Color.clear, lineWidth: 1.5))
                             .overlay(alignment: .leading) {
                                 if pd.startsMonth { Rectangle().fill(NX.border).frame(width: 1, height: cell).offset(x: -gap / 2) }
@@ -2160,15 +2245,20 @@ struct StreakBoardCard: View {
         // the whole crew restored into a personal board would be a quiet, convincing lie.
         let scope = wide ? "workspace" : "me"
         let month = monthKey
+        // A load whose scope or month is no longer the one on screen must not touch the board — not
+        // with its answer and not with its cached fallback. The board's `.task` is cancelled and
+        // restarted when the permissions land (`me` → `workspace`); the cancelled `me` load then
+        // failed into the catch below and drew the viewer's own cached row over the crew board.
+        func stale() -> Bool { Task.isCancelled || scope != (wide ? "workspace" : "me") || month != monthKey }
         do {
             let fetched = try await APIClient.shared.attendanceHistoryResponse(scope: scope, month: month)
-            // The arrows moved while a quiet re-read was out: its month is no longer the one shown.
-            if silent && month != monthKey { return }
+            if stale() { return }
             members = Self.buildMembers(fetched.all, roster: fetched.roster)
             cachedFrom = nil
         }
         catch APIError.unauthorized { auth.logout() }   // leaves the board as it was, same as before
         catch {
+            if stale() { return }
             // A quiet re-read that fails keeps what is drawn; the next minute tries again.
             if silent { return }
             // A month already drawn is far more use than an empty grid, and unlike today's card

@@ -430,7 +430,9 @@ struct FormBuilderView: View {
             }
             Text(draft.branding.icon.isEmpty ? displayName : "\(draft.branding.icon) \(displayName)")
                 .fontWeight(.medium).foregroundStyle(NX.foreground).lineLimit(1).truncationMode(.tail)
-                .frame(maxWidth: tightBar ? 130 : 220, alignment: .leading)
+                // Capped only while the tabs share the bar: with the tabs below it, a portrait iPad cut the name
+                // to "Pengajuan Finan…" beside an empty bar (UI tour run 14, P-I33).
+                .frame(maxWidth: tightBar && barTabs ? 130 : 280, alignment: .leading)
         }
         .font(NXFont.text(14))
         .fixedSize()
@@ -965,7 +967,7 @@ struct FormFieldEditorView: View {
             routingSections
             if !embedded {
                 Section {
-                    FormFieldPreview(field: field)
+                    FormFieldPreview(field: field, numberStyle: field.numberStyle(customFields))
                 } header: {
                     Text(T("Preview"))
                 }
@@ -1474,6 +1476,7 @@ private struct FieldEditorTitle: ViewModifier {
 /// How the field will look on the form — the web builder's live preview, drawn, not interactive.
 private struct FormFieldPreview: View {
     let field: BuilderField
+    var numberStyle: CustomFieldNumber.Style = .plain
 
     private var options: [String] {
         field.options.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
@@ -1527,7 +1530,7 @@ private struct FormFieldPreview: View {
         case "email":
             box(field.autofill.isEmpty ? "email@example.com" : T("Filled from the account"))
         case "number":
-            box(field.numberFormat == "currency-idr" ? "Rp 0" : "0")
+            box(field.numberPlaceholder(numberStyle))
         case "date":
             box(T("Pick a date"), icon: "calendar")
         default:

@@ -77,13 +77,16 @@ struct LegalTemplatesPane: View {
             Image(systemName: "doc.text").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(tpl.name).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+                    Text(tpl.name).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(2)
+                        .multilineTextAlignment(.leading)
                     if tpl.archived { NexusChip(text: T("Archived")) }
                 }
-                // Version and field count first: at the end they were the part cut off ("v3 · 1…", F-29).
+                // Version and field count first (F-29); two lines, so the type and the company are read in
+                // full beside the date column instead of "Any c…" / "(PKS)…" (run 14, N-24).
                 Text(["v\(tpl.currentVersion)", String(format: T("%d fields"), tpl.fields.count),
                       LegalLabels.docType(tpl.docType), tpl.company?.name ?? T("Any company")].joined(separator: " · "))
-                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 4)
             Text(LegalLabels.date(tpl.updatedAt)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)

@@ -361,6 +361,7 @@ struct MyLegalRequestsStrip: View {
     let requests: [MyLegalRequest]
     let gutter: CGFloat
     let onOpen: (String) -> Void
+    @Environment(\.horizontalSizeClass) private var hSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -415,9 +416,16 @@ struct MyLegalRequestsStrip: View {
             }
         }
         .padding(12)
-        .frame(width: 260, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
+        // A lone request takes the phone's width (run 14, N-16: half the width, the rest empty); several
+        // keep a card width that shows the next one peeking in. iPad / Mac: the web's 360 pt card.
+        .containerRelativeFrame(.horizontal, alignment: .leading) { w, _ in
+            let inner = w - 2 * gutter
+            if hSize == .regular { return min(360, inner) }
+            return requests.count == 1 ? inner : min(300, inner * 0.85)
+        }
         .contentShape(Rectangle())
     }
 
@@ -658,25 +666,23 @@ struct LegalRequestsPane: View {
         Button { sheet = .links } label: { Label(T("Request links"), systemImage: "link") }.buttonStyle(.nxBordered)
     }
 
+    // The filters wrap onto a second line instead of scrolling under an edge fade: every pill stays
+    // whole and visible ("Any deadlin…", "Signed…", the project filter off-screen; run 14 N-25 / N-26 /
+    // P-I20).
     private var filters: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                let types = Array(Set((rows ?? []).map(\.docType))).sorted()
-                LegalMenuPicker(options: types.map { ($0, LegalLabels.docType($0)) }, selection: $query.docType, noneLabel: T("All types"), compact: true)
-                LegalMenuPicker(options: companies.map { ($0.id, $0.name) }, selection: $query.companyId, noneLabel: T("All companies"), compact: true)
-                LegalMenuPicker(options: [("none", T("No PIC yet"))] + members.map { ($0.userId, $0.name) }, selection: $query.picId, noneLabel: T("Any PIC"), compact: true)
-                LegalMenuPicker(options: [("overdue", T("Overdue")), ("week", T("Due within a week")), ("none", T("No deadline"))],
-                                selection: $query.deadline, noneLabel: T("Any deadline"), compact: true)
-                if query.filtered {
-                    Button { let q = query.q; query = LegalBoardQuery(); query.q = q } label: { Label(T("Clear filters"), systemImage: "xmark") }
-                        .buttonStyle(NXButtonStyle(kind: .ghost, compact: true))
-                }
+        FlowLayout(spacing: 8) {
+            let types = Array(Set((rows ?? []).map(\.docType))).sorted()
+            LegalMenuPicker(options: types.map { ($0, LegalLabels.docType($0)) }, selection: $query.docType, noneLabel: T("All types"), compact: true)
+            LegalMenuPicker(options: companies.map { ($0.id, $0.name) }, selection: $query.companyId, noneLabel: T("All companies"), compact: true)
+            LegalMenuPicker(options: [("none", T("No PIC yet"))] + members.map { ($0.userId, $0.name) }, selection: $query.picId, noneLabel: T("Any PIC"), compact: true)
+            LegalMenuPicker(options: [("overdue", T("Overdue")), ("week", T("Due within a week")), ("none", T("No deadline"))],
+                            selection: $query.deadline, noneLabel: T("Any deadline"), compact: true)
+            if query.filtered {
+                Button { let q = query.q; query = LegalBoardQuery(); query.q = q } label: { Label(T("Clear filters"), systemImage: "xmark") }
+                    .buttonStyle(NXButtonStyle(kind: .ghost, compact: true))
             }
-            .padding(.vertical, 1)
-            // Room past the last pill, so it can scroll clear of the edge fade ("Any deadlin…", F-31).
-            .padding(.trailing, 32)
         }
-        .nxEdgeFade(40)
+        .padding(.vertical, 1)
     }
 
     @ViewBuilder private var content: some View {
@@ -812,7 +818,7 @@ struct LegalRequestCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .top) {
-                Text(r.templateName.isEmpty ? LegalLabels.docType(r.docType) : r.templateName)
+                Text(nxUnbreakableParentheses(r.templateName.isEmpty ? LegalLabels.docType(r.docType) : r.templateName))
                     .font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(2).multilineTextAlignment(.leading)
                 Spacer(minLength: 4)
                 if r.rejected { LegalChip(text: T("Rejected"), tone: .danger) }
@@ -839,19 +845,19 @@ struct LegalRequestCard: View {
             .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             Text(r.pic.map { "PIC · \($0.name)" } ?? T("No PIC yet")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
             if let doc = r.document {
-                HStack(spacing: 6) {
-                    Text(doc.number).font(.system(size: 10, design: .monospaced)).foregroundStyle(NX.mutedFg)
-                        .lineLimit(1).truncationMode(.middle)
-                    Spacer(minLength: 4)
-                    // A live request whose earlier number was voided: say so, not a struck "Void" chip
-                    // that reads as a broken request (M-21 / W-D23).
-                    if doc.status == "VOID" {
-                        Text(T("Previous number voided")).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
-                            .lineLimit(1).fixedSize()
-                    } else {
-                        LegalStatusChip(status: doc.status)
-                    }
+                // The status first, then the whole number on a line of its own: beside the chip a narrow
+                // column cut it to "0…1" / "001/SP-…/X/2026" (run 14, P-I5 / P-M15).
+                // A live request whose earlier number was voided: say so, not a struck "Void" chip
+                // that reads as a broken request (M-21 / W-D23).
+                if doc.status == "VOID" {
+                    Text(T("Previous number voided")).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                } else {
+                    LegalStatusChip(status: doc.status)
                 }
+                Text(doc.number).font(.system(size: 10, design: .monospaced)).foregroundStyle(NX.mutedFg)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .help(doc.number)
             }
         }
         .padding(10)

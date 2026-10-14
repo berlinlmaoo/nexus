@@ -32,6 +32,15 @@ enum LegalLabels {
         }
     }
 
+    /// The type where a row has little room: the abbreviation people use for the long agreement names.
+    static func docTypeShort(_ type: String) -> String {
+        switch type {
+        case "SP", "SK", "PKS", "SPK", "NDA": return type
+        case "MOU": return "MoU"
+        default: return docType(type)
+        }
+    }
+
     static func fieldType(_ type: String) -> String {
         switch type {
         case "text": return T("Text")
@@ -598,3 +607,4 @@ struct LegalLinkPickerSheet: View {
         }
     }
 }
+

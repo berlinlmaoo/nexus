@@ -214,7 +214,9 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     /// routes stay alive for old shortcuts and notification links.
     static var groups: [(title: String?, screens: [NXScreen])] { [
         (T("Home"),   [.dashboard, .messages, .gideon, .inbox, .threads, .vault, .tasks, .submissions, .teamCalendar, .roomBooking]),
-        (T("Work"),   [.projects, .legal, .leaderboard, .reports, .forms]),
+        // The web sidebar's Work group (AppSidebar.tsx): no Reports or Forms rows (UI tour run 14, P-I36).
+        // Both screens stay reachable: Forms from My Submissions ("Open forms"), Reports from its links.
+        (T("Work"),   [.projects, .legal, .leaderboard]),
         (T("Team"),   [.attendance]),
         (T("System"), [.tickets, .settings, .admin]),
     ] }
@@ -310,7 +312,7 @@ struct TabRoot: View {
                 .tag(PhoneTab.dashboard)
             // Its own stack as a tab root, as the sidebar gives it (MoreView pushes the no-stack form).
             MessagesView(providesOwnStack: true)
-                .tabItem { Label(T("Chat"), systemImage: "bubble.left.and.bubble.right.fill") }
+                .tabItem { Label(T("Messages"), systemImage: "bubble.left.and.bubble.right.fill") }
                 .badge(chat.totalUnread)
                 .tag(PhoneTab.messages)
             if calendarTab {
@@ -506,7 +508,15 @@ struct SidebarRoot: View {
         // rows; the iPad keeps them.
         .environment(\.defaultMinListRowHeight, 30)
         #endif
-        .scrollIndicators(.hidden)
+        // The nav can be taller than the window (a Mac window ~1250 pt tall ends at Tickets under the
+        // account footer, with Settings and Control Room below it): the scroll indicator shows there is
+        // more, and it flashes when the sidebar appears (UI tour run 14, P-M6). It was hidden.
+        #if targetEnvironment(macCatalyst)
+        .scrollIndicators(.visible, axes: .vertical)
+        #else
+        .scrollIndicators(.automatic, axes: .vertical)
+        #endif
+        .scrollIndicatorsFlash(onAppear: true)
         // Fixed header and footer, like the web's SidebarHeader / SidebarFooter: they stay put while
         // the nav scrolls between them.
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -562,13 +572,16 @@ struct SidebarRoot: View {
                     toggle: { toggleSidebar() },
                     peek: { on in peeking = on && columns == .detailOnly }
                 ))
-                // Screens that hide their navigation bar get an empty band at the top: once the sidebar
-                // is away, iPadOS's window controls (and the Mac's traffic lights) land on the detail
-                // column, and the band keeps the page header clear of them. Reserved whatever the
-                // sidebar is doing — an inset that comes and goes mid-animation snaps instead of sliding.
+                // Screens that draw a page header get an empty band at the top while the sidebar is away:
+                // then iPadOS's window controls (and the Mac's traffic lights) land on the detail column,
+                // and the band keeps the header clear of them. With the sidebar open the controls sit on
+                // the sidebar and the band was just an empty strip that put Notifications and Calendar
+                // ~44 pt lower than My Tasks and Messages, which never had it (UI tour run 14, P-I18 /
+                // P-M7). The band is always there and only its height changes, so it slides with the
+                // sidebar instead of snapping in mid-animation.
                 .safeAreaInset(edge: .top, spacing: 0) {
                     if needsTopBand {
-                        Color.clear.frame(height: 44)
+                        Color.clear.frame(height: columns == .detailOnly ? 44 : 0)
                     }
                 }
         }
@@ -727,7 +740,8 @@ struct SidebarRoot: View {
     /// from the sidebar would otherwise strand the user exactly like Dashboard did.
     private var detailHidesNavigationBar: Bool {
         switch selection {
-        case .screen(let s):  return s.hidesNavigationBar
+        // My Tasks and Messages draw the same page header with an empty bar; they need the band too.
+        case .screen(let s):  return s.hidesNavigationBar || s == .tasks || s == .messages
         case .project:        return true
         case nil:             return NXScreen.dashboard.hidesNavigationBar
         }

@@ -77,7 +77,8 @@ final class AppLanguage {
          indonesianSheetsPanels, indonesianAccessR2, indonesianMacShell, indonesianMacPages, indonesianMacProject,
          indonesianMacScreens, indonesianMacForms, indonesianMacGideon, indonesianUITour, indonesianRun5, indonesianRun6,
          indonesianLegal, indonesianRun7A, indonesianRun7B, indonesianRun7C, indonesianLegalRequests, indonesianRun9, indonesianRun10,
-         indonesianRun11A, indonesianRun11B, indonesianRun11C, indonesianOutletCustom, indonesianSocialMedia, indonesianRun12, indonesianRun13]
+         indonesianRun11A, indonesianRun11B, indonesianRun11C, indonesianOutletCustom, indonesianSocialMedia, indonesianRun12, indonesianRun13,
+         indonesianRun14NF, indonesianRun14PV, indonesianRun14PP, indonesianRun14OL]
     }
 
     /// English → Indonesian. Keys must match the source literal EXACTLY.
@@ -244,7 +245,6 @@ final class AppLanguage {
             "\"Otomatis\" dihitung sistem dari absensi & akhir periode. \"Manual\" diberikan Head/HR/manajemen berdasarkan penilaian mereka.",
         "Edit Profile": "Ubah Profil",
         "LEVEL": "LEVEL",
-        "POINTS THIS PERIOD": "POIN PERIODE",
         "Daily agenda": "Agenda harian",
         "Nothing due on this date.": "Tidak ada task yang jatuh tempo di tanggal ini.",
         "Chat": "Chat",
@@ -1180,7 +1180,6 @@ final class AppLanguage {
         "No passkey was returned. Try again.": "Passkey tidak terbaca. Coba lagi.",
         "The server sent passkey options this app couldn't read.":
             "Server ngirim opsi passkey yang nggak kebaca sama app ini.",
-        "PASSKEYS": "PASSKEY",
         "Sign in with Face ID or Touch ID instead of typing your password. Your password keeps working.":
             "Masuk pakai Face ID atau Touch ID, nggak usah ngetik password. Password kamu tetap jalan.",
         "Add a passkey": "Tambah passkey",
@@ -1746,7 +1745,7 @@ final class AppLanguage {
         "Next period": "Periode berikutnya",
         "PERIOD": "PERIODE",
         "Day %d of %d": "Hari ke-%d dari %d",
-        "Days worked (present or permit) out of %d working days: %d days minus %d day-off allowance.": "Hari kerja (hadir atau izin) dari %d hari kerja: %d hari dikurangi jatah day off %d.",
+        "Days worked (present or permit) out of %d working days: %d days minus %d days-off allowance.": "Hari kerja (hadir atau izin) dari %d hari kerja: %d hari dikurangi jatah day off %d.",
         "Absent (TK)": "Alpha (TK)",
         "Late %d min in total, on %d days": "Total telat %d mnt, dalam %d hari",
         "Never late this period": "Tidak pernah telat periode ini",

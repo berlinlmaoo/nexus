@@ -511,8 +511,15 @@ private struct OverviewProgressCard: View {
         ]
     }
 
+    @Environment(\.horizontalSizeClass) private var counterSize
+
+    /// iPad / Mac: tiles wide enough for every label on one line ("No due / date" broke in a 110 pt tile
+    /// next to one-line labels, UI tour run 14, P-I22). The phone keeps narrow tiles with two-line labels.
+    private var wideCounters: Bool { counterSize == .regular }
+
     private var counters: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 0)], spacing: 0) {
+        LazyVGrid(columns: wideCounters ? Array(repeating: GridItem(.flexible(), spacing: 0), count: counterItems.count)
+                                     : [GridItem(.adaptive(minimum: 110), spacing: 0)], spacing: 0) {
             ForEach(counterItems) { c in
                 Button { onDrill?(c.drill) } label: {
                     VStack(alignment: .leading, spacing: 4) {
@@ -522,9 +529,11 @@ private struct OverviewProgressCard: View {
                             // ("Unassigne / d", UI tour run 11, PD-4). Every label reserves two lines, so the
                             // numbers under them sit on one baseline across the row (PD-7).
                             ZStack(alignment: .topLeading) {
-                                Text(verbatim: "A\nA").font(NXFont.text(12, .medium)).hidden().accessibilityHidden(true)
+                                if !wideCounters {
+                                    Text(verbatim: "A\nA").font(NXFont.text(12, .medium)).hidden().accessibilityHidden(true)
+                                }
                                 Text(c.label).font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg)
-                                    .lineLimit(c.label.contains(" ") ? 2 : 1)
+                                    .lineLimit(c.label.contains(" ") && !wideCounters ? 2 : 1)
                                     .minimumScaleFactor(c.label.contains(" ") ? 1 : 0.75)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -537,7 +546,7 @@ private struct OverviewProgressCard: View {
                         Text("\(c.value)").font(NXFont.display(20, .bold)).monospacedDigit()
                             .foregroundStyle(c.value == 0 ? NX.mutedFg.opacity(0.6) : (c.late ? OverviewStyle.late : NX.foreground))
                     }
-                    .padding(.horizontal, 16).padding(.vertical, 12)
+                    .padding(.horizontal, wideCounters ? 12 : 16).padding(.vertical, 12)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
                 }
@@ -618,10 +627,8 @@ private struct OverviewDeadlinesCard: View {
         if d == 0 { return T("Today") }
         if d == 1 { return T("Tomorrow") }
         guard let date = ProjDate.parse(t.dueDate) else { return "" }
-        let f = DateFormatter()
-        f.locale = OverviewMath.locale
-        f.setLocalizedDateFormatFromTemplate("EEEdMMM")
-        return f.string(from: date)
+        // "Thu 15 Oct": no comma, day before month in both languages (UI tour run 14, N-35).
+        return AppDateLocale.formatter("EEE d MMM", timeZone: ProjDate.cal.timeZone).string(from: date)
     }
 
     var body: some View {
@@ -728,16 +735,18 @@ private struct OverviewTeamCard: View {
         HStack(spacing: 6) {
             a.frame(width: 44, alignment: .trailing)
             b.frame(width: 52, alignment: .trailing)
-            c.frame(width: 64, alignment: .trailing)
+            c.frame(width: 92, alignment: .trailing)
         }
     }
 
     private var header: some View {
         HStack(alignment: .bottom, spacing: 8) {
             Text(T("Person")).frame(maxWidth: .infinity, alignment: .leading)
-            numbers(Text(T("Open")), Text(T("Overdue")), Text(T("Done this month")).multilineTextAlignment(.trailing))
+            // "Done" over a column of this month's counts, on one line like "Open" / "Overdue": "Done this
+            // month" broke onto two (UI tour run 14, N-17 / P-I22 / P-M23); the card says the month below.
+            numbers(Text(T("Open")), Text(T("Overdue")), Text(T("Done (month)")))
         }
-        .font(NXFont.text(11, .medium)).foregroundStyle(NX.mutedFg).lineLimit(2)
+        .font(NXFont.text(11, .medium)).foregroundStyle(NX.mutedFg).lineLimit(1)
         .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
         .accessibilityHidden(true)
     }
@@ -995,9 +1004,11 @@ private struct OverviewRecentCard: View {
         guard let d = ProjDate.parse(iso) else { return "" }
         let cal = OverviewMath.cal
         let days = cal.dateComponents([.day], from: cal.startOfDay(for: d), to: cal.startOfDay(for: Date())).day ?? 0
-        if days < 30 {
-            // In whole days, like web's Intl.RelativeTimeFormat(…, "day"): "19 days ago", not the
-            // formatter's own rounding to "2 weeks ago" (UI tour run 7). Today: minutes, then hours.
+        // A week back at most, then the day ("24 Sep"), as Threads and the notifications do: "20 days ago"
+        // next to dated rows elsewhere read inconsistently (UI tour run 14, N-18).
+        if days < 7 {
+            // In whole days, like web's Intl.RelativeTimeFormat(…, "day"): "5 days ago", not the
+            // formatter's own rounding (UI tour run 7). Today: minutes, then hours.
             let f = RelativeDateTimeFormatter()
             f.locale = OverviewMath.locale
             f.dateTimeStyle = .named
@@ -1009,10 +1020,8 @@ private struct OverviewRecentCard: View {
             }
             return f.localizedString(from: DateComponents(day: -days))
         }
-        let f = DateFormatter()
-        f.locale = OverviewMath.locale
-        f.setLocalizedDateFormatFromTemplate("dMMM")
-        return f.string(from: d)
+        // "24 Sep" (the year only outside this one), the app's day format.
+        return AppDateLocale.shortDate(d, timeZone: OverviewMath.cal.timeZone)
     }
 
     var body: some View {
@@ -1034,7 +1043,9 @@ private struct OverviewRecentCard: View {
                                 Image(systemName: "checkmark.circle.fill").font(.system(size: 15))
                                     .foregroundStyle(NX.success).accessibilityHidden(true)
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text(UntitledText.task(t.title)).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
+                                    // Two lines before an ellipsis ("Reimburse Bonus Hosting PR PA…", P-M23).
+                                    Text(UntitledText.task(t.title)).font(NXFont.text(14)).foregroundStyle(NX.foreground)
+                                        .lineLimit(2).multilineTextAlignment(.leading)
                                     if !meta.isEmpty {
                                         Text(meta).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                                     }
@@ -1121,20 +1132,18 @@ private struct OverviewStatusUpdatesCard: View {
                 }
                 HStack {
                     Spacer()
-                    // Disabled: muted text on a muted fill, readable; white at half opacity on top of the
-                    // system's own dimming all but vanished on the Mac (UI tour run 13, M-20).
-                    let off = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !posting
+                    // The app's primary button (web: the same button at half strength while it can't post). The
+                    // plain style's own dimming on top of muted text on a muted fill all but hid the label on
+                    // the Mac (UI tour run 13 M-20, run 14 P-M23); NXButtonStyle draws its disabled state
+                    // itself, once.
                     Button { Task { await post() } } label: {
                         HStack(spacing: 6) {
-                            if posting { ProgressView().tint(.white).controlSize(.small) }
+                            if posting { ProgressView().tint(NX.background).controlSize(.small) }
                             Text(T("Post update")).font(NXFont.text(14, .semibold))
                         }
-                        .foregroundStyle(off ? NX.mutedFg : .white)
-                        .padding(.horizontal, 16).frame(minHeight: 44)
-                        .background(off ? NX.muted : NX.violetFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .opacity(posting ? 0.6 : 1)
+                        .padding(.horizontal, 2).frame(minHeight: 40)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.nxPrimary)
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || posting)
                 }
                 }

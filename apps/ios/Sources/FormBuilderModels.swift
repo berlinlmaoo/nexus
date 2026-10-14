@@ -321,6 +321,23 @@ struct BuilderField: Identifiable, Equatable, Sendable {
         return FormQuestionKind(rawValue: type) ?? .text
     }
 
+    /// How a number question's answer reads: Rupiah when the question is the Rupiah kind, else the
+    /// format of the project number field its answer goes to ("Harga" sends to a Rupiah field, so its
+    /// box says "Rp 0", UI tour run 14 N-01), else a plain number.
+    func numberStyle(_ fields: [CustomField]) -> CustomFieldNumber.Style {
+        if numberFormat == "currency-idr" { return CustomFieldNumber.Style(format: numberFormat) }
+        if mappingTarget == "custom_field",
+           let target = fields.first(where: { $0.id == mappingCustomFieldId }), target.type.uppercased() == "NUMBER" {
+            return target.options?.numberStyle ?? .plain
+        }
+        return .plain
+    }
+
+    /// The empty number box: "0", "Rp 0", "US$0,00", "0%" — zero in the answer's format.
+    func numberPlaceholder(_ style: CustomFieldNumber.Style) -> String {
+        CustomFieldNumber.format(0, style: style)
+    }
+
     /// The web's `withKind`: turns the question into another kind, keeping what still applies.
     mutating func applyKind(_ k: FormQuestionKind) {
         type = k.storedType

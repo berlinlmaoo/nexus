@@ -140,6 +140,10 @@ enum CalFormat {
             f.locale = Locale(identifier: isID ? "id_ID" : "en_GB")
             f.timeZone = TimeZone(identifier: "UTC")
             f.setLocalizedDateFormatFromTemplate(template)
+            // en_GB writes a weekday with a year as "Thursday, 15 October 2026"; the app never puts a
+            // comma after the weekday ("Thu 15 Oct", UI tour run 14, N-35).
+            if template.contains("E") { f.dateFormat = f.dateFormat.replacingOccurrences(of: ",", with: "") }
+            AppDateLocale.useShortMonths(f)
             cache[key] = f
         }
         let text = f.string(from: CalDays.date(day))
@@ -439,10 +443,11 @@ struct CalStatusGlyph: View {
 struct CalPriorityChip: View {
     let priority: String?
     var body: some View {
+        // In capitals, as the web's chip (CAPS): "URGENT", "HIGH" (UI tour run 14, P-I17).
         if priority == "URGENT" {
-            CalChip(text: T("Urgent"), tone: .danger)
+            CalChip(text: T("Urgent").uppercased(), tone: .danger)
         } else if priority == "HIGH" {
-            CalChip(text: T("High"), tone: .warning)
+            CalChip(text: T("High").uppercased(), tone: .warning)
         }
     }
 }
@@ -1016,12 +1021,13 @@ struct CalItemRow: View {
     }
 
     /// The overdue rail's date, the time and the read-only eye: after the title, or under it.
+    /// The time first, then the overdue date, as the web writes it: "10:00 14 Oct" (UI tour run 14, P-I17).
     @ViewBuilder private func rowNotes(readOnly: Bool) -> some View {
-        if let note = trailingNote {
-            Text(note).font(NXFont.text(CalType.size(11))).foregroundStyle(CalTone.overdue)
-        }
         if item.time != nil {
             Text(CalFormat.time(item.time)).font(NXFont.text(CalType.size(11.5), .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
+        }
+        if let note = trailingNote {
+            Text(note).font(NXFont.text(CalType.size(11))).foregroundStyle(CalTone.overdue)
         }
         if readOnly {
             Image(systemName: "eye")
@@ -1098,8 +1104,11 @@ struct CalItemRow: View {
                 }
             }
             if !others.isEmpty {
+                // Every name in full: cut at two lines the overdue card read "…WILLIAM ERSAN (Multimedia),
+                // Moha…" (UI tour run 14, P-M8).
                 Text(here.isEmpty ? othersText : "\(T("with")) \(othersText)")
-                    .font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg).lineLimit(2)
+                    .font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -1248,7 +1257,11 @@ struct CalSectionCard: View {
     /// came down to about four letters beside a "You" badge.
     @ViewBuilder private func header(_ count: Int) -> some View {
         let name = Text(node.unit.name.uppercased()).calCaps().foregroundStyle(NX.foreground)
-        let number = Text("\(count)").font(NXFont.text(CalType.size(11.5), .bold)).monospacedDigit()
+        // "1 task", not a bare "1": the count is of distinct tasks, and one task shared by three teams of
+        // the card is listed under each of them, so a bare number read as a miscount of the rows below
+        // (UI tour run 14, N-38).
+        let number = Text(CalFormat.tasks(count)).font(NXFont.text(CalType.size(11.5), .bold)).monospacedDigit()
+            .lineLimit(1).fixedSize()
             .padding(.horizontal, 8).padding(.vertical, 2).background(NX.muted, in: Capsule())
         let chevron = Image(systemName: "chevron.down").font(NXFont.text(CalType.size(11), .semibold)).foregroundStyle(NX.mutedFg)
             .rotationEffect(.degrees(collapsed ? -90 : 0))
@@ -1329,7 +1342,8 @@ struct CalSubNode: View {
     var body: some View {
         if node.unit.isGroup {
             VStack(alignment: .leading, spacing: 0) {
-                Text("\(node.unit.name.uppercased()) · \(node.count)").calCaps().foregroundStyle(NX.mutedFg)
+                // "CREATIVE · 1 TASK": distinct tasks, which may each be listed under several of its teams (N-38).
+                Text("\(node.unit.name.uppercased()) · \(CalFormat.tasks(node.count).uppercased())").calCaps().foregroundStyle(NX.mutedFg)
                     .padding(.horizontal, 8).padding(.top, 6)
                     .accessibilityLabel(calJoin(node.unit.name, CalFormat.tasks(node.count)))
                     .accessibilityAddTraits(.isHeader)

@@ -210,14 +210,11 @@ enum SPFormat {
         return f.string(from: d)
     }
 
-    /// "Senin, 12 Oktober 2026" for a YYYY-MM-DD day.
+    /// "Senin 12 Okt" / "Monday 12 Oct" for a YYYY-MM-DD day.
     static func day(_ key: String) -> String {
         guard let d = SPVersions.date("\(key)T12:00:00+07:00") else { return key }
-        let f = DateFormatter()
-        f.locale = Locale(identifier: AppLanguage.shared.lang == .id ? "id_ID" : "en_US")
-        f.timeZone = TimeZone(identifier: "Asia/Jakarta")
-        f.setLocalizedDateFormatFromTemplate("EEEEdMMMMyyyy")
-        return f.string(from: d)
+        // "Monday 12 Oct", the year only outside the current one: the app's weekday format (run 14, N-35).
+        return AppDateLocale.weekdayDate(d)
     }
 
     /// A model cell's address ("C5").

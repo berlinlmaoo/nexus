@@ -208,56 +208,54 @@ struct LegalDocumentsPane: View {
             .buttonStyle(.nxPrimary)
     }
 
+    // The filters wrap onto a second line instead of scrolling under an edge fade: every pill stays
+    // whole and visible ("Any deadlin…", "Signed…", the project filter off-screen; run 14 N-25 / N-26 /
+    // P-I20).
     private var filters: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                LegalMenuPicker(options: companies.map { ($0.id, $0.name) }, selection: binding(\.companyId),
-                                noneLabel: T("All companies"), compact: true)
-                LegalMenuPicker(options: LegalLabels.docTypes.map { ($0, LegalLabels.docType($0)) }, selection: binding(\.docType),
-                                noneLabel: T("All types"), compact: true)
-                LegalMenuPicker(options: LegalLabels.statuses.map { ($0, LegalLabels.status($0)) }, selection: binding(\.status),
-                                noneLabel: T("All statuses"), compact: true)
-                LegalMenuPicker(options: [("1", T("Signed copy uploaded"))], selection: binding(\.signed),
-                                noneLabel: T("Signed or not"), compact: true)
-                LegalMenuPicker(options: [("GENERATED", T("Made here")), ("UPLOADED", T("Uploaded"))], selection: binding(\.source),
-                                noneLabel: T("Made or uploaded"), compact: true)
-                if query.parentId != nil {
-                    Button { query.parentId = nil; query.page = 1 } label: {
-                        Label(T("One document and its addenda"), systemImage: "xmark.circle.fill")
-                    }
-                    .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
-                    .accessibilityHint(T("Clear filters"))
+        FlowLayout(spacing: 8) {
+            LegalMenuPicker(options: companies.map { ($0.id, $0.name) }, selection: binding(\.companyId),
+                            noneLabel: T("All companies"), compact: true)
+            LegalMenuPicker(options: LegalLabels.docTypes.map { ($0, LegalLabels.docType($0)) }, selection: binding(\.docType),
+                            noneLabel: T("All types"), compact: true)
+            LegalMenuPicker(options: LegalLabels.statuses.map { ($0, LegalLabels.status($0)) }, selection: binding(\.status),
+                            noneLabel: T("All statuses"), compact: true)
+            LegalMenuPicker(options: [("1", T("Signed copy uploaded"))], selection: binding(\.signed),
+                            noneLabel: T("Signed or not"), compact: true)
+            LegalMenuPicker(options: [("GENERATED", T("Made here")), ("UPLOADED", T("Uploaded"))], selection: binding(\.source),
+                            noneLabel: T("Made or uploaded"), compact: true)
+            if query.parentId != nil {
+                Button { query.parentId = nil; query.page = 1 } label: {
+                    Label(T("One document and its addenda"), systemImage: "xmark.circle.fill")
                 }
-                Button { sheet = .dates } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "calendar").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
-                        Text(dateLabel).font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
-                    }
-                    .legalInput()
-                }
-                .buttonStyle(.plain)
-                LegalLinkButton(value: link, placeholder: T("Any project or deal")) { v in
-                    link = v
-                    query.projectId = v?.projectId
-                    query.dealId = v?.dealId
-                    query.page = 1
-                }
-                .frame(maxWidth: 260)
-                if query.filtered {
-                    Button {
-                        let q = query.q
-                        query = LegalArchiveQuery()
-                        query.q = q
-                        link = nil
-                    } label: { Label(T("Clear filters"), systemImage: "xmark") }
-                        .buttonStyle(NXButtonStyle(kind: .ghost, compact: true))
-                }
+                .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+                .accessibilityHint(T("Clear filters"))
             }
-            .padding(.vertical, 1)
-            // Room past the last chip, so it scrolls clear of the edge fade (I-21).
-            .padding(.trailing, 32)
+            Button { sheet = .dates } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
+                    Text(dateLabel).font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+                }
+                .legalInput()
+            }
+            .buttonStyle(.plain)
+            LegalLinkButton(value: link, placeholder: T("Any project or deal")) { v in
+                link = v
+                query.projectId = v?.projectId
+                query.dealId = v?.dealId
+                query.page = 1
+            }
+            .frame(maxWidth: 260)
+            if query.filtered {
+                Button {
+                    let q = query.q
+                    query = LegalArchiveQuery()
+                    query.q = q
+                    link = nil
+                } label: { Label(T("Clear filters"), systemImage: "xmark") }
+                    .buttonStyle(NXButtonStyle(kind: .ghost, compact: true))
+            }
         }
-        .nxEdgeFade(40)
+        .padding(.vertical, 1)
     }
 
     private var dateLabel: String {
@@ -290,16 +288,31 @@ struct LegalDocumentsPane: View {
                 if table { wideHeader; Divider().overlay(NX.border) }
                 ForEach(Array(result.documents.enumerated()), id: \.element.id) { i, d in
                     if i > 0 { Divider().overlay(NX.border) }
-                    Button { open = LegalOpenID(id: d.id) } label: {
-                        if table { wideRow(d) } else { phoneRow(d) }
-                    }
-                    .buttonStyle(.plain)
-                    .hoverEffect(.highlight)
-                    .contextMenu {
-                        if d.parent != nil || d.addendaCount > 0 {
-                            Button { query.parentId = d.parent?.id ?? d.id; query.page = 1 } label: {
-                                Label(T("Show the chain"), systemImage: "arrow.triangle.branch")
+                    VStack(alignment: .leading, spacing: 0) {
+                        Button { open = LegalOpenID(id: d.id) } label: {
+                            if table { wideRow(d) } else { phoneRow(d) }
+                        }
+                        .buttonStyle(.plain)
+                        .hoverEffect(.highlight)
+                        .contextMenu {
+                            if hasChain(d) {
+                                Button { showChain(d) } label: {
+                                    Label(T("Show the chain"), systemImage: "arrow.triangle.branch")
+                                }
                             }
+                        }
+                        // The web's "Show the chain" link on a document with addenda or a parent, not only in
+                        // the context menu (run 14, P-I20). Its own button, under the row's.
+                        if hasChain(d) && query.parentId == nil {
+                            Button { showChain(d) } label: {
+                                Label(T("Show the chain"), systemImage: "arrow.triangle.branch")
+                                    .font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+                                    .frame(minHeight: 32).contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .hoverEffect(.highlight)
+                            .padding(.leading, table ? 14 + 300 + 12 : 14)
+                            .padding(.bottom, 6)
                         }
                     }
                 }
@@ -309,12 +322,19 @@ struct LegalDocumentsPane: View {
         }
     }
 
+    private func hasChain(_ d: LegalDocumentSummary) -> Bool { d.parent != nil || d.addendaCount > 0 }
+
+    private func showChain(_ d: LegalDocumentSummary) {
+        query.parentId = d.parent?.id ?? d.id
+        query.page = 1
+    }
+
     private var wideHeader: some View {
         HStack(spacing: 12) {
-            Text(T("Number")).frame(width: 230, alignment: .leading)
+            Text(T("Number")).frame(width: 300, alignment: .leading)
             Text(T("Title")).frame(maxWidth: .infinity, alignment: .leading)
             Text(T("Counterparty")).frame(width: 160, alignment: .leading)
-            Text(T("Company")).frame(width: 120, alignment: .leading)
+            Text(T("Company")).frame(width: 90, alignment: .leading)
             Text(T("Date")).frame(width: 90, alignment: .leading)
             Text(T("Status")).frame(width: 80, alignment: .leading)
         }
@@ -324,43 +344,59 @@ struct LegalDocumentsPane: View {
     }
 
     private func subtitle(_ d: LegalDocumentSummary) -> String {
-        var s = LegalLabels.docType(d.docType)
-        if d.source == "UPLOADED" { s += " · " + T("Uploaded") }
-        if let deal = d.deal { s += " · " + deal.code } else if let p = d.project { s += " · " + p.name }
-        if let parent = d.parent { s += " · " + String(format: T("Addendum to %@"), parent.number) }
+        // An addendum says "Addendum to …" on its own line below, so the type isn't repeated (run 14, N-26).
+        var parts: [String] = d.parent != nil && d.docType == "ADD" ? [] : [LegalLabels.docType(d.docType)]
+        if d.source == "UPLOADED" { parts.append(T("Uploaded")) }
+        if let deal = d.deal { parts.append(deal.code) } else if let p = d.project { parts.append(p.name) }
+        var s = parts.joined(separator: " · ")
         // "1 addendum" / "2 addenda" (F-28).
-        if d.addendaCount > 0 { s += " · " + (d.addendaCount == 1 ? T("1 addendum") : String(format: T("%d addenda"), d.addendaCount)) }
-        if let at = d.signedAt { s += " · " + String(format: T("Signed %@ by %@"), LegalLabels.date(at), d.signedBy?.name ?? "—") }
+        if d.addendaCount > 0 { s += (s.isEmpty ? "" : " · ") + (d.addendaCount == 1 ? T("1 addendum") : String(format: T("%d addenda"), d.addendaCount)) }
+        if let at = d.signedAt { s += (s.isEmpty ? "" : " · ") + String(format: T("Signed %@ by %@"), LegalLabels.date(at), d.signedBy?.name ?? "—") }
         return s
     }
 
-    /// "Number reused by PKS/…/ADD-1" on a line of its own, cut in the middle: inside the subtitle it wrapped or
-    /// was cut part-way through the number (UI tour run 11, IP-12 / PD-13).
-    @ViewBuilder private func reusedLine(_ d: LegalDocumentSummary) -> some View {
-        if d.status == "VOID", let by = d.numberReusedBy {
-            Text(String(format: T("Number reused by %@"), by.number))
-                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                .lineLimit(1).truncationMode(.middle)
-                .help(by.number)
+    /// "Addendum to" / "Number reused by" and the whole number under it: a number is never broken across
+    /// lines or cut ("…/OKT/ ⏎ 2026/002", "PKS/PATS-U...YAKARTA"; run 11 IP-12, run 14 N-26 / P-M16). It
+    /// shrinks a little on a narrow phone instead.
+    private func numberLine(_ label: String, _ number: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            Text(number).font(.system(size: 11, design: .monospaced)).foregroundStyle(NX.mutedFg)
+                .lineLimit(1).minimumScaleFactor(0.6)
         }
+        .accessibilityElement(children: .combine)
+        .help(number)
+    }
+
+    @ViewBuilder private func parentLine(_ d: LegalDocumentSummary) -> some View {
+        if let parent = d.parent { numberLine(T("Addendum to"), parent.number) }
+    }
+
+    @ViewBuilder private func reusedLine(_ d: LegalDocumentSummary) -> some View {
+        if d.status == "VOID", let by = d.numberReusedBy { numberLine(T("Number reused by"), by.number) }
     }
 
     private func wideRow(_ d: LegalDocumentSummary) -> some View {
         HStack(spacing: 12) {
             // Numbers run long ("SPK/CH/PATS-UNIV/YOGYAKARTA/JAN/2027/001"): cut in the middle so the series
             // prefix and the sequence both stay readable, with the full number on hover (UI tour run 11, MC-2).
+            // The whole number in a wider column (run 14, P-M16: "SPK/CH/PATS-UNI…TA/JAN/2027/001" with a 180 pt
+            // Company column for "PATS"); a number longer still shrinks a little rather than being cut.
             Text(d.number.isEmpty ? "—" : d.number).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.foreground)
-                .strikethrough(d.numberReleased).lineLimit(1).truncationMode(.middle).frame(width: 230, alignment: .leading)
+                .strikethrough(d.numberReleased).lineLimit(1).minimumScaleFactor(0.7).frame(width: 300, alignment: .leading)
                 .help(d.number)
             VStack(alignment: .leading, spacing: 2) {
-                Text(d.title).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
-                Text(subtitle(d)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                Text(d.title).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                let sub = subtitle(d)
+                if !sub.isEmpty { Text(sub).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2) }
+                parentLine(d)
                 reusedLine(d)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Text(d.counterparty.isEmpty ? "—" : d.counterparty).font(NXFont.text(13)).foregroundStyle(NX.foreground)
-                .lineLimit(1).frame(width: 160, alignment: .leading)
-            Text(d.company?.name ?? "—").font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(1).frame(width: 120, alignment: .leading)
+                .lineLimit(2).frame(width: 160, alignment: .leading)
+            Text(d.company?.name ?? "—").font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(2).frame(width: 90, alignment: .leading)
             Text(LegalLabels.shortDay(d.docDate)).font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(1).frame(width: 90, alignment: .leading)
             LegalStatusChip(status: d.status).frame(width: 80, alignment: .leading)
         }
@@ -372,14 +408,16 @@ struct LegalDocumentsPane: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 8) {
                 Text(d.number.isEmpty ? T("No number") : d.number).font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(NX.mutedFg).strikethrough(d.numberReleased).lineLimit(1)
+                    .foregroundStyle(NX.mutedFg).strikethrough(d.numberReleased).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer(minLength: 4)
                 LegalStatusChip(status: d.status)
             }
             Text(d.title).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(2).multilineTextAlignment(.leading)
             Text([d.counterparty.isEmpty ? nil : d.counterparty, d.company?.name, LegalLabels.shortDay(d.docDate)].compactMap { $0 }.joined(separator: " · "))
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
-            Text(subtitle(d)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2)
+            let sub = subtitle(d)
+            if !sub.isEmpty { Text(sub).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2) }
+            parentLine(d)
             reusedLine(d)
         }
         .padding(.horizontal, 14).padding(.vertical, 11)

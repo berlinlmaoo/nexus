@@ -24,7 +24,7 @@ struct OutletCalendarView: View {
             VStack(alignment: .leading, spacing: wide ? 20 : 14) {
                 OutletHeader(store: store, tab: $tab, newEventDate: day)
                 grid(selected: day)
-                OutletCalendarLegend()
+                OutletCalendarLegend(statuses: true)
                 dayDetail(day)
             }
             .outletPage(wide: wide)
@@ -80,9 +80,12 @@ struct OutletCalendarView: View {
                     .background(isToday ? NX.violetFill : .clear, in: Circle())
                 if wide {
                     ForEach(list.prefix(2)) { e in
-                        HStack(spacing: 4) {
+                        // Two lines for the name: one line cut every event to "ZZ QA cu…" on an iPad (run 14, P-I28).
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
                             Circle().fill(e.status.tone.fg).frame(width: 6, height: 6)
-                            Text(e.name).font(NXFont.text(11, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                            Text(e.name).font(NXFont.text(11, .semibold)).foregroundStyle(NX.foreground)
+                                .lineLimit(2).multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(.horizontal, 5).padding(.vertical, 2)
                         .frame(maxWidth: .infinity, alignment: .leading)

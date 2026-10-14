@@ -197,17 +197,6 @@ enum SocialFormat {
         n == 1 ? T("1 post") : String(format: T("%@ posts"), count(n))
     }
 
-    /// "1,2 rb" / "1.2k" on a calendar cell (web writes the lower-case "k").
-    static func compact(_ n: Double) -> String {
-        let f = NumberFormatter()
-        f.locale = Locale(identifier: OutletFormat.isID ? "id_ID" : "en_GB")
-        f.maximumFractionDigits = 1
-        let a = abs(n)
-        if a >= 1_000_000 { return (f.string(from: NSNumber(value: n / 1_000_000)) ?? "") + (OutletFormat.isID ? " jt" : "M") }
-        if a >= 1_000 { return (f.string(from: NSNumber(value: n / 1_000)) ?? "") + (OutletFormat.isID ? " rb" : "k") }
-        return OutletFormat.grouped(Int64(n.rounded()))
-    }
-
     /// Engagement = Likes + Comments + Shares (the server's engagementOf); nil when none is filled.
     static func engagement(likes: Int64?, comments: Int64?, shares: Int64?) -> Int64? {
         let parts = [likes, comments, shares].compactMap { $0 }

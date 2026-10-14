@@ -253,12 +253,7 @@ struct ProjectSettingsView: View {
             }
             ForEach(fields) { f in
                 HStack(spacing: 10) {
-                    Image(systemName: cfIcon(f.type)).font(.system(size: 13)).foregroundStyle(NX.violetText)
-                        .frame(width: 30, height: 30).background(NX.violet.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(f.name).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
-                        Text(cfSummary(f)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                    }
+                    fieldLabel(f)
                     Spacer(minLength: 4)
                     if canManage {
                         Button { Task { await deleteField(f) } } label: { Image(systemName: "trash").font(.system(size: 12)).foregroundStyle(NX.danger) }.disabled(busy)
@@ -375,12 +370,44 @@ struct ProjectSettingsView: View {
         Text(t).font(NXFont.text(13, .semibold)).foregroundStyle(.white)
             .padding(.horizontal, 16).padding(.vertical, 10).background(NX.onyx, in: Capsule()).padding(.bottom, 20)
     }
+    /// A field's icon, name and summary. A number field opens its format (Notion's Edit property) for
+    /// whoever manages the project.
+    @ViewBuilder private func fieldLabel(_ f: CustomField) -> some View {
+        let content = HStack(spacing: 10) {
+            Image(systemName: cfIcon(f.type)).font(.system(size: 13)).foregroundStyle(NX.violetText)
+                .frame(width: 30, height: 30).background(NX.violet.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(f.name).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                Text(cfSummary(f)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            }
+        }
+        if canManage && f.type.uppercased() == "NUMBER" {
+            NavigationLink { NumberFieldFormatEditor(field: f) { await reloadFields() } } label: {
+                HStack(spacing: 6) {
+                    content
+                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        } else {
+            content
+        }
+    }
+
     private func cfIcon(_ type: String) -> String {
         switch type { case "NUMBER": return "number"; case "DATE": return "calendar"; case "PLACE": return "mappin.and.ellipse"
         case "MULTI_SELECT": return "checklist"; case "STATUS": return "flag.fill"; default: return "chevron.down.circle" }
     }
     private func cfSummary(_ f: CustomField) -> String {
-        if f.type == "NUMBER" { return f.options?.format == "currency-idr" ? "Angka · Rp" : "Angka" }
+        if f.type == "NUMBER" {
+            // "Number · Rupiah", "Number · Percent · Bar": the format by its short name, as Notion's panel.
+            let style = f.options?.numberStyle ?? .plain
+            var parts = [T("Number"), CustomFieldNumber.info(style.numberFormat).shortName]
+            if style.showAs == .bar { parts.append(T("Bar")) }
+            if style.showAs == .ring { parts.append(T("Ring")) }
+            return parts.joined(separator: " · ")
+        }
         if !f.choices.isEmpty { return "\(f.type.replacingOccurrences(of: "_", with: " ").capitalized) · \(f.choices.joined(separator: ", "))" }
         return f.type.replacingOccurrences(of: "_", with: " ").capitalized
     }

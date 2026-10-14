@@ -11,6 +11,8 @@ struct InboxView: View {
     @Environment(AppRouter.self) private var router
     @Environment(\.horizontalSizeClass) private var hSize
     @State private var items: [NexusNotification] = []
+    /// The workspace's people, to put a face on rows written before the server kept the sender.
+    @State private var roster: [MentionUser] = []
     @State private var unread = 0
     @State private var loading = true
     @State private var error: String?
@@ -71,6 +73,7 @@ struct InboxView: View {
             }
         }
         .task { await load() }
+        .task { if let r = try? await APIClient.shared.mentionRoster() { roster = r } }
         // A notification written for this person while the Inbox is open shows up in it, as it does
         // on the web: RealtimeClient posts this on the server's `new-notification`.
         .liveRefresh(every: 60, on: [.nexusInboxChanged]) { await reloadQuietly() }
@@ -136,7 +139,7 @@ struct InboxView: View {
                         VStack(spacing: 0) {
                             ForEach(Array(shown.enumerated()), id: \.element.id) { idx, n in
                                 if idx > 0 { Divider().overlay(NX.border) }
-                                NotificationRow(notification: n, onDelete: { Task { await delete(n) } },
+                                NotificationRow(notification: n, roster: roster, onDelete: { Task { await delete(n) } },
                                                 onMarkRead: { Task { await markRead(n) } }) { open(n) }
                             }
                         }
@@ -262,6 +265,8 @@ private struct NotificationRowMenu: ViewModifier {
 
 struct NotificationRow: View {
     let notification: NexusNotification
+    /// The workspace's people (GET /api/members), for rows without an `actor`.
+    var roster: [MentionUser] = []
     /// The web's trash button at the row's right (Inbox only; nil elsewhere).
     var onDelete: (() -> Void)? = nil
     /// The web's per-row "Mark as read" on an unread row, without opening it (UI tour run 9, P12).
@@ -318,7 +323,7 @@ struct NotificationRow: View {
     /// The sender's avatar with the kind as a small badge (web inbox, 13 Oct 2026, from `actor`); system
     /// signals and rows from before the server kept the sender show the kind's mark instead.
     @ViewBuilder private var mark: some View {
-        if let actor = notification.actor, !NotificationMark.isLegal(notification.type) {
+        if let actor = Self.actor(of: notification, roster: roster), !NotificationMark.isLegal(notification.type) {
             AvatarView(url: actor.avatar, initial: actor.initial, size: 38)
                 .overlay(alignment: .bottomTrailing) {
                     kindMark(size: 18)
@@ -328,6 +333,21 @@ struct NotificationRow: View {
         } else {
             kindMark(size: 38)
         }
+    }
+
+    /// Who caused the row: the server's `actor`, else — a row written before the server kept the sender — the
+    /// person the title starts with ("QA Dev 4 commented on …", "Rina posted on Threads"), the longest name
+    /// winning ("Ana" vs "Ana Putri"), as the web inbox does (UI tour run 13 I-28 / M-16, run 14 P-I25).
+    static func actor(of n: NexusNotification, roster: [MentionUser]) -> NexusNotification.Actor? {
+        if let a = n.actor { return a }
+        let title = n.title ?? ""
+        var best: MentionUser?
+        for u in roster {
+            guard let name = u.name?.trimmingCharacters(in: .whitespaces), name.count >= 2,
+                  title.hasPrefix(name + " ") else { continue }
+            if (best?.name?.count ?? 0) < name.count { best = u }
+        }
+        return best.map { NexusNotification.Actor(id: $0.id, name: $0.name, avatar: $0.avatar) }
     }
 
     /// The kind's own circle, mapped from the type as the web's notificationMark does (inbox.tsx): a chat
@@ -349,9 +369,10 @@ struct NotificationRow: View {
         .frame(width: size, height: size)
     }
 
-    /// " · " joined to the word before it, so a wrapped line never starts with "· PATS" (F-32).
+    /// " · " joined to the word before it, so a wrapped line never starts with "· PATS" (F-32), and a
+    /// bracketed run such as "(SP I/II/III)" kept whole (run 14, N-23: "(SP I/II/ ⏎ III)").
     static func keepSeparators(_ s: String) -> String {
-        s.replacingOccurrences(of: " · ", with: "\u{00A0}·\u{00A0}")
+        nxUnbreakableParentheses(s.replacingOccurrences(of: " · ", with: "\u{00A0}·\u{00A0}"))
     }
 
     /// The web's own meta line, hint included: a row that opens something says so, and a row that

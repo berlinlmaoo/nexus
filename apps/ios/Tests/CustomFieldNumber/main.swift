@@ -1,5 +1,8 @@
-// Linux check of Sources/CustomFieldNumber.swift against the web/server test cases
-// (src/lib/custom-field-number.test.mjs). Run from the repo root:
+// Check of Sources/CustomFieldNumber.swift against the web/server test cases
+// (src/lib/custom-field-number.test.mjs) and the Number format contract (numberFormat / decimals / showAs …).
+// Run from apps/ios, on macOS:
+//   swiftc -o /tmp/cfn Tests/CustomFieldNumber/Stub.swift Sources/CustomFieldNumber.swift Tests/CustomFieldNumber/main.swift && /tmp/cfn
+// or on Linux:
 //   docker run --rm -v "$PWD":/w -w /w swift:5.10-jammy bash -c "swiftc -o /tmp/t Tests/CustomFieldNumber/Stub.swift Sources/CustomFieldNumber.swift Tests/CustomFieldNumber/main.swift && /tmp/t"
 import Foundation
 var fails = 0, passes = 0
@@ -63,7 +66,319 @@ check(CustomFieldNumber.groupIDR("0"), "0", "groupIdrDigits \"0\"")
 check(CustomFieldNumber.groupIDR(""), "", "groupIdrDigits \"\"")
 check(CustomFieldNumber.formatIDR("369.000"), "Rp 369.000", "formatIdr \"369.000\"")
 check(CustomFieldNumber.formatIDR("369000"), "Rp 369.000", "formatIdr \"369000\"")
-check(CustomFieldNumber.formatIDR("-25000"), "-Rp 25.000", "formatIdr \"-25000\"")
+check(CustomFieldNumber.formatIDR("-25000"), "\u{2212}Rp 25.000", "formatIdr \"-25000\"")
 check(CustomFieldNumber.formatIDR(""), "", "formatIdr \"\"")
+
+// ── Number formats (Notion style, run 14) ──────────────────────────────────────────────────────
+typealias CFN = CustomFieldNumber
+typealias Style = CustomFieldNumber.Style
+let M = "\u{2212}"
+func style(_ nf: String?, _ d: Int? = nil) -> Style { Style(numberFormat: nf, decimals: d) }
+func checkD(_ b: Bool, _ name: String) { check(b ? "true" : "false", "true", name) }
+
+// Every format × decimals (Default, 0, 2, 5) × positive / negative.
+let matrix: [(String, Int?, String, String)] = [
+    // numberFormat, decimals, 1234567.891, -1500.5
+    ("number", nil, "1.234.567,891", M + "1.500,5"),
+    ("number", 0, "1.234.568", M + "1.501"),
+    ("number", 2, "1.234.567,89", M + "1.500,50"),
+    ("number", 5, "1.234.567,89100", M + "1.500,50000"),
+    ("number_with_separators", nil, "1.234.567,891", M + "1.500,5"),
+    ("number_with_separators", 0, "1.234.568", M + "1.501"),
+    ("number_with_separators", 2, "1.234.567,89", M + "1.500,50"),
+    ("number_with_separators", 5, "1.234.567,89100", M + "1.500,50000"),
+    ("percent", nil, "123.456.789,1%", M + "150.050%"),
+    ("percent", 0, "123.456.789%", M + "150.050%"),
+    ("percent", 2, "123.456.789,10%", M + "150.050,00%"),
+    ("percent", 5, "123.456.789,10000%", M + "150.050,00000%"),
+    ("IDR", nil, "Rp 1.234.568", M + "Rp 1.501"),
+    ("IDR", 0, "Rp 1.234.568", M + "Rp 1.501"),
+    ("IDR", 2, "Rp 1.234.567,89", M + "Rp 1.500,50"),
+    ("IDR", 5, "Rp 1.234.567,89100", M + "Rp 1.500,50000"),
+    ("USD", nil, "US$1.234.567,89", M + "US$1.500,50"),
+    ("USD", 0, "US$1.234.568", M + "US$1.501"),
+    ("USD", 2, "US$1.234.567,89", M + "US$1.500,50"),
+    ("USD", 5, "US$1.234.567,89100", M + "US$1.500,50000"),
+    ("EUR", nil, "€1.234.567,89", M + "€1.500,50"),
+    ("EUR", 0, "€1.234.568", M + "€1.501"),
+    ("JPY", nil, "JP¥1.234.568", M + "JP¥1.501"),
+    ("JPY", 2, "JP¥1.234.567,89", M + "JP¥1.500,50"),
+    ("GBP", nil, "£1.234.567,89", M + "£1.500,50"),
+    ("INR", nil, "Rs 1.234.567,89", M + "Rs 1.500,50"),
+    ("KRW", nil, "₩1.234.568", M + "₩1.501"),
+    ("CHF", nil, "CHF 1.234.567,89", M + "CHF 1.500,50"),
+    ("SAR", nil, "SAR 1.234.567,89", M + "SAR 1.500,50"),
+    ("SGD", 5, "SGD 1.234.567,89100", M + "SGD 1.500,50000"),
+    ("BTC", nil, "₿1.234.567,891", M + "₿1.500,5"),
+    ("BTC", 0, "₿1.234.568", M + "₿1.501"),
+    ("BTC", 2, "₿1.234.567,89", M + "₿1.500,50"),
+    ("BTC", 5, "₿1.234.567,89100", M + "₿1.500,50000"),
+]
+// Decimal places 1, 3 and 4 for every kind of format (number, percent, Rupiah, an Intl currency, BTC).
+let prefixes: [(String, String, String)] = [("number", "", ""), ("number_with_separators", "", ""), ("IDR", "Rp ", ""),
+                                            ("USD", "US$", ""), ("EUR", "€", ""), ("BTC", "₿", "")]
+var fullMatrix = matrix
+for (nf, pre, _) in prefixes {
+    fullMatrix += [(nf, 1, pre + "1.234.567,9", M + pre + "1.500,5"),
+                   (nf, 3, pre + "1.234.567,891", M + pre + "1.500,500"),
+                   (nf, 4, pre + "1.234.567,8910", M + pre + "1.500,5000")]
+}
+fullMatrix += [("percent", 1, "123.456.789,1%", M + "150.050,0%"),
+               ("percent", 3, "123.456.789,100%", M + "150.050,000%"),
+               ("percent", 4, "123.456.789,1000%", M + "150.050,0000%")]
+for (nf, d, pos, neg) in fullMatrix {
+    check(CFN.display("1234567.891", style: style(nf, d)), pos, "\(nf) d=\(d.map(String.init) ?? "Default") positive")
+    check(CFN.display("-1500.5", style: style(nf, d)), neg, "\(nf) d=\(d.map(String.init) ?? "Default") negative")
+}
+// Every currency in the list formats without falling back, with plain spaces only.
+for f in CFN.formats where f.code.count == 3 && f.code != "BTC" {
+    let out = CFN.display("1234.5", style: style(f.code))
+    checkD(!out.contains("\u{00A0}") && !out.contains("\u{202F}") && out.contains("1.23"), "currency \(f.code) → \(out)")
+}
+// No "−0": a negative that rounds to zero is zero.
+check(CFN.display("-0.4", style: style("IDR")), "Rp 0", "idr -0.4")
+check(CFN.display("-0.004", style: style("number", 2)), "0,00", "number -0.004 d=2")
+check(CFN.display("0", style: style("number")), "0", "number 0")
+
+// Percent: the stored fraction × 100; Default = the fraction's own digits minus 2.
+check(CFN.display("0.42", style: style("percent")), "42%", "percent 0.42")
+check(CFN.display("0.07", style: style("percent")), "7%", "percent 0.07")
+check(CFN.display("0.4213", style: style("percent")), "42,13%", "percent 0.4213")
+check(CFN.display("1", style: style("percent")), "100%", "percent 1")
+check(CFN.display("-0.42", style: style("percent")), M + "42%", "percent -0.42")
+check(CFN.display("0.4213", style: style("percent", 0)), "42%", "percent 0.4213 d=0")
+check(CFN.display("0.4213", style: style("percent", 1)), "42,1%", "percent 0.4213 d=1")
+check(CFN.display("1234.567", style: style("percent")), "123.456,7%", "percent grouped")
+
+// Default = the value's own shortest digits.
+check(CFN.display("0.1", style: style("number")), "0,1", "number 0.1")
+check(CFN.display("13.600000", style: style("number")), "13,6", "number 13.600000")
+check(CFN.display("2.5", style: style(nil)), "2,5", "absent numberFormat 2.5")
+check(CFN.display("1500000", style: style(nil)), "1.500.000", "absent numberFormat 1500000")
+check(CFN.display("0.00000001", style: style("BTC")), "₿0,00000001", "btc satoshi")
+check(CFN.display("1e-8", style: style("BTC")), "₿0,00000001", "btc js exponent")
+// Text that is not a number shows as typed; empty shows nothing.
+check(CFN.display("n/a", style: style("USD")), "n/a", "usd text")
+check(CFN.display("", style: style("USD")), "", "usd empty")
+check(CFN.display("  ", style: style("percent")), "", "percent blank")
+
+// Rupiah reads legacy grouped text, and machine numbers as numbers.
+check(CFN.display("369.000", style: style("IDR")), "Rp 369.000", "idr legacy 369.000")
+check(CFN.display("13.600000", style: style("IDR")), "Rp 13.600.000", "idr legacy 13.600000")
+check(CFN.display("1234567.891", style: style("IDR")), "Rp 1.234.568", "idr machine 1234567.891")
+check(CFN.display("0.42", style: style("IDR")), "Rp 0", "idr machine 0.42")
+check(CFN.display("0.42", style: style("IDR", 2)), "Rp 0,42", "idr 0.42 d=2")
+check(CFN.display("150000.5", style: style("IDR", 1)), "Rp 150.000,5", "idr 150000.5 d=1")
+check(CFN.display("Rp 1.500.000", style: style("IDR")), "Rp 1.500.000", "idr typed text")
+
+// Compatibility: old options → a style.
+check(Style(options: ["format": "currency-idr"]).numberFormat, "IDR", "compat currency-idr")
+check(Style(options: ["format": "IDR"]).numberFormat, "IDR", "compat IDR")
+check(Style(options: ["format": "Rupiah"]).numberFormat, "IDR", "compat rupiah")
+check(Style(options: "currency-idr").numberFormat, "IDR", "compat bare string")
+check(Style(options: nil).numberFormat, "number_with_separators", "compat none")
+check(Style(options: [String: Any]()).numberFormat, "number_with_separators", "compat empty")
+check(Style(options: ["options": ["a", "b"]]).numberFormat, "number_with_separators", "compat select-ish options")
+check(Style(options: ["numberFormat": "USD", "format": "currency-idr"]).numberFormat, "USD", "numberFormat wins")
+check(Style(options: ["numberFormat": "XYZ"]).numberFormat, "number_with_separators", "unknown numberFormat")
+check(Style(options: ["numberFormat": "XYZ", "format": "currency-idr"]).numberFormat, "IDR", "unknown numberFormat + legacy idr")
+check(Style(options: ["numberFormat": "usd"]).numberFormat, "USD", "lowercase code")
+check(CFN.display("369000", format: "currency-idr"), "Rp 369.000", "legacy display(format:) idr")
+check(CFN.display("1500000", format: nil), "1.500.000", "legacy display(format:) plain")
+
+// Options decoding: decimals / showAs / colour / divideBy / showNumber, invalid values dropped.
+let full = Style(options: ["numberFormat": "IDR", "decimals": 2, "showAs": "ring", "barColor": "blue", "divideBy": 50, "showNumber": false])
+check("\(full.decimals ?? -1) \(full.showAs.rawValue) \(full.barColor) \(full.divideBy) \(full.showNumber)", "2 ring blue 50.0 false", "full options")
+let bad = Style(options: ["decimals": 9, "showAs": "pie", "barColor": "teal", "divideBy": -3, "showNumber": "yes"])
+check("\(bad.decimals.map(String.init) ?? "nil") \(bad.showAs.rawValue) \(bad.barColor) \(bad.divideBy) \(bad.showNumber)", "nil number default 100.0 true", "invalid options dropped")
+check(Style(options: ["divideBy": 0]).divideBy.description, "100.0", "divideBy 0 → 100")
+check(Style(options: ["decimals": true]).decimals.map(String.init) ?? "nil", "nil", "decimals bool ignored")
+
+// Write side: format "currency-idr" only for Rupiah; defaults left out.
+let idrOut = style("IDR").options
+check(idrOut["format"] as? String ?? "", "currency-idr", "write idr legacy key")
+check(idrOut["numberFormat"] as? String ?? "", "IDR", "write idr numberFormat")
+checkD(style("USD").options["format"] == nil, "write usd has no legacy key")
+checkD(Style().options.count == 1, "write default has only numberFormat")
+var ringStyle = style("percent", 1); ringStyle.showAs = .ring; ringStyle.barColor = "red"; ringStyle.divideBy = 10; ringStyle.showNumber = false
+let ro = ringStyle.options
+check("\(ro["decimals"] as? Int ?? -1) \(ro["showAs"] as? String ?? "") \(ro["barColor"] as? String ?? "") \(ro["divideBy"] as? Double ?? 0) \(ro["showNumber"] as? Bool ?? true)", "1 ring red 10.0 false", "write ring options")
+// Round trip.
+checkD(Style(options: ringStyle.options) == ringStyle, "round trip")
+checkD(Style(options: full.options) == full, "round trip idr")
+
+// Bar / Ring fill: value ÷ Divide by, clamped; Percent fills by the fraction.
+func fillOf(_ v: String, _ s: Style) -> String { String(format: "%.3f", CFN.fill(CFN.decimal(v, style: s)!, style: s)) }
+check(fillOf("42", style(nil)), "0.420", "fill 42/100")
+check(fillOf("250", style(nil)), "1.000", "fill clamp high")
+check(fillOf("-5", style(nil)), "0.000", "fill clamp low")
+var div50 = style(nil); div50.divideBy = 50
+check(fillOf("25", div50), "0.500", "fill divideBy 50")
+var pctDiv = style("percent"); pctDiv.divideBy = 10
+check(fillOf("0.42", pctDiv), "0.420", "percent fill ignores divideBy")
+check(fillOf("1.7", style("percent")), "1.000", "percent fill clamp high")
+check(fillOf("-0.2", style("percent")), "0.000", "percent fill clamp low")
+check(fillOf("1234567.891", style("IDR")), "1.000", "idr fill clamp")
+
+// Storing: "42%" → 0.42 in any field; Rupiah decimals keep up to that many digits.
+check(CFN.normalize("42%", style: style(nil)), "0.42", "store 42%")
+check(CFN.normalize("42 %", style: style("percent")), "0.42", "store 42 %")
+check(CFN.normalize("7,5%", style: style("percent")), "0.075", "store 7,5%")
+check(CFN.normalize("0.42", style: style("percent")), "0.42", "store percent fraction")
+check(CFN.normalize("150.000,50", style: style("IDR")), "150001", "store idr default rounds")
+check(CFN.normalize("150.000,50", style: style("IDR", 0)), "150001", "store idr d=0 rounds")
+check(CFN.normalize("150.000,55", style: style("IDR", 2)), "150000.55", "store idr d=2")
+check(CFN.normalize("150.000,555", style: style("IDR", 2)), "150000555", "store idr d=2: 3 digits after a mark are grouping (web)")
+check(CFN.normalize("150.000,5", style: style("IDR", 1)), "150000.5", "store idr d=1")
+check(CFN.normalize("369.000", style: style("IDR", 2)), "369000", "store idr d=2 grouping")
+check(CFN.normalize("Rp 1.500.000", style: style("IDR", 2)), "1500000", "store idr d=2 with Rp")
+check(CFN.normalize("1,5jt", style: style("IDR", 2)), "1500000", "store idr d=2 jt")
+check(CFN.normalize("\u{2212}Rp 25.000", style: style("IDR")), "-25000", "store true minus")
+check(CFN.normalize("2,5", style: style("USD")), "2.5", "store usd")
+check(CFN.normalize("1.234,56", style: style("EUR")), "1234.56", "store eur")
+// Same as the web: "%" is not a fraction in a Rupiah field (its digits are kept), currency marks are
+// stripped, Rupiah with decimals still reads 3+ digits after a mark as grouping.
+check(CFN.normalize("42%", style: style("IDR")), "42", "store 42% in idr")
+check(CFN.normalize("US$1.234,50", style: style("USD")), "1234.5", "store typed US$")
+check(CFN.normalize("€ 2,5", style: style("EUR")), "2.5", "store typed €")
+check(CFN.normalize("13.600000", style: style("IDR", 2)), "13600000", "store idr d=2 legacy grouping")
+check(CFN.normalize("1,25jt", style: style("IDR", 2)), "1250000", "store idr d=2 jt fraction")
+check(CFN.normalize("2,555rb", style: style("IDR", 1)), "2555", "store idr d=1 rb")
+check(CFN.normalize("-150.000,5", style: style("IDR", 1)), "-150000.5", "store idr d=1 negative")
+// A stored machine number reads as itself unless the field is whole Rupiah.
+check(CFN.display("123.456", style: style("IDR", 3)), "Rp 123,456", "idr d=3 machine number")
+check(CFN.display("1.500", style: style("number")), "1,5", "plain machine number 1.500")
+
+// The list: Rupiah right under Percent, the rest in Notion's order; every name in both languages.
+check(CFN.formats.prefix(5).map(\.code).joined(separator: ","), "number,number_with_separators,percent,IDR,USD", "list order")
+check(String(CFN.formats.count), "45", "list size")
+checkD(CFN.formats.last?.code == "BTC", "BTC last")
+checkD(Set(CFN.formats.map(\.code)).count == CFN.formats.count, "codes unique")
+check(CFN.info("IDR").shortName, "Rupiah", "short name en")
+AppLanguage.shared.lang = .id
+check(CFN.info("USD").name, "Dolar AS (USD)", "id name")
+check(CFN.info("number_with_separators").shortName, "Angka dengan pemisah", "id short")
+check(CFN.filterFormats("dolar").first?.code ?? "", "USD", "filter id")
+check(CFN.filterFormats("rup").map(\.code).joined(separator: ","), "IDR,INR,PKR,PEN", "filter rup id")
+AppLanguage.shared.lang = .en
+// Fuzzy filter: substring matches first, then letters in order (Notion: "rup").
+check(CFN.filterFormats("rup").map(\.code).joined(separator: ","), "IDR,INR,PKR,UYU", "filter rup")
+check(CFN.filterFormats("").count.description, "45", "filter empty")
+check(CFN.filterFormats("btc").first?.code ?? "", "BTC", "filter code")
+check(CFN.filterFormats("zloty").first?.code ?? "", "PLN", "filter diacritics")
+checkD(CFN.filterFormats("qqq").isEmpty, "filter none")
+check(CFN.filterFormats("dolar").map(\.code).joined(separator: ","), "USD,AUD,CAD,SGD,HKD,NZD,TWD", "filter dolar en fuzzy")
+check(CFN.filterFormats("peso").map(\.code).joined(separator: ","), "MXN,CLP,PHP,COP,ARS,UYU,PEN", "filter word, then fuzzy")
+check(CFN.filterFormats("ollar").first?.code ?? "", "USD", "filter inside a word")
+check(CFN.filterFormats("dolar", lang: .id).first?.code ?? "", "USD", "filter explicit lang")
+
+// ── The web's own cases (src/__tests__/custom-field-number-format.test.ts), one for one ──────────
+func fmt(_ n: String, _ f: String, _ d: Int? = nil) -> String { CFN.format(Decimal(string: n)!, style: style(f, d)) }
+let webCases: [(String, Int?, String, String)] = [
+    ("number", nil, "1234567.891", "1.234.567,891"),
+    ("number", 0, "1234567.891", "1.234.568"),
+    ("number", 2, "42", "42,00"),
+    ("number", 5, "0.5", "0,50000"),
+    ("number", nil, "-1500.5", M + "1.500,5"),
+    ("number_with_separators", nil, "1234567.891", "1.234.567,891"),
+    ("number_with_separators", 1, "-0.04", "0,0"),
+    ("number_with_separators", 3, "-2", M + "2,000"),
+    ("percent", nil, "0.42", "42%"),
+    ("percent", nil, "0.4213", "42,13%"),
+    ("percent", nil, "0.07", "7%"),
+    ("percent", 1, "0.42", "42,0%"),
+    ("percent", nil, "1234567.891", "123.456.789,1%"),
+    ("percent", 0, "-0.425", M + "43%"),
+    ("IDR", nil, "1234567.891", "Rp 1.234.568"),
+    ("IDR", 0, "-1500.5", M + "Rp 1.501"),
+    ("IDR", 2, "1234567.891", "Rp 1.234.567,89"),
+    ("IDR", 5, "42", "Rp 42,00000"),
+    ("USD", nil, "1234567.891", "US$1.234.567,89"),
+    ("USD", 0, "-1500.5", M + "US$1.501"),
+    ("EUR", nil, "1234567.891", "€1.234.567,89"),
+    ("EUR", 3, "1", "€1,000"),
+    ("JPY", nil, "1234567.891", "JP¥1.234.568"),
+    ("JPY", 2, "5", "JP¥5,00"),
+    ("BTC", nil, "0.12345678", "₿0,12345678"),
+    ("BTC", 5, "1234567.891", "₿1.234.567,89100"),
+    ("BTC", nil, "-2", M + "₿2"),
+]
+for (f, d, n, want) in webCases { check(fmt(n, f, d), want, "web \(f) d=\(d.map(String.init) ?? "Default") \(n)") }
+// Every format × every decimals choice × sign: grouped, signed with "−", the asked number of digits.
+for f in CFN.formats.map(\.code) {
+    for d in [nil, 0, 1, 2, 3, 4, 5] as [Int?] {
+        let pos = fmt("1234567.891", f, d), neg = fmt("-1234567.891", f, d)
+        let tag = "\(f)/\(d.map(String.init) ?? "Default")"
+        check(neg, M + pos, "web sign \(tag)")
+        if f != "percent" { checkD(pos.range(of: "1\\.234\\.56[78]", options: .regularExpression) != nil, "web grouped \(tag) → \(pos)") }
+        if let d, d > 0 { checkD(pos.range(of: ",[0-9]{\(d)}([^0-9]|$)", options: .regularExpression) != nil, "web digits \(tag) → \(pos)") }
+        checkD(!pos.contains("\u{00A0}") && !pos.contains("\u{202F}"), "web spaces \(tag)")
+    }
+}
+check(fmt("0", "IDR"), "Rp 0", "web zero idr")
+check(fmt("0", "percent"), "0%", "web zero percent")
+// Stored values.
+check(CFN.decimal("1.234", style: style(nil)).map { "\($0)" } ?? "nil", "1.234", "web stored 1.234 plain")
+check(CFN.decimal("369.000", style: Style(format: "currency-idr")).map { "\($0)" } ?? "nil", "369000", "web stored 369.000 idr")
+check(CFN.decimal("1234.567", style: Style(format: "currency-idr")).map { "\($0)" } ?? "nil", "1234.567", "web stored 1234.567 whole idr")
+check(CFN.display("1234.567", style: Style(format: "currency-idr")), "Rp 1.235", "web display 1234.567 whole idr")
+check(CFN.decimal("1500.5", style: style("IDR", 2)).map { "\($0)" } ?? "nil", "1500.5", "web stored 1500.5 idr d=2")
+checkD(CFN.decimal("", style: style(nil)) == nil, "web stored empty")
+checkD(CFN.decimal("abc", style: style(nil)) == nil, "web stored text")
+check(CFN.display("abc", style: style(nil)), "abc", "web display text")
+check(CFN.display("1500000", style: style(nil)), "1.500.000", "web display plain")
+check(CFN.display("369.000", style: Style(format: "rupiah")), "Rp 369.000", "web display rupiah legacy")
+check(CFN.display("0.42", style: style("percent")), "42%", "web display percent")
+check(CFN.display("0.123", style: style("IDR")), "Rp 123", "web whole idr 0.123 is grouping")
+check(CFN.formatIDR("1234.567"), "Rp 1.235", "web formatIdr machine")
+check(CFN.formatIDR("-25000"), M + "Rp 25.000", "web formatIdr minus")
+// Rupiah keeps a fraction only with decimal places.
+check(CFN.normalize("1.500,50", style: Style(format: "currency-idr")), "1501", "web idr 1.500,50")
+check(CFN.normalize("1.500,50", style: style("IDR", 2)), "1500.5", "web idr d=2 1.500,50")
+check(CFN.normalize("1.500,555", style: style("IDR", 2)), "1500555", "web idr d=2 1.500,555")
+check(CFN.normalize("1,234", style: style("IDR", 1)), "1234", "web idr d=1 1,234")
+check(CFN.normalize("2,25", style: style("IDR", 1)), "2.3", "web idr d=1 2,25")
+check(CFN.normalize("1,5jt", style: style("IDR", 2)), "1500000", "web idr d=2 1,5jt")
+// A typed percent is the stored fraction (not in Rupiah).
+check(CFN.normalize("42%", style: style("percent")), "0.42", "web 42%")
+check(CFN.normalize("12,5 %", style: .plain), "0.125", "web 12,5 %")
+check(CFN.normalize("0.42", style: style("percent")), "0.42", "web 0.42 percent")
+check(CFN.normalize("50%", style: Style(format: "currency-idr")), "50", "web 50% idr")
+// Currency marks typed with the amount are dropped.
+check(CFN.normalize("US$1.500,25", style: style("USD")), "1500.25", "web US$")
+check(CFN.normalize("€ 12", style: style("EUR")), "12", "web €")
+// Bar / Ring fill.
+func fillD(_ v: String, _ s: Style) -> Double { CFN.fill(Decimal(string: v)!, style: s) }
+var div10 = style("IDR"); div10.divideBy = 10
+check(String(format: "%.3f", fillD("42", style("number"))), "0.420", "web fill 42")
+check(String(format: "%.3f", fillD("500", style("number"))), "1.000", "web fill 500")
+check(String(format: "%.3f", fillD("-5", style("number"))), "0.000", "web fill -5")
+check(String(format: "%.3f", fillD("5", div10)), "0.500", "web fill divideBy 10")
+check(String(format: "%.3f", fillD("5", Style(options: ["divideBy": 0]))), "0.050", "web fill divideBy 0")
+var pct1000 = style("percent"); pct1000.divideBy = 1000
+check(String(format: "%.3f", fillD("0.42", pct1000)), "0.420", "web percent fill ignores divideBy")
+// Options compat and write side.
+check(Style(options: "idr").numberFormat, "IDR", "web compat bare idr")
+checkD(Style(options: nil) == Style(), "web compat null = defaults")
+let badPct = Style(options: ["numberFormat": "percent", "decimals": 9, "showAs": "pie", "barColor": "teal", "divideBy": -3, "showNumber": "no"])
+var wantPct = Style(); wantPct.numberFormat = "percent"
+checkD(badPct == wantPct, "web invalid values read as defaults")
+check(CFN.barColors.first ?? "", "default", "web bar colours start with default")
+let ring = Style(options: ["numberFormat": "percent", "decimals": 1, "showAs": "ring", "barColor": "blue", "divideBy": "250", "showNumber": false])
+let ringOut = ring.options
+check("\(ringOut["numberFormat"] as? String ?? "") \(ringOut["decimals"] as? Int ?? -1) \(ringOut["showAs"] as? String ?? "") \(ringOut["barColor"] as? String ?? "") \(ringOut["divideBy"] as? Double ?? 0) \(ringOut["showNumber"] as? Bool ?? true) \(ringOut["format"] == nil)",
+      "percent 1 ring blue 250.0 false true", "web write ring")
+let eur = Style(options: ["numberFormat": "EUR", "decimals": 0, "showAs": "bar", "barColor": "red", "divideBy": 50, "showNumber": false])
+checkD(Style(options: eur.options) == eur, "web round trip eur bar")
+check((Style(options: ["numberFormat": "IDR", "decimals": 2]).options["format"] as? String) ?? "", "currency-idr", "web write idr d=2 legacy key")
+checkD(Style(options: ["numberFormat": "USD", "format": "currency-idr"]).options["format"] == nil, "web write usd drops legacy key")
+// Filter formats.
+let rupEN = CFN.filterFormats("rup", lang: .en).map(\.code)
+checkD(["INR", "IDR", "PKR", "UYU"].allSatisfy(rupEN.contains) && !rupEN.contains("PEN"), "web filter rup")
+check(CFN.filterFormats("dolar", lang: .id).first?.code ?? "", "USD", "web filter dolar id")
+check(CFN.filterFormats("persen", lang: .id).map(\.code).joined(separator: ","), "percent", "web filter persen id")
+check(CFN.filterFormats("idr", lang: .en).first?.code ?? "", "IDR", "web filter idr")
+checkD(CFN.filterFormats("zzzz", lang: .en).isEmpty, "web filter none")
+
 print("passes", passes, "fails", fails)
 if fails > 0 { exit(1) }

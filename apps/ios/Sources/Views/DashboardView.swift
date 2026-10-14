@@ -492,10 +492,11 @@ struct DashboardView: View {
 
     private var xpLabel: String {
         guard let game else { return "… XP" }
-        // Web: "1,000 XP / 1,150" — the next level's floor after the slash; nothing after it at the top.
-        let total = AppNumber.int(game.xp.totalXp) + " XP"
-        guard let next = game.xp.nextFloor, next > 0 else { return total }
-        return total + " / " + AppNumber.int(next)
+        // "1.000 / 1.150 XP": the next level's floor after the slash, the unit once, at the end (UI tour
+        // run 14, N-37: "1.000 XP / 1.150" put it on the first number only).
+        let total = AppNumber.int(game.xp.totalXp)
+        guard let next = game.xp.nextFloor, next > 0 else { return total + " XP" }
+        return total + " / " + AppNumber.int(next) + " XP"
     }
 
     // MARK: search + bell
@@ -1199,23 +1200,44 @@ if !XpRules.tiers.isEmpty {
                 Text(ProjDate.fmt("MMMM yyyy").string(from: selectedDay).capitalized)
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
+            // Whole days only: the chips share the card's width out evenly (as many as fit at 46 pt or
+            // more) and a swipe comes to rest on a day's edge, so no chip is ever cut at the card's edge
+            // ("Mo 26" / "Sun 25", UI tour run 14, P-I16 / P-M10; a fade over a cut chip still read as cut).
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(calDays, id: \.self) { d in dayChip(d) }
+                HStack(spacing: Self.chipGap) {
+                    ForEach(calDays, id: \.self) { d in
+                        dayChip(d)
+                            .containerRelativeFrame(.horizontal) { length, _ in Self.chipWidth(in: length) }
+                    }
                 }
+                .scrollTargetLayout()
             }
-            // The card's edges fade where more days lie, so the last day reads as "scroll for more" instead
-            // of a chip cut at the card's edge (UI tour run 13, I-17 / M-18).
-            .nxEdgeFade(20)
+            .scrollTargetBehavior(.viewAligned)
             let items = tasksDue(on: selectedDay)
             if items.isEmpty {
-                Text(T("Nothing due on this date."))
-                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.vertical, 4)
+                // A next step, not a dead end (UI tour run 14, N-37 / P-I16 / P-M10; web: "Open My Tasks").
+                HStack(spacing: 8) {
+                    Text(T("Nothing due on this date."))
+                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    Spacer(minLength: 0)
+                    Button { router.go(.tasks) } label: {
+                        Text(T("Open My Tasks")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.vertical, 4)
             } else {
                 ForEach(items) { t in dayRow(t) }
             }
         }
         .nexusCard()
+    }
+
+    private static let chipGap: CGFloat = 8
+    /// The width that puts a whole number of chips (46 pt or wider) across `length`.
+    private static func chipWidth(in length: CGFloat) -> CGFloat {
+        let n = max(1, ((length + chipGap) / (46 + chipGap)).rounded(.down))
+        return ((length - chipGap * (n - 1)) / n).rounded(.down)
     }
 
     private func dayChip(_ d: Date) -> some View {
@@ -1230,7 +1252,7 @@ if !XpRules.tiers.isEmpty {
                 Circle().fill(count > 0 ? (on ? Color.white : NX.violet) : Color.clear)
                     .frame(width: 5, height: 5)
             }
-            .frame(width: 46).padding(.vertical, 9)
+            .frame(maxWidth: .infinity).padding(.vertical, 9)
             .background(on ? NX.violet : NX.muted.opacity(0.5),
                         in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
@@ -1262,7 +1284,8 @@ if !XpRules.tiers.isEmpty {
                 AvatarView(url: profile?.avatar, initial: String(name.first ?? "?").uppercased(), size: 64)
                 VStack(alignment: .leading, spacing: 8) {
                     if let game { NexusChip(text: Self.levelText(game.xp.level, game.xp.levelName), tone: .accent) }
-                    row(T("POINTS THIS PERIOD"), AppNumber.int(game?.xp.totalXp ?? 0))
+                    // "XP" like everything else on Home, on one line (UI tour run 14, N-37 / P-I16 / P-M10).
+                    row(T("XP this period"), AppNumber.int(game?.xp.totalXp ?? 0))
                 }
                 Spacer()
             }
@@ -1286,7 +1309,7 @@ if !XpRules.tiers.isEmpty {
 
     private func row(_ label: String, _ value: String) -> some View {
         HStack(spacing: 12) {
-            SectionLabel(label).frame(width: 96, alignment: .leading)
+            SectionLabel(label).lineLimit(1).fixedSize()
             Text(value).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
         }
     }
@@ -1396,7 +1419,9 @@ struct StatusBarScrollEdge: ViewModifier {
         if #available(iOS 26.0, *) {
             content
                 .safeAreaBar(edge: .top, spacing: 0) { Color.clear.frame(height: 0) }
-                .scrollEdgeEffectStyle(.soft, for: .top)
+                // Hard, not soft: under the soft edge the tiles' text stayed readable behind the clock
+                // (UI tour run 14, N-30). The hard style is the system's opaque edge, as under a bar.
+                .scrollEdgeEffectStyle(.hard, for: .top)
         } else {
             content
         }
