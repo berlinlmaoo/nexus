@@ -20,6 +20,7 @@ struct ProjectsSummaryCard: View {
     @Binding var sortMode: String
     let statusOptions: [ProjectsMenuOption]
     let sortOptions: [ProjectsMenuOption]
+    @Environment(\.horizontalSizeClass) private var hSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -31,6 +32,13 @@ struct ProjectsSummaryCard: View {
             .foregroundStyle(NX.foreground)
             .padding(.horizontal, 12).padding(.vertical, 6)
             .background(NX.muted, in: Capsule())
+            // The web's line under the count on a wide screen (it is hidden on the phone there too; UI tour
+            // run 14, P-I19).
+            if hSize == .regular {
+                Text(T("Open a project to see its board, pages, calendar and timeline."))
+                    .font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             HStack(spacing: 8) {
                 stat(icon: "target", value: progressText, label: T("Average progress"))

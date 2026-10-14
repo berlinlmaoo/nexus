@@ -87,7 +87,9 @@ struct TemplateGallery: View {
                 Text(T("What is this project for?")).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
                 searchField
                 categoryChips
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 10)], spacing: 10) {
+                // Three across where the sheet allows, as the web: at 250 pt a Mac sheet held two, with an
+                // empty slot beside the last card (UI tour run 13 M-8, run 14 P-M18).
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 10)], spacing: 10) {
                     if showBlank {
                         Button { onPick(.blank) } label: {
                             GalleryCard(glyph: Image(systemName: "plus"), tint: NX.violet, title: T("Blank project"),
@@ -134,6 +136,8 @@ struct TemplateGallery: View {
                 }
             }
             .padding(20)
+            // Clear of the sheet's bottom edge (the last card touched it on iPad, P-I32).
+            .padding(.bottom, 16)
         }
         .task {
             await viewer.loadIfNeeded()
@@ -171,7 +175,7 @@ struct TemplateGallery: View {
                         Text(c == "all" ? T("All") : Self.categoryLabel(c))
                             .font(NXFont.text(12, .semibold))
                             .padding(.horizontal, 12).padding(.vertical, 6)
-                            .nxChoiceChip(on: category == c)
+                            .modifier(GalleryCategoryChip(on: category == c))
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(category == c ? .isSelected : [])
@@ -179,6 +183,18 @@ struct TemplateGallery: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(T("Template categories"))
+    }
+}
+
+/// The gallery's category filter: the picked one solid dark, as the web's (a pale wash read as unpicked;
+/// UI tour run 14, P-I32).
+private struct GalleryCategoryChip: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View {
+        content
+            .foregroundStyle(on ? NX.background : NX.mutedFg)
+            .background(on ? NX.onyx : NX.card, in: Capsule())
+            .overlay(Capsule().strokeBorder(on ? Color.clear : NX.border))
     }
 }
 
@@ -199,7 +215,8 @@ private struct GalleryCard<Preview: View>: View {
                     .background(tint.opacity(0.15), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    Text(blurb).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                    // The whole description, as on the web (it was cut to two lines, P-I32 / P-M18).
+                    Text(blurb).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)

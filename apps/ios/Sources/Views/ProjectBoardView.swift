@@ -130,10 +130,18 @@ struct ProjectDetailView: View {
     /// The Table's row drop (a move); nil below Can edit, so nothing drops there.
     private var tableDrop: (([String], String, String?) -> Void)? {
         guard canEdit else { return nil }
-        let visible = filteredLanes
+        let visible = tableView.map { ViewEngine.lanes(filteredLanes, config: configOf($0), ctx: viewContext) } ?? filteredLanes
         return { (ids: [String], laneId: String, before: String?) -> Void in
             dropped(ids, on: laneId, before: before, visible: visible)
         }
+    }
+    /// The Table's own built-in view: its filter, sort and grouping (web Table toolbar; UI tour run 14,
+    /// P-I12 / P-M9: the Table had no Filter / Sort / Group while the List and the web Table do).
+    private var tableView: ProjectViewFull? { views.first { $0.builtin == "table" } }
+    /// The view the toolbar's Filter / Sort / Group and View settings act on, for the tab on screen.
+    private var toolView: ProjectViewFull? {
+        if let layout = layoutOf(tab) { return activeView(layout) }
+        return tab == .table ? tableView : nil
     }
     /// The view's config as drawn: an on-screen filter (read-only levels) over the saved one.
     private func configOf(_ v: ProjectViewFull) -> ProjectViewConfig { screenConfigs[v.id] ?? v.config }
@@ -733,7 +741,7 @@ struct ProjectDetailView: View {
             // screen edge (UI tour run 11: "rview", "er kategori").
             .padding(.leading, wide ? 18 : 8)
             if tabsOverflow { tabOverflowMenu(chipItems) }
-            if let layout = layoutOf(tab), let v = activeView(layout) {
+            if let v = toolView {
                 let filtered = configOf(v).isFiltered
                 Button { filterView = v } label: {
                     Image(systemName: filtered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease")
@@ -939,7 +947,7 @@ struct ProjectDetailView: View {
     /// List view on screen (they are one sheet in the app); search on every task tab.
     private var wideTools: some View {
         HStack(spacing: 2) {
-            if let layout = layoutOf(tab), let v = activeView(layout) {
+            if let v = toolView {
                 let c = configOf(v)
                 ProjectToolIcon(icon: "line.3.horizontal.decrease", label: T("Filter"), active: c.isFiltered) { filterView = v }
                 ProjectToolIcon(icon: "arrow.up.arrow.down", label: T("Sort"), active: !c.sort.isEmpty) { filterView = v }
@@ -955,7 +963,7 @@ struct ProjectDetailView: View {
                 ProjectToolbarSearch(query: $query, open: $searchOpen, focused: $searchFocused,
                                      count: "\(matchCount)/\(totalCount)")
             }
-            if let layout = layoutOf(tab), let v = activeView(layout) {
+            if let v = toolView {
                 Menu { viewMenuItems(v) } label: {
                     Image(systemName: "slider.horizontal.3").font(.system(size: 15, weight: .regular)).foregroundStyle(NX.mutedFg)
                         .frame(width: 34, height: 34).frame(minHeight: 44).contentShape(Rectangle())
@@ -1207,9 +1215,10 @@ struct ProjectDetailView: View {
     private func tableTab() -> ProjectTableTab {
         let statusOptions = StatusOptions.inUse(lanes)
         let editable = canEdit
+        let shown = tableView.map { ViewEngine.lanes(filteredLanes, config: configOf($0), ctx: viewContext) } ?? filteredLanes
         return ProjectTableTab(
             projectId: projectId,
-            lanes: filteredLanes,
+            lanes: shown,
             allLanes: lanes,
             members: detail?.members ?? [],
             statusOptions: statusOptions,
@@ -1222,7 +1231,8 @@ struct ProjectDetailView: View {
             onToggleAssignee: editable ? { (id: String, uid: String, has: Bool) -> Void in toggleAssignee(id, uid, has) } : nil,
             onAddTask: (editable && canCreate) ? { (laneId: String, title: String) async -> String? in
                 await addTask(laneId: laneId, title: title)
-            } : nil
+            } : nil,
+            statusOf: rowStatusLookup()
         )
     }
 
@@ -1266,10 +1276,21 @@ struct ProjectDetailView: View {
                         }
                         if statusStyle && detail.canManageProject { addStatusColumn }
                     }
-                    .padding(14)
+                    .padding(.vertical, 14)
+                    // Each column is a resting place (below).
+                    .scrollTargetLayout()
                     .frame(maxHeight: .infinity, alignment: .top)
                 }
+                // Sideways the board comes to rest on a column's leading edge, never part-way through one:
+                // a pale To Do column scrolled half away left only its "•••" floating at the edge, and the
+                // "+ Status" column was cut at the other (UI tour run 14, N-13 / P-I13). The margin is the
+                // scroll's own (not padding inside it), so the snapped column keeps its 14 pt inset.
+                .scrollTargetBehavior(.viewAligned)
+                .contentMargins(.horizontal, 14, for: .scrollContent)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Columns scrolled off to the left end at the board's edge: on the Mac they showed through
+                // the sidebar's material as blurred ghost cards (UI tour run 14, P-M30).
+                .clipShape(Rectangle())
             } else {
                 EmptyState(icon: "square.stack.3d.up.slash", title: T("No sections yet"),
                            subtitle: T("This project has no sections yet. Add one from Project settings."),
@@ -1405,7 +1426,10 @@ struct ProjectDetailView: View {
             ListTab(lanes: shown, fields: allFields, onOpen: { open($0) }, selection: canEdit ? selection : nil,
                     statusStyle: StatusOptions.inUse(lanes) || shown.contains { $0.id.hasPrefix("grp:") },
                     onDrop: drop,
-                    statusOf: rowStatusLookup())
+                    statusOf: rowStatusLookup(),
+                    onAddTask: (canEdit && canCreate) ? { (laneId: String, title: String) async -> String? in
+                        await addTask(laneId: laneId, title: title)
+                    } : nil)
         }
     }
 
@@ -1544,8 +1568,9 @@ struct ProjectDetailView: View {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return nil }
         let layout = tab == .list ? "list" : "board"
-        // The Table draws the real sections without a view: no view filter fills in values there.
-        let config = (tab == .board || tab == .list) ? activeView(layout).map { configOf($0) } : nil
+        // The Table draws through its own built-in view (its filter fills in values too).
+        let config = (tab == .board || tab == .list) ? activeView(layout).map { configOf($0) }
+            : tab == .table ? tableView.map { configOf($0) } : nil
         var section = laneId
         var priority: String?
         var assignMe = false

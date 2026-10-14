@@ -202,7 +202,9 @@ struct FormStudioHead: View {
             Button(action: onChangeAccess) {
                 HStack(spacing: 8) {
                     Image(systemName: isPublic ? "link" : "person.2").font(.system(size: 13))
-                    Text(isPublic ? T("Anyone in NEXUS with the link can fill this in, after signing in.")
+                    // The short sentence (it is "in NEXUS", so signing in goes without saying): the long one
+                    // took three lines in the iPad's form column (UI tour run 14, P-I33).
+                    Text(isPublic ? T("Anyone in NEXUS with the link can fill it in.")
                                   : T("Only members of this project can fill this in."))
                         .font(NXFont.text(13)).multilineTextAlignment(.leading)
                     Spacer(minLength: 8)

@@ -214,7 +214,9 @@ struct ProjectsView: View {
     private var pageHeader: some View {
         NXPageHeader(title: T("Projects"), subtitle: T("Every project you're part of.")) {
             // The same search as the phone's field: projects here, tasks from /api/search.
-            NXHeaderSearchField(prompt: T("Search projects, owners, sections…"), text: $query)
+            // Wide enough for its whole prompt: "Search projects, owners, secti…" was cut in 256 pt (UI tour
+            // run 14, P-I19 / P-M26).
+            NXHeaderSearchField(prompt: T("Search projects, owners, sections…"), text: $query, width: 300)
             NXHeaderIconToggle(systemImage: "square.grid.2x2", label: T("Grid view"), on: viewMode != "list") { viewMode = "grid" }
             NXHeaderIconToggle(systemImage: "list.bullet", label: T("List view"), on: viewMode == "list") { viewMode = "list" }
             Button { sheet = .newFolder } label: { Label(T("Folder"), systemImage: "folder.badge.plus") }
@@ -1330,7 +1332,10 @@ struct ProjectCard: View {
                 ProjectMark(icon: project.icon, color: project.color, size: 44, projectId: project.id)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(project.name).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    // Two lines before an ellipsis: the status chip beside it cut names to "PATS: INDONESI…"
+                    // (UI tour run 14, P-I19).
+                    Text(project.name).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground).lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                     // Nothing when there is no description, like web (UI tour run 7: "No description yet." on every card).
                     if let d = project.description?.trimmingCharacters(in: .whitespacesAndNewlines), !d.isEmpty {
                         Text(d).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(2)
@@ -1351,11 +1356,16 @@ struct ProjectCard: View {
             // progress
             VStack(spacing: 6) {
                 HStack {
-                    Text(done == nil ? T("Calculating…") : String(format: T("%d%% done"), Int(progress * 100)))
-                        .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                    Spacer()
-                    Text(done.map { String(format: T("%d left"), max(0, total - $0)) } ?? "")
-                        .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    if done != nil && total == 0 {
+                        // A project with no task yet says so, not "0% done · 0 left" (UI tour run 14, P-M26).
+                        Text(T("No tasks yet")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    } else {
+                        Text(done == nil ? T("Calculating…") : String(format: T("%d%% done"), Int(progress * 100)))
+                            .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                        Spacer()
+                        Text(done.map { String(format: T("%d left"), max(0, total - $0)) } ?? "")
+                            .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    }
                 }
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {

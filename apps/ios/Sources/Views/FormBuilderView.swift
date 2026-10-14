@@ -430,7 +430,9 @@ struct FormBuilderView: View {
             }
             Text(draft.branding.icon.isEmpty ? displayName : "\(draft.branding.icon) \(displayName)")
                 .fontWeight(.medium).foregroundStyle(NX.foreground).lineLimit(1).truncationMode(.tail)
-                .frame(maxWidth: tightBar ? 130 : 220, alignment: .leading)
+                // Capped only while the tabs share the bar: with the tabs below it, a portrait iPad cut the name
+                // to "Pengajuan Finan…" beside an empty bar (UI tour run 14, P-I33).
+                .frame(maxWidth: tightBar && barTabs ? 130 : 280, alignment: .leading)
         }
         .font(NXFont.text(14))
         .fixedSize()

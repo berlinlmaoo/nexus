@@ -16,38 +16,95 @@ import SwiftUI
 
 /// The Table's column widths for one window width: the web's grid (Name minmax(240px, 2fr), every other
 /// column minmax(140px, 1fr), a 40px open column). Wider than the window = it scrolls sideways.
+///
+/// Every column after Name has its own width (`widths`, in order: Assignee, Due date, the project's fields,
+/// Priority, Status), so a field column is at least as wide as its header: "Tanggal Penggunaan" wrapped
+/// onto two lines in a 150 pt column (UI tour run 14, P-I12 / P-M9).
 struct TableColumns: Equatable {
     var name: CGFloat
-    var col: CGFloat
-    var field: CGFloat
-    var fieldCount: Int
+    var widths: [CGFloat]
     let open: CGFloat = 40
     /// Assignee, Due date, Priority, Status.
     static let fixedCount = 4
-    var total: CGFloat { name + col * CGFloat(Self.fixedCount) + field * CGFloat(fieldCount) + open }
 
-    static func fit(width: CGFloat, fieldCount: Int, compact: Bool) -> TableColumns {
+    var assignee: CGFloat { widths[0] }
+    var due: CGFloat { widths[1] }
+    func field(_ i: Int) -> CGFloat { widths[2 + i] }
+    var priority: CGFloat { widths[widths.count - 2] }
+    var status: CGFloat { widths[widths.count - 1] }
+    var total: CGFloat { name + widths.reduce(0, +) + open }
+
+    /// The sideways offsets at which a column starts right after the frozen Name column: the only places
+    /// the scroll comes to rest, so no column is ever half under it (see TableColumnSnap).
+    var columnStarts: [CGFloat] {
+        var out: [CGFloat] = [0]
+        var x: CGFloat = 0
+        for w in widths + [open] { x += w; out.append(x) }
+        return out
+    }
+
+    /// Room after the last column so the scroll's end is also a column start (the last resting place
+    /// would otherwise leave the column beside Name half hidden under it).
+    func trailingRoom(visibleWidth: CGFloat) -> CGFloat {
+        let maxX = total - visibleWidth
+        guard maxX > 0 else { return 0 }
+        guard let next = columnStarts.first(where: { $0 >= maxX - 0.5 }) else { return 0 }
+        return max(0, next - maxX)
+    }
+
+    /// A header's natural width: its icon, the name on one line, the cell's padding.
+    static func headerWidth(_ title: String) -> CGFloat {
+        let font = UIFont(name: "Inter", size: 13) ?? .systemFont(ofSize: 13)
+        let text = (title as NSString).size(withAttributes: [.font: font]).width
+        return ceil(text) + 12 + 6 + 24 + 4
+    }
+
+    static func fit(width: CGFloat, fieldNames: [String], compact: Bool) -> TableColumns {
         let minName: CGFloat = compact ? 200 : 260
         let minCol: CGFloat = compact ? 120 : 150
-        let flex = CGFloat(fixedCount + fieldCount)
-        let minTotal = minName + minCol * flex + 40
-        let share = max(0, width - minTotal) / (flex + 2)
-        if !compact && share == 0 {
-            // Wider than the window on an iPad / Mac: the window's edge falls on a column boundary, the
-            // name column taking up the rest, so no amount is cut mid-number at the edge ("Rp 6.842.09",
-            // UI tour run 11, PD-1); the trailing fade still says more columns lie that way.
-            let fit = max(1, floor((width - minName) / minCol))
-            let name = max(minName, width - fit * minCol)
-            return TableColumns(name: name, col: minCol, field: minCol, fieldCount: fieldCount)
+        let fieldMins = fieldNames.map { min(compact ? 220 : 280, max(minCol, headerWidth($0))) }
+        let mins = [minCol, minCol] + fieldMins + [minCol, minCol]
+        let minTotal = minName + mins.reduce(0, +) + 40
+        if width >= minTotal {
+            // Everything fits: the spare room is shared, Name taking two shares (web 2fr / 1fr).
+            let share = (width - minTotal) / CGFloat(mins.count + 2)
+            return TableColumns(name: minName + 2 * share, widths: mins.map { $0 + share })
         }
-        if compact && share == 0 {
+        if compact {
             // A phone never fits the table: size the name so the screen's edge falls through the MIDDLE of
-            // a column (Notion's peek), never on a column's edge, where "Due date" read as the last column,
-            // cut with no ellipsis (UI tour run 9, I5).
+            // a column (Notion's peek), never on a column's edge, where "Due date" read as the last column
+            // (UI tour run 9, I5). The edge fades there.
             let name = max(170, min(260, width - minCol * 1.5))
-            return TableColumns(name: name, col: minCol, field: minCol, fieldCount: fieldCount)
+            return TableColumns(name: name, widths: mins)
         }
-        return TableColumns(name: minName + 2 * share, col: minCol + share, field: minCol + share, fieldCount: fieldCount)
+        // Wider than the window on an iPad / Mac: Name keeps its minimum (it took half the window before,
+        // UI tour run 14, P-I12 / P-M9) and the columns that fit beside it share the rest, so the window's
+        // edge falls on a column boundary and no amount is cut mid-number ("Rp 6.842.09", run 11, PD-1).
+        var used = minName
+        var k = 0
+        while k < mins.count && used + mins[k] <= width { used += mins[k]; k += 1 }
+        guard k > 0 else { return TableColumns(name: max(minName, width - minCol), widths: mins) }
+        let extra = width - used
+        let nameExtra = min(extra, 80)
+        let each = (extra - nameExtra) / CGFloat(k)
+        var widths = mins
+        for i in 0..<k { widths[i] += each }
+        return TableColumns(name: minName + nameExtra, widths: widths)
+    }
+}
+
+/// Sideways, the Table comes to rest only where a column starts right after the frozen Name column. A
+/// free stop left the column beside Name partly under it: its header said "Tanggal Penggunaan" while its
+/// cells read "ul", "Aug" (UI tour run 14, N-03 / P-I2 / P-M2).
+struct TableColumnSnap: ScrollTargetBehavior {
+    let starts: [CGFloat]
+    func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
+        let maxX = max(0, context.contentSize.width - context.containerSize.width)
+        guard maxX > 0 else { return }
+        let x = min(max(0, target.rect.origin.x), maxX)
+        let stops = starts.filter { $0 <= maxX + 0.5 }
+        guard let best = stops.min(by: { abs($0 - x) < abs($1 - x) }) else { return }
+        target.rect.origin.x = min(best, maxX)
     }
 }
 
@@ -72,6 +129,9 @@ struct ProjectTableTab: View {
     var onToggleAssignee: ((String, String, Bool) -> Void)? = nil
     /// "+ New task" under a group; answers the new task's id (nil = failed, the board says why).
     var onAddTask: ((String, String) async -> String?)? = nil
+    /// Each task's status option when the rows are grouped by something else than the section (the Table's
+    /// view groups by a property, web Group); nil = the group's own section.
+    var statusOf: ((BoardTask) -> RowStatus?)? = nil
 
     @Environment(\.horizontalSizeClass) private var hSize
     @State private var fields: [CustomField] = []
@@ -102,7 +162,7 @@ struct ProjectTableTab: View {
             } else {
                 GeometryReader { geo in
                     let pad: CGFloat = compact ? 12 : 24
-                    let cols = TableColumns.fit(width: geo.size.width - pad * 2, fieldCount: fields.count, compact: compact)
+                    let cols = TableColumns.fit(width: geo.size.width - pad * 2, fieldNames: fields.map(\.name), compact: compact)
                     grid(cols, visibleWidth: geo.size.width - pad * 2)
                         .padding(.horizontal, pad).padding(.vertical, 12)
                 }
@@ -122,17 +182,20 @@ struct ProjectTableTab: View {
                     .padding(.bottom, 24)
                 }
             }
-            .frame(width: cols.total)
+            .frame(width: cols.total + cols.trailingRoom(visibleWidth: visibleWidth), alignment: .leading)
             .frame(maxHeight: .infinity, alignment: .top)
         }
+        .scrollTargetBehavior(TableColumnSnap(starts: cols.columnStarts))
         .modifier(HorizontalOffsetTracker(offsetX: $stickyX))
         .background(NX.card)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         // More columns to the right: the edge fades instead of cutting a label clean (UI tour run 9, I5).
         .overlay(alignment: .trailing) {
-            if cols.total > visibleWidth + 1 {
+            if cols.total + cols.trailingRoom(visibleWidth: visibleWidth) - visibleWidth > stickyX + 1 {
+                // Wide enough to read as "more this way": 28 pt looked like a hard cut ("Due", "26 Ma",
+                // UI tour run 14, N-15).
                 LinearGradient(colors: [NX.card.opacity(0), NX.card], startPoint: .leading, endPoint: .trailing)
-                    .frame(width: 28)
+                    .frame(width: 44)
                     .allowsHitTesting(false)
             }
         }
@@ -189,7 +252,7 @@ struct ProjectTableTab: View {
                     .font(.system(size: 12, weight: .semibold)).foregroundStyle(NX.mutedFg)
                     .rotationEffect(.degrees(isCollapsed ? -90 : 0))
                     .frame(width: 18)
-                if statusOptions {
+                if statusOptions && !lane.id.hasPrefix("grp:") {
                     StatusPill(name: lane.name, colorKey: lane.colorKey, size: 14)
                 } else {
                     Text(lane.name).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
@@ -215,7 +278,7 @@ struct ProjectTableTab: View {
             : nil
         return ProjectTableRow(
             task: t, laneId: laneId, cols: cols, fields: fields, stickyX: stickyX,
-            status: laneStatus ?? RowStatus.plain(t), statusOptions: statusOptions,
+            status: statusOf?(t) ?? laneStatus ?? RowStatus.plain(t), statusOptions: statusOptions,
             allLanes: allLanes, members: members, selection: selection, order: order,
             onOpen: onOpen, onDrop: onDrop, onMoveTo: onMoveTo, onSetStatus: onSetStatus,
             onSetPriority: onSetPriority, onToggleAssignee: onToggleAssignee
@@ -320,19 +383,20 @@ struct TableHeaderRow: View {
                 .overlay(alignment: .trailing) { StickyColumnEdge(active: stickyX > 0) }
                 .offset(x: stickyX)
                 .zIndex(1)
-            cell(T("Assignee"), icon: "person", width: cols.col)
-            cell(T("Due date"), icon: "calendar", width: cols.col)
+            cell(T("Assignee"), icon: "person", width: cols.assignee)
+            cell(T("Due date"), icon: "calendar", width: cols.due)
             // The project's fields come right after the dates, as on the web's table (Harga, Request by,
             // Tanggal Penggunaan…, then Priority and Status): an iPad beside the sidebar showed the four
             // built-in columns and never a field (UI tour run 10, IPD-4).
-            ForEach(fields) { f in
-                cell(f.name, icon: nameFields.contains(f.id) ? "person" : Self.icon(f.type), width: cols.field)
+            ForEach(Array(fields.enumerated()), id: \.element.id) { i, f in
+                cell(f.name, icon: nameFields.contains(f.id) ? "person" : Self.icon(f.type), width: cols.field(i))
             }
-            cell(T("Priority"), icon: "flag", width: cols.col)
-            cell(T("Status"), icon: "rectangle.split.3x1", width: cols.col)
+            cell(T("Priority"), icon: "flag", width: cols.priority)
+            cell(T("Status"), icon: "rectangle.split.3x1", width: cols.status)
             Color.clear.frame(width: cols.open, height: 44)
                 .overlay(alignment: .leading) { Rectangle().fill(NX.border).frame(width: 1) }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(NX.card)
         .overlay(alignment: .bottom) { TableHairline() }
     }
@@ -340,9 +404,9 @@ struct TableHeaderRow: View {
     private func cell(_ title: String, icon: String, width: CGFloat, first: Bool = false) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon).font(.system(size: 12))
-            // Two lines before an ellipsis: "Tanggal Penggunaan" was cut to "Tanggal P…" (F-06).
-            Text(title).font(NXFont.text(13)).lineLimit(2).truncationMode(.tail)
-                .fixedSize(horizontal: false, vertical: true)
+            // One line: a field's column is as wide as its header (TableColumns.headerWidth), so
+            // "Tanggal Penggunaan" neither wraps (UI tour run 14, P-I12) nor cuts (F-06).
+            Text(title).font(NXFont.text(13)).lineLimit(1).truncationMode(.tail)
         }
         .foregroundStyle(NX.mutedFg)
         .padding(.horizontal, 12)
@@ -407,13 +471,13 @@ struct ProjectTableRow: View {
                 .overlay(alignment: .trailing) { StickyColumnEdge(active: stickyX > 0) }
                 .offset(x: stickyX)
                 .zIndex(1)
-            assigneeCell.modifier(TableCell(width: cols.col, height: rowH))
-            dueCell.modifier(TableCell(width: cols.col, height: rowH))
-            ForEach(fields) { f in
-                fieldCell(f).modifier(TableCell(width: cols.field, height: rowH))
+            assigneeCell.modifier(TableCell(width: cols.assignee, height: rowH))
+            dueCell.modifier(TableCell(width: cols.due, height: rowH))
+            ForEach(Array(fields.enumerated()), id: \.element.id) { i, f in
+                fieldCell(f).modifier(TableCell(width: cols.field(i), height: rowH))
             }
-            priorityCell.modifier(TableCell(width: cols.col, height: rowH))
-            statusCell.modifier(TableCell(width: cols.col, height: rowH))
+            priorityCell.modifier(TableCell(width: cols.priority, height: rowH))
+            statusCell.modifier(TableCell(width: cols.status, height: rowH))
             openButton {
                 Image(systemName: "chevron.right").font(.system(size: 13, weight: .medium)).foregroundStyle(NX.mutedFg)
                     .frame(maxWidth: .infinity)
@@ -421,6 +485,7 @@ struct ProjectTableRow: View {
             .modifier(TableCell(width: cols.open, height: rowH, inset: 0))
             .accessibilityLabel(T("Open"))
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(selecting && selected ? NX.violet.opacity(0.10) : Color.clear)
         .overlay(alignment: .bottom) { TableHairline() }
         .accessibilityAddTraits(selecting && selected ? .isSelected : [])
@@ -493,9 +558,7 @@ struct ProjectTableRow: View {
                 AvatarView(url: a.url, initial: a.initial, size: 26)
                     .overlay(Circle().strokeBorder(NX.card, lineWidth: 2))
             }
-            if task.assigneeAvatars.isEmpty {
-                Text("—").font(NXFont.text(14)).foregroundStyle(NX.mutedFg.opacity(0.6))
-            }
+            if task.assigneeAvatars.isEmpty { TableEmptyMark() }
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
@@ -510,6 +573,9 @@ struct ProjectTableRow: View {
                     .font(NXFont.text(14, overdue ? .medium : .regular))
                     .foregroundStyle(overdue ? NX.danger : NX.foreground.opacity(0.9))
                     .lineLimit(1).truncationMode(.tail)
+            } else {
+                // Every empty cell says so the same way, as Assignee does (UI tour run 14, N-15 / P-M9).
+                TableEmptyMark()
             }
         }
     }
@@ -610,8 +676,29 @@ struct ProjectTableRow: View {
             }
             .buttonStyle(.plain)
         } else {
-            openButton { Text(fieldText(f)).font(NXFont.text(14)).foregroundStyle(NX.foreground.opacity(0.9)).lineLimit(1) }
+            openButton { fieldFace(f) }
         }
+    }
+
+    /// A field's cell: a select option in its colour (web: the coloured pill, UI tour run 14, P-I12), any
+    /// other value as text, and "—" when the task has none.
+    @ViewBuilder private func fieldFace(_ f: CustomField) -> some View {
+        let text = fieldText(f)
+        if text.isEmpty {
+            TableEmptyMark()
+        } else if let key = fieldColorKey(f) {
+            let sw = StatusColor.swatch(key)
+            Text(text).font(NXFont.text(13, .medium)).lineLimit(1)
+                .padding(.horizontal, 8).padding(.vertical, 3)
+                .foregroundStyle(sw.fg).background(sw.bg, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+        } else {
+            Text(text).font(NXFont.text(14)).foregroundStyle(NX.foreground.opacity(0.9)).lineLimit(1)
+        }
+    }
+
+    private func fieldColorKey(_ f: CustomField) -> String? {
+        guard let cfv = (task.customFieldValues ?? []).first(where: { $0.customFieldId == f.id }) else { return nil }
+        return customFieldChip(cfv)?.colorKey
     }
 
     /// Reuses the board's chip formatter so currency / multi-select / place values read the same here as on
@@ -624,6 +711,13 @@ struct ProjectTableRow: View {
             return AppDateLocale.shortDate(day, timeZone: ProjDate.cal.timeZone)
         }
         return chip?.label ?? (cfv.value ?? "")
+    }
+}
+
+/// An empty Table cell: one quiet dash, the same in every column.
+struct TableEmptyMark: View {
+    var body: some View {
+        Text("—").font(NXFont.text(14)).foregroundStyle(NX.mutedFg.opacity(0.6)).accessibilityLabel(T("Empty"))
     }
 }
 

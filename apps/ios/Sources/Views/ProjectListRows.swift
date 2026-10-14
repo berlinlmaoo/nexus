@@ -72,6 +72,8 @@ struct ListPropLine: View {
     var columnLayout: ListColumns.Layout? = nil
     /// The List is grouped by priority: its header says it, the row does not repeat it.
     var hidePriority = false
+    /// The assignees' avatars at the end of the line; off where the row draws them beside the title.
+    var showPeople = true
 
     /// The custom values a row shows (web: up to four), with every date apart from start and due folded
     /// out when it repeats one of them or another date (UI tour run 9, I7: "24 May 24 May ⏱ 26 May").
@@ -140,11 +142,12 @@ struct ListPropLine: View {
     /// (UI tour run 12, MC2).
     private func columns(_ layout: ListColumns.Layout) -> some View {
         let repeated = repeatedDateFields(layout)
+        let dueSaid = dueSaidByField(layout)
         return HStack(spacing: 12) {
             ForEach(layout.fields, id: \.id) { field in
                 ListSlot(width: field.width) { if !repeated.contains(field.id) { fieldSlot(field.id) } }
             }
-            if layout.due { ListSlot(width: ListColumns.dueW) { dueSlot } }
+            if layout.due { ListSlot(width: ListColumns.dueW) { if !dueSaid { dueSlot } } }
             if layout.priority { ListSlot(width: ListColumns.priorityW) { prioritySlot } }
             if layout.status { ListSlot(width: ListColumns.statusW) { statusSlot } }
             if layout.people { ListSlot(width: ListColumns.peopleW, alignment: .trailing) { people } }
@@ -153,8 +156,12 @@ struct ListPropLine: View {
 
     /// Date columns that would repeat a day this row already shows (the due date, or an earlier date
     /// column): left blank, so "24 May 24 May ⏱ 26 May" reads "24 May ⏱ 26 May" (UI tour run 13, M-5).
+    ///
+    /// The due date that repeats a date column is the one left out instead, unless it is overdue (only the
+    /// due slot says that): "4 May" stays in its own column on every row rather than jumping to the due
+    /// column on some of them (UI tour run 14, P-M1).
     private func repeatedDateFields(_ layout: ListColumns.Layout) -> Set<String> {
-        var seen = Set(dueDay.map { [ProjDate.dayLabel($0)] } ?? [])
+        var seen = Set(overdue ? (dueDay.map { [ProjDate.dayLabel($0)] } ?? []) : [])
         var out = Set<String>()
         for field in layout.fields {
             guard let cfv = (task.customFieldValues ?? []).first(where: { $0.customFieldId == field.id }),
@@ -162,6 +169,16 @@ struct ListPropLine: View {
             if !seen.insert(chip.label).inserted { out.insert(field.id) }
         }
         return out
+    }
+
+    /// A date column of this row already shows the due day (and it is not overdue): the due slot stays blank.
+    private func dueSaidByField(_ layout: ListColumns.Layout) -> Bool {
+        guard !overdue, let due = dueDay.map(ProjDate.dayLabel) else { return false }
+        return layout.fields.contains { field in
+            guard let cfv = (task.customFieldValues ?? []).first(where: { $0.customFieldId == field.id }),
+                  let chip = customFieldChip(cfv), chip.isDate else { return false }
+            return chip.label == due
+        }
     }
 
     @ViewBuilder private func fieldSlot(_ id: String) -> some View {
@@ -205,7 +222,7 @@ struct ListPropLine: View {
             // the assignees' avatars ended others, so "who" jumped between the start and the end of the
             // line (UI tour run 11, PD-6).
             ForEach(chips.filter(\.isPerson)) { chip in customValue(chip) }
-            people
+            if showPeople { people }
         }
     }
 
@@ -219,7 +236,7 @@ struct ListPropLine: View {
         }
     }
 
-    @ViewBuilder private var people: some View {
+    @ViewBuilder var people: some View {
         let avatars = task.assigneeAvatars
         if !avatars.isEmpty {
             HStack(spacing: -6) {
@@ -292,16 +309,14 @@ struct ListTaskRow: View {
     @ViewBuilder private var content: some View {
         if wide {
             // The property columns are fixed widths (up to ~830 pt with three fields). On a portrait iPad
-            // with the sidebar open that left the title NO width at all — rows of amounts and pills with
-            // no names (UI tour run 5). Keep at least 200 pt for the title: drop field columns one by one,
-            // then fall back to the two-line row. Every row sees the same width and the title's ideal is
-            // fixed, so all rows of a List pick the same layout.
-            // Never down to zero field columns when the project has fields: that row showed only priority
-            // and status on a portrait iPad (UI tour run 9, P6). The two-line row shows them all instead.
+            // with the sidebar open that left the title NO width at all (UI tour run 5). Every row sees the
+            // same width and the title's ideal is fixed, so all rows of a List pick the same layout.
+            // Every column or the two-line row, nothing in between: dropping field columns to fit a portrait
+            // iPad left only Kategori, so the amount and the date vanished from the rows while the web and
+            // the Mac show them (UI tour run 14, P-I1), and the title was cut short beside empty slots
+            // (P-I10). The two-line row gives the title the whole width and lists every value under it.
             ViewThatFits(in: .horizontal) {
-                ForEach(0...max(0, columnLayout.fields.count - 1), id: \.self) { dropped in
-                    wideRow(columnLayout.droppingFields(dropped))
-                }
+                wideRow(columnLayout)
                 compactRow
             }
         } else {
@@ -317,12 +332,19 @@ struct ListTaskRow: View {
         }
     }
 
+    /// The title on top, the values under it in one fixed order (amount, options, dates, priority,
+    /// status, person fields); the assignees' avatars sit at the end of the title line, so they never
+    /// wrap onto a line of their own (UI tour run 14, N-14).
     private var compactRow: some View {
-        HStack(alignment: .top, spacing: 10) {
+        let line = ListPropLine(task: task, status: status, wrap: true, hidePriority: hidePriority, showPeople: false)
+        return HStack(alignment: .top, spacing: 10) {
             leading.padding(.top, 1)
             VStack(alignment: .leading, spacing: 5) {
-                titleLine
-                ListPropLine(task: task, status: status, wrap: true, hidePriority: hidePriority)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    titleLine.frame(maxWidth: .infinity, alignment: .leading)
+                    line.people
+                }
+                line
             }
         }
     }
@@ -353,6 +375,63 @@ struct ListTaskRow: View {
     }
 }
 
+/// "+ New task" at the end of a List group (web ListView): tap, type a title, Return adds it and keeps the
+/// field open for the next one (UI tour run 14, P-I10: the iPad List had no way to add in a group).
+struct ListNewTaskRow: View {
+    /// Creates the task; answers its id (nil = failed, the board says why and keeps the title).
+    let onAdd: (String) async -> String?
+    @State private var editing = false
+    @State private var title = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        Group {
+            if editing {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                    TextField(T("Task title"), text: $title)
+                        .focused($focused)
+                        .font(NXFont.text(15))
+                        .submitLabel(.done)
+                        .onSubmit(submit)
+                    Button(T("Cancel")) { editing = false; title = "" }
+                        .font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                        .buttonStyle(.plain)
+                        .keyboardShortcut(.cancelAction)
+                }
+                .padding(.horizontal, 8)
+                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+            } else {
+                Button {
+                    title = ""
+                    editing = true
+                    focused = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus").font(.system(size: 13, weight: .semibold))
+                        Text(T("New task")).font(NXFont.text(14))
+                    }
+                    .foregroundStyle(NX.mutedFg)
+                    .padding(.horizontal, 8)
+                    .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+            }
+        }
+        .overlay(alignment: .bottom) { Rectangle().fill(NX.border.opacity(0.7)).frame(height: 0.5) }
+    }
+
+    private func submit() {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        title = ""
+        focused = true
+        Task { _ = await onAdd(t) }
+    }
+}
+
 /// The wide List's property columns: their widths, which custom fields get one (the project's fields in
 /// their own order that hold a value on any task shown, at most four like the web row), and which fixed
 /// slots the List draws at all.
@@ -374,18 +453,6 @@ enum ListColumns {
         var priority = true
         var status = true
         var people = true
-
-        /// The same layout with `n` field columns left out (a narrow window): plain values from the end
-        /// first, option fields (Kategori) last. Kategori went first before, so a Mac List never showed it
-        /// (UI tour run 13, M-1 / I-6).
-        func droppingFields(_ n: Int) -> Layout {
-            var copy = self
-            var drop = Set<String>()
-            let order = fields.filter { !$0.keep }.reversed() + fields.filter(\.keep).reversed()
-            for f in order.prefix(n) { drop.insert(f.id) }
-            copy.fields = fields.filter { !drop.contains($0.id) }
-            return copy
-        }
     }
 
     static func fieldIds(fields: [CustomField], lanes: [ProjectDetail.Lane], max: Int = 4) -> [String] {
