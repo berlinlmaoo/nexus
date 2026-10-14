@@ -80,7 +80,7 @@ export const ID_PROJECT_OVERVIEW: Record<string, string> = {
   "Couldn't draft an update. Try again, or write it yourself.": "Gagal membuat draf. Coba lagi, atau tulis sendiri.",
   "Couldn't post the update. Check your connection and try again.": "Update gagal dikirim. Cek koneksi lalu coba lagi.",
   "Post update": "Kirim update",
-  "No updates yet. Post one so the team and BoD can follow along without asking.": "Belum ada update. Kirim satu supaya tim dan BoD bisa mengikuti tanpa harus bertanya.",
+  "No updates yet. Post one so the team and the board can follow along without asking.": "Belum ada update. Kirim satu supaya tim dan direksi bisa mengikuti tanpa harus bertanya.",
   "Show all {n} updates": "Lihat semua {n} update",
   "On Track": "Sesuai rencana",
   "At Risk": "Berisiko",

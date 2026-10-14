@@ -1,4 +1,5 @@
-import { type CSSProperties, ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { type CSSProperties, ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useStickyHeaderOffset } from "@/hooks/use-sticky-header-offset";
 import { cn } from "@/lib/utils";
 
 /**
@@ -65,6 +66,15 @@ export function PageHeader({
     return () => window.removeEventListener("scroll", read);
   }, []);
   const barEdge = !tabs && cn("max-md:border-b", scrolled ? "max-md:border-border" : "max-md:border-transparent");
+
+  // Where the pinned header ends, for the page's own scroll snapping: a list marked `data-snap-rows` stops
+  // with its top row whole right under the header, not cut through the middle (UI tour run 15, R15-WB-1).
+  const stickyTop = useStickyHeaderOffset();
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--page-sticky-top", `${stickyTop}px`);
+    return () => { root.style.removeProperty("--page-sticky-top"); };
+  }, [stickyTop]);
 
   const titleBlock = (
     <div

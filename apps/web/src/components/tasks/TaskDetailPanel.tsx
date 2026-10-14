@@ -1161,13 +1161,17 @@ function fmtCreatedDateTime(ts: string, locale: string): string {
   return `${m.day} ${m.month} ${m.year} • ${m.hour}:${m.minute}`;
 }
 
+/** An empty table cell reads "—", in every column (UI tour run 15, R15-WB-4: Assignee showed "—" while an empty
+ *  date or text cell was blank). */
+const EMPTY_CELL = "—";
+
 export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLeft }: { field: NexusCustomField; projectId?: string; onSet: (value: unknown) => void; hideLabel?: boolean; /** The task's creator was offboarded: the CREATED field marks them "Left". */ creatorLeft?: boolean }) {
   const { t: tr, locale } = useLang();
   const type = (field.type ?? "").toUpperCase();
   const choices = customFieldChoices(field.options);
   // In a table cell (hideLabel) the editor reads as plain text until hovered, like a Notion property.
   const cls = hideLabel
-    ? "w-full min-w-0 appearance-none truncate rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm outline-none transition-colors hover:bg-muted focus:border-primary focus:bg-background"
+    ? "w-full min-w-0 appearance-none truncate rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm outline-none transition-colors placeholder:text-muted-foreground/60 hover:bg-muted focus:border-primary focus:bg-background focus:placeholder:text-transparent"
     : "w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary";
 
   const strVal = typeof field.value === "string" ? field.value : "";
@@ -1198,7 +1202,7 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
         value={strVal}
         onChange={(v) => onSet(v)}
         clearable
-        placeholder={hideLabel ? "" : tr("Not set")}
+        placeholder={hideLabel ? EMPTY_CELL : tr("Not set")}
         ariaLabel={field.name}
         // A value no longer in the option list still shows (and stays pickable), as the <select> kept it.
         options={(strVal && !choices.includes(strVal) ? [...choices, strVal] : choices).map((c) => ({ value: c, label: c, color: choiceColor(field, c, choices) }))}
@@ -1225,7 +1229,7 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
     // place's name, with its map link as an icon. The link itself is edited in the task.
     body = (
       <div className="flex min-w-0 items-center gap-1">
-        <input value={place.label} onChange={(e) => { const v = e.target.value; setPlace((p) => ({ ...p, label: v })); }} onBlur={() => commit(place, true)} aria-label={field.name} className={cls} />
+        <input value={place.label} onChange={(e) => { const v = e.target.value; setPlace((p) => ({ ...p, label: v })); }} onBlur={() => commit(place, true)} aria-label={field.name} placeholder={EMPTY_CELL} className={cls} />
         {place.mapUrl.trim() && <a href={place.mapUrl} target="_blank" rel="noopener noreferrer" aria-label={tr("Open map")} title={tr("Open map")} className="shrink-0 text-muted-foreground hover:text-primary"><MapPin className="h-3.5 w-3.5" /></a>}
       </div>
     );
@@ -1252,7 +1256,7 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
     // One line in a table cell: the address, then an icon that opens it (WD-11).
     body = (
       <div className="flex min-w-0 items-center gap-1">
-        <input type="url" value={local} onChange={(e) => setLocal(e.target.value)} onBlur={() => commit(local, local !== strVal)} aria-label={field.name} className={cls} />
+        <input type="url" value={local} onChange={(e) => setLocal(e.target.value)} onBlur={() => commit(local, local !== strVal)} aria-label={field.name} placeholder={EMPTY_CELL} className={cls} />
         {strVal.trim() && <a href={strVal} target="_blank" rel="noopener noreferrer" aria-label={tr("Open link")} title={tr("Open link")} className="shrink-0 text-muted-foreground hover:text-primary"><Link2 className="h-3.5 w-3.5" /></a>}
       </div>
     );
@@ -1272,10 +1276,10 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
   } else if (type === "NUMBER") {
     // The field's own format (Rupiah, Percent, a currency… and Bar / Ring), Indonesian grouping; a click edits.
     // Rupiah keeps its "Rp" box that groups while typing. In a table cell numbers sit right-aligned (Notion).
-    body = <NumberFieldInput raw={strVal} fieldOptions={field.options} onSet={(v) => onSet(v)} ariaLabel={field.name} inline={hideLabel} align={hideLabel ? "end" : "start"} placeholder={hideLabel ? "" : tr("Not set")} />;
+    body = <NumberFieldInput raw={strVal} fieldOptions={field.options} onSet={(v) => onSet(v)} ariaLabel={field.name} inline={hideLabel} align={hideLabel ? "end" : "start"} placeholder={hideLabel ? EMPTY_CELL : tr("Not set")} />;
   } else if (type === "DATE") {
     // Notion-style date: the day as text, a calendar on click; no "mm/dd/yyyy" in empty fields.
-    body = <DateField value={local || null} onChange={(v) => { setLocalState(v ?? ""); onSet(v ?? ""); }} ariaLabel={field.name} className={hideLabel ? undefined : "h-[34px] rounded-lg border border-border bg-background px-2.5 hover:bg-background hover:border-primary/40"} placeholder={hideLabel ? "" : tr("Not set")} />;
+    body = <DateField value={local || null} onChange={(v) => { setLocalState(v ?? ""); onSet(v ?? ""); }} ariaLabel={field.name} className={hideLabel ? undefined : "h-[34px] rounded-lg border border-border bg-background px-2.5 hover:bg-background hover:border-primary/40"} placeholder={hideLabel ? EMPTY_CELL : tr("Not set")} />;
   } else {
     body = (
       <input
@@ -1283,6 +1287,7 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
         value={local}
         onChange={(e) => setLocal(e.target.value)}
         onBlur={() => commit(local, local !== shownVal)}
+        placeholder={hideLabel ? EMPTY_CELL : undefined}
         className={cls}
       />
     );

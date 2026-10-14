@@ -13,6 +13,7 @@ import { docTypeLabel } from "@/components/legal/legal-labels";
 import { fmtDate } from "@/lib/nexus-api";
 import { LEGAL_DOC_TYPES, legalApi, legalSettingsApi, legalTemplatesApi, type LegalCompany, type LegalSeries } from "@/lib/legal-api";
 import { useLang } from "@/lib/lang";
+import { cn } from "@/lib/utils";
 
 /**
  * Issuing companies (owner, 14 Oct 2026): their legal name and address as printed in contracts, their kop,
@@ -25,6 +26,29 @@ export function LegalSettings() {
   const canEdit = (me.data?.invitePower ?? "NONE") !== "NONE";
   const headerTop = useStickyHeaderOffset();
   const jumpRef = useRef<HTMLElement>(null);
+  // The chip of the company in view is marked, following the scroll (UI tour run 15, R15-WB-7): the company
+  // whose card starts at or above the line just under the pinned chips, else the first.
+  const [inView, setInView] = useState<string | null>(null);
+  const list = companies.data?.companies;
+  useEffect(() => {
+    if (!list || list.length <= 2) return;
+    let frame = 0;
+    const read = () => {
+      frame = 0;
+      const line = headerTop + (jumpRef.current?.offsetHeight ?? 0) + 24;
+      let current = list[0]?.id ?? null;
+      for (const c of list) {
+        const el = document.getElementById(`legal-co-${c.id}`);
+        if (el && el.getBoundingClientRect().top <= line) current = c.id;
+      }
+      setInView(current);
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(read); };
+    read();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    return () => { if (frame) cancelAnimationFrame(frame); window.removeEventListener("scroll", schedule); window.removeEventListener("resize", schedule); };
+  }, [list, headerTop]);
 
   if (companies.isLoading) return <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {t("Loading…")}</div>;
   if (companies.isError) return <p className="py-6 text-sm text-destructive">{(companies.error as Error).message}</p>;
@@ -38,14 +62,15 @@ export function LegalSettings() {
         <nav ref={jumpRef} aria-label={t("Companies")} style={{ top: headerTop }}
           className="sticky z-20 -mx-4 flex flex-wrap gap-1.5 border-b border-border bg-background px-4 py-2 md:-mx-8 md:px-8">
           {companies.data!.companies.map((c) => (
-            <button key={c.id} type="button"
+            <button key={c.id} type="button" aria-current={inView === c.id ? "location" : undefined}
               onClick={() => {
                 const el = document.getElementById(`legal-co-${c.id}`);
                 if (!el) return;
                 el.style.scrollMarginTop = `${headerTop + (jumpRef.current?.offsetHeight ?? 0) + 12}px`;
                 el.scrollIntoView({ behavior: "smooth", block: "start" });
               }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-9">
+              className={cn("inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-9",
+                inView === c.id ? "border-foreground/25 bg-accent text-foreground" : "border-border bg-card hover:bg-muted")}>
               {c.name}<span className="font-mono text-[10px] text-muted-foreground">{c.code}</span>
             </button>
           ))}

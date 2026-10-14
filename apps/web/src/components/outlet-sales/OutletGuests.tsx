@@ -149,10 +149,13 @@ function Communities({ guests }: { guests: OutletGuests }) {
                     <span className="shrink-0 font-medium tabular-nums">{count(c.total, lang)}</span>
                   </button>
                 ) : (
-                  <div className="flex items-baseline justify-between gap-3 text-sm">
-                    <span className={cn("min-w-0 truncate", gutter && "pl-[1.125rem]", c.archived && "text-muted-foreground")}>
-                      {c.name}
-                      {c.archived && <span className="ml-1.5 text-xs text-muted-foreground">· {t("archived")}</span>}
+                  // The same box as an expandable row, with an empty chevron slot, so a "Total only" community lines up
+                  // with one that opens (UI tour run 15, R15-WM-6: "Run Club" sat indented and lower on a phone).
+                  <div className="-mx-1.5 flex w-[calc(100%+0.75rem)] items-baseline justify-between gap-3 px-1.5 text-sm pointer-coarse:min-h-[40px] pointer-coarse:items-center">
+                    <span className={cn("flex min-w-0 items-baseline", c.archived && "text-muted-foreground")}>
+                      {gutter && <span aria-hidden className="w-[1.125rem] shrink-0 self-center" />}
+                      <span className="truncate">{c.name}</span>
+                      {c.archived && <span className="ml-1 text-xs text-muted-foreground">· {t("archived")}</span>}
                     </span>
                     <span className="shrink-0 font-medium tabular-nums">{count(c.total, lang)}</span>
                   </div>

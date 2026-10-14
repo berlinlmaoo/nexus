@@ -145,7 +145,7 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
           {isMobile ? (
             // Phone (UI tour run 10, WM-1): a card per document like the iPhone app; the desktop table showed
             // only its first column here, the rest scrolled off to the right.
-            <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+            <ul data-snap-rows className="divide-y divide-border overflow-clip rounded-xl border border-border bg-card">
               {rows.map((d) => (
                 <li key={d.id}>
                   <DocCard d={d} lang={lang} onOpen={() => onOpen(d.id)} onShowChain={filters.parentId ? undefined : () => showChain(d)} />
@@ -153,7 +153,9 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
               ))}
             </ul>
           ) : (
-          <div className="overflow-x-auto rounded-lg border border-border">
+          // From xl the table fits, and `overflow-clip` (no scroll box of its own) lets its rows snap under the page
+          // header (UI tour run 15, R15-WB-1).
+          <div className="overflow-x-auto rounded-lg border border-border xl:overflow-clip">
             {/* Fixed columns (UI tour run 10, WD-1): the number column took a third of the row and cut the
                 title; it is now a set width with an ellipsis (the full number on hover), and the title gets
                 the room. */}
@@ -161,12 +163,14 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
               <colgroup>
                 {/* Status gave up width it did not use to the number and the counterparty (UI tour run 13, W-D11),
                     and again to the title (run 14, R14-WD-12: a chip needs ~6 rem; the signed line truncates). */}
+                {/* Company and the signed line under the status got the room the date did not use (UI tour run 15,
+                    R15-WD-7: "The Z Networ…" and "14 Oct · QA D…" were cut beside a half-empty date column). */}
                 <col className="w-[14rem]" />
                 <col />
-                <col className="w-[12rem]" />
-                <col className="w-[8rem]" />
-                <col className="w-[6.5rem]" />
-                <col className="w-[7.5rem]" />
+                <col className="w-[11rem]" />
+                <col className="w-[9.5rem]" />
+                <col className="w-[6rem]" />
+                <col className="w-[9.5rem]" />
               </colgroup>
               <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                 <tr>
@@ -178,7 +182,7 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
                   <th className="px-3 py-2 font-medium">{t("Status")}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody data-snap-rows className="divide-y divide-border">
                 {rows.map((d) => (
                   <tr key={d.id} className="cursor-pointer hover:bg-accent/40" onClick={() => onOpen(d.id)}>
                     <td className="px-3 py-2 align-top font-mono text-xs">
@@ -250,19 +254,20 @@ function StatusChip({ status }: { status: string }) {
 /** Type · uploaded · project or deal · "Addendum to …": the second line under a document's title. */
 function DocKind({ d }: { d: ArchiveDoc }) {
   const { t } = useLang();
+  // An addendum says so once: "Addendum to PKS/…", not "Addendum · Addendum to PKS/…" (UI tour run 15, R15-WM-11).
+  const parts = [
+    d.parent && d.docType === "ADD" ? null : docTypeLabel(d.docType),
+    d.source === "UPLOADED" ? t("Uploaded") : null,
+    d.deal ? d.deal.code : d.project ? d.project.name : null,
+  ].filter(Boolean);
   return (
     <>
-      {docTypeLabel(d.docType)}{d.source === "UPLOADED" ? ` · ${t("Uploaded")}` : ""}{d.deal ? ` · ${d.deal.code}` : d.project ? ` · ${d.project.name}` : ""}
-      {d.parent && <> · <AddendumOf number={d.parent.number} /></>}
+      {parts.join(" · ")}
+      {d.parent && <>{parts.length > 0 && " · "}<AddendumOf number={d.parent.number} /></>}
     </>
   );
 }
 
-/**
- * "Addendum to PKS/PATS-UNIV/…/2026/002" with the number kept whole: it moves to the next line as one piece
- * and, when even a line is too short, breaks only after a "/" (UI tour run 14, R14-WM-20: the phone card
- * broke it at the hyphen, "PKS/PATS- / UNIV/…").
- */
 function AddendumOf({ number }: { number: string }) {
   const { t } = useLang();
   const label = t("Addendum to {number}", { number: "\u0000" });

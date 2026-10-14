@@ -237,17 +237,15 @@ export function Meter({ pct, label }: { pct: number | null; label: string }) {
  * One label and its value. Figures sit in one right-aligned column whatever their depth: a part is indented
  * by its label only, so its number lines up under its total's (UI tour run 13, W-B13).
  */
-function Row({ label, children, strong, depth = 0, text, besideFigures }: { label: string; children: ReactNode; strong?: boolean; depth?: 0 | 1 | 2; text?: boolean; besideFigures?: boolean }) {
+function Row({ label, children, strong, depth = 0, text }: { label: string; children: ReactNode; strong?: boolean; depth?: 0 | 1 | 2; text?: boolean; besideFigures?: boolean }) {
   // A written answer goes under its question, so the one value column stays the right-aligned figures
-  // (UI tour run 14, R14-WM-13: "Not filled" sat left-aligned in the middle of that column on a phone). Only
-  // where the answers have a column of their own beside the figures (a wide card from lg up) do they keep the
-  // label / answer grid.
-  const stack = text && (besideFigures ? "max-lg:grid-cols-1 max-lg:gap-y-0.5" : "grid-cols-1 gap-y-0.5");
-  const stackIndent = text && cn(depth === 1 && (besideFigures ? "max-lg:pl-3" : "pl-3"), depth === 2 && (besideFigures ? "max-lg:pl-6" : "pl-6"));
+  // (UI tour run 14, R14-WM-13: "Not filled" sat left-aligned in the middle of that column on a phone). The
+  // wide card does the same now (UI tour run 15, R15-WD-2: beside the figures the answers were the only
+  // values not on the right edge).
   return (
-    <div className={cn("grid gap-x-3 py-1.5 text-sm", stack || "grid-cols-[minmax(7.5rem,40%)_1fr]", text && besideFigures && "lg:grid-cols-[minmax(7.5rem,40%)_1fr]")}>
+    <div className={cn("grid gap-x-3 py-1.5 text-sm", text ? "grid-cols-1 gap-y-0.5" : "grid-cols-[minmax(7.5rem,40%)_1fr]")}>
       <dt className={cn("text-muted-foreground", depth === 1 && "pl-3", depth === 2 && "pl-6", strong && "font-medium text-foreground")}>{label}</dt>
-      <dd className={cn("min-w-0 break-words tabular-nums", !text && "text-right", stackIndent, strong && "font-semibold")}>{children}</dd>
+      <dd className={cn("min-w-0 break-words tabular-nums", !text && "text-right", text && depth === 1 && "pl-3", text && depth === 2 && "pl-6", strong && "font-semibold")}>{children}</dd>
     </div>
   );
 }

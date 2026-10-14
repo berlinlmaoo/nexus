@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { CalendarPlus, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CAPS } from "@/components/calendar/bits";
 import { useLang } from "@/lib/lang";
 import type { OutletEvent, OutletMonthResponse } from "@/lib/outlet-sales-api";
 import { EventDetail, MarkerLegend, STATUS_DOT, STATUS_LABEL, STATUS_ORDER, dayLong, monthLabel } from "./outlet-ui";
@@ -65,10 +66,13 @@ export function OutletCalendar({
 
   return (
     <div className="flex flex-col gap-4">
-      <div role="group" aria-label={monthLabel(data.month, locale)} className="overflow-clip rounded-xl border border-border bg-card">
+      {/* The month and the day panel are snap points: a scrolled page stops with the day's heading right under
+          the pinned tabs, not with the legend half under them (UI tour run 15, R15-WD-1). */}
+      <div role="group" data-snap-row aria-label={monthLabel(data.month, locale)} className="overflow-clip rounded-xl border border-border bg-card">
         <div aria-hidden className="grid grid-cols-7 border-b border-border bg-muted/40">
           {weekdays.map((w) => (
-            <div key={w} className="truncate px-1 py-2 text-center text-xs font-medium text-muted-foreground sm:px-2 sm:text-left">{w}</div>
+            // One month-grid style (UI tour run 15, R15-WB-3): "MON TUE" as the Calendar writes them.
+            <div key={w} className={cn("truncate px-1.5 py-2 text-left text-muted-foreground sm:px-2", CAPS)}>{w}</div>
           ))}
         </div>
         <div className="grid grid-cols-7">
@@ -96,25 +100,25 @@ export function OutletCalendar({
                   i % 7 !== 6 && "border-r",
                   i < 35 && "border-b",
                   inMonth ? "bg-card hover:bg-muted/40" : "bg-muted/30 text-muted-foreground/60",
-                  isSel && "bg-primary/5 ring-2 ring-inset ring-primary",
+                  isSel && "bg-cal-accent/5 ring-2 ring-inset ring-cal-accent dark:ring-primary",
                 )}
               >
                 <span
                   className={cn(
-                    "grid h-6 w-6 place-items-center self-center rounded-full text-xs tabular-nums sm:self-start",
-                    isToday && "bg-primary font-semibold text-primary-foreground",
+                    "grid h-6 w-6 place-items-center self-start rounded-full text-xs tabular-nums",
+                    isToday && "bg-cal-accent font-semibold text-cal-accent-foreground dark:bg-primary dark:text-primary-foreground",
                   )}
                 >
                   {Number(d.slice(8))}
                 </span>
                 {/* Wider screens: the day-target mark in the corner, inset clear of the selection ring. A phone's
-                    cell is too narrow for a corner mark beside the centred date (UI tour run 14, R14-WM-12: it
+                    cell is too narrow for a corner mark beside the date (UI tour run 14, R14-WM-12: it
                     touched the "15" badge and the ring), so there it leads the row of dots under the date. */}
                 {hasTarget && (
                   <Target aria-hidden className="absolute right-2 top-2 hidden h-3.5 w-3.5 text-primary sm:block" />
                 )}
                 {(hasTarget || evs.length > 0) && (
-                  <span aria-hidden className="flex items-center justify-center gap-0.5 sm:hidden">
+                  <span aria-hidden className="flex items-center gap-0.5 sm:hidden">
                     {hasTarget && <Target className="h-3 w-3 shrink-0 text-primary" />}
                     {/* One dot per night (three at most), coloured by status. */}
                     {evs.slice(0, 3).map((e) => <span key={e.id} className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[e.status])} />)}
@@ -146,7 +150,7 @@ export function OutletCalendar({
         ]}
       />
 
-      <section ref={panelRef} aria-labelledby="os-day" className="scroll-mt-4">
+      <section ref={panelRef} data-snap-row aria-labelledby="os-day" className="scroll-mt-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 id="os-day" className="text-base font-semibold">{dayLong(day, locale, data.today.slice(0, 4))}</h3>
           <button

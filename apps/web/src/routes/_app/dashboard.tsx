@@ -681,7 +681,8 @@ function LevelChip() {
           <div className="mt-1 flex items-center gap-2">
             <AnimatedBar pct={info.pct} className="h-1.5 flex-1 rounded-full bg-muted sm:w-24 sm:flex-none" barClassName="h-full rounded-full bg-primary" />
             <span className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
-              {formatCount(totalXp)} XP{info.isMax ? "" : ` / ${formatCount((info.nextFloor ?? 0))}`}
+              {/* "1.000 / 1.150 XP", the unit once at the end, as the apps write it (UI tour run 15 shared decision). */}
+              {info.isMax ? `${formatCount(totalXp)} XP` : `${formatCount(totalXp)} / ${formatCount((info.nextFloor ?? 0))} XP`}
             </span>
           </div>
         </div>
@@ -786,7 +787,7 @@ function ProfileCard({ avatarUrl }: { avatarUrl?: string | null }) {
         )}
         <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex items-baseline justify-between gap-2"><span className="text-xs uppercase tracking-wide text-muted-foreground">{t("Level")}</span><span className="text-sm font-bold">{levelLabel(info.level, info.name, t)}</span></div>
-          <div className="flex items-baseline justify-between gap-2"><span className="text-xs uppercase tracking-wide text-muted-foreground">{t("Period points")}</span><span className="text-sm font-bold tabular-nums">{formatCount(totalXp)}</span></div>
+          <div className="flex items-baseline justify-between gap-2"><span className="text-xs uppercase tracking-wide text-muted-foreground">{t("XP this period")}</span><span className="text-sm font-bold tabular-nums">{formatCount(totalXp)}</span></div>
         </div>
       </div>
       <Link to="/settings" className="mt-4 flex h-11 items-center justify-center gap-2 rounded-xl border border-primary/40 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { NotebookPen, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CAPS } from "@/components/calendar/bits";
 import { useLang } from "@/lib/lang";
 import { MarkerLegend, dayLong, monthLabel } from "@/components/outlet-sales/outlet-ui";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
@@ -40,7 +41,8 @@ export function SocialCalendar({ data, onOpen }: { data: SocialMonthResponse; on
     <div className="flex flex-col gap-3">
       <div role="group" aria-label={monthLabel(data.month, locale)} className="overflow-clip rounded-xl border border-border bg-card">
         <div aria-hidden className="grid grid-cols-7 border-b border-border bg-muted/40">
-          {weekdays.map((w) => <div key={w} className="truncate px-1 py-2 text-center text-xs font-medium text-muted-foreground sm:px-2 sm:text-left">{w}</div>)}
+          {/* One month-grid style (UI tour run 15, R15-WB-3): "MON TUE" as the Calendar writes them. */}
+          {weekdays.map((w) => <div key={w} className={cn("truncate px-1.5 py-2 text-left text-muted-foreground sm:px-2", CAPS)}>{w}</div>)}
         </div>
         <div className="grid grid-cols-7">
           {cells.map((d, i) => {
@@ -74,29 +76,37 @@ export function SocialCalendar({ data, onOpen }: { data: SocialMonthResponse; on
                   future && inMonth && "text-muted-foreground",
                 )}
               >
-                <span className="flex items-center justify-between gap-1">
-                  <span className={cn("grid h-6 w-6 place-items-center rounded-full text-xs tabular-nums", isToday && "bg-primary font-semibold text-primary-foreground")}>
+                {/* Date top-left on every width, as on every month grid (UI tour run 15, R15-WB-3). A phone's cell is too
+                    narrow for the marks beside it, so there they get their own row under it. */}
+                <span className="flex items-center justify-start gap-1 sm:justify-between">
+                  <span className={cn("grid h-6 w-6 place-items-center rounded-full text-xs tabular-nums", isToday && "bg-cal-accent font-semibold text-cal-accent-foreground dark:bg-primary dark:text-primary-foreground")}>
                     {Number(d.slice(8))}
                   </span>
-                  <span aria-hidden className="flex items-center gap-0.5 text-muted-foreground">
+                  <span aria-hidden className="hidden items-center gap-0.5 text-muted-foreground sm:flex">
                     {notes && <NotebookPen className="h-3 w-3" />}
                     {hasTarget && <Target className="h-3 w-3 text-primary" />}
                   </span>
                 </span>
+                {(notes || hasTarget) && (
+                  <span aria-hidden className="flex items-center gap-0.5 text-muted-foreground sm:hidden">
+                    {notes && <NotebookPen className="h-3 w-3" />}
+                    {hasTarget && <Target className="h-3 w-3 text-primary" />}
+                  </span>
+                )}
                 {day && day.engagement !== null && (
-                  <span aria-hidden className="truncate text-center text-xs font-semibold tabular-nums text-foreground sm:text-left sm:text-sm">
+                  <span aria-hidden className="truncate text-left text-xs font-semibold tabular-nums text-foreground sm:text-sm">
                     {/* Plain dotted count, never "3k" / "2.2k" (UI tour run 14, R14-WB-2). */}
                     {num(day.engagement, lang)}
                   </span>
                 )}
                 {/* On a phone too (UI tour run 13, W-M14): the posts were dropped below sm. */}
                 {day && day.posts !== null && (
-                  <span aria-hidden className="truncate text-center text-[10px] tabular-nums text-muted-foreground sm:text-left sm:text-[11px]">
+                  <span aria-hidden className="truncate text-left text-[10px] tabular-nums text-muted-foreground sm:text-[11px]">
                     {tn(day.posts, "1 post", "{n} posts")}
                   </span>
                 )}
                 {inMonth && !future && !day?.recorded && (
-                  <span aria-hidden className="mx-auto mt-auto h-1 w-1 rounded-full bg-muted-foreground/30 sm:mx-0" />
+                  <span aria-hidden className="mt-auto h-1 w-1 rounded-full bg-muted-foreground/30" />
                 )}
               </button>
             );

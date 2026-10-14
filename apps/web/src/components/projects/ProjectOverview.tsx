@@ -72,7 +72,8 @@ const CARD = "rounded-2xl border border-border bg-card shadow-soft";
 
 function Section({ title, icon, action, children, className, id }: { title: string; icon?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; id: string }) {
   return (
-    <section aria-labelledby={id} className={cn(CARD, "min-w-0 overflow-hidden", className)}>
+    // A card stops whole under the pinned project header while the page scrolls (UI tour run 15, R15-WB-1).
+    <section aria-labelledby={id} data-snap-row className={cn(CARD, "min-w-0 overflow-hidden", className)}>
       <div className="flex min-h-12 items-center gap-2 border-b border-border px-4 py-2.5">
         <h3 id={id} className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold">
           {icon && <span className="text-muted-foreground" aria-hidden>{icon}</span>}
@@ -479,8 +480,8 @@ function TeamCard({ people, memberById, unassigned, onDrill }: { people: Map<str
                   {num(unassigned)}
                   {/* Overdue and done are counted per person; for nobody they read as a quiet dash, so the row
                       fills its three columns like the others (UI tour run 11, WM-7). */}
-                  <span className="text-right text-sm text-muted-foreground/60" aria-hidden>–</span>
-                  <span className="text-right text-sm text-muted-foreground/60" aria-hidden>–</span>
+                  <span className="text-right text-sm text-muted-foreground/60" aria-hidden>—</span>
+                  <span className="text-right text-sm text-muted-foreground/60" aria-hidden>—</span>
                 </button>
               </li>
             )}
@@ -542,7 +543,10 @@ function RecentlyDoneCard({ completed, memberById, onOpenTask }: { completed: Ne
       const mins = Math.round((d.getTime() - Date.now()) / 60_000);
       return Math.abs(mins) < 60 ? rtf.format(Math.min(0, mins), "minute") : rtf.format(Math.round(mins / 60), "hour");
     }
-    return Math.abs(days) < 30 ? rtf.format(days, "day") : d.toLocaleDateString(locale, { day: "numeric", month: "short" });
+    // Relative for the last week, then the date: "25 Sep" (the iPhone rule, UI tour run 14 N-18; run 15 shared
+    // decision so every platform reads the same). Another year shows its year.
+    if (Math.abs(days) <= 7) return rtf.format(days, "day");
+    return d.toLocaleDateString(locale, { day: "numeric", month: "short", ...(d.getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}) });
   };
   const rows = completed.slice(0, 6);
   return (
@@ -620,7 +624,7 @@ function StatusUpdatesCard({ projectId }: { projectId: string }) {
       </div>
       <div className="px-4 pb-4 pt-2">
         {updates.isLoading && <div className="space-y-2" aria-hidden><div className="h-3 w-1/3 animate-pulse rounded bg-muted" /><div className="h-3 w-full animate-pulse rounded bg-muted" /><div className="h-3 w-4/5 animate-pulse rounded bg-muted" /></div>}
-        {!updates.isLoading && rows.length === 0 && <p className="text-sm text-muted-foreground">{t("No updates yet. Post one so the team and BoD can follow along without asking.")}</p>}
+        {!updates.isLoading && rows.length === 0 && <p className="text-sm text-muted-foreground">{t("No updates yet. Post one so the team and the board can follow along without asking.")}</p>}
         {shown.length > 0 && (
           <ol className="divide-y divide-border border-t border-border">
             {shown.map((u) => (

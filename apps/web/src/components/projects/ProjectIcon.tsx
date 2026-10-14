@@ -133,10 +133,17 @@ export function ProjectMarkFor({ projectId, icon, size = 16, className }: { proj
  */
 export function ProjectTile({ projectId, size, className }: { projectId: string; size: number; className?: string }) {
   const icon = useLiveProjectIcon(projectId);
+  const type = useLiveProjectType(projectId);
   if (isProjectPhoto(icon)) return <ProjectMarkFor projectId={projectId} icon={icon} size={size} className={cn("rounded-lg ring-1 ring-border", className)} />;
+  // A dashboard project keeps its template icon here too (UI tour run 15, R15-WB-5: the Messages room list
+  // drew the page icon for the outlet and social media rooms while their own headers showed store and
+  // megaphone).
+  const Dash = type ? DASHBOARD_MARK[type] : undefined;
   return (
     <span aria-hidden className={cn("grid shrink-0 place-items-center rounded-lg bg-muted ring-1 ring-border", className)} style={{ width: size, height: size }}>
-      <ProjectPageIcon size={Math.round(size * 0.55)} />
+      {Dash
+        ? <Dash aria-hidden strokeWidth={1.6} style={{ width: Math.round(size * 0.55), height: Math.round(size * 0.55), color: "var(--st-gray-dot, #91918e)" }} />
+        : <ProjectPageIcon size={Math.round(size * 0.55)} />}
     </span>
   );
 }

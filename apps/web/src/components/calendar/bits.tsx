@@ -374,7 +374,9 @@ export function ItemRow({
   // A long-overdue row is not faded: its dashed ring, muted title and "Overdue for more than…" line
   // already mark it, and fading took the text below 4.5:1.
   const cls = cn(
-    "flex w-full items-start gap-[10px] rounded-xl px-[10px] py-2 text-left",
+    // A snap point for the day panel's own scroller (UI tour run 15, R15-WB-1): a scrolled day stops on a whole
+    // row under the panel's sticky header, not on half a name line.
+    "flex w-full snap-start items-start gap-[10px] rounded-xl px-[10px] py-2 text-left",
     clickable && cn("transition-colors hover:bg-muted/70 focus-visible:bg-muted/70", FOCUS_ROW),
   );
   return clickable ? (
