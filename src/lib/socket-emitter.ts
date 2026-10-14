@@ -217,6 +217,16 @@ export function emitOutletSalesChanged(projectId: string, eventId: string | null
 }
 
 /**
+ * `social-media-changed` { projectId, date, month, actorId } to the `project:<id>` room (owner, 14 Oct 2026):
+ * a day of a Social Media Report project was recorded, a target or the platforms changed (date null for a
+ * monthly target, month null for the platforms). A ping, not the data: whoever has the report open refetches
+ * GET /api/projects/:id/social-media for the month it shows. Apps that do not know the event ignore it.
+ */
+export function emitSocialMediaChanged(projectId: string, date: string | null, month: string | null, actorId?: string) {
+  publishSafely(BUS_EVENTS.SOCIAL_MEDIA_CHANGED, { projectId, date, month, actorId: actorId ?? null })
+}
+
+/**
  * `automations-changed` { projectId, automationId, actorId } to the `project:<id>` room (12 Oct 2026): a rule
  * was created, edited, toggled, deleted or restored, or it ran (new run-log row). A ping: the open Automations
  * tab refetches through GET /api/automations, which applies the access rules. Apps that do not know it ignore it.

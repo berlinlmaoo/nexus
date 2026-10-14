@@ -11,7 +11,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { AvatarStack } from "@/components/Avatar";
 import { ProgressBar } from "@/components/StatusPill";
 import { ProjectMark } from "@/components/projects/ProjectIcon";
-import { TemplateChosen, TemplateGallery, type GalleryPick } from "@/components/projects/TemplateGallery";
+import { TemplateChosen, TemplateGallery, type DashboardType, type GalleryPick } from "@/components/projects/TemplateGallery";
 import { TabPreviewCards } from "@/components/projects/TabPreviewCards";
 import { NEW_PROJECT_HIDDEN_TABS, projectSettingsErrorText, type ProjectTypeId } from "@/components/projects/project-tabs";
 import { MemberMultiPicker } from "@/components/projects/MemberMultiPicker";
@@ -480,7 +480,7 @@ function ProjectsPage() {
               </div>
             ) : (
             <div className="mt-5 space-y-3">
-              <TemplateChosen pick={newProjectPick ?? (newProjectType === "TASK" ? { kind: "blank" } : { kind: "type", type: newProjectType as "OUTLET_SALES" | "PIPELINE" })} onChange={backToGallery} />
+              <TemplateChosen pick={newProjectPick ?? (newProjectType === "TASK" ? { kind: "blank" } : { kind: "type", type: newProjectType as DashboardType })} onChange={backToGallery} />
               {newProjectFolderId && folderList.some((f) => f.id === newProjectFolderId) && (
                 <div className="flex min-w-0 items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs">
                   <FolderGlyph folder={folderList.find((f) => f.id === newProjectFolderId)!} size={14} className="text-muted-foreground" />
@@ -579,7 +579,7 @@ function ProjectsPage() {
                 variant="primary"
                 className="w-full font-bold"
               >
-                {createProject.isPending ? tr("Creating project…") : newProjectType === "PIPELINE" ? tr("Create project + open pipeline") : newProjectType === "OUTLET_SALES" ? tr("Create project + open dashboard") : tr("Create project + open board")}
+                {createProject.isPending ? tr("Creating project…") : newProjectType === "PIPELINE" ? tr("Create project + open pipeline") : newProjectType === "OUTLET_SALES" || newProjectType === "SOCIAL_MEDIA_REPORT" ? tr("Create project + open dashboard") : tr("Create project + open board")}
               </Button>
             </div>
             )}

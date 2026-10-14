@@ -70,7 +70,7 @@ export const ID_PROJECTS: Record<string, string> = {
   // Refusals from /api/projects, by code
   "Board or List has to stay on — at least one way to see the tasks.": "Board atau Daftar harus tetap nyala — minimal satu cara untuk melihat task.",
   "That tab can't be changed here. Refresh the page and try again.": "Tab itu tidak bisa diubah di sini. Muat ulang halaman lalu coba lagi.",
-  "That project type is coming soon. For now you can create a Task Project, a Pipeline Dashboard or an Outlet Sales Dashboard.": "Tipe project itu segera hadir. Untuk sekarang kamu bisa membuat Task Project, Pipeline Dashboard, atau Outlet Sales Dashboard.",
+  "That project type is coming soon. For now you can create a Task Project, a Pipeline Dashboard, an Outlet Sales Dashboard or a Social Media Report.": "Tipe project itu segera hadir. Untuk sekarang kamu bisa membuat Task Project, Pipeline Dashboard, Outlet Sales Dashboard, atau Laporan Media Sosial.",
   // The Projects page: projects are called projects (owner, 9 Oct 2026 — "kok masih new mission?").
   // Since 12 Oct 2026 the pages are plainly "Projects" and "My Tasks".
   "New project": "Project baru",

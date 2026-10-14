@@ -64,6 +64,8 @@ export function hiddenTabsOf(project?: Pick<NexusProject, "hiddenTabs"> | null):
 export const PROJECT_TYPES = [
   { id: "TASK", available: true },
   { id: "OUTLET_SALES", available: true },
+  // Owner, 14 Oct 2026: Social Media Report (components/social-media).
+  { id: "SOCIAL_MEDIA_REPORT", available: true },
   { id: "CONTENT", available: false },
   { id: "PIPELINE", available: true },
 ] as const;
@@ -80,7 +82,7 @@ export function projectSettingsErrorText(code: unknown): string | null {
     case "MEMBER_NOT_IN_WORKSPACE":
       return "Someone you picked isn't in this workspace any more. Refresh and pick again.";
     case "TYPE_COMING_SOON":
-      return "That project type is coming soon. For now you can create a Task Project, a Pipeline Dashboard or an Outlet Sales Dashboard.";
+      return "That project type is coming soon. For now you can create a Task Project, a Pipeline Dashboard, an Outlet Sales Dashboard or a Social Media Report.";
     // The company's one pipeline (owner/GM, 9 Oct 2026). PIPELINE_EXISTS opens the board when the answer
     // names it; without a projectId the person is not one of its members (owner, 9 Oct 2026 evening:
     // the board's lead adds people, like any project).

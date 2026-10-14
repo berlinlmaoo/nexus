@@ -37,6 +37,8 @@ export const BUS_EVENTS = {
   PIPELINE_CHANGED: "pipeline-changed",
   /** An event or target of an Outlet Sales Dashboard project changed → the `project:<id>` room. Ids only (owner, 10 Oct 2026). */
   OUTLET_SALES_CHANGED: "outlet-sales-changed",
+  /** A day, target or platform of a Social Media Report project changed → the `project:<id>` room. Ids only (owner, 14 Oct 2026). */
+  SOCIAL_MEDIA_CHANGED: "social-media-changed",
   /** A project's automations or their run log changed → the `project:<id>` room. Ids only (12 Oct 2026). */
   AUTOMATIONS_CHANGED: "automations-changed",
   /** A doc's body or header changed → `project:<id>` ("doc-changed", ids only) for lists and open pages (block editor, 12 Oct 2026). */

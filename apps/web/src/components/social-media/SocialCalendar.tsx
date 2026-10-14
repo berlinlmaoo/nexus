@@ -1,0 +1,106 @@
+import { useMemo } from "react";
+import { NotebookPen, Target } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useLang } from "@/lib/lang";
+import { dayLong, monthLabel } from "@/components/outlet-sales/outlet-ui";
+import type { SocialMonthResponse } from "@/lib/social-media-api";
+import { num } from "./social-ui";
+
+function addDays(iso: string, n: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** The 42 days shown for a month: Monday first, six weeks, as the NEXUS Calendar and the outlet. */
+function monthGrid(month: string): string[] {
+  const first = `${month}-01`;
+  const dow = (new Date(`${first}T00:00:00Z`).getUTCDay() + 6) % 7;
+  const start = addDays(first, -dow);
+  return Array.from({ length: 42 }, (_, i) => addDays(start, i));
+}
+
+/**
+ * The report's month (owner, 14 Oct 2026): every day with its engagement (all platforms) and posts, a mark
+ * on a day with notes or its own target. A day opens its sheet: figures per platform, notes, day targets.
+ */
+export function SocialCalendar({ data, onOpen }: { data: SocialMonthResponse; onOpen: (date: string) => void }) {
+  const { t, tn, lang, locale } = useLang();
+  const cells = useMemo(() => monthGrid(data.month), [data.month]);
+  const byDate = useMemo(() => new Map(data.days.map((d) => [d.date, d])), [data.days]);
+  const custom = useMemo(() => new Set(data.dayTargets.map((d) => d.date)), [data.dayTargets]);
+  const compact = useMemo(() => new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 }), [locale]);
+  const weekdays = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => new Date(`2026-10-${String(5 + i).padStart(2, "0")}T00:00:00`).toLocaleDateString(locale, { weekday: "short" })),
+    [locale],
+  );
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div role="group" aria-label={monthLabel(data.month, locale)} className="overflow-clip rounded-xl border border-border bg-card">
+        <div aria-hidden className="grid grid-cols-7 border-b border-border bg-muted/40">
+          {weekdays.map((w) => <div key={w} className="truncate px-1 py-2 text-center text-xs font-medium text-muted-foreground sm:px-2 sm:text-left">{w}</div>)}
+        </div>
+        <div className="grid grid-cols-7">
+          {cells.map((d, i) => {
+            const inMonth = d.slice(0, 7) === data.month;
+            const day = inMonth ? byDate.get(d) : undefined;
+            const isToday = d === data.today;
+            const future = d > data.today;
+            const notes = !!day && (day.worked !== "" || day.didntWork !== "");
+            const hasTarget = inMonth && custom.has(d);
+            const label = [
+              dayLong(d, locale, data.today.slice(0, 4)),
+              day && day.engagement !== null ? t("{n} engagement", { n: num(day.engagement, lang) }) : "",
+              day && day.posts !== null ? tn(day.posts, "1 post", "{n} posts") : "",
+              notes ? t("Has notes") : "",
+              hasTarget ? t("Own daily target") : "",
+              isToday ? t("Today") : "",
+              inMonth && !day?.recorded && !future ? t("Not recorded") : "",
+            ].filter(Boolean).join(", ");
+            return (
+              <button
+                key={d}
+                type="button"
+                disabled={!inMonth}
+                aria-label={label}
+                onClick={() => onOpen(d)}
+                className={cn(
+                  "relative flex min-h-[3.75rem] min-w-0 flex-col items-stretch gap-0.5 border-border p-1 text-left transition-colors focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:min-h-[6rem] sm:p-1.5",
+                  i % 7 !== 6 && "border-r",
+                  i < 35 && "border-b",
+                  inMonth ? "bg-card hover:bg-muted/40" : "bg-muted/30 text-muted-foreground/50",
+                  future && inMonth && "text-muted-foreground",
+                )}
+              >
+                <span className="flex items-center justify-between gap-1">
+                  <span className={cn("grid h-6 w-6 place-items-center rounded-full text-xs tabular-nums", isToday && "bg-primary font-semibold text-primary-foreground")}>
+                    {Number(d.slice(8))}
+                  </span>
+                  <span aria-hidden className="flex items-center gap-0.5 text-muted-foreground">
+                    {notes && <NotebookPen className="h-3 w-3" />}
+                    {hasTarget && <Target className="h-3 w-3 text-primary" />}
+                  </span>
+                </span>
+                {day && day.engagement !== null && (
+                  <span aria-hidden className="truncate text-center text-xs font-semibold tabular-nums text-foreground sm:text-left sm:text-sm">
+                    {compact.format(day.engagement)}
+                  </span>
+                )}
+                {day && day.posts !== null && (
+                  <span aria-hidden className="hidden truncate text-[11px] tabular-nums text-muted-foreground sm:block">
+                    {tn(day.posts, "1 post", "{n} posts")}
+                  </span>
+                )}
+                {inMonth && !future && !day?.recorded && (
+                  <span aria-hidden className="mx-auto mt-auto h-1 w-1 rounded-full bg-muted-foreground/30 sm:mx-0" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">{t("Each day shows its engagement (likes + comments + shares) across platforms, and the posts published. Tap a day to record it.")}</p>
+    </div>
+  );
+}

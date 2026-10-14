@@ -38,8 +38,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     const where = { projectId, OR: [{ ownerId: null }, { ownerId: session.user.id }] }
     let rows = await prisma.projectView.findMany({ where, orderBy: [{ position: "asc" }, { createdAt: "asc" }] })
-    // Pipeline and Outlet Sales projects have their own screens; only task projects get the built-ins.
-    if (project.type !== "PIPELINE" && project.type !== "OUTLET_SALES") {
+    // Pipeline, Outlet Sales and Social Media Report projects have their own screens; only task projects
+    // get the built-ins.
+    if (project.type !== "PIPELINE" && project.type !== "OUTLET_SALES" && project.type !== "SOCIAL_MEDIA_REPORT") {
       const have = new Set(rows.filter((r) => r.builtin && r.ownerId === null).map((r) => r.builtin as string))
       const seed = { id: projectId, tableColumns: project.tableColumns, templateId: project.templateId, customFields: project.customFields.map((f) => ({ ...f, type: String(f.type) })), sectionNames: project.taskLists.map((l) => l.name) }
       if (await ensureBuiltinViews(prisma, seed, have)) {
