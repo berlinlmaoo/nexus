@@ -2,7 +2,8 @@ import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router"
 import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useEdgeFade } from "@/hooks/use-edge-fade";
 import { AlertCircle, CalendarDays, Check, ChevronDown, Download, FileText, FolderKanban, Inbox, Loader2, Lock, MessageSquare, Paperclip, Send, Tag, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -292,6 +293,9 @@ function MySubmissions() {
   // view has no multimedia columns.
   const projects = new Set(subs.filter((s) => (filter === "all" || s.kind === filter) && inProject(s)).map((s) => s.projectId).filter(Boolean));
   const visibleCols = columns.filter((c) => (c.projectIds ? c.projectIds.some((id) => projects.has(id)) : true) || shown.some((s) => keyOf(s) === c.key));
+  // Phone: the lane cut at the right edge fades out, so it reads as "swipe for more" (UI tour run 9).
+  const boardRef = useRef<HTMLDivElement>(null);
+  const boardFade = useEdgeFade(boardRef, [visibleCols.length, shown.length]);
 
   // `/submissions?id=<submissionId>` opens straight onto that submission (the `submission_status`
   // notification links here).
@@ -361,7 +365,7 @@ function MySubmissions() {
                 message={mine ? t("When the team asks for a revision or replies to you, the request shows up here.") : t("Try another filter.")}
                 action={<EmptyAction onClick={() => { setFilter("all"); setMine(false); setProjectFilter(null); }}>{t("Show all")}</EmptyAction>} />
             ) : (
-              <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-4 sm:snap-none">
+              <div ref={boardRef} className={cn("flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto pb-4 sm:snap-none", boardFade)}>
                 {visibleCols.map((col, i) => {
                   const items = shown.filter((s) => keyOf(s) === col.key);
                   const p = preset(col);

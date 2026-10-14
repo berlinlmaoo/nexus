@@ -54,7 +54,18 @@ function Settings() {
   const active: string = search.section ?? "profile";
   const setActive = (id: string) => { void navigate({ search: { section: id === "profile" ? undefined : (id as SectionId) }, replace: true }); };
   const strip = useRef<HTMLElement>(null);
-  const stripFade = useEdgeFade(strip);
+  const stripFade = useEdgeFade(strip, [], true);
+  // Phone/tablet strip: bring the open section's tab into view (a deep link to ?section=security opened on a
+  // tab cut at "Securi…"). Only the strip scrolls sideways; the page itself is never moved.
+  useEffect(() => {
+    const el = strip.current;
+    const btn = el?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!el || !btn || el.scrollWidth <= el.clientWidth) return;
+    const left = btn.offsetLeft; // the strip is `relative`, so it is the offsetParent
+    const pad = 40;
+    if (left - pad < el.scrollLeft) el.scrollTo({ left: Math.max(0, left - pad), behavior: "smooth" });
+    else if (left + btn.offsetWidth + pad > el.scrollLeft + el.clientWidth) el.scrollTo({ left: left + btn.offsetWidth + pad - el.clientWidth, behavior: "smooth" });
+  }, [active]);
   return (
     <div>
       <PageHeader title={t("Settings")} subtitle={t("Your profile, security, notifications and workspace preferences.")} />

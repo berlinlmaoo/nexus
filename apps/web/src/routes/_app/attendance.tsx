@@ -537,7 +537,7 @@ function Attendance() {
           // Its own scroll box, as tall as the screen allows: the date row can only stay pinned inside
           // the element that scrolls, and a page-level sticky cannot cross `overflow-x`. So the days
           // and weekdays stay above the dots while you scroll down the crew (owner, 28 Sep 2026).
-          <div ref={boardScrollRef} className="max-h-[calc(100dvh-11rem)] overflow-auto overscroll-contain">
+          <div ref={boardScrollRef} className="isolate max-h-[calc(100dvh-11rem)] overflow-auto overscroll-contain">
             {/* `min-w-max`: with a plain `w-full` the 31 day columns and the member column were
                 squeezed into the phone's width, so the name, the pills and the dots all landed on
                 top of each other. Now the table keeps its natural width and this container scrolls,
@@ -545,7 +545,7 @@ function Attendance() {
             <table className="w-full min-w-max text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr>
-                  <th data-member-col className="sticky left-0 top-0 z-30 w-[11.5rem] min-w-[11.5rem] bg-muted px-3 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">{tr("Member")}</th>
+                  <th data-member-col className="sticky left-0 top-0 z-30 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] bg-muted px-2 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:max-w-[20rem] sm:px-4">{tr("Member")}</th>
                   {periodDays.map((pd) => (
                     <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} className={cn("sticky top-0 z-20 bg-muted px-1 py-1.5 font-medium text-[10px] leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
                       <span className={cn("block text-[9px] uppercase", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" })}</span>
@@ -569,7 +569,7 @@ function Attendance() {
                 )}
                 {memberRows.map((u) => (
                   <tr key={u.id} className="border-b border-border last:border-0 hover:bg-muted/20">
-                    <td className="sticky left-0 z-10 w-[11.5rem] min-w-[11.5rem] bg-card px-3 py-2.5 shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">
+                    <td className="sticky left-0 z-10 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] bg-card px-1.5 py-2 shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:max-w-[20rem] sm:px-4 sm:py-2.5">
                       {/* Two lines at every width: who, then everything about them. One row squeezed the
                           badges and pills on top of each other in the 20rem column (28 Sep 2026). */}
                       <div className="flex min-w-0 flex-col gap-1.5">
@@ -581,22 +581,28 @@ function Attendance() {
                           >
                             <MemberAvatar user={u} />
                             <div className="min-w-0">
-                              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-medium">{u.name || tr("Unnamed")}</span><LeftTag leftAt={leftAtOf(u)} /></div>
-                              <div className="truncate text-[10px] text-muted-foreground">{memberSubtitle(u)}</div>
+                              {/* Phone: first name only, so the pinned column stays narrow (UI tour run 9). */}
+                              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-medium sm:hidden" title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
+                              <div className="hidden truncate text-[10px] text-muted-foreground sm:block">{memberSubtitle(u)}</div>
+                              <PhoneMemberSummary d={canManage ? dayOffOf(u.id) : null} />
                             </div>
                           </button>
                         ) : (
-                          <>
+                          <div className="flex min-w-0 items-center gap-2 px-1 py-0.5">
                             <MemberAvatar user={u} />
                             <div className="min-w-0">
-                              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-medium">{u.name || tr("Unnamed")}</span><LeftTag leftAt={leftAtOf(u)} /></div>
-                              <div className="truncate text-[10px] text-muted-foreground">{memberSubtitle(u)}</div>
+                              {/* Phone: first name only, so the pinned column stays narrow (UI tour run 9). */}
+                              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-medium sm:hidden" title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
+                              <div className="hidden truncate text-[10px] text-muted-foreground sm:block">{memberSubtitle(u)}</div>
+                              <PhoneMemberSummary d={canManage ? dayOffOf(u.id) : null} />
                             </div>
-                          </>
+                          </div>
                         )}
                         {/* Phone (UI tour run 7, 14 Oct 2026): a 11.5rem column with small pills whose tap targets
                             grow invisibly (tap-area); the 44 px pills and the 15rem column left room for three days. */}
-                        <div className="flex min-w-0 flex-wrap items-center gap-1 pl-1">
+                        {/* Phone: the pills live behind the name (deductions) and the person's Record page; on the
+                            narrow pinned column they pushed the day columns off screen (UI tour run 9). */}
+                        <div className="hidden min-w-0 flex-wrap items-center gap-1 pl-1 sm:flex">
                         <TrackingBadges rec={recMap.get(`${u.id}:${todayKey}`)} isToday />
                         {/* The person's whole record for this period: counts, XP log with reasons, requests. */}
                         <Link to="/people/$userId" params={{ userId: u.id }} search={{ period: monthKey }} title={tr("{name} — record for this period", { name: u.name ?? tr("Unnamed") })}
@@ -912,6 +918,17 @@ function ExportMenu({ monthKey, monthLabel }: { monthKey: string; monthLabel: st
       )}
     </div>
   );
+}
+
+// First word of a name, for the narrow pinned column on a phone.
+function shortName(name: string | null | undefined) {
+  return (name ?? "").trim().split(/\s+/)[0] ?? "";
+}
+
+// Phone line under the name: this period's day-off quota and XP as plain text (the pills sit on desktop).
+function PhoneMemberSummary({ d }: { d: { remaining: number; quota: number; xp: { score: number } } | null }) {
+  if (!d) return null;
+  return <div className="truncate text-[10px] tabular-nums text-muted-foreground sm:hidden">{d.remaining}/{d.quota} DO · {d.xp.score} XP</div>;
 }
 
 // Member avatar that falls back to the initials Avatar if the photo URL 404s.
@@ -1734,18 +1751,21 @@ function EmploymentStartSection() {
                     : tr("Eligible from {date}", { date: m.eligibleFrom ? new Date(m.eligibleFrom).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" }) : "—" })}
               </div>
             </div>
-            <input
-              type="date"
-              max={new Date().toISOString().slice(0, 10)}
-              defaultValue={m.employmentStartDate ? String(m.employmentStartDate).slice(0, 10) : ""}
-              // Saved on blur, not on every keystroke: a date input fires onChange for each partial
-              // value (0002-01-01 on the way to 2024-...), which the server would rightly reject.
-              onBlur={(e) => {
-                const next = e.target.value || null;
+            {/* The app's date picker, "14 Oct 2026" (UI tour run 9: a raw input painted "dd/mm/yyyy"). It
+                emits one whole day per pick, so it saves on change. */}
+            <DateField
+              value={m.employmentStartDate ? String(m.employmentStartDate).slice(0, 10) : null}
+              max={new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" })}
+              yearPicker
+              align="end"
+              ariaLabel={tr("Employment start date")}
+              placeholder={tr("Pick a date")}
+              disabled={save.isPending && save.variables?.userId === m.userId}
+              onChange={(next) => {
                 const current = m.employmentStartDate ? String(m.employmentStartDate).slice(0, 10) : null;
                 if (next !== current) save.mutate({ userId: m.userId, date: next });
               }}
-              className="shrink-0 rounded-xl border border-border bg-background px-2 py-1.5 text-sm"
+              className="w-auto shrink-0 rounded-xl border border-border bg-background px-2.5 py-1.5"
             />
             <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold",
               m.eligible ? "bg-success/10 text-success" : "bg-muted text-muted-foreground")}>
