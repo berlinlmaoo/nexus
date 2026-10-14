@@ -451,7 +451,7 @@ final class NEXUSUITour: XCTestCase {
                 // Not on the first page of the archive: search for it, as a person would (typing saves nothing).
                 let search = app.textFields.firstMatch
                 if search.waitForExistence(timeout: 5) {
-                    search.tap()
+                    press(search)
                     search.typeText(title)
                     pause(1.5)
                 }
@@ -470,9 +470,8 @@ final class NEXUSUITour: XCTestCase {
 
     /// Taps `element` and waits until `landed()` (or the app's picture changed). Run 10, 14 Oct 2026: on
     /// the Mac every Legal tab and document tap was "ok" yet did nothing, and all five Legal screens were
-    /// the same picture. The NEXUS window is brought to the front only for a shot (takeShot), so the click
-    /// went to a window that was not key, and macOS spends a click on a background window on making it
-    /// key. So: front first, a normal tap, and if nothing happened a click at the element's centre.
+    /// the same picture. The window is brought to the front first (a click on a background window only
+    /// makes it key), and on the Mac the element is CLICKED, not tapped: see `press`.
     @MainActor
     private func tapUntil(_ element: XCUIElement, landed: () -> Bool) -> Bool {
         for attempt in 0..<3 {
@@ -481,10 +480,10 @@ final class NEXUSUITour: XCTestCase {
             #endif
             let before = app.windows.firstMatch.screenshot().pngRepresentation
             if attempt == 0 {
-                element.tap()
+                press(element)
             } else {
                 guard element.exists else { return landed() }
-                element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+                press(element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
             }
             let deadline = Date().addingTimeInterval(4)
             while Date() < deadline {
@@ -495,6 +494,28 @@ final class NEXUSUITour: XCTestCase {
             if app.windows.firstMatch.screenshot().pngRepresentation != before { return true }
         }
         return landed()
+    }
+
+    /// A tap on the iPhone / iPad, a mouse click on the Mac. Run 11, 14 Oct 2026: on Mac Catalyst
+    /// XCUIElement.tap() (and a coordinate tap) on a SwiftUI Button (the Legal tabs, a document row) was
+    /// delivered at the right point yet the button never fired, three times in a row; click() on the same
+    /// element, the mouse event a person sends, switched the tab at once. Not an app bug: a mouse works.
+    @MainActor
+    private func press(_ element: XCUIElement) {
+        #if targetEnvironment(macCatalyst)
+        element.click()
+        #else
+        element.tap()
+        #endif
+    }
+
+    @MainActor
+    private func press(_ point: XCUICoordinate) {
+        #if targetEnvironment(macCatalyst)
+        point.click()
+        #else
+        point.tap()
+        #endif
     }
 
     /// The Indonesian labels of the tabs named in ui-tour-screens.json (LocalizationLegal.swift).
@@ -666,6 +687,19 @@ final class NEXUSUITour: XCTestCase {
         guard maxPages > 1, let target = scrollTarget(in: root, web: web) else { return 0 }
         var page = 1
         var last = first.pngRepresentation
+        #if targetEnvironment(macCatalyst)
+        // The scroll wheel puts the pointer on a row, and its hover highlight alone made "page 2" differ
+        // from page 1 while nothing had scrolled, so the wrong wheel direction was never caught (run 11,
+        // Legal archive). The pointer goes there first, and the reference picture is taken with it.
+        if !web {
+            target.element.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: target.visible.midX - target.element.frame.minX,
+                                     dy: target.visible.midY - target.element.frame.minY))
+                .hover()
+            pause(0.5)
+            last = takeShot(root).pngRepresentation
+        }
+        #endif
         // A drag that lands on a row can still be read as a tap and push a screen (run 5: the
         // leaderboard opened a profile). Pushed screen = stop paging and go back.
         let backs = { () -> Int in web ? 0 : root.navigationBars.buttons.matching(identifier: "BackButton").count }
@@ -673,10 +707,11 @@ final class NEXUSUITour: XCTestCase {
         let navigatedAway = { () -> Bool in
             guard !web, backs() > backsBefore else { return false }
             let back = root.navigationBars.buttons.matching(identifier: "BackButton").firstMatch
-            if back.exists && back.isHittable { back.tap(); self.pause(1.0) }
+            if back.exists && back.isHittable { self.press(back); self.pause(1.0) }
             return true
         }
-        if id.hasSuffix("board") || id.hasSuffix("table") || id.hasSuffix("timeline") {
+        // Not the Dashboard: it ends in "board" but has no columns to swipe to.
+        if (id.hasSuffix("board") && id != "dashboard") || id.hasSuffix("table") || id.hasSuffix("timeline") {
             drag(target, dx: -0.5, dy: 0)
             let shot = takeShot(root)
             if navigatedAway() { return page - 1 }
@@ -689,6 +724,7 @@ final class NEXUSUITour: XCTestCase {
         }
         #if targetEnvironment(macCatalyst)
         var flipped = false
+        var scrolled = false
         #endif
         while page < maxPages {
             drag(target, dx: 0, dy: -0.5)
@@ -698,13 +734,17 @@ final class NEXUSUITour: XCTestCase {
             let data = shot.pngRepresentation
             #if targetEnvironment(macCatalyst)
             // First scroll changed nothing: maybe the wheel goes the other way on this Mac. Once.
-            if data == last && page == 1 && !flipped {
+            // (Not `page == 1`: a board's sideways shot already made it 2, and the flip never came.)
+            if data == last && !scrolled && !flipped {
                 flipped = true
                 macWheelSign = -macWheelSign
                 continue
             }
             #endif
             if data == last { break }
+            #if targetEnvironment(macCatalyst)
+            scrolled = true
+            #endif
             last = data
             page += 1
             attachShot(shot, "\(prefix)\(id)-\(page)")
@@ -722,25 +762,38 @@ final class NEXUSUITour: XCTestCase {
     /// ON SCREEN. Measured by the whole frame, the Timeline's inner horizontal scroll view (as tall as
     /// all its rows) beat the vertical one around it; the drags went to its off-screen middle and
     /// pages 1–3 of the iPhone timeline were the same picture (run 5).
+    ///
+    /// iPad / Mac: never the sidebar, and only the part of the page BESIDE it. Run 11, 14 Oct 2026: the
+    /// iPad's page scroll view spans the whole window, under the floating sidebar, so the drags down its
+    /// left gutter (6 pt in) landed on the sidebar list; pages 2–6 of the dashboard, attendance, Legal
+    /// and most other screens scrolled the sidebar and showed the same page.
     @MainActor
     private func scrollTarget(in root: XCUIApplication, web: Bool) -> ScrollTarget? {
-        let window = root.windows.firstMatch.frame
+        let screen = root.windows.firstMatch.frame
+        var window = screen
         if web {
             let page = root.webViews.firstMatch
             guard page.exists else { return nil }
             return ScrollTarget(element: page, visible: page.frame.intersection(window))
         }
+        let sidebar = sidebarFrame(in: root, window: window)
+        if let sidebar, sidebar.maxX < window.maxX - 80 {
+            window = CGRect(x: sidebar.maxX, y: window.minY, width: window.maxX - sidebar.maxX, height: window.height)
+        }
         var best: ScrollTarget?
         var bestArea: CGFloat = 0
         for query in [root.collectionViews, root.tables, root.scrollViews] {
-            for i in 0..<min(query.count, 8) {
+            for i in 0..<min(query.count, 16) {
                 let element = query.element(boundBy: i)
                 guard element.exists else { continue }
+                if let sidebar, element.frame.insetBy(dx: 2, dy: 2).intersection(sidebar) == element.frame.insetBy(dx: 2, dy: 2) { continue }
                 let visible = element.frame.intersection(window)
                 guard !visible.isNull, visible.width > 40, visible.height > 80 else { continue }
                 // A frame much taller or wider than what shows of it is content, not a viewport: it is
                 // scrolled by something around it.
-                let isViewport = element.frame.height <= visible.height * 1.05 && element.frame.width <= visible.width * 1.05
+                // (Against the whole window: a page scroll view under the sidebar is still a viewport.)
+                let shown = element.frame.intersection(screen)
+                let isViewport = element.frame.height <= shown.height * 1.05 && element.frame.width <= shown.width * 1.05
                 let area = visible.width * visible.height * (isViewport ? 1 : 0.5)
                 if area > bestArea { best = ScrollTarget(element: element, visible: visible); bestArea = area }
             }
@@ -748,9 +801,21 @@ final class NEXUSUITour: XCTestCase {
         return best
     }
 
+    /// The sidebar's on-screen frame in a regular-width layout (UIKit names its list "Sidebar" on the
+    /// iPad and the Mac alike), nil on the iPhone or while the sidebar is collapsed.
+    @MainActor
+    private func sidebarFrame(in root: XCUIApplication, window: CGRect) -> CGRect? {
+        let sidebar = root.collectionViews.matching(NSPredicate(format: "identifier == 'Sidebar' OR label == 'Sidebar'")).firstMatch
+        guard sidebar.exists else { return nil }
+        let visible = sidebar.frame.intersection(window)
+        guard !visible.isNull, visible.width > 40, visible.width < window.width * 0.6 else { return nil }
+        return visible
+    }
+
     /// Mac: which way a positive scroll-wheel delta moves the content. Unknown until one scroll did
     /// nothing; snapMorePages flips it once (run 3, 13 Oct 2026).
-    private var macWheelSign: CGFloat = -1
+    /// +1 since run 11: every Mac scroll that moved the page was a negative deltaY for "content up".
+    private var macWheelSign: CGFloat = 1
 
     /// dy < 0 scrolls the content up (finger moves up), dx < 0 scrolls it left. Distances are fractions
     /// of the VISIBLE part of the target, and every point is inside it.
