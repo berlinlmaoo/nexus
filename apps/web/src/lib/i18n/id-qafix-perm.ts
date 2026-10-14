@@ -53,7 +53,7 @@ export const ID_QAFIX_PERM: Record<string, string> = {
   "This device already has a passkey for your account.": "Perangkat ini sudah punya passkey untuk akunmu.",
   "This task doesn't exist any more": "Task ini sudah tidak ada",
   "This ticket doesn't exist": "Tiket ini tidak ada",
-  "This ticket is closed, but the attendance fix below still waits for a decision. It stays under In review until someone approves or rejects it.": "Tiket ini sudah ditutup, tapi perbaikan absensi di bawah masih menunggu keputusan. Tiket tetap di Ditinjau sampai ada yang menyetujui atau menolaknya.",
+  "This ticket is closed, but the attendance fix below still waits for a decision. It stays at the top of All until someone approves or rejects it.": "Tiket ini sudah ditutup, tapi perbaikan absensi di bawah masih menunggu keputusan. Tiket tetap di urutan teratas Semua sampai ada yang menyetujui atau menolaknya.",
   "This ticket is closed, but your attendance fix below still waits for a BoD decision.": "Tiket ini sudah ditutup, tapi perbaikan absensimu di bawah masih menunggu keputusan BoD.",
   "This ticket isn't yours": "Tiket ini bukan milikmu",
   "You can't open this task": "Kamu tidak bisa membuka task ini",

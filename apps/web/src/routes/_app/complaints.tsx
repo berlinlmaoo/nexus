@@ -237,11 +237,14 @@ function TicketRow({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: bool
   const who = c.reporter?.name ?? t("Anonymous");
   // The two things a row has to say beyond its status: GIDEON has been in here, and a decision is
   // sitting unmade. Both come straight off /api/complaints and are independent of the status chip.
-  const markers = (c.pendingCorrection || c.gideonReplied) && (
+  // "Awaiting decision" is ONE label (run 9): the status chip and this marker used to say it two ways.
+  // When the status chip already says it, the marker would only repeat it, so it stays off.
+  const decisionMark = c.pendingCorrection && c.status !== "AWAITING_DECISION";
+  const markers = (decisionMark || c.gideonReplied) && (
     <span className="inline-flex shrink-0 items-center gap-1.5">
-      {c.pendingCorrection && (
+      {decisionMark && (
         <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-1.5 py-px text-[11px] font-medium text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
-          <CalendarClock className="h-3 w-3" /> {t("Decision waiting")}
+          <CalendarClock className="h-3 w-3" /> {t("Awaiting decision")}
         </span>
       )}
       {c.gideonReplied && (
@@ -257,9 +260,9 @@ function TicketRow({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: bool
       <div className="flex min-w-0 items-center gap-2 overflow-hidden">
         <span className="min-w-0 truncate text-sm font-medium text-foreground">{c.subject}</span>
         {/* Desktop: the same two markers as small labelled icons, so a long subject never pushes them into the next column. */}
-        {(c.pendingCorrection || c.gideonReplied) && (
+        {(decisionMark || c.gideonReplied) && (
           <span className="hidden shrink-0 items-center gap-1 xl:inline-flex">
-            {c.pendingCorrection && <span title={t("Decision waiting")} aria-label={t("Decision waiting")} className="grid h-5 w-5 place-items-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"><CalendarClock className="h-3 w-3" /></span>}
+            {decisionMark && <span title={t("Awaiting decision")} aria-label={t("Awaiting decision")} className="grid h-5 w-5 place-items-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"><CalendarClock className="h-3 w-3" /></span>}
             {c.gideonReplied && <span title={t("GIDEON replied")} aria-label={t("GIDEON replied")} className="grid h-5 w-5 place-items-center rounded-full bg-muted text-muted-foreground"><GideonMark className="h-3 w-3" /></span>}
           </span>
         )}
@@ -528,7 +531,7 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
         {pendingOnClosed && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
             {viewerIsBod
-              ? t("This ticket is closed, but the attendance fix below still waits for a decision. It stays under In review until someone approves or rejects it.")
+              ? t("This ticket is closed, but the attendance fix below still waits for a decision. It stays at the top of All until someone approves or rejects it.")
               : t("This ticket is closed, but your attendance fix below still waits for a BoD decision.")}
           </div>
         )}

@@ -55,7 +55,6 @@ export const ID_I18N_WORK: Record<string, string> = {
   "Create the first form for this project.": "Buat form pertama untuk project ini.",
   "Current": "Sekarang",
   "Days off deducted": "Jatah day off terpotong",
-  "Decision waiting": "Menunggu keputusan",
   "Deduction cancellation": "Pembatalan potongan",
   "Delete booking": "Hapus booking",
   "Delete field": "Hapus field",
