@@ -7,7 +7,7 @@ struct CFChip: Identifiable, Equatable {
     let tone: ChipTone
     /// A select option's colour (web choiceColor: the palette by the option's position); nil = tone.
     var colorKey: String? = nil
-    /// A date value: drawn like web's PropValue date (clock icon + muted text, no pill), so two date
+    /// A date value: drawn like web's PropValue date (calendar icon + muted text, no pill), so two date
     /// fields on one card read as dates and the field name is spoken (UI tour run 7).
     var isDate = false
     var fieldName: String? = nil
@@ -101,7 +101,9 @@ struct CFChipView: View {
                 .foregroundStyle(NX.mutedFg).background(NX.muted, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
                 .accessibilityLabel(chip.fieldName.map { "\($0): \(chip.label)" } ?? chip.label)
         } else if chip.isDate {
-            Label(chip.label, systemImage: "clock").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            // A date field wears the calendar; the clock is the due date's alone (web PropValue / DateChips,
+            // UI tour run 10, IP-3: both dates on a card had a clock).
+            Label(chip.label, systemImage: "calendar").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 .padding(.vertical, 2)
                 .accessibilityLabel(chip.fieldName.map { "\($0): \(chip.label)" } ?? chip.label)
         } else if let key = chip.colorKey {
@@ -127,8 +129,12 @@ private struct CFPersonLabelStyle: LabelStyle {
 /// Wrapping chip row for a task's custom-field values (board / list / calendar / timeline cards).
 struct CFChipRow: View {
     let values: [BoardTask.CFValue]?
+    /// The fields this project has, when known: a card linked in from another project carries that
+    /// project's fields too ("PATS Foundation" from SBU's own Category), which the web never draws — its
+    /// card shows the viewing project's properties only (UI tour run 10, IP-3). nil = show every value.
+    var only: Set<String>? = nil
     var body: some View {
-        let chips = (values ?? []).compactMap(customFieldChip)
+        let chips = (values ?? []).filter { only?.contains($0.customFieldId) ?? true }.compactMap(customFieldChip)
         if !chips.isEmpty {
             FlowLayout(spacing: 5) {
                 ForEach(chips) { CFChipView(chip: $0) }

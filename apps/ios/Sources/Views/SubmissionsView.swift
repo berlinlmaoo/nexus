@@ -401,7 +401,7 @@ struct SubmissionsView: View {
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 12) {
                 ForEach(Array(cols.enumerated()), id: \.element.key) { i, col in
-                    column(col, groupLabel: i == 0 || cols[i - 1].statusGroup != col.statusGroup ? col.statusGroup.label : nil)
+                    column(col, groupLabel: i == 0 || cols[i - 1].statusGroup != col.statusGroup ? col.statusGroup.header(above: col.name) : nil)
                 }
             }
             .padding(.horizontal, gutter).padding(.bottom, 16)

@@ -46,6 +46,10 @@ struct Complaint: Decodable, Identifiable, Sendable {
     /// GIDEON answering ANNOTATES a ticket, it does not hand it to anybody.
     var isUnclaimed: Bool { statusKey == "OPEN" || statusKey == "AWAITING_DECISION" }
     var awaitsDecision: Bool { pendingCorrection == true }
+    /// The row's "Awaiting decision" marker: off when the status pill already says those words (web
+    /// complaints.tsx decisionMark; UI tour run 10, IP-1 — the row read "Decision waiting" beside an
+    /// "Awaiting decision" pill).
+    var showsDecisionMarker: Bool { awaitsDecision && statusKey != "AWAITING_DECISION" }
     /// The "In review" queue, as the server builds it (GET /api/complaints?status=IN_REVIEW,…, QA 13 Oct
     /// 2026): taken on, answered by GIDEON, or closed / resolved while an attendance-fix proposal still
     /// waits for Approve / Reject. The iPhone counted 8 where the web said 10 (UI tour 13 Oct 2026).
@@ -460,11 +464,11 @@ struct TicketsView: View {
             HStack(spacing: 6) {
                 Text(t.title).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
                 // The two markers as small icons, so a long subject never pushes them into the next column.
-                if t.awaitsDecision {
+                if t.showsDecisionMarker {
                     Image(systemName: "calendar.badge.clock").font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(NX.violetText)
                         .frame(width: 20, height: 20).background(NX.violetText.opacity(0.14), in: Circle())
-                        .accessibilityLabel(T("Decision waiting"))
+                        .accessibilityLabel(T("Awaiting decision"))
                 }
                 if t.hasGideonReply {
                     Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
@@ -562,10 +566,10 @@ struct TicketsView: View {
     /// been in the thread. In that order, and both when both hold — the decision is the one that
     /// needs a person, the reply is only context for it.
     @ViewBuilder private func markers(_ t: Complaint) -> some View {
-        if t.awaitsDecision || t.hasGideonReply {
+        if t.showsDecisionMarker || t.hasGideonReply {
             HStack(spacing: 6) {
-                if t.awaitsDecision {
-                    NexusChip(text: T("Decision waiting"), tone: .accent,
+                if t.showsDecisionMarker {
+                    NexusChip(text: T("Awaiting decision"), tone: .accent,
                               systemImage: "calendar.badge.clock")
                 }
                 if t.hasGideonReply { gideonMarker }

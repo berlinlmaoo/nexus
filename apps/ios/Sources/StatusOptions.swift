@@ -28,6 +28,15 @@ enum StatusGroup: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// The group's label above its first column, or nil when that column already says it: "To-do" over a
+    /// "To Do" pill, "In progress" over "In Progress" read as one word twice in two casings (UI tour run 10,
+    /// IP-4). Compared on letters and digits only, in any case.
+    func header(above column: String) -> String? {
+        func key(_ s: String) -> String { String(s.lowercased().filter { $0.isLetter || $0.isNumber }) }
+        let k = key(column)
+        return k == key(label) || k == key(rawValue) ? nil : label
+    }
+
     var statuses: [String] {
         switch self {
         case .todo: return ["TODO"]

@@ -165,7 +165,7 @@ private struct LegalCompanyCard: View {
                 Text(T("Numbering series")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                 Spacer()
                 if canEdit && !adding {
-                    Button { adding = true } label: { Label(T("Add series"), systemImage: "plus") }
+                    Button { adding = true } label: { Label(T("Add numbering series"), systemImage: "plus") }
                         .buttonStyle(NXButtonStyle(kind: .ghost, compact: true))
                 }
             }
@@ -232,25 +232,28 @@ private struct LegalSeriesRow: View {
     @State private var resetPeriod: String? = "YEAR"
     @State private var info: LegalSeriesInfo?
     @State private var saving = false
+    @Environment(\.horizontalSizeClass) private var hSize
 
     var body: some View {
         if editing { editor } else { summary }
     }
 
+    /// Web-mobile's compact row (UI tour run 10, IP-5): the name in the foreground and the type · period
+    /// quiet beside it on one line, the pattern whole on its own monospaced line (it may wrap at its
+    /// slashes, never cut), and on a phone the switch without its "In use" words (still its VoiceOver label).
     private var summary: some View {
         HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(series.label)  ·  \(LegalLabels.docType(series.docType))  ·  \(LegalLabels.resetPeriod(series.resetPeriod))")
-                    .font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(2)
-                Text(verbatim: series.format).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            VStack(alignment: .leading, spacing: 3) {
+                (Text(series.label).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground)
+                 + Text("  ·  \(LegalLabels.docType(series.docType))  ·  \(LegalLabels.resetPeriod(series.resetPeriod))")
+                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg))
+                    .lineLimit(1).truncationMode(.tail)
+                Text(verbatim: LegalText.wrappable(series.format)).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer(minLength: 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
             if canEdit {
-                Toggle(isOn: Binding(get: { series.active }, set: { v in Task { await patch(["active": v]) } })) {
-                    Text(T("In use")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                }
-                .tint(NX.violet)
-                .fixedSize()
+                inUseToggle
                 Button {
                     label = series.label; format = series.format; resetPeriod = series.resetPeriod
                     editing = true
@@ -263,6 +266,14 @@ private struct LegalSeriesRow: View {
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .opacity(series.active ? 1 : 0.6)
+    }
+
+    @ViewBuilder private var inUseToggle: some View {
+        let toggle = Toggle(isOn: Binding(get: { series.active }, set: { v in Task { await patch(["active": v]) } })) {
+            Text(T("In use")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+        }
+        .tint(NX.violet)
+        if hSize == .regular { toggle.fixedSize() } else { toggle.labelsHidden().fixedSize() }
     }
 
     private var editor: some View {

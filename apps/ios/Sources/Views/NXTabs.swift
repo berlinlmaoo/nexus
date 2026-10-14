@@ -88,3 +88,46 @@ struct NXChoiceChipStyle: ViewModifier {
 extension View {
     func nxChoiceChip(on: Bool) -> some View { modifier(NXChoiceChipStyle(on: on)) }
 }
+
+/// The edges of a horizontal ScrollView (a filter or tab row wider than the screen) fade out where more
+/// content lies that way, so a cut chip reads as "scroll for more" rather than a broken label (UI tour
+/// run 10: Legal filters, the project tab strip). iOS 18 fades only the edge that has more; iOS 17 has no
+/// scroll geometry and fades the trailing edge alone.
+struct NXHorizontalEdgeFade: ViewModifier {
+    var width: CGFloat = 24
+    @State private var leading = false
+    @State private var trailing = true
+
+    func body(content: Content) -> some View {
+        tracked(content)
+            .mask {
+                HStack(spacing: 0) {
+                    LinearGradient(colors: [.black.opacity(leading ? 0 : 1), .black], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: width)
+                    Rectangle()
+                    LinearGradient(colors: [.black, .black.opacity(trailing ? 0 : 1)], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: width)
+                }
+            }
+    }
+
+    @ViewBuilder private func tracked(_ content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: [Bool].self) { g in
+                let start = -g.contentInsets.leading
+                let end = g.contentSize.width + g.contentInsets.trailing - g.containerSize.width
+                return [g.contentOffset.x > start + 1, g.contentOffset.x < end - 1]
+            } action: { _, edges in
+                leading = edges[0]
+                trailing = edges[1]
+            }
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    /// Apply to a horizontal ScrollView: see NXHorizontalEdgeFade.
+    func nxEdgeFade(_ width: CGFloat = 24) -> some View { modifier(NXHorizontalEdgeFade(width: width)) }
+}
