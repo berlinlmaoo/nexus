@@ -46,7 +46,6 @@ export const ID_SOCIAL: Record<string, string> = {
   "No engagement target": "Belum ada target engagement",
   "Target to date · month target {target}": "Target sampai hari ini · target sebulan {target}",
   "Likes": "Likes",
-  "Comments + Shares": "Komentar + Share",
 
   // Calendar
   "{n} engagement": "{n} engagement",
