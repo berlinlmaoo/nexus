@@ -22,6 +22,29 @@ out for the owner to test. The fixes for that audit's RENDAH findings (R1, R3, R
 after it and ride in the next build, which is made only when the server/web side says so.
 Phases 1–5 done; Wear OS not built (the owner: not a Play Store priority).
 
+## 14 Oct, UI tour: dashboard screen ids (docs only, not in ui-tour-android.sh yet)
+
+`apps/ios/scripts/ui-tour-screens.json` has nine new ids (after `form-builder`, before `leaderboard`). When the
+Android tour takes them, keep the ids and order:
+
+| id | What to show on Android |
+|---|---|
+| `project-templates` | Projects › New project gallery, Dashboards category (Social Media Report card visible) |
+| `outlet-overview` | Outlet Sales project, Overview tab (Guest overview) |
+| `outlet-calendar` | Outlet Sales, Calendar tab, this month (daily-target markers) |
+| `outlet-day` | Outlet Sales, Calendar with `{outletDay}` picked (day target + that night's report) |
+| `outlet-settings` | Outlet Sales, Report settings sheet |
+| `socmed-overview` | Social Media Report project, Overview tab |
+| `socmed-calendar` | Social Media Report, Calendar tab, this month |
+| `socmed-day` | Social Media Report, the day sheet of `{socmedDay}` |
+| `socmed-settings` | Social Media Report, Platforms & targets sheet |
+
+Look-ups (as the iOS/web tour, GET only with the QA account): project = the one named "ZZ QA Manager Outlet" /
+"ZZ QA Social Media Report" (else the first "ZZ QA" project of type `OUTLET_SALES` / `SOCIAL_MEDIA_REPORT`),
+overridable with `TOUR_OUTLET_PROJECT_ID` / `TOUR_SOCMED_PROJECT_ID`; `{outletDay}` = newest date with a REPORTED
+night (else with its own day target), `{socmedDay}` = newest date up to today with any figure, this month or the
+one before. Not found = `skipped: <reason>`, never a failure. Links: `/projects/<id>?view=overview|calendar&date=YYYY-MM-DD`.
+
 ## 14 Oct (late), parity before QA (owner order; build + JVM tests only, no tour yet)
 
 Done and on `dev`, each built and unit-tested on the build VM (all green); none of it has been checked on a device yet:

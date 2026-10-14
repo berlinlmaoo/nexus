@@ -17,6 +17,8 @@ import { existsSync } from "node:fs";
 //                                "account": "nonmember" are shot with it; without the password they are skipped.
 //   TOUR_LEGAL_DOC_ID / TOUR_LEGAL_FORM_PATH   optional: the Legal document / request form path to use instead
 //                                of looking them up (newest [TEST] document, the general request link)
+//   TOUR_OUTLET_PROJECT_ID / TOUR_SOCMED_PROJECT_ID   optional: the Outlet Sales / Social Media Report project to
+//                                show instead of looking it up by name and type (dashboardValues)
 //   node tour.mjs --out <dir> [--only id,id] [--base https://…] [--variants desktop,mobile]
 import { chromium, devices } from "playwright";
 import fs from "node:fs";
@@ -283,10 +285,118 @@ async function legalValues(browser, state) {
   return values;
 }
 
-/** `s.web` with the Legal values filled in, or `{ skip }` when one of them is missing. */
+/** "YYYY-MM" of the month before `month`. */
+function monthBefore(month) {
+  const [y, m] = month.split("-").map(Number);
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+}
+
+/**
+ * The run-time values of the dashboard screens (14 Oct 2026), read with the QA session (GET only):
+ * `{outlet}` / `{socmed}` = the QA Outlet Sales / Social Media Report project (by name, else the first "ZZ QA"
+ * project of that type; TOUR_OUTLET_PROJECT_ID / TOUR_SOCMED_PROJECT_ID win), `{outletDay}` = the newest date
+ * with a reported night (else with its own daily target), `{socmedDay}` = the newest date up to today with
+ * figures; this month, else the month before. Missing = `{ skip: "<reason>" }`, like the Legal values.
+ */
+async function dashboardValues(browser, state) {
+  const values = {};
+  const wanted = (key) => memberScreens.some((s) => s.web.includes(`{${key}`));
+  if (!wanted("outlet") && !wanted("socmed")) return values;
+  const ctx = await browser.newContext({ ignoreHTTPSErrors: true, storageState: state });
+  const get = async (p) => {
+    const r = await ctx.request.get(BASE + p, { timeout: 30000 });
+    if (!r.ok()) throw new Error(`HTTP ${r.status()} from ${p.split("?")[0]}`);
+    return r.json();
+  };
+  const kinds = [
+    { key: "outlet", env: "TOUR_OUTLET_PROJECT_ID", type: "OUTLET_SALES", name: "ZZ QA Manager Outlet", api: "outlet-sales",
+      day: (d) => {
+        const reported = (d.events || []).filter((e) => e.status === "REPORTED").map((e) => e.date);
+        const targets = (d.dayTargets || []).map((t) => t.date);
+        return (reported.length ? reported : targets).sort().pop() || null;
+      } },
+    { key: "socmed", env: "TOUR_SOCMED_PROJECT_ID", type: "SOCIAL_MEDIA_REPORT", name: "ZZ QA Social Media Report", api: "social-media",
+      day: (d) => (d.days || [])
+        .filter((x) => x.date <= d.today && Object.values(x.platforms || {}).some((p) =>
+          ["views", "likes", "comments", "shares", "posts"].some((k) => Number(p?.[k]) > 0)))
+        .map((x) => x.date).sort().pop() || null },
+  ];
+  try {
+    let projects = null;
+    for (const k of kinds) {
+      if (!wanted(k.key)) continue;
+      const dayKey = `${k.key}Day`;
+      let id = process.env[k.env] || null;
+      try {
+        if (!id) {
+          projects ??= await get("/api/projects");
+          const list = Array.isArray(projects) ? projects : projects.projects || [];
+          const hit = list.find((p) => p.name === k.name && p.type === k.type)
+            || list.find((p) => p.type === k.type && String(p.name || "").startsWith("ZZ QA"));
+          id = hit?.id || null;
+        }
+      } catch (e) {
+        values[k.key] = values[dayKey] = { skip: `projects not readable (${e.message})` };
+        continue;
+      }
+      if (!id) {
+        values[k.key] = values[dayKey] = { skip: `no ${k.type} project "${k.name}" for ${EMAIL} (set ${k.env})` };
+        continue;
+      }
+      values[k.key] = { value: id };
+      if (!wanted(dayKey)) continue;
+      try {
+        let month = null, day = null;
+        for (let i = 0; i < 2 && !day; i++) {
+          const data = await get(`/api/projects/${encodeURIComponent(id)}/${k.api}${month ? `?month=${month}` : ""}`);
+          day = k.day(data);
+          month = monthBefore(data.month);
+        }
+        values[dayKey] = day ? { value: day } : { skip: `no ${k.key === "outlet" ? "reported night or daily target" : "day with figures"} this month or last` };
+      } catch (e) {
+        values[dayKey] = { skip: `${k.api} not readable (${e.message})` };
+      }
+    }
+  } finally {
+    await ctx.close();
+  }
+  for (const [k, v] of Object.entries(values)) console.log(`dashboard ${k}: ${v.skip ? `skipped: ${v.skip}` : v.value}`);
+  return values;
+}
+
+/**
+ * The buttons a screen's `webTaps` names, pressed in order once it settled (a settings sheet, the template
+ * gallery's Dashboards tab): "A|B" = the English or the Indonesian label, a leading "?" = only when the next
+ * step's button is not on screen yet. nil when done, else what went wrong. Opening a sheet writes nothing.
+ */
+async function pressSteps(page, steps) {
+  const find = (step) => {
+    const names = step.replace(/^\?/, "").split("|");
+    const re = new RegExp(`^(${names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})$`);
+    return page.getByRole("button", { name: re }).or(page.getByRole("tab", { name: re }))
+      .filter({ visible: true }).first();
+  };
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    if (step.startsWith("?")) {
+      if (i + 1 < steps.length && (await find(steps[i + 1]).isVisible().catch(() => false))) continue;
+      if (!(await find(step).isVisible().catch(() => false))) continue;
+    }
+    const target = find(step);
+    if (!(await target.waitFor({ state: "visible", timeout: 10000 }).then(() => true, () => false))) {
+      return `no "${step.replace(/^\?/, "").split("|")[0]}" button`;
+    }
+    await target.click({ timeout: 10000 });
+    await settle(page);
+    await page.waitForTimeout(600);
+  }
+  return null;
+}
+
+/** `s.web` with the run-time values filled in, or `{ skip }` when one of them is missing. */
 function resolveWeb(s, legal) {
   let web = s.web;
-  for (const key of ["legalDoc", "legalForm"]) {
+  for (const key of Object.keys(legal)) {
     if (!web.includes(`{${key}}`)) continue;
     const v = legal[key];
     if (!v || v.skip) return { skip: v?.skip || `${key} not looked up` };
@@ -447,7 +557,7 @@ async function main() {
     headless: !process.env.TOUR_WATCH, ...(process.env.TOUR_WATCH ? { slowMo: 150 } : {}) });
   try {
     const state = await signIn(browser);
-    const legal = await legalValues(browser, state);
+    const legal = { ...(await legalValues(browser, state)), ...(await dashboardValues(browser, state)) };
     for (const [name, variant] of Object.entries(VARIANTS)) {
       if (!WANT.has(name)) continue;
       const dir = path.join(OUT, variant.dir);
@@ -488,6 +598,10 @@ async function main() {
               else if (s.id.startsWith("legal-") && await page.getByText(/Legal is by invitation only|Legal hanya untuk yang diundang/).first().isVisible().catch(() => false)) {
                 status = `wrong-screen: ${EMAIL} is not invited to Legal`;
               } else if (s.id === "legal-request-form" && legal.legalForm?.note) status = `ok, ${legal.legalForm.note}`;
+              if (!status.startsWith("bounced") && s.webTaps?.length) {
+                const problem = await pressSteps(page, s.webTaps);
+                if (problem) status = `wrong-screen: ${s.id} (${problem})`;
+              }
             } catch (e) {
               status = `error: ${String(e.message || e).split("\n")[0]}`;
             }
