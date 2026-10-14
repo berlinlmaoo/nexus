@@ -697,11 +697,11 @@ private struct WebEmailField: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            // Shrinks, then wraps, before it cuts: "qa5...invalid" told nobody which address it was
-            // (UI tour run 9, P9).
+            // Wraps before it cuts: "qa5...invalid" told nobody which address it was (UI tour run 9, P9).
+            // It no longer shrinks: a smaller font than Full name beside it looked broken (run 13, I-23).
             Text(email.isEmpty ? "—" : email)
                 .font(NXFont.text(15)).foregroundStyle(NX.mutedFg)
-                .lineLimit(2).minimumScaleFactor(0.75).truncationMode(.middle)
+                .lineLimit(2).truncationMode(.middle)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 12).padding(.vertical, 6)
                 .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)

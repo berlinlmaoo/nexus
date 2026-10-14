@@ -104,7 +104,8 @@ struct RootView: View {
                         }
                             .toolbar {
                                 ToolbarItem(placement: .cancellationAction) {
-                                    Button(T("Close")) { router.formRequest = nil }
+                                    // A form to fill: "Cancel", as on every other sheet that edits (F-30).
+                                    Button(T("Cancel")) { router.formRequest = nil }
                                 }
                             }
                     }

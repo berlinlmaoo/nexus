@@ -30,5 +30,17 @@ extension AppLanguage {
         "%@/%@ used": "%@/%@ terpakai",
         // Home and Settings wording (F-26, F-37)
         "Edit profile": "Ubah profil",
+        // Legal (F-28)
+        "1 addendum": "1 addendum",
+        // Legal request form (F-30, W-B23)
+        "Fill in the required fields (*) to send": "Isi kolom wajib (*) untuk mengirim",
+        // Legal requests board (F-31, M-21)
+        "Previous number voided": "Nomor sebelumnya dibatalkan",
+        // Threads relative time (F-36)
+        "%dm ago": "%d mnt lalu",
+        "%dh ago": "%d jam lalu",
+        "%dd ago": "%d hr lalu",
+        // Form builder (I-12)
+        "Tap a question to change its type, make it required, add logic or choose where its answer goes.": "Ketuk pertanyaan untuk mengganti jenisnya, menjadikannya wajib, menambah logika, atau memilih ke mana jawabannya masuk.",
     ]
 }

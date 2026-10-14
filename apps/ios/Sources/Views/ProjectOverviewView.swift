@@ -1121,15 +1121,18 @@ private struct OverviewStatusUpdatesCard: View {
                 }
                 HStack {
                     Spacer()
+                    // Disabled: muted text on a muted fill, readable; white at half opacity on top of the
+                    // system's own dimming all but vanished on the Mac (UI tour run 13, M-20).
+                    let off = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !posting
                     Button { Task { await post() } } label: {
                         HStack(spacing: 6) {
                             if posting { ProgressView().tint(.white).controlSize(.small) }
                             Text(T("Post update")).font(NXFont.text(14, .semibold))
                         }
-                        .foregroundStyle(.white)
+                        .foregroundStyle(off ? NX.mutedFg : .white)
                         .padding(.horizontal, 16).frame(minHeight: 44)
-                        .background(NX.violetFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .opacity(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || posting ? 0.5 : 1)
+                        .background(off ? NX.muted : NX.violetFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .opacity(posting ? 0.6 : 1)
                     }
                     .buttonStyle(.plain)
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || posting)

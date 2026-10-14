@@ -119,23 +119,30 @@ private struct LegalCompanyCard: View {
         }
     }
 
-    private var kopRow: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) { kopText; Spacer(minLength: 0); kopButtons }
-            VStack(alignment: .leading, spacing: 8) { kopText; kopButtons }
+    /// iPad / Mac: the buttons always on the right, a long file name cut in the middle. Fitting the row
+    /// to its text put one company's buttons under a long name while the others sat beside it (I-26).
+    @ViewBuilder private var kopRow: some View {
+        Group {
+            if hSize == .regular {
+                HStack(spacing: 10) { kopText(oneLine: true); Spacer(minLength: 0); kopButtons.fixedSize() }
+            } else {
+                VStack(alignment: .leading, spacing: 8) { kopText(oneLine: false); kopButtons }
+            }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    private var kopText: some View {
+    private func kopText(oneLine: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(T("Letterhead")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+            Text(T("Letterhead")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).fixedSize()
             Text(company.hasKop
                  ? String(format: T("%@, uploaded %@"), company.kopFileName ?? "kop.docx", LegalLabels.date(company.kopUpdatedAt))
                  : T("Not uploaded: documents get no letterhead."))
-                .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+                .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                .lineLimit(oneLine ? 1 : nil).truncationMode(.middle)
+                .fixedSize(horizontal: false, vertical: !oneLine)
         }
     }
 

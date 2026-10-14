@@ -87,10 +87,8 @@ enum LegalLabels {
     }
 
     /// "2026-09-30" → "30 Sep 2026" in the interface language.
-    static func day(_ day: String?) -> String {
-        guard let day, let d = LegalText.date(fromDay: day) else { return "—" }
-        return AppDateLocale.formatter("d MMM yyyy", timeZone: TimeZone(identifier: "Asia/Jakarta")).string(from: d)
-    }
+    /// "20 Oct", the year only outside the current one ("5 Jan 2027"; UI tour run 13, M-10: "20 Oct 2026").
+    static func day(_ day: String?) -> String { shortDay(day) }
 
     /// "2026-10-14" → "14 Oct" this year, "14 Oct 2025" otherwise: the documents list, as the web writes it
     /// (UI tour run 11).

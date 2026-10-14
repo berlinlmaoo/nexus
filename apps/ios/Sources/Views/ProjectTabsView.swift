@@ -335,6 +335,10 @@ struct TimelineTab: View {
     private static let DAY: TimeInterval = 86400
 
     private var compact: Bool { hSize != .regular }
+    /// The chart's width, for `showMeta`.
+    @State private var chartWidth: CGFloat = 0
+    /// Duration and Progress columns: a wide screen with room for them beside the chart.
+    private var showMeta: Bool { !compact && chartWidth >= 900 }
     private var cal: Calendar { ProjDate.cal }
     private func sod(_ d: Date) -> Date { cal.startOfDay(for: d) }
     private func days(_ a: Date, _ b: Date) -> Int { cal.dateComponents([.day], from: sod(a), to: sod(b)).day ?? 0 }
@@ -402,6 +406,7 @@ struct TimelineTab: View {
                 chart(gs, width: geo.size.width - pad * 2)
                     .padding(.horizontal, pad).padding(.vertical, 12)
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { chartWidth = $0 }
         }
     }
 
@@ -439,7 +444,10 @@ struct TimelineTab: View {
     /// The frozen Name (| Duration | Progress) column. Wider than before: the phone's ~150 pt showed about
     /// ten characters of a name (UI tour run 11, IP-14).
     private func leftWidth(_ width: CGFloat) -> CGFloat {
-        compact ? min(240, max(160, width * 0.5)) : min(560, max(460, width * 0.45))
+        if compact { return min(240, max(160, width * 0.5)) }
+        // A regular width too narrow for Duration and Progress (portrait iPad): the name alone, so the chart
+        // keeps more than five days (UI tour run 13, I-19).
+        return showMeta ? min(560, max(460, width * 0.45)) : min(320, max(220, width * 0.38))
     }
 
     /// iOS 18 knows the chart's scroll offset, so the day header can sit above the rows and stay put while
@@ -544,7 +552,7 @@ struct TimelineTab: View {
     private var leftHeader: some View {
         HStack(spacing: 0) {
             headLabel(T("Name")).padding(.leading, compact ? 12 : 16).frame(maxWidth: .infinity, alignment: .bottomLeading)
-            if !compact {
+            if showMeta {
                 headLabel(T("Duration")).padding(.horizontal, 8).frame(width: durationW, alignment: .bottomLeading)
                 headLabel(T("Progress")).padding(.horizontal, 12).frame(width: progressW, alignment: .bottomLeading)
                     .overlay(alignment: .leading) { Rectangle().fill(NX.border).frame(width: 1) }
@@ -601,7 +609,7 @@ struct TimelineTab: View {
             }
             .buttonStyle(.plain)
             .accessibilityValue(isCollapsed ? T("Collapsed") : T("Expanded"))
-            if !compact {
+            if showMeta {
                 Text(gDur > 0 ? Self.dayCount(gDur) : "—").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     .padding(.horizontal, 8).frame(width: durationW, alignment: .leading)
                 // The rows' status colours (amber in progress, green done), as web — not a fixed blue; the
@@ -631,7 +639,7 @@ struct TimelineTab: View {
                             .strikethrough(t.isDone).lineLimit(1)
                         // The phone has no Duration column: the dates under the name, so a row whose bar
                         // is out of view still says when it is (UI tour run 13, F-09).
-                        if compact {
+                        if !showMeta {
                             Text(r.win.map(Self.spanLabel) ?? T("No date"))
                                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                         }
@@ -644,7 +652,7 @@ struct TimelineTab: View {
             }
             .buttonStyle(.plain)
             .hoverEffect(.highlight)
-            if !compact {
+            if showMeta {
                 Text(r.win.map { Self.dayCount(days($0.start, $0.end) + 1) } ?? T("No date"))
                     .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     .padding(.horizontal, 8).frame(width: durationW, alignment: .leading)
@@ -920,6 +928,9 @@ struct CalendarTab: View {
     var onPlotBy: ((String?) -> Void)? = nil
     @State private var monthOffset = 0
     @State private var selected: Int?
+    /// The "No date" box lists its first chips only until asked (UI tour run 13, I-20: 84 chips filled the page).
+    @State private var allUndated = false
+    private static let undatedPreview = 12
 
     private var cal: Calendar { ProjDate.cal }
     private var monthDate: Date { cal.date(byAdding: .month, value: monthOffset, to: Date()) ?? Date() }
@@ -988,7 +999,7 @@ struct CalendarTab: View {
                         ProjectRangeHint(icon: "calendar.badge.exclamationmark",
                                          text: undated.count == 1 ? T("1 task has no date") : String(format: T("%d tasks have no date"), undated.count),
                                          actionTitle: T("Show them")) {
-                            withAnimation(.snappy) { proxy.scrollTo("undated", anchor: .top) }
+                            withAnimation(.snappy) { allUndated = true; proxy.scrollTo("undated", anchor: .top) }
                         }
                     }
                     weekdayRow
@@ -1026,8 +1037,9 @@ struct CalendarTab: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(String(format: T("No date · %d"), items.count))
                 .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            let shown = allUndated ? items : Array(items.prefix(Self.undatedPreview))
             FlowLayout(spacing: 6) {
-                ForEach(items) { t in
+                ForEach(shown) { t in
                     Button { onOpen(t.id) } label: {
                         Text(t.title).font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(1)
                             .frame(maxWidth: 220, alignment: .leading)
@@ -1038,6 +1050,14 @@ struct CalendarTab: View {
                     .buttonStyle(.plain)
                     .hoverEffect(.highlight)
                 }
+            }
+            if items.count > Self.undatedPreview {
+                Button { withAnimation(.snappy) { allUndated.toggle() } } label: {
+                    Text(allUndated ? T("Show fewer") : String(format: T("Show all %d"), items.count))
+                        .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
+                        .frame(minHeight: 36).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(12)

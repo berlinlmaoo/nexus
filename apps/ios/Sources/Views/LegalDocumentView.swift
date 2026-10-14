@@ -86,7 +86,8 @@ struct LegalDocumentView: View {
         .background(NX.background.ignoresSafeArea())
         // The number and the title are both in the header below; the bar repeated the number cut to
         // "SPK/CH/PATS-UNIV/YOGYAKARTA/JAN/…" (UI tour run 10, IP-2), so it carries a short word instead.
-        .navigationTitle(T("Document"))
+        // The document's title once it is in (I-25 / M-22: a generic "Document"); the number stays in the header.
+        .navigationTitle(model.doc.map { $0.title.isEmpty ? T("Document") : $0.title } ?? T("Document"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load() }
         // PDFs are made in the background after generate / save / upload / approve: while a recent Word

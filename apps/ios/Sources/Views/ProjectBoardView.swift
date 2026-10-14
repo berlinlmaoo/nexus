@@ -27,6 +27,10 @@ struct ProjectDetailView: View {
     /// The tab row is wider than the screen: a "…" menu lists every tab (Notion, UI tour run 9).
     @State private var tabsOverflow = false
     @State private var tabsWidth: CGFloat = 0
+    /// The wide tab bar's width and its tools' width: when the tabs and the tools don't share one row,
+    /// the tools move under the tabs (UI tour run 13, I-18 / M-7: "verview", "ategori", "Cal" cut).
+    @State private var barWidth: CGFloat = 0
+    @State private var toolsWidth: CGFloat = 0
     /// A filter opened from a count on the Overview (owner, 11 Oct 2026): open top-level tasks only,
     /// shown as a chip above the task tabs until it is cleared.
     @State private var drill: OverviewDrill?
@@ -795,7 +799,38 @@ struct ProjectDetailView: View {
         return out
     }
 
-    private var wideTabBar: some View {
+    /// The tabs need more room than the row leaves beside the tools.
+    private var toolsBelowTabs: Bool {
+        barWidth > 0 && tabsWidth > 0 && tabsWidth + toolsWidth + 18 + 24 + 16 > barWidth
+    }
+
+    @ViewBuilder private var wideTabBar: some View {
+        Group {
+            if toolsBelowTabs {
+                VStack(alignment: .trailing, spacing: 0) {
+                    HStack(spacing: 8) { wideTabs; if tabsOverflow { tabOverflowMenu(wideMenuItems) } }
+                        .padding(.trailing, 24)
+                    measuredTools
+                }
+            } else {
+                HStack(spacing: 8) {
+                    wideTabs
+                    if tabsOverflow { tabOverflowMenu(wideMenuItems) }
+                    measuredTools
+                }
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
+    }
+
+    private var measuredTools: some View {
+        wideTools
+            .fixedSize()
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { toolsWidth = $0 }
+            .padding(.trailing, 24)
+    }
+
+    private var wideTabs: some View {
         HStack(spacing: 8) {
             ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
@@ -829,10 +864,6 @@ struct ProjectDetailView: View {
             // The inset sits OUTSIDE the scroll view: inside it, it scrolled away with the tabs and a
             // scrolled row put its first tab flush against the sidebar (UI tour run 10, MAC-1).
             .padding(.leading, 18)
-            if tabsOverflow { tabOverflowMenu(wideMenuItems) }
-            wideTools
-                .fixedSize()
-                .padding(.trailing, 24)
         }
     }
 

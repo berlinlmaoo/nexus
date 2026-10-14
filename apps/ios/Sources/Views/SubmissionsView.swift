@@ -408,6 +408,8 @@ struct SubmissionsView: View {
             .scrollTargetLayout()
         }
         .scrollTargetBehavior(.viewAligned)
+        // The column peeking in at the edge fades, so it reads as "more this way" (F-35).
+        .nxEdgeFade(20)
     }
 
     private func column(_ col: SubmissionColumn) -> some View {
@@ -431,9 +433,9 @@ struct SubmissionsView: View {
                                 .hoverEffect(.highlight)
                         }
                         if items.isEmpty {
-                            // Say WHY the column is empty, not just that it is (UI tour run 7).
-                            // Web's sentence, word for word (UI tour run 9, I8).
-                            Text(T("None of your submissions are at this stage right now. The team moves a card here when its work reaches it."))
+                            // Short: the page's subtitle already says the team moves the cards, and the same four
+                            // lines in every column were cut mid-sentence in the peeking one (UI tour run 13, F-35).
+                            Text(T("Nothing here yet"))
                                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                                 .multilineTextAlignment(.center)
                                 .fixedSize(horizontal: false, vertical: true)

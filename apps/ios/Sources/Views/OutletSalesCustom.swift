@@ -142,11 +142,14 @@ struct OutletGuestOverview: View {
                                 }
                             } label: {
                                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                    if expandable {
-                                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
-                                            .foregroundStyle(NX.mutedFg)
-                                            .rotationEffect(.degrees(open.contains(c.id) ? 90 : 0))
-                                    }
+                                    // The chevron's slot is kept on every row, so the names line up; the
+                                    // ones that open draw it (UI tour run 13, F-33 / I-27).
+                                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(NX.violetText)
+                                        .rotationEffect(.degrees(open.contains(c.id) ? 90 : 0))
+                                        .frame(width: 12)
+                                        .opacity(expandable ? 1 : 0)
+                                        .accessibilityHidden(true)
                                     Text(c.archived ? "\(c.name) · \(T("archived"))" : c.name)
                                         .font(NXFont.text(14)).foregroundStyle(c.archived ? NX.mutedFg : NX.foreground).lineLimit(1)
                                     Spacer(minLength: 4)
@@ -419,6 +422,8 @@ struct OutletReportSettingsView: View {
             communitySections(cfg.communities)
         }
         .listStyle(.insetGrouped)
+        // The sheet goes on below its edge (Communities, on an iPad): the indicator shows once (I-5).
+        .scrollIndicatorsFlash(onAppear: true)
         .environment(\.editMode, .constant(.active))
         .scrollDismissesKeyboard(.interactively)
     }
@@ -534,8 +539,7 @@ struct OutletReportSettingsView: View {
                 if item.isBreakdown {
                     itemRows(c.items,
                              newText: Binding(get: { newSub[item.rowId] ?? "" }, set: { newSub[item.rowId] = $0 }),
-                             addLabel: String(format: T("Add item to %@"), item.name.isEmpty ? T("this community") : item.name),
-                             inset: 12)
+                             addLabel: String(format: T("Add item to %@"), item.name.isEmpty ? T("this community") : item.name))
                 }
                 HStack(spacing: 18) {
                     Button { moveCommunity(list, item.rowId, by: -1) } label: { Label(T("Move up"), systemImage: "arrow.up") }

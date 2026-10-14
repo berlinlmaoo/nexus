@@ -8,6 +8,7 @@ import SwiftUI
 
 struct LegalTemplatesPane: View {
     let gutter: CGFloat
+    @Environment(\.horizontalSizeClass) private var hSize
 
     @State private var showArchived = false
     @State private var templates: [LegalTemplate]?
@@ -24,7 +25,13 @@ struct LegalTemplatesPane: View {
                     Button { uploading = true } label: { Label(T("Upload template"), systemImage: "arrow.up.doc") }
                         .buttonStyle(.nxPrimary)
                 }
-                LegalToggle(label: T("Show archived"), isOn: $showArchived).frame(maxWidth: 320)
+                // The switch beside its label on an iPad / Mac, at the list's right edge on a phone: in a
+                // 320 pt box it floated mid-row on the Mac and short of the edge on the phone (F-29 / M-23).
+                if hSize == .regular {
+                    LegalToggle(label: T("Show archived"), isOn: $showArchived).fixedSize()
+                } else {
+                    LegalToggle(label: T("Show archived"), isOn: $showArchived)
+                }
                 list
                 LegalPlaceholderHelp()
             }
@@ -73,8 +80,9 @@ struct LegalTemplatesPane: View {
                     Text(tpl.name).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
                     if tpl.archived { NexusChip(text: T("Archived")) }
                 }
-                Text([LegalLabels.docType(tpl.docType), tpl.company?.name ?? T("Any company"), "v\(tpl.currentVersion)",
-                      String(format: T("%d fields"), tpl.fields.count)].joined(separator: " · "))
+                // Version and field count first: at the end they were the part cut off ("v3 · 1…", F-29).
+                Text(["v\(tpl.currentVersion)", String(format: T("%d fields"), tpl.fields.count),
+                      LegalLabels.docType(tpl.docType), tpl.company?.name ?? T("Any company")].joined(separator: " · "))
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
             }
             Spacer(minLength: 4)

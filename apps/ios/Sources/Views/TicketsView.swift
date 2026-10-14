@@ -461,19 +461,21 @@ struct TicketsView: View {
 
     private func wideRow(_ t: Complaint) -> some View {
         HStack(spacing: 12) {
-            HStack(spacing: 6) {
-                Text(t.title).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
-                // The same chip as the narrow rows (one style, UI tour run 11 IP-1); it never shrinks, the
-                // subject truncates first.
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(t.title).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+                    if t.hasGideonReply {
+                        Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
+                            .frame(width: 11, height: 11).foregroundStyle(NX.mutedFg)
+                            .frame(width: 20, height: 20).background(NX.muted, in: Circle())
+                            .accessibilityLabel(T("GIDEON replied"))
+                    }
+                }
+                // The same chip as the narrow rows (one style, UI tour run 11 IP-1), under the subject: beside
+                // it, it left the subject "Tgl 4-8 it…" (UI tour run 13, M-9).
                 if t.showsDecisionMarker {
                     NexusChip(text: T("Correction awaiting decision"), tone: .accent, systemImage: "calendar.badge.clock")
                         .fixedSize()
-                }
-                if t.hasGideonReply {
-                    Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
-                        .frame(width: 11, height: 11).foregroundStyle(NX.mutedFg)
-                        .frame(width: 20, height: 20).background(NX.muted, in: Circle())
-                        .accessibilityLabel(T("GIDEON replied"))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

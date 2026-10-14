@@ -801,7 +801,10 @@ struct FormPanelHint: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(T("Question settings").uppercased())
                 .font(NXFont.text(12, .semibold)).tracking(0.6).foregroundStyle(NX.mutedFg)
-            Text(T("Click a question to change its type, make it required, add logic or choose where its answer goes."))
+            // "Tap" on an iPad, "Click" on a Mac (UI tour run 13, I-12).
+            Text(PlatformWording.tapOrClick(
+                tap: "Tap a question to change its type, make it required, add logic or choose where its answer goes.",
+                click: "Click a question to change its type, make it required, add logic or choose where its answer goes."))
                 .font(NXFont.text(15)).foregroundStyle(NX.mutedFg)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 8) {
