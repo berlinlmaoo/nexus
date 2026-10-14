@@ -1198,7 +1198,7 @@ struct CreateProjectSheet: View {
                             // An outlet opens straight away (web: "Create project + open dashboard").
                             HStack(spacing: 8) {
                                 if busy { ProgressView().tint(NX.background) }
-                                Text(kind == .outlet ? T("Create project + open dashboard") : T("Create project"))
+                                Text(kind == .outlet || kind == .social ? T("Create project + open dashboard") : T("Create project"))
                             }
                             .frame(maxWidth: .infinity, minHeight: 44)
                         }
@@ -1258,6 +1258,15 @@ struct CreateProjectSheet: View {
                 // Any number of outlets, one project each (owner, 10 Oct 2026, for Ryan); it opens on its
                 // Overview once the list knows it.
                 let made = try await APIClient.shared.outletProjectCreate(workspaceId: workspaceId, name: trimmed,
+                                                                          folderId: folder?.id, memberIds: Array(memberIds),
+                                                                          memberLevel: memberLevel)
+                await onCreated()
+                dismiss()
+                onOpenProject(made)
+                return
+            } else if kind == .social {
+                // Social Media Report (owner, 14 Oct 2026): opens on its Overview.
+                let made = try await APIClient.shared.socialProjectCreate(workspaceId: workspaceId, name: trimmed,
                                                                           folderId: folder?.id, memberIds: Array(memberIds),
                                                                           memberLevel: memberLevel)
                 await onCreated()

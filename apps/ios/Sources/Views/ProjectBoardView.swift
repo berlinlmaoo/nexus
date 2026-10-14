@@ -37,6 +37,9 @@ struct ProjectDetailView: View {
     @State private var outletStore: OutletSalesStore?
     /// An outlet opens on Overview once (later reloads leave the tab alone).
     @State private var outletLanded = false
+    /// A Social Media Report's store (owner, 14 Oct 2026); it opens on Overview once.
+    @State private var socialStore: SocialMediaStore?
+    @State private var socialLanded = false
     /// A link chose the tab (`?view=`), so the template's default tab must not replace it.
     @State private var tabFromLink = false
     /// A link asked for this form's builder (`?form=<id>`, the web's open form builder).
@@ -291,7 +294,7 @@ struct ProjectDetailView: View {
     }
 
     /// The task tabs with multi-select + Duplicate. Not an outlet's Board, which shows its events.
-    private var selectionApplies: Bool { !isOutlet && !isPipeline && canEdit && (tab == .board || tab == .list || tab == .table) }
+    private var selectionApplies: Bool { !isTypedDashboard && !isPipeline && canEdit && (tab == .board || tab == .list || tab == .table) }
 
     /// The selected tasks in board order (lanes, then position), skipping any that vanished meanwhile.
     private func tasksFor(_ ids: [String]) -> [BoardTask] {
@@ -326,9 +329,16 @@ struct ProjectDetailView: View {
     /// Calendar and Board are the outlet's own (OutletSalesView.swift), not the task ones of the same name.
     private var isOutlet: Bool { detail?.type == "OUTLET_SALES" }
 
+    /// A Social Media Report (owner, 14 Oct 2026): Overview · Calendar · Chat, the report's own
+    /// (SocialMediaView.swift), not the task tabs of the same names.
+    private var isSocial: Bool { detail?.type == "SOCIAL_MEDIA_REPORT" }
+
+    /// An outlet or a social media report: a dashboard with its own screens instead of the task ones.
+    private var isTypedDashboard: Bool { isOutlet || isSocial }
+
     private var visibleTabs: [ProjectTab] {
-        if isOutlet {
-            var tabs = ProjectTab.outletTabs
+        if isTypedDashboard {
+            var tabs = isOutlet ? ProjectTab.outletTabs : ProjectTab.socialTabs
             if !hiddenTabKeys.contains(ProjectTab.chat.key ?? "") { tabs.append(.chat) }
             return tabs
         }
@@ -345,7 +355,7 @@ struct ProjectDetailView: View {
     /// Where to land when the open tab is not (or no longer) shown: Board, else List, else the first
     /// tab there is — which for a Pipeline Dashboard is Pipeline.
     private var fallbackTab: ProjectTab {
-        if isOutlet { return .overview }
+        if isTypedDashboard { return .overview }
         let tabs = visibleTabs
         return tabs.first { ProjectTab.taskViews.contains($0) } ?? tabs.first ?? .board
     }
@@ -395,7 +405,7 @@ struct ProjectDetailView: View {
             }
             .background {
                 // Keyboard: ⌘N = new task (iPad keyboard, Mac).
-                Button("") { if !isPipeline && !isOutlet && canCreate && tab != .forms && !cover.isCovered { newTask(in: nil) } }
+                Button("") { if !isPipeline && !isTypedDashboard && canCreate && tab != .forms && !cover.isCovered { newTask(in: nil) } }
                     .keyboardShortcut("n", modifiers: .command)
                     .opacity(0).accessibilityHidden(true)
             }
@@ -421,9 +431,9 @@ struct ProjectDetailView: View {
             Divider().overlay(NX.border)
             if let cachedFrom { OfflineNotice(savedAt: cachedFrom).padding(.vertical, 4) }
             // iPad / Mac: the search is the magnifier on the tab row, not a full-width bar.
-            if searchApplies && !isOutlet && !loading && error == nil && !lanes.isEmpty && !wideBar { searchBar }
-            if drill != nil && searchApplies && !isOutlet { drillBar }
-            if let mine = myViewName, searchApplies && !isOutlet && !isPipeline { myViewBar(mine) }
+            if searchApplies && !isTypedDashboard && !loading && error == nil && !lanes.isEmpty && !wideBar { searchBar }
+            if drill != nil && searchApplies && !isTypedDashboard { drillBar }
+            if let mine = myViewName, searchApplies && !isTypedDashboard && !isPipeline { myViewBar(mine) }
             content
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if selection.active && selectionApplies {
@@ -550,7 +560,7 @@ struct ProjectDetailView: View {
     private var wide: Bool { hSize == .regular }
     /// The web's one tab row (views as tabs, modules as icons, tools at the right): a task project on a
     /// wide screen. An outlet or a pipeline keeps its own short row.
-    private var wideBar: Bool { wide && !isOutlet && !isPipeline }
+    private var wideBar: Bool { wide && !isTypedDashboard && !isPipeline }
 
     /// The task composer, starting in `laneId` (nil = the first to-do section, web addTask()).
     private func newTask(in laneId: String?) {
@@ -602,7 +612,7 @@ struct ProjectDetailView: View {
     @ViewBuilder private var addButton: some View {
         if tab == .pipeline {
             ProjectHeaderButton(title: T("New deal"), icon: "plus", labelled: wide, prominent: true) { newDealRequest += 1 }
-        } else if !isPipeline && !isOutlet && canEdit {
+        } else if !isPipeline && !isTypedDashboard && canEdit {
             // Can view / Can comment: no Add task / New form (access levels round 2).
             ProjectHeaderButton(title: tab == .forms ? T("New form") : T("Add task"), icon: "plus", labelled: wide,
                                 prominent: true, enabled: tab == .forms || canCreate) {
@@ -998,6 +1008,8 @@ struct ProjectDetailView: View {
     @ViewBuilder private var content: some View {
         if isOutlet, tab.isOutletView, let outletStore {
             OutletSalesTab(store: outletStore, tab: $tab)
+        } else if isSocial, tab.isSocialView, let socialStore {
+            SocialMediaTab(store: socialStore, tab: $tab)
         } else {
             taskContent
         }
@@ -1095,6 +1107,24 @@ struct ProjectDetailView: View {
         case "board": tab = .board
         default: tab = .overview
         }
+    }
+
+    /// The first load of a Social Media Report: its store, Overview, and what a link asked for —
+    /// `view` (overview | calendar) and `date` (that day's sheet).
+    private func landSocial() {
+        let store: SocialMediaStore
+        if let socialStore { store = socialStore } else {
+            store = SocialMediaStore(projectId: projectId)
+            socialStore = store
+        }
+        if !socialLanded {
+            socialLanded = true
+            tab = .overview
+        }
+        guard let link = AppRouter.shared.projectLink, link.projectId == projectId else { return }
+        AppRouter.shared.projectLink = nil
+        tab = link.view == "overview" ? .overview : (link.view == "calendar" || link.date != nil ? .calendar : .overview)
+        if let date = link.date { store.open(date) }
     }
 
     @ViewBuilder private func viewChips(_ layout: String) -> some View {
@@ -1362,13 +1392,14 @@ struct ProjectDetailView: View {
             detail = d
             // Before the task reads below, so an outlet never flashes an empty task board.
             if d.type == "OUTLET_SALES" { landOutlet() }
+            if d.type == "SOCIAL_MEDIA_REPORT" { landSocial() }
             // Best-effort: the project payload is parentId-only, so pull the full task set and merge
             // subtasks into their lane (under the parent) for the board + list. Calendar/Timeline use detail.
             let all = (try? await APIClient.shared.projectTasks(projectId)) ?? []
             lanes = Self.mergeSubtasks(into: d.taskLists ?? [], all: all)
             // If the selected tab just became hidden (e.g. the flag was turned off), fall back.
             if !visibleTabs.contains(tab) { tab = fallbackTab }
-            if d.type != "OUTLET_SALES" { claimLink() }
+            if d.type != "OUTLET_SALES" && d.type != "SOCIAL_MEDIA_REPORT" { claimLink() }
             cachedFrom = nil
             Task { await loadTemplateExtras(d) }
         }
@@ -1411,6 +1442,7 @@ struct ProjectDetailView: View {
         let all = ResponseCache.decoded("project-tasks-\(projectId)", as: [BoardTask].self)?.value ?? []
         lanes = Self.mergeSubtasks(into: d.value.taskLists ?? [], all: all)
         if d.value.type == "OUTLET_SALES" { landOutlet() }
+        if d.value.type == "SOCIAL_MEDIA_REPORT" { landSocial() }
         if !visibleTabs.contains(tab) { tab = fallbackTab }
         cachedFrom = d.savedAt
         return true
