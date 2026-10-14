@@ -1,3 +1,4 @@
+import { NumberValue } from "@/components/projects/number-field";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, CalendarDays, ChevronRight, CircleCheck, Clock, ImageOff, ListChecks, MessageSquare, Plus, UserRound } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
@@ -114,7 +115,11 @@ export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; c
   }
   if (def.kind === "number") {
     const n = Number(vals[0]);
-    // Rp only for Rupiah fields; any other number field is a plain grouped number.
+    // A number field in its own format ("Rp 1.500.000", "42%", "US$12,00") and Show as (Bar / Ring); any
+    // other number (a rating) is a plain grouped number.
+    if (!Number.isNaN(n) && def.number) {
+      return <NumberValue n={n} options={def.number} title={def.label} className={cn("text-[11px] text-muted-foreground", def.number.showAs === "bar" ? "w-28 shrink-0" : "shrink-0")} />;
+    }
     const text = Number.isNaN(n) ? vals[0] : formatNumberProp(n, def.numberFormat, 2, locale);
     return <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground" title={def.label}>{text}</span>;
   }
@@ -166,11 +171,13 @@ export function PropLine({ task, keys, defs, ctx, className, slots }: { task: Ne
     // W-D14: the chips shifted with each row's content). On a phone the line stays one line (W-M16).
     const firstDateKey = items.find((d) => d.kind === "date")?.key ?? null;
     return (
-      <div className={cn("flex items-center gap-1.5 max-sm:flex-nowrap max-sm:overflow-hidden", className)}>
+      // Phone: the line wraps to a second one when it has to, instead of cutting the status and the people off
+      // at the edge (UI tour run 14, WM-3).
+      <div className={cn("flex items-center gap-1.5 max-sm:flex-wrap max-sm:gap-y-1", className)}>
         {items.map((d) => {
           if (d.kind === "date" && d.key !== firstDateKey) return null;
           const content = d.key === firstDateKey
-            ? <><DateChips task={task} items={dateItems} />{!isDateItem(d) && <PropValue task={task} def={d} ctx={ctx} />}</>
+            ? <><DateChips task={task} items={dateItems} fit />{!isDateItem(d) && <PropValue task={task} def={d} ctx={ctx} />}</>
             : <PropValue task={task} def={d} ctx={ctx} />;
           return <span key={d.key} className={cn("inline-flex min-w-0 items-center gap-1 max-sm:shrink-0 max-sm:empty:hidden sm:overflow-hidden", listSlotWidth(d))}>{content}</span>;
         })}
@@ -195,7 +202,7 @@ export function PropLine({ task, keys, defs, ctx, className, slots }: { task: Ne
 /** A List row's column width for a property (sm and up), wide enough for its usual value. */
 function listSlotWidth(d: PropDef): string {
   if (d.key === "assignee") return "sm:w-[3.75rem] sm:justify-start";
-  if (d.kind === "date") return "sm:w-[8.5rem] sm:justify-end";
+  if (d.kind === "date") return "sm:w-[9.5rem] sm:justify-end";
   if (d.kind === "number") return "sm:w-[6.5rem] sm:justify-end";
   if (d.key === "priority") return "sm:w-[4.75rem]";
   if (d.key === "status" || d.key === "section") return "sm:w-[7.5rem]";
@@ -203,8 +210,12 @@ function listSlotWidth(d: PropDef): string {
   return "sm:w-[7rem]";
 }
 
-/** A task's date properties as one ordered group: start → due, then every other date field, each day once. */
-function DateChips({ task, items }: { task: NexusTask; items: PropDef[] }) {
+/**
+ * A task's date properties as one ordered group: start → due, then every other date field, each day once.
+ * `fit` (a List row's date column): the lead chip and at most one more day; the rest fold into "+N", whose
+ * tooltip names them (UI tour run 14, WD-5: three dates overflowed the column and the first was cut).
+ */
+function DateChips({ task, items, fit }: { task: NexusTask; items: PropDef[]; fit?: boolean }) {
   const { t } = useLang();
   const fmt = useDateFmt();
   const label = (d: PropDef) => (d.builtin ? t(d.label) : d.label);
@@ -235,14 +246,20 @@ function DateChips({ task, items }: { task: NexusTask; items: PropDef[] }) {
       <Clock className="h-3 w-3" />{dueText ?? startText}{!dueText && <ArrowRight className="h-3 w-3 opacity-70" aria-hidden />}
     </span>
   ) : null;
+  const room = !fit ? others.length : !lead ? 2 : startText && dueText && startText !== dueText ? 0 : 1;
+  const shownOthers = others.slice(0, room);
+  const folded = others.slice(room);
   return (
     <>
       {lead}
-      {others.map((text) => (
+      {shownOthers.map((text) => (
         <span key={text} title={tip(text)} className="inline-flex shrink-0 items-center gap-1 text-[11px] tabular-nums text-muted-foreground">
           <CalendarDays className="h-3 w-3" />{text}
         </span>
       ))}
+      {folded.length > 0 && (
+        <span title={folded.map(tip).join("\n")} className="inline-flex shrink-0 items-center rounded bg-muted px-1 text-[11px] tabular-nums text-muted-foreground">+{folded.length}</span>
+      )}
     </>
   );
 }

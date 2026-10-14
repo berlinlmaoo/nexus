@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CheckCircle2, CornerDownRight, Download, FileDown, FilePlus2, FileSignature, GitBranch, Loader2, Lock, RefreshCw, RotateCcw, Upload } from "lucide-react";
+import { CheckCircle2, CornerDownRight, Download, FileDown, FilePlus2, FileSignature, GitBranch, Loader2, Lock, Maximize2, RefreshCw, RotateCcw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -168,7 +168,15 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
 
             {view === "overview" && <>
             {shownVersion?.hasPdf && (
-              <iframe title={doc.title} src={legalDocsApi.fileUrl(doc.id, shownVersion.version, "pdf", true)} className="h-[60vh] w-full rounded-md border border-border bg-muted" />
+              <div className="space-y-1.5">
+                <iframe title={doc.title} src={legalDocsApi.fileUrl(doc.id, shownVersion.version, "pdf", true)} className="h-[60vh] w-full rounded-md border border-border bg-muted" />
+                {/* The preview is a sheet's width: too small to read on a phone (UI tour run 14, R14-WM-22). The
+                    browser's own viewer, full screen, can be zoomed. */}
+                <a href={legalDocsApi.fileUrl(doc.id, shownVersion.version, "pdf", true)} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-md text-sm font-medium text-primary hover:underline pointer-coarse:min-h-9">
+                  <Maximize2 className="h-4 w-4" /> {t("Open full screen")}
+                </a>
+              </div>
             )}
 
             <div className="grid gap-3 sm:grid-cols-2">

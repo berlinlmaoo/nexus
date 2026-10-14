@@ -23,6 +23,7 @@ import {
   cleanFields, condIncomplete, COVER_PRESETS, fieldTitle, hasOptions, ICON_CHOICES, kindMeta, kindOf, logicParents, MAPPING_TARGETS, needsValue, newFieldId, newQuestion,
   OPERATORS, optionsOf, QUESTION_KINDS, ROUTING_ACTIONS, staleOption, withKind, type FormDraft, type FRule, type QuestionKind, type RichField,
   categoryFieldForSectionQuestion, optionsAreSections, projectCategoryField, selectChoices,
+  withMappedRupiah,
 } from "./form-model";
 
 /**
@@ -102,9 +103,9 @@ function AutoTextarea({ value, onChange, placeholder, className, onKeyDown, auto
   );
 }
 
-function Toggle({ checked, onChange, label, hint, icon }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string; icon?: ReactNode }) {
+function Toggle({ checked, onChange, label, hint, icon, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string; icon?: ReactNode; disabled?: boolean }) {
   return (
-    <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)} className="flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/60">
+    <button type="button" role="switch" aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)} className="flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/60 disabled:cursor-default disabled:hover:bg-transparent">
       {icon && <span className="mt-0.5 shrink-0 text-muted-foreground">{icon}</span>}
       <span className="min-w-0 flex-1">
         <span className="block text-sm">{label}</span>
@@ -294,7 +295,7 @@ function QuestionCard({ field, index, total, selected, others, customFields, tas
     setSlashFor(null);
     setActive(0);
   };
-  const kind = kindOf(field);
+  const kind = kindOf(withMappedRupiah(field, customFields));
   const meta = kindMeta(kind);
   const mapping = field.mapping?.target && field.mapping.target !== "none" ? field.mapping : null;
   // A "Section" question whose options are categories: its answers land in the category field (server,
@@ -390,7 +391,7 @@ function QuestionCard({ field, index, total, selected, others, customFields, tas
         ) : field.type === "checkbox" ? (
           <div className="flex items-center gap-2.5 text-[15px] text-muted-foreground"><span className="h-4 w-4 rounded border border-muted-foreground/40" aria-hidden /> {fieldTitle(field) || t("Checkbox")}</div>
         ) : (
-          <div className="pointer-events-none"><QuestionControl field={field} value={undefined} onChange={() => {}} disabled /></div>
+          <div className="pointer-events-none"><QuestionControl field={withMappedRupiah(field, customFields)} value={undefined} onChange={() => {}} disabled /></div>
         )}
       </div>
 
@@ -421,6 +422,8 @@ function QuestionPanel({ field, index, total, others, customFields, taskLists, m
 }) {
   const { t, tn } = useLang();
   const kind = kindOf(field);
+  // Mapped to a Rupiah project field: the question is a Rupiah amount whatever the toggle says (R14-WB-1).
+  const mappedRupiah = withMappedRupiah(field, customFields) !== field;
   const pick = "h-auto min-h-[32px] rounded-md bg-background px-2 text-xs";
   const input = "h-8 min-w-0 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-foreground/40";
   const showIf = field.showIf ?? null;
@@ -460,7 +463,9 @@ function QuestionPanel({ field, index, total, others, customFields, taskLists, m
         <Toggle label={t("Description")} hint={t("Helper text under the question")} checked={field.description !== undefined} onChange={(v) => onChange((f) => { const n = { ...f }; if (v) n.description = ""; else delete n.description; return n; })} />
         {(kind === "text" || kind === "textarea") && <Toggle label={t("Long answer")} checked={kind === "textarea"} onChange={(v) => onChange((f) => withKind(f, v ? "textarea" : "text"))} />}
         {kind === "dropdown" && <Toggle label={t("Show options as a list")} hint={t("On the web form. The apps show a menu.")} checked={field.display === "list"} onChange={(v) => onChange((f) => { const n = { ...f }; if (v) n.display = "list"; else delete n.display; return n; })} />}
-        {(kind === "number" || kind === "rupiah") && <Toggle label={t("Rupiah amount")} hint="Rp 1.500.000" checked={kind === "rupiah"} onChange={(v) => onChange((f) => withKind(f, v ? "rupiah" : "number"))} />}
+        {(kind === "number" || kind === "rupiah") && (mappedRupiah
+          ? <Toggle label={t("Rupiah amount")} hint={t("Always on: the answer fills a Rupiah field")} checked disabled onChange={() => {}} />
+          : <Toggle label={t("Rupiah amount")} hint="Rp 1.500.000" checked={kind === "rupiah"} onChange={(v) => onChange((f) => withKind(f, v ? "rupiah" : "number"))} />)}
         {(kind === "text" || kind === "email") && (
           <div className="flex items-center gap-2 px-2 py-2">
             <span className="min-w-0 flex-1 text-sm">{t("Fill from the sender's account")}</span>
@@ -1243,7 +1248,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
     </span>
   );
 
-  const rendererForm = { name: draft.name, description: draft.description, fields: cleanFields(draft.fields), branding: draft.branding, settings: draft.settings as { confirmationTitle?: string; confirmationMessage?: string; submitLabel?: string } | null };
+  const rendererForm = { name: draft.name, description: draft.description, fields: cleanFields(draft.fields).map((f) => withMappedRupiah(f, customFields)), branding: draft.branding, settings: draft.settings as { confirmationTitle?: string; confirmationMessage?: string; submitLabel?: string } | null };
   const me = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 }).data?.user;
 
   const panel = sel ? (
@@ -1280,7 +1285,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
         <div className="flex h-12 items-center gap-2 px-2 sm:px-3">
           <button type="button" onClick={close} aria-label={t("Back to forms")} title={t("Back to forms")} className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><ArrowLeft className="h-4 w-4" /></button>
           <div className="flex min-w-0 items-center gap-1.5 text-sm">
-            {projectName && <span className="hidden min-w-0 max-w-[12rem] items-center gap-1.5 truncate text-muted-foreground md:inline-flex"><span className="grid h-4 w-4 shrink-0 place-items-center overflow-hidden rounded"><ProjectMark icon={projectQ.data?.icon} color={projectQ.data?.color} className="h-full w-full object-cover" /></span><span className="truncate">{projectName}</span><span className="text-muted-foreground/50">/</span></span>}
+            {projectName && <span className="hidden min-w-0 max-w-[12rem] items-center gap-1.5 truncate text-muted-foreground md:inline-flex"><span className="grid h-4 w-4 shrink-0 place-items-center overflow-hidden rounded"><ProjectMark icon={projectQ.data?.icon} color={projectQ.data?.color} type={projectQ.data?.type} className="h-full w-full object-cover" /></span><span className="truncate">{projectName}</span><span className="text-muted-foreground/50">/</span></span>}
             <span className="truncate font-medium">{draft.branding?.icon ? `${draft.branding.icon} ` : ""}{draft.name.trim() || t("Untitled form")}</span>
           </div>
           <nav className="mx-auto hidden items-center gap-0.5 md:flex" aria-label={t("Form builder")}>
@@ -1483,7 +1488,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
           {projectsQ.isLoading && <div className="py-4 text-center text-sm text-muted-foreground">{t("Loading projects…")}</div>}
           {(projectsQ.data ?? []).filter((p) => p.id !== projectId).map((p) => (
             <button key={p.id} type="button" disabled={dup.isPending || !dupName.trim()} onClick={() => dup.mutate(p.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-accent disabled:opacity-50">
-              <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded bg-muted text-sm"><ProjectMark icon={p.icon} color={p.color} className="h-full w-full object-cover" /></span>
+              <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded bg-muted text-sm"><ProjectMark icon={p.icon} color={p.color} type={p.type} className="h-full w-full object-cover" /></span>
               <span className="truncate">{p.name}</span>
               {dup.isPending && dup.variables === p.id && <Loader2 className="ml-auto h-4 w-4 shrink-0 animate-spin" />}
             </button>

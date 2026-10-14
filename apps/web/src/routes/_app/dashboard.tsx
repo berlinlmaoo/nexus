@@ -24,6 +24,7 @@ import {
   Maximize2,
   Loader2,
   RotateCw,
+  CalendarClock,
   } from "lucide-react";
 
 import learner from "@/assets/philearn/learner.png";
@@ -109,13 +110,13 @@ function Dashboard() {
               the whole rail, and a double gap where the hidden copy was). Two columns from xl. */}
           <div data-dashboard-main-cal="" className="grid gap-6 xl:grid-cols-2">
             <Reveal delay={0.15}><CalendarCard /></Reveal>
-            <Reveal delay={0.2}><ScheduleCard /></Reveal>
+            <Reveal delay={0.2} className="xl:h-full"><ScheduleCard /></Reveal>
           </div>
         </div>
 
         {/* right rail */}
         <aside className="space-y-6">
-          <Reveal delay={0.05}><ProfileCard userName={userName} avatarUrl={profile.data?.user?.avatar} /></Reveal>
+          <Reveal delay={0.05}><ProfileCard avatarUrl={profile.data?.user?.avatar} /></Reveal>
           <Reveal delay={0.1}><MessagesCard /></Reveal>
           <Reveal delay={0.15}><LeaderboardCard /></Reveal>
         </aside>
@@ -189,7 +190,7 @@ function NotificationsBell({ unread }: { unread: number }) {
       >
         <Bell className="h-5 w-5" />
         {count > 0 && (
-          <span className="absolute right-1.5 top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">{count}</span>
+          <span className="absolute right-1.5 top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">{count > 99 ? "99+" : count}</span>
         )}
       </motion.button>
       <NotificationsModal open={open} onClose={() => setOpen(false)} list={list} unread={count} loading={q.isLoading} error={q.isError} />
@@ -296,7 +297,7 @@ function NotificationsModal({ open, onClose, list, unread, loading, error }: { o
 }
 
 /* ---------- section card shell ---------- */
-function Section({ title, action, className, children, morphId, contentHidden, dim }: { title: string; action?: React.ReactNode; className?: string; children: React.ReactNode; morphId?: string; contentHidden?: boolean; dim?: boolean }) {
+function Section({ title, action, className, children, morphId, contentHidden, dim, fill }: { title: string; action?: React.ReactNode; className?: string; children: React.ReactNode; morphId?: string; contentHidden?: boolean; dim?: boolean; /** Body stretches to the card's height (a card that shares a row with a taller one). */ fill?: boolean }) {
   return (
     <motion.section
       layoutId={morphId}
@@ -308,12 +309,12 @@ function Section({ title, action, className, children, morphId, contentHidden, d
     >
       {/* contentHidden: while the card itself is morphing into a modal, hide its content so it
           doesn't crossfade ("kebawa") — only the card box morphs. */}
-      <div className={cn(contentHidden && "opacity-0")}>
+      <div className={cn(contentHidden && "opacity-0", fill && "flex h-full flex-col")}>
         <div className="mb-4 flex items-center justify-between gap-3">
           <h3 className="font-display text-base font-semibold tracking-tight">{title}</h3>
           {action}
         </div>
-        {children}
+        {fill ? <div className="flex min-h-0 flex-1 flex-col">{children}</div> : children}
       </div>
     </motion.section>
   );
@@ -768,7 +769,7 @@ function LevelModal({ open, onClose, info, totalXp, streak }: { open: boolean; o
 }
 
 /* ---------- right rail: profile ---------- */
-function ProfileCard({ userName, avatarUrl }: { userName: string; avatarUrl?: string | null }) {
+function ProfileCard({ avatarUrl }: { avatarUrl?: string | null }) {
   const { t, locale } = useLang();
   const g = useGamification();
   const totalXp = g.data?.xp?.totalXp ?? 0;
@@ -791,7 +792,7 @@ function ProfileCard({ userName, avatarUrl }: { userName: string; avatarUrl?: st
       <Link to="/settings" className="mt-4 flex h-11 items-center justify-center gap-2 rounded-xl border border-primary/40 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
         <Pencil className="h-4 w-4" /> {t("Edit profile")}
       </Link>
-      <p className="mt-2 text-center text-xs text-muted-foreground">{userName}</p>
+      {/* No name caption under the button: the greeting above already says who this is (UI tour run 14, R14-WD-13). */}
     </section>
   );
 }
@@ -1103,7 +1104,9 @@ function ScheduleCard() {
       .slice(0, 6);
   }, [tasks.data]);
   return (
-    <Section title={t("Your schedule")} action={<SeeAll to="/my-tasks" />}>
+    // Same height as the calendar beside it, with the empty state centred in it: a short card left a large
+    // blank area under "Your schedule" (UI tour run 14, R14-WD-13).
+    <Section title={t("Your schedule")} action={<SeeAll to="/my-tasks" />} className="xl:h-full" fill>
       {tasks.isLoading && (
         <div className="space-y-2.5">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -1120,7 +1123,8 @@ function ScheduleCard() {
       )}
       {!tasks.isLoading && items.length === 0 && (
         // A next step, not a dead end (UI tour run 9): My Tasks is where dates get set and tasks get picked up.
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 py-4 text-center">
+          <span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/10 text-primary"><CalendarClock className="h-6 w-6" aria-hidden /></span>
           <p className="text-sm text-muted-foreground">{t("No upcoming tasks with a due date.")}</p>
           <Link to="/my-tasks" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">{t("Open My Tasks")}</Link>
         </div>

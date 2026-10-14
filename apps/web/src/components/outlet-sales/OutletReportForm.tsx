@@ -322,7 +322,7 @@ function FormBody({
           id={htmlId}
           inputMode="numeric"
           autoComplete="off"
-          placeholder="0"
+          placeholder="—"
           value={figures[id] ?? ""}
           onChange={(e) => setFigure(id, e.target.value)}
           aria-invalid={invalid === `values.${id}` || undefined}
@@ -406,11 +406,12 @@ function FormBody({
         return (
           <span className="relative block">
             <span aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">Rp</span>
-            <input {...common} inputMode="numeric" autoComplete="off" placeholder="0" value={draft[f.key] ?? ""} onChange={(e) => set(f, e.target.value)} className={cn(base, "h-10 pl-9 tabular-nums pointer-coarse:h-11")} />
+            {/* Empty: only the "Rp" mark, no grey "0" that reads like a real zero (UI tour run 14, R14-WB-1 / WB-11). */}
+            <input {...common} inputMode="numeric" autoComplete="off" value={draft[f.key] ?? ""} onChange={(e) => set(f, e.target.value)} className={cn(base, "h-10 pl-9 tabular-nums pointer-coarse:h-11")} />
           </span>
         );
       case "count":
-        return <input {...common} inputMode="numeric" autoComplete="off" placeholder="0" value={draft[f.key] ?? ""} onChange={(e) => set(f, e.target.value)} className={cn(base, "h-10 text-right tabular-nums pointer-coarse:h-11")} />;
+        return <input {...common} inputMode="numeric" autoComplete="off" placeholder="—" value={draft[f.key] ?? ""} onChange={(e) => set(f, e.target.value)} className={cn(base, "h-10 text-right tabular-nums pointer-coarse:h-11")} />;
       default:
         return <input {...common} type="text" required={f.required} maxLength={f.max} value={draft[f.key] ?? ""} onChange={(e) => set(f, e.target.value)} className={cn(base, "h-10 pointer-coarse:h-11")} />;
     }

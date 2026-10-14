@@ -47,7 +47,7 @@ assert.equal(templateLang("fr"), "id")
 
 // Field options are stored the way lib/custom-fields.ts normalizes them.
 const ev = planTemplate(findProjectTemplate("event"), "en")
-assert.deepEqual(ev.fields.find((f) => f.key === "budget").options, { format: "currency-idr" })
+assert.deepEqual(ev.fields.find((f) => f.key === "budget").options, { format: "currency-idr", numberFormat: "IDR" })
 assert.deepEqual(ev.fields.find((f) => f.key === "venue").options, { format: "name-and-map-link" })
 assert.equal(ev.fields.find((f) => f.key === "eventDate").options, null)
 

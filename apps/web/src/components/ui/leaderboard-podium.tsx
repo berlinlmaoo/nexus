@@ -75,4 +75,30 @@ const LeaderboardPodium = React.forwardRef<HTMLDivElement, LeaderboardPodiumProp
 
 LeaderboardPodium.displayName = "LeaderboardPodium"
 
-export { LeaderboardPodium }
+/**
+ * More people share 1st than the podium has steps (UI tour run 14, R14-WB-9): three equal "1" blocks for 3 of
+ * 7 tied people left the other four out and a large empty gold area. Instead, one gold band holds everyone who
+ * shares 1st, in the list's order, with the caption ("7-way tie for 1st") on top.
+ */
+function LeaderboardTie({ rankings, caption, className }: { rankings: LeaderboardRanking[]; caption: React.ReactNode; className?: string }) {
+  const s = PODIUM_STYLE[1]
+  return (
+    <div className={cn("rounded-xl px-4 py-4", s.bar, className)}>
+      <p className={cn("flex items-center justify-center gap-1.5 text-center text-sm font-semibold", s.barText)}>
+        <Crown aria-hidden className="h-4 w-4 shrink-0" />
+        <span>{caption}</span>
+        {rankings[0] ? <span className="tabular-nums">· {formatCount(rankings[0].value)}</span> : null}
+      </p>
+      <ul className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-3">
+        {rankings.map((item) => (
+          <li key={item.userId} className="flex w-20 min-w-0 flex-col items-center gap-1">
+            <PodiumAvatar item={item} size={44} ring={cn("ring-2", s.ring)} />
+            <span className={cn("max-w-full truncate text-xs font-semibold", s.barText)}>{item.userName}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+export { LeaderboardPodium, LeaderboardTie }

@@ -1,3 +1,4 @@
+import { numberFieldFormat } from "@/lib/custom-field-number";
 import { AlignLeft, AtSign, Calendar, CheckSquare, CircleDot, Hash, Link2, ListChecks, Paperclip, Phone, Type, Wallet } from "lucide-react";
 import type { NexusFormBranding, NexusFormField } from "@/lib/nexus-api";
 
@@ -43,6 +44,18 @@ export function kindOf(f: Pick<RichField, "type" | "numberFormat">): QuestionKin
   if (f.type === "select") return "dropdown";
   return (QUESTION_KINDS.find((k) => k.kind === f.type)?.kind ?? "text") as QuestionKind;
 }
+/**
+ * A number question that fills a Rupiah project field is a Rupiah question even when the builder left it
+ * plain (the finance forms' "Harga"): the server sends it that way to the form (forms/[formId]/public), so
+ * the builder's canvas and preview show the "Rp" box too (UI tour run 14, R14-WB-1).
+ */
+export function withMappedRupiah<F extends Pick<RichField, "type" | "numberFormat" | "mapping">>(f: F, customFields: Array<{ id: string; type?: string | null; options?: unknown }>): F {
+  if (f.type !== "number" || f.numberFormat || f.mapping?.target !== "custom_field" || !f.mapping.customFieldId) return f;
+  const cf = customFields.find((c) => c.id === f.mapping?.customFieldId);
+  if (!cf || (cf.type ?? "").toUpperCase() !== "NUMBER" || numberFieldFormat(cf.options) !== "currency-idr") return f;
+  return { ...f, numberFormat: "currency-idr" };
+}
+
 export const kindMeta = (k: QuestionKind) => QUESTION_KINDS.find((x) => x.kind === k) ?? QUESTION_KINDS[0];
 export const hasOptions = (f: Pick<RichField, "type">) => f.type === "dropdown" || f.type === "multi_select" || f.type === "select";
 

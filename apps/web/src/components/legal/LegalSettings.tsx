@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { useStickyHeaderOffset } from "@/hooks/use-sticky-header-offset";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AlertTriangle, Check, Download, Loader2, Pencil, Plus, Upload, X } from "lucide-react";
@@ -22,6 +23,8 @@ export function LegalSettings() {
   const me = useQuery({ queryKey: ["legal", "me"], queryFn: legalApi.me, staleTime: 60_000 });
   const companies = useQuery({ queryKey: ["legal", "companies"], queryFn: legalTemplatesApi.companies });
   const canEdit = (me.data?.invitePower ?? "NONE") !== "NONE";
+  const headerTop = useStickyHeaderOffset();
+  const jumpRef = useRef<HTMLElement>(null);
 
   if (companies.isLoading) return <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {t("Loading…")}</div>;
   if (companies.isError) return <p className="py-6 text-sm text-destructive">{(companies.error as Error).message}</p>;
@@ -29,12 +32,19 @@ export function LegalSettings() {
     <div className="space-y-4">
       {!canEdit && <p className="text-sm text-muted-foreground">{t("Only the owner or a BoD member with Legal can change these.")}</p>}
       {/* A long page (a company each with its letterhead and ~11 series): a row of its companies to jump to
-          (UI tour run 13, W-B26). */}
+          (UI tour run 13, W-B26). It stays pinned under the header and tabs while the page scrolls (run 14,
+          R14-WB-7), and a company it jumps to lands below it. */}
       {(companies.data?.companies.length ?? 0) > 2 && (
-        <nav aria-label={t("Companies")} className="flex flex-wrap gap-1.5">
+        <nav ref={jumpRef} aria-label={t("Companies")} style={{ top: headerTop }}
+          className="sticky z-20 -mx-4 flex flex-wrap gap-1.5 border-b border-border bg-background px-4 py-2 md:-mx-8 md:px-8">
           {companies.data!.companies.map((c) => (
             <button key={c.id} type="button"
-              onClick={() => document.getElementById(`legal-co-${c.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              onClick={() => {
+                const el = document.getElementById(`legal-co-${c.id}`);
+                if (!el) return;
+                el.style.scrollMarginTop = `${headerTop + (jumpRef.current?.offsetHeight ?? 0) + 12}px`;
+                el.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
               className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-9">
               {c.name}<span className="font-mono text-[10px] text-muted-foreground">{c.code}</span>
             </button>
@@ -183,7 +193,9 @@ function SeriesRow({ s, canEdit }: { s: LegalSeries; canEdit: boolean }) {
         {/* Nothing truncated (UI tour run 11, WM-3): the type wraps under the name on a phone, and the number
             pattern has a monospace line of its own. It wraps after a "/" only, never inside a token such as
             {SEQ:3} (UI tour run 13, W-M4: "{YY / YY}"). */}
-        <div className="font-medium [overflow-wrap:anywhere]">{s.label} <span className="text-xs font-normal text-muted-foreground">· {docTypeLabel(s.docType)} · {s.resetPeriod === "MONTH" ? t("Monthly") : t("Yearly")}</span></div>
+        {/* Each "·" is held to the word before it by a no-break space, so a wrapped line never starts with the
+            separator (UI tour run 14, R14-WM-21: "· Work agreement (SPK) · Yearly"). */}
+        <div className="font-medium [overflow-wrap:anywhere]">{s.label}<span className="text-xs font-normal text-muted-foreground">{"\u00a0· "}{docTypeLabel(s.docType)}{"\u00a0· "}{s.resetPeriod === "MONTH" ? t("Monthly") : t("Yearly")}</span></div>
         <div className="mt-0.5 font-mono text-xs text-muted-foreground [overflow-wrap:anywhere]">
           {s.format.split("/").map((part, i, all) => (
             <Fragment key={i}>{part}{i < all.length - 1 && <>/<wbr /></>}</Fragment>

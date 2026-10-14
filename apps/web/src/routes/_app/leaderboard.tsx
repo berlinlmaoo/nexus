@@ -39,9 +39,12 @@ function Leaderboard() {
     avatarUrl: r.avatar,
   }));
 
-  // More people share 1st than the podium has steps: three equal "1" blocks read as the whole story, so say
-  // how many are tied, as the iPhone app does (UI tour run 12, WD2).
+  // More people share 1st than the podium has steps: everyone tied stands in one row in place of the podium,
+  // under "7-way tie for 1st" (UI tour run 12, WD2; run 14, R14-WB-9: three "1" blocks left four people out).
   const tiedFirst = ranked.filter((r) => r.rank === 1).length;
+  const podiumTie = tiedFirst > 3
+    ? ranked.filter((r) => r.rank === 1).map((r, i) => ({ userId: r.userId, userName: r.name ?? "—", rank: i + 1, label: 1, value: r.totalXp, avatarUrl: r.avatar }))
+    : undefined;
 
   const rankings = ranked.map((r) => ({
     userId: r.userId,
@@ -102,6 +105,7 @@ function Leaderboard() {
               subtitle={t("XP ranking for everyone")}
               podiumRankings={podiumRankings}
               podiumCaption={tiedFirst > 3 ? t("{n}-way tie for 1st", { n: tiedFirst }) : undefined}
+              podiumTie={podiumTie}
               rankings={rankings}
               currentUserId={meId}
               onSelectUser={(item) => setXpUser({ id: item.userId, name: item.userName, avatar: item.avatarUrl })}

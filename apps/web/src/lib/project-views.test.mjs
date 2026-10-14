@@ -90,6 +90,30 @@ eq(V.groupCalcValue(T, { kind: "count" }, defs).value, "4")
 eq(V.groupCalcValue(T, { kind: "done" }, defs).value, "1/4")
 eq(V.groupCalcValue(T, { kind: "percent_done" }, defs).value, "25%")
 eq(V.groupCalcValue(T, { kind: "sum", prop: "cf:f2" }, defs).value, "Rp 2.000.000", "a Rupiah field sums as Rupiah")
+eq(V.groupCalcValue(T, { kind: "avg", prop: "cf:f2" }, defs).value, "Rp 1.000.000", "a Rupiah average stays whole rupiah")
+
+// table footer calculations (Notion's Calculate): Sum… keep the field's format, counts are plain
+const budget = V.propDef(defs, "cf:f2")
+eq(budget.number.numberFormat, "IDR", "legacy { format: currency-idr } reads as Rupiah")
+eq(V.columnCalcValue(T, "sum", budget), "Rp 2.000.000")
+eq(V.columnCalcValue(T, "avg", budget), "Rp 1.000.000")
+eq(V.columnCalcValue(T, "median", budget), "Rp 1.000.000")
+eq(V.columnCalcValue(T, "min", budget), "Rp 500.000")
+eq(V.columnCalcValue(T, "max", budget), "Rp 1.500.000")
+eq(V.columnCalcValue(T, "range", budget), "Rp 1.000.000")
+eq(V.columnCalcValue(T, "count_all", budget), "4")
+eq(V.columnCalcValue(T, "count_values", budget), "2")
+eq(V.columnCalcValue(T, "count_empty", budget), "2")
+eq(V.columnCalcValue(T, "percent_empty", budget), "50%")
+eq(V.columnCalcValue(T, "percent_not_empty", budget), "50%")
+eq(V.columnCalcValue([], "sum", budget), "", "no numbers: no sum")
+eq(V.columnCalcsFor(V.propDef(defs, "cf:f1")).includes("sum"), false, "a select column only counts")
+const pctDefs = V.propDefs({ ...ctx, fields: [{ id: "p", name: "Done %", type: "NUMBER", options: { numberFormat: "percent", decimals: 1 }, position: 0 }] })
+const pctTasks = [{ id: "x", customFieldValues: [cf("p", "NUMBER", "0.25")] }, { id: "y", customFieldValues: [cf("p", "NUMBER", "0.5")] }]
+eq(V.columnCalcValue(pctTasks, "avg", V.propDef(pctDefs, "cf:p")), "37,5%", "a percent average keeps the format and decimals")
+eq(V.columnCalcValue(pctTasks, "sum", V.propDef(pctDefs, "cf:p")), "75,0%")
+eq(V.resolveConfig({ layout: "table", config: { columnCalcs: { "cf:f2": "sum" } } }).columnCalcs, { "cf:f2": "sum" })
+eq(V.resolveConfig({ layout: "table", config: {} }).columnCalcs, {})
 
 // URL round trip
 const f = { simple: [rule("status", "none_of", ["DONE"])], advanced: adv }

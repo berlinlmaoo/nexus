@@ -255,8 +255,9 @@ function FeedPage() {
         </AnimatePresence>
       </div>
 
-      {/* list — continuous, divider-separated */}
-      <div>
+      {/* list — continuous, divider-separated. The last post draws no divider of its own: the card's border is
+          right under it, and the two read as a doubled line (UI tour run 14, R14-WM-6). */}
+      <div className="[&>article:last-of-type]:border-b-0">
         {loading && Array.from({ length: 5 }).map((_, i) => <PostSkeleton key={i} />)}
 
         {failed && <LoadError compact error={feed.error} what={t("the posts")} onRetry={() => void feed.refetch()} />}

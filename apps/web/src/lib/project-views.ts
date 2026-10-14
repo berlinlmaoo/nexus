@@ -14,7 +14,7 @@
  */
 import type { NexusCustomField, NexusProjectView, NexusTask } from "./nexus-api";
 import { groupIndex, orderedOptions, usesStatusOptions } from "./status-options.ts";
-import { normalizeNumberFieldValue, numberFieldFormat, rupiah } from "./custom-field-number.ts";
+import { formatNumberWith, numberFieldFormat, numberOptions, storedNumber, type NumberOptions } from "./custom-field-number.ts";
 import { formatCount } from "./number-format.ts";
 
 export type ViewLayout = NexusProjectView["layout"];
@@ -42,6 +42,24 @@ export type FilterGroup = { id: string; mode: "and" | "or"; rules: Array<FilterR
 export type ViewFilter = { simple: FilterRule[]; advanced: FilterGroup | null };
 export type SortRule = { prop: string; dir: "asc" | "desc" };
 export type GroupCalc = { kind: "count" | "done" | "percent_done" | "sum" | "avg"; prop?: string };
+/** A Table column's footer calculation (Notion's "Calculate"). Counts work on any column, the rest on numbers. */
+export type ColumnCalc = "count_all" | "count_values" | "count_empty" | "percent_empty" | "percent_not_empty" | "sum" | "avg" | "median" | "min" | "max" | "range";
+export const COUNT_CALCS: ColumnCalc[] = ["count_all", "count_values", "count_empty", "percent_empty", "percent_not_empty"];
+export const NUMBER_CALCS: ColumnCalc[] = ["sum", "avg", "median", "min", "max", "range"];
+/** English names (the UI translates them); the short ones label the footer value, as Notion does. */
+export const COLUMN_CALC_LABEL: Record<ColumnCalc, { name: string; short: string }> = {
+  count_all: { name: "Count all", short: "Count all" },
+  count_values: { name: "Count values", short: "Count values" },
+  count_empty: { name: "Count empty", short: "Count empty" },
+  percent_empty: { name: "Percent empty", short: "Percent empty" },
+  percent_not_empty: { name: "Percent not empty", short: "Percent not empty" },
+  sum: { name: "Sum", short: "Sum" },
+  avg: { name: "Average", short: "Average" },
+  median: { name: "Median", short: "Median" },
+  min: { name: "Min", short: "Min" },
+  max: { name: "Max", short: "Max" },
+  range: { name: "Range", short: "Range" },
+};
 export type ColorRule = { id: string; prop: string; value: string; color: string };
 
 export type ViewConfig = {
@@ -63,6 +81,8 @@ export type ViewConfig = {
   endProp: string;
   showSubtasks: boolean;
   wrap: boolean;
+  /** Table footer: a calculation per column (prop key → calc). Absent = none. */
+  columnCalcs: Record<string, ColumnCalc>;
 };
 
 export const EMPTY_FILTER: ViewFilter = { simple: [], advanced: null };
@@ -80,7 +100,14 @@ export function newId(): string {
 export type PropKind = "title" | "text" | "select" | "multi" | "person" | "date" | "number" | "checkbox" | "count";
 export type PropOption = { value: string; label: string; color?: string | null };
 /** `hidden`: still evaluated (old saved filters keep working) but not offered in pickers. */
-export type PropDef = { key: string; label: string; kind: PropKind; options?: PropOption[]; fieldType?: string; /** NUMBER fields: "currency-idr" shows Rp, "plain" a grouped number. */ numberFormat?: "plain" | "currency-idr"; builtin: boolean; hidden?: boolean };
+export type PropDef = {
+  key: string; label: string; kind: PropKind; options?: PropOption[]; fieldType?: string;
+  /** NUMBER fields: "currency-idr" shows Rp, "plain" any other format (legacy; see `number`). */
+  numberFormat?: "plain" | "currency-idr";
+  /** NUMBER fields: the field's format, decimals and Show as (lib/custom-field-number.ts). */
+  number?: NumberOptions;
+  builtin: boolean; hidden?: boolean;
+};
 
 export type ViewCtx = {
   /** The project's sections. With a taskStatus they are its status options (lib/status-options.ts). */
@@ -163,17 +190,20 @@ export function propDefs(ctx: ViewCtx): PropDef[] {
     const colors = fieldOptionColors(f);
     const options = kind === "select" || kind === "multi" ? fieldChoices(f).map((v) => ({ value: v, label: v, color: colors[v] ?? null })) : kind === "person" ? ctx.people.map((p) => ({ value: p.id, label: p.name })) : undefined;
     const fieldType = (f.type ?? "").toUpperCase();
-    defs.push({ key: `cf:${f.id}`, label: f.name, kind, options, fieldType, numberFormat: fieldType === "NUMBER" ? numberFieldFormat(f.options) : undefined, builtin: false });
+    const isNumber = fieldType === "NUMBER";
+    defs.push({ key: `cf:${f.id}`, label: f.name, kind, options, fieldType, numberFormat: isNumber ? numberFieldFormat(f.options) : undefined, number: isNumber ? numberOptions(f.options) : undefined, builtin: false });
   }
   return defs;
 }
 
 /**
- * A number property for display: Rupiah fields as "Rp 1.500.000", other numbers with Indonesian grouping
- * ("1.500") in both languages (UI tour run 13). `_locale` stays for the callers.
+ * A number property for display in its field's format ("Rp 1.500.000", "42%", "US$12,00", "1.500"), with
+ * Indonesian grouping in both languages. Without a field format (RATING, counts) a grouped number with up
+ * to `maxFractionDigits` decimals. `format` is the legacy two-way switch, still honoured.
  */
-export function formatNumberProp(n: number, format: PropDef["numberFormat"], maxFractionDigits = 2, _locale = "id-ID"): string {
-  if (format === "currency-idr") return rupiah(n);
+export function formatNumberProp(n: number, format: PropDef["numberFormat"] | NumberOptions | undefined, maxFractionDigits = 2, _locale = "id-ID"): string {
+  if (format && typeof format === "object") return formatNumberWith(n, format);
+  if (format === "currency-idr") return formatNumberWith(n, numberOptions({ format: "currency-idr" }));
   return formatCount(n, maxFractionDigits);
 }
 
@@ -258,9 +288,9 @@ export function taskValues(task: NexusTask, key: string): string[] {
       try { const p = JSON.parse(raw) as { label?: string }; return p?.label ? [p.label] : []; } catch { return [raw]; }
     }
     if (type === "NUMBER") {
-      // Rupiah: a legacy "369.000" is Rp 369.000, not 369 (lib/custom-field-number.ts).
-      if (numberFieldFormat(cfv?.customField?.options) === "currency-idr") { const n = normalizeNumberFieldValue(raw, "currency-idr"); return n ? [n] : []; }
-      const n = raw.replace(/[^\d.-]+/g, ""); return n ? [n] : [];
+      // The stored machine number; a legacy Rupiah "369.000" is Rp 369.000, not 369 (lib/custom-field-number.ts).
+      const n = storedNumber(raw, cfv?.customField?.options);
+      return n === null ? [] : [String(n)];
     }
     return [raw];
   }
@@ -612,13 +642,60 @@ export function groupCalcValue(tasks: NexusTask[], calc: GroupCalc, defs: PropDe
       const nums = tasks.map((t) => Number(taskValues(t, def.key)[0])).filter((n) => !Number.isNaN(n));
       const sum = nums.reduce((a, b) => a + b, 0);
       const v = calc.kind === "sum" ? sum : nums.length ? sum / nums.length : 0;
-      // Only a Rupiah field reads as "Rp …"; a plain number field is just grouped (owner, 12 Oct 2026).
-      const text = formatNumberProp(v, def.numberFormat, calc.kind === "avg" ? 1 : 0);
+      // In the field's own format ("Rp …", "42%"…); a plain number field is just grouped (owner, 12 Oct 2026).
+      const text = def.number ? formatCalcNumber(v, def.number, calc.kind === "avg") : formatNumberProp(v, def.numberFormat, calc.kind === "avg" ? 1 : 0);
       return { value: text, label: calc.kind === "sum" ? `Sum of ${def.label}` : `Average ${def.label}` };
     }
     default:
       return { value: String(tasks.length), label: "Count" };
   }
+}
+
+/** A calculated number in its field's format; an average with Default decimals is not printed to 16 places. */
+function formatCalcNumber(v: number, o: NumberOptions, averaged: boolean): string {
+  if (!averaged || o.decimals !== null) return formatNumberWith(v, o);
+  const places = o.numberFormat === "percent" ? 4 : o.numberFormat === "IDR" ? 0 : 2;
+  return formatNumberWith(Number(v.toFixed(places)), o);
+}
+
+/** Which footer calculations a column offers: counts for every column, sums and the rest for numbers. */
+export function columnCalcsFor(def: PropDef | undefined): ColumnCalc[] {
+  if (!def) return [];
+  return def.kind === "number" || def.kind === "count" ? [...COUNT_CALCS, ...NUMBER_CALCS] : [...COUNT_CALCS];
+}
+
+/**
+ * A Table column's footer value over the view's tasks. Sum, Average, Median, Min, Max and Range keep the
+ * field's number format and decimals; counts and percents are plain ("12", "25%").
+ */
+export function columnCalcValue(tasks: NexusTask[], calc: ColumnCalc, def: PropDef): string {
+  const values = tasks.map((t) => taskValues(t, def.key));
+  const filled = def.kind === "count" ? values.filter((v) => v.length && v[0] !== "0").length : values.filter((v) => v.length > 0).length;
+  const total = tasks.length;
+  const pct = (k: number) => `${total ? formatCount((k / total) * 100, 1) : "0"}%`;
+  switch (calc) {
+    case "count_all": return formatCount(total);
+    case "count_values": return formatCount(filled);
+    case "count_empty": return formatCount(total - filled);
+    case "percent_empty": return pct(total - filled);
+    case "percent_not_empty": return pct(filled);
+  }
+  const nums = values.map((v) => (v.length ? Number(v[0]) : Number.NaN)).filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
+  if (!nums.length) return "";
+  let v: number;
+  switch (calc) {
+    case "sum": v = nums.reduce((a, b) => a + b, 0); break;
+    case "avg": v = nums.reduce((a, b) => a + b, 0) / nums.length; break;
+    case "median": { const m = nums.length >> 1; v = nums.length % 2 ? nums[m] : (nums[m - 1] + nums[m]) / 2; break; }
+    case "min": v = nums[0]; break;
+    case "max": v = nums[nums.length - 1]; break;
+    case "range": v = nums[nums.length - 1] - nums[0]; break;
+    default: return "";
+  }
+  // Float noise from adding fractions (0.1 + 0.2) is not a real digit.
+  v = Number(v.toPrecision(15));
+  if (def.number) return formatCalcNumber(v, def.number, calc === "avg" || calc === "median");
+  return formatCount(v, calc === "avg" || calc === "median" ? 2 : 0);
 }
 
 // ─── config ──────────────────────────────────────────────────────────────────────────────────────────
@@ -666,6 +743,7 @@ export function defaultConfig(layout: ViewLayout): ViewConfig {
     endProp: "due",
     showSubtasks: layout === "board" || layout === "list",
     wrap: false,
+    columnCalcs: {},
   };
 }
 
@@ -691,6 +769,7 @@ export function resolveConfig(view: Pick<NexusProjectView, "layout" | "config">)
     collapsedGroups: Array.isArray(c.collapsedGroups) ? c.collapsedGroups : [],
     colorRules: Array.isArray(c.colorRules) ? c.colorRules : [],
     groupCalc: c.groupCalc && typeof c.groupCalc === "object" ? c.groupCalc : d.groupCalc,
+    columnCalcs: c.columnCalcs && typeof c.columnCalcs === "object" && !Array.isArray(c.columnCalcs) ? c.columnCalcs : {},
   } as ViewConfig;
 }
 

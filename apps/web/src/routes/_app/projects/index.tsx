@@ -791,7 +791,7 @@ function ProjectCard({ project: p, folders, canMove, onMove, dragProps, dragging
           </div>
           <div className="flex items-start gap-3 relative">
             <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-muted text-2xl">
-              <ProjectMark icon={p.icon} color={p.color} />
+              <ProjectMark icon={p.icon} color={p.color} type={p.type} />
             </div>
             <div className="min-w-0 flex-1">
               <h3 className="truncate font-semibold tracking-tight transition group-hover:text-primary">
@@ -862,7 +862,7 @@ function ProjectRow({ project: p, folders, canMove, onMove, dragProps, dragging 
     >
       <div className="flex items-center gap-3 min-w-0">
         <div className="grid h-10 w-10 place-items-center rounded-2xl bg-muted text-xl shrink-0">
-          <ProjectMark icon={p.icon} color={p.color} />
+          <ProjectMark icon={p.icon} color={p.color} type={p.type} />
         </div>
         <div className="min-w-0">
           <div className="font-semibold truncate group-hover:text-primary">{p.name}</div>

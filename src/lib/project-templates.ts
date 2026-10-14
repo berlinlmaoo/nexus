@@ -519,7 +519,7 @@ export function planTemplate(t: ProjectTemplate, lang: TemplateLang, starter = t
         f.type === "SELECT" || f.type === "MULTI_SELECT"
           ? templateSelectOptions(f.options ?? [], lang)
           : f.type === "NUMBER" && f.format
-            ? { format: f.format }
+            ? { format: f.format, numberFormat: "IDR" }
             : f.type === "CREATED"
               ? { defaultSource: "taskCreatedAt", editable: false }
               : f.type === "PLACE"

@@ -131,7 +131,7 @@ check("display helpers", () => {
   assert.equal(m.groupIdrDigits(""), "")
   assert.equal(m.formatIdr("369.000"), "Rp 369.000")
   assert.equal(m.formatIdr("369000"), "Rp 369.000")
-  assert.equal(m.formatIdr("-25000"), "-Rp 25.000")
+  assert.equal(m.formatIdr("-25000"), "\u2212Rp 25.000")
   assert.equal(m.formatIdr(""), "")
 })
 

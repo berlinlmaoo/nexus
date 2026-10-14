@@ -27,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
 import { SelectPicker } from "@/components/SelectPicker";
 import { useLang } from "@/lib/lang";
@@ -125,26 +126,38 @@ export function PropPicker({ defs, onPick, exclude = [], placeholder }: { defs: 
 }
 
 /** A toolbar button: quiet until it holds something, then it takes the accent colour. */
-export function ToolbarButton({ icon: Icon, label, active, count, onClick, disabled, className }: {
+export function ToolbarButton({ icon: Icon, label, active, count, onClick, disabled, className, showLabel }: {
   icon: typeof ListFilter; label: string; active?: boolean; count?: number; onClick?: () => void; disabled?: boolean; className?: string; iconOnly?: boolean;
+  /** Write the name beside the icon from lg up (a toolbar with room to spare, e.g. on the Overview). */
+  showLabel?: boolean;
 }) {
-  return (
+  const button = (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      title={label}
       className={cn(
         "inline-flex h-8 min-w-8 shrink-0 items-center justify-center gap-1 rounded-md px-1.5 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/30 disabled:opacity-40",
         active ? "text-[color:var(--accent-foreground)]" : "text-muted-foreground hover:text-foreground",
+        showLabel && "lg:px-2",
         className,
       )}
     >
       <Icon className="h-4 w-4" />
-      {/* Icons only, like Notion's toolbar: the label is the tooltip and the accessible name. */}
+      {showLabel && <span aria-hidden className="hidden whitespace-nowrap lg:inline">{label}</span>}
       {!!count && <span className="tabular-nums text-xs font-semibold">{count}</span>}
     </button>
+  );
+  // Icons like Notion's toolbar, each with a quick tooltip that names it on hover and keyboard focus (UI tour
+  // run 14, WD-7: the native title tooltip took a second and a half to show, so the icons read as unlabeled).
+  return (
+    <TooltipProvider delayDuration={250}>
+      <Tooltip>
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
+        <TooltipContent side="bottom">{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 

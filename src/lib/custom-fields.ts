@@ -1,4 +1,4 @@
-import { normalizeNumberFieldValue } from "./custom-field-number"
+import { formatNumberField, normalizeNumberFieldValue, numberFieldFormat, numberOptionsToStore, type BarColor, type NumberShowAs } from "./custom-field-number"
 
 export const SUPPORTED_CUSTOM_FIELD_TYPES = [
   "TEXT",
@@ -28,6 +28,14 @@ export interface CustomFieldOptionConfig {
   defaultSource?: "taskCreatedAt"
   editable?: boolean
   format?: CustomFieldDisplayFormat
+  /** NUMBER display settings (Notion-style formats, 15 Oct 2026; lib/custom-field-number.ts). Additive:
+   *  released apps read only `format: "currency-idr"`, which is still written for Rupiah. */
+  numberFormat?: string
+  decimals?: number
+  showAs?: NumberShowAs
+  barColor?: BarColor
+  divideBy?: number
+  showNumber?: boolean
 }
 
 export interface CreatedFieldMetadata {
@@ -79,19 +87,8 @@ export function normalizeCustomFieldOptions(
   options: unknown
 ): CustomFieldOptionConfig | null {
   if (type === "NUMBER") {
-    const rawFormat =
-      typeof options === "string"
-        ? options
-        : typeof (options as { format?: unknown } | null)?.format === "string"
-          ? String((options as { format: string }).format)
-          : ""
-
-    const normalizedFormat = rawFormat.toLowerCase().trim()
-    if (normalizedFormat === "currency-idr" || normalizedFormat === "idr" || normalizedFormat === "rupiah") {
-      return { format: "currency-idr" }
-    }
-
-    return null
+    // Keeps and validates every number setting (format, decimals, Show as…); invalid values are dropped.
+    return numberOptionsToStore(options) as CustomFieldOptionConfig | null
   }
 
   if (type === "SELECT" || type === "MULTI_SELECT" || type === "STATUS") {
@@ -339,7 +336,7 @@ export function formatCustomFieldValueForExport(
 }
 
 export function getNumberCustomFieldFormat(options: CustomFieldOptionConfig | null | undefined): NumberCustomFieldFormat {
-  return options?.format === "currency-idr" ? "currency-idr" : "plain"
+  return numberFieldFormat(options)
 }
 
 export function normalizeCustomFieldNumberInput(
@@ -452,19 +449,6 @@ export function formatCustomFieldNumberValue(
   value: string | number | null | undefined,
   options: CustomFieldOptionConfig | null | undefined
 ): string {
-  const raw = String(value ?? "").trim()
-  if (!raw) return ""
-
-  if (getNumberCustomFieldFormat(options) === "currency-idr") {
-    const digits = normalizeCustomFieldNumberInput(raw, options)
-    if (!digits) return ""
-
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      maximumFractionDigits: 0,
-    }).format(Number(digits))
-  }
-
-  return raw
+  // The field's own format ("Rp 1.500.000", "42%", "US$12,50"…), Indonesian grouping.
+  return formatNumberField(value, options)
 }

@@ -5,6 +5,7 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 import {
   LeaderboardPodium,
+  LeaderboardTie,
   type LeaderboardRanking as LeaderboardPodiumRanking,
 } from "@/components/ui/leaderboard-podium"
 import {
@@ -32,6 +33,8 @@ interface LeaderboardCardProps extends React.HTMLAttributes<HTMLDivElement> {
   onSelectUser?: (item: LeaderboardRankingItem, origin?: MorphOrigin) => void
   /** A line under the podium, e.g. how many share 1st when more do than the podium has steps. */
   podiumCaption?: React.ReactNode
+  /** Set when more people share 1st than the podium has steps: everyone tied, shown in place of the podium. */
+  podiumTie?: LeaderboardPodiumRanking[]
 }
 
 function formatRangeDate(date: string | Date) {
@@ -61,6 +64,7 @@ const LeaderboardCard = React.forwardRef<HTMLDivElement, LeaderboardCardProps>(
       onRunChange,
       onSelectUser,
       podiumCaption,
+      podiumTie,
       ...props
     },
     ref
@@ -113,8 +117,14 @@ const LeaderboardCard = React.forwardRef<HTMLDivElement, LeaderboardCardProps>(
           ) : null}
         </div>
 
-        <LeaderboardPodium rankings={podiumRankings} className={cn("mx-auto max-w-3xl", podiumCaption ? "mb-3" : "mb-6")} />
-        {podiumCaption ? <p className="mb-6 text-center text-sm font-semibold text-muted-foreground">{podiumCaption}</p> : null}
+        {podiumTie && podiumTie.length > 0 ? (
+          <LeaderboardTie rankings={podiumTie} caption={podiumCaption} className="mx-auto mb-6 max-w-3xl" />
+        ) : (
+          <>
+            <LeaderboardPodium rankings={podiumRankings} className={cn("mx-auto max-w-3xl", podiumCaption ? "mb-3" : "mb-6")} />
+            {podiumCaption ? <p className="mb-6 text-center text-sm font-semibold text-muted-foreground">{podiumCaption}</p> : null}
+          </>
+        )}
 
         <LeaderboardRankings
           rankings={rankings}

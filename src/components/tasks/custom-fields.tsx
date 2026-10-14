@@ -240,10 +240,8 @@ function NumberFieldInput({
     onCommit(normalizedValue)
   }
 
-  const displayValue =
-    numberFormat === "currency-idr" && !focused
-      ? formatCustomFieldNumberValue(draft, field.options)
-      : draft
+  // Not focused: the field's own format ("Rp 1.500.000", "42%", "1.500"); focused: the raw number.
+  const displayValue = !focused && draft ? formatCustomFieldNumberValue(draft, field.options) : draft
 
   return (
     <div className="space-y-2">

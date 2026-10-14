@@ -261,7 +261,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
             <div className="flex items-center gap-3">
               <div className="relative shrink-0">
                 <span className="grid h-12 w-12 place-items-center overflow-hidden rounded-2xl border border-border bg-muted text-3xl">
-                  <ProjectMark icon={icon} className="h-full w-full object-cover" />
+                  <ProjectMark icon={icon} type={project.type} className="h-full w-full object-cover" />
                 </span>
                 {uploadIcon.isPending && <div className="absolute inset-0 grid place-items-center rounded-2xl bg-background/60"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>}
               </div>

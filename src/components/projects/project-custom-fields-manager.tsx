@@ -454,7 +454,7 @@ function FieldPreview({
         <div className="rounded-xl border border-border/80 bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
           {numberFormat === "currency-idr"
             ? formatCustomFieldNumberValue("1250000", { format: "currency-idr" })
-            : "1250000"}
+            : formatCustomFieldNumberValue("1250000", null)}
         </div>
       )}
 
@@ -1160,7 +1160,13 @@ export function ProjectCustomFieldsManager({ projectId }: { projectId: string })
                                 item.id === field.id
                                   ? {
                                       ...item,
-                                      options: buildOptions(item.type, { numberFormat: nextFormat }),
+                                      // Only the Rupiah / plain switch here: decimals, Show as and the rest set in the
+                                      // newer field settings are kept (lib/custom-field-number.ts).
+                                      options: normalizeCustomFieldOptions("NUMBER", {
+                                        ...(item.options ?? {}),
+                                        format: undefined,
+                                        numberFormat: nextFormat === "currency-idr" ? "IDR" : "number_with_separators",
+                                      }),
                                     }
                                   : item
                               )

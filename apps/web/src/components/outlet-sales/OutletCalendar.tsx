@@ -107,15 +107,21 @@ export function OutletCalendar({
                 >
                   {Number(d.slice(8))}
                 </span>
+                {/* Wider screens: the day-target mark in the corner, inset clear of the selection ring. A phone's
+                    cell is too narrow for a corner mark beside the centred date (UI tour run 14, R14-WM-12: it
+                    touched the "15" badge and the ring), so there it leads the row of dots under the date. */}
                 {hasTarget && (
-                  <Target aria-hidden className="absolute right-1 top-1 h-3 w-3 text-primary sm:right-1.5 sm:top-1.5 sm:h-3.5 sm:w-3.5" />
+                  <Target aria-hidden className="absolute right-2 top-2 hidden h-3.5 w-3.5 text-primary sm:block" />
+                )}
+                {(hasTarget || evs.length > 0) && (
+                  <span aria-hidden className="flex items-center justify-center gap-0.5 sm:hidden">
+                    {hasTarget && <Target className="h-3 w-3 shrink-0 text-primary" />}
+                    {/* One dot per night (three at most), coloured by status. */}
+                    {evs.slice(0, 3).map((e) => <span key={e.id} className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[e.status])} />)}
+                  </span>
                 )}
                 {evs.length > 0 && (
                   <>
-                    {/* A phone: one dot per night (three at most), coloured by status. */}
-                    <span aria-hidden className="flex justify-center gap-0.5 sm:hidden">
-                      {evs.slice(0, 3).map((e) => <span key={e.id} className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[e.status])} />)}
-                    </span>
                     <span aria-hidden className="hidden min-w-0 flex-col gap-0.5 sm:flex">
                       {evs.slice(0, 2).map((e) => (
                         <span key={e.id} className="flex min-w-0 items-center gap-1 rounded-md bg-muted/70 px-1.5 py-0.5 text-[11px] font-medium leading-tight text-foreground">

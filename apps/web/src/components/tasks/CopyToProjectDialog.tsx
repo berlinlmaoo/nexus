@@ -138,7 +138,7 @@ export function CopyToProjectDialog({ taskIds, sourceProjectId, onClose, onDone 
                   <span className={cn("grid h-4 w-4 shrink-0 place-items-center rounded-full border", projectId === p.id ? "border-primary bg-primary text-primary-foreground" : "border-border")}>
                     {projectId === p.id && <Check className="h-2.5 w-2.5" />}
                   </span>
-                  <span className="grid h-5 w-5 shrink-0 place-items-center"><ProjectMark icon={p.icon} color={p.color} className="max-h-5 max-w-5" /></span>
+                  <span className="grid h-5 w-5 shrink-0 place-items-center"><ProjectMark icon={p.icon} color={p.color} type={p.type} className="max-h-5 max-w-5" /></span>
                   <span className="truncate">{p.name}</span>
                 </button>
               ))}

@@ -27,6 +27,8 @@
  *   colorBy:       prop | null           colorRules: { id, prop, value, color }[]
  *   dateProp / startProp / endProp: prop (calendar day; timeline bar start and end)
  *   showSubtasks:  boolean               wrap: boolean
+ *   columnCalcs:   { [prop]: "count_all" | "count_values" | "count_empty" | "percent_empty" |
+ *                  "percent_not_empty" | "sum" | "avg" | "median" | "min" | "max" | "range" }  (Table footer)
  * A prop is "title" | "section" | "status" | "priority" | "assignee" | "due" | "start" | "tags" |
  * "created" | "updated" | "subtasks" | "comments" | "cf:<customFieldId>".
  */
@@ -98,6 +100,9 @@ function cleanGroup(g: unknown, depth: number): Record<string, unknown> | null {
   return { id, mode, rules }
 }
 
+/** Table footer calculations (Notion's "Calculate"). */
+export const COLUMN_CALCS = ["count_all", "count_values", "count_empty", "percent_empty", "percent_not_empty", "sum", "avg", "median", "min", "max", "range"] as const
+
 const ONE_OF = <T extends string>(v: unknown, allowed: readonly T[]): T | undefined =>
   typeof v === "string" && (allowed as readonly string[]).includes(v) ? (v as T) : undefined
 
@@ -134,6 +139,14 @@ export function sanitizeViewConfig(raw: unknown): Record<string, unknown> {
   if (isObj(raw.groupCalc)) {
     const kind = ONE_OF(raw.groupCalc.kind, ["count", "done", "percent_done", "sum", "avg"] as const)
     if (kind) out.groupCalc = { kind, ...(prop(raw.groupCalc.prop) ? { prop: raw.groupCalc.prop } : {}) }
+  }
+  if (isObj(raw.columnCalcs)) {
+    const calcs: Record<string, string> = {}
+    for (const [k, v] of Object.entries(raw.columnCalcs).slice(0, 80)) {
+      const kind = ONE_OF(v, COLUMN_CALCS)
+      if (prop(k) && kind) calcs[k] = kind
+    }
+    out.columnCalcs = calcs
   }
   if ("visibleProps" in raw) {
     out.visibleProps = raw.visibleProps === null ? null : strList(raw.visibleProps, 80).filter((p) => PROP_RE.test(p))
