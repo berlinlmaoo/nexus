@@ -11,6 +11,7 @@
  */
 import prisma from "@/lib/prisma"
 import { statusGroup, type StatusGroup } from "@/lib/status-sections"
+import { numberFieldFormat, storedNumber } from "@/lib/custom-field-number"
 
 export type SubmissionKind = "finance" | "multimedia" | "other"
 
@@ -34,15 +35,16 @@ export function submissionKind(projectName: string | null | undefined, folderNam
 type CfRow = { value: string; customField: { id: string; name: string; type: string; options: unknown } }
 
 function isIdrField(options: unknown) {
-  return !!options && typeof options === "object" && (options as { format?: unknown }).format === "currency-idr"
+  // Legacy { format: "currency-idr" } and the newer { numberFormat: "IDR" } (lib/custom-field-number.ts).
+  return numberFieldFormat(options) === "currency-idr"
 }
 
 /** The amount of a request: an IDR number field on the task, else a number-ish answer named like one. */
 export function amountOf(values: CfRow[], answers?: Record<string, unknown> | null, fields?: Array<{ id: string; name?: string; type?: string }>) {
   for (const v of values) {
     if (String(v.customField.type) !== "NUMBER" || !isIdrField(v.customField.options)) continue
-    const n = Number(String(v.value).replace(/[^\d.-]+/g, ""))
-    if (Number.isFinite(n) && String(v.value).trim()) return n
+    const n = storedNumber(v.value, v.customField.options)
+    if (n !== null) return n
   }
   for (const f of fields ?? []) {
     if (!/(harga|nominal|amount|biaya|total|jumlah)/i.test(f.name ?? "")) continue
