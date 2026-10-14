@@ -146,6 +146,10 @@ model User {
   outletEventsReported OutletSalesEvent[]   @relation("OutletEventReportedBy")
   outletTargetsUpdated OutletSalesTarget[]  @relation("OutletTargetUpdatedBy")
   outletDayTargetsUpdated OutletSalesDayTarget[] @relation("OutletDayTargetUpdatedBy")
+  socialDaysUpdated       SocialMediaDay[]       @relation("SocialDayUpdatedBy")
+  socialNotesUpdated      SocialMediaNote[]      @relation("SocialNoteUpdatedBy")
+  socialTargetsUpdated    SocialMediaTarget[]    @relation("SocialTargetUpdatedBy")
+  socialDayTargetsUpdated SocialMediaDayTarget[] @relation("SocialDayTargetUpdatedBy")
   blockReminders       BlockReminder[]
   legalMembership      LegalMember?           @relation("LegalMemberUser")
   legalInvites         LegalMember[]          @relation("LegalMemberInvitedBy")
@@ -579,6 +583,15 @@ model Project {
   /// Outlet report breakdown (owner, 14 Oct 2026): RSVP items, Hosting items, Communities. Null = the
   /// original seven items. Shape and rules: src/lib/outlet-sales.ts (readReportConfig / mergeReportConfig).
   outletReportConfig Json?
+  /// Social Media Report (Project.type "SOCIAL_MEDIA_REPORT", owner 14 Oct 2026): per day and platform the
+  /// team's figures, per day two notes, monthly and daily targets per platform. Rules: src/lib/social-media.ts.
+  socialMediaDays       SocialMediaDay[]
+  socialMediaNotes      SocialMediaNote[]
+  socialMediaTargets    SocialMediaTarget[]
+  socialMediaDayTargets SocialMediaDayTarget[]
+  /// The platforms tracked, in order, by stable id: { version: 1, platforms: [{ id, name, archived? }] }.
+  /// Null = Instagram and TikTok. Shape and rules: src/lib/social-media.ts (readSocialConfig / mergeSocialConfig).
+  socialReportConfig Json?
 
   @@index([folderId, position])
   @@index([workspaceId]) // perf pass 12 Oct 2026 (prisma/sql/2026-10-12-perf-indexes.sql)
@@ -4030,6 +4043,82 @@ model OutletSalesDayTarget {
   updatedAt   DateTime @updatedAt
 
   @@unique([projectId, date])
+}
+
+/// One platform's figures on one day of a Social Media Report project (owner, 14 Oct 2026). Every figure is
+/// nullable: null = not filled (0 is a real zero). Engagement (likes + comments + shares) is never stored.
+/// `platformId` is a stable id of Project.socialReportConfig. SQL: prisma/sql/2026-10-14-social-media-report.sql.
+model SocialMediaDay {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// The day, WIB, no time.
+  date        DateTime @db.Date
+  platformId  String
+  views       Int?
+  likes       Int?
+  comments    Int?
+  shares      Int?
+  /// Contents posted that day.
+  posts       Int?
+  updatedById String?
+  updatedBy   User?    @relation("SocialDayUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([projectId, date, platformId])
+}
+
+/// A day's two notes of a Social Media Report project: "What worked" and "What didn't work" (owner, 14 Oct 2026).
+model SocialMediaNote {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  date        DateTime @db.Date
+  worked      String   @default("")
+  didntWork   String   @default("")
+  updatedById String?
+  updatedBy   User?    @relation("SocialNoteUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([projectId, date])
+}
+
+/// A platform's monthly targets ("YYYY-MM"): engagement and posts. Null = no target for that part. A target
+/// is never deleted: clearing stores nulls, and the audit row keeps the values before.
+model SocialMediaTarget {
+  id               String   @id @default(cuid())
+  projectId        String
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  month            String
+  platformId       String
+  engagementTarget Int?
+  postsTarget      Int?
+  updatedById      String?
+  updatedBy        User?    @relation("SocialTargetUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([projectId, month, platformId])
+}
+
+/// A date's own target for one platform: engagement, posts, or both; null = that part falls back to the
+/// month's target split evenly over its days. A row whose two parts are both cleared is deleted.
+model SocialMediaDayTarget {
+  id               String   @id @default(cuid())
+  projectId        String
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  date             DateTime @db.Date
+  platformId       String
+  engagementTarget Int?
+  postsTarget      Int?
+  updatedById      String?
+  updatedBy        User?    @relation("SocialDayTargetUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([projectId, date, platformId])
 }
 
 /// One event (night) of an outlet and its report: Ryan's form (owner, 10 Oct 2026). A date may hold

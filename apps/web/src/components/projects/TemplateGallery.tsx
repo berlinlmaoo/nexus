@@ -1,6 +1,6 @@
 // New project gallery (owner, 12 Oct 2026, DEV item #8): "Blank" first, then the templates from the
 // server registry (GET /api/project-templates, src/lib/project-templates.ts of the Next app) and the two
-// dashboards that are project TYPES (Outlet Sales, Pipeline). Notion's picker is the model: search,
+// dashboards that are project TYPES (Outlet Sales, Social Media Report, Pipeline). Notion's picker is the model: search,
 // categories, cards with a one-line blurb and a small drawing of what the project will look like.
 //
 // Nothing here knows a template by name. A card and its preview are drawn from the template's data
@@ -11,15 +11,17 @@ import { useEdgeFade } from "@/hooks/use-edge-fade";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bug, CalendarRange, FileText, Filter, Flag, Images, Lightbulb, ListChecks, Map as MapIcon, Megaphone, Package,
-  PartyPopper, Plus, Search, StickyNote, Store, Target, Users, X,
+  PartyPopper, Plus, Search, StickyNote, Store, Target, Users, X, Heart,
 } from "lucide-react";
 import { nexusApi, type NexusL, type NexusProjectTemplate, type NexusTemplateColor } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 
+export type DashboardType = "OUTLET_SALES" | "SOCIAL_MEDIA_REPORT" | "PIPELINE";
+
 export type GalleryPick =
   | { kind: "blank" }
-  | { kind: "type"; type: "OUTLET_SALES" | "PIPELINE" }
+  | { kind: "type"; type: DashboardType }
   | { kind: "template"; template: NexusProjectTemplate };
 
 const ICONS: Record<string, typeof ListChecks> = {
@@ -65,9 +67,11 @@ const CATEGORY_LABEL: Record<string, string> = {
 };
 const CATEGORY_ORDER = ["marketing", "projects", "docs", "planning", "operations", "dashboards"];
 
-const DASHBOARDS: { type: "OUTLET_SALES" | "PIPELINE"; icon: typeof Store; title: string; body: string }[] = [
+const DASHBOARDS: { type: DashboardType; icon: typeof Store; title: string; body: string }[] = [
   // Owner, 10 Oct 2026 (for Ryan). One project = one outlet.
   { type: "OUTLET_SALES", icon: Store, title: "Outlet Sales Dashboard", body: "One outlet: sales and pax against the month's target, a calendar of events, and a report form for every night." },
+  // Owner, 14 Oct 2026: per day and platform the team's views, likes, comments, shares and posts.
+  { type: "SOCIAL_MEDIA_REPORT", icon: Heart, title: "Social Media Report", body: "Daily views, likes, comments, shares and posts per platform, against monthly and daily targets." },
   { type: "PIPELINE", icon: Filter, title: "Pipeline Dashboard", body: "Follow every deal from first contact to paid." },
 ];
 
@@ -353,7 +357,24 @@ function BlankPreview() {
   );
 }
 
-function DashboardPreview({ type }: { type: "OUTLET_SALES" | "PIPELINE" }) {
+function DashboardPreview({ type }: { type: DashboardType }) {
+  if (type === "SOCIAL_MEDIA_REPORT") {
+    return (
+      <div className="flex h-full flex-col gap-1.5">
+        <div className="grid grid-cols-2 gap-1.5">
+          {[62, 85].map((w, i) => (
+            <div key={i} className="flex flex-col gap-1 rounded bg-foreground/[0.06] p-1">
+              <span className="block h-1.5 w-1/2 rounded bg-foreground/15" />
+              <span className="block h-1 rounded-full bg-foreground/10"><span className="block h-1 rounded-full bg-primary/60" style={{ width: `${w}%` }} /></span>
+            </div>
+          ))}
+        </div>
+        <svg viewBox="0 0 100 30" preserveAspectRatio="none" className="flex-1 text-primary/60" aria-hidden>
+          <path d="M0,24 L14,20 L28,22 L42,13 L56,16 L70,8 L84,11 L100,4" fill="none" stroke="currentColor" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+        </svg>
+      </div>
+    );
+  }
   if (type === "PIPELINE") {
     return (
       <div className="flex h-full flex-col justify-center gap-1.5 px-1">

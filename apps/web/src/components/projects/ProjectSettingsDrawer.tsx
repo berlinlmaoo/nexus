@@ -332,7 +332,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
 
           {/* A Pipeline Dashboard shows its pipeline, not task tabs (owner, 9 Oct 2026): nothing to choose. */}
           {/* …and an Outlet Sales Dashboard its four views (owner, 10 Oct 2026). */}
-          {project.type !== "PIPELINE" && project.type !== "OUTLET_SALES" && <ProjectTabsSection project={project} canManage={canManage} roleKnown={roleKnown} />}
+          {project.type !== "PIPELINE" && project.type !== "OUTLET_SALES" && project.type !== "SOCIAL_MEDIA_REPORT" && <ProjectTabsSection project={project} canManage={canManage} roleKnown={roleKnown} />}
 
           {/* workflow bundle */}
           <div className="space-y-2 border-t border-border pt-5">

@@ -18,7 +18,7 @@
  * a key it does not know, so this list can grow without breaking an older app.
  */
 
-export const PROJECT_TYPES = ["TASK", "FINANCE", "CONTENT", "PIPELINE", "OUTLET_SALES"] as const
+export const PROJECT_TYPES = ["TASK", "FINANCE", "CONTENT", "PIPELINE", "OUTLET_SALES", "SOCIAL_MEDIA_REPORT"] as const
 export type ProjectType = (typeof PROJECT_TYPES)[number]
 
 /**
@@ -28,8 +28,11 @@ export type ProjectType = (typeof PROJECT_TYPES)[number]
  * place of the Finance Dashboard card in the picker; one project = one outlet, as many as needed — routes
  * under /api/projects/:id/outlet-sales, rules in lib/outlet-sales.ts). FINANCE stays a known type that
  * cannot be created (no client offers it any more); Content Planner waits for the owner's references.
+ * SOCIAL_MEDIA_REPORT since 14 Oct 2026 (owner: per day and platform the team's views, likes, comments,
+ * shares and posts against monthly / daily targets — routes under /api/projects/:id/social-media, rules in
+ * lib/social-media.ts). A released app that does not know it opens it as an empty task project.
  */
-export const CREATABLE_PROJECT_TYPES: readonly ProjectType[] = ["TASK", "PIPELINE", "OUTLET_SALES"]
+export const CREATABLE_PROJECT_TYPES: readonly ProjectType[] = ["TASK", "PIPELINE", "OUTLET_SALES", "SOCIAL_MEDIA_REPORT"]
 
 /** Every tab a project can hide, in tab-bar order. "table" exists on web only; iOS ignores it. */
 export const PROJECT_TAB_KEYS = [
@@ -78,7 +81,7 @@ export function checkCreatableProjectType(raw: unknown): ProjectTypeCheck {
   return {
     ok: false,
     code: "TYPE_COMING_SOON",
-    error: "Tipe project ini belum tersedia. Untuk sekarang yang bisa dibuat: Task Project, Pipeline Dashboard, dan Outlet Sales Dashboard.",
+    error: "Tipe project ini belum tersedia. Untuk sekarang yang bisa dibuat: Task Project, Pipeline Dashboard, Outlet Sales Dashboard, dan Laporan Media Sosial.",
   }
 }
 

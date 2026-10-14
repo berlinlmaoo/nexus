@@ -687,6 +687,12 @@ export function initializeSocketServer(
     emitGuarded(`project:${data.projectId}`, "outlet-sales-changed", { projectId: data.projectId, eventId: data.eventId, month: data.month, actorId: data.actorId })
   })
 
+  // A day, target or the platforms of a Social Media Report project changed (lib/socket-emitter.ts
+  // emitSocialMediaChanged): ids only, to the project's room (VIEWER access to join, as for the outlet).
+  eventBus.on(BUS_EVENTS.SOCIAL_MEDIA_CHANGED, (data: { projectId: string; date: string | null; month: string | null; actorId: string | null }) => {
+    emitGuarded(`project:${data.projectId}`, "social-media-changed", { projectId: data.projectId, date: data.date, month: data.month, actorId: data.actorId })
+  })
+
   // A project's automations changed or ran (lib/socket-emitter.ts emitAutomationsChanged): ids only, to the
   // project's room (VIEWER access to join). The Automations tab refetches its list and run log.
   eventBus.on(BUS_EVENTS.AUTOMATIONS_CHANGED, (data: { projectId: string; automationId: string | null; actorId: string | null }) => {

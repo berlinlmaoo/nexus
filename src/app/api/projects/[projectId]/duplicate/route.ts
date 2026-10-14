@@ -81,6 +81,8 @@ export async function POST(
         hiddenTabs: original.hiddenTabs,
         // The template it came from (12 Oct 2026): the copy opens and plots like the original.
         templateId: original.templateId,
+        // A Social Media Report's platforms (14 Oct 2026); figures and targets are not copied.
+        ...(original.socialReportConfig != null && { socialReportConfig: original.socialReportConfig as InputJsonValue }),
       },
     })
 

@@ -134,6 +134,7 @@ const ProjectFormsView = named(() => import("@/components/forms/form-kit"), "Pro
 const ProjectSheetView = named(() => import("@/components/sheets/ProjectSheetView"), "ProjectSheetView");
 const PipelineView = named(() => import("@/components/pipeline/PipelineView"), "PipelineView");
 const OutletSalesView = named(() => import("@/components/outlet-sales/OutletSalesView"), "OutletSalesView");
+const SocialMediaView = named(() => import("@/components/social-media/SocialMediaView"), "SocialMediaView");
 const loadTable = () => import("@/components/projects/ProjectTableView");
 const ProjectTableView = named(loadTable, "ProjectTableView");
 const ProjectOverview = named(() => import("@/components/projects/ProjectOverview"), "ProjectOverview");
@@ -207,7 +208,7 @@ function searchString(v: unknown, max: number): string | undefined {
   return typeof v === "string" && v.length > 0 && v.length <= max ? v : undefined;
 }
 
-type ViewId = "pipeline" | "os-overview" | "os-calendar" | "os-board" | "os-form" | "chat";
+type ViewId = "pipeline" | "os-overview" | "os-calendar" | "os-board" | "os-form" | "sm-overview" | "sm-calendar" | "chat";
 type ModuleKey = "overview" | "sheet" | "automations" | "pages" | "forms" | "chat";
 
 const TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"] as const;
@@ -221,6 +222,9 @@ const SPECIAL_TABS: { id: ViewId; label: string; icon: typeof LayoutGrid }[] = [
   { id: "os-calendar", label: "Calendar", icon: CalIcon },
   { id: "os-board", label: "Board", icon: LayoutGrid },
   { id: "os-form", label: "Report form", icon: ClipboardList },
+  // A Social Media Report project's views (owner, 14 Oct 2026); one SocialMediaView behind them.
+  { id: "sm-overview", label: "Overview", icon: Activity },
+  { id: "sm-calendar", label: "Calendar", icon: CalIcon },
   { id: "chat", label: "Chat", icon: MessageSquare },
 ];
 
@@ -355,8 +359,9 @@ function ProjectDetail() {
   const hiddenTabs = hiddenTabsOf(data);
   const isPipeline = data?.type === "PIPELINE";
   const isOutlet = data?.type === "OUTLET_SALES";
-  const isSpecial = isPipeline || isOutlet;
-  const specialTabs = SPECIAL_TABS.filter((tab) => (tab.id === "pipeline" ? isPipeline : tab.id.startsWith("os-") ? isOutlet : true));
+  const isSocial = data?.type === "SOCIAL_MEDIA_REPORT";
+  const isSpecial = isPipeline || isOutlet || isSocial;
+  const specialTabs = SPECIAL_TABS.filter((tab) => (tab.id === "pipeline" ? isPipeline : tab.id.startsWith("os-") ? isOutlet : tab.id.startsWith("sm-") ? isSocial : true));
   useEffect(() => {
     if (!data || !isSpecial) return;
     if (!specialTabs.some((tab) => tab.id === specialView)) setSpecialView(specialTabs[0].id);
@@ -370,6 +375,11 @@ function ProjectDetail() {
     if (data.type === "OUTLET_SALES") {
       setOutletLink((cur) => ({ date: search.date, eventId: search.event, nonce: cur.nonce + 1 }));
       setSpecialView(`os-${search.view ?? (search.event ? "form" : "calendar")}` as ViewId);
+    }
+    // A Social Media Report: ?view=overview|calendar, &date= opens that day's sheet.
+    if (data.type === "SOCIAL_MEDIA_REPORT") {
+      setOutletLink((cur) => ({ date: search.date, nonce: cur.nonce + 1 }));
+      setSpecialView(search.view === "overview" ? "sm-overview" : "sm-calendar");
     }
     setSearch({ view: undefined, date: undefined, event: undefined });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -765,6 +775,17 @@ function ProjectDetail() {
               view={specialView.startsWith("os-") ? (specialView.slice(3) as OutletView) : "overview"}
               onView={(v) => setSpecialView(`os-${v}` as ViewId)}
               initial={outletLink.nonce ? { date: outletLink.date, eventId: outletLink.eventId } : undefined}
+            />
+          )}</Pending>
+      )}
+      {!project.isLoading && data && isSocial && (
+        <Pending>{specialView === "chat" ? <ProjectChat projectId={data.id} />
+          : (
+            <SocialMediaView
+              key={outletLink.nonce}
+              projectId={data.id}
+              view={specialView === "sm-calendar" ? "calendar" : "overview"}
+              initialDate={outletLink.nonce ? outletLink.date : undefined}
             />
           )}</Pending>
       )}
