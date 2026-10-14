@@ -18,6 +18,7 @@ import XCTest
 ///   TOUR_LANG                   optional: "en" (default) or "id"
 ///   TOUR_WEB_BASE               required for the Safari tour: the dev web it opens (ui-tour.sh passes it)
 ///   TOUR_LEGAL_DOC_ID / TOUR_LEGAL_FORM_PATH   optional: the Legal document / request form to show
+///   TOUR_OUTLET_PROJECT_ID / TOUR_SOCMED_PROJECT_ID   optional: the Outlet Sales / Social Media Report project
 ///
 /// Legal screens (14 Oct 2026): `{legalDoc}` / `{legalForm}` in a route are looked up once per run with
 /// the QA account over the API (LegalLookup, GET only): the newest [TEST] document and the general request
@@ -25,6 +26,11 @@ import XCTest
 /// `appTab` names the Legal tab tapped after landing, `appOpen: legalDoc` taps that document's row: the
 /// app has no route to either. Screens with an `account` (legal-hidden, the account without Legal) are
 /// the web tour's (tour.mjs) and skipped here.
+///
+/// Dashboards (14 Oct 2026): `{outlet}` / `{socmed}` are the QA Outlet Sales / Social Media Report projects and
+/// `{outletDay}` / `{socmedDay}` a date of theirs with data, looked up the same way (DashboardLookup, GET only).
+/// `appTaps` / `webTaps` name buttons pressed in order after landing (a settings sheet, the New project
+/// gallery): "A|B" = the English or Indonesian label, a leading "?" = only when the next one is not on screen.
 ///
 /// testWebSafariTour is the web's MOBILE reference: the same screens in real Safari on the same
 /// simulator (owner, 13 Oct 2026: not Chrome emulation). It runs after testTour (alphabetical order),
@@ -46,6 +52,10 @@ final class NEXUSUITour: XCTestCase {
         let appTab: String?
         /// "legalDoc": tap the row of the looked-up Legal document.
         let appOpen: String?
+        /// Buttons the app tour presses in order once the screen is up ("A|B", "?A": see the header).
+        let appTaps: [String]?
+        /// The same for the web in Safari.
+        let webTaps: [String]?
     }
 
     private struct Outcome: Encodable {
@@ -141,6 +151,13 @@ final class NEXUSUITour: XCTestCase {
                 resolved = resolved
                     .replacingOccurrences(of: "{legalDoc}", with: legal.docId ?? "")
                     .replacingOccurrences(of: "{legalForm}", with: legal.formPath ?? "")
+            }
+            switch dashboards(resolved, email: email, password: password) {
+            case .failure(let skip):
+                outcomes.append(Outcome(id: screen.id, status: "skipped: \(skip.reason)", pages: 0, settled: false, seconds: 0))
+                continue
+            case .success(let filled):
+                resolved = filled
             }
             guard resolved.hasPrefix("nexus://") || resolved.hasPrefix("https://") else { continue }
             XCTContext.runActivity(named: "Screen \(screen.id)") { _ in
@@ -291,6 +308,13 @@ final class NEXUSUITour: XCTestCase {
                     .replacingOccurrences(of: "{legalDoc}", with: legal.docId ?? "")
                     .replacingOccurrences(of: "{legalForm}", with: legal.formPath ?? "")
             }
+            switch dashboards(path, email: email, password: password) {
+            case .failure(let skip):
+                outcomes.append(Outcome(id: screen.id, status: "skipped: \(skip.reason)", pages: 0, settled: false, seconds: 0))
+                continue
+            case .success(let filled):
+                path = filled
+            }
             XCTContext.runActivity(named: "Safari \(screen.id)") { _ in
                 let started = Date()
                 open(base + path)
@@ -300,6 +324,8 @@ final class NEXUSUITour: XCTestCase {
                 dismissSafariPrompts()
                 scrollWebToTop()
                 pause(0.8)
+                let tapProblem = screen.webTaps.flatMap { pressWebSteps($0) }
+                if tapProblem != nil { settled = false }
                 // Checked before the extra pages: the login form's own button, not "a password field" —
                 // Settings has one (Change password) and was reported as a lost session (run 3).
                 let bounced = isLoginPage() && path.hasPrefix("/login") == false
@@ -307,12 +333,38 @@ final class NEXUSUITour: XCTestCase {
                 let more = snapMorePages(screen.id, prefix: "safari-", first: first, in: safari, web: true)
                 outcomes.append(Outcome(id: screen.id,
                                         status: bounced ? "bounced to the login page (session lost)"
-                                            : (settled ? "ok" : "ok, page still changing after 25 s"),
+                                            : tapProblem.map { "wrong-screen: \(screen.id) (\($0))" }
+                                            ?? (settled ? "ok" : "ok, page still changing after 25 s"),
                                         pages: 1 + more,
                                         settled: settled, seconds: Date().timeIntervalSince(started)))
             }
         }
         attach(outcomes, name: "safari-results")
+    }
+
+    /// A screen's `webTaps` in Safari, in order: the page's button (or tab) with one of the labels. nil when
+    /// done, else what was missing.
+    @MainActor
+    private func pressWebSteps(_ steps: [String]) -> String? {
+        let page = safari.webViews.firstMatch
+        let find = { (step: String) -> XCUIElement in
+            let names = Self.labels(step)
+            let match = NSPredicate(format: "label IN %@", names)
+            let button = page.buttons.matching(match).firstMatch
+            return button.exists ? button : page.descendants(matching: .any).matching(match).firstMatch
+        }
+        for (i, step) in steps.enumerated() {
+            if step.hasPrefix("?") {
+                if i + 1 < steps.count, find(steps[i + 1]).exists { continue }
+                if !find(step).exists { continue }
+            }
+            let target = find(step)
+            guard target.waitForExistence(timeout: 10) else { return "no \"\(Self.labels(step)[0])\" button" }
+            target.tap()
+            pause(1.0)
+            _ = waitForWebToSettle(timeout: 10)
+        }
+        return nil
     }
 
     /// The web's sign-in form: a password field AND its "Sign in" / "Masuk" button.
@@ -444,6 +496,24 @@ final class NEXUSUITour: XCTestCase {
             }
             pause(1.2)
         }
+        if let steps = screen.appTaps {
+            for (i, step) in steps.enumerated() {
+                let button = appButton(step)
+                if step.hasPrefix("?") {
+                    // Only when the next button is not on screen yet (the iPhone's + menu before New project).
+                    if i + 1 < steps.count, appButton(steps[i + 1]).exists, appButton(steps[i + 1]).isHittable { continue }
+                    if !button.waitForExistence(timeout: 5) { continue }
+                }
+                guard button.waitForExistence(timeout: 15) else {
+                    return "wrong-screen: \(screen.id) (no \"\(Self.labels(step)[0])\" button found)"
+                }
+                // A sheet over it (the button is no longer hittable), a chip now selected, or a new picture.
+                guard tapUntil(button, landed: { !button.exists || !button.isHittable || button.isSelected }) else {
+                    return "wrong-screen: \(screen.id) (tapped \"\(Self.labels(step)[0])\", nothing opened)"
+                }
+                pause(1.2)
+            }
+        }
         if screen.appOpen == "legalDoc" {
             let legal = LegalLookup.values(base: webBase, email: email, password: password,
                                            docOverride: setting("TOUR_LEGAL_DOC_ID"), formOverride: setting("TOUR_LEGAL_FORM_PATH"))
@@ -469,6 +539,38 @@ final class NEXUSUITour: XCTestCase {
             pause(2.0)
         }
         return nil
+    }
+
+    /// The labels of one `appTaps` / `webTaps` step: "?Add|Tambah" → ["Add", "Tambah"].
+    private static func labels(_ step: String) -> [String] {
+        let names = (step.hasPrefix("?") ? String(step.dropFirst()) : step).split(separator: "|").map(String.init)
+        return names.isEmpty ? [step] : names
+    }
+
+    /// The app's button with one of a step's labels (a menu item is a button too).
+    @MainActor
+    private func appButton(_ step: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label IN %@", Self.labels(step))).firstMatch
+    }
+
+    private struct Skip: Error { let reason: String }
+
+    /// `{outlet}`, `{outletDay}`, `{socmed}`, `{socmedDay}` in a route filled in (DashboardLookup), or the
+    /// reason the screen is skipped. Routes without them come back unchanged, without a lookup.
+    private func dashboards(_ route: String, email: String, password: String) -> Result<String, Skip> {
+        let keys = ["outlet", "outletDay", "socmed", "socmedDay"].filter { route.contains("{\($0)}") }
+        guard !keys.isEmpty else { return .success(route) }
+        let found = DashboardLookup.values(base: webBase, email: email, password: password,
+                                           overrides: ["outlet": setting("TOUR_OUTLET_PROJECT_ID"),
+                                                       "socmed": setting("TOUR_SOCMED_PROJECT_ID")])
+        var filled = route
+        for key in keys {
+            guard let value = found.values[key] else {
+                return .failure(Skip(reason: found.problems[key] ?? "\(key) not looked up"))
+            }
+            filled = filled.replacingOccurrences(of: "{\(key)}", with: value)
+        }
+        return .success(filled)
     }
 
     /// Taps `element` and waits until `landed()` (or the app's picture changed). Run 10, 14 Oct 2026: on
@@ -925,7 +1027,7 @@ enum LegalLookup {
     }
 
     /// One blocking request (the tour test is sequential by nature); nil on a transport error.
-    private static func call(_ address: String, method: String, body: [String: String]?,
+    static func call(_ address: String, method: String, body: [String: String]?,
                              cookie: String?) -> (status: Int, json: [String: Any])? {
         guard let url = URL(string: address) else { return nil }
         var request = URLRequest(url: url, timeoutInterval: 30)
@@ -950,5 +1052,132 @@ enum LegalLookup {
         _ = done.wait(timeout: .now() + 35)
         session.finishTasksAndInvalidate()
         return result.map { (status: $0.0, json: $0.1) }
+    }
+}
+
+/// The run-time values of the dashboard screens, looked up once per test process with the QA account (the
+/// same sign-in and sign-out as LegalLookup; GET /api/projects and the projects' month only). `outlet` /
+/// `socmed` = the project named "ZZ QA Manager Outlet" / "ZZ QA Social Media Report" (else the first "ZZ QA"
+/// project of type OUTLET_SALES / SOCIAL_MEDIA_REPORT) unless overridden; `outletDay` = the newest date with a
+/// reported night, else with its own daily target; `socmedDay` = the newest date up to today with figures.
+/// Each from this month, else the month before. A missing value has its reason in `problems`.
+enum DashboardLookup {
+    struct Found {
+        var values: [String: String] = [:]
+        var problems: [String: String] = [:]
+    }
+
+    nonisolated(unsafe) private static var cached: Found?
+
+    private struct Kind {
+        let key: String, type: String, name: String, api: String
+    }
+
+    private static let kinds = [
+        Kind(key: "outlet", type: "OUTLET_SALES", name: "ZZ QA Manager Outlet", api: "outlet-sales"),
+        Kind(key: "socmed", type: "SOCIAL_MEDIA_REPORT", name: "ZZ QA Social Media Report", api: "social-media"),
+    ]
+
+    static func values(base: String, email: String, password: String, overrides: [String: String?]) -> Found {
+        if let cached { return cached }
+        var f = Found()
+        defer { cached = f }
+        let call = LegalLookup.call
+        guard let login = call(base + "/api/auth/app-login", "POST", ["email": email, "password": password], nil),
+              login.status == 200,
+              let token = login.json["token"] as? String, let name = login.json["cookieName"] as? String else {
+            for k in ["outlet", "outletDay", "socmed", "socmedDay"] { f.problems[k] = "dashboard lookup: QA sign-in over the API failed" }
+            return f
+        }
+        let cookie = "\(name)=\(token)"
+        defer { _ = call(base + "/api/auth/app-logout", "POST", nil, cookie) }
+
+        var projects: [[String: Any]]?
+        for kind in kinds {
+            let dayKey = kind.key + "Day"
+            var id = overrides[kind.key] ?? nil
+            if id == nil {
+                if projects == nil {
+                    projects = callList(base + "/api/projects", cookie: cookie)
+                }
+                let list = projects ?? []
+                let named = list.first { ($0["name"] as? String) == kind.name && ($0["type"] as? String) == kind.type }
+                let typed = list.first { ($0["type"] as? String) == kind.type && (($0["name"] as? String) ?? "").hasPrefix("ZZ QA") }
+                id = (named ?? typed)?["id"] as? String
+            }
+            guard let id else {
+                let why = projects == nil ? "projects not readable by the QA account"
+                    : "no \(kind.type) project \"\(kind.name)\" for the QA account"
+                f.problems[kind.key] = why
+                f.problems[dayKey] = why
+                continue
+            }
+            f.values[kind.key] = id
+            let enc = id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? id
+            var month: String?
+            for _ in 0..<2 where f.values[dayKey] == nil {
+                guard let r = call(base + "/api/projects/\(enc)/\(kind.api)" + (month.map { "?month=\($0)" } ?? ""), "GET", nil, cookie),
+                      r.status == 200 else {
+                    f.problems[dayKey] = "\(kind.api) not readable by the QA account"
+                    break
+                }
+                f.values[dayKey] = kind.key == "outlet" ? outletDay(r.json) : socmedDay(r.json)
+                month = monthBefore(r.json["month"] as? String ?? "")
+                if month == nil { break }
+            }
+            if f.values[dayKey] == nil, f.problems[dayKey] == nil {
+                f.problems[dayKey] = kind.key == "outlet" ? "no reported night or daily target this month or last"
+                    : "no day with figures this month or last"
+            }
+        }
+        return f
+    }
+
+    /// GET /api/projects answers a bare array (older shape: `{ projects: [...] }`).
+    private static func callList(_ address: String, cookie: String) -> [[String: Any]]? {
+        guard let url = URL(string: address) else { return nil }
+        var request = URLRequest(url: url, timeoutInterval: 30)
+        request.setValue(cookie, forHTTPHeaderField: "Cookie")
+        let done = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var result: [[String: Any]]?
+        let config = URLSessionConfiguration.ephemeral
+        config.httpShouldSetCookies = false
+        let session = URLSession(configuration: config)
+        session.dataTask(with: request) { data, response, _ in
+            if (response as? HTTPURLResponse)?.statusCode == 200, let data,
+               let any = try? JSONSerialization.jsonObject(with: data) {
+                result = (any as? [[String: Any]]) ?? ((any as? [String: Any])?["projects"] as? [[String: Any]])
+            }
+            done.signal()
+        }.resume()
+        _ = done.wait(timeout: .now() + 35)
+        session.finishTasksAndInvalidate()
+        return result
+    }
+
+    private static func outletDay(_ json: [String: Any]) -> String? {
+        let events = (json["events"] as? [[String: Any]]) ?? []
+        let reported = events.filter { ($0["status"] as? String) == "REPORTED" }.compactMap { $0["date"] as? String }
+        let targets = ((json["dayTargets"] as? [[String: Any]]) ?? []).compactMap { $0["date"] as? String }
+        return (reported.isEmpty ? targets : reported).max()
+    }
+
+    private static func socmedDay(_ json: [String: Any]) -> String? {
+        let today = json["today"] as? String ?? "9999-12-31"
+        let days = (json["days"] as? [[String: Any]]) ?? []
+        return days.filter { day in
+            guard let date = day["date"] as? String, date <= today else { return false }
+            let platforms = (day["platforms"] as? [String: Any])?.values.compactMap { $0 as? [String: Any] } ?? []
+            return platforms.contains { p in
+                ["views", "likes", "comments", "shares", "posts"].contains { ((p[$0] as? NSNumber)?.doubleValue ?? 0) > 0 }
+            }
+        }.compactMap { $0["date"] as? String }.max()
+    }
+
+    /// "YYYY-MM" of the month before, nil for anything else.
+    private static func monthBefore(_ month: String) -> String? {
+        let parts = month.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 2 else { return nil }
+        return parts[1] == 1 ? String(format: "%04d-12", parts[0] - 1) : String(format: "%04d-%02d", parts[0], parts[1] - 1)
     }
 }

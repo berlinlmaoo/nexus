@@ -108,3 +108,32 @@ TOUR_EMAIL=qa6@dev.invalid apps/ios/scripts/ui-tour.sh --set-password
 
 Setelah itu tour biasa (akun qa5) otomatis membaca password qa6 dari Keychain dan hanya memberikannya ke
 bagian web. Cara lain: `TOUR_NONMEMBER_PASSWORD=…` di environment (akun lain: `TOUR_NONMEMBER_EMAIL`).
+
+## Layar dashboard (Outlet Sales, Social Media Report)
+
+Sembilan layar (14 Okt 2026), dari project QA di dev:
+
+| id | Layar |
+|---|---|
+| `project-templates` | Galeri template New project, kategori Dashboards (kartu Social Media Report terlihat) |
+| `outlet-overview` | Outlet Sales: Overview dengan Guest overview |
+| `outlet-calendar` | Outlet Sales: kalender bulan ini, dengan penanda target harian |
+| `outlet-day` | Outlet Sales: kalender dengan panel hari terpilih (target hari itu + laporan malamnya) |
+| `outlet-settings` | Outlet Sales: sheet Report settings |
+| `socmed-overview` | Social Media Report: Overview |
+| `socmed-calendar` | Social Media Report: kalender bulan ini |
+| `socmed-day` | Social Media Report: sheet satu hari yang ada angkanya |
+| `socmed-settings` | Social Media Report: sheet Platforms & targets |
+
+- Project dicari saat tour jalan lewat API dengan akun QA, hanya membaca (`GET /api/projects`): project bernama
+  "ZZ QA Manager Outlet" / "ZZ QA Social Media Report", kalau tidak ada project "ZZ QA …" pertama bertipe
+  `OUTLET_SALES` / `SOCIAL_MEDIA_REPORT`. Untuk memaksa project lain: `TOUR_OUTLET_PROJECT_ID=<id>` /
+  `TOUR_SOCMED_PROJECT_ID=<id>` (environment atau `~/.config/nexus/ui-tour.env`).
+- Tanggal untuk `outlet-day` = tanggal terbaru yang malamnya sudah dilaporkan (kalau tidak ada: yang punya target
+  harian sendiri); untuk `socmed-day` = tanggal terbaru sampai hari ini yang ada angkanya. Dicari di bulan ini,
+  lalu bulan sebelumnya (`GET /api/projects/<id>/outlet-sales`, `…/social-media`).
+- Project atau tanggal yang tidak ketemu: layarnya tercatat `skipped: <alasan>`, layar lain tetap jalan.
+- Route-nya `?view=overview|calendar&date=…`, sama seperti link "Copy form link". Sheet settings dan galeri tidak
+  punya route: tour membuka layarnya lalu menekan tombolnya (`appTaps` / `webTaps` di
+  `scripts/ui-tour-screens.json`; label Inggris atau Indonesia). Di iPhone, New project ada di menu `+`.
+- Membuka sheet tidak menyimpan apa-apa; tour web tetap menolak semua tulis ke `/api` (503).

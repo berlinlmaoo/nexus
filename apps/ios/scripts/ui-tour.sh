@@ -21,6 +21,8 @@
 #   TOUR_WEB_BASE=https://<dev server>      required: the dev web the tours open and log in to
 #   UI_TOUR_HOST=<user>@<host>              optional: where results are copied (no upload when unset)
 #   AGENTS=<user>@<host>                    --android only: the host that builds the APK
+#   TOUR_OUTLET_PROJECT_ID / TOUR_SOCMED_PROJECT_ID   optional: the dashboard projects to show instead of the
+#                                           QA ones looked up by name (docs/UI-TOUR.md, "Dashboards")
 #
 # The QA password is read from the Keychain (service "nexus-ui-tour"), or TOUR_PASSWORD. Never in git,
 # never on the command line of xcodebuild (it travels in the test runner's environment).
@@ -36,6 +38,10 @@ if [ -z "${TOUR_WEB_BASE:-}" ]; then
 fi
 export TOUR_WEB_BASE
 [ -n "${AGENTS:-}" ] && export AGENTS
+# Optional overrides of the run-time lookups, for the web half (node) too when they come from the config file.
+for v in TOUR_LEGAL_DOC_ID TOUR_LEGAL_FORM_PATH TOUR_OUTLET_PROJECT_ID TOUR_SOCMED_PROJECT_ID; do
+  [ -n "${!v:-}" ] && export "$v"
+done
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 ORIG_ARGS=("$@")
@@ -219,6 +225,10 @@ run_app() {
   TEST_RUNNER_TOUR_ONLY="$ONLY" \
   TEST_RUNNER_TOUR_PROJECT_ID="${TOUR_PROJECT_ID:-}" \
   TEST_RUNNER_TOUR_FORM_ID="${TOUR_FORM_ID:-}" \
+  TEST_RUNNER_TOUR_LEGAL_DOC_ID="${TOUR_LEGAL_DOC_ID:-}" \
+  TEST_RUNNER_TOUR_LEGAL_FORM_PATH="${TOUR_LEGAL_FORM_PATH:-}" \
+  TEST_RUNNER_TOUR_OUTLET_PROJECT_ID="${TOUR_OUTLET_PROJECT_ID:-}" \
+  TEST_RUNNER_TOUR_SOCMED_PROJECT_ID="${TOUR_SOCMED_PROJECT_ID:-}" \
   TEST_RUNNER_TOUR_MAC_WINDOW="${TOUR_MAC_WINDOW:-}" \
   TEST_RUNNER_TOUR_OUT_DIR="$direct_dir" \
   TEST_RUNNER_TOUR_WEB_BASE="$TOUR_WEB_BASE" \
