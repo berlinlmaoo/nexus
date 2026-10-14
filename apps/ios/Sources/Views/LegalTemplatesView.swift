@@ -583,7 +583,7 @@ struct LegalPlaceholderHelp: View {
          ("{{TANGGAL_TTD | tanggal}}", "30 September 2026"),
          ("{{TANGGAL_TTD | tgl}} {{TANGGAL_TTD | bulan}}", "30 September"),
          ("{{TANGGAL_TTD | tahun_terbilang}}", "Dua Ribu Dua Puluh Enam"),
-         ("{{HONOR | rupiah}}", "Rp 25.000.000"),
+         ("{{HONOR | rupiah}}", "Rp. 25.000.000,00"),
          ("{{HONOR | terbilang_rupiah | upper}}", "DUA PULUH LIMA JUTA RUPIAH"),
          ("{{#BARANG}} … {{NAMA_BARANG}} … {{/BARANG}}", T("Repeats for each row (e.g. a table row)")),
          ("{{#PAKAI_MATERAI}} … {{/PAKAI_MATERAI}}", T("Shown only when ticked")),
