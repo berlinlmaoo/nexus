@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 /// The UI screenshot tour (docs/UI-TOUR.md). Run by scripts/ui-tour.sh on iPhone, iPad and
 /// "My Mac (Mac Catalyst)"; it is a camera, not a test of behaviour, and is in no CI.
@@ -847,6 +848,20 @@ final class NEXUSUITour: XCTestCase {
             }
             #endif
             if data == last { break }
+            // Moved, but by less than about a third of the view: the end of the scroll, or nothing moved at
+            // all and only a clock or a hover changed. That picture is the page before again (UI tour run 13,
+            // F-08 / M-27: project-templates-2 and calendar-2 were page 1), so no page for it.
+            if let shift = contentShift(from: last, to: data, in: target.visible, window: root.windows.firstMatch.frame),
+               shift < minPageShift {
+                #if targetEnvironment(macCatalyst)
+                if shift == 0 && !scrolled && !flipped {
+                    flipped = true
+                    macWheelSign = -macWheelSign
+                    continue
+                }
+                #endif
+                break
+            }
             #if targetEnvironment(macCatalyst)
             scrolled = true
             #endif
@@ -855,6 +870,68 @@ final class NEXUSUITour: XCTestCase {
             attachShot(shot, "\(prefix)\(id)-\(page)")
         }
         return page - 1
+    }
+
+    /// The least a page must have moved (fraction of the scrolled view's visible height) to be kept. A drag
+    /// asks for half; touch slop and rubber-banding take a little of that.
+    private var minPageShift: CGFloat { CGFloat(Double(env["TOUR_MIN_PAGE_SHIFT"] ?? "") ?? 0.35) }
+
+    /// How far the content inside `rect` (screen points) moved up between two screenshots, as a fraction of
+    /// the rect's height: 0 = the same rows, 0.5 = half a view. nil when no shift explains the new picture
+    /// (a different screen, a sheet that opened): then it counts as a new page. Rows are compared by a hash
+    /// of their pixels inside the rect.
+    private func contentShift(from old: Data, to new: Data, in rect: CGRect, window: CGRect) -> CGFloat? {
+        guard let a = rowHashes(old, rect: rect, window: window), let b = rowHashes(new, rect: rect, window: window),
+              a.count == b.count, a.count > 40 else { return nil }
+        let h = a.count
+        var best = (shift: -1, match: 0.0)
+        for s in 0..<(h * 3 / 4) {
+            let n = h - s
+            var same = 0
+            for i in 0..<n where b[i] == a[i + s] { same += 1 }
+            let match = Double(same) / Double(n)
+            if match > best.match + 0.01 { best = (s, match) }
+            if match > 0.97 { break }
+        }
+        guard best.shift >= 0, best.match >= 0.6 else { return nil }
+        return CGFloat(best.shift) / CGFloat(h)
+    }
+
+    /// One hash per pixel row of `rect` in a PNG screenshot (the picture is of `window`, or of the whole
+    /// screen when its size says so).
+    private func rowHashes(_ png: Data, rect: CGRect, window: CGRect) -> [UInt64]? {
+        guard let image = UIImage(data: png)?.cgImage else { return nil }
+        let width = image.width, height = image.height
+        let bytesPerRow = width * 4
+        var pixels = [UInt8](repeating: 0, count: bytesPerRow * height)
+        let drawn: Bool = pixels.withUnsafeMutableBytes { buffer in
+            guard let ctx = CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: bytesPerRow, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn, window.width > 0 else { return nil }
+        let scale = CGFloat(width) / window.width
+        let local = rect.offsetBy(dx: -window.minX, dy: -window.minY)
+        let x0 = max(0, Int(local.minX * scale)), x1 = min(width, Int(local.maxX * scale))
+        let y0 = max(0, Int(local.minY * scale)), y1 = min(height, Int(local.maxY * scale))
+        guard x1 - x0 > 8, y1 - y0 > 8 else { return nil }
+        var out: [UInt64] = []
+        out.reserveCapacity(y1 - y0)
+        for y in y0..<y1 {
+            var hash: UInt64 = 0xcbf29ce484222325
+            var x = x0
+            while x < x1 {
+                let i = y * bytesPerRow + x * 4
+                hash = (hash ^ UInt64(pixels[i])) &* 0x100000001b3
+                hash = (hash ^ UInt64(pixels[i + 1])) &* 0x100000001b3
+                hash = (hash ^ UInt64(pixels[i + 2])) &* 0x100000001b3
+                x += 2
+            }
+            out.append(hash)
+        }
+        return out
     }
 
     /// Where the drags go: an element, and the part of it that is actually on screen.
