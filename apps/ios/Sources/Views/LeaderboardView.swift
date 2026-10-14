@@ -226,7 +226,7 @@ struct Podium: View {
                             if label(rank) == 1 { Image(systemName: "crown.fill").font(.system(size: 18)).foregroundStyle(crown).offset(y: -avatar/2 - 6) }
                         }
                         Text(row.name ?? "—").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Text(row.totalXp.formatted(.number.locale(AppDateLocale.current))).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                        Text(AppNumber.int(row.totalXp)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     }
                     .contentShape(Rectangle())
                 }
@@ -269,7 +269,7 @@ struct RankRow: View {
                     Text("Level \(row.level)\(row.levelName.map { " · \($0)" } ?? "")").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
                 Spacer()
-                Text(row.totalXp.formatted(.number.locale(AppDateLocale.current)))
+                Text(AppNumber.int(row.totalXp))
                     .font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
             }
             .padding(.horizontal, 14).padding(.vertical, 11)

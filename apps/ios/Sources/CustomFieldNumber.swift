@@ -186,23 +186,19 @@ enum CustomFieldNumber {
         return (neg ? "-" : "") + "Rp " + groupIDR(neg ? String(n.dropFirst()) : n)
     }
 
-    /// A stored plain number grouped in the app's language ("1500000" → "1,500,000" / "1.500.000");
+    /// A stored plain number with dot grouping ("1500000" → "1.500.000") in both languages;
     /// text that is not a number is shown as it is.
     static func formatPlain(_ value: String?) -> String {
         let raw = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if raw.isEmpty { return "" }
         let n = normalize(raw, idr: false)
         guard let d = Double(n), d.isFinite else { return raw }
-        let f = AppLanguage.shared.lang == .id ? plainID : plainEN
-        return f.string(from: NSNumber(value: d)) ?? n
+        // Indonesian grouping in English too (owner rule, UI tour run 13): "1.500.000", "2,5".
+        return plainID.string(from: NSNumber(value: d)) ?? n
     }
 
     private static let plainID: NumberFormatter = {
         let f = NumberFormatter(); f.numberStyle = .decimal; f.locale = Locale(identifier: "id_ID"); f.maximumFractionDigits = 6
-        return f
-    }()
-    private static let plainEN: NumberFormatter = {
-        let f = NumberFormatter(); f.numberStyle = .decimal; f.locale = Locale(identifier: "en_US"); f.maximumFractionDigits = 6
         return f
     }()
 

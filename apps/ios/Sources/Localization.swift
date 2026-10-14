@@ -77,7 +77,7 @@ final class AppLanguage {
          indonesianSheetsPanels, indonesianAccessR2, indonesianMacShell, indonesianMacPages, indonesianMacProject,
          indonesianMacScreens, indonesianMacForms, indonesianMacGideon, indonesianUITour, indonesianRun5, indonesianRun6,
          indonesianLegal, indonesianRun7A, indonesianRun7B, indonesianRun7C, indonesianLegalRequests, indonesianRun9, indonesianRun10,
-         indonesianRun11A, indonesianRun11B, indonesianRun11C, indonesianOutletCustom, indonesianSocialMedia, indonesianRun12]
+         indonesianRun11A, indonesianRun11B, indonesianRun11C, indonesianOutletCustom, indonesianSocialMedia, indonesianRun12, indonesianRun13]
     }
 
     /// English → Indonesian. Keys must match the source literal EXACTLY.

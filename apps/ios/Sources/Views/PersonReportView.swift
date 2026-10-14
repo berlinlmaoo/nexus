@@ -17,8 +17,8 @@ enum ReportFormat {
     static func number(_ v: Double?) -> String {
         guard let v, v.isFinite, abs(v) < 1e12 else { return "—" }
         let r = (v * 10).rounded() / 10
-        if r == r.rounded() { return String(Int(r)) }
-        return String(format: "%.1f", r)
+        if r == r.rounded() { return AppNumber.int(Int(r)) }
+        return AppNumber.decimal(r)
     }
 
     /// A whole percent, or "—" when the ratio had nothing to measure (0 of 0 is not 0%).

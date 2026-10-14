@@ -13,77 +13,51 @@ struct OutletCalendarView: View {
 
     @Environment(\.horizontalSizeClass) private var hSize
     private var wide: Bool { hSize == .regular }
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
-
-    /// The day panel's width beside the month on Mac/iPad.
-    private static let panelWidth: CGFloat = 400
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
 
     var body: some View {
         let day = store.calendarDay
-        if wide {
-            // Mac/iPad: the month on the left, the picked day's reports in a panel beside it. Each side
-            // scrolls on its own, so a long report never pushes the month out of view.
-            VStack(alignment: .leading, spacing: 20) {
+        // Every width as the web draws it (UI tour run 13, I-1 / M-11 / M-12): the month across the full
+        // width, the picked day under it, one page that scrolls. The side panel squeezed the month into a
+        // third of an iPad ("M/on", chips cut to "Z") and cut the day's report off on the Mac.
+        ScrollView {
+            VStack(alignment: .leading, spacing: wide ? 20 : 14) {
                 OutletHeader(store: store, tab: $tab, newEventDate: day)
-                HStack(alignment: .top, spacing: 20) {
-                    ScrollView {
-                        grid(selected: day)
-                            .padding(.bottom, 24)
-                    }
-                    .scrollIndicators(.hidden)
-                    .refreshable { await store.load() }
-                    .frame(maxWidth: .infinity)
-                    ScrollView {
-                        dayDetail(day)
-                            .padding(16)
-                            .padding(.bottom, 8)
-                    }
-                    .frame(width: Self.panelWidth)
-                    .background(NX.card.opacity(0.6), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(NX.border))
-                    .padding(.bottom, 24)
-                }
+                grid(selected: day)
+                OutletCalendarLegend()
+                dayDetail(day)
             }
-            .padding(.horizontal, OutletLayout.margin(true))
-            .padding(.top, 24)
-            .frame(maxWidth: OutletLayout.maxWidth + 2 * OutletLayout.margin(true), maxHeight: .infinity, alignment: .topLeading)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .outletPage(wide: wide)
             .opacity(store.switching ? 0.55 : 1)
-        } else {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    OutletHeader(store: store, tab: $tab, newEventDate: day)
-                    grid(selected: day)
-                    dayDetail(day)
-                }
-                .outletPage(wide: false)
-                .opacity(store.switching ? 0.55 : 1)
-            }
-            .refreshable { await store.load() }
         }
+        .refreshable { await store.load() }
     }
 
     // MARK: the month grid
 
+    /// A bordered grid, the same as the Social Media calendar and the web (F-21).
     private func grid(selected: String) -> some View {
-        VStack(spacing: 4) {
-            LazyVGrid(columns: columns, spacing: 4) {
+        VStack(spacing: 0) {
+            LazyVGrid(columns: columns, spacing: 0) {
                 ForEach(Array(OutletFormat.weekHeader.enumerated()), id: \.offset) { _, name in
                     Text(name).font(NXFont.text(wide ? 12 : 11, .semibold)).foregroundStyle(NX.mutedFg)
+                        .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: wide ? .leading : .center)
                         .padding(.leading, wide ? 8 : 0)
-                        .padding(.vertical, wide ? 4 : 0)
+                        .padding(.vertical, 8)
                 }
             }
-            LazyVGrid(columns: columns, spacing: 4) {
+            .background(NX.muted.opacity(0.5))
+            Divider().overlay(NX.border)
+            LazyVGrid(columns: columns, spacing: 0) {
                 ForEach(OutletFormat.gridDays(store.month), id: \.self) { d in
                     cell(d, selected: d == selected)
                 }
             }
         }
-        .padding(wide ? 14 : 10)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: wide ? 20 : 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: wide ? 20 : 16, style: .continuous).strokeBorder(NX.border))
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
     }
 
     private func cell(_ d: String, selected: Bool) -> some View {
@@ -129,15 +103,16 @@ struct OutletCalendarView: View {
                 Spacer(minLength: 0)
             }
             .padding(wide ? 6 : 3)
-            .frame(maxWidth: .infinity, minHeight: wide ? 104 : 52, alignment: wide ? .topLeading : .top)
+            .frame(maxWidth: .infinity, minHeight: wide ? 104 : 56, alignment: wide ? .topLeading : .top)
             .overlay(alignment: .topTrailing) {
                 if ownTarget {
                     Image(systemName: "target").font(.system(size: wide ? 11 : 9, weight: .semibold))
-                        .foregroundStyle(NX.violetText).padding(wide ? 6 : 3)
+                        .foregroundStyle(NX.violetText).padding(wide ? 8 : 3)
                 }
             }
-            .background(selected ? NX.violet.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(selected ? NX.violet.opacity(0.6) : .clear))
+            .background(selected ? NX.violet.opacity(0.12) : (inMonth ? Color.clear : NX.muted.opacity(0.35)))
+            .overlay(Rectangle().strokeBorder(NX.border.opacity(0.6), lineWidth: 0.5))
+            .overlay(Rectangle().strokeBorder(selected ? NX.violet.opacity(0.6) : .clear, lineWidth: 1.5))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -164,12 +139,7 @@ struct OutletCalendarView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            // In the side panel the title gets the panel's full width; the action sits under it.
-            if wide {
-                VStack(alignment: .leading, spacing: 0) { title; add }
-            } else {
-                HStack(alignment: .center, spacing: 8) { title; Spacer(minLength: 4); add }
-            }
+            HStack(alignment: .center, spacing: 8) { title; Spacer(minLength: 4); add }
             OutletDayTargetCard(store: store, day: day)
             if list.isEmpty {
                 Text(T("No event on this day. Add one to fill its report after the night."))
@@ -180,7 +150,7 @@ struct OutletCalendarView: View {
                     .background(NX.muted.opacity(0.45), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             } else {
                 ForEach(list) { e in
-                    OutletEventCard(event: e, form: store.form, thisYear: store.thisYear, config: store.config, narrow: wide) {
+                    OutletEventCard(event: e, form: store.form, thisYear: store.thisYear, config: store.config, today: store.today) {
                         store.openForm(eventId: e.id, date: nil)
                         tab = .reportForm
                     }
@@ -245,6 +215,11 @@ struct OutletReportFormView: View {
             VStack(alignment: .leading, spacing: 14) {
                 head
                 picker
+                if futureNight {
+                    // W-B5: a night after today (WIB) has nothing to report yet; the event itself can be planned.
+                    Label(T("Reports open on the night itself"), systemImage: "clock")
+                        .font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                }
                 if let current { currentLine(current) }
                 else if draft.eventId != nil {
                     Text(T("This event no longer exists. It may have been deleted; Control Room → Audit can restore it."))
@@ -407,15 +382,19 @@ struct OutletReportFormView: View {
 
     // MARK: the sections, exactly as the server's form lists them
 
+    /// The draft's night is after today (WIB): only the event's name and date can be filled.
+    private var futureNight: Bool { draft.date.prefix(10) > store.today.prefix(10) }
+
     @ViewBuilder private func section(_ s: OutletFormSection) -> some View {
         // RSVP and Hosting come from the outlet's own items (owner, 14 Oct 2026); Communities follow Hosting.
         if s.key == "rsvp" {
-            breakdownSection(s.title.text, store.config.rsvp)
+            breakdownSection(T("RSVP total"), store.config.rsvp).disabled(futureNight)
         } else if s.key == "hosting" {
-            breakdownSection(s.title.text, store.config.hosting)
-            communitiesSection
+            breakdownSection(T("Hosting total"), store.config.hosting).disabled(futureNight)
+            communitiesSection.disabled(futureNight)
         } else {
-            formSection(s)
+            let planning = s.fields.contains { $0.type == "date" || $0.key == "name" }
+            formSection(s).disabled(futureNight && !planning)
         }
     }
 
@@ -468,7 +447,7 @@ struct OutletReportFormView: View {
                 return totals.isEmpty ? nil : totals.reduce(0, +)
             }()
             OutletCard {
-                Text("\(T("Communities – TOTAL")): \(OutletFormat.count(grand))")
+                Text("\(T("Communities total")): \(OutletFormat.count(grand))")
                     .font(NXFont.text(12, .bold)).tracking(0.3).foregroundStyle(NX.foreground)
                 ForEach(list, id: \.rowId) { c in
                     let subs = shown(c.items)

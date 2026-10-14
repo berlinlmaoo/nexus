@@ -66,7 +66,7 @@ func customFieldChip(_ cfv: BoardTask.CFValue) -> CFChip? {
     switch type {
     case "NUMBER":
         // Rupiah reads id-ID grouping ("369.000" = 369 000, owner bug 12 Oct 2026); every other number
-        // is grouped in the app's language and is never shown with "Rp" (CustomFieldNumber.swift).
+        // uses dot grouping too and is never shown with "Rp" (CustomFieldNumber.swift).
         let label = CustomFieldNumber.display(raw, format: cfv.customField?.options?.format)
         return label.isEmpty ? nil : CFChip(id: cfv.customFieldId, label: label, tone: .neutral)
     case "STATUS":

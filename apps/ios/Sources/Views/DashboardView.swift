@@ -764,7 +764,7 @@ struct DashboardView: View {
             HStack(spacing: 10) {
                 levelStat(T("Streak"), "\(g?.streakCurrent ?? 0) 🔥")
                 levelStat(T("Quests claimed"), "\(g?.questsDone ?? 0)")
-                levelStat(T("Total XP"), "\(g?.xp.totalXp ?? 0)")
+                levelStat(T("Total XP"), AppNumber.int(g?.xp.totalXp ?? 0))
             }
             .opacity(morphReady ? 1 : 0)
         }

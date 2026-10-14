@@ -635,34 +635,22 @@ struct OutletCreatedProject: Decodable, Sendable {
     let name: String?
 }
 
-// MARK: - Formats (§6): "Rp8.000.000 / Rp20.000.000 (40%)", "Minggu, 4 Oktober"
+// MARK: - Formats (§6): "Rp 8.000.000 / Rp 20.000.000 (40%)", "Minggu, 4 Oktober"
 
 enum OutletFormat {
     static var isID: Bool { AppLanguage.shared.lang == .id }
 
-    private static func grouping(_ locale: String) -> NumberFormatter {
-        let f = NumberFormatter()
-        f.numberStyle = .decimal
-        f.locale = Locale(identifier: locale)
-        f.maximumFractionDigits = 0
-        f.usesGroupingSeparator = true
-        return f
-    }
-    private static let groupID = grouping("id_ID")
-    private static let groupEN = grouping("en_GB")
+    /// "3.000": Indonesian dot grouping in both languages (owner rule, UI tour run 13: the app wrote
+    /// "Rp6,000,000" in English while the web writes dots).
+    static func grouped(_ n: Int64) -> String { AppNumber.int64(n) }
 
-    /// "3.000" (id) / "3,000" (en).
-    static func grouped(_ n: Int64) -> String {
-        (isID ? groupID : groupEN).string(from: NSNumber(value: n)) ?? String(n)
-    }
-
-    /// "Rp8.000.000" / "Rp8,000,000"; "—" for nothing filled.
+    /// "Rp 6.000.000"; "—" for nothing filled.
     static func rupiah(_ n: Int64?) -> String {
         guard let n else { return "—" }
-        return "\(n < 0 ? "-" : "")Rp\(grouped(abs(n)))"
+        return AppNumber.rupiah(n)
     }
 
-    /// "3.000" / "3,000"; "—" for nothing filled.
+    /// "3.000"; "—" for nothing filled.
     static func count(_ n: Int64?) -> String {
         guard let n else { return "—" }
         return grouped(n)
@@ -749,14 +737,22 @@ enum OutletFormat {
         return dayCalendar.component(.weekday, from: d) - 1
     }
 
-    /// "Minggu, 4 Oktober" / "Sunday, 4 October" — Ryan's Hari/Tanggal. The year only when it is not
+    /// "Minggu 4 Okt" / "Sunday 4 Oct": the app's day header (UI tour run 13, F-34: this said
+    /// "Wednesday, 14 October" while the Calendar writes "Wednesday 14 Oct"). The year only when it is not
     /// `thisYear` ("2026").
     static func dayLong(_ iso: String, thisYear: String? = nil) -> String {
         guard let p = parts(iso), let w = weekdayIndex(iso) else { return iso }
         let wd = (isID ? weekdaysID : weekdaysEN)[w]
-        let mn = (isID ? monthsID : monthsEN)[p.m - 1]
+        let mn = (isID ? monthsShortID : monthsShortEN)[p.m - 1]
         let year = (thisYear != nil && String(iso.prefix(4)) != thisYear) ? " \(p.y)" : ""
-        return "\(wd), \(p.d) \(mn)\(year)"
+        return "\(wd) \(p.d) \(mn)\(year)"
+    }
+
+    /// "1–14 Oct" from the first of `month` to `cutoff`; "1 Oct" when the cutoff is the first.
+    static func monthSpan(_ month: String, to cutoff: String) -> String {
+        guard let end = parts(cutoff) else { return "" }
+        let mn = (isID ? monthsShortID : monthsShortEN)[end.m - 1]
+        return end.d <= 1 ? "1 \(mn)" : "1–\(end.d) \(mn)"
     }
 
     /// "Min, 4 Okt" / "Sun, 4 Oct" — on a card; the year too when it is not `thisYear`.

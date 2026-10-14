@@ -202,12 +202,12 @@ struct ProjectsView: View {
         return total > 0 ? "\(Int((Double(done) / Double(total) * 100).rounded()))%" : "0%"
     }
     private var summaryDone: String {
-        tallies.isEmpty ? "–" : "\(tallies.values.reduce(0) { $0 + $1.done })"
+        tallies.isEmpty ? "–" : AppNumber.int(tallies.values.reduce(0) { $0 + $1.done })
     }
     /// Distinct people, not memberships summed over projects (web QA 13 Oct 2026).
     private var summaryMembers: String {
         let ids = Set(projects.flatMap { ($0.members ?? []).compactMap { $0.user?.id } })
-        return "\(ids.count)"
+        return AppNumber.int(ids.count)
     }
 
     /// Web projects/index.tsx PageHeader: search, grid / list, Folder, primary New project.
@@ -1342,9 +1342,9 @@ struct ProjectCard: View {
 
             // metrics
             HStack(spacing: 8) {
-                metric(T("Cards"), "\(total)")
-                metric(T("Done"), done.map { "\($0)" } ?? "—")
-                metric(T("Sections"), "\(project.laneCount)")
+                metric(T(total == 1 ? "Card" : "Cards"), AppNumber.int(total))
+                metric(T("Done"), done.map { AppNumber.int($0) } ?? "—")
+                metric(T(project.laneCount == 1 ? "Section" : "Sections"), AppNumber.int(project.laneCount))
             }
             .padding(.top, 16)
 
