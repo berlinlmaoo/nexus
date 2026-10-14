@@ -86,7 +86,7 @@ function InboxPage() {
           </div>
         )}
         <Reveal>
-          <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+          <div data-snap-rows className="divide-y divide-border overflow-clip rounded-xl border border-border bg-card">
             {inbox.isLoading && Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="flex items-start gap-3 p-4">
                 <Skeleton className="h-9 w-9 rounded-full" />

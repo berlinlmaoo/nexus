@@ -55,8 +55,10 @@ const LeaderboardRankings = React.forwardRef<HTMLDivElement, LeaderboardRankings
 
     return (
       <div ref={ref} className={cn("space-y-3", className)} {...props}>
-        <div className="overflow-hidden rounded-2xl border">
-          <div className="divide-y">
+        {/* Rows snap whole under the page header while scrolling (UI tour run 15, R15-WB-1). `overflow-clip`, not
+            `hidden`: a hidden box is a scroll container of its own and would keep the rows' snap points. */}
+        <div className="overflow-clip rounded-2xl border">
+          <div data-snap-rows className="divide-y">
             {rows.map((item) => {
               const isMe = currentUserId != null && item.userId === currentUserId
               return (

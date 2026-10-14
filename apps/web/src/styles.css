@@ -599,3 +599,31 @@
     }
   }
 }
+
+/* The display face (Plus Jakarta Sans) is already set tight and has a narrow word space, so the usual
+   `tracking-tight` on it made headings run together ("Checkinandout", "Legalrequest"; UI tour run 15,
+   R15-WB-2). On that face it keeps a plain letter spacing and a slightly wider word space, so display
+   headings read like the Inter page titles (Leaderboard, Settings). */
+.font-display.tracking-tight,
+.font-display.tracking-tighter {
+  letter-spacing: -0.005em;
+  word-spacing: 0.06em;
+}
+
+/* Row snapping for long pages (UI tour run 15, R15-WB-1 / R15-WD-1): a page that holds a list marked
+   `data-snap-rows` snaps the document so the row at the top sits whole under the pinned page header
+   (PageHeader publishes its height as --page-sticky-top) instead of half-cut by it. Proximity only, so
+   free scrolling still ends anywhere between far-apart rows; the gap clears the header's 1rem fade. */
+html:has([data-snap-rows], [data-snap-row]) {
+  scroll-snap-type: y proximity;
+  scroll-padding-top: calc(var(--page-sticky-top, 0px) + 1rem);
+}
+[data-snap-rows] > *,
+[data-snap-row] {
+  scroll-snap-align: start;
+}
+/* A scroll box of its own (a table, a side panel) snaps its rows under its own sticky head. */
+[data-snap-box] {
+  scroll-snap-type: y proximity;
+  scroll-padding-top: var(--snap-box-head, 0px);
+}

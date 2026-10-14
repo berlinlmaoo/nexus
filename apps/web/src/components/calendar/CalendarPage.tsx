@@ -704,7 +704,7 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
           {legendKey}
           {truncated}
         </div>
-        <aside data-cal-region="panel" className={cn("shrink-0 overflow-y-auto border-l border-border bg-card/40", lay.wideAside ? "w-105" : "w-95")}>
+        <aside data-cal-region="panel" className={cn("shrink-0 overflow-y-auto border-l border-border bg-card/40 [scroll-padding-top:var(--cal-sticky-room,0px)] [scroll-snap-type:y_proximity]", lay.wideAside ? "w-105" : "w-95")}>
           {panel}
         </aside>
       </div>
