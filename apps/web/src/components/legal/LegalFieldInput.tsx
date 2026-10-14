@@ -20,12 +20,14 @@ function groupDigits(v: string): string {
 const ungroup = (v: string) => v.replace(/\./g, "").replace(",", ".");
 
 /** One form field of a template, by its type. `errors` is keyed like the server's ("ROWS.0.CELL"). */
-export function LegalFieldInput({ field, value, onChange, errors, path }: {
+export function LegalFieldInput({ field, value, onChange, errors, path, hideName = false }: {
   field: TemplateField;
   value: unknown;
   onChange: (v: unknown) => void;
   errors: Record<string, string>;
   path: string;
+  /** The request form: people outside Legal see the label only, not the placeholder's name. */
+  hideName?: boolean;
 }) {
   const { t } = useLang();
   const error = errors[path];
@@ -34,7 +36,7 @@ export function LegalFieldInput({ field, value, onChange, errors, path }: {
     <Label htmlFor={id} className="flex items-baseline gap-1">
       {field.label}
       {field.required && field.type !== "boolean" && <span className="text-destructive">*</span>}
-      <span className="ml-1 font-mono text-[10px] font-normal text-muted-foreground">{field.name}</span>
+      {!hideName && <span className="ml-1 font-mono text-[10px] font-normal text-muted-foreground">{field.name}</span>}
     </Label>
   );
   const hint = (field.help || error) && (
@@ -67,7 +69,7 @@ export function LegalFieldInput({ field, value, onChange, errors, path }: {
               </div>
               <div className="grid gap-2 sm:grid-cols-2">
                 {cols.map((c) => (
-                  <LegalFieldInput key={c.name} field={c} value={row[c.name]} errors={errors} path={`${path}.${i}.${c.name}`}
+                  <LegalFieldInput key={c.name} field={c} value={row[c.name]} errors={errors} path={`${path}.${i}.${c.name}`} hideName={hideName}
                     onChange={(v) => onChange(rows.map((r, j) => (j === i ? { ...r, [c.name]: v } : r)))} />
                 ))}
               </div>

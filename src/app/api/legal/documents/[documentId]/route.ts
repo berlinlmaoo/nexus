@@ -9,6 +9,7 @@ import { dateFromDay, documentInclude, serializeDocument } from "@/lib/legal/doc
 import { isLegalDocType, isLegalStatus, releasesNumberOnVoid, statusChangeProblem } from "@/lib/legal/rules"
 import { releaseLegalNumber } from "@/lib/legal/numbering"
 import { linkProblem, redactLinks } from "@/lib/legal/links"
+import { syncRequestForDocument } from "@/lib/legal/requests"
 
 type Ctx = { params: Promise<{ documentId: string }> }
 
@@ -122,6 +123,8 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
       metadata: { changed: Object.keys(body), ...(data.status ? { status: { from: doc.status, to: data.status } } : {}), ...(released ? { numberReleased: doc.number } : {}) },
       request,
     })
+    // Final, sent, void or a new final version: a request this document was made for follows.
+    if (data.status || data.finalVersion !== undefined) await syncRequestForDocument(documentId, gate.actor.userId)
     const [document] = await redactLinks(gate.actor, [serializeDocument(updated)])
     return NextResponse.json({ document })
   } catch (error) {

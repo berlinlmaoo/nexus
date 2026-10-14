@@ -157,6 +157,8 @@ model User {
   legalDocVersions     LegalDocumentVersion[] @relation("LegalDocumentVersionAuthor")
   legalProposals       LegalEditProposal[]    @relation("LegalEditProposalCreatedBy")
   legalProposalsDecided LegalEditProposal[]   @relation("LegalEditProposalDecidedBy")
+  legalRequests        LegalRequest[]         @relation("LegalRequestRequester")
+  legalRequestsPic     LegalRequest[]         @relation("LegalRequestPic")
 }
 
 // Per-user API token for the MCP connector (and other integrations). Only the SHA-256 hash is
@@ -1874,6 +1876,8 @@ model LegalCompany {
   series    LegalSeries[]
   templates LegalTemplate[]
   documents LegalDocument[]
+  requests     LegalRequest[]
+  requestLinks LegalRequestLink[]
 }
 
 /// One numbering series: a company × document type and how its printed number looks. DocumentNumber.series
@@ -2006,6 +2010,8 @@ model LegalDocument {
 
   versions  LegalDocumentVersion[]
   proposals LegalEditProposal[]
+  /// The request this document was made for (Legal request board, owner 14 Oct 2026).
+  request   LegalRequest?          @relation("LegalRequestDocument")
 
   @@index([companyId, docDate])
   @@index([docType])
@@ -2063,6 +2069,78 @@ model LegalEditProposal {
   updatedAt      DateTime      @updatedAt
 
   @@index([documentId, status])
+}
+
+// --- Legal requests (owner, 14 Oct 2026): anyone with a request link asks Legal for a document ---
+// Design: docs/legal.md "Requests". SQL: prisma/sql/2026-10-14-legal-requests.sql. Server: src/lib/legal/requests*.ts.
+
+/// A link that opens the Legal request form at /f/legal-<token>. One general link (scope "general": the
+/// requester picks the company) and one per company (scope = the company id: preset and locked).
+/// Regenerating gives a new token, so the old link stops working.
+model LegalRequestLink {
+  id          String        @id @default(cuid())
+  /// "general" or the LegalCompany id.
+  scope       String        @unique
+  token       String        @unique
+  companyId   String?
+  company     LegalCompany? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// Closed = the link still resolves but says it isn't accepting requests.
+  accepting   Boolean       @default(true)
+  createdById String?
+  rotatedAt   DateTime?
+  rotatedById String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+/// One request for a legal document. The requester sees only their own (My Submissions); Legal members work
+/// them on the board (To Do / In Progress / Done).
+model LegalRequest {
+  id               String         @id @default(cuid())
+  requesterId      String?
+  requester        User?          @relation("LegalRequestRequester", fields: [requesterId], references: [id], onDelete: SetNull)
+  /// The link it came through (plain id: a link row is never deleted, only rotated).
+  linkId           String?
+  companyId        String
+  company          LegalCompany   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  /// The template asked for (plain id) and its version when the request was sent (field labels).
+  templateId       String?
+  templateVersion  Int?
+  templateName     String         @default("")
+  docType          String
+  /// An addendum request: the parent's number exactly as the requester typed it. Never looked up.
+  isAddendum       Boolean        @default(false)
+  parentNumberText String         @default("")
+  /// The real signed parent, set by Legal while processing (plain id).
+  parentDocumentId String?
+  /// The template's fields as the requester filled them (all optional).
+  fieldValues      Json           @default("{}")
+  purpose          String         @default("")
+  deadline         DateTime?
+  /// [{ id, storageKey, fileName, mimeType, size }] under the Legal storage dir.
+  attachments      Json           @default("[]")
+  projectId        String?
+  dealId           String?
+  /// TODO | IN_PROGRESS | DONE (the board column).
+  column           String         @default("TODO")
+  /// What the requester sees: RECEIVED | IN_PROGRESS | REVISION | FINAL | SIGNED | DONE | REJECTED.
+  stage            String         @default("RECEIVED")
+  rejectedAt       DateTime?
+  rejectReason     String         @default("")
+  rejectedById     String?
+  picId            String?
+  pic              User?          @relation("LegalRequestPic", fields: [picId], references: [id], onDelete: SetNull)
+  documentId       String?        @unique
+  document         LegalDocument? @relation("LegalRequestDocument", fields: [documentId], references: [id], onDelete: SetNull)
+  doneAt           DateTime?
+  /// The sender's attempt id: a repeat of the same attempt returns the first request.
+  idempotencyKey   String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([requesterId, idempotencyKey])
+  @@index([column])
+  @@index([requesterId, createdAt])
 }
 
 // --- Finance dashboard (per Finance project, monthly OPEX + Revenue) ---

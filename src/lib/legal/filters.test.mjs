@@ -162,4 +162,18 @@ test("a section on its own field shows only with a value", () => {
   for (const v of ["01.234.567.8-901.000", "0", 0, true, [1]]) assert.equal(F.hasPrintableValue(v), true, String(v))
 })
 
+test("urutan: a level in words", () => {
+  const r = (raw, filters = ["urutan"]) => F.renderTagValue({ name: "TINGKAT", filters }, raw, "select", () => undefined)
+  assert.equal(r("I"), "Pertama")
+  assert.equal(r("II"), "Kedua")
+  assert.equal(r("III"), "Ketiga")
+  assert.equal(r("iv"), "Keempat")
+  assert.equal(r("2"), "Kedua")
+  assert.equal(r("12"), "Kedua Belas")
+  assert.equal(r("II", ["urutan", "upper"]), "KEDUA")
+  assert.equal(r("IIII"), "IIII")
+  assert.equal(r("Final"), "Final")
+  assert.deepEqual(F.unknownFilters(["urutan", "urutan:2"]), ["urutan:2"])
+})
+
 console.log(`legal filters: ${passed} passed`)

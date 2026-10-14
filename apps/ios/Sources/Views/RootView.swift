@@ -94,7 +94,14 @@ struct RootView: View {
                         // replaced by the form's real name. "Form" is deliberately not in
                         // Localization.swift: T() falls back to the English literal, and the
                         // Indonesian for this one is the same word.
-                        FormFillView(formId: request.id, title: T("Form"))
+                        Group {
+                            // `/f/legal-<token>`: the Legal request form (owner, 14 Oct 2026).
+                            if LegalRequestLinks.isLinkId(request.id) {
+                                LegalRequestFormView(linkId: request.id)
+                            } else {
+                                FormFillView(formId: request.id, title: T("Form"))
+                            }
+                        }
                             .toolbar {
                                 ToolbarItem(placement: .cancellationAction) {
                                     Button(T("Close")) { router.formRequest = nil }
@@ -126,6 +133,7 @@ struct RootView: View {
                             case .task(let id):       TaskDetailView(taskId: id)
                             case .project(let id):    ProjectDetailView(projectId: id, projectName: "")
                             case .submission(let id): SubmissionDetailSheet(submissionId: id)
+                            case .legalRequest(let id): MyLegalRequestSheet(requestId: id, standalone: false)
                             default:                  EmptyView()
                             }
                         }

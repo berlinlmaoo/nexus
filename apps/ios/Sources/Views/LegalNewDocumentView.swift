@@ -13,6 +13,16 @@ struct LegalNewDocumentSheet: View {
     /// number follow the parent, and the form starts filled from it (owner, 14 Oct 2026).
     struct Parent: Equatable { let id: String; let number: String; let title: String }
     var parent: Parent? = nil
+    /// "Create document" from a Legal request (owner, 14 Oct 2026): its template and company are picked, the
+    /// form starts with what the requester filled, and the document is linked to the request.
+    struct FromRequest: Equatable {
+        let requestId: String
+        let templateId: String?
+        let companyId: String
+        let values: [String: LegalValue]
+        let link: LegalLink?
+    }
+    var fromRequest: FromRequest? = nil
     let onCreated: (String) -> Void
 
     private enum Step { case pick, form }
@@ -99,6 +109,16 @@ struct LegalNewDocumentSheet: View {
                 do { templates = try await t } catch { listError = error.legalMessage; templates = [] }
                 companies = (try? await c) ?? []
                 if parent != nil, templateId == nil, let only = offered, only.count == 1 { templateId = only[0].id }
+                // From a request: its template and company, straight to the form (an archived template stays on Pick).
+                if let fr = fromRequest, step == .pick, let tpl = templates?.first(where: { $0.id == fr.templateId }) {
+                    templateId = tpl.id
+                    companyId = tpl.company?.id ?? fr.companyId
+                    startForm()
+                    link = fr.link
+                } else if let fr = fromRequest, companyId == nil {
+                    companyId = fr.companyId
+                    link = fr.link
+                }
             }
             .task(id: numberKey) { await refreshPreview() }
         }
@@ -242,7 +262,8 @@ struct LegalNewDocumentSheet: View {
             let p = try await APIClient.shared.legalPrepare(templateId: templateId, companyId: effectiveCompany, parentDocumentId: parent?.id)
             prepared = p
             preview = p.numberPreview
-            // An addendum's parties start from its parent.
+            // What the requester filled wins; an addendum's parties then start from its parent.
+            for (k, v) in fromRequest?.values ?? [:] where values[k] == nil { values[k] = v }
             for (k, v) in p.prefill where values[k] == nil { values[k] = .text(v) }
             // The document date defaults to today in Jakarta.
             if values[LegalField.documentDate] == nil { values[LegalField.documentDate] = .text(LegalText.todayJakarta()) }
@@ -272,7 +293,7 @@ struct LegalNewDocumentSheet: View {
                 templateId: templateId, companyId: effectiveCompany, values: values,
                 title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                 counterparty: counterparty.trimmingCharacters(in: .whitespacesAndNewlines),
-                projectId: link?.projectId, dealId: link?.dealId, parentDocumentId: parent?.id)
+                projectId: link?.projectId, dealId: link?.dealId, parentDocumentId: parent?.id, requestId: fromRequest?.requestId)
             LegalToasts.shared.success(String(format: T("Document %@ made"), res.number))
             LegalToasts.shared.pdfWarning(res.pdfError)
             dismiss()
@@ -298,6 +319,8 @@ struct LegalFieldInput: View {
     let value: LegalValue?
     let errors: [String: String]
     let path: String
+    /// The request form: people outside Legal see the label only, not the placeholder's name.
+    var hideName = false
     let onChange: (LegalValue?) -> Void
 
     private var error: String? { errors[path] }
@@ -313,7 +336,7 @@ struct LegalFieldInput: View {
         case "list":
             listInput
         default:
-            LegalFormRow(label: field.label, required: field.required, mono: field.name, hint: field.help, error: error) {
+            LegalFormRow(label: field.label, required: field.required, mono: hideName ? nil : field.name, hint: field.help, error: error) {
                 scalar
             }
         }
@@ -386,7 +409,7 @@ struct LegalFieldInput: View {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(field.label).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
                 if field.required { Text(verbatim: "*").font(NXFont.text(13, .bold)).foregroundStyle(NX.danger) }
-                Text(verbatim: field.name).font(.system(size: 10, design: .monospaced)).foregroundStyle(NX.mutedFg)
+                if !hideName { Text(verbatim: field.name).font(.system(size: 10, design: .monospaced)).foregroundStyle(NX.mutedFg) }
             }
             ForEach(Array(rows.indices), id: \.self) { i in
                 VStack(alignment: .leading, spacing: 10) {
@@ -404,7 +427,7 @@ struct LegalFieldInput: View {
                         .accessibilityLabel(T("Remove row"))
                     }
                     ForEach(cols) { c in
-                        AnyView(LegalFieldInput(field: c, value: rows[i][c.name], errors: errors, path: "\(path).\(i).\(c.name)") { v in
+                        AnyView(LegalFieldInput(field: c, value: rows[i][c.name], errors: errors, path: "\(path).\(i).\(c.name)", hideName: hideName) { v in
                             var next = rows
                             guard next.indices.contains(i) else { return }
                             next[i][c.name] = v

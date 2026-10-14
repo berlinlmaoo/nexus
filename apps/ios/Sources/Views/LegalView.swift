@@ -14,7 +14,7 @@ struct LegalOpenID: Hashable, Identifiable {
 }
 
 struct LegalView: View {
-    enum Tab: String, Hashable { case documents, templates, settings, members }
+    enum Tab: String, Hashable { case documents, requests, templates, settings, members }
     private enum Phase { case loading, notInvited, failed(String), ready }
 
     @Environment(AppRouter.self) private var router
@@ -22,6 +22,8 @@ struct LegalView: View {
     @State private var tab: Tab = .documents
     @State private var me: LegalMe?
     @State private var phase: Phase = .loading
+    /// A request a notification pointed at (`/legal?tab=requests&request=<id>`).
+    @State private var requestFocus: String?
 
     private var isRoot: Bool { NXSidebarPage.isRoot(.legal, hSize: hSize, router: router) }
     private var subtitle: String { T("Contracts, letters and invoices of every company, numbered and archived.") }
@@ -29,6 +31,7 @@ struct LegalView: View {
 
     private var tabs: [NXTabItem<Tab>] {
         [NXTabItem(id: .documents, label: T("Documents"), icon: "archivebox"),
+         NXTabItem(id: .requests, label: T("Requests"), icon: "tray"),
          NXTabItem(id: .templates, label: T("Templates"), icon: "doc.text"),
          NXTabItem(id: .settings, label: T("Companies & numbering"), icon: "slider.horizontal.3"),
          NXTabItem(id: .members, label: T("Members"), icon: "person.2")]
@@ -50,6 +53,7 @@ struct LegalView: View {
         .navigationTitle(T("Legal"))
         .navigationBarTitleDisplayMode(.inline)
         .task { if me == nil { await load() } }
+        .task(id: router.focus) { claimFocus() }
         .legalToasts()
     }
 
@@ -79,10 +83,19 @@ struct LegalView: View {
         let gutter = NXSidebarPage.gutter(isRoot)
         switch tab {
         case .documents: LegalDocumentsPane(gutter: gutter, wide: hSize == .regular)
+        case .requests: LegalRequestsPane(gutter: gutter, wide: hSize == .regular, focus: $requestFocus)
         case .templates: LegalTemplatesPane(gutter: gutter)
         case .settings: LegalSettingsPane(gutter: gutter, canEdit: me?.invitePower.canInvite ?? false)
         case .members: LegalMembersPane(gutter: gutter)
         }
+    }
+
+    /// A legal_request_new push / Inbox row: the Requests tab, opened on that request.
+    private func claimFocus() {
+        guard case .legalBoard(let id) = router.focus else { return }
+        router.focus = nil
+        tab = .requests
+        requestFocus = id
     }
 
     private func load() async {

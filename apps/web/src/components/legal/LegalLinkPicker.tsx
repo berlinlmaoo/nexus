@@ -4,19 +4,20 @@ import { Briefcase, FolderKanban, Link2, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { legalLinksApi } from "@/lib/legal-api";
+import { legalLinksApi, type LegalLinkResults } from "@/lib/legal-api";
 import { useLang } from "@/lib/lang";
 
 export type LegalLink = { kind: "project"; id: string; label: string } | { kind: "deal"; id: string; label: string } | null;
 
-/** Pick a project or a Pipeline deal you can open — what a legal document belongs to. */
-export function LegalLinkPicker({ value, onChange, placeholder, size = "sm" }: { value: LegalLink; onChange: (v: LegalLink) => void; placeholder?: string; size?: "sm" | "default" }) {
+/** Pick a project or a Pipeline deal you can open — what a legal document belongs to. `search`: another source
+ *  with the same answer (the request form asks /api/legal-requests/links: the requester's own access). */
+export function LegalLinkPicker({ value, onChange, placeholder, size = "sm", search = legalLinksApi.search }: { value: LegalLink; onChange: (v: LegalLink) => void; placeholder?: string; size?: "sm" | "default"; search?: (q: string) => Promise<LegalLinkResults> }) {
   const { t } = useLang();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
   useEffect(() => { const h = setTimeout(() => setDebounced(q), 250); return () => clearTimeout(h); }, [q]);
-  const res = useQuery({ queryKey: ["legal", "links", debounced], queryFn: () => legalLinksApi.search(debounced), enabled: open });
+  const res = useQuery({ queryKey: ["legal", "links", search === legalLinksApi.search ? "legal" : "own", debounced], queryFn: () => search(debounced), enabled: open });
 
   return (
     <div className="flex items-center gap-1">

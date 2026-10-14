@@ -148,3 +148,50 @@ series: Series[]}`. `Series`: `{id, key, docType, label, format, resetPeriod: "Y
 - Locked paragraphs are shown, but can't be edited or ticked.
 - `targets` are the paragraphs the person ticked. GIDEON may change only those, or the fewest paragraphs it
   needs when none are ticked.
+
+## Requests (owner, 14 Oct 2026)
+
+Rules: [legal.md](legal.md#requests-owner-14-oct-2026). Two sides.
+
+**Requester** (`/api/legal-requests/*`, any signed-in person; only their own requests):
+
+| Method | Path | Body / query | Answer |
+|---|---|---|---|
+| GET | `/api/legal-requests/form/:linkId` | `linkId` = `legal-<token>` | `{link: {company{id,name}?, accepting}, signedIn, companies?: [{id,code,name}], templates?: FormTemplate[]}` (companies / templates only when signed in and accepting); 404 `{code: "LEGAL_LINK_UNKNOWN"}` |
+| POST | `/api/legal-requests/form/:linkId` | JSON `{templateId, companyId?, values, purpose?, deadline? (YYYY-MM-DD), projectId?, dealId?, parentNumber?}`, or multipart with that JSON in `data` + up to 5 `file`; header `Idempotency-Key` | 201 `{ok: true, id}` (200 for a repeat of the same key); 401 `LOGIN_REQUIRED`; 403 `LEGAL_LINK_CLOSED`; 422 `fieldErrors` |
+| GET | `/api/legal-requests/links` | `?q=` | like `/api/legal/links`, with the requester's own access |
+| GET | `/api/legal-requests/mine` | | `{requests: MyRequest[]}` |
+| GET | `/api/legal-requests/mine/:id` | | `{request: MyRequest + answers}`; 404 when not mine |
+| GET | `/api/legal-requests/mine/:id/file` | `?inline=1`, `?format=docx` | the FINAL / SIGNED file; 404 when not mine or not final yet |
+| GET | `/api/legal-requests/mine/:id/attachments/:attachmentId` | | a file I attached |
+
+- `FormTemplate`: `{id, name, description, docType, companyId?, isAddendum, fields: Field[]}` (every field
+  `required: false`, no `TANGGAL_DOKUMEN`). For an addendum, `parentNumber` is required text and is never
+  looked up: the answer is the same for any number.
+- `MyRequest`: `{id, createdAt, updatedAt, company{id,name}, templateName, docType, isAddendum,
+  parentNumberText, deadline, stage, rejectReason?, pic{id,name,avatar}?, document{number,title,status}?,
+  canDownload, purpose, attachments: [{id,fileName,mimeType,size}], project?, deal?}`; the detail adds
+  `answers: [{name, label, type, value, columns?}]`.
+- `stage`: `RECEIVED IN_PROGRESS REVISION FINAL SIGNED DONE REJECTED`.
+
+**Legal** (invited members only, 403 `LEGAL_NOT_INVITED` otherwise):
+
+| Method | Path | Body / query | Answer |
+|---|---|---|---|
+| GET | `/api/legal/requests` | `column, docType, companyId, picId ("none"), deadline (overdue\|week\|none), q` | `{requests: BoardRequest[]}` |
+| GET | `/api/legal/requests/:id` | | `{request: BoardRequest + {fieldValues, fields}, prefill}` |
+| PATCH | `/api/legal/requests/:id` | `{column?, picId? (null), parentDocumentId? (null)}` | `{request}`; parent must be SIGNED (409) |
+| POST | `/api/legal/requests/:id/reject` | `{reason}` (3+ characters) | `{request}`; 409 once its document is signed |
+| GET | `/api/legal/requests/:id/attachments/:attachmentId` | `?inline=1` | the file |
+| GET | `/api/legal/request-links` | | `{links: [{scope, company?, path, accepting, rotatedAt, updatedAt}]}` |
+| PATCH | `/api/legal/request-links/:scope` | `{accepting}` | `{link}` |
+| POST | `/api/legal/request-links/:scope/regenerate` | | `{link}` (new `path`; the old one stops working) |
+| POST | `/api/legal/documents` | as above + `requestId` | links the new document to the request (409 when the request was rejected or already has a live document; an addendum request needs `parentDocumentId`) |
+
+- `BoardRequest`: `{id, createdAt, updatedAt, requester{id,name,avatar}?, company{id,code,name}, templateId,
+  templateName, docType, isAddendum, parentNumberText, parent{id,number,title,status,docType}?, deadline,
+  column: TODO|IN_PROGRESS|DONE, stage, rejected, rejectedAt, rejectReason, pic?, document{id,number,title,
+  status,docType,signedAt}?, doneAt, purpose, attachments, project?, deal?, linkHidden}`.
+- `prefill`: `{requestId, templateId, companyId, isAddendum, parentDocumentId, values, projectId, dealId}`
+  (project / deal only when this member may link them). Start New document from it and send `requestId`.
+- Live: `workspace-changed {kind: "legal"}` (board) and `{kind: "submissions"}` (requester).

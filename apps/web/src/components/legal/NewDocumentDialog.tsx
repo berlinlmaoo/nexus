@@ -22,13 +22,16 @@ const formatFields = (format: string) => [...format.matchAll(/\{([A-Z][A-Z0-9_]*
  * New document (owner, 14 Oct 2026): pick a template (and the company, when the template is for any
  * company) → the form made from its {{PLACEHOLDERS}} → the number is taken only when it is generated.
  */
-export function NewDocumentDialog({ open, onOpenChange, onCreated, parent }: {
+export function NewDocumentDialog({ open, onOpenChange, onCreated, parent, fromRequest }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onCreated: (id: string) => void;
   /** Create addendum: the signed document it amends. Only addendum templates are offered; company, kop
    *  and number follow the parent, and the form starts filled from it. */
   parent?: { id: string; number: string; title: string } | null;
+  /** "Create document" from a Legal request (owner, 14 Oct 2026): its template and company are picked, the
+   *  form starts with what the requester filled, and the document is linked to the request. */
+  fromRequest?: { requestId: string; templateId: string | null; companyId: string; values: Record<string, unknown>; link: LegalLink } | null;
 }) {
   const { t, lang } = useLang();
   const qc = useQueryClient();
@@ -49,6 +52,18 @@ export function NewDocumentDialog({ open, onOpenChange, onCreated, parent }: {
     if (!open) { setTemplate(null); setCompanyId(null); setStep("pick"); setValues({}); setTitle(""); setCounterparty(""); setLink(null); setErrors({}); setProblems([]); }
   }, [open]);
 
+  // From a request: its template and company, straight to the form (a template archived since stays on Pick).
+  const [requestApplied, setRequestApplied] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open || !fromRequest || requestApplied === fromRequest.requestId || !templates.data) return;
+    const tpl = templates.data.templates.find((x) => x.id === fromRequest.templateId);
+    setRequestApplied(fromRequest.requestId);
+    setLink(fromRequest.link);
+    setCompanyId(tpl?.company?.id ?? fromRequest.companyId);
+    if (tpl) { setTemplate(tpl); setStep("form"); }
+  }, [open, fromRequest, requestApplied, templates.data]);
+  useEffect(() => { if (!open) setRequestApplied(null); }, [open]);
+
   const effectiveCompany = template?.company?.id ?? companyId;
   const form = useQuery({
     queryKey: ["legal", "prepare", template?.id, effectiveCompany],
@@ -59,8 +74,9 @@ export function NewDocumentDialog({ open, onOpenChange, onCreated, parent }: {
 
   // Default the document date to today once the form is known (and an addendum's parties from its parent).
   useEffect(() => {
-    if (form.data && values.TANGGAL_DOKUMEN === undefined) setValues((v) => ({ ...(form.data.prefill as FieldValues), ...v, TANGGAL_DOKUMEN: todayJakarta() }));
-  }, [form.data, values.TANGGAL_DOKUMEN]);
+    // From a request, what the requester filled wins over the parent's parties; the date is Legal's call.
+    if (form.data && values.TANGGAL_DOKUMEN === undefined) setValues((v) => ({ ...(form.data.prefill as FieldValues), ...((fromRequest?.values ?? {}) as FieldValues), ...v, TANGGAL_DOKUMEN: todayJakarta() }));
+  }, [form.data, values.TANGGAL_DOKUMEN, fromRequest?.values]);
 
   const numberInputs = useMemo(() => {
     const names = ["TANGGAL_DOKUMEN", ...formatFields(form.data?.series?.format ?? "")];
@@ -76,11 +92,12 @@ export function NewDocumentDialog({ open, onOpenChange, onCreated, parent }: {
   });
 
   const generate = useMutation({
-    mutationFn: () => legalDocsApi.generate({ templateId: template!.id, companyId: effectiveCompany, values, title: title.trim() || undefined, counterparty: counterparty.trim() || undefined, projectId: link?.kind === "project" ? link.id : null, dealId: link?.kind === "deal" ? link.id : null, parentDocumentId: parent?.id ?? null }),
+    mutationFn: () => legalDocsApi.generate({ templateId: template!.id, companyId: effectiveCompany, values, title: title.trim() || undefined, counterparty: counterparty.trim() || undefined, projectId: link?.kind === "project" ? link.id : null, dealId: link?.kind === "deal" ? link.id : null, parentDocumentId: parent?.id ?? null, requestId: fromRequest?.requestId ?? null }),
     onSuccess: (res) => {
       toast.success(t("Document {number} made", { number: res.number }));
       if (res.pdfError) toast.warning(t("The PDF couldn't be made yet: {reason}", { reason: res.pdfError }));
       void qc.invalidateQueries({ queryKey: ["legal", "documents"] });
+      if (fromRequest) void qc.invalidateQueries({ queryKey: ["legal", "requests"] });
       onOpenChange(false);
       onCreated(res.id);
     },

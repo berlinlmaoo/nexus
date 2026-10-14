@@ -113,3 +113,42 @@ Four tabs, like the web: **Documents · Templates · Companies & numbering · Me
 - Add unit tests for the model decoding (sample JSON from legal-api.md), the money input formatting, and the
   number-preview field extraction (`{NAME}` / `{NAME:n}` tokens, ignoring SEQ ROMAWI MM BLN YYYY YY CO), the
   same way `feature/pipeline` has its tests.
+
+## Requests (owner, 14 Oct 2026) — to build
+
+Server, web and iOS have it; Android does not yet. Contract: [legal-api.md](legal-api.md#requests-owner-14-oct-2026).
+Copy and layout follow the web (`components/legal/LegalRequestForm.tsx`, `MyLegalRequests.tsx`,
+`LegalRequests.tsx`; Indonesian in `apps/web/src/lib/i18n/id-legal-requests.ts`) and iOS
+(`Views/LegalRequestViews.swift`).
+
+1. **Deep link.** `https://<host>/f/legal-<24 letters/digits>` opens the request form in the app instead of
+   the form screen (any other `/f/<id>` stays a form). Signed out: the login screen first, then the form.
+   - `GET /api/legal-requests/form/:linkId`. 404 `LEGAL_LINK_UNKNOWN` → "This link doesn't work any more";
+     `accepting: false` → "This link isn't accepting requests right now".
+   - Company picker unless `link.company` is set; document type from `templates` (hide those whose
+     `companyId` is another company's). Fields with the Legal field inputs (no field names shown, all
+     optional). For `isAddendum`: a required text field "Number of the document to amend" (`parentNumber`).
+   - Purpose (multi-line), needed-by date, related project/deal (`GET /api/legal-requests/links`), up to 5
+     attachments (PDF/DOCX/JPG/PNG, 50 MB each) → multipart `data` + `file`, with an `Idempotency-Key`
+     per attempt. Success screen: "Request sent" + Open My Submissions / Send another request.
+2. **My Submissions.** Above the board, "Legal requests" cards from `GET /api/legal-requests/mine`: name,
+   company, stage chip, deadline (red when overdue), document number, reject reason, and a Download button
+   when `canDownload` (`GET …/mine/:id/file`). Tap → detail (`GET …/mine/:id`) with answers and attachments.
+   Refresh on `workspace-changed {kind: "submissions"}`. Show the empty state only when both lists are empty.
+3. **Notifications.** `/submissions?legal=<id>` → the request's detail; `/legal?tab=requests&request=<id>` →
+   Legal → Requests opened on it.
+4. **Legal → Requests tab** (after Documents), invited members only:
+   - Board (To Do / In Progress / Done; on a phone a segmented column switch) and a List, filters type,
+     company, PIC (`none` = no PIC), deadline (overdue / week / none), search. Move a card with a long-press
+     menu "Move to …" (PATCH `column`). Refresh on `workspace-changed {kind: "legal"}`.
+   - Card: template name, company, requester, deadline (red when overdue), PIC, document number + status,
+     "Rejected" label.
+   - Detail: column and PIC pickers; for an addendum the typed number and a picker of SIGNED documents
+     (`GET /api/legal/documents?status=SIGNED&q=`) → PATCH `parentDocumentId`; **Create document** = the New
+     document flow started from `prefill` (template, company, values, link; for an addendum with
+     `parentDocumentId`) and `requestId` in the generate body; **Open document** once linked; **Reject**
+     in a centred dialog with a required reason (POST `/reject`); answers and attachments.
+   - **Request links** sheet: each link (general + per company) with Copy, a "Taking requests" switch and
+     Regenerate (confirm first: the old link stops working).
+5. Strings in `values/strings.xml` + `values-in/strings.xml`; unit tests for the decoding of `MyRequest` /
+   `BoardRequest` and for the `/f/legal-…` link detection.

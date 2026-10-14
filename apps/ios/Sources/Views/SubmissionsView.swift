@@ -76,6 +76,8 @@ struct MySubmission: Decodable, Identifiable, Sendable {
 struct SubmissionRef: Identifiable {
     let id: String
     var preview: MySubmission? = nil
+    /// One of my Legal requests (its id) instead of a form submission — one `.sheet(item:)` for both.
+    var legalRequestId: String? = nil
 }
 
 /// GET /api/forms/my-submissions/{submissionId} — the answers, the proofs, the history and the comments.
@@ -205,6 +207,8 @@ struct SubmissionsView: View {
     @State private var loadError = false
     @State private var cachedFrom: Date?
     @State private var opened: SubmissionRef?
+    /// What I asked Legal for (owner, 14 Oct 2026), above the form board.
+    @State private var legal: [MyLegalRequest] = []
     /// "all" | "finance" | "multimedia".
     @State private var kindFilter = "all"
     @State private var needsMine = false
@@ -263,13 +267,20 @@ struct SubmissionsView: View {
                 EmptyState(icon: "wifi.exclamationmark", title: T("Couldn't load your submissions."),
                            subtitle: T("Check your connection and try again."),
                            actionTitle: T("Try again"), actionIcon: "arrow.clockwise") { Task { await load() } }
-            } else if subs.isEmpty {
+            } else if subs.isEmpty && legal.isEmpty {
                 EmptyState(icon: "tray", title: T("No submissions yet"),
                            subtitle: T("Everything you send through a form (a payment request, a design request, a report) shows up here with where it stands, so you never have to ask."),
                            actionTitle: T("Open forms"), actionIcon: "doc.text") { router.go(.forms) }
             } else {
                 VStack(alignment: .leading, spacing: 10) {
                     if let cachedFrom { OfflineNotice(savedAt: cachedFrom).padding(.horizontal, gutter).padding(.top, 8) }
+                    if !legal.isEmpty && kindFilter == "all" {
+                        MyLegalRequestsStrip(requests: legal, gutter: gutter) { id in opened = SubmissionRef(id: "legal-" + id, legalRequestId: id) }
+                            .padding(.top, 6)
+                    }
+                    if subs.isEmpty {
+                        Spacer(minLength: 0)
+                    } else {
                     filterBar
                     if shown.isEmpty {
                         EmptyState(icon: "doc.text.magnifyingglass",
@@ -280,6 +291,7 @@ struct SubmissionsView: View {
                         }
                     } else {
                         board
+                    }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -296,8 +308,12 @@ struct SubmissionsView: View {
         // Live: the team moved, answered or attached something (workspace-changed { kind: "submissions" }
         // to my own room); the timer covers the time the connection is down.
         .liveRefresh(every: 60, on: [.nexusWorkspaceChanged], kinds: [RealtimeKind.submissions]) { await load(quiet: true) }
-        .sheet(item: $opened, onDismiss: { Task { await load(quiet: true) } }) {
-            SubmissionDetailSheet(submissionId: $0.id, preview: $0.preview)
+        .sheet(item: $opened, onDismiss: { Task { await load(quiet: true) } }) { ref in
+            if let lid = ref.legalRequestId {
+                MyLegalRequestSheet(requestId: lid)
+            } else {
+                SubmissionDetailSheet(submissionId: ref.id, preview: ref.preview)
+            }
         }
     }
 
@@ -492,6 +508,8 @@ struct SubmissionsView: View {
 
     private func load(quiet: Bool = false) async {
         if !quiet { loadError = false }
+        // Best effort: an older server has no Legal requests; the board loads either way.
+        if let mine = try? await APIClient.shared.myLegalRequests() { legal = mine }
         do {
             let r = try await APIClient.shared.mySubmissions()
             subs = r.submissions ?? []

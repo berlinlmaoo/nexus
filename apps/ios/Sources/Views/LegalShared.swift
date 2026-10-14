@@ -496,6 +496,8 @@ enum LegalLink: Equatable {
 struct LegalLinkButton: View {
     let value: LegalLink?
     var placeholder: String? = nil
+    /// The request form: search what the requester can open themselves (/api/legal-requests/links).
+    var ownAccess = false
     let onChange: (LegalLink?) -> Void
     @State private var picking = false
 
@@ -522,13 +524,14 @@ struct LegalLinkButton: View {
             }
         }
         .sheet(isPresented: $picking) {
-            LegalLinkPickerSheet { picked in onChange(picked) }
+            LegalLinkPickerSheet(ownAccess: ownAccess) { picked in onChange(picked) }
         }
     }
 }
 
 /// Search the projects and deals the viewer can open.
 struct LegalLinkPickerSheet: View {
+    var ownAccess = false
     let onPick: (LegalLink) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var q = ""
@@ -564,7 +567,11 @@ struct LegalLinkPickerSheet: View {
             .task(id: q) {
                 if !q.isEmpty { try? await Task.sleep(nanoseconds: 250_000_000) }
                 if Task.isCancelled { return }
-                do { links = try await APIClient.shared.legalLinks(q: q.trimmingCharacters(in: .whitespaces)); error = nil }
+                do {
+                    let term = q.trimmingCharacters(in: .whitespaces)
+                    links = ownAccess ? try await APIClient.shared.legalRequestLinks(q: term) : try await APIClient.shared.legalLinks(q: term)
+                    error = nil
+                }
                 catch { if !Task.isCancelled { self.error = error.legalMessage } }
             }
             .navigationTitle(T("Belongs to"))

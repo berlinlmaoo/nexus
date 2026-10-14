@@ -62,6 +62,7 @@ struct NXDetailRequest: Identifiable, Hashable {
         case .task(let id):       return "task-" + id
         case .project(let id):    return "project-" + id
         case .submission(let id): return "submission-" + id
+        case .legalRequest(let id): return "legal-request-" + id
         default:                  return "other"
         }
     }
@@ -258,8 +259,11 @@ final class AppRouter {
         switch target {
         case .screen(let screen):
             go(screen)
-        case .task, .project, .submission:
+        case .task, .project, .submission, .legalRequest:
             detail = NXDetailRequest(target: target)
+        case .legalBoard:
+            focus = target
+            go(.legal)
         case .attendanceRequest, .offsiteCheckout, .permitToday, .crewBoard, .complaint, .conversation, .announcement, .post:
             focus = target
             if let screen = target.hostScreen { go(screen) }

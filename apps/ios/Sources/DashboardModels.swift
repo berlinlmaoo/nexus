@@ -358,6 +358,10 @@ enum NotificationTarget: Hashable {
     /// who is outside the office right now (`attendance_outside_approver`, owner 8 Oct 2026). Also
     /// `/attendance?board=1`.
     case crewBoard
+    /// One of MY Legal requests — `/submissions?legal=<id>` (legal_request_status): drawn as a sheet.
+    case legalRequest(String)
+    /// A request on the Legal board — `/legal?tab=requests&request=<id>` (legal_request_new, Legal members).
+    case legalBoard(String)
 
     /// The screen that owns the record, for the router to walk to before the screen claims it.
     var hostScreen: NXScreen? {
@@ -368,7 +372,8 @@ enum NotificationTarget: Hashable {
         case .conversation:                      return .messages
         case .announcement:                      return .dashboard
         case .post:                              return .threads
-        case .submission:                        return .submissions
+        case .submission, .legalRequest:         return .submissions
+        case .legalBoard:                        return .legal
         case .calendarDay:                       return .teamCalendar
         case .task, .project:                    return nil
         }
@@ -419,7 +424,10 @@ enum NotificationTarget: Hashable {
         // it is the entire point of the notification: "your reimbursement moved" has to open THAT
         // reimbursement. Without the id it is still just the board.
         case "submissions":
-            if let id = Self.queryValue("id", in: path) { self = .submission(id) } else { self = .screen(.submissions) }
+            if let id = Self.queryValue("legal", in: path) { self = .legalRequest(id) }
+            else if let id = Self.queryValue("id", in: path) { self = .submission(id) } else { self = .screen(.submissions) }
+        case "legal":
+            if let id = Self.queryValue("request", in: path) { self = .legalBoard(id) } else { self = .screen(.legal) }
         case "room-booking":            self = .screen(.roomBooking)
         // The Calendar (0.1.7) under its web name and both old ones. `/master-calendar?booking=<id>` is
         // the room-booking reminder (booking_soon), written when bookings lived on the Team Calendar;
