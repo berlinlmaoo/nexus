@@ -6,8 +6,7 @@
 // Nothing here knows a template by name. A card and its preview are drawn from the template's data
 // (sections, fields, preview layout), so a template added on the server shows up without a web change.
 // The drawings use the same plain blocks in theme tokens as TabPreviewCards.
-import { useMemo, useRef, useState, type ReactNode } from "react";
-import { useEdgeFade } from "@/hooks/use-edge-fade";
+import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bug, CalendarRange, FileText, Filter, Flag, Images, Lightbulb, ListChecks, Map as MapIcon, Megaphone, Package,
@@ -86,7 +85,6 @@ export function TemplateGallery({ onPick, pipeline }: { onPick: (pick: GalleryPi
   const { t, lang } = useLang();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("all");
-  const chipStrip = useRef<HTMLDivElement>(null);
   const list = useQuery({ queryKey: ["nexus", "project-templates"], queryFn: () => nexusApi.projectTemplates(), staleTime: 5 * 60_000, retry: 1 });
   const templates = list.data?.templates ?? [];
   const dashboards = DASHBOARDS.filter((d) => d.type !== "PIPELINE" || !pipeline || pipeline.allowed);
@@ -103,8 +101,6 @@ export function TemplateGallery({ onPick, pipeline }: { onPick: (pick: GalleryPi
   const shownDashboards = dashboards.filter((d) => (category === "all" || category === "dashboards") && matches(d.title, t(d.title), d.body, t(d.body)));
   const showBlank = category === "all" && matches("blank", t("Blank project"), t("Start empty"));
   const categories = CATEGORY_ORDER.filter((c) => c === "dashboards" ? dashboards.length > 0 : templates.some((tp) => tp.category === c));
-  // The category chips scroll sideways on a phone; the cut edge fades (it was a hard cut, audit 12 Oct 2026).
-  const chipFade = useEdgeFade(chipStrip, [categories.length, lang]);
   const nothing = !showBlank && shownTemplates.length === 0 && shownDashboards.length === 0 && !list.isLoading;
 
   return (
@@ -126,7 +122,9 @@ export function TemplateGallery({ onPick, pipeline }: { onPick: (pick: GalleryPi
           )}
         </label>
       </div>
-      <div ref={chipStrip} className={cn("relative -mx-1 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", chipFade)} role="tablist" aria-label={t("Template categories")}>
+      {/* The chips wrap onto a second line instead of scrolling sideways (UI tour run 14, WM-11: with a later
+          chip picked, the row opened scrolled and the first chip was cut at the left edge). */}
+      <div className="flex flex-wrap gap-1.5" role="tablist" aria-label={t("Template categories")}>
         {["all", ...categories].map((c) => (
           <button
             key={c}

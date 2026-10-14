@@ -17,6 +17,8 @@ export function useEdgeFade(ref: RefObject<HTMLElement | null>, deps: unknown[] 
     el.addEventListener("scroll", read, { passive: true });
     const ro = new ResizeObserver(read);
     ro.observe(el);
+    // The content can grow without the scroller changing size (columns or chips that arrive later).
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
     return () => { el.removeEventListener("scroll", read); ro.disconnect(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);

@@ -2,6 +2,7 @@
 // Backend stores either an uploaded path ("/..."), an inline emoji, or a
 // named icon ("folder", "rocket", ...). We map names → emoji.
 import { useQuery } from "@tanstack/react-query";
+import { Filter, Megaphone, Store, type LucideIcon } from "lucide-react";
 import { useLogoTone } from "@/lib/calendar/tone";
 import { nexusApi } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
@@ -57,12 +58,23 @@ function UploadedMark({ src, className }: { src: string; className?: string }) {
  * 11 Oct. Emoji, named icons and the project colour stay ignored on purpose. Sized in em, so it follows
  * the font size of the slot it sits in. iOS and Android draw the same paths (24x24 grid).
  */
-export function ProjectMark({ icon, className }: { icon?: string | null; color?: string | null; className?: string }) {
+export function ProjectMark({ icon, className, type }: { icon?: string | null; color?: string | null; className?: string; type?: string | null }) {
   if (isProjectPhoto(icon)) {
     return <UploadedMark src={icon} className={className} />;
   }
+  // A dashboard project without a photo wears its template's icon, the one its card shows in New project
+  // (UI tour run 14, R14-WB-10), in the same muted outline as the default page. iOS does the same.
+  const Dash = type ? DASHBOARD_MARK[type] : undefined;
+  if (Dash) return <Dash aria-hidden strokeWidth={1.6} className="h-[1em] w-[1em] shrink-0" style={{ color: "var(--st-gray-dot, #91918e)" }} />;
   return <ProjectPageIcon />;
 }
+
+/** The template icon of each dashboard project type (TemplateGallery's DASHBOARDS). */
+const DASHBOARD_MARK: Record<string, LucideIcon> = {
+  OUTLET_SALES: Store,
+  SOCIAL_MEDIA_REPORT: Megaphone,
+  PIPELINE: Filter,
+};
 
 /**
  * The default project icon. `size` in px, or omitted to follow the font size (1em); the stroke is the
@@ -94,6 +106,12 @@ export function useLiveProjectIcon(projectId?: string | null, known?: string | n
   return hit ? (hit.icon ?? null) : (known ?? null);
 }
 
+/** A project's type from the shared project list (a dashboard type picks its template icon). */
+function useLiveProjectType(projectId?: string | null): string | null {
+  const q = useQuery({ queryKey: ["nexus", "projects"], queryFn: nexusApi.projects, retry: false, staleTime: 60_000, enabled: !!projectId });
+  return (projectId ? q.data?.find((p) => p.id === projectId)?.type : undefined) ?? null;
+}
+
 /**
  * THE project mark for any place that knows a project's id: its current photo, else the default page icon,
  * in a `size` px slot. Search, mentions, GIDEON chips, pickers and breadcrumbs all draw through this, so
@@ -101,9 +119,10 @@ export function useLiveProjectIcon(projectId?: string | null, known?: string | n
  */
 export function ProjectMarkFor({ projectId, icon, size = 16, className }: { projectId?: string | null; icon?: string | null; size?: number; className?: string }) {
   const live = useLiveProjectIcon(projectId, icon);
+  const type = useLiveProjectType(projectId);
   return (
     <span aria-hidden className={cn("inline-grid shrink-0 place-items-center overflow-hidden rounded leading-none", className)} style={{ width: size, height: size, fontSize: size }}>
-      <ProjectMark icon={live} className="h-full w-full rounded object-cover" />
+      <ProjectMark icon={live} type={type} className="h-full w-full rounded object-cover" />
     </span>
   );
 }

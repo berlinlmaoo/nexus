@@ -114,6 +114,7 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
               onDragEnd={() => { setDragId(null); setOverId(null); }}
               onClick={() => !active && onSelect(tab.key)}
               title={tab.compact ? tab.label : undefined}
+              aria-label={tab.compact ? tab.label : undefined}
               onDoubleClick={() => v && editable && setRenaming(v.id)}
               // Keys typed in the rename field inside the tab are the field's (a space in a name, C-BUG-10).
               onKeyDown={(e) => { if (e.target !== e.currentTarget) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(tab.key); } }}
@@ -128,7 +129,9 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
               {v && renaming === v.id ? (
                 <RenameInput initial={tab.label} onDone={(name) => { setRenaming(null); if (name !== null && name.trim() && name.trim() !== tab.label) onRename(v, name.trim()); }} />
               ) : (
-                <span className={cn("max-w-48 truncate", tab.compact && !active && "sr-only")}>{tab.label}</span>
+                // Compact tabs are icon-only on a phone only; from md up they carry their name (UI tour run 14,
+                // WD-7: Sheet, Docs, Forms and Chat were four unlabeled icons on the desktop).
+                <span className={cn("max-w-48 truncate", tab.compact && !active && "max-md:sr-only")}>{tab.label}</span>
               )}
               {v && !v.shared && <Lock className="h-3 w-3 shrink-0 opacity-60" aria-label={t("Only you see this view")} />}
               {v && active && (

@@ -179,15 +179,23 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
   };
   const resetWidth = (key: string) => setColW((w) => { const next = { ...w }; delete next[key]; try { localStorage.setItem(widthKey, JSON.stringify(next)); } catch { /* private mode */ } return next; });
-  const gridTemplate = `minmax(240px,2fr) ${columns.map((k) => (colW[k] ? `${colW[k]}px` : "minmax(160px,1fr)")).join(" ")} 40px`;
+  // A column is at least as wide as its name (UI tour run 14, WD-1: "Tanggal Pengg…" could not be read).
+  // Phone: a narrower Name column, so the next column peeks in past Assignee and the table reads as one
+  // that scrolls sideways (WM-9: Name and Assignee filled the box exactly and looked like the whole table).
+  const isPhone = useIsMobile();
+  const nameW = isPhone ? 168 : 280;
+  const colMin = (k: string) => colW[k] ?? Math.min(280, Math.max(160, Math.ceil(64 + propLabel(propDef(defs, k)).length * 6.8)));
+  const gridTemplate = `minmax(${nameW}px,2fr) ${columns.map((k) => (colW[k] ? `${colW[k]}px` : `minmax(${colMin(k)}px,1fr)`)).join(" ")} 40px`;
   const rowIn = (gKey: string | null, subKey: string | null) => (task: NexusTask) => row(task, mover.enabled && gKey !== null && canDragTask(task, projectId)
     ? <DragHandle onDragStart={(e) => mover.startDrag(e, task, gKey, subKey)} onDragEnd={mover.endDrag} className="group-hover:opacity-100" />
     : null);
   const row = (task: NexusTask, handle: ReactNode = null) => (
-    <div key={task.id} {...bulk.bindRow(task)} className={cn("group grid items-stretch border-b border-border text-sm hover:bg-muted/40", bulk.isSelected(task.id) && "bg-accent")} style={{ gridTemplateColumns: gridTemplate }}>
+    // One row height for every row (UI tour run 14, WD-11: a link or file cell made some rows taller): two
+    // lines of name fit, and a cell never grows the row.
+    <div key={task.id} {...bulk.bindRow(task)} className={cn("group grid h-12 items-stretch border-b border-border text-sm hover:bg-muted/40", bulk.isSelected(task.id) && "bg-accent")} style={{ gridTemplateColumns: gridTemplate }}>
       <NameCell key={task.title} task={task} handle={handle} onRename={(title) => patchTask(task.id, { title })} onOpen={() => onOpen(task)} />
       {columns.map((key) => (
-        <div key={key} className="relative flex min-w-0 items-center border-l border-border px-1.5 py-1 [&>*]:min-w-0 [&>*]:flex-1">
+        <div key={key} className="relative flex min-w-0 items-center overflow-hidden border-l border-border px-1.5 py-1 [&>*]:min-w-0 [&>*]:flex-1">
           {key.startsWith("cf:") && ai.isMarked(key.slice(3), task.id) && <Sparkles aria-label={t("Filled by GIDEON")} className="pointer-events-none absolute right-1 top-1 h-3 w-3 text-primary/70" />}
           <Cell colKey={key} task={task} members={members} cfById={cfById} sections={sections} projectId={projectId} patchTask={patchTask} toggleAssignee={toggleAssignee} setCf={setCf} />
         </div>
@@ -198,7 +206,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
     </div>
   );
   const scrollRef = useRef<HTMLDivElement>(null);
-  const edgeFade = useEdgeFade(scrollRef, [columns.length]);
+  const edgeFade = useEdgeFade(scrollRef, [columns.length], true);
   const groupRow = (g: TaskGroup, by: string | null, key: string, depth: number) => (
     <div className={cn("sticky left-0 flex items-center border-b border-border bg-card px-1.5 py-1", depth > 0 && "pl-6")}>
       <GroupHeader group={g} groupBy={by} defs={defs} cfg={cfg} collapsed={collapsed.has(key)} onToggle={() => onToggleGroup(key)} />
@@ -217,7 +225,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
       <div ref={scrollRef} className={cn("overflow-auto overscroll-x-contain rounded-lg border border-border max-h-[max(20rem,calc(100dvh-10rem))] max-md:max-h-[max(16rem,calc(100dvh-var(--tabbar-room)-8rem))]", edgeFade)}>
         {/* Width from the columns' minimums, never from cell contents (perf pass, 12 Oct 2026): with min-w-max a
             row that loaded wider content widened every column and the header jumped. */}
-        <div className="w-full" style={{ minWidth: 240 + columns.reduce((n, k) => n + (colW[k] ?? 160), 0) + 40 }}>
+        <div className="w-full" style={{ minWidth: nameW + columns.reduce((n, k) => n + colMin(k), 0) + 40 }}>
           {/* Header row */}
           <div className="sticky top-0 z-[1] grid items-stretch border-b border-border bg-card text-xs text-muted-foreground" style={{ gridTemplateColumns: gridTemplate }}>
             <div className="flex items-center gap-1.5 px-3 py-2"><PropIcon def={propDef(defs, "title")} />{t("Name")}</div>
@@ -313,21 +321,35 @@ function questXp(task: NexusTask): number {
 function NameCell({ task, handle, onRename, onOpen }: { task: NexusTask; handle?: ReactNode; onRename: (title: string) => void; onOpen: () => void }) {
   const { t } = useLang();
   const [title, setTitle] = useState(task.title);
+  const [editing, setEditing] = useState(false);
   const done = task.status === "DONE";
   const xp = questXp(task);
   const filteredOut = useFilteredOut(task.id);
   return (
-    <div className={cn("flex min-w-0 items-center gap-1.5 px-2 py-1.5", handle && "gap-1 pl-0.5")}>
+    <div className={cn("flex min-w-0 items-center gap-1.5 px-2 py-1", handle && "gap-1 pl-0.5")}>
       {handle}
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onBlur={() => { const t = title.trim(); if (t && t !== task.title) onRename(t); else if (!t) setTitle(task.title); }}
-        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-        title={task.title}
-        // An ellipsis where the name is cut (UI tour run 7: phone names stopped mid-word with no sign).
-        className={cn("min-w-0 flex-1 truncate rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium outline-none hover:border-border focus:border-primary focus:bg-background", done && "text-muted-foreground line-through")}
-      />
+      {editing ? (
+        <input
+          autoFocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onBlur={() => { setEditing(false); const t = title.trim(); if (t && t !== task.title) onRename(t); else if (!t) setTitle(task.title); }}
+          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") { setTitle(task.title); setEditing(false); } }}
+          aria-label={t("Name")}
+          className="min-w-0 flex-1 rounded-md border border-primary bg-background px-1.5 py-1 text-sm font-medium outline-none"
+        />
+      ) : (
+        // The name wraps to two lines before it is cut (UI tour run 14, WB-12: names that start alike,
+        // "REIMBURSE PATS SPOR…", read the same on every row). A click edits it, as the field did.
+        <button
+          type="button"
+          onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey) return; setEditing(true); }}
+          title={task.title}
+          className={cn("line-clamp-2 min-w-0 flex-1 break-words rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm font-medium leading-snug hover:border-border", done && "text-muted-foreground line-through")}
+        >
+          {title}
+        </button>
+      )}
       {filteredOut && <FilterHint />}
       {xp > 0 && <span title={t("Quest XP")} className="shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">+{xp} XP</span>}
       <button onClick={onOpen} aria-label={t("Open")} title={t("Open")} className="shrink-0 text-muted-foreground/0 transition-colors hover:text-primary group-hover:text-muted-foreground"><ChevronRight className="h-3.5 w-3.5" /></button>
@@ -545,9 +567,9 @@ function TagsCell({ task, onSave }: { task: NexusTask; onSave: (tags: string[]) 
   };
   const remove = (t: string) => { const next = tags.filter((x) => x !== t); setTags(next); onSave(next); };
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
       {tags.map((tag) => (
-        <span key={tag} className="inline-flex items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
+        <span key={tag} className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
           {tag}
           <button aria-label={t("Remove tag {name}", { name: tag })} onClick={() => remove(tag)} className="hover:text-destructive"><X className="h-2.5 w-2.5" /></button>
         </span>

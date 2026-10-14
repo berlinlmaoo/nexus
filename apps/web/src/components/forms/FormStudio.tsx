@@ -1285,7 +1285,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
         <div className="flex h-12 items-center gap-2 px-2 sm:px-3">
           <button type="button" onClick={close} aria-label={t("Back to forms")} title={t("Back to forms")} className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><ArrowLeft className="h-4 w-4" /></button>
           <div className="flex min-w-0 items-center gap-1.5 text-sm">
-            {projectName && <span className="hidden min-w-0 max-w-[12rem] items-center gap-1.5 truncate text-muted-foreground md:inline-flex"><span className="grid h-4 w-4 shrink-0 place-items-center overflow-hidden rounded"><ProjectMark icon={projectQ.data?.icon} color={projectQ.data?.color} className="h-full w-full object-cover" /></span><span className="truncate">{projectName}</span><span className="text-muted-foreground/50">/</span></span>}
+            {projectName && <span className="hidden min-w-0 max-w-[12rem] items-center gap-1.5 truncate text-muted-foreground md:inline-flex"><span className="grid h-4 w-4 shrink-0 place-items-center overflow-hidden rounded"><ProjectMark icon={projectQ.data?.icon} color={projectQ.data?.color} type={projectQ.data?.type} className="h-full w-full object-cover" /></span><span className="truncate">{projectName}</span><span className="text-muted-foreground/50">/</span></span>}
             <span className="truncate font-medium">{draft.branding?.icon ? `${draft.branding.icon} ` : ""}{draft.name.trim() || t("Untitled form")}</span>
           </div>
           <nav className="mx-auto hidden items-center gap-0.5 md:flex" aria-label={t("Form builder")}>
@@ -1488,7 +1488,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
           {projectsQ.isLoading && <div className="py-4 text-center text-sm text-muted-foreground">{t("Loading projects…")}</div>}
           {(projectsQ.data ?? []).filter((p) => p.id !== projectId).map((p) => (
             <button key={p.id} type="button" disabled={dup.isPending || !dupName.trim()} onClick={() => dup.mutate(p.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-accent disabled:opacity-50">
-              <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded bg-muted text-sm"><ProjectMark icon={p.icon} color={p.color} className="h-full w-full object-cover" /></span>
+              <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded bg-muted text-sm"><ProjectMark icon={p.icon} color={p.color} type={p.type} className="h-full w-full object-cover" /></span>
               <span className="truncate">{p.name}</span>
               {dup.isPending && dup.variables === p.id && <Loader2 className="ml-auto h-4 w-4 shrink-0 animate-spin" />}
             </button>

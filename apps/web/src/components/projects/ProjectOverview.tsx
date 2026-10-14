@@ -417,7 +417,7 @@ function DeadlinesCard({ overdue, upcoming, noDue, openCount, dueLabel, onOpenTa
 }
 
 function TeamCard({ people, memberById, unassigned, onDrill }: { people: Map<string, { open: number; overdue: number; doneMonth: number }>; memberById: Map<string, { name?: string | null; avatar?: string | null; role?: string }>; unassigned: number; onDrill: (d: OverviewDrill) => void }) {
-  const { t, tn } = useLang();
+  const { t, tn, locale } = useLang();
   const [all, setAll] = useState(false);
   const rows = [...people.entries()]
     .map(([id, v]) => ({ id, ...v, name: memberById.get(id)?.name ?? "—", avatar: memberById.get(id)?.avatar, role: memberById.get(id)?.role }))
@@ -425,7 +425,9 @@ function TeamCard({ people, memberById, unassigned, onDrill }: { people: Map<str
   const max = Math.max(1, ...rows.map((r) => r.open), unassigned);
   const LIMIT = 8;
   const shown = all ? rows : rows.slice(0, LIMIT);
-  const grid = "grid grid-cols-[minmax(0,1fr)_3rem_3.5rem_3.5rem] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_4rem_4rem_6rem]";
+  const grid = "grid grid-cols-[minmax(0,1fr)_3rem_3.5rem_4.5rem] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_4rem_4rem_6rem]";
+  // Phone: "Done (Oct)" on one line; "Done this month" wrapped to two in the narrow column (UI tour run 14, WM-26).
+  const monthShort = new Intl.DateTimeFormat(locale, { month: "short" }).format(new Date()).replace(/\.$/, "").replace(/^Sept$/, "Sep");
   const num = (n: number, bad?: boolean) => <span className={cn("text-right text-sm tabular-nums", n === 0 ? "text-muted-foreground/60" : bad ? cn("font-semibold", STATUS.overdueText) : "font-semibold")}>{n}</span>;
   return (
     <Section id="ov-team" title={t("Who's working on what")} icon={<Users className="h-4 w-4" />}>
@@ -437,7 +439,10 @@ function TeamCard({ people, memberById, unassigned, onDrill }: { people: Map<str
             <span>{t("Person")}</span>
             <span className="text-right">{t("Open")}</span>
             <span className="text-right">{t("Overdue")}</span>
-            <span className="text-right">{t("Done this month")}</span>
+            <span className="whitespace-nowrap text-right" title={t("Done this month")}>
+              <span className="sm:hidden">{t("Done ({month})", { month: monthShort })}</span>
+              <span className="max-sm:hidden">{t("Done this month")}</span>
+            </span>
           </div>
           <ul>
             {shown.map((r) => (
