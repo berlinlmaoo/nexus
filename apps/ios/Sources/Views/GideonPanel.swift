@@ -39,9 +39,7 @@ struct GideonLauncher: View {
         // GIDEON's own page (iPad / Mac sidebar) binds ⌘O itself: one binding at a time.
         let onGideonPage = hSize == .regular && router.sidebarScreen == .gideon
         Group {
-            // iPad / Mac: Home's search row carries the GIDEON button (DashboardView), and the sidebar has
-            // its row; a floating one covered the agenda (UI tour run 13, I-4 / I-17). ⌘O stays below.
-            if (gideonLauncherHomeOnly && !onHome) || hSize == .regular {
+            if gideonLauncherHomeOnly && !onHome {
                 Color.clear.frame(width: 0, height: 0).allowsHitTesting(false)
             } else {
                 launcher

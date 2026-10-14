@@ -38,8 +38,6 @@ struct DashboardView: View {
     @State private var activeStat: Int?
     @State private var activeLevel = false
     @State private var activeBell = false
-    /// iPad / Mac: GIDEON from the search row (the floating button covered the agenda, UI tour run 13, I-4).
-    @State private var gideonOpen = false
     @State private var morphReady = false   // detail body fades in AFTER the card morphs (web: delay ~0.15)
     /// Passkey nudge. Only shown to someone who has none, and only until they dismiss it once —
     /// a prompt that keeps coming back after being answered stops being a prompt and becomes noise.
@@ -197,8 +195,13 @@ struct DashboardView: View {
             // iPad / Mac: the button sits 28 pt above the window's bottom edge (52 + 28 = 80 pt), and with
             // no margin it covered the agenda's last day ("Sun 25", UI tour run 11 PD-19). 92 pt lets every
             // card scroll clear of it. The phone's 72 is unchanged.
-            .contentMargins(.bottom, hSize == .regular ? 92 : 72, for: .scrollContent)
+            .contentMargins(.bottom, hSize == .regular ? 16 : 72, for: .scrollContent)
             .modifier(StatusBarScrollEdge())
+            // iPad / Mac: the scroll area ends above the floating GIDEON button (52 pt, 28 pt above the window's
+            // bottom edge), so no card scrolls under it, on the first screen or further down (UI tour runs 12
+            // and 13, PD3 / I-4 / I-17: it covered the agenda's last day and month). The band below is the
+            // page's own background. The phone's Home is unchanged.
+            .padding(.bottom, hSize == .regular ? 92 : 0)
             .background(NX.background.ignoresSafeArea())
             .overlay { statModal }
             .overlay { levelModal }
@@ -510,23 +513,6 @@ struct DashboardView: View {
                 .overlay(Capsule().strokeBorder(NX.border, lineWidth: 1))
             }
             .buttonStyle(.plain)
-
-            // iPad / Mac: GIDEON sits in this row instead of floating over the page, where it covered
-            // the agenda card at any scroll position (UI tour runs 12 and 13, PD3 / I-4). The phone keeps
-            // its floating button bottom-left.
-            if hSize == .regular {
-                Button { Haptics.tap(); gideonOpen = true } label: {
-                    Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
-                        .frame(width: 22, height: 22).foregroundStyle(NX.foreground)
-                        .frame(width: 48, height: 48)
-                        .background(NX.card, in: Circle())
-                        .overlay(Circle().strokeBorder(NX.border))
-                }
-                .buttonStyle(.plain)
-                .hoverEffect(.lift)
-                .accessibilityLabel("GIDEON")
-                .sheet(isPresented: $gideonOpen) { GideonPanel().environment(auth).environment(router) }
-            }
 
             Button { Haptics.tap(); toggleBell(true) } label: {
                 ZStack(alignment: .topTrailing) {
