@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.pipeline
 
+import id.znetworks.nexus.core.i18n.AppLanguage
 import id.znetworks.nexus.R
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -330,7 +331,7 @@ object PipelineCard {
     fun dateTone(day: String, today: String) = when { day < today -> Tone.PAST; day == today -> Tone.TODAY; else -> Tone.LATER }
     /** "4 Okt" / "4 Oct": the year goes without saying on a card. */
     fun shortDay(iso: String, id: Boolean = java.util.Locale.getDefault().language.let { it == "in" || it == "id" }): String = runCatching {
-        java.time.format.DateTimeFormatter.ofPattern("d MMM", if (id) java.util.Locale.forLanguageTag("id-ID") else java.util.Locale.UK).format(java.time.LocalDate.parse(iso.take(10)))
+        java.time.format.DateTimeFormatter.ofPattern("d MMM", if (id) java.util.Locale.forLanguageTag("id-ID") else AppLanguage.ENGLISH_FORMATS).format(java.time.LocalDate.parse(iso.take(10)))
     }.getOrDefault(iso)
 }
 
@@ -343,14 +344,14 @@ object PipelineFormat {
         val abs = kotlin.math.abs(n)
         val (b, m, k) = if (id) Triple("M", "Jt", "Rb") else Triple("B", "M", "K")
         val (v, s) = when { abs >= 1e9 -> abs / 1e9 to b; abs >= 1e6 -> abs / 1e6 to m; abs >= 1e3 -> abs / 1e3 to k; else -> abs to "" }
-        val nf = java.text.NumberFormat.getNumberInstance(if (id) java.util.Locale.forLanguageTag("id-ID") else java.util.Locale.UK)
+        val nf = java.text.NumberFormat.getNumberInstance(if (id) java.util.Locale.forLanguageTag("id-ID") else AppLanguage.ENGLISH_FORMATS)
             .apply { maximumFractionDigits = if (s.isNotEmpty() && v < 10) 1 else 0; minimumFractionDigits = 0 }
         return (if (n < 0) "-" else "") + "Rp" + nf.format(v) + s
     }
 
     /** Full: Rp950.000.000. */
     fun idrFull(n: Double, id: Boolean = isId()): String =
-        (if (n < 0) "-" else "") + "Rp" + java.text.NumberFormat.getNumberInstance(if (id) java.util.Locale.forLanguageTag("id-ID") else java.util.Locale.UK)
+        (if (n < 0) "-" else "") + "Rp" + java.text.NumberFormat.getNumberInstance(if (id) java.util.Locale.forLanguageTag("id-ID") else AppLanguage.ENGLISH_FORMATS)
             .apply { maximumFractionDigits = 0 }.format(kotlin.math.round(kotlin.math.abs(n)))
 
     /** What someone typed in a money field ("950.000.000", "Rp 950000000", "-5000"); blank = 0, garbage = null. */

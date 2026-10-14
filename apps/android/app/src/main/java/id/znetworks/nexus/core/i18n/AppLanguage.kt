@@ -30,9 +30,12 @@ object AppLanguage {
     /**
      * Dates and numbers in the app's language, not the phone's (owner, 14 Oct 2026; iOS AppDateLocale): an English app
      * on an Indonesian phone says "Wed, 14 Oct", an Indonesian one "Rab, 14 Okt". Rupiah amounts keep id-ID on purpose.
+     * English is en-150: day first and 24-hour like en-GB, but "1 Sep" as web and iOS, where en-GB says "1 Sept" (run 9).
      */
     fun locale(tag: String = current): java.util.Locale =
-        if (tag == INDONESIAN) java.util.Locale.forLanguageTag("id-ID") else java.util.Locale.UK
+        if (tag == INDONESIAN) java.util.Locale.forLanguageTag("id-ID") else ENGLISH_FORMATS
+
+    val ENGLISH_FORMATS: java.util.Locale = java.util.Locale.forLanguageTag("en-150")
 
     /** Makes every formatter that reads Locale.getDefault() follow the app's language too. */
     private fun useForFormats(tag: String) = java.util.Locale.setDefault(locale(tag))

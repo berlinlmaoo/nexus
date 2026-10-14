@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.outlet
 
+import id.znetworks.nexus.core.i18n.AppLanguage
 import id.znetworks.nexus.core.net.NexusJson
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -167,7 +168,7 @@ data class OutletForm(val sections: List<OutletSection>) {
 /** Numbers, rupiah, days and months in Ryan's shapes (§6), in the app's language. */
 object OutletFormat {
     fun isId(locale: Locale = Locale.getDefault()) = locale.language == "in" || locale.language == "id"
-    private fun loc(id: Boolean) = if (id) Locale.forLanguageTag("id-ID") else Locale.UK
+    private fun loc(id: Boolean) = if (id) Locale.forLanguageTag("id-ID") else AppLanguage.ENGLISH_FORMATS
 
     /** 3.000 (ID) / 3,000 (EN); null → "—". */
     fun count(v: Double?, id: Boolean = isId()): String {
@@ -225,7 +226,7 @@ object OutletFormat {
     fun stamp(iso: String?, id: Boolean = isId()): String? {
         val t = iso?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() } ?: return null
         val z = t.atZone(java.time.ZoneId.of("Asia/Jakarta"))
-        val mo = if (id) ID_SHORT_MONTHS[z.monthValue - 1] else z.month.getDisplayName(TextStyle.SHORT, Locale.UK).take(3)
+        val mo = if (id) ID_SHORT_MONTHS[z.monthValue - 1] else z.month.getDisplayName(TextStyle.SHORT, AppLanguage.ENGLISH_FORMATS).take(3)
         return "${z.dayOfMonth} $mo, " + DateTimeFormatter.ofPattern(if (id) "HH.mm" else "HH:mm").format(z)
     }
 

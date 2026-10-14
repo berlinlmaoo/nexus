@@ -382,8 +382,9 @@ private fun LinkedColumn(l: BoardLogic.LinkedLane, props: PropCtx, access: Proje
         // Lines up with the status-group label above the other columns.
         Text(" ", fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
         Row(Modifier.padding(horizontal = 4.dp, vertical = 2.dp).heightIn(min = 32.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(l.name ?: stringResource(R.string.cp_another_project), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            // Up to two lines: the source project's full name, as iOS (run 9 cut it to "SPECIAL BU…" on one line).
+            Text(l.name ?: stringResource(R.string.cp_another_project), fontSize = 14.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold, color = c.foreground,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.cp_linked), fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(c.muted).padding(horizontal = 6.dp))
             Spacer(Modifier.weight(1f))
