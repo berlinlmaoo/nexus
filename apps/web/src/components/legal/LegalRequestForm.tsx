@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
+import { DateField } from "@/components/DateField";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Clock, FileText, Link2Off, Loader2, LogIn, Paperclip, Scale, X } from "lucide-react";
@@ -14,6 +15,7 @@ import { ApiError } from "@/lib/nexus-api";
 import { fieldErrorsOf } from "@/lib/legal-api";
 import { legalRequestsApi, type RequestFormInfo } from "@/lib/legal-requests-api";
 import { useLang } from "@/lib/lang";
+import { cn } from "@/lib/utils";
 
 const MAX_FILES = 5;
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
@@ -212,7 +214,8 @@ function RequestForm({ linkId, info }: { linkId: string; info: RequestFormInfo }
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="lr-deadline">{t("Needed by")}</Label>
-            <Input id="lr-deadline" type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} aria-invalid={!!errors.deadline} />
+            <DateField value={deadline || null} onChange={(v) => setDeadline(v ?? "")} ariaLabel={t("Needed by")} placeholder={t("Pick a date")}
+              className={cn("h-9 w-full rounded-md border border-input bg-transparent px-3 shadow-sm hover:bg-transparent", errors.deadline && "border-destructive")} />
           </div>
           <div className="space-y-1.5">
             <Label>{t("Related project or deal")}</Label>

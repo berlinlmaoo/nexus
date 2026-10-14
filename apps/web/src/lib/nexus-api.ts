@@ -1075,6 +1075,8 @@ export type NexusTask = {
   dueDate?: string | null;
   startDate?: string | null;
   createdAt?: string | null;
+  /** Who made the task (a scalar of every task payload; the card lists don't include the creator object). */
+  creatorId?: string | null;
   updatedAt?: string | null;
   /** When the task last became DONE and by whom (set by a DB trigger; null = unknown or not done). */
   completedAt?: string | null;

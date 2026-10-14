@@ -8,6 +8,7 @@ import {
 import { useState } from "react";
 import { SidebarProjectTree } from "@/components/SidebarProjectTree";
 import { GideonMark } from "@/components/gideon/GideonMark";
+import { GideonAskButton } from "@/components/gideon/GideonLauncher";
 import nexusLogo from "@/assets/nexus-logo.png";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
@@ -131,14 +132,19 @@ export function AppSidebar() {
             <PanelLeftClose className="h-4 w-4" />
           </button>
         </div>
-        <button
-          onClick={openGlobalSearch}
-          className="mx-2 my-1 flex items-center gap-2 overflow-hidden rounded-md border border-border bg-background/60 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent group-data-[collapsible=icon]:hidden"
-        >
-          <Search className="h-3.5 w-3.5 shrink-0" />
-          <span className="flex-1 truncate text-left">{t("Search…")}</span>
-          <kbd className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{modKey("K")}</kbd>
-        </button>
+        {/* Search and "Ask GIDEON" share one row. GIDEON's button lives here, not floating over the page
+            (UI tour run 11, WD-1): a fixed corner button always ended up on someone's content. */}
+        <div className="mx-2 my-1 flex items-center gap-1.5 group-data-[collapsible=icon]:hidden">
+          <button
+            onClick={openGlobalSearch}
+            className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-md border border-border bg-background/60 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent"
+          >
+            <Search className="h-3.5 w-3.5 shrink-0" />
+            <span className="flex-1 truncate text-left">{t("Search…")}</span>
+            <kbd className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{modKey("K")}</kbd>
+          </button>
+          <GideonAskButton />
+        </div>
       </SidebarHeader>
 
       {/* Short desktop screens (≤960px tall, mouse): a denser nav, so the last entry (Control Room) is not

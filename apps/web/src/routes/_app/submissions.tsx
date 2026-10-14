@@ -308,6 +308,8 @@ function MySubmissions() {
   // Phone: the lane cut at the right edge fades out, so it reads as "swipe for more" (UI tour run 9).
   const boardRef = useRef<HTMLDivElement>(null);
   const boardFade = useEdgeFade(boardRef, [visibleCols.length, shown.length]);
+  // The row of group labels only exists when some group has more than one column.
+  const groupRow = visibleCols.some((c, i) => visibleCols.findIndex((x) => x.group === c.group) !== i);
 
   // `/submissions?id=<submissionId>` opens straight onto that submission (the `submission_status`
   // notification links here).
@@ -386,17 +388,21 @@ function MySubmissions() {
                 message={mine ? t("When the team asks for a revision or replies to you, the request shows up here.") : t("Try another filter.")}
                 action={<EmptyAction onClick={() => { setFilter("all"); setMine(false); setProjectFilter(null); }}>{t("Show all")}</EmptyAction>} />
             ) : (
-              <div ref={boardRef} className={cn("flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto pb-4 sm:snap-none", boardFade)}>
+              // Phone: the lanes run to the screen edges, snap one at a time and the next one peeks in (UI tour
+              // run 11, WM-4).
+              <div ref={boardRef} className={cn("-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-4 sm:mx-0 sm:snap-none sm:px-0", boardFade)}>
                 {visibleCols.map((col, i) => {
                   const items = shown.filter((s) => keyOf(s) === col.key);
                   const p = preset(col);
-                  const firstOfGroup = i === 0 || visibleCols[i - 1].group !== col.group;
+                  // The group label ("To-do", "Complete") only over a group of several columns (UI tour run 11,
+                  // WD-3): over a single one it repeated the column's own name ("To-do" over "To Do").
+                  const firstOfGroup = (i === 0 || visibleCols[i - 1].group !== col.group) && visibleCols.filter((c) => c.group === col.group).length > 1;
                   return (
                     // Phone (UI tour run 7, 14 Oct 2026): a column with cards takes ~85% of the screen, so its
                     // cards read whole and the next column peeks in; an empty one shrinks to a narrow lane
                     // that says why it is empty, instead of a 288 px blank pushing the work off screen.
-                    <div key={col.key} className={cn("flex shrink-0 snap-start flex-col sm:w-72", items.length ? "w-[85vw] max-w-[22rem]" : "w-40")}>
-                      <div className="mb-1 h-4 text-[11px] font-semibold text-muted-foreground">{firstOfGroup ? t(GROUP_LABEL[col.group]) : ""}</div>
+                    <div key={col.key} className={cn("flex shrink-0 snap-start flex-col sm:w-72", items.length ? "w-[82vw] max-w-[22rem]" : "w-[8.5rem]")}>
+                      {groupRow && <div className="mb-1 h-4 text-[11px] font-semibold text-muted-foreground">{firstOfGroup ? t(GROUP_LABEL[col.group]) : ""}</div>}
                       <div className="flex flex-1 flex-col rounded-xl" style={{ background: p.lane }}>
                         <div className="flex items-center gap-2 px-3 py-2.5">
                           <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-semibold" style={{ background: p.bg, color: p.text }}>
@@ -407,7 +413,8 @@ function MySubmissions() {
                         <div className="flex-1 space-y-2 px-2 pb-2">
                           {/* Long columns render in slices as they scroll into view (perf pass, 12 Oct 2026). */}
                           <Incremental items={items} first={25} step={30} keyOf={(s) => s.id} render={(s) => <Card s={s} onOpen={() => setOpenId(s.id)} />} />
-                          {items.length === 0 && <div className="px-2 py-6 text-center text-[11px] leading-snug text-muted-foreground">{t("None of your submissions are at this stage right now. The team moves a card here when its work reaches it.")}</div>}
+                          {/* One short hint per empty lane; the read-only note above already says the team moves the cards. */}
+                          {items.length === 0 && <div className="px-2 py-4 text-center text-[11px] leading-snug text-muted-foreground">{t("Nothing here yet")}</div>}
                         </div>
                       </div>
                     </div>

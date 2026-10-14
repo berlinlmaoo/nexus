@@ -444,8 +444,10 @@ function TeamCard({ people, memberById, unassigned, onDrill }: { people: Map<str
                   <span className="flex min-w-0 items-center gap-2.5">
                     <Avatar userId={r.id} name={r.name} avatar={r.avatar} size={28} />
                     <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-1.5">
-                        <span className="truncate text-sm font-medium">{r.name}</span>
+                      {/* The "Project Owner" pill wraps under the name when both don't fit (UI tour run 11, WM-20:
+                          beside it the name was cut to "Bagas …"). */}
+                      <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                        <span className="min-w-0 max-w-full truncate text-sm font-medium">{r.name}</span>
                         {r.role === "LEAD" && <span className="shrink-0 rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold leading-4 text-primary">{t("Project Owner")}</span>}
                       </span>
                       <span className="mt-1 block h-1 max-w-40 overflow-hidden rounded-full bg-muted"><span className="block h-full rounded-full bg-primary/70" style={{ width: `${(r.open / max) * 100}%` }} /></span>
@@ -468,8 +470,10 @@ function TeamCard({ people, memberById, unassigned, onDrill }: { people: Map<str
                     </span>
                   </span>
                   {num(unassigned)}
-                  <span />
-                  <span />
+                  {/* Overdue and done are counted per person; for nobody they read as a quiet dash, so the row
+                      fills its three columns like the others (UI tour run 11, WM-7). */}
+                  <span className="text-right text-sm text-muted-foreground/60" aria-hidden>–</span>
+                  <span className="text-right text-sm text-muted-foreground/60" aria-hidden>–</span>
                 </button>
               </li>
             )}

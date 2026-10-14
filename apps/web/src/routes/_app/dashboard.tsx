@@ -41,7 +41,7 @@ import { UserXpLogModal } from "@/components/UserXpLogModal";
 import { MorphPanel, type MorphOrigin } from "@/components/motion/MorphPanel";
 import { activeNotifications, fmtTime, nexusApi, notificationGroup, statusLabel, type NexusDashboardResponse, type NexusProject, type NexusTask, type NexusQuest, type NexusConversation, type NexusUser, type NexusNotification, type NexusLeaderboardRow, type NotificationGroupId } from "@/lib/nexus-api";
 import { NotificationFilterTabs } from "@/components/NotificationFilterTabs";
-import { LEVELS, levelForXp } from "@/lib/levels";
+import { LEVELS, levelForXp, levelLabel } from "@/lib/levels";
 import { TierBadge } from "@/components/gamification/TierBadge";
 import { Reveal, AnimatedBar, CountUp } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -783,7 +783,7 @@ function ProfileCard({ userName, avatarUrl }: { userName: string; avatarUrl?: st
           </div>
         )}
         <div className="min-w-0 flex-1 space-y-1.5">
-          <div className="flex items-baseline justify-between gap-2"><span className="text-xs uppercase tracking-wide text-muted-foreground">{t("Level")}</span><span className="text-sm font-bold">{info.level} · {info.name}</span></div>
+          <div className="flex items-baseline justify-between gap-2"><span className="text-xs uppercase tracking-wide text-muted-foreground">{t("Level")}</span><span className="text-sm font-bold">{levelLabel(info.level, info.name, t)}</span></div>
           <div className="flex items-baseline justify-between gap-2"><span className="text-xs uppercase tracking-wide text-muted-foreground">{t("Period points")}</span><span className="text-sm font-bold tabular-nums">{totalXp.toLocaleString(locale)}</span></div>
         </div>
       </div>
@@ -966,7 +966,7 @@ function LeaderboardCard() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-semibold">{r.name ?? t("Member")}{r.userId === myId ? ` ${t("(you)")}` : ""}</div>
-                <div className="flex items-center gap-1 text-[11px] text-muted-foreground"><TierBadge level={r.level} size={14} rounded="rounded" /> {r.levelName ?? `Lv. ${r.level}`}</div>
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground"><TierBadge level={r.level} size={14} rounded="rounded" /> {levelLabel(r.level, r.levelName, t)}</div>
               </div>
               <span className="shrink-0 text-xs font-bold">{r.totalXp.toLocaleString(locale)} XP</span>
             </div>
@@ -1028,7 +1028,7 @@ function LeaderboardExpandModal({ origin, originScale, onClose, onSelect, myId }
             <motion.button variants={{ hide: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }} transition={{ duration: 0.24, ease: "easeOut" }} key={r.userId} onClick={() => onSelect(r)} className={cn("flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-accent active:scale-[0.99]", r.userId === myId && "bg-primary/10")}>
               <span className="w-6 shrink-0 text-center text-xs font-bold tabular-nums text-muted-foreground">{i === 0 ? <Crown className="mx-auto h-4 w-4 text-amber-500" /> : i + 1}</span>
               {r.avatar ? <img src={thumbUrl(r.avatar, 40)} loading="lazy" decoding="async" alt="" className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-border" /> : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary ring-1 ring-border">{(r.name ?? "?").trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")}</span>}
-              <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{r.name ?? t("Member")}{r.userId === myId ? ` ${t("(you)")}` : ""}</div><div className="flex items-center gap-1 text-[11px] text-muted-foreground"><TierBadge level={r.level} size={14} rounded="rounded" /> {r.levelName ?? `Lv. ${r.level}`}</div></div>
+              <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{r.name ?? t("Member")}{r.userId === myId ? ` ${t("(you)")}` : ""}</div><div className="flex items-center gap-1 text-[11px] text-muted-foreground"><TierBadge level={r.level} size={14} rounded="rounded" /> {levelLabel(r.level, r.levelName, t)}</div></div>
               <span className="shrink-0 text-xs font-bold tabular-nums">{r.totalXp.toLocaleString(locale)} XP</span>
             </motion.button>
           ))}

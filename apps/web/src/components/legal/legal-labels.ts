@@ -64,9 +64,16 @@ export function versionKindLabel(kind: string): string {
   return labels[kind] ?? kind;
 }
 
-/** "2026-09-30" → "30 Sep 2026" in the interface language. */
+/**
+ * "2026-09-30" → "30 Sep" in the interface language; the year only when it is not this one ("30 Sep 2025")
+ * (UI tour run 11, WM-12/WD-6). "This year" is the WIB year, the office's.
+ */
 export function fmtDay(day: string | null | undefined, lang: "id" | "en"): string {
   if (!day) return "—";
-  const d = new Date(`${day}T12:00:00Z`);
-  return d.toLocaleDateString(lang === "id" ? "id-ID" : "en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  const key = day.slice(0, 10);
+  const d = new Date(`${key}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return day;
+  const thisYear = new Date(Date.now() + 7 * 3600_000).getUTCFullYear();
+  const sameYear = d.getUTCFullYear() === thisYear;
+  return d.toLocaleDateString(lang === "id" ? "id-ID" : "en-GB", { day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }), timeZone: "UTC" });
 }

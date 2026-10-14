@@ -24,7 +24,7 @@ import { CustomFieldInput } from "@/components/tasks/TaskDetailPanel";
 import { FieldEditor } from "@/components/projects/ProjectCustomFieldsManager";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { Avatar } from "@/components/Avatar";
+import { Avatar, AvatarFace, useUserLookup } from "@/components/Avatar";
 import { useTaskBulk } from "@/components/tasks/task-bulk";
 import { toast } from "sonner";
 import { Incremental } from "@/components/projects/views/incremental";
@@ -301,6 +301,38 @@ function NameCell({ task, handle, onRename, onOpen }: { task: NexusTask; handle?
   );
 }
 
+/**
+ * A "Created by" field (CREATED) in the table, read-only and plain like the other cells (UI tour run 11, WD-2).
+ * It held a boxed input showing "04 May 2026 • 19:19" on some rows and a name on others (a Notion import keeps
+ * the requester's name as text; a task made here stores its creation time). Now: whoever is known, as a name
+ * chip (the task's creator for a timestamp, the imported name otherwise); a bare date only when nobody is,
+ * short ("15 Apr", the year only when it is not this one). One line, so rows keep their height.
+ */
+function CreatedCell({ raw, task, members }: { raw: string; task: NexusTask; members: NexusUser[] }) {
+  const { locale } = useLang();
+  const directory = useUserLookup();
+  const text = raw.trim();
+  const when = /^\d{4}-\d{2}-\d{2}/.test(text) ? new Date(text) : null;
+  const isTime = !!when && !Number.isNaN(when.getTime());
+  const byName = !isTime && text ? members.find((m) => (m.name ?? "").trim().toLowerCase() === text.toLowerCase()) : undefined;
+  const creatorId = task.creatorId ?? null;
+  const creator = creatorId ? members.find((m) => m.id === creatorId) ?? (directory.get(creatorId) ? { id: creatorId, ...directory.get(creatorId)! } : null) : null;
+  const person = isTime ? creator : byName ?? (text ? { id: "", name: text, avatar: null } : null);
+  let body: ReactNode = <span className="text-muted-foreground/60">—</span>;
+  if (person?.name) {
+    body = (
+      <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full bg-muted/60 py-0.5 pl-0.5 pr-2" title={isTime ? `${person.name} · ${when!.toLocaleString(locale, { timeZone: "Asia/Jakarta" })}` : person.name}>
+        {person.id ? <Avatar userId={person.id} name={person.name} avatar={person.avatar} size={18} className="shrink-0 ring-0" /> : <AvatarFace name={person.name} size={18} className="shrink-0 ring-0" />}
+        <span className="truncate text-sm">{person.name}</span>
+      </span>
+    );
+  } else if (isTime) {
+    const sameYear = when!.getFullYear() === new Date().getFullYear();
+    body = <span className="truncate text-sm tabular-nums">{when!.toLocaleDateString(locale, { timeZone: "Asia/Jakarta", day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) })}</span>;
+  }
+  return <div className="flex min-h-8 min-w-0 items-center whitespace-nowrap px-1.5">{body}</div>;
+}
+
 function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, toggleAssignee, setCf }: {
   colKey: string;
   task: NexusTask;
@@ -326,6 +358,7 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
     if ((def.type ?? "").toUpperCase() === "MULTI_SELECT") {
       return <MultiSelectCell field={def} value={Array.isArray(value) ? (value as string[]) : []} onSet={(v) => setCf(def.id, task.id, v)} />;
     }
+    if ((def.type ?? "").toUpperCase() === "CREATED") return <CreatedCell raw={raw} task={task} members={members} />;
     // key by the persisted raw value so the editor re-seeds its internal state after a save+refetch
     // (CustomFieldInput only reads field.value on mount). No focus loss: values only change on blur/select.
     return <CustomFieldInput key={raw} field={{ ...def, value: value as NexusCustomField["value"] }} projectId={projectId} hideLabel onSet={(v) => setCf(def.id, task.id, v)} />;

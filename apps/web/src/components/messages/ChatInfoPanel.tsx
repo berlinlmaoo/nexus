@@ -299,8 +299,7 @@ function InfoBody({
       : t("Direct message");
 
   return (
-    // Room at the end to scroll the last rows clear of the floating GIDEON button (beside the thread).
-    <div className="pb-6 lg:pb-24">
+    <div className="pb-6">
       {/* Picture, name, count */}
       <div className="flex flex-col items-center px-6 pb-4 pt-6 text-center">
         {peer ? (

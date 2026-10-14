@@ -18,7 +18,7 @@ import { Reveal } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLang } from "@/lib/lang";
 import { toast } from "sonner";
-import { Avatar } from "@/components/Avatar";
+import { Avatar, useUserLookup } from "@/components/Avatar";
 import { notificationMessage, notificationTitle } from "@/lib/server-text";
 import { toastFailure } from "@/lib/failure";
 import { LoadError } from "@/components/LoadError";
@@ -142,6 +142,21 @@ function NotificationRow({ notification }: { notification: NexusNotification }) 
   const remove = useMutation({ mutationFn: () => nexusApi.deleteNotification(notification.id), onSuccess: () => { refresh(); celebrate(t("Notification deleted")); }, onError: (e: unknown) => toastFailure(t("Couldn't delete it."), e) });
   const busy = markRead.isPending || remove.isPending;
   const target = notificationTarget(notification);
+  // Rows written before the server kept the sender (actorId) still name them first in the title ("QA Dev 4
+  // commented on …", "Rina posted on Threads"): find that person in the workspace, so the row shows their face
+  // too instead of the kind's generic icon (UI tour run 11, WD-14). Longest name wins ("Ana" vs "Ana Putri").
+  const lookup = useUserLookup();
+  const actor = useMemo(() => {
+    if (notification.actor?.id) return notification.actor;
+    const title = notificationTitle(notification);
+    let best: { id: string; name: string; avatar: string | null } | null = null;
+    for (const [id, u] of lookup) {
+      const name = u.name?.trim();
+      if (!name || name.length < 2 || !title.startsWith(`${name} `)) continue;
+      if (!best || name.length > best.name.length) best = { id, name, avatar: u.avatar ?? null };
+    }
+    return best;
+  }, [notification, lookup]);
 
   const open = () => {
     if (!notification.read) markRead.mutate();
@@ -164,9 +179,9 @@ function NotificationRow({ notification }: { notification: NexusNotification }) 
     >
       {/* The sender's avatar with the kind as a small badge; system rows (and rows from before the server
           kept the sender) show the kind's icon instead. */}
-      {notification.actor?.id ? (
-        <div className="relative shrink-0" data-notification-actor={notification.actor.id} aria-hidden>
-          <Avatar userId={notification.actor.id} name={notification.actor.name} avatar={notification.actor.avatar} size={36} />
+      {actor?.id ? (
+        <div className="relative shrink-0" data-notification-actor={actor.id} aria-hidden>
+          <Avatar userId={actor.id} name={actor.name} avatar={actor.avatar} size={36} />
           <span className="absolute -bottom-1 -right-1 grid h-[18px] w-[18px] place-items-center rounded-full border-2 border-card bg-card">
             <span className={`grid h-full w-full place-items-center rounded-full ${tone}`}><Icon className="h-2.5 w-2.5" /></span>
           </span>

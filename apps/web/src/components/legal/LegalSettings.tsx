@@ -47,7 +47,7 @@ function CompanyCard({ company, canEdit }: { company: LegalCompany; canEdit: boo
   });
   const kop = useMutation({
     mutationFn: (file: File) => legalSettingsApi.uploadKop(company.id, file),
-    onSuccess: () => { refresh(); toast.success(t("Kop uploaded")); },
+    onSuccess: () => { refresh(); toast.success(t("Letterhead uploaded")); },
     onError: (e: Error) => toast.error(e.message),
   });
   const dirty = draft.name !== company.name || draft.code !== company.code || draft.legalName !== company.legalName || draft.address !== company.address;
@@ -79,14 +79,14 @@ function CompanyCard({ company, canEdit }: { company: LegalCompany; canEdit: boo
       {canEdit && <Button size="sm" disabled={!dirty || save.isPending} onClick={() => save.mutate()}>{t("Save")}</Button>}
 
       <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted/40 px-3 py-2 text-sm">
-        <span className="font-medium">{t("Kop")}</span>
+        <span className="font-medium">{t("Letterhead")}</span>
         <span className="flex-1 text-muted-foreground">
           {company.hasKop ? t("{file}, uploaded {date}", { file: company.kopFileName ?? "kop.docx", date: fmtDate(company.kopUpdatedAt) }) : t("Not uploaded: documents get no letterhead.")}
         </span>
         {company.hasKop && <Button asChild variant="ghost" size="sm" className="gap-1.5"><a href={legalSettingsApi.kopUrl(company.id)}><Download className="h-4 w-4" /> {t("Download")}</a></Button>}
         {canEdit && (
           <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-sm hover:bg-accent">
-            {kop.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} {company.hasKop ? t("Replace") : t("Upload kop")}
+            {kop.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} {company.hasKop ? t("Replace") : t("Upload letterhead")}
             <input type="file" accept=".docx" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) kop.mutate(f); e.target.value = ""; }} />
           </label>
         )}
@@ -152,8 +152,10 @@ function SeriesRow({ s, canEdit }: { s: LegalSeries; canEdit: boolean }) {
   return (
     <li className={`flex flex-wrap items-center gap-3 px-3 py-2 text-sm ${s.active ? "" : "opacity-60"}`}>
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium">{s.label} <span className="text-xs font-normal text-muted-foreground">· {docTypeLabel(s.docType)} · {s.resetPeriod === "MONTH" ? t("Monthly") : t("Yearly")}</span></div>
-        <div className="truncate font-mono text-xs text-muted-foreground">{s.format}</div>
+        {/* Nothing truncated (UI tour run 11, WM-3): the type wraps under the name on a phone, and the number
+            pattern has a monospace line of its own that wraps at any character. */}
+        <div className="font-medium [overflow-wrap:anywhere]">{s.label} <span className="text-xs font-normal text-muted-foreground">· {docTypeLabel(s.docType)} · {s.resetPeriod === "MONTH" ? t("Monthly") : t("Yearly")}</span></div>
+        <div className="mt-0.5 font-mono text-xs text-muted-foreground [overflow-wrap:anywhere]">{s.format}</div>
       </div>
       {canEdit && (
         <>

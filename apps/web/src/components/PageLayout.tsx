@@ -78,7 +78,8 @@ export function PageTabs<K extends string>({ tabs, value, onChange, label, class
     onChange(tabs[n].key);
     requestAnimationFrame(() => ref.current?.querySelector<HTMLButtonElement>(`[data-tab="${tabs[n].key}"]`)?.focus());
   };
-  const arrow = "absolute top-0 bottom-[2px] z-10 hidden w-10 items-center text-muted-foreground transition hover:text-foreground pointer-fine:flex";
+  // The arrow shows on touch screens too (UI tour run 11, WM-5): the fade alone read as a cut-off "Compani".
+  const arrow = "absolute top-0 bottom-[2px] z-10 flex w-10 items-center text-muted-foreground transition hover:text-foreground";
   return (
     <div className={cn("relative min-w-0", className)}>
     <div ref={ref} role="tablist" aria-label={label} onKeyDown={onKey} onScroll={measure} onWheel={onWheel} className="flex items-end gap-5 overflow-x-auto overscroll-x-contain whitespace-nowrap [scrollbar-width:none] [touch-action:pan-x_pan-y] [&::-webkit-scrollbar]:hidden">
@@ -113,13 +114,13 @@ export function PageTabs<K extends string>({ tabs, value, onChange, label, class
     </div>
       {edge.left && (
         <>
-          <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-background to-transparent" />
+          <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-14 bg-gradient-to-r from-background from-40% to-transparent" />
           <button type="button" tabIndex={-1} aria-label={tr("Show earlier tabs")} onClick={() => nudge(-1)} className={cn(arrow, "left-0 justify-start")}><ChevronLeft className="h-4 w-4" /></button>
         </>
       )}
       {edge.right && (
         <>
-          <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-background to-transparent" />
+          <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-14 bg-gradient-to-l from-background from-40% to-transparent" />
           <button type="button" tabIndex={-1} aria-label={tr("Show more tabs")} onClick={() => nudge(1)} className={cn(arrow, "right-0 justify-end")}><ChevronRight className="h-4 w-4" /></button>
         </>
       )}

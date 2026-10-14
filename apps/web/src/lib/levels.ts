@@ -49,3 +49,12 @@ export function levelForXp(totalXp: number): LevelInfo {
 export function tierEmoji(level: number): string {
   return ["🔩", "🥉", "🥈", "🥇", "💠", "💎", "🔱", "👑", "🏆", "⭐"][Math.max(0, Math.min(9, level - 1))];
 }
+
+/**
+ * A level as people read it, one format everywhere: "Level 6 · Diamond" (UI tour run 11, WM-17: the
+ * leaderboard said "Level 5 – Platinum" and the dashboard "6 · Diamond"). Both come from the same score
+ * (baseline 1000 ± this period's XP) and the same table; only the wording differed.
+ */
+export function levelLabel(level: number, name: string | null | undefined, t: (key: string, vars?: Record<string, string | number>) => string): string {
+  return name ? t("Level {n} · {name}", { n: level, name }) : t("Level {n}", { n: level });
+}

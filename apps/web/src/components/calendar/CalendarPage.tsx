@@ -603,8 +603,9 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
         )}
       </div>
       {structure && access !== "none" && access !== "off" && (
-        // Below md the chips scroll sideways (snapping, the right edge fading out); from md up they wrap.
-        <div data-cal-region="chips" className="flex snap-x scroll-px-4 items-center gap-2 overflow-x-auto px-4 pb-2.5 max-md:pr-8 max-md:[mask-image:linear-gradient(to_right,#000_calc(100%_-_2rem),transparent)] max-md:[scrollbar-width:none] md:flex-wrap md:overflow-visible md:px-8">
+        // The chips wrap on every width (UI tour run 11, WM-19): scrolling sideways on a phone left the last one
+        // cut mid-count at the edge ("PATS 5…"). A handful of divisions takes two short rows.
+        <div data-cal-region="chips" className="flex flex-wrap items-center gap-2 px-4 pb-2.5 md:px-8">
           {focusId !== ix.top?.id && (
             <nav aria-label={t("Focus")} className="flex shrink-0 snap-start items-center gap-1 text-xs font-semibold">
               {[...ix.ancestors(focusId)].reverse().concat(focusId).map((id, i, all) => {
