@@ -274,6 +274,8 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
                     val media = if (vm.trash) emptyList() else g.media
                     val itemRow: @Composable (VaultItem) -> Unit = { i ->
                             var menu by remember { mutableStateOf(false) }
+                        // One Column: a grid cell stacks its children like a Box, so the divider sat on top of the row.
+                        Column {
                         Row(Modifier.fillMaxWidth().clickable {
                             when { vm.trash -> Unit; i.isFolder -> onOpenFolder(i.id); i.isMedia -> viewing = media.indexOf(i); else -> vm.open(i, false) }
                         }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -313,6 +315,7 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
                             }
                         }
                         HorizontalDivider(color = c.border.copy(alpha = 0.5f), modifier = Modifier.padding(start = 70.dp))
+                        }
                     }
                     if (vm.trash) LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) { items(VaultRules.sorted(l.items), key = { it.id }) { itemRow(it) } }
                     else androidx.compose.foundation.lazy.grid.LazyVerticalGrid(androidx.compose.foundation.lazy.grid.GridCells.Fixed(3), contentPadding = PaddingValues(vertical = 8.dp),

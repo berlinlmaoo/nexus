@@ -26,6 +26,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -358,12 +359,16 @@ private fun ReflectionsLink(onOpen: () -> Unit) {
             .clickable(onClick = onOpen).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.AutoAwesome, null, tint = c.violetText, modifier = Modifier.size(22.dp))
+        // iOS reflectionsLink: sparkles on a violet tile, two lines, a chevron.
+        Box(Modifier.size(30.dp).background(c.violet.copy(alpha = 0.12f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.AutoAwesome, null, tint = c.violetText, modifier = Modifier.size(16.dp))
+        }
         Spacer(Modifier.size(10.dp))
         Column(Modifier.weight(1f)) {
             Text(stringResource(R.string.reflections_title), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = c.foreground)
-            Text(stringResource(R.string.reflections_link_sub), fontSize = 11.sp, color = c.mutedFg)
+            Text(stringResource(R.string.reflections_link_sub), fontSize = 11.sp, lineHeight = 14.sp, color = c.mutedFg, maxLines = 2)
         }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
     }
 }
 
