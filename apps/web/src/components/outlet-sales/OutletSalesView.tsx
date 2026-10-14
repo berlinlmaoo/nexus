@@ -205,6 +205,7 @@ export function OutletSalesView({
           )}
         </SheetContent>
       </Sheet>
+      <OutletReportSettings projectId={projectId} open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );
 }
