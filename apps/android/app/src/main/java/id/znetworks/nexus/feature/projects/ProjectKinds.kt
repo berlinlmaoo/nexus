@@ -6,7 +6,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 
-// Project types, per-project tabs, named icons (Berlin, 9 Oct; PROJECT-TYPES-TABS, server 12db577/76d1ae4).
+// Project types, per-project tabs, named icons (owner, 9 Oct; PROJECT-TYPES-TABS, server 12db577/76d1ae4).
 
 object ProjectTabsLogic {
     /**

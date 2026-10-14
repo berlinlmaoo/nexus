@@ -72,7 +72,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Control Room › Announcements › New (Batch 2, Berlin 29 Sep; iOS CreateAnnouncementSheet 78bfe37):
+ * Control Room › Announcements › New (Batch 2, owner 29 Sep; iOS CreateAnnouncementSheet 78bfe37):
  * everyone or selected people (roster with search), an optional PDF that makes it an SP, tone, repeat.
  * A refused post keeps the sheet open with the server's reason, never closes as if it had worked.
  */

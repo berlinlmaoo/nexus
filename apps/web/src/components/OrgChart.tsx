@@ -91,7 +91,7 @@ export function OrgChart() {
   });
   const [confirmReset, setConfirmReset] = useState(false);
   // "Di bawah siapa" from the person dialog: put them in the leader's card first (if not there yet),
-  // then under the leader (owner, 30 Sep 2026: click Mey → under Abraham, in one step).
+  // then under the leader (owner, 30 Sep 2026: click Mira → under Adam, in one step).
   const [placingUnder, setPlacingUnder] = useState(false);
   const placeUnder = async (person: OrgChartPerson, leaderId: string, unitId: string) => {
     setPlacingUnder(true);
@@ -998,7 +998,7 @@ function groupsTogether(list: OrgUnit[]): OrgUnit[] {
 function rowOf(u: OrgUnit, g: Group): string[] {
   if (u.kind === "GROUP") return [...g.led, ...groupsTogether(g.free)].map((k) => `u:${k.id}`);
   // Led sub-units and "di bawah" boxes together, in the order of their leaders in the card's boxes, so
-  // the lines from neighbouring leaders never cross (owner, 5 Oct 2026: Abraham's line to Mey crossed
+  // the lines from neighbouring leaders never cross (owner, 5 Oct 2026: Adam's line to Mira crossed
   // Gerald's and Henryca's).
   const byLeader = [
     ...g.led.map((k) => ({ key: `u:${k.id}`, at: g.leaderIdx.get(k.leadUserId!) ?? 0, box: 0 })),
@@ -1162,7 +1162,7 @@ function buildEdges(units: OrgUnit[], groups: Map<string, Group>, effParentOf: (
       if (led.length === 0 || Math.abs(x - s.x) < 24) x = s.x;
       else {
         // Off the middle it leaves through a gap between two people, never from under one of them —
-        // a stem under Mimiw read as Mimiw leading every IP.
+        // a stem under one leader read as that leader leading every IP.
         const inBox = Object.keys(chips).filter((k) => chips[k].box === srcKey).map((k) => chipAt(k)!.r).sort((a, b) => a.x - b.x);
         const gaps = inBox.slice(1).map((r, i) => (inBox[i].x + inBox[i].w + r.x) / 2);
         if (gaps.length) x = gaps.reduce((best, g) => (Math.abs(g - x) < Math.abs(best - x) ? g : best), gaps[0]);
@@ -1318,7 +1318,7 @@ function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: Reac
   );
 }
 
-/** "PT. The Z Networks › Framework Agency" — the path ABOVE a unit. */
+/** "The Z Networks › Framework Agency" — the path ABOVE a unit. */
 function parentTrail(u: OrgUnit, byId: Map<string, OrgUnit>): string {
   const full = pathOf(u, byId);
   const i = full.lastIndexOf(" › ");

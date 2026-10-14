@@ -1837,7 +1837,7 @@ model DocumentNumber {
 // Files live under public/uploads/attachments/legal (src/lib/legal/storage.ts), never as Vault items, so
 // nothing legal is reachable through Z Vault's own access rules.
 
-/// Who may open Legal. The root (LEGAL_ROOT_EMAILS, Berlin) needs no row. Never deleted: a revoke stamps
+/// Who may open Legal. The root (LEGAL_ROOT_EMAILS, owner) needs no row. Never deleted: a revoke stamps
 /// revokedAt so who-invited-whom survives; inviting the same person again clears it.
 model LegalMember {
   id          String    @id @default(cuid())
@@ -1862,7 +1862,7 @@ model LegalCompany {
   /// The {CO} segment of a document number. Editable until the company has issued a number.
   code          String    @unique
   name          String
-  /// As printed in contracts ("PT PATS DARI SELATAN"); empty until someone fills it in Settings.
+  /// As printed in contracts ("PT Contoh Sejahtera"); empty until someone fills it in Settings.
   legalName     String    @default("")
   address       String    @default("")
   kopStorageKey String?
@@ -3660,7 +3660,7 @@ model VaultItem {
 
   // Ambang peran, BUKAN ACL per objek. NEXUS tidak punya tabel Permission/Acl/grant di mana pun,
   // dan membuatnya untuk 46 orang adalah cara 0.1.4 berubah jadi 0.1.6.
-  // null = warisi dari leluhur terdekat yang mengisinya. Berlin memutuskan semua staff boleh
+  // null = warisi dari leluhur terdekat yang mengisinya. owner memutuskan semua staff boleh
   // mengunggah, jadi defaultnya terbuka; kolomnya tetap ada supaya rak seperti "Brand" bisa
   // dikunci belakangan tanpa migrasi.
   minReadRole  String?

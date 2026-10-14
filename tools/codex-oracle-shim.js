@@ -20,8 +20,8 @@ const path = require("path")
 
 const PORT = parseInt(process.env.ORACLE_LLM_PORT || "8765", 10)
 const SECRET = process.env.ORACLE_LLM_SECRET || ""
-const CODEX = process.env.CODEX_BIN || "/Users/jagainmacmini1/.local/bin/codex"
-const HERMES = process.env.HERMES_BIN || "/Users/jagainmacmini1/.local/bin/hermes"
+const CODEX = process.env.CODEX_BIN || "codex"
+const HERMES = process.env.HERMES_BIN || "hermes"
 // Neutral, empty workdir so Codex has nothing to act on even if it tried.
 const WORKDIR = path.join(os.homedir(), ".hermes", "oracle-workdir")
 try { fs.mkdirSync(WORKDIR, { recursive: true }) } catch {}

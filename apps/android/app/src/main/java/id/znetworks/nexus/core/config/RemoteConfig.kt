@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
 
 /**
- * Remote config (Berlin, 28 Sep 2026; iOS RemoteConfig.swift, server lib/app-config.ts):
+ * Remote config (owner, 28 Sep 2026; iOS RemoteConfig.swift, server lib/app-config.ts):
  * `GET /api/app/config?platform=android` — public, no session, exempt from 426. Flags, numbers and
  * sentences the server can change without a new APK. From now on, a rule or sentence that may change
  * is read from here, not hard-coded.
@@ -32,7 +32,7 @@ import kotlinx.serialization.Serializable
     val calendar: Boolean? = null,
     /** The Calendar widgets. */
     val calendarWidgets: Boolean? = null,
-    /** Automatic offsite check-out after 2 h 30 outside (server cd89d72): off unless the server says so (Berlin, 8 Oct). */
+    /** Automatic offsite check-out after 2 h 30 outside (server cd89d72): off unless the server says so (owner, 8 Oct). */
     val outsideAutoCheckout: Boolean? = null,
 )
 @Serializable data class ConfigValues(val outsideHourAlertMinutes: Int? = null, val calendarPollSeconds: Int? = null)

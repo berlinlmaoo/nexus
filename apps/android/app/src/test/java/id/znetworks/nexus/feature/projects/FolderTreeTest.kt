@@ -11,7 +11,7 @@ import java.io.File
 class FolderTreeTest {
     // a › b › c › d (4 levels), e at the top, x in a missing parent (shows at the top).
     private val folders = listOf(
-        ProjectFolder("a", "Clients"), ProjectFolder("b", "ANKER", parentFolderId = "a"),
+        ProjectFolder("a", "Clients"), ProjectFolder("b", "ACME", parentFolderId = "a"),
         ProjectFolder("c", "Launch", parentFolderId = "b"), ProjectFolder("d", "Week 1", parentFolderId = "c"),
         ProjectFolder("e", "Internal"), ProjectFolder("x", "Orphan", parentFolderId = "gone"),
     )
@@ -21,7 +21,7 @@ class FolderTreeTest {
     @Test fun depthHeightAndPath() {
         assertEquals(1, t.depth("a")); assertEquals(4, t.depth("d")); assertEquals(1, t.depth("x"))
         assertEquals(4, t.height("a")); assertEquals(1, t.height("d"))
-        assertEquals("Clients › ANKER › Launch", t.path("c"))
+        assertEquals("Clients › ACME › Launch", t.path("c"))
         assertEquals(listOf("a", "b", "c", "d", "e", "x"), t.inOrder().map { it.id })
         assertEquals(listOf("p2", "p3"), t.loose().map { it.id })
     }

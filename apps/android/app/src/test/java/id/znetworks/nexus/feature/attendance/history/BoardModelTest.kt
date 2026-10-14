@@ -42,9 +42,9 @@ class BoardModelTest {
     }
 
     @Test fun membersAreAToZLikeIosAndTheWeb() {
-        val m = BoardModel.members(listOf(row("2026-09-01", user = "u2", name = "Zed"), row("2026-09-02", user = "me", name = "Bagas"),
+        val m = BoardModel.members(listOf(row("2026-09-01", user = "u2", name = "Zed"), row("2026-09-02", user = "me", name = "Budi"),
             row("2026-09-01", user = "u3", name = "ana")), viewerId = "me", selfName = "x")
-        assertEquals(listOf("ana", "Bagas", "Zed"), m.map { it.name })
+        assertEquals(listOf("ana", "Budi", "Zed"), m.map { it.name })
     }
 
     @Test fun rosterShowsEveryoneEvenWithoutRows() {
@@ -122,7 +122,7 @@ class BoardModelTest {
     }
 
     @Test fun outsideNowOnlyTodayWithoutCheckOut() {
-        // Berlin, 8 Oct (as the web board): outside now = today's row, outsideSince set, no check-out yet.
+        // owner, 8 Oct (as the web board): outside now = today's row, outsideSince set, no check-out yet.
         val row = HistoryRow(id = "r", attendanceDate = "2026-10-08", checkInAt = "2026-10-08T01:00:00Z", outsideSince = "2026-10-08T03:12:00Z")
         assertEquals("2026-10-08T03:12:00Z", BoardModel.outsideNow(row, "2026-10-08"))
         assertEquals(null, BoardModel.outsideNow(row.copy(checkOutAt = "2026-10-08T09:00:00Z"), "2026-10-08"))

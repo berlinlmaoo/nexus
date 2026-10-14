@@ -75,3 +75,32 @@ cron/cron.log
 __pycache__/
 deploy/bluegreen/RUNBOOK.md
 apps/android/docs/HANDOFF-ANDROID.md
+
+# Private operations material: runbooks, host scripts, agent notes and old machine configs. They live in
+# the private ops folder on the deploy host, never in this public repo. Listed so a local copy is not
+# committed by accident.
+.claude/
+CLAUDE.md
+**/CLAUDE.md
+/AGENTS.md
+/reports/
+deploy/dev/
+deploy/macos/
+deploy/cloudflared/
+deploy/bluegreen/prod-patches/
+deploy/bluegreen/deploy-nexus-bluegreen.sh
+deploy/bluegreen/prod-migrate.sh
+deploy/bluegreen/vps-harness.sh
+deploy/bluegreen/vps-kuma-standby-monitor.py
+integrations/gideon/shim/*.service
+maintenance/*.bak*
+maintenance/*.mac-asli
+apps/ios/CARA-KERJA.md
+/README-production.md
+/PLAN-*.md
+docs/plans/
+*.apk
+*.aab
+*.ipa
+# Onboarding screenshots were captured from real data; real copies are kept privately and dropped in at deploy.
+apps/web/public/onboarding/*.png

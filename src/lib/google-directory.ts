@@ -193,7 +193,7 @@ export async function createDirectoryUser(input: CreateAccountInput): Promise<Cr
  *
  *  Diturunkan dari alamat akun yang ada, bukan dari `domains.list`: endpoint itu butuh scope
  *  `admin.directory.domain.readonly` yang TIDAK didelegasikan, dan menambah scope berarti
- *  meminta Berlin kembali ke Admin Console. Konsekuensinya jujur dan kecil — domain yang
+ *  meminta owner kembali ke Admin Console. Konsekuensinya jujur dan kecil — domain yang
  *  terdaftar tapi belum punya satu pun akun tidak akan muncul di pilihan. */
 export function domainsFrom(accounts: { domain: string }[]): string[] {
   return Array.from(new Set(accounts.map((a) => a.domain).filter(Boolean))).sort()

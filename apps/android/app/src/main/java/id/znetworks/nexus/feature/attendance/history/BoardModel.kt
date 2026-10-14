@@ -89,7 +89,7 @@ object BoardModel {
     /**
      * One row per person, A–Z (as iOS and the web). The roster and the rows together: on the first
      * day of a period only those who already checked in have rows, and the board must still show
-     * everybody else (bug from the main session, 28 Sep 2026).
+     * everybody else (server bug, 28 Sep 2026).
      */
     fun members(rows: List<HistoryRow>, viewerId: String?, selfName: String, roster: List<PersonRef> = emptyList()): List<BoardMember> {
         val byUser = rows.groupBy { it.user?.id ?: viewerId ?: "me" }
@@ -111,7 +111,7 @@ object BoardModel {
     }
 
     /**
-     * The person is outside the office right now (Berlin, 8 Oct, as the web board): today's row has an
+     * The person is outside the office right now (owner, 8 Oct, as the web board): today's row has an
      * `outsideSince` and no check-out yet. Returns the outsideSince instant, else null.
      */
     fun outsideNow(row: HistoryRow?, today: String = id.znetworks.nexus.core.time.OfficeTime.today().toString()): String? =

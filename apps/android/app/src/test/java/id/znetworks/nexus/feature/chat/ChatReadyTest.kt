@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** Chat ready to replace the WhatsApp groups (Berlin, 8 Oct; CHAT-CONTRACT / CHAT-REPORT), with old-server fallbacks. */
+/** Chat ready to replace the WhatsApp groups (owner, 8 Oct; CHAT-CONTRACT / CHAT-REPORT), with old-server fallbacks. */
 class ChatReadyTest {
     private fun m(id: String, at: String) = Message(id = id, createdAt = at, content = id)
 

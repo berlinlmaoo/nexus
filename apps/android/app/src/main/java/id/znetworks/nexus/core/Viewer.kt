@@ -16,7 +16,7 @@ class Viewer(private val api: ApiClient) {
         private set
     /**
      * The caller belongs to the company workspace (Z Networks): Z Vault and Threads are the company's
-     * (Berlin, 29 Sep 2026; iOS 14b086f). Null until loaded, and company-only screens stay hidden till then.
+     * (owner, 29 Sep 2026; iOS 14b086f). Null until loaded, and company-only screens stay hidden till then.
      */
     @Volatile var isCompany: Boolean? = null
         private set

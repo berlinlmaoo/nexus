@@ -8,7 +8,7 @@ import org.junit.Test
 import java.io.File
 import java.time.Instant
 
-/** SPRINTS-OVERVIEW §3 (Berlin, 11 Oct; web fc81517): the Overview's numbers and the drill into the Board. */
+/** SPRINTS-OVERVIEW §3 (owner, 11 Oct; web fc81517): the Overview's numbers and the drill into the Board. */
 class ProjectOverviewTest {
     // 2026-10-11 10:00 WIB.
     private val now = Instant.parse("2026-10-11T03:00:00Z")

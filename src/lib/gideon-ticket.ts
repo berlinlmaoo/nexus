@@ -496,7 +496,7 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
       // kedaluwarsa, OOM, dsb.) — bukan "tidak ada yang perlu dijawab". Diam di sini pernah berarti
       // GIDEON mati berhari-hari tanpa satu baris pun yang menyebutnya. Kalimatnya sengaja mudah
       // di-grep: "gideon-ticket: balasan kosong".
-      console.error("gideon-ticket: balasan kosong dari shim — agen Hermes kemungkinan gagal (cek journal gideon-shim di VM agents)", { complaintId, category })
+      console.error("gideon-ticket: balasan kosong dari shim — agen Hermes kemungkinan gagal (cek journal gideon-shim di host agen)", { complaintId, category })
       runError = "empty reply"
       return
     }

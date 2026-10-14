@@ -29,7 +29,7 @@ import kotlinx.coroutines.launch
  */
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        // English unless the person chose Indonesian (Berlin, 29 Sep): never the phone's language.
+        // English unless the person chose Indonesian (owner, 29 Sep): never the phone's language.
         id.znetworks.nexus.core.i18n.AppLanguage.apply(this)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)

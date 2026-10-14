@@ -751,7 +751,7 @@ export function ChatThread({
           const day = dayLabel(m.createdAt);
           const showDay = day && day !== lastDay;
           lastDay = day;
-          // A group's log line ("Bagas added Mey"): centred, muted, no avatar, no bubble, no actions.
+          // A group's log line ("Budi added Mira"): centred, muted, no avatar, no bubble, no actions.
           if (isSystemMessage(m)) {
             const when = m.createdAt ? new Date(m.createdAt) : null;
             const full = when && !Number.isNaN(when.getTime())

@@ -11,7 +11,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** PIPELINE-DASHBOARD §11 (Berlin, 9 Oct evening): members-only board, payments per term. */
+/** PIPELINE-DASHBOARD §11 (owner, 9 Oct evening): members-only board, payments per term. */
 class PipelineTermsTest {
     private fun deal(json: String) = PipelineDeal(NexusJson.parseToJsonElement(json).jsonObject)
 

@@ -89,7 +89,7 @@ import id.znetworks.nexus.ui.theme.Nx
 import kotlinx.coroutines.launch
 
 /**
- * A chat's info, like WhatsApp's (Berlin, 8 Oct; SYSTEM-MESSAGES part 2, iOS ChatInfoView): who is in it,
+ * A chat's info, like WhatsApp's (owner, 8 Oct; SYSTEM-MESSAGES part 2, iOS ChatInfoView): who is in it,
  * its media, search, mute, and — in a GROUP — editing, adding, removing and leaving. Opened from the
  * thread's header. An older server without /info shows what the conversation list knows.
  */

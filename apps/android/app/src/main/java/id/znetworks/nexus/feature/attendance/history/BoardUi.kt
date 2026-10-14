@@ -292,7 +292,7 @@ fun CrewBoardCard(vm: BoardViewModel) {
     val context = LocalContext.current
     // A board left open past 00:00 WIB on the 28th moves to the new period by itself (audit R5).
     var periodNow by remember { mutableStateOf(BoardModel.periodKey(0)) }
-    // Every 60 s while the board is on screen and the app in front (Berlin, 8 Oct): who is outside
+    // Every 60 s while the board is on screen and the app in front (owner, 8 Oct): who is outside
     // the office now stays current; a new period is picked up the same way.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle) {

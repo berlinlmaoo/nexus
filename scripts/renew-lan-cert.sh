@@ -8,14 +8,14 @@
 # --dns-cloudflare dipilih, bukan HTTP-01: nama ini menunjuk ke IP privat, jadi
 # Lets Encrypt tidak akan pernah bisa menjangkaunya dari internet untuk verifikasi.
 set -u
-LOG=/home/debian/certs-log/renew-cron.log
+LOG="$HOME/certs-log/renew-cron.log"
 echo "=== $(date -Is) mulai" >> "$LOG"
 
 docker run --rm \
-  -v /home/debian/certs:/etc/letsencrypt \
-  -v /home/debian/certs-work:/var/lib/letsencrypt \
-  -v /home/debian/certs-log:/var/log/letsencrypt \
-  -v /home/debian/.secrets/cloudflare.ini:/cf.ini:ro \
+  -v "$HOME/certs":/etc/letsencrypt \
+  -v "$HOME/certs-work":/var/lib/letsencrypt \
+  -v "$HOME/certs-log":/var/log/letsencrypt \
+  -v "$HOME/.secrets/cloudflare.ini":/cf.ini:ro \
   certbot/dns-cloudflare renew \
   --dns-cloudflare --dns-cloudflare-credentials /cf.ini \
   --dns-cloudflare-propagation-seconds 30 \

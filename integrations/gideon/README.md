@@ -1,122 +1,47 @@
-# GIDEON — bagian yang hidup di luar repo ini
+# GIDEON — the parts that run outside the NEXUS server
 
-Salinan berkala dari apa yang benar-benar berjalan di VM `agents`. Bukan sumber yang dieksekusi:
-Hermes memuat dari `~/.hermes/` dan `~/gideon/`. Ini ada supaya perubahannya punya riwayat, dan
-supaya VM yang di-reset bisa dikembalikan tanpa menebak-nebak.
+GIDEON, the NEXUS assistant, runs as an agent on a separate host. NEXUS talks to it over a small HTTP
+shim; the agent calls back into NEXUS through a tool plugin. This folder keeps versioned copies of both so
+changes have a history. The host-specific install notes (paths, service units, addresses) are kept
+privately with the operations runbook, not here.
 
-## Kenapa ini perlu
-
-Dua perbaikan pada 6 September 2026 hanya hidup sebagai file tanpa versi, dan dua-duanya menghasilkan
-gejala yang sama: GIDEON tampak rusak padahal cuma salah alamat.
-
-- `NEXUS_BASE_URL` menunjuk ke `http://127.0.0.1:3000` — port itu ditempati **OpenChamber**, bukan
-  NEXUS. Setiap panggilan tool dijawab 401 oleh layanan yang keliru.
-- `client.py` memakai User-Agent bawaan `urllib`. Cloudflare menolaknya dengan `error code: 1010`,
-  sebuah 403 yang tidak pernah sampai ke aplikasi — sehingga tokennya tampak salah padahal benar.
-
-## Peta berkas
-
-| Di sini | Yang dijalankan |
+| Here | What it is |
 |---|---|
-| `plugin/` | `~/.hermes/plugins/nexus/` |
-| `shim/codex-oracle-shim.js` | `~/gideon/codex-oracle-shim.js` |
-| `shim/gideon-shim.service` | `/etc/systemd/system/gideon-shim.service` |
+| `plugin/` | Tool plugin for the agent runtime: every tool calls `POST /api/gideon/tools` on NEXUS as the asking user |
+| `shim/codex-oracle-shim.js` | HTTP shim NEXUS calls (`GET /health`, `POST /chat`, `POST /chat-stream`); picks the model tier |
+| `shim/gideon-stream-runner.py` | Token-by-token streaming for `/chat-stream` (NDJSON) |
 
-## Env yang dibutuhkan — NILAINYA TIDAK ADA DI SINI
+## Environment (values are never stored here)
 
-`~/.hermes/.env` (dibaca Hermes sendiri, bukan oleh unit systemd):
+Agent runtime env:
 
-    NEXUS_BASE_URL=https://nexus.znetworks.id
-    NEXUS_SERVICE_TOKEN=<rahasia>
+    NEXUS_BASE_URL=https://<your NEXUS host>
+    NEXUS_SERVICE_TOKEN=<secret>
+    NEXUS_GIDEON_NO_ATTENDANCE=1      # optional: do not register attendance/ticket tools at all
 
-`~/gideon/shim.env`:
+Shim env:
 
-    ORACLE_LLM_SECRET=<rahasia, sama dengan ORACLE_LLM_SECRET di container NEXUS>
+    ORACLE_LLM_SECRET=<secret, same value as ORACLE_LLM_SECRET in the NEXUS container>
+    ORACLE_LLM_PORT=8765              # default
+    CODEX_BIN / HERMES_BIN            # optional; default: found on PATH
 
-Token dan secret sengaja tidak disalin. Ambil dari server yang berjalan, atau terbitkan ulang.
+Check that the tool path works, not just the shim: calling `call_nexus('list_projects', {'limit': 1})` from
+`plugin/client.py` must answer `{"ok":true,...}`. A 401 means `NEXUS_BASE_URL` points at the wrong service;
+`error code: 1010` means the request lost its User-Agent and was refused by the CDN.
 
-## Memulihkan
+## Rules that must not be broken
 
-    scp -r plugin/* agents:~/.hermes/plugins/nexus/
-    scp shim/codex-oracle-shim.js agents:~/gideon/
-    sudo cp shim/gideon-shim.service /etc/systemd/system/
-    sudo systemctl daemon-reload && sudo systemctl restart gideon-shim
+- The plugin never gets an attendance tool, not even a role-limited one. Every other tool is safe because it
+  acts AS the user and is refused wherever that user is refused; but a person may check themselves in, so
+  "acting as the user" does not hold anything back there.
+- A dev server gets its own agent profile and token and never reaches production data, and the other way round.
+- New plugin tools go live only together with the NEXUS server release that has the matching action.
 
-Lalu isi kedua file env di atas, dan buktikan jalur tool-nya hidup — bukan sekadar shim-nya:
+## Workspace search tool
 
-    python3 -c "import sys; sys.path.insert(0,'/home/debian/.hermes/plugins'); \
-      from nexus.client import call_nexus; print(call_nexus('list_projects', {'limit': 1})[:80])"
-
-Harus menjawab `{"ok":true,...}`. Kalau `error code: 1010`, User-Agent-nya hilang lagi. Kalau 401,
-`NEXUS_BASE_URL` menunjuk ke layanan yang salah.
-
-## Aturan yang tidak boleh dilanggar
-
-Plugin ini tidak boleh punya tool absensi — bukan sekadar dibatasi role. Semua tool lain aman karena
-bertindak SEBAGAI penggunanya dan ditolak di tempat pengguna itu ditolak; tapi seseorang memang boleh
-mengabsenkan dirinya sendiri, jadi di situ "bertindak sebagai pengguna" tidak menahan apa pun.
-
-## Status salinan ini (12 Okt 2026)
-
-`plugin/` dan `shim/codex-oracle-shim.js` di sini SUDAH lebih baru daripada yang jalan di prod:
-
-- plugin: `nexus_resolve_ticket` (yang dulu hanya ada di VM) kini ikut tersalin; tool baca baru
-  `nexus_get_task`, `nexus_search_docs`, `nexus_get_doc`; `nexus_create_document` aktif lagi; header
-  `x-gideon-run` (dari `NEXUS_GIDEON_RUN_ID`); `NEXUS_GIDEON_NO_ATTENDANCE=1` = keempat tool absensi/tiket
-  tidak didaftarkan sama sekali.
-- shim: `POST /chat-stream` (NDJSON token demi token lewat `gideon-stream-runner.py`), `runId` diteruskan
-  ke plugin, `HERMES_PROFILE_HOME`, `GIDEON_DOCS=0`. Tanpa env baru, perilakunya sama seperti sebelumnya.
-
-Prod (`gideon-shim.service`, :8765, `~/.hermes/plugins/nexus/`) BELUM disentuh. Tool baru di atas butuh
-server NEXUS yang sudah memuat route-nya; salin ke prod hanya bersamaan dengan rilis server itu.
-
-## GIDEON DEV (12 Okt 2026) — jalur terpisah untuk server dev
-
-Tujuannya: server dev (`https://nexus-prod.tail765d02.ts.net:8443`, container `nexus-dev-*`) punya GIDEON
-sendiri yang tidak pernah menyentuh data prod, dan GIDEON prod tidak pernah menyentuh dev.
-
-    nexus-dev-app ──(nexus_dev_internal, tanpa internet)──▶ nexus-dev-gideon-relay (nginx, :8766)
-        └─ hanya GET /health, POST /chat, POST /chat-stream ─▶ 192.168.223.116:8766 (VM agents)
-    gideon-dev-shim.service (:8766, iptables: hanya 192.168.223.111 = nexus-prod)
-        └─ Hermes profil `gideon-dev` (HERMES_HOME=~/.hermes/profiles/gideon-dev)
-             .env: NEXUS_BASE_URL=https://nexus-prod.tail765d02.ts.net:8443 (DEV) + token dev
-                   NEXUS_GIDEON_NO_ATTENDANCE=1
-             plugins/nexus: salinan plugin ini (tanpa tool absensi)
-             toolsets: nexus + vision saja (tanpa terminal/file/web/memory/messaging), memory mati
-             TANPA gateway (tidak ada Telegram / WhatsApp / api_server)
-
-- Kredensial model: profil `gideon-dev` tidak punya entri openai-codex sendiri, jadi Hermes memakai
-  pool global secara read-only (pola yang sama dengan profil `hr-finance`). Pemakaian dev ikut memotong
-  kuota yang sama dengan prod — jaga tes tetap sedikit dan kecil.
-- Rahasia dev (bukan nilai prod; deploy menolak kalau sama): `~/nexus-dev-data/gideon-dev.env` di
-  nexus-prod (`GIDEON_CHAT_URL`, `GIDEON_STREAM_URL`, `ORACLE_LLM_SECRET`, `NEXUS_GIDEON_SERVICE_TOKEN`,
-  `NEXUS_GIDEON_NO_ATTENDANCE=1`), `~/gideon-dev/shim.env` dan `~/.hermes/profiles/gideon-dev/.env` di agents.
-- Server dev juga menolak tool absensi (`NEXUS_GIDEON_NO_ATTENDANCE=1` di /api/gideon/tools), tidak
-  mengirim tiket support dan refleksi check-out ke GIDEON sama sekali.
-
-Pasang ulang (VM agents):
-
-    mkdir -p ~/gideon-dev && scp shim/codex-oracle-shim.js shim/gideon-stream-runner.py shim/gideon-dev-shim.service agents:gideon-dev/
-    hermes profile create gideon-dev --no-alias --no-skills     # lalu isi config.yaml/.env seperti di atas
-    scp plugin/* agents:.hermes/profiles/gideon-dev/plugins/nexus/
-    sudo cp ~/gideon-dev/gideon-dev-shim.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now gideon-dev-shim
-
-Di nexus-prod, `~/deploy-nexus-dev.sh` membuat/menghapus relay dan menambahkan env-nya (bagian "DEV GIDEON");
-`~/deploy-nexus-dev.sh gideon` = hanya env + relay + restart app, tanpa build.
-
-MATIKAN (urut dari paling cepat):
-
-    ssh nexus-prod 'docker stop nexus-dev-gideon-relay'                        # putus seketika
-    ssh nexus-prod 'touch ~/nexus-dev-data/gideon-dev.off && ~/deploy-nexus-dev.sh gideon'   # permanen: relay dihapus, env dicabut
-    ssh agents 'sudo systemctl disable --now gideon-dev-shim'                   # shim dev mati
-
-## GIDEON = Notion AI (12 Okt 2026, dev)
-
-- Tool baru `nexus_search_workspace` (plugin/__init__.py + schemas.py) → action `search_workspace` di /api/gideon/tools:
-  satu pencarian atas project, task, dokumen, komentar task, form, dan chat — hanya yang boleh dilihat aktor
-  (aturan sama dengan ⌘K /api/search; chat lewat visibleConversationIdsOf). Absensi tidak pernah dicari.
-- SUDAH dipasang di profil `gideon-dev` (VM agents, ~/.hermes/profiles/gideon-dev/plugins/nexus/). Prod BELUM:
-  salin ke ~/.hermes/plugins/nexus/ hanya bersamaan dengan rilis server yang memuat action-nya.
-- Server juga mencari sendiri sebelum menjawab (pre-search, /api/gideon stream:true) dan hanya hit yang disebut di
-  jawaban yang jadi Sources. Editor "Ask AI" (/api/gideon/write) dan AI Autofill memakai shim yang sama dengan
-  prompt "jangan panggil tool"; tetap actor-scoped kalau model melanggarnya.
+`nexus_search_workspace` (plugin `__init__.py` + `schemas.py`) maps to action `search_workspace` on
+`/api/gideon/tools`: one search over projects, tasks, docs, task comments, forms and chat — only what the
+acting user may see (same rules as ⌘K `/api/search`). Attendance is never searched. The server also searches
+before answering (pre-search, `/api/gideon` with `stream:true`) and only hits cited in the answer become
+Sources. The editor's "Ask AI" (`/api/gideon/write`) and AI Autofill use the same shim with a "do not call
+tools" prompt and stay actor-scoped if the model ignores it.

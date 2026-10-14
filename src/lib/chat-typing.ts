@@ -1,5 +1,5 @@
 /**
- * "… is typing" in a chat, like WhatsApp (owner Berlin, 9 Oct 2026: "di menu chat, bikin status titik
+ * "… is typing" in a chat, like WhatsApp (owner owner, 9 Oct 2026: "di menu chat, bikin status titik
  * titik gitu kaya wa kalo ada orang lain atau lawan bicara pas lg ngetik", and "indikator mengetiknya jg
  * harus keliatan profile picture org yg ngetiknya").
  *

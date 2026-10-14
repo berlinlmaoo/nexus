@@ -20,7 +20,7 @@ import { ORG_WORKSPACE_ID, orgRoleOf } from "@/lib/org"
  *  `attachments/gideon/` already ride along this way. */
 export const VAULT_DIR = path.join(process.cwd(), "public", "uploads", "attachments", "vault")
 
-/** Total across the whole workspace, not per person — Berlin's call. The number that actually
+/** Total across the whole workspace, not per person — the owner's call. The number that actually
  *  binds is the backup destination on the Proxmox host, not the VM disk, so keep this well under it. */
 export const VAULT_QUOTA_BYTES = 60 * 1024 * 1024 * 1024 // 60 GB
 

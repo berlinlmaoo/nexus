@@ -12,7 +12,7 @@ import java.io.File
 class SessionStoreTest {
     @get:Rule val tmp = TemporaryFolder()
 
-    private val s = Session("tok", "__Secure-authjs.session-token", "u1", "Bagas", "b@x.id", 123)
+    private val s = Session("tok", "__Secure-authjs.session-token", "u1", "Budi", "b@x.id", 123)
 
     @Test fun survivesRestart() {
         val f = File(tmp.root, "session/session.bin")

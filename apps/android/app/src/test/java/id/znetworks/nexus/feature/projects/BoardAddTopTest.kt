@@ -4,7 +4,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** Berlin, 10 Oct: a lane's "Add task" sits under its header, above (outside) the scrolled card list. */
+/** owner, 10 Oct: a lane's "Add task" sits under its header, above (outside) the scrolled card list. */
 class BoardAddTopTest {
     @Test fun addTaskAboveLaneList() {
         // Redesign (13 Oct): the board lives in ProjectPage.kt; "+ New task" still sits above the cards.

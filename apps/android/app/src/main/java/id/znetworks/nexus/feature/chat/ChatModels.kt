@@ -63,7 +63,7 @@ data class Conversation(
         else -> name ?: members.filter { it.uid != meId }.joinToString(", ") { it.displayName }.ifBlank { "—" }
     }
 
-    /** The web's initials: first letters of the first two words ("Bagas Z" → "BZ", "Direct message" → "DM"); never "?" for a named room. */
+    /** The web's initials: first letters of the first two words ("Budi Z" → "BZ", "Direct message" → "DM"); never "?" for a named room. */
     fun initials(meId: String?, dmFallback: String): String = ChatInitials.of(title(meId, dmFallback))
     fun other(meId: String?): ChatUser? = if (type == "DM") members.firstOrNull { it.uid != meId }?.user else null
 }

@@ -449,7 +449,7 @@ export function RealtimeProvider({
                 queryClient.invalidateQueries({ queryKey: ["chat-info", data.conversationId] });
               }
             }
-            // A system line ("Bagas added Mey") in an open room: its member list changed too.
+            // A system line ("Budi added Mira") in an open room: its member list changed too.
             if (evt === "message-created" && data.kind === "SYSTEM" && typeof data.conversationId === "string") {
               queryClient.invalidateQueries({ queryKey: ["chat-info", data.conversationId] });
             }

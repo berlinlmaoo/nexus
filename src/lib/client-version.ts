@@ -110,7 +110,7 @@ const IOS_BUILDS: ReadonlyArray<readonly [number, string]> = [
 export function iosVersionForBuild(build: number): string | null {
   if (!Number.isInteger(build) || build < IOS_BUILDS[0][0]) return null
   // Builds below 8 cannot be placed: the Mac app numbered its builds on its own until 0.1.6, so
-  // "NEXUS/1" is a 0.1.5 Mac as much as a 0.1.0 iPhone (28 Sep 2026: Mey's Mac got 426 filing a permit).
+  // "NEXUS/1" is a 0.1.5 Mac as much as a 0.1.0 iPhone (28 Sep 2026: a staff Mac got 426 filing a permit).
   // An unplaceable build is never blocked — the looser side, as for every client we cannot read.
   if (build < LEGACY_FIRST_PLACEABLE_BUILD) return null
   let v: string | null = null

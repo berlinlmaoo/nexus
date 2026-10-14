@@ -1993,7 +1993,7 @@
     <string name="chat_everyone_here_group">Every workspace member is already in this chat.</string>
     <string name="chat_everyone_here_project">Every workspace member is already in this project.</string>
     <string name="chat_manager_required">Only managers and above can add or remove members.</string>
-    <!-- Restore deleted projects and tasks, Control Room › Audit (Berlin, 8 Oct) -->
+    <!-- Restore deleted projects and tasks, Control Room › Audit (owner, 8 Oct) -->
     <string name="au_restore">Restore</string>
     <string name="au_restorable">Restorable</string>
     <string name="au_restored">Restored</string>
@@ -2048,7 +2048,7 @@
         <item quantity="one">%d member</item>
         <item quantity="other">%d members</item>
     </plurals>
-    <!-- Offboarding (Berlin, 8 Oct; web id-offboard.ts / id-former.ts) -->
+    <!-- Offboarding (owner, 8 Oct; web id-offboard.ts / id-former.ts) -->
     <string name="off_left">Left</string>
     <string name="off_left_on">Left · %1$s</string>
     <string name="off_left_desc">Left the workspace — last working day %1$s</string>
@@ -2107,13 +2107,13 @@
         <item quantity="one">%d automatic deduction dated after their last day was canceled.</item>
         <item quantity="other">%d automatic deductions dated after their last day were canceled.</item>
     </plurals>
-    <!-- Realtime + task creator (Berlin, 8 Oct) -->
+    <!-- Realtime + task creator (owner, 8 Oct) -->
     <string name="rt_line">Realtime: %1$s</string>
     <string name="rt_connected">connected</string>
     <string name="rt_reconnecting">reconnecting</string>
     <string name="rt_off">off</string>
     <string name="td_created_by">Created by %1$s</string>
-    <!-- Restore every kind of delete (Berlin, 8 Oct; RESTORE-ALL-TYPES) -->
+    <!-- Restore every kind of delete (owner, 8 Oct; RESTORE-ALL-TYPES) -->
     <string name="au_restore_too_old_any">This was deleted before NEXUS started keeping deleted items, so it can\'t be restored.</string>
     <string name="au_restored_now_vault">Restored. It\'s back in the Vault trash.</string>
     <string name="au_rb_comment">Restore comment</string>
@@ -2274,7 +2274,7 @@
         <item quantity="one">%d person</item>
         <item quantity="other">%d people</item>
     </plurals>
-    <!-- Chat log lines, like WhatsApp (Berlin, 8 Oct; SYSTEM-MESSAGES) -->
+    <!-- Chat log lines, like WhatsApp (owner, 8 Oct; SYSTEM-MESSAGES) -->
     <string name="sys_you">You</string>
     <string name="sys_you_object">you</string>
     <string name="sys_added">%1$s added %2$s</string>
@@ -2283,7 +2283,7 @@
     <string name="sys_created">%1$s created the group</string>
     <string name="sys_created_named">%1$s created the group “%2$s”</string>
     <string name="sys_renamed">%1$s renamed the group to “%2$s”</string>
-    <!-- Chat info, media, search (Berlin, 8 Oct; SYSTEM-MESSAGES part 2, iOS 7029ba5) -->
+    <!-- Chat info, media, search (owner, 8 Oct; SYSTEM-MESSAGES part 2, iOS 7029ba5) -->
     <string name="ci_group_info">Group info</string>
     <string name="ci_contact_info">Contact info</string>
     <string name="ci_open_info">Open the chat\'s info</string>
@@ -2348,7 +2348,7 @@
         <item quantity="one">%d member</item>
         <item quantity="other">%d members</item>
     </plurals>
-    <!-- Delete group (Berlin, 9 Oct; DELETE-GROUP) -->
+    <!-- Delete group (owner, 9 Oct; DELETE-GROUP) -->
     <string name="dg_delete">Delete group</string>
     <string name="dg_delete_q">Delete “%1$s”?</string>
     <string name="dg_delete_body">Its messages and members go with it. It can be restored from Control Room → Audit.</string>
@@ -2367,7 +2367,7 @@
         <item quantity="one">%d message</item>
         <item quantity="other">%d messages</item>
     </plurals>
-    <!-- Project types and tabs (Berlin, 9 Oct; PROJECT-TYPES-TABS, web id-projects.ts) -->
+    <!-- Project types and tabs (owner, 9 Oct; PROJECT-TYPES-TABS, web id-projects.ts) -->
     <string name="ps_tabs">Tabs</string>
     <string name="ps_tabs_sub">Choose the tabs this project shows. Turning a tab off only hides it: nothing in it is deleted, and turning it back on brings everything back.</string>
     <string name="ps_tabs_board_or_list">Board or List stays on</string>
@@ -2379,7 +2379,7 @@
     <string name="pt_finance_sub">Revenue, OPEX and profit, month by month.</string>
     <string name="pt_content_sub">Plan and schedule content across your channels.</string>
     <string name="pt_pipeline_sub">Follow every deal from first contact to paid.</string>
-    <!-- Z Vault move, gallery, viewer (Berlin, 9 Oct; VAULT-MOVE-DND) -->
+    <!-- Z Vault move, gallery, viewer (owner, 9 Oct; VAULT-MOVE-DND) -->
     <string name="vm_menu">Move to…</string>
     <string name="vm_title">Move “%1$s”</string>
     <string name="vm_here">Move here</string>
@@ -2395,7 +2395,7 @@
         <item quantity="one">%1$d file uploaded to %2$s</item>
         <item quantity="other">%1$d files uploaded to %2$s</item>
     </plurals>
-    <!-- Profile tidy (Berlin, 9 Oct; PROFILE-TIDY) -->
+    <!-- Profile tidy (owner, 9 Oct; PROFILE-TIDY) -->
     <string name="pp_view_photo">View profile photo</string>
     <string name="pp_total_xp">Total XP</string>
     <string name="pp_period">Period</string>
@@ -2409,7 +2409,7 @@
         <item quantity="one">%1$d min · 1 day</item>
         <item quantity="other">%1$d min · %2$d days</item>
     </plurals>
-    <!-- Form builder (Berlin, 9 Oct; FORM-BUILDER, iOS d156e29) -->
+    <!-- Form builder (owner, 9 Oct; FORM-BUILDER, iOS d156e29) -->
     <string name="fb_new">New form</string>
     <string name="fb_edit">Edit form</string>
     <string name="fb_name">Form name</string>
@@ -2578,7 +2578,7 @@
         <item quantity="one">It has 1 submission. Deleting the form removes it and its My Submissions history too.</item>
         <item quantity="other">It has %d submissions. Deleting the form removes them and their My Submissions history too.</item>
     </plurals>
-    <!-- Typing indicator (Berlin, 9 Oct; TYPING.md) -->
+    <!-- Typing indicator (owner, 9 Oct; TYPING.md) -->
     <string name="ty_typing">typing…</string>
     <string name="ty_one">%1$s is typing…</string>
     <string name="ty_someone">Someone</string>
@@ -2587,11 +2587,11 @@
         <item quantity="other">%d people are typing…</item>
     </plurals>
     <string name="tab_chat">Chat</string>
-    <!-- Chat tab, Home tiles, group of two (Berlin, 9 Oct; NAV-HOME-GROUP) -->
+    <!-- Chat tab, Home tiles, group of two (owner, 9 Oct; NAV-HOME-GROUP) -->
     <string name="ng_make_group">Make it a group</string>
     <string name="ng_forced">Two or more people always make a group.</string>
     <string name="ng_one_other">Start a group with just one other person, and add more later.</string>
-    <!-- Pipeline Dashboard (Berlin, 9 Oct; PIPELINE-DASHBOARD §8, web id-pipeline.ts) -->
+    <!-- Pipeline Dashboard (owner, 9 Oct; PIPELINE-DASHBOARD §8, web id-pipeline.ts) -->
     <string name="pl_tab">Pipeline</string>
     <string name="pl_new_deal">New deal</string>
     <string name="pl_export">Download Excel</string>
@@ -2759,7 +2759,7 @@
         <item quantity="one">%d day, counted from the due date</item>
         <item quantity="other">%d days, counted from the due date</item>
     </plurals>
-    <!-- Pipeline: one board, access, execution project (Berlin, 9 Oct; PIPELINE-DASHBOARD §10) -->
+    <!-- Pipeline: one board, access, execution project (owner, 9 Oct; PIPELINE-DASHBOARD §10) -->
     <string name="pl_open_exec">Open execution project</string>
     <string name="pl_make_exec">Create execution project</string>
     <string name="pl_exec_note">Makes a folder for this deal with its Master Calendar and Master Task. The event date goes on the Master Calendar.</string>

@@ -10,7 +10,7 @@ import { dealInclude, pipelineGate, serializeDeal } from "@/lib/pipeline-server"
 import { buildPipelineWorkbook, contentDisposition, exportFileName } from "@/lib/pipeline-export"
 
 /**
- * "Download Excel" of a Pipeline board (owner, 9 Oct 2026; tidied 14 Oct 2026 to Gerro's export): the
+ * "Download Excel" of a Pipeline board (owner, 9 Oct 2026; tidied 14 Oct 2026 to the GM's export): the
  * workbook is lib/pipeline-export.ts. Same access as the board: anyone who may read it (Full / Can edit /
  * Can comment / Can view) gets every column, the real cost ones included; anyone else 403. Headers follow
  * ?lang=id|en (the screen's language).

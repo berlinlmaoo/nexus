@@ -19,7 +19,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** Someone who left the workspace (offboarding, Berlin 8 Oct; web LeftTag). */
+/** Someone who left the workspace (offboarding, owner 8 Oct; web LeftTag). */
 object LeftAt {
     /**
      * `leftAt` ("YYYY-MM-DD" or ISO) is the last working day, stored as 00:00 UTC of the Jakarta date: its

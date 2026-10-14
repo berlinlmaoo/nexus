@@ -639,7 +639,7 @@ export type NexusReplyPreview = {
   user?: NexusUser | null;
 };
 
-/** One person named in a system line ("Bagas added Mey"). */
+/** One person named in a system line ("Budi added Mira"). */
 export type NexusSystemPerson = { id: string; name: string };
 
 /**
@@ -667,7 +667,7 @@ export type NexusMessage = {
   /** Set when this message replies to another one in the same conversation; null otherwise. */
   replyTo?: NexusReplyPreview | null;
   /**
-   * "SYSTEM" for a group's log line ("Bagas added Mey"): drawn as a centred pill from `event`, never
+   * "SYSTEM" for a group's log line ("Budi added Mira"): drawn as a centred pill from `event`, never
    * replied to, never unread. "USER" (or missing, on servers before 8 Oct 2026) for a person's message.
    */
   kind?: "USER" | "SYSTEM" | string;
@@ -2106,7 +2106,7 @@ export async function downloadFile(path: string, fallbackName: string) {
 // uploads to the edge and then never receives a response, so progress freezes at a chunk boundary.
 // 16MB transmits in seconds and stays far below that. It was raised from 10MB so the web ceiling
 // (64 chunks) reaches the same 1GB as iOS — a file that uploads from the phone but not from the
-// browser is exactly the kind of split Berlin asked to stop happening.
+// browser is exactly the kind of split owner asked to stop happening.
 const UPLOAD_CHUNK_SIZE = 16 * 1024 * 1024;
 const UPLOAD_CHUNK_THRESHOLD = 20 * 1024 * 1024; // below this, one request is simpler and faster
 

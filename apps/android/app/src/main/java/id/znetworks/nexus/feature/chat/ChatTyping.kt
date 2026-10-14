@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-// "… is typing", like WhatsApp (Berlin, 9 Oct; TYPING.md, iOS d4244ab). Realtime only: nothing stored, pushed or polled.
+// "… is typing", like WhatsApp (owner, 9 Oct; TYPING.md, iOS d4244ab). Realtime only: nothing stored, pushed or polled.
 
 data class Typer(val userId: String, val name: String?, val avatar: String?, val until: Long)
 

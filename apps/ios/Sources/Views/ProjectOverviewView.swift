@@ -748,7 +748,7 @@ private struct OverviewTeamCard: View {
                     AvatarView(url: p.avatar, initial: OverviewStyle.initial(p.name), size: 28)
                     VStack(alignment: .leading, spacing: 4) {
                         // Name and Owner chip side by side when both fit whole; on a phone the chip goes under
-                        // the name instead of cutting it to "Bagas P…" (UI tour run 7).
+                        // the name instead of cutting it to "Budi P…" (UI tour run 7).
                         ViewThatFits(in: .horizontal) {
                             HStack(spacing: 6) {
                                 Text(p.name).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1).fixedSize()

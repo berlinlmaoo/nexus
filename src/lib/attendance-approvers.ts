@@ -5,7 +5,7 @@ import { formerMembersOf, isExemptRole } from "@/lib/former-recaps"
 /**
  * Siapa yang menyetujui request absensi siapa — Bagan Approval.
  *
- * Rantai bebas, tanpa fallback ke tim. Berlin: "willy approve anak-anaknya, willy ke gerro,
+ * Rantai bebas, tanpa fallback ke tim. owner: "willy approve anak-anaknya, willy ke gerro,
  * gerro ke riri" — jadi tepinya tidak terikat peran:
  *
  *   siapa pun dengan approverId  → approver-nya saja, apa pun peran keduanya

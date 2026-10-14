@@ -61,8 +61,8 @@ struct Conversation: Decodable, Identifiable, Sendable {
         }
         return name ?? (type == "PROJECT" ? "Project chat" : "Group")
     }
-    /// The web's initials (messages list): first letters of the first two words, "Bagas Z" -> "BZ",
-    /// "Direct message" -> "DM". One letter made two different Bagas rows look alike (UI tour run 3).
+    /// The web's initials (messages list): first letters of the first two words, "Budi Z" -> "BZ",
+    /// "Direct message" -> "DM". One letter made two different Budi rows look alike (UI tour run 3).
     func initial(meId: String?) -> String {
         let words = title(meId: meId).split(whereSeparator: { $0 == " " }).prefix(2)
         let letters = words.compactMap(\.first).map { String($0).uppercased() }.joined()

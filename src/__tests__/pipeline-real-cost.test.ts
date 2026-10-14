@@ -237,7 +237,7 @@ describe('who receives the numbers (project access, server side)', () => {
     expect(call.data.costs).toEqual([{ id: 'c1', label: 'Vendor sound', amount: 35_000_000 }])
   })
 
-  it("the export is Gerro's 33 columns in his order plus Diperbarui Oleh, with real numbers, dates and formats", async () => {
+  it("the export is the GM's 33 columns in his order plus Diperbarui Oleh, with real numbers, dates and formats", async () => {
     h.level = 'VIEW'
     h.deals = [
       row({ mainDate: new Date('2026-11-02T00:00:00Z'), nextAction: 'Kirim invoice', terms: [], updatedBy: { id: 'u9', name: 'Test Editor', avatar: null } }),

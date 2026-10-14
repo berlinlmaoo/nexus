@@ -8,7 +8,7 @@ import { previousMonthKey, isMonthKey, summarizeReflectionMonth } from "@/lib/re
 /**
  * Monthly: GIDEON writes last month's reflection summary for everyone who wrote reflections.
  *
- * Runs on the 1st (crontab on nexus-prod, 02:10 WIB). The work is started and the response returned
+ * Runs on the 1st (crontab on the server host, 02:10 WIB). The work is started and the response returned
  * at once: the cron wrapper gives curl 120 s and one GIDEON call can take longer than that, so
  * waiting here would only ever log a timeout. Progress goes to the app log, one line per person.
  * `?month=YYYY-MM` overrides the month for a manual re-run.

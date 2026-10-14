@@ -32,7 +32,7 @@ fun rememberIsCompany(): Boolean? {
 }
 
 /**
- * Z Vault and Threads are the company's (Berlin, 29 Sep 2026; iOS 14b086f): a link or a route to them
+ * Z Vault and Threads are the company's (owner, 29 Sep 2026; iOS 14b086f): a link or a route to them
  * outside the company workspace shows "Only for Z Networks" instead (the server refuses them with 403).
  */
 @Composable

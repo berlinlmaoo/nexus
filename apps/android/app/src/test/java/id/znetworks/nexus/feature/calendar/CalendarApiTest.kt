@@ -44,7 +44,7 @@ class CalendarApiTest {
     @Test fun structureParsesInBaganOrder() {
         assertEquals(26, structure.units.size); assertEquals(48, structure.people.size)
         assertEquals(CalAccess.ALL, structure.accessLevel)
-        assertEquals("PT. The Z Networks", structure.unitsByRank.first().name)
+        assertEquals("The Z Networks", structure.unitsByRank.first().name)
         assertEquals((0 until 26).toList(), structure.unitsByRank.map { it.rank })
         // A group is a ribbon: nobody's home is a group.
         val groups = structure.units.filter { it.isGroup }.map { it.id }.toSet()

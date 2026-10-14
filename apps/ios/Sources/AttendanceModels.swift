@@ -107,7 +107,7 @@ struct AttendanceRecord: Decodable, Sendable {
     }
 }
 
-/// Where a day's check-in happened, as text (owner decision, Berlin, 28 Sep 2026): per record, a
+/// Where a day's check-in happened, as text (owner decision, owner, 28 Sep 2026): per record, a
 /// check-in made outside the office radius (location-free members) shows the ADDRESS it was made at,
 /// not the office the record is filed under; inside the radius it stays the office. Same rule as the
 /// server (src/lib/attendance-place.ts) and the web. No T() here: the watch compiles this file too.

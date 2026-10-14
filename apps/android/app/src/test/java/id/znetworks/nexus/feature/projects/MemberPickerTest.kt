@@ -5,7 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** MEMBER-PICKER.md (Berlin, 9 Oct): search + multi-select, everyone picked in one request. */
+/** MEMBER-PICKER.md (owner, 9 Oct): search + multi-select, everyone picked in one request. */
 class MemberPickerTest {
     @Test fun oneRequestAndFullHeightPicker() {
         val api = File("src/main/java/id/znetworks/nexus/feature/projects/ProjectsApi.kt").readText()

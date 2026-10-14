@@ -2,7 +2,7 @@
 -- =====================================================================================================
 -- 2026-10-12  Retire the NEXUS WhatsApp feature and Webhooks — the DATABASE half.
 --
--- Owner (Berlin, 12 Oct 2026): "fitur whatsapp, webhooks hapus aja". The code stopped using every object
+-- Owner (owner, 12 Oct 2026): "fitur whatsapp, webhooks hapus aja". The code stopped using every object
 -- below on 12 Oct 2026 (branch dev): the WhatsApp link/commands/digest/notifications, project webhooks
 -- (Settings → Webhooks + delivery on task/comment/project events) and the automation "Webhook received"
 -- trigger / "Send webhook" action. The Prisma schema no longer declares any of these objects, so Prisma

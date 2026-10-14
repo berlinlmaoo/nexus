@@ -15,7 +15,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** PIPELINE-DASHBOARD §8 (Berlin, 9 Oct): read leniently, server-computed health, tabs, filters, words. */
+/** PIPELINE-DASHBOARD §8 (owner, 9 Oct): read leniently, server-computed health, tabs, filters, words. */
 class PipelineTest {
     private fun data(json: String) = PipelineData.of(NexusJson.parseToJsonElement(json).jsonObject)
     private val sample = """{"project":{"id":"p","workspaceId":"w"},"today":"2026-10-09",

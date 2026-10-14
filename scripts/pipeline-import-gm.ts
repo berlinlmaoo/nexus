@@ -53,9 +53,9 @@ const optText = (v: unknown): string | null => text(v) || null
 async function main() {
   const projectId = arg("project")
   const seedPath = arg("seed")
-  const actorEmail = arg("actor") ?? "bagasputro.bp@gmail.com"
+  const actorEmail = arg("actor") ?? process.env.NEXUS_OWNER_EMAIL
   const dryRun = process.argv.includes("--dry-run")
-  if (!projectId || !seedPath) throw new Error("usage: --project <pipeline project id> --seed <s3.js> [--actor <email>] [--dry-run]")
+  if (!projectId || !seedPath || !actorEmail) throw new Error("usage: --project <pipeline project id> --seed <s3.js> --actor <email> (or env NEXUS_OWNER_EMAIL) [--dry-run]")
 
   const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true, name: true, type: true } })
   if (!project) throw new Error(`project ${projectId} not found`)

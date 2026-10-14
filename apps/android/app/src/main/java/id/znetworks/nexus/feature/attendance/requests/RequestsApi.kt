@@ -104,7 +104,7 @@ open class RequestsApi(private val api: ApiClient) {
 
     /**
      * One date per request (REQ-ATT-25): `endDate` is `startDate`, except annual leave, which the
-     * server takes as a run of consecutive dates (Berlin 29 Sep). [lat]/[lng] go together or not at all.
+     * server takes as a run of consecutive dates (owner 29 Sep). [lat]/[lng] go together or not at all.
      */
     open suspend fun create(
         type: String,

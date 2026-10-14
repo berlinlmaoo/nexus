@@ -255,7 +255,7 @@ async function buildAttendanceWorkbook({
 
 /**
  * One person, one row per day. The monthly workbook answers "who was in on the 12th"; this one answers
- * "what happened to Azra this period" — the sheet a BoD hands to the person, or to payroll, when a
+ * "what happened to this person this period" — the sheet a BoD hands to the person, or to payroll, when a
  * single record is in dispute.
  */
 async function buildPersonWorkbook({

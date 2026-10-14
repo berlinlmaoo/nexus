@@ -84,7 +84,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
     if (!description.ok) return NextResponse.json({ error: description.error, code: "BAD_DESCRIPTION" }, { status: 400 })
     const newName = trimmed
 
-    // A real change of name leaves "Bagas renamed the group to “QA”" in the group, written with it
+    // A real change of name leaves "Budi renamed the group to “QA”" in the group, written with it
     // (chat-system.ts); saving the same name again changes nothing and writes nothing.
     const previousName = (conversation.name ?? "").trim()
     const { updated, system } = await prisma.$transaction(async (tx) => {

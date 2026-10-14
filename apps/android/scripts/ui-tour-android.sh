@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Android UI tour (docs/UI-TOUR-ANDROID.md): screenshots of the same 23 screens as the iOS/web tour
-# (nexus-ios scripts/ui-tour-screens.json), from the Android emulator inside Orca on Berlin's Mac, against the DEV server.
+# (nexus-ios scripts/ui-tour-screens.json), from the Android emulator on the owner's Mac, against the DEV server.
 #
-#   scripts/ui-tour-android.sh                 build on agents, install, tour every screen
+#   scripts/ui-tour-android.sh                 build on the build host (AGENTS), install, tour every screen
 #   scripts/ui-tour-android.sh --only a,b      only these screen ids
-#   scripts/ui-tour-android.sh --no-build      reuse the APK already on agents
+#   scripts/ui-tour-android.sh --no-build      reuse the APK already on the build host
 #   scripts/ui-tour-android.sh --no-upload     keep the results on this Mac only
 #
 # The app's half is core/tour/TourMode.kt (DEBUG builds only): it is driven by intent extras and answers with
@@ -12,8 +12,11 @@
 # service nexus-ui-tour, account $TOUR_EMAIL; set it once with apps/ios/scripts/ui-tour.sh --set-password).
 set -uo pipefail
 
-AGENTS="${AGENTS:-debian@100.66.244.85}"
-# The monorepo checkout on agents (14 Oct 2026; ~/nexus-android is frozen).
+UI_TOUR_CONFIG="${UI_TOUR_CONFIG:-$HOME/.config/nexus/ui-tour.env}"
+# shellcheck disable=SC1090
+[ -z "${AGENTS:-}" ] && [ -f "$UI_TOUR_CONFIG" ] && . "$UI_TOUR_CONFIG"
+[ -n "${AGENTS:-}" ] || { echo "[ui-tour-android] set AGENTS=<user>@<build host> in $UI_TOUR_CONFIG"; exit 2; }
+# The monorepo checkout on the build host (TOUR_REPO, relative to its home).
 REPO="${TOUR_REPO:-nexus/apps/android}"
 PKG="id.znetworks.nexus"
 ACT="$PKG/.MainActivity"
@@ -46,7 +49,7 @@ SIDEWAYS=" project-board project-table project-timeline "
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 [ -n "$ADB" ] || die "adb not found (expected ~/Library/Android/sdk/platform-tools/adb)"
-"$ADB" get-state >/dev/null 2>&1 || die "no emulator/device on adb (start the Android emulator in Orca)"
+"$ADB" get-state >/dev/null 2>&1 || die "no emulator/device on adb (start the Android emulator)"
 
 TOUR_PASSWORD="${TOUR_PASSWORD:-$(security find-generic-password -s nexus-ui-tour -a "$TOUR_EMAIL" -w 2>/dev/null || true)}"
 [ -n "$TOUR_PASSWORD" ] || die "no QA password in the Keychain for $TOUR_EMAIL — run ~/nexus-ios/scripts/ui-tour.sh --set-password once in Terminal"
@@ -59,9 +62,9 @@ REPORT="$OUT/logs/report.txt"
 : > "$REPORT"
 say() { echo "$*"; echo "$*" >> "$REPORT"; }
 
-# 1. Build on agents (the Mac has no Android SDK on PATH), copy the APK, install.
+# 1. Build on the build host (the Mac has no Android SDK on PATH), copy the APK, install.
 if [ "$BUILD" = 1 ]; then
-  say "build: agents ~/$REPO (git pull + assembleDebug)"
+  say "build: $AGENTS ~/$REPO (git pull + assembleDebug)"
   ssh "$AGENTS" "cd ~/$REPO && git pull -q --ff-only && ./gradlew -q assembleDebug" >"$OUT/logs/build.log" 2>&1 || die "build failed (see $OUT/logs/build.log)"
 fi
 scp -q "$AGENTS:$REPO/app/build/outputs/apk/debug/app-debug.apk" "$APK" || die "could not copy the APK"
@@ -158,7 +161,7 @@ done
   done
 } > "$OUT/index.html"
 
-# 6. A copy on agents for Claude.
+# 6. A copy on the build host for reviewers.
 if [ "$UPLOAD" = 1 ]; then
   rsync -az "$OUT/" "$AGENTS:ui-tour/android-$STAMP/" 2>/dev/null && say "uploaded: $AGENTS:ui-tour/android-$STAMP/" || say "upload failed (results stay on this Mac)"
 fi

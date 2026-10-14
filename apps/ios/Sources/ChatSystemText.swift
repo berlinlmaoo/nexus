@@ -1,7 +1,7 @@
 import Foundation
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Chat system messages: "Bagas Putro added Mey", like WhatsApp (owner, 8 Oct 2026).
+// Chat system messages: "Budi Santoso added Mira", like WhatsApp (owner, 8 Oct 2026).
 //
 // The server writes one SYSTEM row per membership change in a GROUP (created, people added, someone
 // removed or leaving, renamed). The row's `content` is an Indonesian fallback sentence for clients
@@ -110,7 +110,7 @@ enum ChatSystemText {
         }
     }
 
-    /// "Mey", "Mey and Yuza", "Mey, Yuza and Angela" — "dan" in Indonesian. No serial comma, as the
+    /// "Mira", "Mira and Yuda", "Mira, Yuda and Anita" — "dan" in Indonesian. No serial comma, as the
     /// contract writes it.
     static func joinNames(_ names: [String], lang: Lang) -> String {
         let and = lang == .en ? " and " : " dan "
@@ -131,7 +131,7 @@ enum ChatSystemText {
     }
 
     /// The people it was done to, mid-sentence: "you" / "kamu" for the reader, who is named first,
-    /// the way WhatsApp says "Bagas added you and Mey". nil when nobody in the list has a name to
+    /// the way WhatsApp says "Budi added you and Mira". nil when nobody in the list has a name to
     /// show — the sentence would end on nothing.
     private static func objects(_ people: [ChatSystemEvent.Person], meId: String?, lang: Lang) -> String? {
         var names: [String] = []

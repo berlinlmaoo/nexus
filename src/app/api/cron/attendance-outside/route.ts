@@ -6,7 +6,7 @@ import { advanceOutsideClock, recordsOutsideNow, type ClockResult } from "@/lib/
 
 /**
  * The outside-the-office clock. Every minute, from the nexus-cron-menit systemd service:
- *   ExecStart=/usr/bin/env NEXUS_CRON_QUIET=1 /home/debian/nexus/cron/nexus-cron.sh cron/attendance-outside
+ *   ExecStart=/usr/bin/env NEXUS_CRON_QUIET=1 <repo>/cron/nexus-cron.sh cron/attendance-outside
  *
  * For every open record that is outside right now: 1 h 30 → reminder, 2 h → warning, 2 h 30 (and at
  * least 30 min after the warning) → automatic offsite check-out. Each once per outside episode — the

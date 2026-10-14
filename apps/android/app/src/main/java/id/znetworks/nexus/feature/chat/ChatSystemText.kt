@@ -5,7 +5,7 @@ import id.znetworks.nexus.R
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.nullable
 
-// Chat system messages: "Bagas Putro added Mey", like WhatsApp (Berlin, 8 Oct; SYSTEM-MESSAGES.md, iOS 7029ba5).
+// Chat system messages: "Budi Santoso added Mira", like WhatsApp (owner, 8 Oct; SYSTEM-MESSAGES.md, iOS 7029ba5).
 // The server writes one SYSTEM row per membership change in a GROUP; its `content` is an Indonesian fallback
 // for clients that don't know `kind`. Every client builds the sentence from `event` in its own language,
 // with "You"/"Kamu" for the reader.
@@ -84,7 +84,7 @@ object ChatSystemText {
         }
     }
 
-    /** "Mey", "Mey and Yuza", "Mey, Yuza and Angela" — no serial comma, as the contract writes it. */
+    /** "Mira", "Mira and Yuda", "Mira, Yuda and Anita" — no serial comma, as the contract writes it. */
     fun joinNames(names: List<String>, and: String): String = when (names.size) {
         0 -> ""; 1 -> names[0]
         else -> names.dropLast(1).joinToString(", ") + " $and " + names.last()
@@ -95,7 +95,7 @@ object ChatSystemText {
         return if (isMe(p, meId)) w.you else clean(p.name)
     }
 
-    /** The people it was done to: "you" first (as WhatsApp: "Bagas added you and Mey"), duplicates once. Null = nobody nameable. */
+    /** The people it was done to: "you" first (as WhatsApp: "Budi added you and Mira"), duplicates once. Null = nobody nameable. */
     private fun objects(people: List<ChatSystemEvent.Person>, meId: String?, w: Words): String? {
         val names = mutableListOf<String>()
         val seen = mutableSetOf<String>()

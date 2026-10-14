@@ -81,7 +81,7 @@ private fun formsApi(): FormsApi {
 }
 
 /**
- * My Submissions (Berlin 29 Sep, UI point 4; iOS SubmissionsView, web submissions.tsx): a read-only
+ * My Submissions (owner 29 Sep, UI point 4; iOS SubmissionsView, web submissions.tsx): a read-only
  * kanban of what I sent through forms. Columns are the finance team's "Status" values from the server,
  * after one of ours for what nobody processed yet; each card shows the item's own title, not the form's.
  */

@@ -138,7 +138,7 @@ object AuditLogic {
     }
 }
 
-/** Restore a deleted project or task from Control Room › Audit (Berlin, 8 Oct; iOS ba38cf4). */
+/** Restore a deleted project or task from Control Room › Audit (owner, 8 Oct; iOS ba38cf4). */
 object AuditRestore {
     /** Bumped after a restore so the list behind the entry reloads (its row pill turns to Restored). */
     val changed = kotlinx.coroutines.flow.MutableStateFlow(0)
@@ -196,7 +196,7 @@ fun AuditTab(onOpen: (String) -> Unit) {
         if (q.isNotBlank()) delay(350) // typing: only the pause after the last key reaches the server
         try { val p = api.page(0, action, q); logs = p.logs; total = p.total; error = null } catch (e: ApiError) { error = e.describe(res) }
     }
-    // Live (Berlin, 8 Oct): a write anywhere (a restore elsewhere turns its row to Restored). The pages
+    // Live (owner, 8 Oct): a write anywhere (a restore elsewhere turns its row to Restored). The pages
     // already loaded are fetched again in one call, so "load more" is not lost; a failure keeps what is shown.
     LiveRefresh(action to q, liveMs = 120_000, fallbackMs = 15_000, matches = RealtimeEvents::isAudit) {
         val held = logs?.size ?: 0

@@ -22,8 +22,8 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // Release key lives OUTSIDE the repo (agents:~/.nexus-android-secrets, backup on the host's
-    // /mnt/nexus-backup/android-signing). Losing it means no installed phone accepts an update, so
+    // Release key lives OUTSIDE the repo (~/.nexus-android-secrets on the build host, with an
+    // offline backup). Losing it means no installed phone accepts an update, so
     // it is never committed. Override the location with NEXUS_KEYSTORE_PROPERTIES.
     val keystoreProps = File(
         System.getenv("NEXUS_KEYSTORE_PROPERTIES")

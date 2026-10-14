@@ -5,7 +5,7 @@ Setiap audit ditulis sebagai bagian baru di paling atas. Path kode relatif ke
 
 ## Audit pra-rilis 29 Sep 2026: KEAMANAN + paritas (HEAD b122e0f, build 5)
 
-Pembanding: iOS `agents:~/nexus-ios` sampai 77818ba, server `nexus-prod:~/nexus` (read-only, tanpa POST,
+Pembanding: iOS `apps/ios` sampai 77818ba, server `the server repo` (read-only, tanpa POST,
 tanpa deploy). Tidak ada kode Android yang diubah. Nilai rahasia tidak pernah ditulis di sini (hanya nama
 file/variabel).
 
@@ -16,7 +16,7 @@ dicatat di STATUS.md (R8).
 
 | Cek | Hasil | Bukti |
 |---|---|---|
-| Rahasia di repo + seluruh riwayat git (`git log -p --all`, 137 commit) | **Bersih.** Tidak ada `.jks`, `keystore.properties`, `google-services.json`, `firebase.properties` yang pernah di-commit. Nilai `storePassword`/`keyPassword`/`apiKey`/`applicationId`/`senderId` dari `~/.nexus-android-secrets/` dicari persis di riwayat: 0 kena. Tidak ada token, sandi tes, private key | `.gitignore:10-13` (`*.jks`, `*.keystore`, `keystore.properties`, `app/google-services.json`); `app/build.gradle.kts:25-44` baca keystore dari luar repo |
+| Rahasia di repo + seluruh riwayat git (`git log -p --all`, 137 commit) | **Bersih.** Tidak ada `.jks`, `keystore.properties`, `google-services.json`, `firebase.properties` yang pernah di-commit. Nilai `storePassword`/`keyPassword`/`apiKey`/`applicationId`/`senderId` dari `<android-secrets-dir>/` dicari persis di riwayat: 0 kena. Tidak ada token, sandi tes, private key | `.gitignore:10-13` (`*.jks`, `*.keystore`, `keystore.properties`, `app/google-services.json`); `app/build.gradle.kts:25-44` baca keystore dari luar repo |
 | Rahasia di APK (`strings` classes.dex + resources.arsc + assets) | **Bersih.** Sandi keystore dan path keystore tidak ada. Satu-satunya kunci = Firebase `apiKey` (awalan `AIza`) + projectId/applicationId/senderId, disuntik ke BuildConfig: ini identitas klien Firebase, bukan rahasia (kirim push butuh kredensial server OAuth). Tidak ada URL privat/IP LAN/staging; host hanya `nexus.znetworks.id`, `lan.nexus.znetworks.id` + tile peta OSM. Email di dex hanya placeholder (`name@company.com`) | `app/build.gradle.kts:69-72`; lihat R2 |
 | Manifest APK (aapt2) | `debuggable` tidak ada (= false), `allowBackup=false`, `fullBackupContent` + `dataExtractionRules` mengecualikan semua domain, `networkSecurityConfig` = `cleartextTrafficPermitted="false"` tanpa `<trust-anchors>` user (hanya CA sistem), `usesCleartextTraffic` tidak diset | `AndroidManifest.xml:27-31`, `res/xml/network_security_config.xml`, `res/xml/backup_rules.xml`, `res/xml/data_extraction_rules.xml` |
 | Komponen exported | Hanya `MainActivity` (launcher + deep link) dan `AttendanceWidgetReceiver` (APPWIDGET_UPDATE, standar) tanpa permission. Sisanya dari library dan terlindung permission sistem: FirebaseInstanceIdReceiver (`c2dm.SEND`), SystemJobService (`BIND_JOB_SERVICE`), GlanceRemoteViewsService (`BIND_REMOTEVIEWS`), Diagnostics/ProfileInstall (`DUMP`), RevocationBoundService. Service FCM, WorkTrailService, boot receiver, InstallResultReceiver, FileProvider: `exported=false` | `AndroidManifest.xml:37-119` |
@@ -95,7 +95,7 @@ Cek ulang perbaikan audit sebelumnya (ada di jalur yang benar-benar dijalankan):
 
 | Apa | Hasil |
 |---|---|
-| `./gradlew -q assembleRelease testDebugUnitTest` di clone bersih `/tmp/audit-clone` (HEAD b122e0f, `local.properties` disalin, rahasia dari `~/.nexus-android-secrets`) | **OK, exit code gradle 0** (`--no-daemon`; percobaan pertama mati karena daemon di-OOM-kill kernel saat build 5 sesi lain jalan bersamaan, bukan kesalahan kode). **300 tes JVM: 0 gagal, 0 error, 0 skip** |
+| `./gradlew -q assembleRelease testDebugUnitTest` di clone bersih `/tmp/audit-clone` (HEAD b122e0f, `local.properties` disalin, rahasia dari `<android-secrets-dir>`) | **OK, exit code gradle 0** (`--no-daemon`; percobaan pertama mati karena daemon di-OOM-kill kernel saat build 5 sesi lain jalan bersamaan, bukan kesalahan kode). **300 tes JVM: 0 gagal, 0 error, 0 skip** |
 | APK diverifikasi | `NEXUS-0.1.6-5.apk` (build 5 sudah ada) |
 | `aapt2 dump badging` | package `id.znetworks.nexus`, versionCode **5**, versionName **0.1.6**, minSdk 26, targetSdk 36 |
 | `apksigner verify --print-certs` | lolos (skema v2), 1 signer `CN=NEXUS Android, O=Z Networks, L=Jakarta, C=ID`, SHA-256 sertifikat `5322fe4c…a6ad26` = kunci rilis, RSA 4096 |
@@ -108,8 +108,8 @@ Cek ulang perbaikan audit sebelumnya (ada di jalur yang benar-benar dijalankan):
 
 ## Audit ulang 28 Sep 2026, malam (HEAD 8842c35, kandidat rilis build 3)
 
-Pembanding: iOS `agents:~/nexus-ios` sampai db9295c (semua commit sejak 0.1.5, 6a8f36a → db9295c),
-server + web `nexus-prod:~/nexus` sampai 02abb38 (read-only, tidak ada POST). Tidak ada kode Android yang diubah.
+Pembanding: iOS `apps/ios` sampai db9295c (semua commit sejak 0.1.5, 6a8f36a → db9295c),
+server + web `the server repo` sampai 02abb38 (read-only, tidak ada POST). Tidak ada kode Android yang diubah.
 
 **RILIS: BELUM LAYAK (K1: update in-app tidak pernah bisa lolos verifikasi tanda tangan di Android 9–10; plus 4 temuan TINGGI: T3 dialog "Installing…" bisa macet tanpa jalan keluar, T4 Bagan Approval bisa diedit Manager tapi semua simpan ditolak 403, T5 tombol Kamera di form pengajuan bisa bikin app crash, T6 papan kru menampilkan data periode lain)**
 
@@ -117,9 +117,9 @@ server + web `nexus-prod:~/nexus` sampai 02abb38 (read-only, tidak ada POST). Ti
 
 | Apa | Hasil |
 |---|---|
-| `./gradlew -q assembleRelease testDebugUnitTest` di clone bersih `/tmp/na-audit` (HEAD 8842c35, `local.properties` disalin; Firebase + keystore dari `~/.nexus-android-secrets`) | **OK**, exit code gradle 0. 268 tes JVM: 0 gagal, 0 error, 0 skip |
+| `./gradlew -q assembleRelease testDebugUnitTest` di clone bersih `/tmp/na-audit` (HEAD 8842c35, `local.properties` disalin; Firebase + keystore dari `<android-secrets-dir>`) | **OK**, exit code gradle 0. 268 tes JVM: 0 gagal, 0 error, 0 skip |
 | `NEXUS-0.1.6-3.apk` → `aapt2 dump badging` | package `id.znetworks.nexus`, versionCode **3**, versionName **0.1.6**, minSdk 26, targetSdk 36 |
-| `apksigner verify --print-certs` | lolos (skema v2), 1 signer `CN=NEXUS Android, O=Z Networks`, SHA-256 sertifikat `5322fe4c…a6ad26` = kunci rilis (CLAUDE.md, assetlinks) |
+| `apksigner verify --print-certs` | lolos (skema v2), 1 signer `CN=NEXUS Android, O=Z Networks`, SHA-256 sertifikat `5322fe4c…a6ad26` = kunci rilis (assetlinks) |
 | sha256 APK | `e63ca19dfb66e8922c283e99e266d8177790d5db0e9ae216607085604133a326`, **sama** dengan STATUS.md:234 dan `.sha256` |
 | APK kandidat vs build bersih HEAD | `classes.dex`, `AndroidManifest.xml`, `resources.arsc` byte-identik: APK memang dibangun dari 8842c35 |
 
@@ -238,7 +238,7 @@ Ditemukan saat mencocokkan gating Control Room; bisa dieksploitasi dari klien ma
 
 ## Audit 28 Sep 2026, 22:12 WIB (HEAD 4b50f89)
 
-Pembanding: iOS `agents:~/nexus-ios` sampai 6144f2c, server + web `nexus-prod:~/nexus` sampai 02abb38
+Pembanding: iOS `apps/ios` sampai 6144f2c, server + web `the server repo` sampai 02abb38
 (read-only). Tidak ada `docs/AUDIT.md` sebelumnya, jadi belum ada temuan lama yang bisa ditutup.
 
 ### Build
@@ -246,7 +246,7 @@ Pembanding: iOS `agents:~/nexus-ios` sampai 6144f2c, server + web `nexus-prod:~/
 | Apa | Hasil |
 |---|---|
 | `assembleRelease testDebugUnitTest` pada **HEAD 4b50f89** (clone bersih) | **OK**, 248 tes JVM, 0 gagal, 0 error |
-| Working copy `~/nexus-android` (perubahan sesi lain yang belum di-commit) | **GAGAL** di `compileDebugUnitTestKotlin`: `app/src/test/java/id/znetworks/nexus/feature/tasks/NewTaskFieldsTest.kt:11-14` "Unresolved reference 'filled'" (file untracked + `TaskFields.kt` yang masih dimodifikasi). Masih pekerjaan setengah jadi, bukan HEAD, jadi tidak dihitung KRITIS. Pastikan hijau sebelum commit. |
+| Working copy the old Android repo (perubahan sesi lain yang belum di-commit) | **GAGAL** di `compileDebugUnitTestKotlin`: `app/src/test/java/id/znetworks/nexus/feature/tasks/NewTaskFieldsTest.kt:11-14` "Unresolved reference 'filled'" (file untracked + `TaskFields.kt` yang masih dimodifikasi). Masih pekerjaan setengah jadi, bukan HEAD, jadi tidak dihitung KRITIS. Pastikan hijau sebelum commit. |
 
 ### Fitur vs iOS / web
 

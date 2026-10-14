@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# (Re)create the nexus-face sidecar on nexus-prod. Independent of ~/deploy-nexus.sh, which only
+# (Re)create the nexus-face sidecar on the server host. Independent of ~/deploy-nexus.sh, which only
 # replaces nexus-app-beta: this container keeps running across app deploys.
 #
 #   docker build -t nexus-face:latest ~/nexus/face && bash ~/nexus/face/run.sh

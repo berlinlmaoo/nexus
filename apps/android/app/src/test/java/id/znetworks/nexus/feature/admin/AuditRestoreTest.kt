@@ -9,7 +9,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** ANDROID-RESTORE (Berlin, 8 Oct): restore deleted projects and tasks from Control Room › Audit. */
+/** ANDROID-RESTORE (owner, 8 Oct): restore deleted projects and tasks from Control Room › Audit. */
 class AuditRestoreTest {
     @Test fun oldServerShowsNothingNew() {
         val page = NexusJson.decodeFromString(AuditPage.serializer(), """{"logs":[{"id":"a","action":"delete","entityType":"project"}],"total":1}""")

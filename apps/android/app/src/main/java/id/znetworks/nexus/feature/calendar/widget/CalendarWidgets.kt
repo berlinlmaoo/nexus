@@ -97,7 +97,7 @@ private fun quadrantText(q: Quadrant) = when (q) {
     Quadrant.LATER -> DayNight(day = Color(0xFF4B5563), night = Color(0xFF9CA3AF))
 }
 private fun quadrantTitle(q: Quadrant) = when (q) { Quadrant.DO -> R.string.wcal_q_do; Quadrant.PLAN -> R.string.wcal_q_plan; Quadrant.ACT -> R.string.wcal_q_act; Quadrant.LATER -> R.string.wcal_q_later }
-/** Berlin: the names stay; "Mendesak" and "Suatu hari" carry a short note of what is in them. */
+/** owner: the names stay; "Mendesak" and "Suatu hari" carry a short note of what is in them. */
 private fun quadrantNote(q: Quadrant) = when (q) { Quadrant.ACT -> R.string.wcal_q_act_note; Quadrant.LATER -> R.string.wcal_q_later_note; else -> null }
 private fun quadrantEmpty(q: Quadrant) = when (q) { Quadrant.DO -> R.string.wcal_q_do_empty; Quadrant.PLAN -> R.string.wcal_q_plan_empty; Quadrant.ACT -> R.string.wcal_q_act_empty; Quadrant.LATER -> R.string.wcal_q_later_empty }
 /**

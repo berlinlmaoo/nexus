@@ -12,7 +12,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** FORM-BUILDER (Berlin, 9 Oct): fields are untyped JSON — what the builder doesn't change goes back exactly as stored. */
+/** FORM-BUILDER (owner, 9 Oct): fields are untyped JSON — what the builder doesn't change goes back exactly as stored. */
 class FormBuilderTest {
     private fun obj(s: String) = NexusJson.parseToJsonElement(s).jsonObject
 

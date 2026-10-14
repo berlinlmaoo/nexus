@@ -1,5 +1,5 @@
 /**
- * Where a day's check-in happened, as one line of text (owner decision, Berlin, 28 Sep 2026).
+ * Where a day's check-in happened, as one line of text (owner decision, owner, 28 Sep 2026).
  *
  * A location-free member (WorkspaceMember.noGeofenceMode) may check in anywhere; the record is still
  * filed under the NEAREST office (check-in route: resolveNearestOffice), so printing "which office"

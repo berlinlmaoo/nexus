@@ -8,7 +8,7 @@
  *    Not filled in = not eligible. That's the honest default: NEXUS only launched in April 2026, so
  *    nothing already in the database measures how long anyone has actually worked here.
  *
- * 2. QUOTA — 12 days, reset on 1 January (Bagas's call, 2026-08-13). Counted per CALENDAR YEAR, and
+ * 2. QUOTA — 12 days, reset on 1 January (the owner's call, 2026-08-13). Counted per CALENDAR YEAR, and
  *    counted in DAYS, not requests, since one request can span several days.
  *
  * The two combine in a way worth stating: someone who qualifies mid-year gets the full 12 for what's

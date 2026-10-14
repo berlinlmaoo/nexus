@@ -13,8 +13,8 @@ import { stageGroupOf } from "@/lib/pipeline"
  *
  * Nothing happens on its own any more when a deal reaches Won. "Create execution project" on a won deal
  * (POST …/pipeline/:dealId/execution) makes ONE folder named after the deal, inside the client's folder,
- * holding two Task projects named the way the company already names them ("ANKER: Master Calendar",
- * "ANKER: General Task"):
+ * holding two Task projects named the way the company already names them ("ACME: Master Calendar",
+ * "ACME: General Task"):
  *   <deal>: Master Calendar   ← the deal's event / main date lands here as a task (syncMainDateTask)
  *   <deal>: Master Task
  * Both have whoever pressed the button (LEAD) and the deal's BD and PM (when they are still in the
@@ -35,13 +35,13 @@ export function canHaveExecutionProject(stage: string): boolean {
 
 /**
  * Where client projects live in the company's folder tree today: "THE Z CREATIVE › Projects: Ongoing &
- * Onboarding", one subfolder per client (ANKER, JIM BEAM, …). Found by name, not id: no client folder
+ * Onboarding", one subfolder per client (ACME, ACME CORP, …). Found by name, not id: no client folder
  * means the deal's folder goes straight under "Projects: Ongoing & Onboarding", and without that one it
  * goes to the root.
  */
 const EXECUTION_FOLDER_NAME = "Projects: Ongoing & Onboarding"
 
-/** "JIMBEAM" and "JIM BEAM" are the same client. */
+/** "ACMECORP" and "ACME CORP" are the same client. */
 const folderKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "")
 
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
@@ -63,7 +63,7 @@ async function executionParentFolderId(tx: Tx, workspaceId: string, brand: strin
 
 /**
  * Folder names are unique per workspace (ProjectFolder @@unique([workspaceId, name])), and a deal is often
- * named like its client ("ANKER"), so a taken name gets the deal's code: "ANKER (TZN-26001)".
+ * named like its client ("ACME"), so a taken name gets the deal's code: "ACME (TZN-26001)".
  */
 async function freeFolderName(tx: Tx, workspaceId: string, name: string, code: string): Promise<string> {
   const base = name.trim().slice(0, 180) || code

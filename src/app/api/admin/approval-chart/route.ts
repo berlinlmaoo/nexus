@@ -8,7 +8,7 @@ import { personalScope } from "@/lib/personal-visibility"
 /**
  * Bagan Approval — semua orang beserta tepinya, dalam satu panggilan. Klien yang menyusun pohonnya.
  *
- * Bukan lagi tiga tingkat tetap. Rantai bebas (Berlin: willy → gerro → riri), jadi bentuknya
+ * Bukan lagi tiga tingkat tetap. Rantai bebas (owner: willy → gerro → riri), jadi bentuknya
  * hutan: akar = orang tanpa approver. Akar yang BoD/OAA memang puncak; akar yang Staff/Manager
  * berarti "belum ditaruh" — request-nya jatuh ke kelompok BoD sampai ditaruh.
  */

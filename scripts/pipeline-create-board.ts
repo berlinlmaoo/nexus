@@ -3,7 +3,7 @@
  * papan/pipeline utama buat semua deal, lintas BD dan brand"), in the company workspace — the same project
  * POST /api/projects { type: "PIPELINE" } makes, for running once on a server before anyone opens the app.
  *
- * Owner (project LEAD): the user with --owner (default bagasputro.bp@gmail.com) when they are in the company
+ * Owner (project LEAD): the user with --owner (default env NEXUS_OWNER_EMAIL) when they are in the company
  * workspace, else its One Above All. Idempotent: when the workspace already has a PIPELINE project, that one
  * is printed and nothing is written. --dry-run only prints what it would do. Prints the project id last,
  * for scripts/pipeline-import-gm.ts --project <id>.
@@ -21,7 +21,7 @@ function arg(name: string): string | undefined {
 }
 
 async function main() {
-  const ownerEmail = arg("owner") ?? "bagasputro.bp@gmail.com"
+  const ownerEmail = arg("owner") ?? process.env.NEXUS_OWNER_EMAIL
   const dryRun = process.argv.includes("--dry-run")
 
   const workspace = await prisma.workspace.findUnique({ where: { id: ORG_WORKSPACE_ID }, select: { id: true, name: true } })
@@ -38,10 +38,10 @@ async function main() {
     return
   }
 
-  const byEmail = await prisma.workspaceMember.findFirst({
+  const byEmail = ownerEmail ? await prisma.workspaceMember.findFirst({
     where: { workspaceId: ORG_WORKSPACE_ID, user: { email: { equals: ownerEmail, mode: "insensitive" } } },
     select: { userId: true, user: { select: { name: true, email: true } } },
-  })
+  }) : null
   const owner = byEmail ?? await prisma.workspaceMember.findFirst({
     where: { workspaceId: ORG_WORKSPACE_ID, role: "ONE_ABOVE_ALL" },
     orderBy: { joinedAt: "asc" },

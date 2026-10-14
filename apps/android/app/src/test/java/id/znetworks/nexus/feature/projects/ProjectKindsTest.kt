@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** PROJECT-TYPES-TABS (Berlin, 9 Oct): tabs per project, types, named icons. */
+/** PROJECT-TYPES-TABS (owner, 9 Oct): tabs per project, types, named icons. */
 class ProjectKindsTest {
     private fun detail(json: String) = NexusJson.decodeFromString(ProjectDetail.serializer(), json)
 

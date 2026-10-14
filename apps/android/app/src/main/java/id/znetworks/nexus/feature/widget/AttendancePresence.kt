@@ -58,7 +58,7 @@ data class AttendanceSnapshot(
 }
 
 /**
- * A workday is running on this phone (Berlin, 28 Sep 2026; iOS b186172): checked in, live or still
+ * A workday is running on this phone (owner, 28 Sep 2026; iOS b186172): checked in, live or still
  * queued, and not checked out, not even offline. Logout is refused then: it would stop the live
  * location and wipe the queue, leaving a day nobody can close from this phone. A 401 still ends the
  * session; only the person's own tap is held.

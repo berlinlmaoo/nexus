@@ -52,7 +52,7 @@ class AuthRepositoryTest {
 
     @Test fun loginStoresServerCookieName() = runTest {
         reply(200, """{"ok":true,"token":"T","cookieName":"__Secure-authjs.session-token","expiresInSeconds":2592000,
-            "user":{"id":"u1","name":"Bagas","email":"b@z.id","avatar":null}}""")
+            "user":{"id":"u1","name":"Budi","email":"b@z.id","avatar":null}}""")
         val s = auth.login("  B@Z.id ", "pw")
         assertEquals("__Secure-authjs.session-token", s.cookieName)
         assertEquals(1_000L + 2_592_000_000L, s.expiresAtMillis)
@@ -92,7 +92,7 @@ class AuthRepositoryTest {
         assertEquals(listOf("out:u1:true"), events)
     }
 
-    // Berlin 29 Sep (iOS f068bbf): logout revokes the token on the server with the session's own
+    // owner 29 Sep (iOS f068bbf): logout revokes the token on the server with the session's own
     // cookie; the answer (404 while the route is new, 401, offline) never ends or blocks anything.
     @Test fun appLogoutCarriesTheOldCookieAndItsAnswerIsIgnored() = runTest {
         val old = Session("oldtok", "c", "u1")

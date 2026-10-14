@@ -15,7 +15,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 const [cmd, ...rest] = process.argv.slice(2);
-const BASE = (process.env.TOUR_WEB_BASE || "https://nexus-prod.tail765d02.ts.net:8443").replace(/\/$/, "");
+const BASE = (process.env.TOUR_WEB_BASE || "").replace(/\/$/, "");
+if (!BASE) throw new Error("set TOUR_WEB_BASE (the dev server URL)");
 
 // ---------------------------------------------------------------------------------------------- pick-sim
 function pickSim(kind) {

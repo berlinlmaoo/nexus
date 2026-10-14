@@ -6,7 +6,7 @@ import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** PIPELINE-DASHBOARD §14 (Berlin, 9 Oct late night): blocker on its phase, the GM's phase lines. */
+/** PIPELINE-DASHBOARD §14 (owner, 9 Oct late night): blocker on its phase, the GM's phase lines. */
 class PipelinePhasesTest {
     private fun deal(json: String) = PipelineDeal(NexusJson.parseToJsonElement(json).jsonObject)
     private val six = """[{"key":"commercial","state":"done"},{"key":"contract","state":"done"},{"key":"readiness","state":"active"},

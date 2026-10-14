@@ -1409,7 +1409,7 @@ struct CalPeopleWeek: View {
     @Environment(AuthStore.self) private var auth
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .body) private var dayLabelWidth: CGFloat = 52
-    /// Wide enough for "Geraldo Valentino" and "Hary Ade Saputra" whole, with a face and a count.
+    /// Wide enough for "Sari Wulandari" and "Budi Santoso Putra" whole, with a face and a count.
     @ScaledMetric(relativeTo: .body) private var nameColumn: CGFloat = 236
     /// The least a day may be before the days scroll sideways: two words of a title a line.
     @ScaledMetric(relativeTo: .body) private var dayColumn: CGFloat = 118

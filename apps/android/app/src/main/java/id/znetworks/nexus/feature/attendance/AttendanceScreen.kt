@@ -197,7 +197,7 @@ fun AttendanceScreen(
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     // A finger dragging the page puts the keyboard away (iOS: swipe to dismiss). Read from the pointer
     // itself, never from scroll events: the bring-into-view scroll above arrives as "user input" in
-    // Compose, and closing the keyboard on it closed it at every letter typed (Berlin, 29 Sep, point 6).
+    // Compose, and closing the keyboard on it closed it at every letter typed (owner, 29 Sep, point 6).
     PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load(); requests.load(); board.load() }, modifier = Modifier.fillMaxSize().weight(1f)) {
         Column(
             Modifier.fillMaxSize().dismissKeyboardOnDrag { focusManager.clearFocus() }.verticalScroll(rememberScrollState())
@@ -206,7 +206,7 @@ fun AttendanceScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // iOS hero (Berlin, 29 Sep, point 1): the purple time card floats over the map.
+            // iOS hero (owner, 29 Sep, point 1): the purple time card floats over the map.
             HeroCard(s, checkedIn, checkedOut, forcePending)
             if (s.loading) LoadingRow()
             if (s.serverDown) DownCard(onRetry = { vm.load() })

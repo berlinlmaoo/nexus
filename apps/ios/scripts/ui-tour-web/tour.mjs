@@ -30,7 +30,8 @@ const opt = (name, fallback) => {
   return i >= 0 && i + 1 < argv.length ? argv[i + 1] : fallback;
 };
 const OUT = path.resolve(opt("out", path.join(process.cwd(), "ui-tour-out")));
-const BASE = (opt("base", process.env.TOUR_WEB_BASE || "https://nexus-prod.tail765d02.ts.net:8443")).replace(/\/$/, "");
+const BASE = (opt("base", process.env.TOUR_WEB_BASE || "")).replace(/\/$/, "");
+if (!BASE) throw new Error("set TOUR_WEB_BASE or --base (the dev server URL)");
 const ONLY = new Set((opt("only", process.env.TOUR_ONLY || "")).split(",").map((s) => s.trim()).filter(Boolean));
 const WANT = new Set(opt("variants", "desktop,mobile").split(",").map((s) => s.trim()));
 const EMAIL = process.env.TOUR_EMAIL || "qa5@dev.invalid";

@@ -508,7 +508,7 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
                 Text(typeHint(rules, cs.type, vm), fontSize = 12.sp, color = c.mutedFg)
 
                 if (cs.type == "LEAVE") {
-                    // Annual leave is one range: first day, last day (Berlin 29 Sep, iOS ed7545e).
+                    // Annual leave is one range: first day, last day (owner 29 Sep, iOS ed7545e).
                     Label(stringResource(R.string.leave_dates))
                     OutlinedButton(onClick = { pickingRange = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
                         Icon(Icons.Filled.CalendarMonth, null, Modifier.size(18.dp))
@@ -646,7 +646,7 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
     }
 }
 
-/** Material's range picker (Berlin 29 Sep): tap the first day, then the last; nothing before [floor]. */
+/** Material's range picker (owner 29 Sep): tap the first day, then the last; nothing before [floor]. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun LeaveRangeDialog(start: LocalDate?, end: LocalDate?, floor: LocalDate?, onPick: (LocalDate, LocalDate) -> Unit, onDismiss: () -> Unit) {

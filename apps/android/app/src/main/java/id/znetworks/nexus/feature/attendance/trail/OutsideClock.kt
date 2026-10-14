@@ -85,7 +85,7 @@ object OutsideClock {
     }
 
     /**
-     * What the phone says while outside (Berlin, 8 Oct; remote config `flags.outsideAutoCheckout`). With the
+     * What the phone says while outside (owner, 8 Oct; remote config `flags.outsideAutoCheckout`). With the
      * automatic check-out on: the countdown and "auto check-out at HH:MM" as before. Off (the default): no
      * countdown and no check-out time anywhere — the time outside counts up, the 1 h 30 reminder and the
      * 2 h heads-up ask for a permit.

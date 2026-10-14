@@ -21,7 +21,7 @@ const { canonicalDoc, sanitizeDoc } = await import(pathToFileURL(path.join(dir, 
 const P = (text, marks) => (text ? { type: "paragraph", content: [{ type: "text", text, ...(marks ? { marks } : {}) }] } : { type: "paragraph" })
 const doc = sanitizeDoc({ type: "doc", content: [
   { type: "heading", attrs: { level: 2, blockId: "abc", blockColor: "red" }, content: [{ type: "text", text: "Agenda" }] },
-  { type: "paragraph", content: [{ type: "text", text: "b", marks: [{ type: "bold" }] }, { type: "mention", attrs: { id: "u1", label: "Mey", kind: "user" } }, { type: "hardBreak" }, { type: "dateChip", attrs: { date: "2026-10-13", time: "09:30", remind: true, remindUserId: "u2" } }, { type: "text", text: "l", marks: [{ type: "link", attrs: { href: "https://z.id" } }] }] },
+  { type: "paragraph", content: [{ type: "text", text: "b", marks: [{ type: "bold" }] }, { type: "mention", attrs: { id: "u1", label: "Mira", kind: "user" } }, { type: "hardBreak" }, { type: "dateChip", attrs: { date: "2026-10-13", time: "09:30", remind: true, remindUserId: "u2" } }, { type: "text", text: "l", marks: [{ type: "link", attrs: { href: "https://z.id" } }] }] },
   P(""),
   { type: "taskList", content: [{ type: "taskItem", attrs: { checked: true }, content: [P("done")] }] },
   { type: "callout", attrs: { emoji: "🔥" }, content: [P("c")] },

@@ -112,13 +112,13 @@ class AppContainer(private val context: Context) {
     val chatEvents = kotlinx.coroutines.flow.MutableSharedFlow<String?>(extraBufferCapacity = 16)
 
     /**
-     * The live connection (Socket.IO, Berlin 8 Oct): on while signed in and in front. Chat pings feed
+     * The live connection (Socket.IO, owner 8 Oct): on while signed in and in front. Chat pings feed
      * [chatEvents] (the list and an open thread refresh), anything unread-related refreshes [badges];
      * every screen listens for its own pings through LiveRefresh.
      */
     val realtime = id.znetworks.nexus.core.realtime.Realtime(api.http, id.znetworks.nexus.core.net.NexusConfig.base, session = { sessionStore.current })
 
-    /** Unread counts for More (Inbox) and the Messages entry points (chat) (Berlin, 8 Oct). */
+    /** Unread counts for More (Inbox) and the Messages entry points (chat) (owner, 8 Oct). */
     val badges = Badges(appScope,
         inbox = { runCatching { id.znetworks.nexus.feature.inbox.InboxApi(api).list().unreadCount }.getOrNull() },
         chat = {
@@ -238,7 +238,7 @@ class AppContainer(private val context: Context) {
                 appScope.launch { calendarSnapshots.clear() }
                 // With the old cookie, before anything else forgets the session (API.md §1.3).
                 val pushGone = push.unregister(session)
-                // Logout revokes the token on the server too (Berlin, 29 Sep; iOS f068bbf): fire and forget,
+                // Logout revokes the token on the server too (owner, 29 Sep; iOS f068bbf): fire and forget,
                 // with the session's own cookie, after the push device is gone (it needs that cookie).
                 // Offline, a 404 while the route is new, any error: the phone signs out regardless.
                 if (deliberate && session != null) signOutWork = appScope.launch {
@@ -299,7 +299,7 @@ class AppContainer(private val context: Context) {
      * is held (workday open, check-ins waiting).
      */
     suspend fun switchServer(to: id.znetworks.nexus.core.net.ServerEnv) {
-        // The dialog already refused these; checked again as the logout rule (Berlin 28 Sep) is checked twice.
+        // The dialog already refused these; checked again as the logout rule (owner 28 Sep) is checked twice.
         if (serverSwitchHeld() || (sessionStore.current != null && signOutBlocked())) return
         if (sessionStore.current != null) {
             auth.signOut()

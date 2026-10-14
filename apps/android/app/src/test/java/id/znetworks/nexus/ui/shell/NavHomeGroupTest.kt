@@ -9,7 +9,7 @@ import org.junit.Test
 import java.io.File
 import java.time.LocalDate
 
-/** NAV-HOME-GROUP (Berlin, 9 Oct): Chat tab, Home tiles, group of two, the board on today. */
+/** NAV-HOME-GROUP (owner, 9 Oct): Chat tab, Home tiles, group of two, the board on today. */
 class NavHomeGroupTest {
     private val shell = File("src/main/java/id/znetworks/nexus/ui/shell/SignedInShell.kt").readText()
 

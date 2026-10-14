@@ -445,7 +445,7 @@ function TeamCard({ people, memberById, unassigned, onDrill }: { people: Map<str
                     <Avatar userId={r.id} name={r.name} avatar={r.avatar} size={28} />
                     <span className="min-w-0 flex-1">
                       {/* The "Project Owner" pill wraps under the name when both don't fit (UI tour run 11, WM-20:
-                          beside it the name was cut to "Bagas …"). */}
+                          beside it the name was cut to "Budi …"). */}
                       <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                         <span className="min-w-0 max-w-full truncate text-sm font-medium">{r.name}</span>
                         {r.role === "LEAD" && <span className="shrink-0 rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold leading-4 text-primary">{t("Project Owner")}</span>}

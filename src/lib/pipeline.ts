@@ -1,7 +1,7 @@
 /**
  * Pipeline Dashboard (Project.type "PIPELINE", owner 9 Oct 2026): the vocabulary and the rules.
  *
- * Berlin: "GM gw udh kirim contoh pipeline dashboard yg dia pengen … tinggal diubah ke design NEXUS".
+ * owner: "GM gw udh kirim contoh pipeline dashboard yg dia pengen … tinggal diubah ke design NEXUS".
  * The GM's board ("Control Tower TZN") is the reference: its stage and status lists, its health rule and
  * its KPI formulas are kept as they are, so the numbers on NEXUS match the numbers he already trusts.
  * Stored values are his English keys (the dash in "Won – …" is an EN DASH); clients translate labels.
@@ -388,7 +388,7 @@ export type PipelineSummary = {
   deliverablesOnTrack: number
   deliverablesDone: number
   /**
-   * "Real Profit" (Control Tower v6, owner + Gerro 14 Oct 2026; refined 14 Oct 2026): only deals that are
+   * "Real Profit" (Control Tower v6, owner + GM 14 Oct 2026; refined 14 Oct 2026): only deals that are
    * NOT Lost / Cancelled, have at least one cost line AND have a net value (> 0) count.
    * realProfit = Σ (net value − real cost) over them; realCost = Σ real cost over the same deals. A deal
    * with costs but no net value is left out of both and counted in costNoNetCount instead (a warning on

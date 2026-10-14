@@ -106,7 +106,7 @@ class AccountApi(private val api: ApiClient) {
 
     // region signed in: email, password
 
-    /** The current password proves it is the owner asking (Berlin 29 Sep; server requires it). */
+    /** The current password proves it is the owner asking (owner 29 Sep; server requires it). */
     suspend fun changeEmailRequest(email: String, currentPassword: String) =
         sent(call("/api/user/email/request", buildJsonObject { put("email", email.trim()); put("currentPassword", currentPassword) }, authed = true), email.trim())
 

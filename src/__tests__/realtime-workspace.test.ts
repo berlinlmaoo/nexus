@@ -169,7 +169,7 @@ function seed() {
     { userId: "u-alice", workspaceId: ORG_WORKSPACE_ID, role: "BOD" },
     { userId: "u-bob", workspaceId: ORG_WORKSPACE_ID, role: "STAFF" },
   )
-  // LOGO holds INTOO (Berlin's own case, 9 Oct 2026).
+  // LOGO holds INTOO (the owner's own case, 9 Oct 2026).
   const folder = (id: string, name: string, parentId: string | null): FakeVaultItem => ({
     id, kind: "FOLDER", name, parentId, workspaceId: ORG_WORKSPACE_ID,
     uploaderId: "u-alice", ownerId: "u-alice", deletedAt: null, minReadRole: null, minWriteRole: null,
@@ -311,7 +311,7 @@ describe("route handlers end to end", () => {
     await settle()
     const ping = { kind: "projects", projectId: "p-alpha", actorId: "u-alice" }
     expect(seen.get("u-alice")!.workspace).toEqual([ping]) // the actor's own other tabs too
-    expect(seen.get("u-bob")!.workspace).toEqual([ping])   // Berlin's colleague on another Mac
+    expect(seen.get("u-bob")!.workspace).toEqual([ping])   // the owner's colleague on another Mac
     expect(seen.get("u-carol")!.workspace).toHaveLength(0)
     expect(seen.get("u-alice")!.audit).toHaveLength(1)     // the update's audit row
     expect(seen.get("u-bob")!.audit).toHaveLength(0)

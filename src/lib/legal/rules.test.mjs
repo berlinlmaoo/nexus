@@ -74,9 +74,10 @@ test("revoke: root anyone, BoD only their own invitees, staff nobody", () => {
   assert.equal(R.mayRevoke({ userId: "bod", power: "STAFF" }, null), false)
   assert.equal(R.mayRevoke({ userId: "s", power: "NONE" }, "s"), false)
 })
-test("root emails: env list wins, empty falls back to the owner", () => {
-  assert.deepEqual(R.parseRootEmails(""), ["bagasputro.bp@gmail.com"])
-  assert.deepEqual(R.parseRootEmails(undefined), ["bagasputro.bp@gmail.com"])
+test("root emails: the env list, empty means no root", () => {
+  assert.deepEqual(R.parseRootEmails(""), [])
+  assert.deepEqual(R.parseRootEmails(undefined), [])
+  assert.deepEqual(R.parseRootEmails(" , "), [])
   assert.deepEqual(R.parseRootEmails(" A@x.id , b@y.id "), ["a@x.id", "b@y.id"])
 })
 

@@ -97,7 +97,7 @@ export type ClassifiedPoint = { at: Date; cls: PointClass; event?: string | null
 /**
  * An "exit" this close to an office proves the phone was inside one until that moment, even when the
  * matching "enter" never reached us. iOS 0.1.6 can lose the enter: a region entry with no fresh fix
- * waits for one, and when the next fix already says "outside" only the exit is sent (Azra, 30 Sep
+ * waits for one, and when the next fix already says "outside" only the exit is sent (a staff report, 30 Sep
  * 2026: 8 minutes inside TAN Group HQ, clock kept running from the office she left before).
  */
 export const EXIT_PROVES_INSIDE_M = 400

@@ -3,7 +3,6 @@ import { loadChart, subtreeOf } from "@/lib/attendance-chart"
 import { isCheckInAway } from "@/lib/attendance-place"
 
 export const ATTENDANCE_TIMEZONE = process.env.APP_TIMEZONE || "Asia/Jakarta"
-const DEFAULT_SILENT_CORRECTION_ADMINS = ["bagasputro.bp@gmail.com"]
 const DEFAULT_WORKDAYS = [1, 2, 3, 4, 5, 6, 7]
 
 type OfficeLocationLike = {
@@ -747,13 +746,14 @@ export function isWorkdayForAttendanceDate(date: Date, office: OfficeLocationLik
   return policy.workdays.includes(weekday)
 }
 
+/**
+ * Accounts whose attendance corrections need no reason and leave no "corrected by" stamp. Comma-separated
+ * emails in ATTENDANCE_SILENT_CORRECTION_ADMINS; unset or empty = nobody (every correction needs a reason).
+ */
 export function isAttendanceSilentCorrectionAdmin(email: string | null | undefined) {
   if (!email) return false
 
-  const configured = (
-    process.env.ATTENDANCE_SILENT_CORRECTION_ADMINS ||
-    DEFAULT_SILENT_CORRECTION_ADMINS.join(",")
-  )
+  const configured = (process.env.ATTENDANCE_SILENT_CORRECTION_ADMINS || "")
     .split(",")
     .map((item) => item.trim().toLowerCase())
     .filter(Boolean)

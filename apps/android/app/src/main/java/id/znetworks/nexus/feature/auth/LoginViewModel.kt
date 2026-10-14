@@ -205,7 +205,7 @@ class LoginViewModel(app: Application) : AndroidViewModel(app) {
 
 /** Sign-in answers that need their own sentence. */
 object LoginErrors {
-    /** An offboarded account (Berlin, 8 Oct): 401 `{ error: "AccountDeactivated" }` from app-login and passkey verify. */
+    /** An offboarded account (owner, 8 Oct): 401 `{ error: "AccountDeactivated" }` from app-login and passkey verify. */
     fun deactivated(e: Throwable): Boolean {
         val h = e as? ApiError.Http ?: return false
         if (h.status != 401) return false

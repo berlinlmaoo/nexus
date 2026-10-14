@@ -7,7 +7,7 @@ import { attendancePeriodKey } from "@/lib/attendance"
 import { periodBounds } from "@/lib/day-off-bonus"
 import { countFaces } from "@/lib/face-check"
 
-// Face check on attendance selfies (lib/face-check.ts). Every 5 minutes (crontab on nexus-prod,
+// Face check on attendance selfies (lib/face-check.ts). Every 5 minutes (crontab on the server host,
 // cron/nexus-cron.sh): the selfies not checked yet, newest first, at most LIMIT records a run, from
 // the start of the PREVIOUS 28→27 period — which is also the backfill: the first runs after this
 // shipped worked through both periods, a couple of hundred records at a time.

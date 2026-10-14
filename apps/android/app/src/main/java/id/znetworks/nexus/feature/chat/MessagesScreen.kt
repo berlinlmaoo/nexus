@@ -107,7 +107,7 @@ class MessagesViewModel(app: Application) : AndroidViewModel(app) {
     fun drop(conversationId: String?) { if (conversationId != null) _state.update { s -> s.copy(conversations = s.conversations.filterNot { it.id == conversationId }) } }
 
     suspend fun pollWhileVisible() {
-        // Pings (conversation-updated) arrive through chatEvents; the poll is the fallback (Berlin, 8 Oct).
+        // Pings (conversation-updated) arrive through chatEvents; the poll is the fallback (owner, 8 Oct).
         while (true) { load(); delay(id.znetworks.nexus.core.realtime.RealtimeEvents.interval(c.realtime.connected, ChatApi.LIST_POLL_LIVE_MS, ChatApi.LIST_POLL_MS)) }
     }
 
@@ -242,7 +242,7 @@ internal fun ConversationRow(conv: Conversation, meId: String?, typing: Boolean 
                         ChatPayload.Plain -> last.content
                     }
                 }
-                // A log line reads as its own sentence, not "Bagas: Bagas Putro menambahkan …" (SYSTEM-MESSAGES).
+                // A log line reads as its own sentence, not "Budi: Budi Santoso menambahkan …" (SYSTEM-MESSAGES).
                 val who = if (conv.type != "DM" && last?.user?.name != null && !last.isSystem) "${last.user.name.substringBefore(' ')}: " else ""
                 // "typing…" in place of the last message while anyone types in that room (TYPING.md).
                 if (typing) Text(stringResource(R.string.ty_typing), fontSize = 13.sp, color = c.violetText, maxLines = 1, modifier = Modifier.weight(1f))

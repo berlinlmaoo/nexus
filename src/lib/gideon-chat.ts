@@ -80,7 +80,7 @@ export async function askGideon(input: {
     }
     const reply = ((await res.json()) as { reply?: string }).reply?.trim()
     if (!reply) {
-      console.error(`gideon-chat: balasan kosong dari shim (${input.tag ?? "untagged"}) — agen Hermes kemungkinan gagal (cek journal gideon-shim di VM agents)`)
+      console.error(`gideon-chat: balasan kosong dari shim (${input.tag ?? "untagged"}) — agen Hermes kemungkinan gagal (cek journal gideon-shim di host agen)`)
       await finishRun(runId, { ok: false, error: "empty reply" })
       return null
     }

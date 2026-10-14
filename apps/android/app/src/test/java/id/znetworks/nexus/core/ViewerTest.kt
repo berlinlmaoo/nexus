@@ -23,7 +23,7 @@ class ViewerTest {
     }
     @After fun tearDown() { server.close() }
 
-    // Berlin 29 Sep (iOS 14b086f): Z Vault and Threads only for the company workspace; unknown = hidden.
+    // owner 29 Sep (iOS 14b086f): Z Vault and Threads only for the company workspace; unknown = hidden.
     @Test fun companyFlagFromTheRoster() = runTest {
         assertNull(viewer.isCompany); assertFalse(viewer.isCompanyMember)
         server.enqueue(MockResponse.Builder().code(200).body("""{"role":"STAFF","isCompany":true,"members":[]}""").build())

@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class AppLanguageTest {
-    // Berlin 29 Sep (point 3): English by default, never the phone's language; a choice is kept.
+    // owner 29 Sep (point 3): English by default, never the phone's language; a choice is kept.
     @Test fun englishUnlessChosen() {
         assertEquals("en", AppLanguage.resolve(stored = null, current = null))           // phone in Indonesian, nothing chosen
         assertEquals("in", AppLanguage.resolve(stored = "in", current = null))

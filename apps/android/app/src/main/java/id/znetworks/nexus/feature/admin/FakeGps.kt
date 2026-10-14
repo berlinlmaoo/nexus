@@ -75,7 +75,7 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-// Control Room › Absen Monitor, was "Fake GPS" (Berlin, 28–29 Sep 2026; server f7f5f1c + e3091ab, web 9f9313d):
+// Control Room › Absen Monitor, was "Fake GPS" (owner, 28–29 Sep 2026; server f7f5f1c + e3091ab, web 9f9313d):
 // abnormal attendance: a fake location (FAKE), a selfie with no face (NOFACE, the server's face check) or a
 // weak location signal (CHECK). Any card can be answered with a warning (a personal pop-up + push, nothing else).
 // Originally (iOS AdminSuspectViews c977091):

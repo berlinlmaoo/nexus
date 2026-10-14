@@ -110,9 +110,9 @@ class CalendarCoreTest {
         val fa = unit("Framework Agency").id
         val tree = CalendarCore.dayTree(CalendarCore.underFocus(items("2026-09-18", "bod"), ix, fa), ix, fa, today, now, window)
         val pm = tree.root!!.children.first { it.unit.name == "Project Management" }
-        assertEquals(listOf(person("Dava Erlangga").userId), pm.people.map { it.userId })
+        assertEquals(listOf(person("Person 14").userId), pm.people.map { it.userId })
         val mm = tree.root.children.first { it.unit.name == "Multimedia" }
-        assertEquals(2, mm.people.first { it.userId == person("Hary Ade Saputra").userId }.items.size)
+        assertEquals(2, mm.people.first { it.userId == person("Person 19").userId }.items.size)
     }
 
     @Test fun unplacedRowsAtTheEndOfTheWeek() {
@@ -144,7 +144,7 @@ class CalendarCoreTest {
 
     @Test fun filters() {
         val all = items("2026-09-18", "bod")
-        val hary = person("Hary Ade Saputra")
+        val hary = person("Person 19")
         val ctx = CalendarCore.FilterContext(ix, hary.userId, hary.homeUnitIds, today, now, window)
         fun f(x: CalendarCore.Filters) = CalendarCore.filterItems(all, x, ctx).size
         val none = CalendarCore.NO_FILTERS

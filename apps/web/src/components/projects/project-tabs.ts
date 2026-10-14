@@ -59,7 +59,7 @@ export function hiddenTabsOf(project?: Pick<NexusProject, "hiddenTabs"> | null):
  * Project types offered when creating a project. TASK; since 9 Oct 2026 PIPELINE (the GM's pipeline board —
  * components/pipeline); since 10 Oct 2026 OUTLET_SALES (owner, for Ryan: one project per outlet —
  * components/outlet-sales), in the place the Finance Dashboard card had. Content Planner waits for
- * Berlin's references.
+ * the owner's references.
  */
 export const PROJECT_TYPES = [
   { id: "TASK", available: true },

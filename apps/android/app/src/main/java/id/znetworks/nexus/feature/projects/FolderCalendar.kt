@@ -130,7 +130,7 @@ fun FolderCalendarScreen(folderId: String, onBack: () -> Unit, onOpenTask: (Stri
         missing = folders.none { it.id == folderId }
         configured = folders.firstOrNull { it.id == folderId }?.aggregateProjectIds.orEmpty()
     }
-    // A folder renamed or a project moved on another device (Berlin, 8 Oct).
+    // A folder renamed or a project moved on another device (owner, 8 Oct).
     id.znetworks.nexus.core.realtime.LiveRefresh(folderId, liveMs = 120_000, fallbackMs = 30_000, matches = id.znetworks.nexus.core.realtime.RealtimeEvents::isProjectsOrFolders) {
         runCatching { api.folders().value }.getOrNull()?.let { folders = it }
         runCatching { api.projects().value }.getOrNull()?.let { projects = it }

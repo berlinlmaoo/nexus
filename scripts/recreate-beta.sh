@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Blue-green (12 Oct 2026): retired on the office - the live app is nexus-app-blue/green, not nexus-app-beta.
-[ -e /home/debian/nexus-data/bluegreen/live ] && { echo "NEXUS runs blue-green now (nexus-app-blue/green): this script would start a THIRD app. Env change: ~/deploy-nexus-bluegreen.sh env (deploy/bluegreen/RUNBOOK.md)"; exit 1; }
+[ -e "$HOME/nexus-data/bluegreen/live" ] && { echo "NEXUS runs blue-green now (nexus-app-blue/green): this script would start a THIRD app. Env change: use the blue-green deploy script's env command"; exit 1; }
 # Safe recreate of the live nexus-app-beta (:3002) onto the freshly-built nexus-app:prod image.
 # Rename-rollback + health gate: if the new container isn't healthy in ~40s, we auto-restore the old one.
 # Env is captured from the live container (has DATABASE_URL/secrets) into a temp file, never printed.

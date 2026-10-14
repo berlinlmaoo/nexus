@@ -9,7 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** PIPELINE-DASHBOARD §10 (Berlin + GM, 9 Oct): one board, who sees it, won → execution project. */
+/** PIPELINE-DASHBOARD §10 (owner + GM, 9 Oct): one board, who sees it, won → execution project. */
 class PipelineBoardTest {
     private fun deal(json: String) = PipelineDeal(NexusJson.parseToJsonElement(json).jsonObject)
 

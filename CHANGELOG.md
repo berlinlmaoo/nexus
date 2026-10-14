@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Activity logs and audit trail
 
 #### Authentication & Security
-- NextAuth.js v5 with credentials and Google OAuth (@patsgroup.id)
+- NextAuth.js v5 with credentials and Google OAuth (company domain only)
 - JWT-based session management
 - Three-level Role-Based Access Control (RBAC): System → Workspace → Project
 - Project roles: LEAD, MEMBER, VIEWER, GUEST
@@ -125,7 +125,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Integrations
 - Google Drive: browse, upload, download files
-- Synology NAS: browse, search, upload, download files (100 MB max)
+- NAS (Synology File Station): browse, search, upload, download files (100 MB max)
 - Asana import (background job)
 - Notion import (background job)
 - Import job status tracking
@@ -138,7 +138,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### AI Assistant
 - GIDEON (Guided Intelligence for Digital Execution & Operations Network)
 - Natural language task creation, updates, and queries
-- Powered by Anthropic Claude (Sonnet/Opus model selection)
+- Selectable model tiers
 
 #### Settings & Administration
 - User profile management (name, avatar)
@@ -147,4 +147,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Webhook management
 - Audit log viewer (admin only)
 
-[1.0.0]: https://github.com/patsgroup/nexus/releases/tag/v1.0.0
+[1.0.0]: https://github.com/berlinlmaoo/nexus/releases/tag/v1.0.0
