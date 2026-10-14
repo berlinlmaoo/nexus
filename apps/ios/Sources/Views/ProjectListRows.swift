@@ -71,7 +71,51 @@ struct ListPropLine: View {
     /// Wide: the custom fields shown as columns, in this order (ListColumns). nil = chips as they come.
     var fieldColumns: [String]? = nil
 
-    private var customChips: [CFChip] { Array((task.customFieldValues ?? []).compactMap(customFieldChip).prefix(3)) }
+    /// The custom values a row shows (web: up to four), with every date apart from start and due folded
+    /// out when it repeats one of them or another date (UI tour run 9, I7: "24 May 24 May ⏱ 26 May").
+    private var customChips: [CFChip] {
+        var seenDates = Set(dateKeys)
+        var out: [CFChip] = []
+        for chip in (task.customFieldValues ?? []).compactMap(customFieldChip) {
+            if chip.isDate {
+                if !seenDates.insert(chip.label).inserted { continue }
+            }
+            out.append(chip)
+        }
+        // Dates last, after the amount / person / category, so the date block reads start → due → others.
+        return Array((out.filter { !$0.isDate } + out.filter(\.isDate)).prefix(4))
+    }
+
+    private var startDay: Date? { ProjDate.parse(task.startDate) }
+    private var dueDay: Date? { ProjDate.parse(task.dueDate) }
+    /// The labels start and due are drawn with, to fold out custom dates that say the same.
+    private var dateKeys: [String] { [startDay, dueDay].compactMap { $0.map(ProjDate.dayLabel) } }
+
+    /// Start → due in that fixed order, one clock: "24 May → 26 May", or just one of them; a start equal
+    /// to the due day is said once.
+    @ViewBuilder private var dateRange: some View {
+        let start = startDay.map(ProjDate.dayLabel)
+        let due = dueDay.map(ProjDate.dayLabel)
+        if start != nil || due != nil {
+            let text: String = {
+                if let start, let due { return start == due ? due : "\(start) → \(due)" }
+                if let start { return String(format: T("Starts %@"), start) }
+                return due ?? ""
+            }()
+            let spoken: String = {
+                var parts: [String] = []
+                if let start, start != due { parts.append(String(format: T("Start %@"), start)) }
+                if let due { parts.append(String(format: T("Due %@"), due)) }
+                return parts.joined(separator: ", ")
+            }()
+            Label(text, systemImage: "clock")
+                .labelStyle(.titleAndIcon)
+                .font(NXFont.text(11, overdue ? .semibold : .regular))
+                .foregroundStyle(overdue ? NX.danger : NX.mutedFg)
+                .lineLimit(1).fixedSize()
+                .accessibilityLabel(spoken)
+        }
+    }
 
     private var overdue: Bool {
         guard !task.isDone, let due = ProjDate.parse(task.dueDate) else { return false }
@@ -101,7 +145,7 @@ struct ListPropLine: View {
 
     @ViewBuilder private func fieldSlot(_ id: String) -> some View {
         if let cfv = (task.customFieldValues ?? []).first(where: { $0.customFieldId == id }), let chip = customFieldChip(cfv) {
-            if chip.colorKey != nil {
+            if chip.colorKey != nil || chip.isPerson {
                 CFChipView(chip: chip).fixedSize()
             } else {
                 Text(chip.label).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).monospacedDigit().lineLimit(1)
@@ -130,14 +174,10 @@ struct ListPropLine: View {
     private var chips: some View {
         let layout = wrap ? AnyLayout(FlowLayout(spacing: 6)) : AnyLayout(HStackLayout(spacing: 8))
         return layout {
-            ForEach(customChips) { chip in customValue(chip) }
-            if let due = ProjDate.parse(task.dueDate) {
-                Label(ProjDate.dayLabel(due), systemImage: "clock")
-                    .labelStyle(.titleAndIcon)
-                    .font(NXFont.text(11, overdue ? .semibold : .regular))
-                    .foregroundStyle(overdue ? NX.danger : NX.mutedFg)
-                    .lineLimit(1).fixedSize()
-            }
+            let chips = customChips
+            ForEach(chips.filter { !$0.isDate }) { chip in customValue(chip) }
+            dateRange
+            ForEach(chips.filter(\.isDate)) { chip in customValue(chip) }
             if let p = task.priority, p.uppercased() != "NONE" { PriorityPill(priority: p) }
             if let status { StatusPill(name: status.name, colorKey: status.colorKey, size: 11).fixedSize() }
             people
@@ -145,7 +185,8 @@ struct ListPropLine: View {
     }
 
     @ViewBuilder private func customValue(_ chip: CFChip) -> some View {
-        if chip.colorKey != nil {
+        // A coloured option, a date (clock) and a person (icon) keep their chip; only plain values are text.
+        if chip.colorKey != nil || chip.isDate || chip.isPerson {
             CFChipView(chip: chip).fixedSize()
         } else {
             Text(chip.label).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
@@ -213,8 +254,10 @@ struct ListTaskRow: View {
             // no names (UI tour run 5). Keep at least 220 pt for the title: drop field columns one by one,
             // then fall back to the two-line row. Every row sees the same width and the title's ideal is
             // fixed, so all rows of a List pick the same layout.
+            // Never down to zero field columns when the project has fields: that row showed only priority
+            // and status on a portrait iPad (UI tour run 9, P6). The two-line row shows them all instead.
             ViewThatFits(in: .horizontal) {
-                ForEach(0...fieldColumns.count, id: \.self) { dropped in
+                ForEach(0...max(0, fieldColumns.count - 1), id: \.self) { dropped in
                     wideRow(Array(fieldColumns.dropLast(dropped)))
                 }
                 compactRow

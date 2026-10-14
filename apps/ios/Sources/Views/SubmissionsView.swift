@@ -431,12 +431,11 @@ struct SubmissionsView: View {
                         }
                         if items.isEmpty {
                             // Say WHY the column is empty, not just that it is (UI tour run 7).
-                            VStack(spacing: 4) {
-                                Text(T("Nothing here")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
-                                Text(emptyReason(col.statusGroup)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                                    .multilineTextAlignment(.center)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
+                            // Web's sentence, word for word (UI tour run 9, I8).
+                            Text(T("None of your submissions are at this stage right now. The team moves a card here when its work reaches it."))
+                                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity).padding(.horizontal, 6).padding(.vertical, 22)
                         }
                     }
@@ -452,15 +451,9 @@ struct SubmissionsView: View {
         // An empty column is narrower, so it doesn't push the cards of the next one off screen
         // (UI tour run 7: an empty To Do took most of the phone's width).
         .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in
-            items.isEmpty ? min(200, width * 0.5) : min(320, width * 0.85)
-        }
-    }
-
-    private func emptyReason(_ group: StatusGroup) -> String {
-        switch group {
-        case .todo: return T("New requests wait here until the team picks them up.")
-        case .inProgress: return T("The team isn't working on any of your requests at this stage.")
-        case .complete: return T("Finished requests land here.")
+            // Two empty columns used to fill a phone exactly, so the third sat just off screen with no hint
+            // of it (UI tour run 9, I8): an empty one is now narrow enough that the next always peeks in.
+            items.isEmpty ? min(200, width * 0.4) : min(320, width * 0.85)
         }
     }
 

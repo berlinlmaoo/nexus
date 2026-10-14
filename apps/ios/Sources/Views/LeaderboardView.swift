@@ -177,9 +177,13 @@ struct Podium: View {
     /// The rank to print on each place when it differs from the place (a tie: two people on rank 1).
     var labels: [Int] = []
     let onOpen: (LeaderboardRow) -> Void
-    // Visual order: 2nd · 1st · 3rd
+    // Visual order: 2nd · 1st · 3rd. With a tie at the top every step reads "1", and 2-1-3 then looked like a
+    // different order from the list below it: tied, the steps run left to right in the list's order (web
+    // leaderboard-podium, UI tour run 9, I11).
     private var slots: [(rank: Int, row: LeaderboardRow?)] {
-        [(2, rows.count > 1 ? rows[1] : nil), (1, rows.first), (3, rows.count > 2 ? rows[2] : nil)]
+        let all: [(rank: Int, row: LeaderboardRow?)] = [(1, rows.first), (2, rows.count > 1 ? rows[1] : nil), (3, rows.count > 2 ? rows[2] : nil)]
+        let tiedTop = rows.count > 1 && label(1) == label(2)
+        return tiedTop ? all : [all[1], all[0], all[2]]
     }
     var body: some View {
         HStack(alignment: .bottom, spacing: 10) {

@@ -11,6 +11,10 @@ struct CFChip: Identifiable, Equatable {
     /// fields on one card read as dates and the field name is spoken (UI tour run 7).
     var isDate = false
     var fieldName: String? = nil
+    /// A date field holding a name, not a date: Notion imports filled "Request by" (a Created-time field)
+    /// with who asked. Drawn as that person — a grey pill with a person icon — not as a date with a
+    /// clock (web PropValue, UI tour run 9).
+    var isPerson = false
 }
 
 // Formatters are expensive to construct — build once and reuse. `customFieldChip` runs per card
@@ -65,8 +69,10 @@ func customFieldChip(_ cfv: BoardTask.CFValue) -> CFChip? {
         }
         return nil
     case "DATE", "CREATED":
-        let label = parseDay(raw).map { ProjDate.dayLabel($0) } ?? raw
-        return CFChip(id: cfv.customFieldId, label: label, tone: .neutral, isDate: true, fieldName: cfv.customField?.name)
+        guard let day = parseDay(raw) else {
+            return CFChip(id: cfv.customFieldId, label: raw, tone: .neutral, fieldName: cfv.customField?.name, isPerson: true)
+        }
+        return CFChip(id: cfv.customFieldId, label: ProjDate.dayLabel(day), tone: .neutral, isDate: true, fieldName: cfv.customField?.name)
     case "SELECT":
         return CFChip(id: cfv.customFieldId, label: raw, tone: .neutral, colorKey: choiceColorKey(raw, choices: cfv.customField?.options?.list ?? []))
     default:
@@ -88,7 +94,13 @@ func choiceColorKey(_ value: String, choices: [String]) -> String {
 struct CFChipView: View {
     let chip: CFChip
     var body: some View {
-        if chip.isDate {
+        if chip.isPerson {
+            Label(chip.label, systemImage: "person").font(NXFont.text(10, .semibold)).lineLimit(1)
+                .labelStyle(CFPersonLabelStyle())
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .foregroundStyle(NX.mutedFg).background(NX.muted, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .accessibilityLabel(chip.fieldName.map { "\($0): \(chip.label)" } ?? chip.label)
+        } else if chip.isDate {
             Label(chip.label, systemImage: "clock").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 .padding(.vertical, 2)
                 .accessibilityLabel(chip.fieldName.map { "\($0): \(chip.label)" } ?? chip.label)
@@ -102,6 +114,13 @@ struct CFChipView: View {
                 .padding(.horizontal, 7).padding(.vertical, 3)
                 .foregroundStyle(chip.tone.fg).background(chip.tone.bg, in: Capsule())
         }
+    }
+}
+
+/// Icon and name close together, like web's pill (gap 4).
+private struct CFPersonLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) { configuration.icon.imageScale(.small); configuration.title }
     }
 }
 

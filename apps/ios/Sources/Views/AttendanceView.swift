@@ -1609,6 +1609,8 @@ struct StreakBoardCard: View {
     /// it again through `periodLabel`; rebuilding that on every body pass also kept resetting the
     /// horizontal scroll, which is what stopped the board landing on today.
     @State private var periodDays: [PeriodDay] = []
+    /// The visible width of the scrolling day strip (whole-day alignment, scrollToToday).
+    @State private var stripWidth: CGFloat = 0
 
     private func buildPeriodDays() -> [PeriodDay] {
         let cal = ProjDate.cal
@@ -1825,14 +1827,32 @@ struct StreakBoardCard: View {
 
     /// Tried again as the layout settles: a single call made before the scroll view has its
     /// size scrolls nowhere and says nothing.
+    ///
+    /// Centring today left a half day at the strip's left edge, its date cut in two (UI tour run 9: I10 on
+    /// the phone, M5 on the Mac). With the strip's width known, the scroll now lines a WHOLE day up with
+    /// the left edge, chosen so today still sits in the middle; before the width is known it centres.
     private func scrollToToday(_ proxy: ScrollViewProxy) {
         guard let t = todayKey else { return }
         Task { @MainActor in
             for delay in [0, 150, 500] {
                 if delay > 0 { try? await Task.sleep(for: .milliseconds(delay)) }
-                proxy.scrollTo("day-\(t)", anchor: .center)
+                if let lead = leadingDayKey(today: t) {
+                    proxy.scrollTo("day-\(lead)", anchor: .leading)
+                } else {
+                    proxy.scrollTo("day-\(t)", anchor: .center)
+                }
             }
         }
+    }
+
+    /// The day to put flush with the strip's left edge so today lands mid-strip; nil while the strip's
+    /// width is unknown or the whole period fits.
+    private func leadingDayKey(today: String) -> String? {
+        guard stripWidth > 0, let i = periodDays.firstIndex(where: { $0.key == today }) else { return nil }
+        let fit = Int((stripWidth + gap) / (cell + gap))
+        guard fit > 0, fit < periodDays.count else { return nil }
+        let lead = min(max(0, i - fit / 2), periodDays.count - fit)
+        return periodDays[lead].key
     }
 
     private var legend: some View {
@@ -1877,6 +1897,7 @@ struct StreakBoardCard: View {
                 // the scroll view now STARTS there: its initial position comes from `daysAnchor`, not
                 // from anything that has to happen after layout. The tries below only centre it.
                 .defaultScrollAnchor(daysAnchor)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { stripWidth = $0 }
                 // One scroll view per period, so another month opens from its own anchor.
                 .id(monthOffset)
                 .onAppear { scrollToToday(proxy) }

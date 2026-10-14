@@ -516,8 +516,10 @@ private struct OverviewProgressCard: View {
             ForEach(counterItems) { c in
                 Button { onDrill?(c.drill) } label: {
                     VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 4) {
-                            Text(c.label).font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                        HStack(alignment: .top, spacing: 4) {
+                            // Two lines rather than "No due d…" in a narrow tile (UI tour run 9, P4).
+                            Text(c.label).font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg)
+                                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 0)
                             if c.value > 0 && onDrill != nil {
                                 Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .semibold))

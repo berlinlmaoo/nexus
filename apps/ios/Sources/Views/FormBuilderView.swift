@@ -311,6 +311,12 @@ struct FormBuilderView: View {
     }
 
     private var regular: Bool { hSize == .regular }
+    /// The screen's width, for the top bar: an iPad in portrait with the sidebar open is "regular" but
+    /// too narrow for breadcrumb + four tabs + save state + Preview, and the bar then crushed the tabs to
+    /// single letters (UI tour run 9, P2). Below `tightBarWidth` the breadcrumb gives way, never the tabs.
+    @State private var barWidth: CGFloat = 0
+    private static let tightBarWidth: CGFloat = 1000
+    private var tightBar: Bool { barWidth > 0 && barWidth < Self.tightBarWidth }
     private var currentId: String? { saved?.id ?? formId }
     private var shareURL: URL? { saved?.publicURL }
     private var displayName: String {
@@ -331,6 +337,7 @@ struct FormBuilderView: View {
             }
         }
         .background(NX.background.ignoresSafeArea())
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
         // Regular width: the breadcrumb and the tabs are the bar; the system Back stays.
         .navigationTitle(regular ? "" : displayName)
         .navigationBarTitleDisplayMode(.inline)
@@ -369,11 +376,12 @@ struct FormBuilderView: View {
             if regular {
                 ToolbarItem(placement: .topBarLeading) { breadcrumb }
                 ToolbarItem(placement: .principal) {
-                    FormStudioTabBar(selection: $tab, responseCount: responseCount)
+                    // Full labels always (web, Mac): the tabs keep their ideal width and the breadcrumb truncates.
+                    FormStudioTabBar(selection: $tab, responseCount: responseCount).fixedSize()
                 }
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
-                FormSaveIndicator(state: saveState, hasId: currentId != nil, compact: !regular) { retry() }
+                FormSaveIndicator(state: saveState, hasId: currentId != nil, compact: !regular || tightBar) { retry() }
                 previewButton
                 moreMenu
             }
@@ -385,21 +393,22 @@ struct FormBuilderView: View {
     /// whole thing keeps its ideal width.
     private var breadcrumb: some View {
         HStack(spacing: 6) {
-            if !projectName.isEmpty {
-                Text(projectName).foregroundStyle(NX.mutedFg).lineLimit(1)
+            // A tight bar drops the project and caps the form's name, so the tabs keep their full labels.
+            if !projectName.isEmpty && !tightBar {
+                Text(projectName).foregroundStyle(NX.mutedFg).lineLimit(1).truncationMode(.tail)
                     .frame(maxWidth: 140, alignment: .leading)
                 Text("/").foregroundStyle(NX.mutedFg.opacity(0.6))
             }
             Text(draft.branding.icon.isEmpty ? displayName : "\(draft.branding.icon) \(displayName)")
-                .fontWeight(.medium).foregroundStyle(NX.foreground).lineLimit(1)
-                .frame(maxWidth: 220, alignment: .leading)
+                .fontWeight(.medium).foregroundStyle(NX.foreground).lineLimit(1).truncationMode(.tail)
+                .frame(maxWidth: tightBar ? 130 : 220, alignment: .leading)
         }
         .font(NXFont.text(14))
         .fixedSize()
     }
 
     @ViewBuilder private var previewButton: some View {
-        if regular {
+        if regular && !tightBar {
             Button { Task { await openPreview() } } label: { Label(T("Preview"), systemImage: "eye").labelStyle(.titleAndIcon) }
                 .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
         } else {

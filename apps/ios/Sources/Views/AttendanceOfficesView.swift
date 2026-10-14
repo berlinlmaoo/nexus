@@ -35,12 +35,12 @@ struct OfficesCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Offices & geofence").font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                    Text("Titik kantor + radius check-in.").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    Text(T("Offices & geofence")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                    Text(T("Office locations and the check-in radius.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer()
                 Button { composer = .new } label: {
-                    Label("Office", systemImage: "plus").font(NXFont.text(12, .bold)).foregroundStyle(.white)
+                    Label(T("Office"), systemImage: "plus").font(NXFont.text(12, .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 12).padding(.vertical, 8).background(NX.violet, in: Capsule())
                 }.buttonStyle(.plain)
             }
@@ -68,7 +68,7 @@ struct OfficesCard: View {
                     Image(systemName: "mappin.circle.fill").font(.system(size: 18)).foregroundStyle((o.isActive ?? true) ? NX.violetText : NX.mutedFg)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(o.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Text("\(o.address ?? "—") · radius \(o.radiusMeters ?? 0)m").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                        Text("\(o.address ?? "—") · " + String(format: T("radius %d m"), o.radiusMeters ?? 0)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     }
                     Spacer(minLength: 6)
                 }
@@ -76,7 +76,8 @@ struct OfficesCard: View {
             }
             .buttonStyle(.plain)
             Toggle("", isOn: Binding(get: { o.isActive ?? true }, set: { on in Task { try? await APIClient.shared.updateOffice(id: o.id, fields: ["isActive": on]); await load() } }))
-                .labelsHidden().tint(NX.violetText)
+                // The plain system switch (UI tour run 9, I10), in the brand fill like the app's other switches.
+                .toggleStyle(.switch).labelsHidden().tint(NX.violet).fixedSize()
             Button { composer = .edit(o) } label: { Image(systemName: "pencil").font(.system(size: 13)).foregroundStyle(NX.mutedFg) }.buttonStyle(.plain)
         }
         .padding(.vertical, 4)

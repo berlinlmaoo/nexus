@@ -467,7 +467,9 @@ struct TimelineTab: View {
             if !compact {
                 Text(gDur > 0 ? Self.dayCount(gDur) : "—").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     .padding(.horizontal, 8).frame(width: durationW, alignment: .leading)
-                progressCell(pct, tint: Color(hex: "#3b82f6"))
+                // The rows' status colours (amber in progress, green done), as web — not a fixed blue; the
+                // track is the card colour, since the group row itself is muted (UI tour run 9, P10/M4).
+                progressCell(pct, tint: Self.progressTint(pct), track: NX.card)
             }
         }
         .frame(height: rowH)
@@ -508,9 +510,9 @@ struct TimelineTab: View {
         .overlay(alignment: .bottom) { Rectangle().fill(NX.border.opacity(0.6)).frame(height: 0.5) }
     }
 
-    private func progressCell(_ pct: Int, tint: Color) -> some View {
+    private func progressCell(_ pct: Int, tint: Color, track: Color = NX.muted) -> some View {
         HStack(spacing: 8) {
-            Capsule().fill(NX.muted)
+            Capsule().fill(track)
                 .frame(height: 6)
                 .overlay(alignment: .leading) {
                     // A fraction of the track, by layout (no measured offsets).

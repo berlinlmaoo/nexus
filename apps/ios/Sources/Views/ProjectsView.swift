@@ -261,9 +261,18 @@ struct ProjectsView: View {
                     }
                     // Only worth a target once there are folders to take things out of.
                     if !folders.isEmpty {
-                        UnfiledDropZone(isEmpty: ungrouped.isEmpty) { payload in drop(payload, into: nil) }
+                        UnfiledDropZone(isEmpty: ungrouped.isEmpty, count: ungrouped.count,
+                                        isExpanded: !collapsed.contains(UnfiledDropZone.collapseKey),
+                                        onToggle: {
+                                            withAnimation(.easeOut(duration: 0.18)) {
+                                                if collapsed.contains(UnfiledDropZone.collapseKey) { collapsed.remove(UnfiledDropZone.collapseKey) }
+                                                else { collapsed.insert(UnfiledDropZone.collapseKey) }
+                                            }
+                                        }) { payload in drop(payload, into: nil) }
                     }
-                    ProjectLinkGroup(projects: ungrouped, tree: folderTree, tallies: tallies, actions: rowActions)
+                    if folders.isEmpty || !collapsed.contains(UnfiledDropZone.collapseKey) {
+                        ProjectLinkGroup(projects: ungrouped, tree: folderTree, tallies: tallies, actions: rowActions)
+                    }
                     }
                 }
                 .padding(.horizontal, NXSidebarPage.gutter(isRoot))
@@ -659,32 +668,46 @@ struct FolderTree {
     }
 }
 
-/// The strip above the projects with no folder: let a project go here to take it out of its folder,
-/// or a folder to bring it up to the top level.
+/// The projects with no folder, drawn as one more folder row (web: "No folder · 21", UI tour run 9) that
+/// opens and closes like the others. Let a project go here to take it out of its folder, or a folder to
+/// bring it up to the top level.
 struct UnfiledDropZone: View {
+    /// Its entry in the screen's `collapsed` set, next to the folders' ids.
+    static let collapseKey = "__no_folder__"
     let isEmpty: Bool
+    let count: Int
+    let isExpanded: Bool
+    let onToggle: () -> Void
     let onDrop: (String) -> Bool
     @State private var targeted = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "tray").font(.system(size: 12, weight: .semibold))
-            Text(T("No folder").uppercased()).font(NXFont.text(11, .bold)).tracking(0.5)
-            if isEmpty || targeted {
-                Text(T("Drop a project here to take it out of its folder."))
-                    .font(NXFont.text(13)).lineLimit(2)
+        Button(action: onToggle) {
+            HStack(spacing: 10) {
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0)).frame(width: 20, height: 30)
+                Image(systemName: "tray").font(.system(size: 17, weight: .regular)).foregroundStyle(NX.mutedFg)
+                    .frame(width: 26, height: 26)
+                Text(T("No folder")).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                Text("\(count)").font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.mutedFg)
+                if isEmpty || targeted {
+                    Text(T("Drop a project here to take it out of its folder."))
+                        .font(NXFont.text(13)).foregroundStyle(targeted ? NX.violetText : NX.mutedFg).lineLimit(2)
+                }
+                Spacer(minLength: 4)
             }
-            Spacer(minLength: 0)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
-        .foregroundStyle(targeted ? NX.violetText : NX.mutedFg)
-        .padding(.horizontal, 12).padding(.vertical, 10)
-        .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-        .background(targeted ? NX.violet.opacity(0.10) : Color.clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(T("No folder")), \(count)")
+        .accessibilityHint(isExpanded ? T("Close folder") : T("Open folder"))
+        .background(targeted ? NX.violet.opacity(0.10) : NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(targeted ? NX.violet : NX.border, lineWidth: targeted ? 2 : 1)
         )
-        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .dropDestination(for: String.self) { items, _ in
             guard let payload = items.first else { return false }
             return onDrop(payload)

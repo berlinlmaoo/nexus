@@ -24,6 +24,9 @@ struct ProjectDetailView: View {
     @State private var cover = SheetCover()
     @State private var prefillDue: Date?
     @State private var query = ""
+    /// The tab row is wider than the screen: a "…" menu lists every tab (Notion, UI tour run 9).
+    @State private var tabsOverflow = false
+    @State private var tabsWidth: CGFloat = 0
     /// A filter opened from a count on the Overview (owner, 11 Oct 2026): open top-level tasks only,
     /// shown as a chip above the task tabs until it is cleared.
     @State private var drill: OverviewDrill?
@@ -686,9 +689,12 @@ struct ProjectDetailView: View {
                     }
                 }
                 .padding(.horizontal, wide ? 18 : 8)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { tabsWidth = $0 }
             }
-            .modifier(TabRowOverflow(activeId: activeTabItemId, proxy: proxy))
+            .modifier(TabRowOverflow(activeId: activeTabItemId, itemIds: chipItems.map(\.id), proxy: proxy,
+                                     overflowing: $tabsOverflow, contentWidth: tabsWidth))
             }
+            if tabsOverflow { tabOverflowMenu(chipItems) }
             if let layout = layoutOf(tab), let v = activeView(layout) {
                 let filtered = configOf(v).isFiltered
                 Button { filterView = v } label: {
@@ -782,13 +788,55 @@ struct ProjectDetailView: View {
                     }
                 }
                 .padding(.leading, 18)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { tabsWidth = $0 }
             }
-            .modifier(TabRowOverflow(activeId: activeTabItemId, proxy: proxy))
+            .modifier(TabRowOverflow(activeId: activeTabItemId, itemIds: wideMenuItems.map(\.id), proxy: proxy,
+                                     overflowing: $tabsOverflow, contentWidth: tabsWidth))
             }
+            if tabsOverflow { tabOverflowMenu(wideMenuItems) }
             wideTools
                 .fixedSize()
                 .padding(.trailing, 24)
         }
+    }
+
+    /// Every tab of the wide row in its order: Overview, the views, then the module icons.
+    private var wideMenuItems: [ViewTabItem] {
+        var out: [ViewTabItem] = []
+        if visibleTabs.contains(.overview) { out.append(.tab(.overview)) }
+        out += viewTabItems
+        out += Self.moduleTabOrder.filter { visibleTabs.contains($0) }.map { ViewTabItem.tab($0) }
+        return out
+    }
+
+    /// "…" at the end of a tab row that does not fit (Notion): every tab by its full name, the one on
+    /// screen ticked. Picking one also scrolls the row to it.
+    private func tabOverflowMenu(_ items: [ViewTabItem]) -> some View {
+        Menu {
+            ForEach(items) { item in
+                switch item {
+                case .tab(let t):
+                    Button { pickTab(t) } label: {
+                        Label(t.label, systemImage: tabIsOn(t) ? "checkmark" : t.macIcon)
+                    }
+                case .view(let v, let t):
+                    let layout = layoutOf(t) ?? "board"
+                    let on = tab == t && activeView(layout)?.id == v.id
+                    Button { tab = t; pickView(layout, v.id) } label: {
+                        Label(viewTitle(v), systemImage: on ? "checkmark" : t.macIcon)
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis").font(.system(size: 14, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                .frame(width: 34, height: 34).frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(T("All views"))
+        .accessibilityLabel(T("All views"))
     }
 
     /// The id of the tab (or saved view) on screen, as the rows tag their items.
@@ -2048,8 +2096,17 @@ struct BoardCard: View {
 /// matching trailing margin, so the last tab can always scroll clear of the fade.
 private struct TabRowOverflow: ViewModifier {
     let activeId: String
+    /// Every tab's id, in order: when the project's views load after the row first drew, the active tab
+    /// may only now exist, and nothing else would scroll it into view (UI tour run 9: the active Board /
+    /// Timeline tab sat off screen).
+    let itemIds: [String]
     let proxy: ScrollViewProxy
+    /// True while the tabs are wider than the row; the row then offers its "…" menu.
+    @Binding var overflowing: Bool
     private let fade: CGFloat = 28
+    /// The tabs' own width (measured by the row's HStack: onScrollGeometryChange needs iOS 18).
+    let contentWidth: CGFloat
+    @State private var viewportWidth: CGFloat = 0
 
     func body(content: Content) -> some View {
         content
@@ -2061,12 +2118,24 @@ private struct TabRowOverflow: ViewModifier {
                         .frame(width: fade)
                 }
             }
-            .onAppear {
-                // After the first layout, or scrollTo finds no frames yet.
-                DispatchQueue.main.async { proxy.scrollTo(activeId) }
-            }
-            .onChange(of: activeId) { _, id in
-                withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(id) }
-            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { viewportWidth = $0; update() }
+            .onChange(of: contentWidth) { _, _ in update() }
+            .onAppear { reveal(animated: false) }
+            .onChange(of: activeId) { _, _ in reveal(animated: true) }
+            .onChange(of: itemIds) { _, _ in reveal(animated: false) }
+    }
+
+    private func update() {
+        let over = viewportWidth > 0 && contentWidth + fade > viewportWidth + 1
+        if over != overflowing { overflowing = over }
+    }
+
+    private func reveal(animated: Bool) {
+        let id = activeId
+        // After the next layout, or scrollTo finds no frames yet.
+        DispatchQueue.main.async {
+            if animated { withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(id) } }
+            else { proxy.scrollTo(id) }
+        }
     }
 }

@@ -332,6 +332,7 @@ struct GideonPanel: View {
                     if !embedded { Button(T("Close")) { dismiss() }.keyboardShortcut(.cancelAction) }
                 }
                 ToolbarItem(placement: .principal) { title }
+                ToolbarItem(placement: .topBarTrailing) { tierChip }
                 // Chat history and New chat as their own buttons, as web's header (UI tour run 7);
                 // the rest stays in ⋯.
                 ToolbarItemGroup(placement: .primaryAction) {
@@ -457,39 +458,17 @@ struct GideonPanel: View {
 
     // MARK: - title (compact)
 
-    /// Every tier name is laid out; only the chosen one is drawn.
-    ///
-    /// The navigation bar sizes its centre view and animates between widths when that view changes,
-    /// and a centre view that is briefly narrower than its own text is CLIPPED rather than
-    /// truncated — clipped symmetrically, so it eats the first characters: switching to Experimental
-    /// showed "EON Experimental" for a moment. Reserving the widest name up front means the width
-    /// never changes, so there is nothing left to animate. `minimumScaleFactor` is the backstop for
-    /// the bar genuinely running out of room next to Close and the ⋯ menu, and it shrinks the whole
-    /// name rather than dropping either end of it.
+    /// "GIDEON" over "Acts in NEXUS as you" (or the chat's title), as web's header (UI tour run 9, I9). The
+    /// tier is its own "Luna ▾" chip beside it, so the title's width no longer changes with the tier (the
+    /// old "GIDEON Luna ▾" title animated between widths and clipped its first letters).
     private var title: some View {
-        Menu {
-            Picker(T("Model"), selection: $tierRaw) {
-                ForEach(GideonTier.allCases) { option in
-                    Text(option.label).tag(option.rawValue)
-                }
-            }
-        } label: {
-            HStack(spacing: 4) {
-                ZStack {
-                    ForEach(GideonTier.allCases) { option in
-                        Text("\(displayName) \(option.label)")
-                            .font(NXFont.display(15, .bold))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
-                            .opacity(option == tier ? 1 : 0)
-                            .accessibilityHidden(option != tier)
-                    }
-                }
-                Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold))
-            }
-            .foregroundStyle(NX.foreground)
+        VStack(spacing: 0) {
+            Text(displayName).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+            Text(chat.chatTitle.flatMap { GideonChatTitle.text($0) } ?? T("Acts in NEXUS as you"))
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
         }
-        .disabled(chat.sending)
+        .frame(maxWidth: 170)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - transcript
