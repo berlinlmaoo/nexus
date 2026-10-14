@@ -166,7 +166,7 @@ struct ListPropLine: View {
 
     @ViewBuilder private func fieldSlot(_ id: String) -> some View {
         if let cfv = (task.customFieldValues ?? []).first(where: { $0.customFieldId == id }), let chip = customFieldChip(cfv) {
-            if chip.colorKey != nil || chip.isPerson {
+            if chip.colorKey != nil || chip.isPerson || chip.number?.isVisual == true {
                 CFChipView(chip: chip).fixedSize()
             } else {
                 Text(chip.label).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).monospacedDigit().lineLimit(1)
@@ -211,7 +211,7 @@ struct ListPropLine: View {
 
     @ViewBuilder private func customValue(_ chip: CFChip) -> some View {
         // A coloured option, a date (clock) and a person (icon) keep their chip; only plain values are text.
-        if chip.colorKey != nil || chip.isDate || chip.isPerson {
+        if chip.colorKey != nil || chip.isDate || chip.isPerson || chip.number?.isVisual == true {
             CFChipView(chip: chip).fixedSize()
         } else {
             Text(chip.label).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)

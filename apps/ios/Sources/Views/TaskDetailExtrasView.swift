@@ -70,7 +70,7 @@ struct TaskCustomFieldsCard: View {
                 }
                 Text(cfText(f.id).isEmpty ? "—" : cfText(f.id)).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
             } else if type == "NUMBER" {
-                NumberFieldInput(text: binding(f.id), idr: CustomFieldNumber.isIDR(f.options?.format), focus: $focused, focusId: f.id)
+                NumberFieldInput(text: binding(f.id), style: f.options?.numberStyle ?? .plain, focus: $focused, focusId: f.id)
                     .padding(10)
                     .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .onSubmit { Task { await commit(f) } }
@@ -161,7 +161,7 @@ struct TaskCustomFieldsCard: View {
             switch v {
             case .text(let s):
                 // A number is stored as a plain machine number ("369.000" Rupiah → "369000").
-                let out = f.type.uppercased() == "NUMBER" ? CustomFieldNumber.normalize(s, idr: CustomFieldNumber.isIDR(f.options?.format)) : s
+                let out = f.type.uppercased() == "NUMBER" ? CustomFieldNumber.normalize(s, style: f.options?.numberStyle ?? .plain) : s
                 try await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: out)
             case .multi(let a): try await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: a)
             case .place(let l, let m): try await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: ["label": l, "mapUrl": m])
@@ -185,7 +185,7 @@ struct TaskCustomFieldsCard: View {
                 guard case .some(let v) = snapshot[f.id] else { continue }
                 switch v {
                 case .text(let s):
-                    let out = f.type.uppercased() == "NUMBER" ? CustomFieldNumber.normalize(s, idr: CustomFieldNumber.isIDR(f.options?.format)) : s
+                    let out = f.type.uppercased() == "NUMBER" ? CustomFieldNumber.normalize(s, style: f.options?.numberStyle ?? .plain) : s
                     try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: task, value: out)
                 case .multi(let a): try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: task, value: a)
                 case .place(let l, let m): try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: task, value: ["label": l, "mapUrl": m])

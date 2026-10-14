@@ -36,7 +36,9 @@ enum CustomFieldNumber {
 
     /// Spaces, a leading/trailing sign, "(…)" for a negative, "Rp"/"Rp."/"IDR", and the "no cents" dash.
     private static func stripCurrency(_ raw: String) -> (s: String, neg: Bool) {
-        var s = String(raw.filter { !$0.isWhitespace && $0 != "\u{00A0}" && $0 != "\u{202F}" })
+        // A true minus (what the app prints for negatives, U+2212) reads as "-" when it is pasted back.
+        var s = String(raw.filter { !$0.isWhitespace && $0 != "\u{00A0}" && $0 != "\u{202F}" }
+            .map { $0 == "\u{2212}" ? "-" : $0 })
         var neg = false
         if s.count >= 2, s.hasPrefix("("), s.hasSuffix(")") { neg = true; s = String(s.dropFirst().dropLast()) }
         if s.hasPrefix("-") { neg.toggle(); s.removeFirst() }
@@ -178,13 +180,17 @@ enum CustomFieldNumber {
         return (neg ? "-" : "") + out
     }
 
-    /// A stored Rupiah value (even a legacy "369.000") → "Rp 369.000"; "" when there is no amount.
+    /// A stored Rupiah value (even a legacy "369.000") → "Rp 369.000", "−Rp 25.000" (a true minus, as
+    /// AppNumber.rupiah); "" when there is no amount.
     static func formatIDR(_ value: String?) -> String {
         let n = normalize(value ?? "", idr: true)
         if n.isEmpty { return "" }
         let neg = n.hasPrefix("-")
-        return (neg ? "-" : "") + "Rp " + groupIDR(neg ? String(n.dropFirst()) : n)
+        return (neg ? minus : "") + "Rp " + groupIDR(neg ? String(n.dropFirst()) : n)
     }
+
+    /// The true minus sign every number format prints (web rupiah()/formatCount, run 13 owner rule).
+    static let minus = "\u{2212}"
 
     /// A stored plain number with dot grouping ("1500000" → "1.500.000") in both languages;
     /// text that is not a number is shown as it is.
@@ -202,8 +208,362 @@ enum CustomFieldNumber {
         return f
     }()
 
-    /// What a NUMBER field shows: Rupiah with "Rp", plain grouped; "" when empty.
+    /// What a NUMBER field shows for a legacy `format` option alone ("currency-idr" or none). Kept for
+    /// callers that only know that key; everything that has the field's options uses `display(_:style:)`.
     static func display(_ value: String?, format: String?) -> String {
-        isIDR(format) ? formatIDR(value) : formatPlain(value)
+        display(value, style: Style(format: format))
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Number formats, Notion style (owner, 15 Oct 2026). A NUMBER field's options carry how its values are
+// shown: `numberFormat` (number, number_with_separators, percent, BTC or an ISO currency code),
+// `decimals` (0…5, absent = Default), `showAs` (number | bar | ring) with `barColor`, `divideBy` and
+// `showNumber`. The legacy key `format: "currency-idr"` is still written for Rupiah, because released
+// apps read only that. Same contract as the web and the server (custom-field-number.ts).
+//
+// Owner rules on top of Notion: every format uses Indonesian grouping in both languages (a dot for
+// thousands, a comma for decimals; "Number" is grouped too), negatives use the true minus "−", Rupiah
+// is "Rp 1.234.568" with 0 decimals by default and is pinned under Percent in the format list.
+// ─────────────────────────────────────────────────────────────────────────────
+
+extension CustomFieldNumber {
+    enum ShowAs: String, CaseIterable, Sendable { case number, bar, ring }
+
+    /// One entry of the Number format list: its stored code and its names in both languages.
+    struct FormatInfo: Sendable {
+        let code: String
+        let en: String
+        let id: String
+        /// The name in the app language ("Rupiah (IDR)" / "Dolar AS (USD)").
+        var name: String { AppLanguage.shared.lang == .id ? id : en }
+        /// The name without its "(XXX)" code, for the row that shows the current choice ("Rupiah").
+        var shortName: String {
+            guard let r = name.range(of: " (", options: .backwards), name.hasSuffix(")") else { return name }
+            return String(name[..<r.lowerBound])
+        }
+    }
+
+    /// Notion's list, in Notion's order (Indonesian names as Notion's id-ID app writes them).
+    static let notionFormats: [FormatInfo] = [
+        .init(code: "number", en: "Number", id: "Angka"),
+        .init(code: "number_with_separators", en: "Number with separators", id: "Angka dengan pemisah"),
+        .init(code: "percent", en: "Percent", id: "Persen"),
+        .init(code: "USD", en: "US Dollar (USD)", id: "Dolar AS (USD)"),
+        .init(code: "AUD", en: "Australian dollar (AUD)", id: "Dolar Australia (AUD)"),
+        .init(code: "CAD", en: "Canadian dollar (CAD)", id: "Dolar Kanada (CAD)"),
+        .init(code: "SGD", en: "Singapore dollar (SGD)", id: "Dolar Singapura (SGD)"),
+        .init(code: "EUR", en: "Euro (EUR)", id: "Euro (EUR)"),
+        .init(code: "GBP", en: "Pound (GBP)", id: "Pound (GBP)"),
+        .init(code: "JPY", en: "Yen (JPY)", id: "Yen (JPY)"),
+        .init(code: "RUB", en: "Ruble (RUB)", id: "Rubel (RUB)"),
+        .init(code: "INR", en: "Rupee (INR)", id: "Rupe (INR)"),
+        .init(code: "KRW", en: "Won (KRW)", id: "Won (KRW)"),
+        .init(code: "CNY", en: "Yuan (CNY)", id: "Yuan (CNY)"),
+        .init(code: "BRL", en: "Real (BRL)", id: "Real (BRL)"),
+        .init(code: "TRY", en: "Lira (TRY)", id: "Lira (TRY)"),
+        .init(code: "IDR", en: "Rupiah (IDR)", id: "Rupiah (IDR)"),
+        .init(code: "CHF", en: "Franc (CHF)", id: "Franc (CHF)"),
+        .init(code: "HKD", en: "Hong Kong dollar (HKD)", id: "Dolar Hong Kong (HKD)"),
+        .init(code: "NZD", en: "New Zealand dollar (NZD)", id: "Dolar Selandia Baru (NZD)"),
+        .init(code: "SEK", en: "Swedish krona (SEK)", id: "Krona Swedia (SEK)"),
+        .init(code: "NOK", en: "Norwegian krone (NOK)", id: "Krona Norwegia (NOK)"),
+        .init(code: "MXN", en: "Mexican peso (MXN)", id: "Peso Meksiko (MXN)"),
+        .init(code: "ZAR", en: "Rand (ZAR)", id: "Rand (ZAR)"),
+        .init(code: "TWD", en: "New Taiwan dollar (TWD)", id: "Dolar Baru Taiwan (TWD)"),
+        .init(code: "DKK", en: "Danish krone (DKK)", id: "Krona Denmark (DKK)"),
+        .init(code: "PLN", en: "Złoty (PLN)", id: "Złoty (PLN)"),
+        .init(code: "THB", en: "Baht (THB)", id: "Baht (THB)"),
+        .init(code: "HUF", en: "Forint (HUF)", id: "Forint (HUF)"),
+        .init(code: "CZK", en: "Koruna (CZK)", id: "Koruna (CZK)"),
+        .init(code: "ILS", en: "Shekel (ILS)", id: "Shekel (ILS)"),
+        .init(code: "CLP", en: "Chilean peso (CLP)", id: "Peso Chili (CLP)"),
+        .init(code: "PHP", en: "Philippine peso (PHP)", id: "Peso Filipina (PHP)"),
+        .init(code: "AED", en: "Dirham (AED)", id: "Dirham (AED)"),
+        .init(code: "COP", en: "Colombian peso (COP)", id: "Peso Kolombia (COP)"),
+        .init(code: "SAR", en: "Riyal (SAR)", id: "Riyal (SAR)"),
+        .init(code: "MYR", en: "Ringgit (MYR)", id: "Ringgit (MYR)"),
+        .init(code: "RON", en: "Leu (RON)", id: "Leu (RON)"),
+        .init(code: "ARS", en: "Argentine peso (ARS)", id: "Peso Argentina (ARS)"),
+        .init(code: "UYU", en: "Uruguayan peso (UYU)", id: "Peso Uruguay (UYU)"),
+        .init(code: "PEN", en: "Peruvian sol (PEN)", id: "Sol Peru (PEN)"),
+        .init(code: "VND", en: "Vietnamese dong (VND)", id: "Dong Vietnam (VND)"),
+        .init(code: "PKR", en: "Pakistani rupee (PKR)", id: "Rupe Pakistan (PKR)"),
+        .init(code: "NGN", en: "Nigerian naira (NGN)", id: "Naira Nigeria (NGN)"),
+        .init(code: "BTC", en: "Bitcoin (BTC)", id: "Bitcoin (BTC)"),
+    ]
+
+    /// The list the app shows: Notion's, with Rupiah moved up to sit right under Percent as the first
+    /// currency (owner: it is the company's currency). Everything else keeps Notion's order.
+    static let formats: [FormatInfo] = {
+        var list = notionFormats
+        guard let i = list.firstIndex(where: { $0.code == "IDR" }),
+              let p = list.firstIndex(where: { $0.code == "percent" }) else { return list }
+        let idr = list.remove(at: i)
+        list.insert(idr, at: p + 1)
+        return list
+    }()
+
+    private static let knownCodes = Set(notionFormats.map(\.code))
+    static func info(_ code: String) -> FormatInfo {
+        formats.first { $0.code == code } ?? formats[1]
+    }
+
+    /// "Filter formats…": an entry matches when the query's letters appear in its name (either language)
+    /// or code in order, like Notion's fuzzy filter ("rup" → Rupee, Rupiah, Pakistani rupee, Uruguayan
+    /// peso). Names that contain the query as typed come first; the rest keep the list order.
+    static func filterFormats(_ query: String) -> [FormatInfo] {
+        let q = fold(query).filter { !$0.isWhitespace }
+        if q.isEmpty { return formats }
+        var direct: [FormatInfo] = [], loose: [FormatInfo] = []
+        for f in formats {
+            let hay = [f.en, f.id, f.code].map(fold)
+            if hay.contains(where: { $0.filter { !$0.isWhitespace }.contains(q) }) { direct.append(f); continue }
+            // Letters in order, within the name itself (not its "(XXX)" code): "rup" finds Uruguayan peso,
+            // not Peruvian sol (PEN).
+            let names = [f.en, f.id].map { fold(String($0.split(separator: "(").first ?? Substring($0))) }
+            if names.contains(where: { isSubsequence(q, of: $0) }) { loose.append(f) }
+        }
+        return direct + loose
+    }
+
+    private static func fold(_ s: String) -> String {
+        // "ł" has no decomposition, so diacritic folding keeps it: "zloty" should still find Złoty.
+        s.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            .replacingOccurrences(of: "ł", with: "l")
+    }
+
+    private static func isSubsequence(_ needle: String, of hay: String) -> Bool {
+        var it = needle.makeIterator()
+        var want = it.next()
+        for c in hay where want != nil && c == want! { want = it.next() }
+        return want == nil
+    }
+
+    /// The bar / ring colours (Notion's ten). "default" draws green.
+    static let barColors = ["default", "gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"]
+
+    /// How a NUMBER field shows its values — the options object of the contract, decoded.
+    struct Style: Equatable, Sendable {
+        var numberFormat: String = "number_with_separators"
+        /// 0…5; nil = Default.
+        var decimals: Int? = nil
+        var showAs: ShowAs = .number
+        var barColor: String = "default"
+        var divideBy: Double = 100
+        var showNumber: Bool = true
+
+        static let plain = Style()
+
+        init() {}
+
+        /// From the option keys (any of them may be absent). The legacy `format` decides the format only
+        /// when `numberFormat` is absent or unknown to this build: "currency-idr" / "idr" / "rupiah" →
+        /// Rupiah; anything else → Number with separators, which is what NEXUS showed before.
+        init(numberFormat: String? = nil, format: String? = nil, decimals: Int? = nil, showAs: String? = nil,
+             barColor: String? = nil, divideBy: Double? = nil, showNumber: Bool? = nil) {
+            let nf = (numberFormat ?? "").trimmingCharacters(in: .whitespaces)
+            if CustomFieldNumber.knownCodes.contains(nf) {
+                self.numberFormat = nf
+            } else if CustomFieldNumber.knownCodes.contains(nf.uppercased()) {
+                self.numberFormat = nf.uppercased()   // "idr", "usd", "btc"
+            } else if CustomFieldNumber.isIDR(format) {
+                self.numberFormat = "IDR"
+            } else {
+                self.numberFormat = "number_with_separators"   // absent or unknown to this build
+            }
+            if let d = decimals, (0...5).contains(d) { self.decimals = d }
+            if let s = showAs.flatMap({ ShowAs(rawValue: $0.lowercased()) }) { self.showAs = s }
+            if let c = barColor?.lowercased(), CustomFieldNumber.barColors.contains(c) { self.barColor = c }
+            if let d = divideBy, d.isFinite, d > 0 { self.divideBy = d }
+            if let s = showNumber { self.showNumber = s }
+        }
+
+        /// From a field's options as JSON (a dictionary, or the bare legacy string "currency-idr").
+        init(options: Any?) {
+            if let s = options as? String { self.init(format: s); return }
+            guard let o = options as? [String: Any] else { self.init(); return }
+            func int(_ v: Any?) -> Int? {
+                if let n = v as? NSNumber, !(v is Bool) { let d = n.doubleValue; return d == d.rounded() ? Int(d) : nil }
+                if let s = v as? String, let n = Int(s) { return n }
+                return nil
+            }
+            func double(_ v: Any?) -> Double? {
+                if let n = v as? NSNumber, !(v is Bool) { return n.doubleValue }
+                if let s = v as? String { return Double(s) }
+                return nil
+            }
+            self.init(numberFormat: o["numberFormat"] as? String, format: o["format"] as? String, decimals: int(o["decimals"]),
+                      showAs: o["showAs"] as? String, barColor: o["barColor"] as? String, divideBy: double(o["divideBy"]),
+                      showNumber: o["showNumber"] as? Bool)
+        }
+
+        /// The legacy key alone (callers that know nothing else).
+        init(format: String?) { self.init(numberFormat: nil, format: format) }
+
+        var isIDR: Bool { numberFormat == "IDR" }
+        var isPercent: Bool { numberFormat == "percent" }
+        var isCurrency: Bool { numberFormat.count == 3 && numberFormat == numberFormat.uppercased() && numberFormat != "BTC" }
+        /// Money and amounts line up on the right in a table cell (Notion right-aligns every number; the
+        /// spec asks it for currencies).
+        var alignsTrailing: Bool { isCurrency }
+
+        /// The options object to save (contract keys). Default values are left out; `format` is written
+        /// only for Rupiah so released apps keep showing "Rp".
+        var options: [String: Any] {
+            var o: [String: Any] = ["numberFormat": numberFormat]
+            if isIDR { o["format"] = "currency-idr" }
+            if let decimals { o["decimals"] = decimals }
+            if showAs != .number { o["showAs"] = showAs.rawValue }
+            if barColor != "default" { o["barColor"] = barColor }
+            if divideBy != 100 { o["divideBy"] = divideBy }
+            if !showNumber { o["showNumber"] = false }
+            return o
+        }
+    }
+
+    // MARK: storing
+
+    /// What to STORE for a NUMBER field with this style. Rupiah with Default/0 decimals → whole rupiah
+    /// digits; Rupiah with 1…5 decimals → up to that many fraction digits; anything else → a plain
+    /// JS-readable number. "42%" typed into any NUMBER field stores 0.42.
+    static func normalize(_ value: String, style: Style) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasSuffix("%") {
+            let n = normalize(String(trimmed.dropLast()), idr: false)
+            guard let d = Decimal(string: n, locale: posix) else { return normalize(trimmed, idr: false) }
+            var frac = d / 100
+            if style.isIDR {
+                frac = rounded(frac, style.decimals ?? 0)
+            }
+            return string(frac)
+        }
+        guard style.isIDR else { return normalize(trimmed, idr: false) }
+        let places = style.decimals ?? 0
+        if places == 0 { return normalize(trimmed, idr: true) }
+        let n = normalize(trimmed, idr: false)
+        guard let d = Decimal(string: n, locale: posix) else { return normalize(trimmed, idr: true) }
+        return string(rounded(d, places))
+    }
+
+    private static let posix = Locale(identifier: "en_US_POSIX")
+
+    /// A stored value as an exact decimal (Rupiah Default/0 reads id-ID grouping, "369.000" = 369 000);
+    /// nil for text that is not a number.
+    static func decimal(_ value: String?, style: Style) -> Decimal? {
+        let raw = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if raw.isEmpty { return nil }
+        // A machine number with a fraction can't be id-ID grouping when its whole part is "0" or has four
+        // or more digits ("1234567.891", "0.42", a value kept from before the field became Rupiah): read
+        // it as the number it is. "369.000" / "13.600000" (legacy typed Rupiah) stay grouping.
+        if style.isIDR, raw.range(of: "^-?(0|[1-9][0-9]{3,})\\.[0-9]+$", options: .regularExpression) != nil,
+           let d = Decimal(string: raw, locale: posix) {
+            return rounded(d, style.decimals ?? 0)
+        }
+        let n = normalize(raw, style: style)
+        // The server stores what JavaScript's String(n) writes, which can be "1e-8" for a tiny fraction.
+        guard !n.isEmpty, n.range(of: "^-?[0-9]+(\\.[0-9]+)?([eE][-+]?[0-9]+)?$", options: .regularExpression) != nil else { return nil }
+        return Decimal(string: n, locale: posix)
+    }
+
+    private static func rounded(_ d: Decimal, _ places: Int) -> Decimal {
+        var x = d, out = Decimal()
+        NSDecimalRound(&out, &x, places, .plain)   // .plain: halves away from zero, like JS toFixed / Intl
+        return out
+    }
+
+    /// "1234567.891", "-0.42" — POSIX digits, no exponent.
+    private static func string(_ d: Decimal) -> String {
+        let s = NSDecimalNumber(decimal: d).stringValue
+        return s == "-0" ? "0" : s
+    }
+
+    /// Dot-grouped integer part, comma decimal: "1.234.567,891". `places` nil = the value's own digits.
+    private static func grouped(_ magnitude: Decimal, places: Int?) -> String {
+        let v = places.map { rounded(magnitude, $0) } ?? magnitude
+        let s = string(v)
+        let parts = s.split(separator: ".", omittingEmptySubsequences: false)
+        var frac = parts.count > 1 ? String(parts[1]) : ""
+        if let places {
+            if frac.count < places { frac += String(repeating: "0", count: places - frac.count) }
+            if frac.count > places { frac = String(frac.prefix(places)) }
+        }
+        let int = groupIDR(String(parts[0]))
+        return frac.isEmpty ? int : int + "," + frac
+    }
+
+    // MARK: showing
+
+    /// A number in this style: "1.234.567,891", "42%", "Rp 1.234.568", "US$1.234.567,89", "₿0,5",
+    /// negatives with "−".
+    static func format(_ value: Decimal, style: Style) -> String {
+        let neg = value < 0
+        let mag = neg ? -value : value
+        let body: String
+        switch style.numberFormat {
+        case "percent":
+            body = grouped(mag * 100, places: style.decimals) + "%"
+        case "BTC":
+            body = "₿" + grouped(mag, places: style.decimals)
+        case "IDR":
+            body = "Rp " + grouped(mag, places: style.decimals ?? 0)
+        case let code where style.isCurrency:
+            body = currency(mag, code: code, places: style.decimals)
+        default:
+            body = grouped(mag, places: style.decimals)
+        }
+        // "−0" never shows: a value that rounds to zero is just zero.
+        let zero = body.allSatisfy { !$0.isNumber || $0 == "0" }
+        return (neg && !zero ? minus : "") + body
+    }
+
+    /// What a NUMBER field shows: the formatted number, the text as typed when it is not a number, ""
+    /// when empty.
+    static func display(_ value: String?, style: Style) -> String {
+        let raw = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if raw.isEmpty { return "" }
+        guard let d = decimal(raw, style: style) else { return style.isIDR ? formatIDR(raw) : raw }
+        return format(d, style: style)
+    }
+
+    /// Bar / Ring fill, 0…1: value ÷ Divide by; a Percent field fills by its stored fraction (0.42 → 42%).
+    static func fill(_ value: Decimal, style: Style) -> Double {
+        let v = NSDecimalNumber(decimal: value).doubleValue
+        let f = style.isPercent ? v : v / (style.divideBy > 0 ? style.divideBy : 100)
+        guard f.isFinite else { return 0 }
+        return min(max(f, 0), 1)
+    }
+
+    /// Currency symbols where Apple's id_ID data differs from the browsers' (Intl id-ID), so the app and
+    /// the web print the same text.
+    private static let symbolOverride: [String: String] = ["INR": "Rs ", "SAR": "SAR "]
+
+    /// One formatter per currency, with the currency's own decimals (2 for USD, 0 for JPY / KRW).
+    private static var currencyFormatters: [String: (formatter: NumberFormatter, natural: Int)] = [:]
+    private static let currencyLock = NSLock()
+
+    /// Intl.NumberFormat('id-ID', {style: 'currency'}) for a non-negative amount: "US$1.234.567,89",
+    /// "€1.234.567,89", "JP¥1.234.568", "CHF 1.234.567,89". Default decimals = the currency's own.
+    private static func currency(_ magnitude: Decimal, code: String, places: Int?) -> String {
+        currencyLock.lock(); defer { currencyLock.unlock() }
+        let entry: (formatter: NumberFormatter, natural: Int)
+        if let cached = currencyFormatters[code] { entry = cached } else {
+            let f = NumberFormatter()
+            f.numberStyle = .currency
+            f.locale = Locale(identifier: "id_ID")
+            f.currencyCode = code
+            if let sym = symbolOverride[code] { f.currencySymbol = sym }
+            f.roundingMode = .halfUp
+            entry = (f, f.maximumFractionDigits)
+            currencyFormatters[code] = entry
+        }
+        let f = entry.formatter
+        let digits = places ?? entry.natural
+        f.minimumFractionDigits = digits
+        f.maximumFractionDigits = digits
+        let out = f.string(from: NSDecimalNumber(decimal: rounded(magnitude, digits))) ?? (code + " " + grouped(magnitude, places: digits))
+        // Plain spaces only (NBSP / narrow NBSP from the formatter): the same text as the web prints.
+        return out.replacingOccurrences(of: "\u{00A0}", with: " ").replacingOccurrences(of: "\u{202F}", with: " ")
+            .replacingOccurrences(of: "  ", with: " ")
     }
 }

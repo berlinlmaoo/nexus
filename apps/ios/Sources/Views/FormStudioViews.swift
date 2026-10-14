@@ -497,7 +497,7 @@ struct FormQuestionCard: View {
                 Text(field.name.isEmpty ? T("Checkbox") : field.name).font(NXFont.text(15)).foregroundStyle(NX.mutedFg)
             }
         } else {
-            FormCanvasControl(field: field)
+            FormCanvasControl(field: field, numberStyle: field.numberStyle(customFields))
         }
         if field.attachmentEnabled && field.type != "file" {
             Label(T("Attach a file (optional)"), systemImage: "paperclip")
@@ -707,6 +707,8 @@ struct FormStaticOptions: View {
 /// The real input of a question, drawn disabled — the web's `QuestionControl disabled`.
 struct FormCanvasControl: View {
     let field: BuilderField
+    /// A number question's format: its own Rupiah kind, else the number field its answer goes to.
+    var numberStyle: CustomFieldNumber.Style = .plain
 
     var body: some View {
         switch field.type {
@@ -732,7 +734,7 @@ struct FormCanvasControl: View {
         case "date":
             box(T("Pick a date"), icon: "calendar")
         case "number":
-            box(field.numberFormat == "currency-idr" ? "Rp 0" : "0")
+            box(field.numberPlaceholder(numberStyle))
         case "email":
             box(field.autofill.isEmpty ? "name@company.com" : T("Filled from the account"), icon: field.autofill.isEmpty ? nil : "lock")
         case "url":

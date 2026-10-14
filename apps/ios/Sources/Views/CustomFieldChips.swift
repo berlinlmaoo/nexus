@@ -15,6 +15,16 @@ struct CFChip: Identifiable, Equatable {
     /// with who asked. Drawn as that person — a grey pill with a person icon — not as a date with a
     /// clock (web PropValue, UI tour run 9).
     var isPerson = false
+    /// A NUMBER value: its field's style and the bar / ring fill, so a card can draw Show as.
+    var number: CFNumberChip? = nil
+}
+
+/// A NUMBER chip's drawing data (CustomFieldNumber.Style + fill 0…1).
+struct CFNumberChip: Equatable {
+    let style: CustomFieldNumber.Style
+    let fill: Double
+    /// Bar or Ring: drawn as CFNumberValue, not as a text pill.
+    var isVisual: Bool { style.showAs != .number }
 }
 
 // Formatters are expensive to construct — build once and reuse. `customFieldChip` runs per card
@@ -65,10 +75,16 @@ func customFieldChip(_ cfv: BoardTask.CFValue) -> CFChip? {
 
     switch type {
     case "NUMBER":
-        // Rupiah reads id-ID grouping ("369.000" = 369 000, owner bug 12 Oct 2026); every other number
-        // uses dot grouping too and is never shown with "Rp" (CustomFieldNumber.swift).
-        let label = CustomFieldNumber.display(raw, format: cfv.customField?.options?.format)
-        return label.isEmpty ? nil : CFChip(id: cfv.customFieldId, label: label, tone: .neutral)
+        // The field's Number format (Notion style, run 14): "Rp 369.000", "42%", "US$1.234,50"…, always
+        // with id-ID grouping; Rupiah still reads legacy "369.000" as 369 000 (CustomFieldNumber.swift).
+        let style = cfv.customField?.options?.numberStyle ?? .plain
+        guard let value = CustomFieldNumber.decimal(raw, style: style) else {
+            let label = CustomFieldNumber.display(raw, style: style)
+            return label.isEmpty ? nil : CFChip(id: cfv.customFieldId, label: label, tone: .neutral)
+        }
+        return CFChip(id: cfv.customFieldId, label: CustomFieldNumber.format(value, style: style), tone: .neutral,
+                      fieldName: cfv.customField?.name,
+                      number: CFNumberChip(style: style, fill: CustomFieldNumber.fill(value, style: style)))
     case "STATUS":
         return CFChip(id: cfv.customFieldId, label: raw, tone: cfStatusTone(raw))
     case "MULTI_SELECT":
@@ -109,7 +125,10 @@ func choiceColorKey(_ value: String, choices: [String]) -> String {
 struct CFChipView: View {
     let chip: CFChip
     var body: some View {
-        if chip.isPerson {
+        if let n = chip.number, n.isVisual {
+            // Show as Bar / Ring: the number (unless hidden) and a short bar or a ring, no pill.
+            CFNumberValue(text: chip.label, style: n.style, fill: n.fill, font: NXFont.text(10, .semibold), color: NX.mutedFg, barWidth: 40)
+        } else if chip.isPerson {
             Label(chip.label, systemImage: "person").font(NXFont.text(10, .semibold)).lineLimit(1)
                 .labelStyle(CFPersonLabelStyle())
                 .padding(.horizontal, 7).padding(.vertical, 3)
@@ -183,30 +202,66 @@ struct FlowLayout: Layout {
     }
 }
 
-/// A NUMBER custom field's input (owner bug 12 Oct 2026, web RupiahInput). Rupiah: "Rp" and the digits
-/// grouped as they are typed ("369.000"); the binding holds the plain digits ("369000"), so what is saved
-/// can never be read back as 369. Plain: the decimal pad, the text as typed (normalised when it is saved).
+/// A NUMBER custom field's input (owner bug 12 Oct 2026, web RupiahInput), in the field's Number format.
+/// Rupiah (Default / 0 decimals): "Rp" and the digits grouped as they are typed ("369.000"); the binding
+/// holds the plain digits ("369000"), so what is saved can never be read back as 369. Every other format:
+/// the text as typed (normalised when it is saved), and — while the field is not being edited — the value
+/// as the field shows it everywhere ("42%", "US$1.234,50", with its bar or ring).
 struct NumberFieldInput: View {
     @Binding var text: String
-    let idr: Bool
+    let style: CustomFieldNumber.Style
     var font: Font = NXFont.text(15)
     /// Optional focus tracking, so a screen can save the value when focus leaves it.
     var focus: FocusState<String?>.Binding? = nil
     var focusId: String = ""
+    @FocusState private var ownFocus: Bool
+
+    init(text: Binding<String>, style: CustomFieldNumber.Style, font: Font = NXFont.text(15),
+         focus: FocusState<String?>.Binding? = nil, focusId: String = "") {
+        _text = text; self.style = style; self.font = font; self.focus = focus; self.focusId = focusId
+    }
+
+    /// The legacy call: Rupiah or a plain number.
+    init(text: Binding<String>, idr: Bool, font: Font = NXFont.text(15),
+         focus: FocusState<String?>.Binding? = nil, focusId: String = "") {
+        self.init(text: text, style: idr ? CustomFieldNumber.Style(numberFormat: "IDR") : .plain, font: font, focus: focus, focusId: focusId)
+    }
+
+    private var wholeRupiah: Bool { style.isIDR && (style.decimals ?? 0) == 0 }
+    private var editing: Bool { focus.map { $0.wrappedValue == focusId } ?? ownFocus }
+    /// The value drawn over the field while it is not being edited; nil = the field shows itself.
+    private var shown: (text: String, fill: Double)? {
+        guard !editing, let d = CustomFieldNumber.decimal(text, style: style) else { return nil }
+        if wholeRupiah && style.showAs == .number { return nil }   // the grouped "Rp" field already reads right
+        return (CustomFieldNumber.format(d, style: style), CustomFieldNumber.fill(d, style: style))
+    }
 
     var body: some View {
-        if idr {
-            HStack(spacing: 6) {
-                Text("Rp").font(font).foregroundStyle(NX.mutedFg)
-                focusable(TextField("0", text: rupiah).keyboardType(.numberPad).font(font))
+        let over = shown
+        // The same text field whether or not it is being edited (switching views would drop the focus):
+        // its own text goes clear and the formatted value is drawn over it.
+        HStack(spacing: 6) {
+            if wholeRupiah {
+                Text("Rp").font(font).foregroundStyle(over == nil ? NX.mutedFg : .clear)
+                focusable(TextField("0", text: rupiah).keyboardType(.numberPad).font(font)
+                    .foregroundStyle(over == nil ? NX.foreground : .clear))
+            } else {
+                // Percent takes "42%" (stored 0.42), so its keyboard has the sign.
+                focusable(TextField(CustomFieldNumber.format(0, style: style), text: $text)
+                    .keyboardType(style.isPercent ? .numbersAndPunctuation : .decimalPad).font(font)
+                    .foregroundStyle(over == nil ? NX.foreground : .clear))
             }
-        } else {
-            focusable(TextField("0", text: $text).keyboardType(.decimalPad).font(font))
+        }
+        .overlay(alignment: .leading) {
+            if let over {
+                CFNumberValue(text: over.text, style: style, fill: over.fill, font: font, barWidth: nil)
+                    .allowsHitTesting(false)
+            }
         }
     }
 
     @ViewBuilder private func focusable<V: View>(_ field: V) -> some View {
-        if let focus { field.focused(focus, equals: focusId) } else { field }
+        if let focus { field.focused(focus, equals: focusId) } else { field.focused($ownFocus) }
     }
 
     /// Shown grouped; stored as digits. While typing on the number pad the dots are only the grouping

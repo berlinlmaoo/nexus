@@ -410,8 +410,7 @@ struct ProjectTableRow: View {
             assigneeCell.modifier(TableCell(width: cols.col, height: rowH))
             dueCell.modifier(TableCell(width: cols.col, height: rowH))
             ForEach(fields) { f in
-                openButton { Text(fieldText(f)).font(NXFont.text(14)).foregroundStyle(NX.foreground.opacity(0.9)).lineLimit(1) }
-                    .modifier(TableCell(width: cols.field, height: rowH))
+                fieldCell(f).modifier(TableCell(width: cols.field, height: rowH))
             }
             priorityCell.modifier(TableCell(width: cols.col, height: rowH))
             statusCell.modifier(TableCell(width: cols.col, height: rowH))
@@ -593,6 +592,26 @@ struct ProjectTableRow: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// A field's cell. A number is drawn in its field's format, with its bar or ring; money sits on the
+    /// right edge of the cell (Notion's number columns), everything else on the left.
+    @ViewBuilder private func fieldCell(_ f: CustomField) -> some View {
+        let cfv = (task.customFieldValues ?? []).first(where: { $0.customFieldId == f.id })
+        if f.type.uppercased() == "NUMBER", let cfv, let chip = customFieldChip(cfv), let num = chip.number {
+            Button {
+                if selecting, let selection { selection.toggle(task.id) } else { onOpen(task.id) }
+            } label: {
+                CFNumberValue(text: chip.label, style: num.style, fill: num.fill, font: NXFont.text(14),
+                              color: NX.foreground.opacity(0.9), barWidth: nil)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity,
+                           alignment: num.style.alignsTrailing && num.style.showAs != .bar ? .trailing : .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        } else {
+            openButton { Text(fieldText(f)).font(NXFont.text(14)).foregroundStyle(NX.foreground.opacity(0.9)).lineLimit(1) }
+        }
     }
 
     /// Reuses the board's chip formatter so currency / multi-select / place values read the same here as on

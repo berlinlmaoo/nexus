@@ -11,7 +11,8 @@ struct CustomFieldEditor: View {
     @State private var type = "SELECT"
     @State private var options: [String] = []
     @State private var newOption = ""
-    @State private var numberCurrency = false
+    /// A number field's format (Notion's Edit property: format, decimals, show as).
+    @State private var numberStyle = CustomFieldNumber.Style()
     @State private var busy = false
 
     private let types: [(String, String)] = [
@@ -42,11 +43,7 @@ struct CustomFieldEditor: View {
                 }
                 if isSelectType { optionsBox }
                 if type == "NUMBER" {
-                    box("Format") {
-                        Toggle(isOn: $numberCurrency) {
-                            Text("Tampilkan sebagai Rupiah (Rp)").font(NXFont.text(13)).foregroundStyle(NX.foreground)
-                        }.tint(NX.violetText)
-                    }
+                    box(T("Format")) { NumberFormatSettings(style: $numberStyle) }
                 }
                 Button { Task { await save() } } label: {
                     Text(busy ? "Menyimpan…" : T("Create field")).font(NXFont.text(15, .bold))
@@ -97,7 +94,7 @@ struct CustomFieldEditor: View {
         busy = true
         var opts: [String: Any]? = nil
         if isSelectType { opts = ["options": options] }
-        else if type == "NUMBER", numberCurrency { opts = ["format": "currency-idr"] }
+        else if type == "NUMBER" { opts = numberStyle.options }
         if (try? await APIClient.shared.createCustomFieldDef(projectId: projectId, name: name.trimmingCharacters(in: .whitespaces), type: type, options: opts)) != nil {
             await onSaved(); dismiss()
         } else { busy = false }

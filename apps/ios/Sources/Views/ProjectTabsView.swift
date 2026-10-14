@@ -1341,7 +1341,7 @@ struct CreateTaskSheet: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(f.name).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
             if type == "NUMBER" {
-                NumberFieldInput(text: cfText(f.id), idr: CustomFieldNumber.isIDR(f.options?.format))
+                NumberFieldInput(text: cfText(f.id), style: f.options?.numberStyle ?? .plain)
                     .padding(10)
                     .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
             } else if type == "DATE" {
@@ -1419,7 +1419,7 @@ struct CreateTaskSheet: View {
                 switch v {
                 case .text(let s):
                     // A number is stored as a plain machine number ("369.000" Rupiah → "369000").
-                    let v = f.type.uppercased() == "NUMBER" ? CustomFieldNumber.normalize(s, idr: CustomFieldNumber.isIDR(f.options?.format)) : s
+                    let v = f.type.uppercased() == "NUMBER" ? CustomFieldNumber.normalize(s, style: f.options?.numberStyle ?? .plain) : s
                     if !v.isEmpty { try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: v) }
                 case .multi(let a):
                     if !a.isEmpty { try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: a) }

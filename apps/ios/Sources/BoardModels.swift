@@ -293,21 +293,37 @@ struct TaskDependency: Decodable, Identifiable, Sendable {
     let task: TaskRef?
     struct TaskRef: Decodable, Sendable { let id: String; let title: String; let status: String? }
 }
-/// options is polymorphic: ["a","b"] | {options:[…], format?} | {choices:[…]} | null.
+/// options is polymorphic: ["a","b"] | {options:[…], format?} | {choices:[…]} | "currency-idr" | null.
+/// A NUMBER field's options also carry its Number format (numberFormat, decimals, showAs, barColor,
+/// divideBy, showNumber — CustomFieldNumber.Style).
 struct CFOptions: Decodable, Sendable {
     let list: [String]
-    let format: String?   // e.g. "currency-idr"
+    let format: String?   // legacy: "currency-idr"
+    /// How a NUMBER field's values show (the legacy `format` alone maps to Rupiah / grouped number).
+    let numberStyle: CustomFieldNumber.Style
     init(from decoder: Decoder) throws {
         if let arr = try? decoder.singleValueContainer().decode([String].self) {
-            list = arr; format = nil
+            list = arr; format = nil; numberStyle = .plain
+        } else if let s = try? decoder.singleValueContainer().decode(String.self) {
+            list = []; format = s; numberStyle = CustomFieldNumber.Style(format: s)
         } else if let c = try? decoder.container(keyedBy: CodingKeys.self) {
-            if let o = try c.decodeIfPresent([String].self, forKey: .options) { list = o }
-            else if let ch = try c.decodeIfPresent([String].self, forKey: .choices) { list = ch }
+            if let o = try? c.decodeIfPresent([String].self, forKey: .options) { list = o }
+            else if let ch = try? c.decodeIfPresent([String].self, forKey: .choices) { list = ch }
             else { list = [] }
             format = try? c.decodeIfPresent(String.self, forKey: .format)
-        } else { list = []; format = nil }
+            let decimals: Int? = (try? c.decodeIfPresent(Int.self, forKey: .decimals)) ?? nil
+            let divideBy: Double? = (try? c.decodeIfPresent(Double.self, forKey: .divideBy)) ?? nil
+            numberStyle = CustomFieldNumber.Style(
+                numberFormat: (try? c.decodeIfPresent(String.self, forKey: .numberFormat)) ?? nil,
+                format: format,
+                decimals: decimals,
+                showAs: (try? c.decodeIfPresent(String.self, forKey: .showAs)) ?? nil,
+                barColor: (try? c.decodeIfPresent(String.self, forKey: .barColor)) ?? nil,
+                divideBy: divideBy,
+                showNumber: (try? c.decodeIfPresent(Bool.self, forKey: .showNumber)) ?? nil)
+        } else { list = []; format = nil; numberStyle = .plain }
     }
-    enum CodingKeys: String, CodingKey { case options, choices, format }
+    enum CodingKeys: String, CodingKey { case options, choices, format, numberFormat, decimals, showAs, barColor, divideBy, showNumber }
 }
 
 /// GET /api/time-entries?taskId= — logged time on a task.
