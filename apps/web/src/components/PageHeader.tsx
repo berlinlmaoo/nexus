@@ -56,14 +56,14 @@ export function PageHeader({
   // Without tabs the bar is the header's last pinned part. It draws its dividing line once the page has
   // scrolled (content then runs under it); at rest the subtitle and actions sit under it, and a line between
   // the title and its own subtitle would cut the header in two.
+  // Also drives the desktop fade under the sticky header (below).
   const [scrolled, setScrolled] = useState(false);
   useLayoutEffect(() => {
-    if (tabs) return;
     const read = () => setScrolled(window.scrollY > 4);
     read();
     window.addEventListener("scroll", read, { passive: true });
     return () => window.removeEventListener("scroll", read);
-  }, [tabs]);
+  }, []);
   const barEdge = !tabs && cn("max-md:border-b", scrolled ? "max-md:border-border" : "max-md:border-transparent");
 
   const titleBlock = (
@@ -117,11 +117,23 @@ export function PageHeader({
           // reaches up from the strip to the title bar, so no sliver of a scrolled row shows between the two
           // pinned parts (UI tour run 13, W-M2: an avatar and cut text showed under the title). Over the bar
           // itself it is the same colour. A header on another surface sets --page-header-bg.
-          className={cn("relative overflow-x-auto px-4 md:px-8 max-md:sticky max-md:top-[var(--page-header-bar-h)] max-md:z-30 max-md:border-b max-md:border-border max-md:bg-background max-md:shadow-[0_-0.75rem_0_0_var(--page-header-bg,var(--background))]", className)}
+          // 2px is enough for the sub-pixel seam between the two pinned parts. It must stay inside the bottom
+          // padding of whatever sits right above the strip: at 0.75rem it painted over the bottom of the project
+          // icon and buttons, a two-line project name and a two-line page subtitle (UI tour run 14, R14-WM-1,
+          // R14-WM-2, R14-WM-5).
+          className={cn("relative overflow-x-auto px-4 md:px-8 max-md:sticky max-md:top-[var(--page-header-bar-h)] max-md:z-30 max-md:border-b max-md:border-border max-md:bg-background max-md:shadow-[0_-2px_0_0_var(--page-header-bg,var(--background))]", className)}
         >
           {tabs}
         </div>
       )}
+      {/* Desktop: once the page has scrolled, content fades out under the sticky header instead of being cut
+          mid-line at its edge (UI tour run 14, R14-WD-10: the outlet calendar's legend showed half a line under
+          the tabs). At rest it is hidden, so nothing right under the header is dimmed. */}
+      <div
+        aria-hidden
+        className={cn("pointer-events-none absolute inset-x-0 top-full hidden h-4 transition-opacity duration-150 md:block", scrolled ? "opacity-100" : "opacity-0")}
+        style={{ background: "linear-gradient(to bottom, var(--page-header-bg, var(--background)), transparent)" }}
+      />
     </div>
   );
 }

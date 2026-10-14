@@ -109,7 +109,9 @@ export function AppSidebar() {
     if (url === "/attendance") return canManageAttendance ? (offsiteQuery.data?.pendingCount ?? 0) : 0;
     return 0;
   };
-  const badgeText = (n: number) => (n > 9 ? "9+" : String(n));
+  // The same cap as the dashboard bell and the phone tab bar ("47", "99+"): the sidebar said "9+" while the bell
+  // beside it said "47" for one count (UI tour run 14, R14-WD-13).
+  const badgeText = (n: number) => (n > 99 ? "99+" : String(n));
   const visibleGroups = groups
     .map((g) => ({ ...g, items: g.items.filter((item) => (canManageOrg || !MANAGER_ONLY_URLS.has(item.url))) }))
     .filter((g) => g.items.length > 0);
@@ -173,8 +175,10 @@ export function AppSidebar() {
       {/* Short desktop screens (≤960px tall, mouse): a denser nav, so the last entry (Control Room) is not
           hidden under the footer at 1440×900 (QA 13 Oct 2026). Touch keeps its 32px+ rows. */}
       {/* While more of the nav lies below, its bottom edge fades into the footer instead of cutting a label in
-          half ("Folders", UI tour run 13, W-D7). */}
-      <SidebarContent ref={navRef} className={cn(navMore && "[mask-image:linear-gradient(to_bottom,black_calc(100%-2rem),transparent)]", "[@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group]]:py-1 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group-label]]:h-6 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu]]:gap-0.5 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu-button]]:h-7")}>
+          half ("Folders", UI tour run 13, W-D7). The last 0.75rem is fully clear and the fade runs over the
+          row above it: a 2rem fade still left the top half of the next row (or project icon, in the collapsed
+          rail) readable right on the footer line (UI tour run 14, R14-WD-4 / R14-WD-15). */}
+      <SidebarContent ref={navRef} className={cn(navMore && "[mask-image:linear-gradient(to_bottom,black_calc(100%-3.5rem),transparent_calc(100%-0.75rem))]", "[@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group]]:py-1 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=group-label]]:h-6 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu]]:gap-0.5 [@media(max-height:960px)_and_(pointer:fine)]:[&_[data-sidebar=menu-button]]:h-7")}>
         {visibleGroups.map((g) => (
           <SidebarGroup key={g.label}>
             <SidebarGroupLabel>{t(g.label)}</SidebarGroupLabel>

@@ -16,6 +16,7 @@ import { useTheme, type Theme } from "@/lib/theme";
 import { useLang, type Lang } from "@/lib/lang";
 import { thumbUrl } from "@/lib/thumb";
 import { ActiveSessions } from "@/components/settings/ActiveSessions";
+import { formatPhone } from "@/lib/phone-format";
 
 // The section is in the URL (?section=security), so a reload, Back or a shared link opens the same one
 // (QA 13 Oct 2026: it always fell back to Profile).
@@ -201,13 +202,13 @@ function WorkspaceMembersSection() {
 function MemberPhoneEditor({ member, workspaceId, canEdit }: { member: NexusWorkspaceMember; workspaceId?: string; canEdit: boolean }) {
   const { t } = useLang();
   const qc = useQueryClient();
-  const [val, setVal] = useState(member.phoneNumber ?? "");
-  const dirty = val.trim() !== (member.phoneNumber ?? "");
+  const [val, setVal] = useState(formatPhone(member.phoneNumber));
+  const dirty = val.replace(/[\s-]+/g, "") !== (member.phoneNumber ?? "").replace(/[\s-]+/g, "");
   const save = useMutation({
     mutationFn: () => nexusApi.updateWorkspaceMember({ memberId: member.id, workspaceId, phoneNumber: val.trim() || null }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "workspace-members"] }),
   });
-  if (!canEdit) return member.phoneNumber ? <span className="hidden text-xs text-muted-foreground sm:inline">{member.phoneNumber}</span> : null;
+  if (!canEdit) return member.phoneNumber ? <span className="hidden text-xs text-muted-foreground sm:inline">{formatPhone(member.phoneNumber)}</span> : null;
   return (
     // Wide enough for "+62 8xx xxxx xxxx" (QA B11: the number was cut on a phone).
     <div className="flex min-w-0 items-center gap-1 max-sm:basis-full">
@@ -368,7 +369,7 @@ function ProfileSection() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [loaded, setLoaded] = useState(false);
-  if (u && !loaded) { setName(u.name ?? ""); setPhone(u.phoneNumber ?? ""); setLoaded(true); }
+  if (u && !loaded) { setName(u.name ?? ""); setPhone(formatPhone(u.phoneNumber)); setLoaded(true); }
   const save = useMutation({ mutationFn: () => nexusApi.updateProfile({ name: name.trim(), phoneNumber: phone.trim() || null }), onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "profile"] }), onError: (e) => toastFailure(t("Couldn't save your profile"), e) });
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -417,7 +418,7 @@ function ProfileSection() {
           </label>
           <label className="block sm:col-span-2">
             <span className="text-xs font-medium text-muted-foreground">{t("Phone number")}</span>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t("08xxxxxxxxxx · outside Indonesia, start with + (e.g. +65…)")} inputMode="tel" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} onBlur={() => setPhone((p) => formatPhone(p))} placeholder={t("08xxxxxxxxxx · outside Indonesia, start with + (e.g. +65…)")} inputMode="tel" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
             <span className="mt-1 block text-[11px] text-muted-foreground">{t("For numbers outside Indonesia, type + and the country code.")}</span>
           </label>
         </div>
@@ -426,7 +427,7 @@ function ProfileSection() {
         </div>
         {save.isSuccess && <p className="text-right text-xs font-semibold text-success">{t("Profile saved.")}</p>}
       </div>
-      <PasswordSection />
+      {/* The password card lives under Security only (UI tour run 14, R14-WM-23: it was on both tabs). */}
       <DeleteAccountSection />
     </div>
   );

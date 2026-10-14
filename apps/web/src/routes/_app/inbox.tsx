@@ -194,7 +194,7 @@ function NotificationRow({ notification }: { notification: NexusNotification }) 
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <p className="line-clamp-2 break-words text-sm font-semibold"><KeepIds text={notificationTitle(notification)} /></p>
+        <p className="line-clamp-2 break-words text-sm font-semibold"><KeepIds text={notificationTitle(notification)} names={[actor?.name]} /></p>
         <p className="line-clamp-3 max-w-3xl break-words text-sm text-muted-foreground mt-0.5">{notificationMessage(notification) || t("New notification")}</p>
         <p className="text-xs text-muted-foreground mt-1">{fmtDay(notification.createdAt, locale)}</p>
         {(markRead.isError || remove.isError) && <p className="mt-1 text-xs font-semibold text-destructive">{t("That didn't work. Check your connection and try again.")}</p>}
@@ -222,7 +222,22 @@ function fmtDay(value: string | null | undefined, locale: string) {
  * A title with request and task ids ("RT6-mef518", "PKS/PATS-UNIV") kept whole: a line breaks around an id,
  * never at its hyphen (UI tour run 13, W-M21: "RT6-" / "mef518").
  */
-function KeepIds({ text }: { text: string }) {
-  const parts = text.split(/(\S*\w-\w\S*)/);
+/**
+ * Names stay in one piece: a short sender name is joined with no-break spaces, and a short number is kept with
+ * the word before it ("QA Dev 6", "SP 2"), so a wrapped title never leaves "6" alone on its own line (UI tour
+ * run 14, R14-WM-25: "New legal request from QA Dev / 6").
+ */
+function keepNames(text: string, names: (string | null | undefined)[]): string {
+  let out = text;
+  for (const raw of names) {
+    const name = raw?.trim();
+    if (!name || name.length > 24 || !name.includes(" ")) continue;
+    out = out.split(name).join(name.replace(/ +/g, "\u00a0"));
+  }
+  return out.replace(/(\S) (\d{1,3})(?=$|[\s:;,.!?)])/g, "$1\u00a0$2");
+}
+
+function KeepIds({ text, names = [] }: { text: string; names?: (string | null | undefined)[] }) {
+  const parts = keepNames(text, names).split(/(\S*\w-\w\S*)/);
   return <>{parts.map((p, i) => (i % 2 === 1 ? <span key={i} className="whitespace-nowrap">{p}</span> : p))}</>;
 }

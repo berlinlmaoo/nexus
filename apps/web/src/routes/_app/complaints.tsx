@@ -95,8 +95,8 @@ const countFor = (counts: Record<string, number>, tab: Tab) =>
 // Desktop row grid: subject · from · category · status · replies · last activity. Header and rows share it.
 // From xl, not lg: at 1024 with the sidebar open the fixed columns took all ~700px and the Subject column
 // collapsed to 0 (QA 13 Oct 2026, iPad portrait). Below xl every ticket is the two-line row.
-const ROW_GRID = "xl:grid xl:grid-cols-[minmax(0,1fr)_11rem_8rem_9rem_4.5rem_7.5rem] xl:items-center xl:gap-4";
-const ROW_GRID_MINE = "xl:grid xl:grid-cols-[minmax(0,1fr)_8rem_9rem_4.5rem_7.5rem] xl:items-center xl:gap-4";
+const ROW_GRID = "xl:grid xl:grid-cols-[minmax(0,1fr)_10.5rem_7.5rem_8rem_4rem_7rem] xl:items-center xl:gap-4";
+const ROW_GRID_MINE = "xl:grid xl:grid-cols-[minmax(0,1fr)_7.5rem_8rem_4rem_7rem] xl:items-center xl:gap-4";
 
 function ComplaintsPage() {
   const { t } = useLang();
@@ -269,16 +269,15 @@ function TicketRow({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: bool
   return (
     <button onClick={onOpen} className={cn("block w-full px-4 py-3 text-left transition-colors hover:bg-accent/50 focus-visible:bg-accent/50 focus-visible:outline-none", viewerIsBod ? ROW_GRID : ROW_GRID_MINE)}>
       {/* Subject (+ markers). On a phone the date rides on this line. */}
-      <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-        <span className="min-w-0 truncate text-sm font-medium text-foreground">{c.subject}</span>
-        {/* Desktop: the same two markers as small labelled icons, so a long subject never pushes them into the next column. */}
-        {(decisionMark || c.gideonReplied) && (
-          <span className="hidden shrink-0 items-center gap-1 xl:inline-flex">
-            {decisionMark && <CorrectionPendingChip />}
-            {c.gideonReplied && <span title={t("GIDEON replied")} aria-label={t("GIDEON replied")} className="grid h-5 w-5 place-items-center rounded-full bg-muted text-muted-foreground"><GideonMark className="h-3 w-3" /></span>}
-          </span>
-        )}
-        <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground xl:hidden">{fmtWhen(c.lastMessageAt)}</span>
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+          {/* Desktop: the subject has the whole column (up to two lines); the markers moved under it, labelled
+              (UI tour run 14, R14-WD-14: beside them the subject was cut to "Day Off terpotong ka…" and the
+              GIDEON mark was a bare glyph). */}
+          <span className="min-w-0 truncate text-sm font-medium text-foreground xl:line-clamp-2 xl:whitespace-normal xl:break-words">{c.subject}</span>
+          <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground xl:hidden">{fmtWhen(c.lastMessageAt)}</span>
+        </div>
+        {markers && <div className="mt-1 hidden xl:flex">{markers}</div>}
       </div>
       {viewerIsBod && (
         <div className="hidden min-w-0 items-center gap-2 xl:flex">
