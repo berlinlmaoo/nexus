@@ -25,6 +25,8 @@ export function DateField({
   emptyClassName,
   align = "start",
   min,
+  max,
+  yearPicker = false,
 }: {
   value: string | null | undefined;
   onChange: (v: string | null) => void;
@@ -37,11 +39,15 @@ export function DateField({
   align?: "start" | "center" | "end";
   /** Earliest pickable day, "YYYY-MM-DD" (the native input's `min`). */
   min?: string;
+  /** Latest pickable day, "YYYY-MM-DD" (the native input's `max`). */
+  max?: string;
+  /** Month and year dropdowns in the calendar header, for dates far from today. */
+  yearPicker?: boolean;
 }) {
   const { t, lang, locale } = useLang();
   const [open, setOpen] = useState(false);
   const date = parseValue(value);
-  const text = date ? formatDateText(date, locale, withTime && hasTime(value)) : "";
+  const text = date ? formatDateText(date, locale, withTime && hasTime(value), yearPicker) : "";
   const emit = (d: Date | null, time?: string) => {
     if (!d) { onChange(null); return; }
     if (!withTime) { onChange(ymd(d)); return; }
@@ -71,7 +77,13 @@ export function DateField({
           defaultMonth={date ?? undefined}
           locale={lang === "id" ? idLocale : enGB}
           weekStartsOn={1}
-          disabled={min && parseValue(min) ? { before: parseValue(min)! } : undefined}
+          disabled={(() => {
+            const lo = min ? parseValue(min) : null; const hi = max ? parseValue(max) : null;
+            const rules = [...(lo ? [{ before: lo }] : []), ...(hi ? [{ after: hi }] : [])];
+            return rules.length ? rules : undefined;
+          })()}
+          // Month + year dropdowns for dates years back (an employment start), from 1990 to `max`.
+          {...(yearPicker ? { captionLayout: "dropdown" as const, startMonth: new Date(1990, 0, 1), endMonth: (max ? parseValue(max) : null) ?? new Date(new Date().getFullYear() + 5, 11, 31) } : {})}
           onSelect={(d) => { emit(d ?? null); if (!withTime) setOpen(false); }}
         />
         {withTime && (
@@ -127,8 +139,8 @@ function hasTime(v: string | null | undefined): boolean {
 }
 
 /** "14 Oct 2026" / "14 Okt 2026" (+ time). The year is dropped in the current year. en-GB's "Sept" reads "Sep". */
-export function formatDateText(d: Date, locale: string, withTime = false): string {
-  const sameYear = d.getFullYear() === new Date().getFullYear();
+export function formatDateText(d: Date, locale: string, withTime = false, alwaysYear = false): string {
+  const sameYear = !alwaysYear && d.getFullYear() === new Date().getFullYear();
   const s = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }), ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}) }).format(d);
   return s.replace(/\bSept\b/, "Sep");
 }
