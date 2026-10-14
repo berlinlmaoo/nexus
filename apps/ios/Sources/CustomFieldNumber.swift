@@ -42,10 +42,10 @@ enum CustomFieldNumber {
         var neg = false
         if s.count >= 2, s.hasPrefix("("), s.hasSuffix(")") { neg = true; s = String(s.dropFirst().dropLast()) }
         if s.hasPrefix("-") { neg.toggle(); s.removeFirst() }
-        let lower = s.lowercased()
-        if lower.hasPrefix("rp.") { s = String(s.dropFirst(3)) }
-        else if lower.hasPrefix("rp") { s = String(s.dropFirst(2)) }
-        else if lower.hasPrefix("idr") { s = String(s.dropFirst(3)) }
+        // A currency mark typed with the amount: "Rp", "IDR", "$", "US$", "€", "£", "¥", "₿"…
+        if let r = s.range(of: "^(rp\\.?|idr|[a-z]{0,3}\\$|[€£¥₩₫₹₿])", options: [.regularExpression, .caseInsensitive]) {
+            s.removeSubrange(r)
+        }
         if s.hasPrefix("-") { neg.toggle(); s.removeFirst() }
         else if s.hasPrefix("+") { s.removeFirst() }
         // "Rp 50.000,-" / "Rp 50.000,00-".
@@ -114,8 +114,13 @@ enum CustomFieldNumber {
         return "1" + String(a)
     }
 
-    private static func idrFromParsed(_ p: Parsed) -> String {
+    private static func idrFromParsed(_ p: Parsed, keep: Int = 0) -> String {
         var int = trimZeros(p.int.isEmpty ? "0" : p.int)
+        if keep > 0, !p.frac.isEmpty, int.count <= 15, let n = Decimal(string: "\(int).\(p.frac)", locale: posix) {
+            // Rupiah with decimal places (1…5): keep the fraction, rounded to the field's places.
+            let r = string(rounded(n, keep))
+            return (p.neg && r != "0" ? "-" : "") + r
+        }
         if let first = p.frac.first?.wholeNumberValue, first >= 5 { int = incrementDigits(int) }
         return (p.neg && int != "0" ? "-" : "") + int
     }
@@ -144,6 +149,11 @@ enum CustomFieldNumber {
     /// "1500000"); plain → a JS-readable number ("1.500" → "1500", "2,5" → "2.5"). Empty → "". Text that
     /// is not a number: Rupiah keeps its digits, plain keeps the text unchanged (nothing is destroyed).
     static func normalize(_ value: String, idr: Bool) -> String {
+        normalize(value, idr: idr, keep: 0)
+    }
+
+    /// `keep`: the fraction digits a Rupiah field keeps (its decimal places, 1…5); 0 = whole rupiah.
+    private static func normalize(_ value: String, idr: Bool, keep: Int) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return "" }
         let (s, neg) = stripCurrency(trimmed)
@@ -153,6 +163,10 @@ enum CustomFieldNumber {
                let base = Double("\(p.int.isEmpty ? "0" : p.int).\(p.frac.isEmpty ? "0" : p.frac)") {
                 let n = base * m.factor
                 if n.isFinite && n < 1e15 {
+                    if idr && keep > 0, let d = Decimal(string: jsNumber(n), locale: posix) {
+                        let r = string(rounded(d, keep))
+                        return (neg && r != "0" ? "-" : "") + r
+                    }
                     let v = idr ? n.rounded() : n
                     return jsNumber(neg && v != 0 ? -v : v)
                 }
@@ -160,7 +174,7 @@ enum CustomFieldNumber {
         }
         if var p = parseDigits(s, idr: idr) {
             p.neg = neg
-            if let out = idr ? idrFromParsed(p) : plainFromParsed(p) { return out }
+            if let out = idr ? idrFromParsed(p, keep: keep) : plainFromParsed(p) { return out }
         }
         if idr { return onlyDigits(value) }
         return trimmed
@@ -309,35 +323,40 @@ extension CustomFieldNumber {
         formats.first { $0.code == code } ?? formats[1]
     }
 
-    /// "Filter formats…": an entry matches when the query's letters appear in its name (either language)
-    /// or code in order, like Notion's fuzzy filter ("rup" → Rupee, Rupiah, Pakistani rupee, Uruguayan
-    /// peso). Names that contain the query as typed come first; the rest keep the list order.
-    static func filterFormats(_ query: String) -> [FormatInfo] {
-        let q = fold(query).filter { !$0.isWhitespace }
+    /// "Filter formats…": the formats whose name in the app language (its "(XXX)" code included) matches,
+    /// best first — web filterNumberFormats: the query at the start of a word, then anywhere, then its
+    /// letters in order within a short span (Notion's fuzzy filter: "rup" → Rupee, Rupiah, Pakistani
+    /// rupee, Uruguayan peso). Ties keep the list order. Accents are ignored ("zloty" finds Złoty).
+    static func filterFormats(_ query: String, lang: AppLang? = nil) -> [FormatInfo] {
+        let q = fold(query.trimmingCharacters(in: .whitespaces))
         if q.isEmpty { return formats }
-        var direct: [FormatInfo] = [], loose: [FormatInfo] = []
-        for f in formats {
-            let hay = [f.en, f.id, f.code].map(fold)
-            if hay.contains(where: { $0.filter { !$0.isWhitespace }.contains(q) }) { direct.append(f); continue }
-            // Letters in order, within the name itself (not its "(XXX)" code): "rup" finds Uruguayan peso,
-            // not Peruvian sol (PEN).
-            let names = [f.en, f.id].map { fold(String($0.split(separator: "(").first ?? Substring($0))) }
-            if names.contains(where: { isSubsequence(q, of: $0) }) { loose.append(f) }
+        let useID = (lang ?? AppLanguage.shared.lang) == .id
+        var scored: [(f: FormatInfo, score: Int, index: Int)] = []
+        for (idx, f) in formats.enumerated() {
+            if let score = fuzzyScore(fold(useID ? f.id : f.en), q) { scored.append((f, score, idx)) }
         }
-        return direct + loose
+        return scored.sorted { ($0.score, $0.index) < ($1.score, $1.index) }.map(\.f)
+    }
+
+    /// 0 = the query starts a word, 1 = it is inside one, 2 = its letters in order within 4× its length.
+    private static func fuzzyScore(_ text: String, _ q: String) -> Int? {
+        let t = Array(text), n = Array(q)
+        if let r = text.range(of: q) {
+            let at = text.distance(from: text.startIndex, to: r.lowerBound)
+            return at == 0 || t[at - 1] == " " || t[at - 1] == "(" ? 0 : 1
+        }
+        var i = 0, first = -1
+        for j in t.indices where i < n.count {
+            if t[j] == n[i] { if first < 0 { first = j }; i += 1 }
+            if i == n.count && j - first + 1 > n.count * 4 { return nil }
+        }
+        return i == n.count ? 2 : nil
     }
 
     private static func fold(_ s: String) -> String {
         // "ł" has no decomposition, so diacritic folding keeps it: "zloty" should still find Złoty.
         s.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
             .replacingOccurrences(of: "ł", with: "l")
-    }
-
-    private static func isSubsequence(_ needle: String, of hay: String) -> Bool {
-        var it = needle.makeIterator()
-        var want = it.next()
-        for c in hay where want != nil && c == want! { want = it.next() }
-        return want == nil
     }
 
     /// The bar / ring colours (Notion's ten). "default" draws green.
@@ -429,21 +448,16 @@ extension CustomFieldNumber {
     /// JS-readable number. "42%" typed into any NUMBER field stores 0.42.
     static func normalize(_ value: String, style: Style) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasSuffix("%") {
-            let n = normalize(String(trimmed.dropLast()), idr: false)
-            guard let d = Decimal(string: n, locale: posix) else { return normalize(trimmed, idr: false) }
-            var frac = d / 100
-            if style.isIDR {
-                frac = rounded(frac, style.decimals ?? 0)
-            }
-            return string(frac)
+        // "42%" is the fraction 0.42 (what a Percent field stores) in any number field but Rupiah.
+        if !style.isIDR, trimmed.hasSuffix("%") {
+            let base = normalize(String(trimmed.dropLast()).trimmingCharacters(in: .whitespaces), idr: false)
+            if isMachineNumber(base), let d = Decimal(string: base, locale: posix) { return string(d / 100) }
         }
-        guard style.isIDR else { return normalize(trimmed, idr: false) }
-        let places = style.decimals ?? 0
-        if places == 0 { return normalize(trimmed, idr: true) }
-        let n = normalize(trimmed, idr: false)
-        guard let d = Decimal(string: n, locale: posix) else { return normalize(trimmed, idr: true) }
-        return string(rounded(d, places))
+        return normalize(trimmed, idr: style.isIDR, keep: style.isIDR ? (style.decimals ?? 0) : 0)
+    }
+
+    private static func isMachineNumber(_ s: String) -> Bool {
+        s.range(of: "^-?[0-9]+(\\.[0-9]+)?([eE][-+]?[0-9]+)?$", options: .regularExpression) != nil
     }
 
     private static let posix = Locale(identifier: "en_US_POSIX")
@@ -453,6 +467,10 @@ extension CustomFieldNumber {
     static func decimal(_ value: String?, style: Style) -> Decimal? {
         let raw = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if raw.isEmpty { return nil }
+        // Anything but whole Rupiah stores a machine number, which reads as itself ("123.456" in a Rupiah
+        // field with 3 decimal places is 123,456 rupiah, not grouping) — web storedNumber.
+        let wholeRupiah = style.isIDR && (style.decimals ?? 0) == 0
+        if !wholeRupiah, isMachineNumber(raw), let d = Decimal(string: raw, locale: posix) { return d }
         // A machine number with a fraction can't be id-ID grouping when its whole part is "0" or has four
         // or more digits ("1234567.891", "0.42", a value kept from before the field became Rupiah): read
         // it as the number it is. "369.000" / "13.600000" (legacy typed Rupiah) stay grouping.

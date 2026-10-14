@@ -114,7 +114,19 @@ let matrix: [(String, Int?, String, String)] = [
     ("BTC", 2, "₿1.234.567,89", M + "₿1.500,50"),
     ("BTC", 5, "₿1.234.567,89100", M + "₿1.500,50000"),
 ]
-for (nf, d, pos, neg) in matrix {
+// Decimal places 1, 3 and 4 for every kind of format (number, percent, Rupiah, an Intl currency, BTC).
+let prefixes: [(String, String, String)] = [("number", "", ""), ("number_with_separators", "", ""), ("IDR", "Rp ", ""),
+                                            ("USD", "US$", ""), ("EUR", "€", ""), ("BTC", "₿", "")]
+var fullMatrix = matrix
+for (nf, pre, _) in prefixes {
+    fullMatrix += [(nf, 1, pre + "1.234.567,9", M + pre + "1.500,5"),
+                   (nf, 3, pre + "1.234.567,891", M + pre + "1.500,500"),
+                   (nf, 4, pre + "1.234.567,8910", M + pre + "1.500,5000")]
+}
+fullMatrix += [("percent", 1, "123.456.789,1%", M + "150.050,0%"),
+               ("percent", 3, "123.456.789,100%", M + "150.050,000%"),
+               ("percent", 4, "123.456.789,1000%", M + "150.050,0000%")]
+for (nf, d, pos, neg) in fullMatrix {
     check(CFN.display("1234567.891", style: style(nf, d)), pos, "\(nf) d=\(d.map(String.init) ?? "Default") positive")
     check(CFN.display("-1500.5", style: style(nf, d)), neg, "\(nf) d=\(d.map(String.init) ?? "Default") negative")
 }
@@ -216,7 +228,7 @@ check(CFN.normalize("0.42", style: style("percent")), "0.42", "store percent fra
 check(CFN.normalize("150.000,50", style: style("IDR")), "150001", "store idr default rounds")
 check(CFN.normalize("150.000,50", style: style("IDR", 0)), "150001", "store idr d=0 rounds")
 check(CFN.normalize("150.000,55", style: style("IDR", 2)), "150000.55", "store idr d=2")
-check(CFN.normalize("150.000,555", style: style("IDR", 2)), "150000.56", "store idr d=2 rounds to 2")
+check(CFN.normalize("150.000,555", style: style("IDR", 2)), "150000555", "store idr d=2: 3 digits after a mark are grouping (web)")
 check(CFN.normalize("150.000,5", style: style("IDR", 1)), "150000.5", "store idr d=1")
 check(CFN.normalize("369.000", style: style("IDR", 2)), "369000", "store idr d=2 grouping")
 check(CFN.normalize("Rp 1.500.000", style: style("IDR", 2)), "1500000", "store idr d=2 with Rp")
@@ -224,6 +236,18 @@ check(CFN.normalize("1,5jt", style: style("IDR", 2)), "1500000", "store idr d=2 
 check(CFN.normalize("\u{2212}Rp 25.000", style: style("IDR")), "-25000", "store true minus")
 check(CFN.normalize("2,5", style: style("USD")), "2.5", "store usd")
 check(CFN.normalize("1.234,56", style: style("EUR")), "1234.56", "store eur")
+// Same as the web: "%" is not a fraction in a Rupiah field (its digits are kept), currency marks are
+// stripped, Rupiah with decimals still reads 3+ digits after a mark as grouping.
+check(CFN.normalize("42%", style: style("IDR")), "42", "store 42% in idr")
+check(CFN.normalize("US$1.234,50", style: style("USD")), "1234.5", "store typed US$")
+check(CFN.normalize("€ 2,5", style: style("EUR")), "2.5", "store typed €")
+check(CFN.normalize("13.600000", style: style("IDR", 2)), "13600000", "store idr d=2 legacy grouping")
+check(CFN.normalize("1,25jt", style: style("IDR", 2)), "1250000", "store idr d=2 jt fraction")
+check(CFN.normalize("2,555rb", style: style("IDR", 1)), "2555", "store idr d=1 rb")
+check(CFN.normalize("-150.000,5", style: style("IDR", 1)), "-150000.5", "store idr d=1 negative")
+// A stored machine number reads as itself unless the field is whole Rupiah.
+check(CFN.display("123.456", style: style("IDR", 3)), "Rp 123,456", "idr d=3 machine number")
+check(CFN.display("1.500", style: style("number")), "1,5", "plain machine number 1.500")
 
 // The list: Rupiah right under Percent, the rest in Notion's order; every name in both languages.
 check(CFN.formats.prefix(5).map(\.code).joined(separator: ","), "number,number_with_separators,percent,IDR,USD", "list order")
@@ -235,6 +259,7 @@ AppLanguage.shared.lang = .id
 check(CFN.info("USD").name, "Dolar AS (USD)", "id name")
 check(CFN.info("number_with_separators").shortName, "Angka dengan pemisah", "id short")
 check(CFN.filterFormats("dolar").first?.code ?? "", "USD", "filter id")
+check(CFN.filterFormats("rup").map(\.code).joined(separator: ","), "IDR,INR,PKR,PEN", "filter rup id")
 AppLanguage.shared.lang = .en
 // Fuzzy filter: substring matches first, then letters in order (Notion: "rup").
 check(CFN.filterFormats("rup").map(\.code).joined(separator: ","), "IDR,INR,PKR,UYU", "filter rup")
@@ -242,6 +267,10 @@ check(CFN.filterFormats("").count.description, "45", "filter empty")
 check(CFN.filterFormats("btc").first?.code ?? "", "BTC", "filter code")
 check(CFN.filterFormats("zloty").first?.code ?? "", "PLN", "filter diacritics")
 checkD(CFN.filterFormats("qqq").isEmpty, "filter none")
+check(CFN.filterFormats("dolar").map(\.code).joined(separator: ","), "USD,AUD,CAD,SGD,HKD,NZD,TWD", "filter dolar en fuzzy")
+check(CFN.filterFormats("peso").map(\.code).joined(separator: ","), "MXN,CLP,PHP,COP,ARS,UYU,PEN", "filter word, then fuzzy")
+check(CFN.filterFormats("ollar").first?.code ?? "", "USD", "filter inside a word")
+check(CFN.filterFormats("dolar", lang: .id).first?.code ?? "", "USD", "filter explicit lang")
 
 print("passes", passes, "fails", fails)
 if fails > 0 { exit(1) }
