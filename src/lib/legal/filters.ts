@@ -4,6 +4,7 @@
 // A template writes {{NAME}} where a value goes, optionally piped through filters, left to right:
 //   {{TANGGAL_TTD | hari}}                 → Rabu
 //   {{TANGGAL_TTD | tanggal}}              → 30 September 2026   (also the default for a date)
+//   {{HONOR | rupiah}}                     → Rp. 25.000.000,00   (how every amount in a document is written)
 //   {{HONOR | angka}}                      → 25.000.000          (also the default for money)
 //   {{HONOR | terbilang_rupiah | upper}}   → DUA PULUH LIMA JUTA RUPIAH
 //   {{TINGKAT | urutan}}                   → Kedua                (I / II / 2 → the ordinal in words)
@@ -14,6 +15,7 @@
 //
 // Computed values: a filter with an argument works out a new value, and the filters after it see that value.
 //   {{HONOR | persen:50}}                          → 50% of HONOR                    (6.250.000)
+//   {{HONOR | persen:50 | rupiah}}                 → Rp. 6.250.000,00
 //   {{NILAI_TERMIN | persen_dari:NILAI_LISENSI}}   → NILAI_TERMIN as % of NILAI_LISENSI (16,67)
 //   {{TANGGAL_DOKUMEN | tambah_bulan:DURASI_BULAN}} → the date DURASI_BULAN months on (also tambah_bulan:6)
 //   {{KALENDER | jumlah:JUMLAH_EVENT}}             → the sum of one column of a list
@@ -200,6 +202,15 @@ export const formatThousands = (n: number) => {
   return `${n < 0 ? "-" : ""}${grouped}${dec !== "00" ? `,${dec}` : ""}`
 }
 
+/**
+ * `6250000` → `"Rp. 6.250.000,00"`: the one way a Legal document writes an amount (owner, 14 Oct 2026). Always
+ * two decimals; the forms and the rest of the app keep their own "Rp 6.250.000".
+ */
+export const formatRupiah = (n: number) => {
+  const [int, dec] = Math.abs(n).toFixed(2).split(".")
+  return `${n < 0 ? "-" : ""}Rp. ${int.replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${dec}`
+}
+
 const ONES = ["", "satu", "dua", "tiga", "empat", "lima", "enam", "tujuh", "delapan", "sembilan", "sepuluh", "sebelas"]
 
 function spell(n: number): string {
@@ -314,7 +325,7 @@ export function applyFilter(filter: string, current: string, raw: unknown): stri
     case "tahun": return String(date().y)
     case "tahun_terbilang": return titleCase(terbilangWords(date().y))
     case "dmy": { const d = date(); return `${String(d.d).padStart(2, "0")}-${String(d.m).padStart(2, "0")}-${d.y}` }
-    case "rupiah": return `Rp ${formatThousands(amount())}`
+    case "rupiah": return formatRupiah(amount())
     case "angka": return formatThousands(amount())
     case "terbilang": return terbilangWords(amount())
     case "terbilang_rupiah": return terbilangRupiah(amount())

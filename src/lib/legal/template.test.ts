@@ -62,7 +62,7 @@ describe("a section on its own field", () => {
 
 describe("computed values", () => {
   const tpl = docx(
-    p("Tahap 1 Rp {{HONOR | persen:50}} ({{HONOR | persen:50 | terbilang_rupiah}})") +
+    p("Tahap 1 {{HONOR | persen:50 | rupiah}} ({{HONOR | persen:50 | terbilang_rupiah}})") +
       p("Berlaku sampai {{TANGGAL_DOKUMEN | tambah_bulan:DURASI_BULAN}}") +
       `<w:tbl>${row("{{#BARIS}}{{BULAN}}", "{{JUMLAH_EVENT}}", "{{TERMIN | persen_dari:NILAI_LISENSI}}%{{/BARIS}}")}${row("TOTAL", "{{BARIS | jumlah:JUMLAH_EVENT}}", "")}</w:tbl>`,
   )
@@ -82,7 +82,7 @@ describe("computed values", () => {
       BARIS: [{ BULAN: "Nov", JUMLAH_EVENT: 4, TERMIN: 100000000 }, { BULAN: "Des", JUMLAH_EVENT: 3, TERMIN: 99999998 }],
     }))
     expect(out).toEqual([
-      "Tahap 1 Rp 6.250.000 (Enam Juta Dua Ratus Lima Puluh Ribu Rupiah)",
+      "Tahap 1 Rp. 6.250.000,00 (Enam Juta Dua Ratus Lima Puluh Ribu Rupiah)",
       "Berlaku sampai 14 April 2027",
       "Nov", "4", "16,67%", "Des", "3", "16,67%",
       "TOTAL", "7",
