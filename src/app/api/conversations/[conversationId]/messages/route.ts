@@ -41,7 +41,7 @@ const SEND_LIMIT = { limit: 30, windowSeconds: 60 }
  * for `after`): the web tells a server that pages this way by the key being present.
  *
  * Each message carries `kind` ("USER" | "SYSTEM") and `event` (SYSTEM only): a SYSTEM row is a group's
- * log line ("Bagas added Mey"), drawn as a centred pill by clients that know it and as a plain message
+ * log line ("Budi added Mira"), drawn as a centred pill by clients that know it and as a plain message
  * with an Indonesian `content` by those that don't (chat-system.ts).
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ conversationId: string }> }) {
@@ -168,7 +168,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
         select: { id: true, kind: true },
       })
       if (!quoted) return NextResponse.json({ error: "replyToId is not in this conversation" }, { status: 400 })
-      // A system line ("Bagas added Mey") is not something to answer. Apps that don't know `kind` yet
+      // A system line ("Budi added Mira") is not something to answer. Apps that don't know `kind` yet
       // offer Reply on it anyway, and show this sentence as it is.
       if (!canReplyTo(quoted)) {
         return NextResponse.json({ error: SYSTEM_MESSAGE_REPLY_MESSAGE, code: SYSTEM_MESSAGE_REPLY }, { status: 400 })

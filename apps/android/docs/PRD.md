@@ -4,16 +4,16 @@
 |---|---|
 | Product | NEXUS by Z Networks — native Android app |
 | Stack | Kotlin, Jetpack Compose, single-activity, Material 3 |
-| Parity target | iOS app **0.1.6 (build 12)**, repo `~/nexus-ios` on `agents`, HEAD `a875c3c` + the live-location work in progress in that tree |
+| Parity target | iOS app **0.1.6 (build 12)**, `apps/ios`, HEAD `a875c3c` + the live-location work in progress in that tree |
 | Endpoint contract | **`docs/API.md`** (sibling file). This PRD names screens, rules and behaviours; request/response shapes live only in API.md. |
-| Owner | Berlin (Bagas) — every "owner decision" below is his, dated where known |
+| Owner | the owner — every "owner decision" below is his, dated where known |
 | Status | Draft 1, 24 Sep 2026 |
 
 Conventions in this document:
 - **MUST / MUST NOT** = release-blocking requirement. **SHOULD** = expected unless an open question overrides it.
 - `REQ-ATT-nn` ids are testable attendance requirements; each has a **Why** (the reason the owner gave or the incident that produced it) and a **Test**.
 - **SERVER/WEB CHANGE** marks work outside the Android repo that the Android release depends on. None of it is done by this PRD.
-- iOS file references are relative to `~/nexus-ios/Sources/`.
+- iOS file references are relative to `apps/ios/Sources/`.
 
 ---
 
@@ -131,7 +131,7 @@ NEXUS is Z Networks' internal operations app ("NEXUS Phaëthon"). One workspace 
 - **REQ-ATT-32 — Approval flow.** Requests go to the member's approver (else BoD group), escalate after 2 working days. Reviewers see one queue ("Submissions" card) with Approve / Reject (reason sheet: "Say why, so they can fix it and file again…") / Cancel; decided rows show "Approved by X · when" or "Recorded automatically"; the requester sees the approver's note. You cannot approve your own. Filter chips Pending/Approved/Rejected/Canceled/All, search by name or reason, window **"Last 3 days" (default)** / "This period". A push about a request opens that request with Approve/Reject inline (REQ-ATT-45).
 
 ### 2.9 Live location while checked in (owner decision 24 Sep 2026; target iOS 0.1.6)
-Status: iOS implementation is in progress in the `~/nexus-ios` working tree (`WorkLocationTracker.swift`, `WorkTrailPolicy.swift`, `Views/LocationTrailView.swift`, uncommitted); server endpoints are specified in API.md (draft names in iOS: `POST /api/attendance/location-trail`, `POST /api/attendance/location-status`, `GET /api/attendance/records/{id}/trail`).
+Status: iOS implementation is in progress in the `apps/ios` working tree (`WorkLocationTracker.swift`, `WorkTrailPolicy.swift`, `Views/LocationTrailView.swift`, uncommitted); server endpoints are specified in API.md (draft names in iOS: `POST /api/attendance/location-trail`, `POST /api/attendance/location-status`, `GET /api/attendance/records/{id}/trail`).
 
 - **REQ-ATT-33 — Scope.** Track **only** between a server-accepted check-in and the check-out, for members the server tracks (not BoD/OAA, not Mobile-mode members; the server answers `tracking:false` ⇒ stop and never restart for that record). Stop on check-out (including a queued offline check-out), logout (discard unsent points), `tracking:false`, or a 16 h safety cap.
 - **REQ-ATT-34 — What is sent.** Inside the office radius: nothing. Outside: one point on leaving, about **every 15 min** while outside, one on coming back. Points carry their own `recordId`, are queued on disk, sent in batches (≤ 200 per request, cap 1,000 pending, oldest dropped first), retried after 2 min. The server may ask for the next point sooner (e.g. just before the 1 h 30 reminder).
@@ -364,7 +364,7 @@ Room booking create/edit/delete; Team Calendar custom sources CRUD; doc editing;
 - **Privacy policy URL** covering attendance photos, location trail (90-day retention), and GIDEON processing.
 - Target audience: adults, not for children. App category: Business.
 - **Release channels**: **internal testing** first (up to 100 testers — covers all staff), then closed testing with Android staff, then production (or keep it as a private/managed app — open question). Play **In-App Updates** for the forced-update flow.
-- **Store listing / release notes**: follow the owner's style — ALL-CAPS hook, short lyric-like lines, a twist, English with real Indonesian quotes, never mention XP cuts or outages, no "update now" CTA, public name "Bagas".
+- **Store listing / release notes**: follow the owner's style — ALL-CAPS hook, short lyric-like lines, a twist, English with real Indonesian quotes, never mention XP cuts or outages, no "update now" CTA, signed with the owner's public first name.
 
 ---
 

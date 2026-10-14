@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# NEXUS blue-green on the VPS warm standby (Sumopod). Tracked: deploy/bluegreen/vps-bluegreen.sh.
+# NEXUS blue-green on the warm standby. Tracked: deploy/bluegreen/vps-bluegreen.sh.
 # Installed as /srv/nexus-app/bluegreen/bin/vps-bluegreen.sh ONLY after VPS migration (RUNBOOK.md, part C).
 #
 # Same slot layout as the office so a failover never meets a different version or a different shape:

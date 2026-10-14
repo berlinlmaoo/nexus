@@ -5,7 +5,7 @@
 // Every task project is classified by its sections:
 //   status    every section is a status word (To Do, In Progress, Review, Done ✅, Waiting for Approval…).
 //             Untouched, except sections with no status yet get one from their name.
-//   category  the sections are categories (PATS X / PATS BSD / ROSI, DIAGEO / PRIMARIA, LOGO / IP LOGO…),
+//   category  the sections are categories (PATS X / PATS BSD / CLIENT A, CLIENT B / CLIENT C, LOGO / IP LOGO…),
 //             plus at most a Done/Selesai. → a single-select field "Category" (English project) or
 //             "Kategori" (Indonesian project) whose options are the old section names (with colours), every
 //             task gets its old section as value, the board becomes To Do / In Progress / Done (tasks placed
@@ -656,7 +656,7 @@ function printFollowups(list) {
 //  - the field is removed (row and values kept in the backup) and what referenced it is remapped: form
 //    answers → the section (status column), routing "set field" → move to the column, automations →
 //    status, saved views → Status, Project.tableColumns drops it.
-// Only fields of TYPE STATUS. SELECT fields named Status (PRIMARIA, Rosi, PATS Archive) are listed in
+// Only fields of TYPE STATUS. SELECT fields named Status (client boards, PATS Archive) are listed in
 // the plan, not touched. Not run on prod unless --unify-status is passed.
 
 const UNIFY = argv.includes("--unify-status")
@@ -682,7 +682,7 @@ const UNIFY_STATUS = (name) => {
 const DEFAULT_COLUMN = /^(to do|in progress|done|belum mulai|sedang jalan|selesai)$/
 
 // Workflow-stage SELECT / MULTI_SELECT fields named Status / Progress (owner, 12 Oct 2026, "like Finance
-// Management"): PRIMARIA "STATUS" (PLANNING … POSTED), INTOO "STATUS KONTEN", Rosi "Status", PATS Archive
+// Management"): a client board "STATUS" (PLANNING … POSTED), INTOO "STATUS KONTEN", another "Status", PATS Archive
 // "Status". A field counts as a workflow when at least half its options read like stages; otherwise
 // (Legal "Status" = document types) it is NOT a status: it is renamed to what it is and gets a board view.
 const STAGE_WORD = /(done|posted|\bpost\b|approv|review|revis|progress|planning|ideation|\bidea|concept|shoot|edit|draft|lock|sampling|production|rollout|\blive\b|publish|upload|selesai|proses|ready)/i

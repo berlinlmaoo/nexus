@@ -44,14 +44,14 @@ class CardPropsTest {
     }
 
     @Test fun financeCardShowsWhatTheWebShows() {
-        // "reimburse claude" on the dev server: Medium, Rp 350.000, ryan ceo pats (a CREATED field holding a name), SBU.
-        val t = BoardTask("t1", "reimburse claude", status = "IN_PROGRESS", priority = "MEDIUM",
-            customFieldValues = listOf(cf("harga", "350000"), cf("tgl", ""), cf("req", "ryan ceo pats"), cf("kat", "SBU")))
+        // "reimburse software" on the dev server: Medium, Rp 350.000, budi finance (a CREATED field holding a name), SBU.
+        val t = BoardTask("t1", "reimburse software", status = "IN_PROGRESS", priority = "MEDIUM",
+            customFieldValues = listOf(cf("harga", "350000"), cf("tgl", ""), cf("req", "budi finance"), cf("kat", "SBU")))
         val items = CardProps.items(t, CardProps.visible(null, "board", fields, true), fields, emptyList(), emptyMap(), today)
         assertEquals(listOf("priority", "cf:harga", "cf:req", "cf:kat"), items.map { it.key })
         assertEquals(CardProps.Item.Priority("priority", "MEDIUM"), items[0])
         assertEquals(CardProps.Item.Number("cf:harga", "Rp 350.000"), items[1])
-        assertEquals(CardProps.Item.When("cf:req", null, "ryan ceo pats", false), items[2])
+        assertEquals(CardProps.Item.When("cf:req", null, "budi finance", false), items[2])
         assertEquals(CardProps.Item.Options("cf:kat", listOf("SBU" to "yellow"), 0), items[3])
     }
 
@@ -71,16 +71,16 @@ class CardPropsTest {
         assertEquals(LocalDate.of(2026, 5, 26), dueDate("2026-05-26T00:00:00.000Z"))
         assertEquals(LocalDate.of(2026, 5, 23), dueDate("2026-05-23"))
         assertEquals(LocalDate.of(2026, 10, 15), dueDate("2026-10-14T17:00:00Z"))
-        assertNull(dueDate("ryan ceo pats"))
+        assertNull(dueDate("budi finance"))
         assertNull(dueDate(null))
     }
 
     @Test fun assigneesAndTheStatusOption() {
         val lanes = listOf(Lane("l1", "On Progress", taskStatus = "IN_PROGRESS"))
-        val t = BoardTask("a", taskListId = "l1", assignees = listOf(Assignee("u1", UserRef("u1", "Geraldo Valentino"))))
+        val t = BoardTask("a", taskListId = "l1", assignees = listOf(Assignee("u1", UserRef("u1", "Budi Santoso"))))
         assertEquals(CardProps.Item.Section("section", "On Progress", "blue"), CardProps.item(t, "section", fields, lanes, emptyMap(), today))
         val people = CardProps.item(t, "assignee", fields, lanes, emptyMap(), today) as CardProps.Item.People
-        assertEquals("Geraldo Valentino", people.people.single().first)
+        assertEquals("Budi Santoso", people.people.single().first)
     }
 
     @Test fun linkedTasksFromTheProjectPayload() {

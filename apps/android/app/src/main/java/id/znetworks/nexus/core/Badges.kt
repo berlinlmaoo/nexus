@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Unread counts for the shell (Berlin, 8 Oct): Inbox moved into More, so More carries Inbox's badge; the
+ * Unread counts for the shell (owner, 8 Oct): Inbox moved into More, so More carries Inbox's badge; the
  * Messages entry points carry chat's. Refreshed on foreground, when a push arrives while the app is open,
  * and when the Inbox or the chat list loads. A failed read keeps the last count.
  */

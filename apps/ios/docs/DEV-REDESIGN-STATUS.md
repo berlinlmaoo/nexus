@@ -2,7 +2,7 @@
 
 Owner decision (12 Oct 2026): the app ships TOGETHER with the redesigned web. Branch `dev` only (never
 `main`); the NEXUS_DEV_SERVER flag + server switch (Settings › Server, or long-press the login title) point
-the build at https://nexus-prod.tail765d02.ts.net:8443. Target: the NEXUS **dev web** as it is now (Notion's
+the build at <dev-url>. Target: the NEXUS **dev web** as it is now (Notion's
 interaction patterns blended with NEXUS's own identity — brand, colours, clipboard project mark, attendance /
 XP / Quest), with native Apple conventions (SF Symbols, navigation, sheets, centred `.alert`, Dynamic Type,
 iPad sidebar, Mac keyboard shortcuts). Where Notion and NEXUS dev differ, NEXUS dev wins.

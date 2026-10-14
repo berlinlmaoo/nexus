@@ -691,7 +691,7 @@ type UserRowProps = {
  * Satu baris = ringkasan yang tenang. Semua pengaturan — peran, jam kerja, per-hari, Flexi,
  * Mobile, day off, Google, tim & project — ada di SATU panel "Atur" di sisi kanan.
  *
- * Dulu ketujuh kontrol itu berjejer di dalam baris, 49 kali. Berlin: "pusing banget". Baris
+ * Dulu ketujuh kontrol itu berjejer di dalam baris, 49 kali. owner: "pusing banget". Baris
  * yang menampilkan semua tombolnya tidak menjawab pertanyaan yang paling sering ditanyakan di
  * tabel ini — "orang ini jamnya berapa, perannya apa" — karena jawabannya tenggelam di antara
  * tombol yang jarang dipakai. Ringkasannya sekarang hanya menyebut yang MENYALA.

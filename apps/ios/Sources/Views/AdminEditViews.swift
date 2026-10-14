@@ -1438,7 +1438,7 @@ struct GoogleLinkSheet: View {
     }
 
     /// Tebakan awal dari nama NEXUS orang itu. Ditebak, bukan dipaksakan: setiap kotak masih bisa
-    /// disunting, karena "Muhammad Omar Karim" bisa jadi omar@ atau omar.karim@ tergantung orangnya.
+    /// disunting, karena "Budi Santoso" bisa jadi budi@ atau budi.santoso@ tergantung orangnya.
     private func startMaking() {
         let parts = target.name.split(whereSeparator: \.isWhitespace).map(String.init)
         givenName = parts.first ?? ""

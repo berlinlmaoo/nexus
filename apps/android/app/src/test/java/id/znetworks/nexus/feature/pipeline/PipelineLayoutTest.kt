@@ -9,7 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** PIPELINE-DASHBOARD §12 (Berlin, 9 Oct night): no nav entry, cards show only what is known. */
+/** PIPELINE-DASHBOARD §12 (owner, 9 Oct night): no nav entry, cards show only what is known. */
 class PipelineLayoutTest {
     private fun deal(json: String) = PipelineDeal(NexusJson.parseToJsonElement(json).jsonObject)
 

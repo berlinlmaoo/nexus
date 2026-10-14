@@ -4,7 +4,7 @@
  * database half lives in day-off-usage.ts (effectiveDayOffQuotas) and the route in
  * /api/attendance/day-off-bonus.
  *
- * Owner decision (Berlin, 28 Sep 2026): the BoD can give selected people X extra day-off days that
+ * Owner decision (owner, 28 Sep 2026): the BoD can give selected people X extra day-off days that
  * count in ONE attendance period only (28th → 27th, keyed "YYYY-MM" = the month the period ends in,
  * exactly like attendancePeriodKey). The first use was staff who worked a 3-day event. Days not used
  * by the 27th expire with the period — nothing carries over, because nothing is stored per person

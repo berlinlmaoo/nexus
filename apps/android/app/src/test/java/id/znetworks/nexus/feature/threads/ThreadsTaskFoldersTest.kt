@@ -10,18 +10,18 @@ import org.junit.Test
 import java.io.File
 import java.time.Instant
 
-/** THREADS-TASK-FOLDERS (Berlin, 9 Oct): likes, @mentions, Threads push with a photo, Home "Task", folders on refresh. */
+/** THREADS-TASK-FOLDERS (owner, 9 Oct): likes, @mentions, Threads push with a photo, Home "Task", folders on refresh. */
 class ThreadsTaskFoldersTest {
-    private val roster = listOf("u1" to "Bagas Putro", "u2" to "Ali", "u3" to "Alia")
+    private val roster = listOf("u1" to "Budi Santoso", "u2" to "Ali", "u3" to "Alia")
 
     @Test fun mentionsPickedOrTypedWholeWordsOnly() {
-        assertEquals(listOf("u1"), FeedMentions.ids("hi @BagasPutro !", mapOf("u1" to "@BagasPutro"), roster))
+        assertEquals(listOf("u1"), FeedMentions.ids("hi @BudiSantoso !", mapOf("u1" to "@BudiSantoso"), roster))
         // Typed by hand (never picked) still counts.
         assertEquals(listOf("u2"), FeedMentions.ids("cc @Ali tolong", emptyMap(), roster))
         // "@Ali" isn't inside "@Alia".
         assertEquals(listOf("u3"), FeedMentions.ids("cc @Alia", emptyMap(), roster))
         // A tag deleted from the text is not sent.
-        assertEquals(emptyList<String>(), FeedMentions.ids("never mind", mapOf("u1" to "@BagasPutro"), roster))
+        assertEquals(emptyList<String>(), FeedMentions.ids("never mind", mapOf("u1" to "@BudiSantoso"), roster))
     }
 
     @Test fun heartComesFromThePost() {

@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Pipeline Dashboard (Project.type "PIPELINE", owner, 9 Oct 2026)
 //
-// Berlin: "GM gw udh kirim contoh pipeline dashboard yg dia pengen … tinggal diubah ke design NEXUS".
+// owner: "GM gw udh kirim contoh pipeline dashboard yg dia pengen … tinggal diubah ke design NEXUS".
 // The GM's "Control Tower TZN" board lives inside a NEXUS project: one deal per client job, from first
 // contact to closed and paid. Spec: agents:~/handoff/chat/PIPELINE-DASHBOARD.md. Server: src/lib/pipeline.ts
 // and pipeline-server.ts; web: apps/web/src/components/pipeline.
@@ -788,7 +788,7 @@ enum PipelineText {
         }
     }
 
-    /// English names of the fields for the History tab ("Bagas changed Stage …"), put through T().
+    /// English names of the fields for the History tab ("Budi changed Stage …"), put through T().
     static func field(_ key: String) -> String {
         let en: String
         switch key {
@@ -976,7 +976,7 @@ extension PipelineDeal {
 
 // MARK: - Phase progress (owner, 9 Oct 2026)
 //
-// Berlin: "progress fase pas gw pencet board per dealnya jg gaada dan kalo gw isi blocker didalemnya …
+// owner: "progress fase pas gw pencet board per dealnya jg gaada dan kalo gw isi blocker didalemnya …
 // harusnya masuk ke tampilan 1 sama progress fasenya supaya tau problemnya". The ONE place this app words
 // the six phases (card track, deal stepper); the states are the server's (src/lib/pipeline.ts phasesOf),
 // the words are the GM's node details, as the web's usePhaseDetail (pipeline-ui.tsx).

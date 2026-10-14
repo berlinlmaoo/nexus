@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** PROFILE-TIDY (Berlin, 9 Oct): guards on the member profile and the photo viewer. */
+/** PROFILE-TIDY (owner, 9 Oct): guards on the member profile and the photo viewer. */
 class ProfileTidyTest {
     private val screen = File("src/main/java/id/znetworks/nexus/feature/people/PeopleScreens.kt").readText()
     private val viewer = File("src/main/java/id/znetworks/nexus/ui/components/PhotoViewer.kt").readText()

@@ -6,7 +6,7 @@ import { syncAttendanceSheet } from "@/lib/attendance-sheet"
 
 /**
  * Live attendance → Google Sheets ("NEXUS · Absensi (live)"). Every minute from the host crontab:
- *   * * * * * /home/debian/nexus/cron/nexus-cron.sh cron/attendance-sheet
+ *   * * * * * <repo>/cron/nexus-cron.sh cron/attendance-sheet
  *
  * ?dryRun=1 (or body { dryRun: true }) builds the grid and reports its size, the target tab and a
  * sample of cells without calling Google at all. A Google failure is a 200 with ok:false and the

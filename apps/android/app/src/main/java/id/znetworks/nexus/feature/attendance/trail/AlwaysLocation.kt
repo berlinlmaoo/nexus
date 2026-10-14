@@ -21,7 +21,7 @@ import id.znetworks.nexus.core.config.configText
 import id.znetworks.nexus.feature.attendance.liveness.openAppSettings
 
 /**
- * Check-in needs location "Allow all the time" with precise location (Berlin, 28 Sep 2026; iOS 77818ba;
+ * Check-in needs location "Allow all the time" with precise location (owner, 28 Sep 2026; iOS 77818ba;
  * remote flag `requireAlwaysLocation`): the live location runs from check-in to check-out, also with the
  * app closed. Precise on Android = ACCESS_FINE_LOCATION (an "approximate" grant is COARSE only);
  * "all the time" = ACCESS_BACKGROUND_LOCATION from Android 10, implied by FINE before it.
@@ -70,7 +70,7 @@ object AlwaysLocation {
 @Composable
 fun AlwaysLocationDialog(onDismiss: () -> Unit, onReady: () -> Unit) {
     val context = LocalContext.current
-    // Scan final (Berlin 29 Sep): the button leads to the app's own Location permission screen. On
+    // Scan final (owner 29 Sep): the button leads to the app's own Location permission screen. On
     // Android 11+ asking for "all the time" IS that screen (the system opens it); precise location is
     // the system dialog. Only when Android refuses without showing anything is App info the way left
     // (no public intent opens a single permission page), and the dialog text says where to tap.

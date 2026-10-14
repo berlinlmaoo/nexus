@@ -19,7 +19,7 @@ import org.junit.Test
 import java.io.File
 import java.time.LocalDate
 
-/** ANDROID-OFFBOARD (Berlin, 8 Oct; OFFBOARD-CONTRACT): mirror of the web. */
+/** ANDROID-OFFBOARD (owner, 8 Oct; OFFBOARD-CONTRACT): mirror of the web. */
 class OffboardTest {
     @Test fun adminUsersCarryTheExit() {
         val p = NexusJson.decodeFromString(AdminUsersPage.serializer(), """{"users":[

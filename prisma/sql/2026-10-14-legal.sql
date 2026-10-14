@@ -8,7 +8,7 @@
 --
 -- Seed: the four issuing companies and their default numbering series (formats from the owner's templates;
 -- every series ends in a running {SEQ}, reset yearly except invoices, which reset monthly — owner 14 Oct).
--- Legal names other than PATS are left empty on purpose: the kop shows only a logo, and nobody guesses a
+-- Legal names and addresses are left empty on purpose: the kop shows only a logo, and nobody guesses a
 -- PT name for a contract. Fill them in Legal → Settings.
 
 SET lock_timeout = '5s';
@@ -283,7 +283,7 @@ END $$;
 -- ── Seed ─────────────────────────────────────────────────────────────────────────────────────────
 INSERT INTO "LegalCompany" ("id", "code", "name", "legalName", "address", "position", "updatedAt") VALUES
   ('legalco_intoo', 'INTOO', 'Intoo', '', '', 0, CURRENT_TIMESTAMP),
-  ('legalco_pats', 'PATS', 'PATS', 'PT PATS DARI SELATAN', '', 1, CURRENT_TIMESTAMP),
+  ('legalco_pats', 'PATS', 'PATS', '', '', 1, CURRENT_TIMESTAMP),
   ('legalco_swl', 'SWL', 'Suwara Lokal', '', '', 2, CURRENT_TIMESTAMP),
   ('legalco_tzn', 'TZN', 'The Z Networks', '', '', 3, CURRENT_TIMESTAMP)
 ON CONFLICT ("code") DO NOTHING;

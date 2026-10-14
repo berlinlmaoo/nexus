@@ -19,7 +19,7 @@ import UIKit
 /// health check proves the box is up; it proves nothing about whether the session this phone carries
 /// is accepted there. Moving a logged-in person onto a host that then answers 401 would look exactly
 /// like being logged out — a far worse failure than being slow. Requiring a 200 from an authenticated
-/// route also makes a stranger's network harmless: another building's 192.168.223.111 cannot present
+/// route also makes a stranger's network harmless: another building's private address cannot present
 /// a valid certificate for this host name, let alone accept this session.
 final class LANRoute {
     static let shared = LANRoute()

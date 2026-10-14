@@ -9,7 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 
-// Berlin 29 Sep (server LIVE, iOS ed7545e): annual leave is ONE range, capped at the days left, one request.
+// owner 29 Sep (server LIVE, iOS ed7545e): annual leave is ONE range, capped at the days left, one request.
 class LeaveRangeTest {
     private fun d(day: Int, m: Int = 10) = LocalDate.of(2026, m, day)
 

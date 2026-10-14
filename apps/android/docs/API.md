@@ -6,7 +6,7 @@ The full list of HTTP calls a native Android (Kotlin) client of NEXUS has to mak
 | | |
 |---|---|
 | iOS source of truth | `nexus-ios` @ `a875c3c` ("Live Activity and Dynamic Island in white instead of violet"), `Sources/` — every `File.swift:LINE` below refers to this commit |
-| Server source of truth | `nexus` @ `5c113e7` on `nexus-prod` (`src/app/api/**/route.ts`, `src/lib/**`, root `middleware.ts`) |
+| Server source of truth | `nexus` @ `5c113e7` on the server (`src/app/api/**/route.ts`, `src/lib/**`, root `middleware.ts`) |
 | Written | 24 Sep 2026 |
 | Rule when they disagree | **the server's behaviour is documented**, and the difference is marked **⚠ Discrepancy** |
 | Items the server does not have yet | marked **⏳ PENDING** (iOS work in progress, not committed at `a875c3c`, and no server route) |
@@ -60,8 +60,8 @@ than apps, and a field that goes missing must not break a whole screen.
 
 **What it does.** Inside the office, the same server (same nginx, same app container, same `/api`
 and `/auth` routes) is also reachable at `https://lan.nexus.znetworks.id`. That hostname has a public
-DNS record (grey-cloud, not proxied) pointing at the private address of `nexus-prod`
-(`192.168.223.111`), with a real Let's Encrypt certificate (renewed with DNS-01 by
+DNS record (grey-cloud, not proxied) pointing at the private address of the server
+(`<server-lan-ip>`), with a real Let's Encrypt certificate (renewed with DNS-01 by
 `scripts/renew-lan-cert.sh`). So TLS works without any exception. A phone on the office Wi-Fi then
 uploads its selfie across the switch, not out to Cloudflare and back through the same office
 uplink. It also **keeps working when the office's internet connection is down**. During the ISP

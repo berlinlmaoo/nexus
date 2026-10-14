@@ -54,7 +54,6 @@ export const ATTENDANCE_SHEET_TITLE = "NEXUS · Absensi (live)"
 export const ATTENDANCE_SHEET_OWNER = "account@znetworks.id"
 export const ATTENDANCE_SHEET_NOTE = "Diisi otomatis dari NEXUS tiap menit — perubahan di sini akan ditimpa."
 export const ATTENDANCE_SHEET_SETTING_KEY = "attendance-sheet"
-const DEFAULT_SHARE = "bagas@znetworks.id"
 const PROTECTION_DESCRIPTION = "NEXUS attendance sync — hanya akun pemilik yang bisa mengubah"
 const SHARE_RETRY_MS = 60 * 60 * 1000
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -512,8 +511,9 @@ export async function getAttendanceSheetUrl(workspaceId: string): Promise<string
   }
 }
 
+/** NEXUS_ATTENDANCE_SHEET_SHARE: comma-separated readers granted access once. Unset = nobody. */
 export function attendanceSheetShareList(raw = process.env.NEXUS_ATTENDANCE_SHEET_SHARE) {
-  const source = raw === undefined ? DEFAULT_SHARE : raw
+  const source = raw ?? ""
   return [...new Set(source.split(",").map((s) => s.trim().toLowerCase()).filter((s) => /^[^\s@]+@[^\s@]+$/.test(s)))]
 }
 

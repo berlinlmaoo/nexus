@@ -52,11 +52,11 @@ class UiPreviewActivity : ComponentActivity() {
                         "chat-sys" -> androidx.compose.foundation.layout.Column(Modifier.padding(16.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
                             fun p(i: String, n: String) = id.znetworks.nexus.feature.chat.ChatSystemEvent.Person(i, n)
                             listOf(
-                                id.znetworks.nexus.feature.chat.ChatSystemEvent("group_created", p("b", "Bagas Putro"), listOf(p("m", "Mey")), name = "Tim Kreatif"),
-                                id.znetworks.nexus.feature.chat.ChatSystemEvent("members_added", p("b", "Bagas Putro"), listOf(p("me", "Me"), p("y", "Yuza"), p("a", "Angela"))),
-                                id.znetworks.nexus.feature.chat.ChatSystemEvent("member_removed", p("me", "Me"), listOf(p("y", "Yuza"))),
-                                id.znetworks.nexus.feature.chat.ChatSystemEvent("member_left", p("a", "Angela")),
-                                id.znetworks.nexus.feature.chat.ChatSystemEvent("group_renamed", p("b", "Bagas Putro"), name = "Tim Kreatif 2026"),
+                                id.znetworks.nexus.feature.chat.ChatSystemEvent("group_created", p("b", "Budi Santoso"), listOf(p("m", "Mira")), name = "Tim Kreatif"),
+                                id.znetworks.nexus.feature.chat.ChatSystemEvent("members_added", p("b", "Budi Santoso"), listOf(p("me", "Me"), p("y", "Yuda"), p("a", "Anita"))),
+                                id.znetworks.nexus.feature.chat.ChatSystemEvent("member_removed", p("me", "Me"), listOf(p("y", "Yuda"))),
+                                id.znetworks.nexus.feature.chat.ChatSystemEvent("member_left", p("a", "Anita")),
+                                id.znetworks.nexus.feature.chat.ChatSystemEvent("group_renamed", p("b", "Budi Santoso"), name = "Tim Kreatif 2026"),
                             ).forEachIndexed { i, e ->
                                 id.znetworks.nexus.feature.chat.SystemPill(id.znetworks.nexus.feature.chat.Message("m$i", content = "fallback", kind = "SYSTEM", event = e,
                                     createdAt = java.time.Instant.now().toString()), "me")
@@ -100,7 +100,7 @@ class UiPreviewActivity : ComponentActivity() {
                             val api = id.znetworks.nexus.feature.admin.orgchart.OrgChartApi((application as id.znetworks.nexus.NexusApplication).container.api)
                             val fa = tree.units.first { it.name == "Finance & Tech" }
                             if (screen == "org-edit") id.znetworks.nexus.feature.admin.orgchart.UnitSheet(tree, api, fa, fa.parentId, {}, {}, {}, {})
-                            else id.znetworks.nexus.feature.admin.orgchart.PersonSheet(tree, api, tree.people.first { it.name?.startsWith("Mey") == true }, {}, {})
+                            else id.znetworks.nexus.feature.admin.orgchart.PersonSheet(tree, api, tree.people.first { it.name?.startsWith("Mira") == true }, {}, {})
                         }
                         "org", "org-pats", "org-full" -> {
                             val tree = androidx.compose.runtime.remember {
@@ -140,7 +140,7 @@ class UiPreviewActivity : ComponentActivity() {
         listOf(
             Submission("1", createdAt = "2026-09-20T12:14:00Z", formName = "Pengajuan Finance Management", projectName = "Finance", taskTitle = "Google AI Ultra", procStatus = "On Progress"),
             Submission("2", createdAt = "2026-09-20T12:12:00Z", formName = "Pengajuan Finance Management", projectName = "Finance", taskTitle = "ChatGPT Akun 1,2,3", procStatus = "On Progress"),
-            Submission("3", createdAt = "2026-09-08T11:55:00Z", formName = "Pengajuan Finance Management", projectName = "Finance", taskTitle = "Claude API Balance", procStatus = "Done"),
+            Submission("3", createdAt = "2026-09-08T11:55:00Z", formName = "Pengajuan Finance Management", projectName = "Finance", taskTitle = "API Balance", procStatus = "Done"),
             Submission("4", createdAt = "2026-09-07T09:58:00Z", formName = "Reimburse", projectName = "Finance", taskTitle = null),
         ),
         statusColumns = listOf("On Progress", "Done"),
@@ -166,7 +166,7 @@ class UiPreviewActivity : ComponentActivity() {
         val j = id.znetworks.nexus.core.net.NexusJson
         val structure0 = j.decodeFromString(id.znetworks.nexus.feature.calendar.CalStructure.serializer(),
             assets.open("calendar/structure.json").bufferedReader().readText().trim().let { "{\"access\":\"all\",${it.substring(1)}" })
-        val gerald = structure0.people.first { it.name == "Geraldo Valentino" }
+        val gerald = structure0.people.first { it.name == "Person 17" }
         val structure = structure0.copy(me = id.znetworks.nexus.feature.calendar.CalMe(gerald.userId, gerald.role, gerald.homeUnitIds))
         val sep = screen == "cal-person" || screen == "cal-people"
         val file = if (sep) "items-2026-09-18.bod.json" else "items-2026-10-03.staff.json"

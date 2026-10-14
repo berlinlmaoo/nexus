@@ -86,7 +86,7 @@ export const ID_CHAT: Record<string, string> = {
   "Load newer messages": "Muat pesan yang lebih baru",
   "Jump to latest": "Ke pesan terbaru",
 
-  // System lines in a group ("Bagas added Mey"). "You" is in id-calendar-page.ts.
+  // System lines in a group ("Budi added Mira"). "You" is in id-calendar-page.ts.
   "you": "kamu",
   "{names} and {last}": "{names} dan {last}",
   "{actor} added {names}": "{actor} menambahkan {names}",

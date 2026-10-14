@@ -12,14 +12,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** SYSTEM-MESSAGES part 2 (Berlin, 8 Oct): the group info screen's decisions. */
+/** SYSTEM-MESSAGES part 2 (owner, 8 Oct): the group info screen's decisions. */
 class ChatInfoTest {
     private val json = JsonObject(mapOf("error" to JsonPrimitive("Not found")))
 
     @Test fun infoDecodes() {
         val i = NexusJson.decodeFromString(ChatInfo.serializer(), """{"conversation":{"id":"c","type":"GROUP","name":"QA","description":null,"memberCount":3,
-            "canManageMembers":true,"canEdit":true,"createdBy":{"id":"b","name":"Bagas"}},
-            "members":[{"userId":"b","name":"Bagas","isAdmin":true},{"userId":"me","name":"Me","isMe":true},{"userId":"r","name":"Rina","deactivatedAt":"2026-10-08T09:00:00.000Z"}],
+            "canManageMembers":true,"canEdit":true,"createdBy":{"id":"b","name":"Budi"}},
+            "members":[{"userId":"b","name":"Budi","isAdmin":true},{"userId":"me","name":"Me","isMe":true},{"userId":"r","name":"Rina","deactivatedAt":"2026-10-08T09:00:00.000Z"}],
             "counts":{"photos":4,"links":2,"docs":1}}""")
         assertEquals(7, i.counts.total)
         // The viewer first, then the server's order (admins first).

@@ -127,7 +127,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
     var notice by remember { mutableStateOf<String?>(null) }
     var tick by remember { mutableIntStateOf(0) }
     var memberships by remember { mutableStateOf<Map<String, UserMemberships>>(emptyMap()) }
-    // Offboarded people (Berlin, 8 Oct): no membership left, so they'd read as "not in the workspace yet".
+    // Offboarded people (owner, 8 Oct): no membership left, so they'd read as "not in the workspace yet".
     var left by remember { mutableStateOf<List<AdminUserRow>>(emptyList()) }
     var reinstating by remember { mutableStateOf<AdminUserRow?>(null) }
     LaunchedEffect(tick) { try { roster = api.roster(); error = null } catch (e: ApiError) { error = e.describe(res) } }
@@ -374,7 +374,7 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
                 val profiles = remember { ProfileApi((context.applicationContext as NexusApplication).container.api) }
                 AccountCard(m, onPhoto = { jpeg -> if (jpeg == null) notice = res.getString(R.string.chat_photo_unreadable) else run { profiles.uploadMemberAvatar(m.id, jpeg); notice = res.getString(R.string.ad_photo_changed) } }) { f -> run { api.updateAccount(m.userId, f) } }
             }
-            // Offboard (Berlin, 8 Oct): rare and heavy, so last; BoD/OAA on someone below them, never themselves.
+            // Offboard (owner, 8 Oct): rare and heavy, so last; BoD/OAA on someone below them, never themselves.
             if (canEdit && viewer.isBoD && m.userId != (context.applicationContext as NexusApplication).container.sessionStore.current?.userId) AdminCard(stringResource(R.string.off_offboard)) {
                 Text(stringResource(R.string.off_intro), fontSize = 12.sp, color = c.mutedFg)
                 OutlinedButton(onClick = { offboarding = true }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.off_offboard_name_more, m.displayName), color = c.dangerText) }

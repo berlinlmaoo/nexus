@@ -259,7 +259,7 @@ fun HomeScreen(
         id.znetworks.nexus.ui.components.GideonMark(24.dp, contentDescription = "GIDEON")
     }
     }
-    // Grows from the tapped card, one gradient, no scrim (iOS MorphFlip; Berlin, 29 Sep, point 5).
+    // Grows from the tapped card, one gradient, no scrim (iOS MorphFlip; owner, 29 Sep, point 5).
     stat?.let { i -> StatMorph(i, statRects[i], s, vm, onOpenProject, onOpenTask) { stat = null } }
     if (levelOpen) LevelSheet(s.game) { levelOpen = false }
 }

@@ -111,7 +111,7 @@ class OutsideClockTest {
     }
 
     @Test fun noCountdownWhenAutoCheckoutIsOff() {
-        // Berlin, 8 Oct: flags.outsideAutoCheckout false (default) = no countdown, no check-out time; reminders stay.
+        // owner, 8 Oct: flags.outsideAutoCheckout false (default) = no countdown, no check-out time; reminders stay.
         for (l in OutsideClock.Level.entries) {
             val w = OutsideClock.wording(l, autoCheckout = false)
             assertTrue(w.name, w.name.endsWith("PLAIN"))

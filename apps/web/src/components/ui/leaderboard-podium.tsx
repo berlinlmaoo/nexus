@@ -37,8 +37,8 @@ const LeaderboardPodium = React.forwardRef<HTMLDivElement, LeaderboardPodiumProp
     const byRank = (rank: number) => rankings.find((r) => r.rank === rank)
     // The classic podium (2nd left, 1st centre, 3rd right) only when the first place is alone at the top.
     // With a tie at the top every step reads "1", and 2-1-3 then looked like a different order from the
-    // list beneath (UI tour run 7, 14 Oct 2026: list Bayemsore, QA Dev, QA Dev 2; podium QA Dev,
-    // Bayemsore, QA Dev 2). Tied, the steps run left to right in the list's order.
+    // list beneath (UI tour run 7, 14 Oct 2026: list Staff A, QA Dev, QA Dev 2; podium QA Dev,
+    // Staff A, QA Dev 2). Tied, the steps run left to right in the list's order.
     const first = byRank(1)
     const second = byRank(2)
     const tiedTop = !!first && !!second && (first.label ?? 1) === (second.label ?? 2)

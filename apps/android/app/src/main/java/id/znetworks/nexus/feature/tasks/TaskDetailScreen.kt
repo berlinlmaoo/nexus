@@ -123,7 +123,7 @@ fun TaskDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenPro
     var menu by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     LaunchedEffect(s.deleted) { if (s.deleted) onBack() }
-    // The task's project room while it is open: an edit or a comment elsewhere shows up here (Berlin, 8 Oct).
+    // The task's project room while it is open: an edit or a comment elsewhere shows up here (owner, 8 Oct).
     id.znetworks.nexus.core.realtime.RealtimeRoom(s.task?.projectId?.let { "project:$it" })
     id.znetworks.nexus.core.realtime.LiveRefresh(vm.taskId, liveMs = null, fallbackMs = 60_000, matches = { id.znetworks.nexus.core.realtime.RealtimeEvents.touchesTask(it, vm.taskId) }) { vm.load().join() }
 
@@ -381,7 +381,7 @@ private fun MetaCard(t: TaskDetail, s: TaskDetailState, vm: TaskDetailViewModel,
                 if (people.isEmpty()) Text(stringResource(R.string.td_unassigned), fontSize = 13.sp, color = c.violetText)
                 else Row(verticalAlignment = Alignment.CenterVertically) {
                     people.take(3).forEach { Avatar(it.name, it.avatar, 22.dp); Spacer(Modifier.width(4.dp)) }
-                    // Someone who left keeps their tasks (Berlin, 8 Oct): their name says so, quietly.
+                    // Someone who left keeps their tasks (owner, 8 Oct): their name says so, quietly.
                     val leftWord = stringResource(R.string.off_left)
                     Text(androidx.compose.ui.text.buildAnnotatedString {
                         people.forEachIndexed { i, u ->

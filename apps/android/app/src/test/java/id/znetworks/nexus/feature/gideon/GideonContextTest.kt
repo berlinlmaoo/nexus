@@ -20,7 +20,7 @@ class GideonContextTest {
         assertEquals("atl", GideonMention.query("look at @atl"))
         assertEquals("Budget", GideonMention.query("line one\n@Budget"))
         // An @ inside a word (an email) is not a mention; a finished word (space after) closes the picker.
-        assertNull(GideonMention.query("mail bagas@znetworks"))
+        assertNull(GideonMention.query("mail budi@znetworks"))
         assertNull(GideonMention.query("@atlas "))
         assertNull(GideonMention.query("no mention"))
         assertNull(GideonMention.query("@" + "a".repeat(41)))

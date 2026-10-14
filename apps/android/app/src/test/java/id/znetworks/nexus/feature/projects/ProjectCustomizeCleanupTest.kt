@@ -8,7 +8,7 @@ import org.junit.Test
 import java.io.File
 import java.time.LocalDate
 
-/** PROJECT-CUSTOMIZE-CLEANUP (Berlin, 11 Oct): duplicate always on; P&L, Finance, proof and calendar mode gone. */
+/** PROJECT-CUSTOMIZE-CLEANUP (owner, 11 Oct): duplicate always on; P&L, Finance, proof and calendar mode gone. */
 class ProjectCustomizeCleanupTest {
     private fun src(p: String) = File("src/main/java/id/znetworks/nexus/$p").readText()
     private fun res(p: String) = File("src/main/res/$p").readText()

@@ -150,7 +150,7 @@ class CalendarAuditTest {
     }
 
     @Test fun monthMarksFollowRule1031() {
-        // Berlin, 8 Oct: full dot = still to do; small check in the division colour = all done / no status. No rings.
+        // owner, 8 Oct: full dot = still to do; small check in the division colour = all done / no status. No rings.
         val screen = File(root, "app/src/main/java/id/znetworks/nexus/feature/calendar/CalendarScreen.kt").readText()
         assertTrue("if (dot.filled) Box(Modifier.size(6.dp).clip(CircleShape).background(col))" in screen)
         assertTrue("else Icon(painterResource(R.drawable.ic_cal_check), null, tint = col" in screen)

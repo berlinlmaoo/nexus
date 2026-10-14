@@ -4,7 +4,7 @@ import { nexusApi } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 import { thumbUrl } from "@/lib/thumb";
 
-/** "Dadio Emerald" → "DE"; "?" when there is no name. */
+/** "Budi Santoso" → "BS"; "?" when there is no name. */
 export function initialsOf(name?: string | null): string {
   if (!name || !name.trim()) return "?";
   return (
@@ -39,7 +39,7 @@ export function useUserLookup() {
 /**
  * One person's photo, or their initials on a colour, with nothing looked up. A photo that fails to load
  * falls back to the initials. `decorative` when the name is printed right beside it: assistive tech then
- * skips it instead of reading "DE Dadio Emerald".
+ * skips it instead of reading "BS Budi Santoso".
  */
 export function AvatarFace({
   name,

@@ -2,7 +2,7 @@
  * The chat rules that need no database: who gets a push for a new message and what it says, how a
  * page of messages is addressed, how far "read" moves, how unread adds up, who may stay in a group
  * or DM, and who may add or remove people in a group. Contract: CHAT-CONTRACT (8 Oct 2026), "push +
- * realtime optimal". Also the system messages ("Bagas added Mey") and the group info screen:
+ * realtime optimal". Also the system messages ("Budi added Mira") and the group info screen:
  * SYSTEM-MESSAGES (8 Oct 2026).
  *
  * Pure on purpose — no imports, no I/O — so chat-rules.test.mjs loads it with plain node, the same
@@ -437,7 +437,7 @@ export function canDeleteGroup(input: {
   return input.memberCount === 1
 }
 
-// ── system messages: "Bagas added Mey" (SYSTEM-MESSAGES contract, owner 8 Oct 2026) ─────────────
+// ── system messages: "Budi added Mira" (SYSTEM-MESSAGES contract, owner 8 Oct 2026) ─────────────
 
 /**
  * Message.kind. A SYSTEM row is a log line the server writes when a GROUP changes (people added,
@@ -486,7 +486,7 @@ export function canReplyTo(m: { kind?: string | null } | null | undefined): bool
 export const SYSTEM_MESSAGE_REPLY = "SYSTEM_MESSAGE_REPLY"
 export const SYSTEM_MESSAGE_REPLY_MESSAGE = "Pesan sistem tidak bisa dibalas."
 
-/** "Mey" · "Mey dan Yuza" · "Mey, Yuza dan Angela" (Indonesian; the web/iOS render their own). */
+/** "Mira" · "Mira dan Yuda" · "Mira, Yuda dan Anita" (Indonesian; the web/iOS render their own). */
 export function joinNames(names: string[], and = "dan"): string {
   const list = names.map((n) => n.trim()).filter(Boolean)
   if (list.length <= 1) return list[0] ?? ""

@@ -57,7 +57,7 @@ data class HistoryRow(
 }
 
 /**
- * [roster] (scope=workspace, main session 28 Sep 2026): everyone who belongs on the board, with or
+ * [roster] (scope=workspace, server 28 Sep 2026): everyone who belongs on the board, with or
  * without a row yet. Absent on older servers and on scope=me.
  */
 @Serializable

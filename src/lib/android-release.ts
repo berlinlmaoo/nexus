@@ -5,7 +5,7 @@ import { androidApkDir } from "@/lib/android-app"
 /**
  * The sideloaded Android release: what /download/android shows and /api/app/android/apk serves.
  *
- * On disk (nexus-prod ~/nexus-data/android, mounted read-only at NEXUS_ANDROID_APK_DIR =
+ * On disk (the server's Android data dir, mounted read-only at NEXUS_ANDROID_APK_DIR =
  * /app/data/android), outside every web root and every upload directory:
  *
  *   current.json                      which release is current — the ONLY thing the server trusts

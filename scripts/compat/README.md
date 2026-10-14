@@ -14,7 +14,7 @@ COMPAT_KEEP_OUT=1 scripts/compat/run.sh prod      # keep logs/results even on su
 
 Exit code: `0` all good · `1` regression (table + candidate error log printed) · `2` usage / image
 missing · `3` network was NOT isolated (candidate never started) · `4` environment set-up failed.
-Runtime on nexus-prod: about **65 s** for the default two passes (each pass ~15 s set-up + ~17 s
+Runtime on the server: about **65 s** for the default two passes (each pass ~15 s set-up + ~17 s
 fixtures). The first run on a host also installs the Prisma CLI into a cache volume (~10 s, once).
 
 ## What a run does
@@ -47,7 +47,7 @@ Once per pass (`--min-version`, default `0.1.4` then `0.1.6`):
 
 * **No network path out.** `--internal` network; the egress check proves it on every run
   (DNS fails, `ENETUNREACH` to public IPs and to the host's own IPs including the Tailscale
-  `100.118.101.24:5432` where production Postgres listens). A hard-coded URL in the source
+  the private address where production Postgres listens). A hard-coded URL in the source
   (e.g. Nominatim in `reverse-geocode.ts`) cannot get out either.
 * **No outward credentials.** The candidate env is built from scratch: `NODE_ENV`, `PORT`,
   `DATABASE_URL` (throwaway), a random `AUTH_SECRET`, `AUTH_TRUST_HOST`, `NEXTAUTH_URL`

@@ -13,7 +13,7 @@ import id.znetworks.nexus.ui.theme.Nx
 class PendingConfirm(val title: String, val message: String?, val action: String, val run: () -> Unit)
 
 /**
- * Every confirmation is a plain alert in the middle of the screen (Berlin 29 Sep, iOS 173ffff): never a
+ * Every confirmation is a plain alert in the middle of the screen (owner 29 Sep, iOS 173ffff): never a
  * sheet or a menu pinned to the button, and never an action that runs straight from a menu.
  */
 @Composable

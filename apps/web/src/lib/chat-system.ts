@@ -2,7 +2,7 @@ import { t } from "@/lib/lang";
 import type { NexusMessage, NexusSystemEvent, NexusSystemPerson } from "@/lib/nexus-api";
 
 /**
- * System messages: a group's log lines ("Bagas added Mey", like WhatsApp; server since 8 Oct 2026).
+ * System messages: a group's log lines ("Budi added Mira", like WhatsApp; server since 8 Oct 2026).
  * The server stores what happened (`event`) and an Indonesian sentence (`content`) for apps that
  * don't know `kind`; this draws the sentence in the interface language, with "You"/"Kamu" for the
  * viewer. An event type this build doesn't know shows `content` as it is.
@@ -12,7 +12,7 @@ export function isSystemMessage(m: Pick<NexusMessage, "kind"> | null | undefined
   return m?.kind === "SYSTEM";
 }
 
-/** "Mey" · "Mey and Yuza" · "Mey, Yuza and Angela" (ID: "… dan …"). */
+/** "Mira" · "Mira and Yuda" · "Mira, Yuda and Anita" (ID: "… dan …"). */
 export function joinNames(names: string[]): string {
   const list = names.filter((n) => n.trim());
   if (list.length <= 1) return list[0] ?? "";

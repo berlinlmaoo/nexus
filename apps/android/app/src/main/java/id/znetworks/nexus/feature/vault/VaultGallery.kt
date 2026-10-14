@@ -80,7 +80,7 @@ import id.znetworks.nexus.ui.components.RemoteImages
 import id.znetworks.nexus.ui.theme.Nx
 import kotlinx.coroutines.launch
 
-// Z Vault: move, gallery, viewer (Berlin, 9 Oct; VAULT-MOVE-DND, iOS 4c193a8).
+// Z Vault: move, gallery, viewer (owner, 9 Oct; VAULT-MOVE-DND, iOS 4c193a8).
 
 /** A picture by URL (thumbnail or /raw, with the session): null while loading, or for good if it failed. */
 @Composable

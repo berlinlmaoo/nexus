@@ -14,9 +14,9 @@ class PipelineExecutionFolderTest {
     private fun obj(json: String) = NexusJson.parseToJsonElement(json).jsonObject
 
     @Test fun decodesFolderAndCalendar() {
-        val d = PipelineDeal(obj("""{"id":"a","executionFolder":{"id":"f1","name":"ANKER Launch"},"executionCalendarProjectId":"c1",
-            "executionCalendarProject":{"id":"c1","name":"ANKER Launch: Master Calendar"},"executionProjectId":"t1"}"""))
-        assertEquals("f1", d.executionFolderId); assertEquals("ANKER Launch", d.executionFolderName)
+        val d = PipelineDeal(obj("""{"id":"a","executionFolder":{"id":"f1","name":"ACME Launch"},"executionCalendarProjectId":"c1",
+            "executionCalendarProject":{"id":"c1","name":"ACME Launch: Master Calendar"},"executionProjectId":"t1"}"""))
+        assertEquals("f1", d.executionFolderId); assertEquals("ACME Launch", d.executionFolderName)
         assertEquals("c1", d.executionCalendarProjectId); assertEquals("t1", d.executionProjectId)
         // A 9 Oct deal: one project, no folder. Before that: nothing at all.
         val old = PipelineDeal(obj("""{"id":"b","executionProjectId":"t2"}"""))

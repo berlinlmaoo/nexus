@@ -19,7 +19,7 @@ ke-deploy (`https://nexus.znetworks.id`) via token di Keychain. **No WebView, fu
 
 ### Base URL
 
-`Sources/Config.swift` → `https://nexus.znetworks.id` (backend di Proxmox).
+`Sources/Config.swift` → `https://nexus.znetworks.id`.
 
 **Wajib domain kanonik, jangan host lama yang redirect.** URLSession **nurunin POST jadi GET** waktu
 ngikutin 301/302. Route app-login cuma nerima POST, jadi hasilnya `Server error (405)` di layar
@@ -45,7 +45,7 @@ curl -o /dev/null -w '%{http_code} %{redirect_url}\n' \
 ## Jalanin di iPhone (tanpa emulator)
 
 ```sh
-cd ~/Documents/nexus-ios
+cd apps/ios
 xcodegen generate          # bikin NEXUS.xcodeproj dari project.yml
 open NEXUS.xcodeproj
 ```
@@ -57,12 +57,10 @@ Di Xcode:
 3. Pilih iPhone lo sebagai run destination → tekan **⌘R** (Run).
 4. Pertama kali: iPhone → Settings → General → **VPN & Device Management** → trust developer cert lo.
 
-Alur harian OpenChamber (nulis kode) → Mac (build): lihat **[CARA-KERJA.md](CARA-KERJA.md)**.
-
 ## Build tanpa GUI Xcode
 
 **IPA cuma bisa dibikin di macOS** — compiler iOS, SDK, dan code signing nggak ada di
-Linux/Proxmox. Yang bisa dihilangkan cuma GUI-nya.
+Linux. Yang bisa dihilangkan cuma GUI-nya.
 
 ```sh
 ./build.sh check    # cek compile doang — cepat, TANPA signing  ← dipakai sehari-hari
@@ -102,7 +100,7 @@ tetap jalan di HP.
 
 `check` yang paling sering kepakai: dia nangkap **semua** error compile tanpa perlu
 signing, provisioning, device, atau packaging — persis yang dibutuhin buat verifikasi
-perubahan dari OpenChamber. IPA cuma perlu kalau mau bagiin app-nya ke orang lain.
+perubahan yang ditulis di mesin lain. IPA cuma perlu kalau mau bagiin app-nya ke orang lain.
 
 **Apple ID gratis:** `run` jalan (rebuild tiap 7 hari), tapi `ipa` sering gagal export —
 personal team nggak dapet provisioning profile yang bisa didistribusi. Butuh Apple

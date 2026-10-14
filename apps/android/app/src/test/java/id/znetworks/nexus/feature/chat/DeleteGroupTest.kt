@@ -14,7 +14,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** DELETE-GROUP (Berlin, 9 Oct): built so today's server (no canDelete, no DELETE route) simply shows nothing new. */
+/** DELETE-GROUP (owner, 9 Oct): built so today's server (no canDelete, no DELETE route) simply shows nothing new. */
 class DeleteGroupTest {
     private fun body(code: String? = null) = JsonObject(buildMap { put("error", JsonPrimitive("x")); code?.let { put("code", JsonPrimitive(it)) } })
 

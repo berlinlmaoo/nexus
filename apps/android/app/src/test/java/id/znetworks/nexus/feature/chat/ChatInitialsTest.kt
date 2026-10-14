@@ -11,12 +11,12 @@ class ChatInitialsTest {
     @Test fun titlesAndInitials() {
         val me = "me"
         // The other person is known: their name.
-        assertEquals("Bagas Z", dm(null, "z" to "Bagas Z", me to "Bagas Putro").title(me, "Direct message"))
+        assertEquals("Budi Z", dm(null, "z" to "Budi Z", me to "Budi Santoso").title(me, "Direct message"))
         // Only me in the member list: the room's name, else "Direct message".
-        assertEquals("BZ", dm("Bagas Z", me to "Bagas Putro").initials(me, "Direct message"))
-        assertEquals("Direct message", dm(null, me to "Bagas Putro").title(me, "Direct message"))
-        assertEquals("DM", dm(null, me to "Bagas Putro").initials(me, "Direct message"))
-        assertEquals("M", ChatInitials.of("Mimiw"))
+        assertEquals("BZ", dm("Budi Z", me to "Budi Santoso").initials(me, "Direct message"))
+        assertEquals("Direct message", dm(null, me to "Budi Santoso").title(me, "Direct message"))
+        assertEquals("DM", dm(null, me to "Budi Santoso").initials(me, "Direct message"))
+        assertEquals("M", ChatInitials.of("Mira"))
         assertEquals("?", ChatInitials.of("  "))
     }
 }

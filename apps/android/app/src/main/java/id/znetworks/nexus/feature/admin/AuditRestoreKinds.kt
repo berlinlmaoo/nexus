@@ -10,7 +10,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.descriptors.nullable
 
-// Restore every kind of delete (Berlin, 8 Oct; RESTORE-ALL-TYPES, web AuditLogView). Project and task
+// Restore every kind of delete (owner, 8 Oct; RESTORE-ALL-TYPES, web AuditLogView). Project and task
 // read exactly as before; every other kind by its own button, note, counts and refusals.
 
 /**

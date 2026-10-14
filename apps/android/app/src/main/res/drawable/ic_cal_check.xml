@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Month-grid mark "all done / no status" (rule 10.31, Berlin 8 Oct 2026), tinted with the division colour.
+  Month-grid mark "all done / no status" (rule 10.31, owner 8 Oct 2026), tinted with the division colour.
   A stroked check (1.5 dp at 10 dp, round caps) inside a padded box, so it reads at dot size (audit 3 #3).
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"

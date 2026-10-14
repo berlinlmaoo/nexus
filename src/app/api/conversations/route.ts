@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
     // takes a person out of the room (lib/chat-membership.ts). Null when it spans workspaces.
     const workspaceId = await workspaceForNewRoom(userId, others)
     const isGroup = type === "GROUP"
-    // A new group opens with its own log line, "Bagas created the group “QA”", written with it: the
+    // A new group opens with its own log line, "Budi created the group “QA”", written with it: the
     // people put in it get one push each from that line (chat-system.ts). A DM has none.
     const { conversation, system } = await prisma.$transaction(async (tx) => {
       const created = await tx.conversation.create({

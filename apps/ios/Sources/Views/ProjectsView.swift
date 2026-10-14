@@ -634,7 +634,7 @@ struct FolderTree {
     /// Room for one more level under this folder (New subfolder).
     func canHoldSubfolder(_ id: String) -> Bool { depth(id) < Self.maxDepth }
 
-    /// "Clients › ANKER › Launch", so two folders with the same name can be told apart in a menu.
+    /// "Clients › ACME › Launch", so two folders with the same name can be told apart in a menu.
     func path(_ id: String) -> String {
         var names: [String] = []
         var seen: Set<String> = []

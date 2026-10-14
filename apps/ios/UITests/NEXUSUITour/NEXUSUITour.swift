@@ -16,7 +16,7 @@ import XCTest
 ///   TOUR_PROJECT_ID / TOUR_FORM_ID   optional: replace the project / form in the list
 ///   TOUR_SERVER                 optional: "dev" (default) or "production"
 ///   TOUR_LANG                   optional: "en" (default) or "id"
-///   TOUR_WEB_BASE               optional: the web the Safari tour opens (default: the DEV server)
+///   TOUR_WEB_BASE               required for the Safari tour: the dev web it opens (ui-tour.sh passes it)
 ///   TOUR_LEGAL_DOC_ID / TOUR_LEGAL_FORM_PATH   optional: the Legal document / request form to show
 ///
 /// Legal screens (14 Oct 2026): `{legalDoc}` / `{legalForm}` in a route are looked up once per run with
@@ -55,7 +55,7 @@ final class NEXUSUITour: XCTestCase {
         let settled: Bool
         let seconds: Double
         /// Mac: false when the NEXUS window could not be brought to the front before a shot, so the
-        /// picture may show another app's window (run 5: a Claude / editor window in the Mac shots).
+        /// picture may show another app's window (run 5: an editor window in the Mac shots).
         var frontmost: Bool? = nil
     }
 
@@ -207,8 +207,11 @@ final class NEXUSUITour: XCTestCase {
             XCTFail("TOUR_EMAIL / TOUR_PASSWORD are not set. Run scripts/ui-tour.sh instead of the test directly.")
             return
         }
-        let base = (setting("TOUR_WEB_BASE") ?? "https://nexus-prod.tail765d02.ts.net:8443")
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let base = webBase
+        guard !base.isEmpty else {
+            XCTFail("TOUR_WEB_BASE is not set. Run scripts/ui-tour.sh instead of the test directly.")
+            return
+        }
         safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
         XCUIApplication().terminate()   // the app tour's last launch; Safari gets the whole screen
         var outcomes: [Outcome] = []
@@ -415,7 +418,7 @@ final class NEXUSUITour: XCTestCase {
     /// The dev web's origin: the Safari tour's base, and the host of `https://…/f/<id>` app routes
     /// (the app opens only links of its own server's host, Config.isNexusHost).
     private var webBase: String {
-        (setting("TOUR_WEB_BASE") ?? "https://nexus-prod.tail765d02.ts.net:8443")
+        (setting("TOUR_WEB_BASE") ?? "")
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     }
 

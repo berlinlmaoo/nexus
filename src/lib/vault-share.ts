@@ -25,7 +25,7 @@ import {
 // request, so a revoke, an expiry, a trash or a lock takes effect on the next click.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Berlin's presets. `permanent` is a real choice, not an oversight — a logo link that dies after a
+/** the owner's presets. `permanent` is a real choice, not an oversight — a logo link that dies after a
  *  month is worse than no link at all. */
 export const EXPIRY_PRESETS: Record<string, number | null> = {
   "3d": 3,

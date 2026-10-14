@@ -34,7 +34,7 @@ class RequestRulesTest {
         assertFalse("LEAVE" in RequestRules(today(leave = AnnualLeave(eligible = true, remaining = 0)), false).types)
     }
 
-    // Berlin 29 Sep (server BACKDATED_SELF, iOS ed7545e): no past day for any type when filing your own.
+    // owner 29 Sep (server BACKDATED_SELF, iOS ed7545e): no past day for any type when filing your own.
     @Test fun noPastDayForAnyType() {
         listOf(RequestRules(today(), false), RequestRules(today(), true)).forEach { r ->
             listOf("LEAVE", "SICK", "PERMIT", "DAY_OFF", "RED_DATE").forEach { t -> assertEquals(todayWib, r.earliest(t, now)) }
@@ -74,7 +74,7 @@ class RequestRulesTest {
         assertEquals(Missing.DATE, r.missing("PERMIT", "event", true, false, todayWib.minusDays(3), now))
     }
 
-    // Berlin 29 Sep (server, iOS ed7545e): sick and permit need their photo from everyone filing their own, BoD too.
+    // owner 29 Sep (server, iOS ed7545e): sick and permit need their photo from everyone filing their own, BoD too.
     @Test fun photoRequiredForBoDToo() {
         val bod = RequestRules(today(), true)
         assertTrue(bod.attachmentRequired("SICK")); assertTrue(bod.attachmentRequired("PERMIT"))

@@ -1,30 +1,30 @@
 # NEXUS Android: status
 
-**Active again since 28 Sep 2026** (hold lifted by Berlin). Parity with iOS per
+**Active again since 28 Sep 2026** (hold lifted by the owner). Parity with iOS per
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
-Repo: monorepo `github.com/berlinlmaoo/nexus` branch `dev`, folder `apps/android` (since 14 Oct; `~/nexus-android` is frozen). Every change is committed.
+Repo: monorepo `github.com/berlinlmaoo/nexus` branch `dev`, folder `apps/android` (since 14 Oct; the old Android repo is frozen). Every change is committed.
 **Branch `dev` (12 Oct, DEV-REDESIGN.md):** the Notion-like redesign is built on branch `dev` against the
 DEV server, never on `master`. Settings › Server switches Production / Dev (Tailscale); see "12 Oct, DEV".
 Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (686 JVM tests, all green, 14 Oct).
 Version 0.1.6 (versionCode 13 in the tree), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
-**Build 13 PUBLISHED** (5 Oct: `nexus-prod:~/nexus-data/android/nexus-0.1.6-13.apk` + `current.json` (previous kept as `current.json.prev-12`), sha256 `a6e09f68cae704162865a633dff4293b4fcdcb0dea865f113f315c959ceea98a`, from 0885fa0, 342 tests; versionCode 13, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 13): build 12 + the org chart in English and Indonesian. Emulator smoke: 3 cold launches drawn, no crash from this install.
-**Build 12 PUBLISHED** (5 Oct 07:44 UTC: `nexus-prod:~/nexus-data/android/nexus-0.1.6-12.apk` + `current.json` (previous kept as `current.json.prev-11`), sha256 `6c660b44318a0872b44a2ba56bc9410373b5fd4da2b5f357e34e4a7957164a1b`, from e7924c4, 341 tests; versionCode 12, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 12): build 11 + Bagan IP & Divisi. Emulator smoke: 3 cold launches drawn, no crash from this install; the fixture and the debug preview are not in the release APK.
-**Build 11 PUBLISHED** (29 Sep 11:38 UTC, by this session on the main session's instruction: `nexus-prod:~/nexus-data/android/nexus-0.1.6-11.apk` + `current.json` (previous kept as `current.json.prev-10`), sha256 `888d6d3c7350c886d61d850f1b183f473185fa74014e367ce8e4465cdfe53a10`, from 1dfc428, 334 tests; versionCode 11, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 11): build 10 + pinned projects synced with the server. Emulator smoke: 3 cold launches drawn, no crash from this install.
-**Build 10 (published by the main session 11:02 UTC)** (`~/nexus-android-release/NEXUS-0.1.6-10.apk`, sha256 `8a57c090a0123acceeaf86388fb65fbe0d2dced575cd6e86997a04efca4ce462`, from 7dc72da, 330 tests; versionCode 10, versionName 0.1.6, signer 5322fe4c…ad26): 0.1.6 final — leave as one range, no past day for any type, photo for sick and permit (BoD included), always-location button to the app's Location screen, What's New line. (A first build 10 made from ea52b04 before Berlin's revision was replaced before anyone got it.) Emulator smoke: 3 cold launches drawn, no crash from this install (only the stale BOOT_COMPLETED to the removed previous uid).
-**Build 9 ready, NOT published** (`~/nexus-android-release/NEXUS-0.1.6-9.apk`, sha256 `de3d5d61eb534cf86d1d22cede2466addbc2420b4401406060d4b7d94afdeaf6`, from 3dea3c4, 324 tests; versionCode 9, versionName 0.1.6, signer 5322fe4c…ad26): build 8 + Control Room › App per device + centred confirmations. Emulator smoke: 3 cold launches drawn, no crash from this install (only the stale BOOT_COMPLETED to the removed previous uid).
-**Build 8 PUBLISHED** (29 Sep, by the main session: nexus-prod current.json versionCode 8, version-policy latestBuild 8; waiting for Berlin's test) (`~/nexus-android-release/NEXUS-0.1.6-8.apk`, sha256 `1a4fd49bc7b801dd0f482272baa25565acfa4ec6542ad8005cc38db8aa36eacc`, from b7000aa, 322 tests; versionCode 8, versionName 0.1.6, signer 5322fe4c…ad26): build 7 + Batch 2 A/B/C (Absen Monitor with warnings, Control Room keyboard, targeted announcements with SP PDF). Same emulator smoke as build 7: 3 cold launches drawn, no crash from this install (only the stale BOOT_COMPLETED to the removed previous uid).
-**Build 7 ready, NOT published** (`~/nexus-android-release/NEXUS-0.1.6-7.apk`, sha256 `f10f4887e2eba6f83521e3584206b35cc04d09b92cb6417b22574612d66b1873`, from 1e3e706, 314 tests; versionCode 7, versionName 0.1.6, signer 5322fe4c…ad26): UI points 1–7 vs iOS + update offered by build number (latestName/latestBuild). Emulator smoke: 3 cold launches drawn, no crash from this install (the one crash in the log is the known stale BOOT_COMPLETED to the uninstalled previous uid).
+**Build 13 PUBLISHED** (5 Oct: `<server>:<apk-dir>/nexus-0.1.6-13.apk` + `current.json` (previous kept as `current.json.prev-12`), sha256 `a6e09f68cae704162865a633dff4293b4fcdcb0dea865f113f315c959ceea98a`, from 0885fa0, 342 tests; versionCode 13, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 13): build 12 + the org chart in English and Indonesian. Emulator smoke: 3 cold launches drawn, no crash from this install.
+**Build 12 PUBLISHED** (5 Oct 07:44 UTC: `<server>:<apk-dir>/nexus-0.1.6-12.apk` + `current.json` (previous kept as `current.json.prev-11`), sha256 `6c660b44318a0872b44a2ba56bc9410373b5fd4da2b5f357e34e4a7957164a1b`, from e7924c4, 341 tests; versionCode 12, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 12): build 11 + Bagan IP & Divisi. Emulator smoke: 3 cold launches drawn, no crash from this install; the fixture and the debug preview are not in the release APK.
+**Build 11 PUBLISHED** (29 Sep 11:38 UTC, by the Android side on the server/web side's instruction: `<server>:<apk-dir>/nexus-0.1.6-11.apk` + `current.json` (previous kept as `current.json.prev-10`), sha256 `888d6d3c7350c886d61d850f1b183f473185fa74014e367ce8e4465cdfe53a10`, from 1dfc428, 334 tests; versionCode 11, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 11): build 10 + pinned projects synced with the server. Emulator smoke: 3 cold launches drawn, no crash from this install.
+**Build 10 (published by the server/web side 11:02 UTC)** (`<release-dir>/NEXUS-0.1.6-10.apk`, sha256 `8a57c090a0123acceeaf86388fb65fbe0d2dced575cd6e86997a04efca4ce462`, from 7dc72da, 330 tests; versionCode 10, versionName 0.1.6, signer 5322fe4c…ad26): 0.1.6 final — leave as one range, no past day for any type, photo for sick and permit (BoD included), always-location button to the app's Location screen, What's New line. (A first build 10 made from ea52b04 before the owner's revision was replaced before anyone got it.) Emulator smoke: 3 cold launches drawn, no crash from this install (only the stale BOOT_COMPLETED to the removed previous uid).
+**Build 9 ready, NOT published** (`<release-dir>/NEXUS-0.1.6-9.apk`, sha256 `de3d5d61eb534cf86d1d22cede2466addbc2420b4401406060d4b7d94afdeaf6`, from 3dea3c4, 324 tests; versionCode 9, versionName 0.1.6, signer 5322fe4c…ad26): build 8 + Control Room › App per device + centred confirmations. Emulator smoke: 3 cold launches drawn, no crash from this install (only the stale BOOT_COMPLETED to the removed previous uid).
+**Build 8 PUBLISHED** (29 Sep, by the server/web side: the server current.json versionCode 8, version-policy latestBuild 8; waiting for the owner's test) (`<release-dir>/NEXUS-0.1.6-8.apk`, sha256 `1a4fd49bc7b801dd0f482272baa25565acfa4ec6542ad8005cc38db8aa36eacc`, from b7000aa, 322 tests; versionCode 8, versionName 0.1.6, signer 5322fe4c…ad26): build 7 + Batch 2 A/B/C (Absen Monitor with warnings, Control Room keyboard, targeted announcements with SP PDF). Same emulator smoke as build 7: 3 cold launches drawn, no crash from this install (only the stale BOOT_COMPLETED to the removed previous uid).
+**Build 7 ready, NOT published** (`<release-dir>/NEXUS-0.1.6-7.apk`, sha256 `f10f4887e2eba6f83521e3584206b35cc04d09b92cb6417b22574612d66b1873`, from 1e3e706, 314 tests; versionCode 7, versionName 0.1.6, signer 5322fe4c…ad26): UI points 1–7 vs iOS + update offered by build number (latestName/latestBuild). Emulator smoke: 3 cold launches drawn, no crash from this install (the one crash in the log is the known stale BOOT_COMPLETED to the uninstalled previous uid).
 Build 6 (sha256 `ec06a64e…1934`, from 91dded1, 308 tests) — see "APK ready".
 **Release candidate: build 5** (`NEXUS-0.1.6-5.apk`, sha256 `4d75566d2e21e24d4ac93835e8cd7c1ba3875455168306c8de2bfb63c0943c38`,
 from b122e0f, 300 JVM tests at that commit): security + parity audit 266af90 = **RILIS LAYAK**; it goes
-out for Berlin to test. The fixes for that audit's RENDAH findings (R1, R3, R4, R6, R7) are in the code
-after it and ride in the next build, which is made only when the main session says so.
-Phases 1–5 done; Wear OS not built (Berlin: not a Play Store priority).
+out for the owner to test. The fixes for that audit's RENDAH findings (R1, R3, R4, R6, R7) are in the code
+after it and ride in the next build, which is made only when the server/web side says so.
+Phases 1–5 done; Wear OS not built (the owner: not a Play Store priority).
 
 ## 14 Oct, UI tour rounds 1–3 (Android vs iPhone first, then web; monorepo `dev`)
 
-Done (each pushed to `dev`, author Berlin):
+Done (each pushed to `dev`, author the owner):
 - Board cards / Table columns / List rows draw the view's properties like the web PropLine and iOS ListPropLine
   (`CardProps.kt`); Linked lanes (taskProjects); phone header + Add task in the tab row; floating tab bar; tab
   scrolled into view; compact search; project Calendar Today + "No date"; Timeline groups collapsible.
@@ -65,7 +65,7 @@ Target: parity with the dev web desktop (master reference) and iOS dev, adapted 
 | 4 Spreadsheet | Native phone v1 of the project Spreadsheet (key `sheet`, web SheetMobile as the blueprint; `feature/sheets`): sheet tabs (add / rename / duplicate / delete — never the last or the main sheet, centred confirm), windowed grid with sticky letters + row numbers, frozen rows/cols, hidden ones skipped, merges blanked; cells from the server's computed display text (`GET /api/sheets/:id?computed=1`) with bold/italic/strike/underline, colours, alignment, wrap, font size; edit bar (address, field, ✓/✕, Enter moves down, undo/redo), checkbox toggle, dropdown / multi-select picker, long-press insert/delete rows and columns; typing ported 1:1 from the web (`inputToCell`, `detectInput`, `parseLocaleNumber`, `parseDateText`, A1 ↔ id-space `toStored` / `toDisplay` / `canonicalFormula`) — **no formula evaluator, the server computes**; per-sheet serial save queue on disk (put back under newer typing on network failure, refusals reload with the server's sentence, 1→30 s backoff, offline badge, cleared on logout), `updatedAt` merge rule, own-echo skipped via `X-Nexus-Tab`, realtime `sheet-cells` / `sheet-structure`, computed refetch 600 ms after changes; protected ranges (restrict refuses, warn asks "Heads up!"); view-only below Can edit and on pivot tabs; empty/error states. Tests: the web's sheet-formula cases for the ported functions + model/queue rules. **Unverified**: the exact key/placement of the computed map (read both a top-level `computed` map and a per-row one; falls back to client formatting) — check on a dev sheet. Left to the web: formatting tools, charts, filters, comments, history, merges drawn as one cell, Sum bar. | done (v1, not seen on a device) |
 
 Not seen on a device signed in yet (QA needs an account on the dev server): the shell was checked in the debug
-preview on the Orca emulator (More, Settings header).
+preview on the emulator (More, Settings header).
 
 ## Done (Phase 1, attendance MVP)
 
@@ -83,10 +83,10 @@ preview on the Orca emulator (More, Settings header).
 | Live location | TrailMachine (port of iOS WorkTrailPolicy), foreground service type location + "Work session" notification, disclosure once per record (not repeated after a yes), "Allow all the time", OEM battery guide, on/denied reporting, boot resume with background permission | `feature/attendance/trail` |
 | Deep links | router holding targets across cold start/sign-in, `nexus://`, notification extras, `/attendance?request=|offsite=|permit=today`, unbuilt screens open the web | `core/nav` |
 | Inbox, announcements, reflections, appearance | as named | `feature/inbox`, `feature/attendance/reflections`, More tab |
-| Push | FCM data-only handling, PRD channels (+ `system`, + the pre-R1 ids), "File a permit" action only, auto-offsite reconcile, tap marks inbox read; local 15-min check-in reminder when push is unavailable. **On**: Firebase is installed (`~/.nexus-android-secrets/firebase.properties` + google-services.json), release builds are made with it; chat pushes as MessagingStyle per conversation (8 Oct) | `feature/push` |
-| Distribution | release key (see CLAUDE.md), ARM-only release APK ~22 MB, staff install guide | `docs/INSTALL-APK.md` |
+| Push | FCM data-only handling, PRD channels (+ `system`, + the pre-R1 ids), "File a permit" action only, auto-offsite reconcile, tap marks inbox read; local 15-min check-in reminder when push is unavailable. **On**: Firebase is installed (`<android-secrets-dir>/firebase.properties` + google-services.json), release builds are made with it; chat pushes as MessagingStyle per conversation (8 Oct) | `feature/push` |
+| Distribution | release key (kept privately), ARM-only release APK ~22 MB, staff install guide | `docs/INSTALL-APK.md` |
 
-Server side for all of this is live (SERVER-REQUESTS R1–R4 DONE, server a79796b; iOS I1/I2 fixed by the main session).
+Server side for all of this is live (SERVER-REQUESTS R1–R4 DONE, server a79796b; iOS I1/I2 fixed by the server/web side).
 
 ## 28 Sep: brought level with iOS (UPDATES-2026-09-28.md)
 
@@ -99,7 +99,7 @@ Server side for all of this is live (SERVER-REQUESTS R1–R4 DONE, server a79796
 | 5 | Extra day off (LIVE, server e910294): `dayOffQuota` shown as sent (already raised); the card says "This period: 4 + 3 extra" from `dayOffAllowance`; `dayoff_bonus_granted` → attendance_reminders; no grant UI (Phase 4) | a884d5c, this step |
 | 6 | Liveness on every attendance selfie, enforced by type + source-scanning test | 6f23cdc |
 | — | Period keys: 28th-at-midnight-WIB cut-off verified everywhere (iOS bug 8838eec not present) | a808e55 |
-| — | Firebase read from `app/google-services.json` (main session drops it in; git-ignored) | a884d5c |
+| — | Firebase read from `app/google-services.json` (server/web side drops it in; git-ignored) | a884d5c |
 | — | In-app APK update: release check, resumable download with session, sha256 + package + signing cert + version verified, PackageInstaller, "Install unknown apps" guided once | fd00ad5 |
 
 ## Outside-the-office in the Work session notification (UPDATES §9), 28 Sep 2026
@@ -124,7 +124,7 @@ the pause; filing a request for today on the phone pauses the countdown at once.
 
 ## Local alerts and the precise route outside the office (UPDATES §10), 28 Sep 2026
 
-Done (§10 was not yet written in UPDATES when this landed; built from Berlin's brief, re-check
+Done (§10 was not yet written in UPDATES when this landed; built from the owner's brief, re-check
 against the text once it is there).
 - Local notifications (channel `attendance_location`): "Kamu keluar kantor jam 14:05 · Auto check-out
   offsite jam 16:35 kalau belum balik atau ajukan izin" on leaving, and "Sudah 1 jam di luar kantor ·
@@ -187,7 +187,7 @@ Done. PRESENCE IN / OUT are gone; `AttendanceButton` is one full-width control:
 | 2.9 | Account, natively: **sign-up** (name, email, password, optional workspace code → 6-digit code → account created → signed in; the code is sent again on verify as the API requires), **password reset** (email → code + new password), resend with the server's countdown, first field error in form order, tries left shown; **passkeys**: sign in with a passkey on the login card (Credential Manager 1.6.0; server origins + assetlinks are live), and in More › Account & sign-in list/add/remove; **change email** (code to the new address, session email updated) and **change password**. `nexus://forgot-password?email=…&invited=1` and `nexus://register?code=…` open those cards. Not verified on a phone yet: the passkey sheet needs the release-signed APK (assetlinks has the release fingerprint only) | 073ee45 |
 | 2.10 | What's New: a sheet once per versionName after sign-in (0.1.6 = the first Android release: one button, work session/outside countdown, offline queue, missions in the app, sign-up/reset/passkeys, in-app updates), also under More. A version without notes shows nothing | f691852 |
 
-**Phase 2 is complete** (28 Sep 2026). To ship it, the APK needs a new versionCode (the one handed over below is build 1, before Phase 2): the main session decides the build number and publishes (R2/R4).
+**Phase 2 is complete** (28 Sep 2026). To ship it, the APK needs a new versionCode (the one handed over below is build 1, before Phase 2): the server/web side decides the build number and publishes (R2/R4).
 
 ## Phase 3 (communication and knowledge), in progress since 28 Sep 2026
 
@@ -228,7 +228,7 @@ Done. PRESENCE IN / OUT are gone; `AttendanceButton` is one full-width control:
 
 Still on the web until built: Phase 3 (chat, Threads, docs/pages, forms, profiles, tickets, Z Vault, reports, leaderboard, GIDEON, Control Room).
 
-## Phase 5 (Berlin, 28 Sep 2026: build now; "close web check-in" is NOT ours — server, after adoption)
+## Phase 5 (the owner, 28 Sep 2026: build now; "close web check-in" is NOT ours — server, after adoption)
 
 | Part | What exists | Commit |
 |---|---|---|
@@ -236,8 +236,8 @@ Still on the web until built: Phase 3 (chat, Threads, docs/pages, forms, profile
 | 5.2 | **LAN upload shortcut**: already there since Phase 1 (`core/net/LanRoute.kt`, the same `lan.nexus.znetworks.id` route as iOS LANRoute). Checked for Phase 5: every upload (task/vault single request, every 16 MiB chunk, avatar, folder icon, chat photo, forms) and every download goes through `ApiClient`'s one OkHttp client with the route interceptor; a request with a body keeps the 60 s timeout on the LAN and is never replayed once it may have left (LanRouteTest). Nothing to build | 6e88d2d |
 | 5.3 | **Tablet navigation rail**: from 600 dp wide (tablets, unfolded phones, landscape on large phones) the five tabs move from the bottom bar to a NavigationRail on the left, same items, same back-stack behaviour; phones unchanged. Not seen on a device yet (needs a signed-in session) | 1a548fe |
 | 5.4 | **Suspect-record review = Control Room › Fake GPS** (server f7f5f1c, iOS c977091; BoD/OAA tab after Extra day off): period switch (28→27), chips Fake GPS / Worth a look / Reviewed with the server's counts, a card per record (name, date, place, badge; check-in and check-out blocks with selfie, the server's signals in the app's language with the speed kept, offline mark, short address, ±accuracy, Map link), note (≤ 300), "It's fine" for any open record, "Not valid…" only for FAKE with a note of 3+ characters and one confirmation that says what happens (day deleted, TK, −150 XP after day off, person notified); server refusals (422 NOT_PROOF…) shown as sent. FakeGpsTest | 7aa6283, 17f59b4 |
-| 5.5 | **Wear OS: NOT built — Berlin's decision (29 Sep): not a Play Store priority.** Background: A Wear OS app is installed on the watch itself, from the Play Store on the watch; a sideloaded phone APK (our only channel, /download/android) cannot carry it, so each watch would need adb over Wi-Fi. Until there is a Play listing (or Berlin wants an adb-installed build for a few people), the watch gets what the phone already posts: ordinary pushes (approvals, reminders) are mirrored by the Wear OS companion. Scope if built: today's status + 7 dots (as the widget) and approvals (as iOS Watch ApprovalsView), session from the phone over the Wear Data Layer | — |
-| — | "Close web check-in": not ours (server decision after adoption, Berlin) | — |
+| 5.5 | **Wear OS: NOT built — the owner's decision (29 Sep): not a Play Store priority.** Background: A Wear OS app is installed on the watch itself, from the Play Store on the watch; a sideloaded phone APK (our only channel, /download/android) cannot carry it, so each watch would need adb over Wi-Fi. Until there is a Play listing (or the owner wants an adb-installed build for a few people), the watch gets what the phone already posts: ordinary pushes (approvals, reminders) are mirrored by the Wear OS companion. Scope if built: today's status + 7 dots (as the widget) and approvals (as iOS Watch ApprovalsView), session from the phone over the Wear Data Layer | — |
+| — | "Close web check-in": not ours (server decision after adoption, the owner) | — |
 
 ## iOS bug checklist (UPDATES §8), checked 28 Sep 2026
 
@@ -257,10 +257,10 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | B10 | **Nothing to fix.** The LAN route replays only when the request provably never left (core/net/LanRoute.kt:113); LanRouteTest `postDroppedMidwayIsNotReplayed`. |
 | B11 | **Not affected.** No splash that waits on data: MainActivity draws login/lock/shell on the first frame, nothing prefetches every project, and no GIDEON bubble exists. |
 | B12 | **Not affected** (6f23cdc): attendance only accepts `LiveSelfie` from the face check (liveness/LivenessCaptureScreen.kt:100); AttendanceGuardTest fails the build on any bypass. |
-| B13 | **Fixed** (main session, 28 Sep: board showed only people who had checked in on a period's first day). The board now merges `roster` from `GET /api/attendance/history?scope=workspace` with the people in the rows, sorted A–Z as on iOS/web (the viewer is no longer pinned first); roster quota is used when a person has no row yet (history/BoardModel.kt `members`, BoardModelTest `rosterShowsEveryoneEvenWithoutRows`). |
+| B13 | **Fixed** (server/web side, 28 Sep: board showed only people who had checked in on a period's first day). The board now merges `roster` from `GET /api/attendance/history?scope=workspace` with the people in the rows, sorted A–Z as on iOS/web (the viewer is no longer pinned first); roster quota is used when a person has no row yet (history/BoardModel.kt `members`, BoardModelTest `rosterShowsEveryoneEvenWithoutRows`). |
 | B14 | **Fixed** (iOS 91d7e98, crew board freeze panes): (1) a drag over the names, the Score column or the date row now scrolls the board too (outer `scrollable` on the whole grid sharing the day-cell and row scroll states; history/BoardUi.kt `Grid`); (2) **not affected**: rows are a plain Column, never a lazy list inside the two-way scroll, so every row is always drawn. |
 
-## UI vs iOS (Berlin GO, 29 Sep; list in the main session's android-ui/LIST.md, points 1–7)
+## UI vs iOS (the owner GO, 29 Sep; list in the server/web side's android-ui/LIST.md, points 1–7)
 
 | Point | Fix | Commit |
 |---|---|---|
@@ -305,7 +305,7 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 
 ## 12 Oct, DEV: server switch (DEV-REDESIGN.md; branch `dev` only)
 
-- `NexusConfig.env` (ServerEnv PRODUCTION / DEV = `https://nexus-prod.tail765d02.ts.net:8443`), read by
+- `NexusConfig.env` (ServerEnv PRODUCTION / DEV = `<dev-url>`), read by
   `ServerEnvStore.load` in `NexusApplication` before the container. API base, realtime, web links (openWeb,
   form and outlet links) follow it; images resolve against the API base. The APK download fallback stays prod.
 - The cookie goes only to the chosen server's host (DEV: the DEV host only, no LAN twin); the office LAN
@@ -388,7 +388,7 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
   TASK_VIEW_REQUIRED in Indonesian only, so the app shows its own EN/ID text for them.
 - Tests: ProjectSetupMembersTest; MemberPickerTest now points at the shared picker.
 
-## 11 Oct, project setup + multi-add members (agents:~/handoff/chat/PROJECT-SETUP-MEMBERS.md), PART B only
+## 11 Oct, project setup + multi-add members (handoff/chat/PROJECT-SETUP-MEMBERS.md), PART B only
 
 - B is already on Android since MEMBER-PICKER: Project settings › Add people is a search with checkbox rows and avatars,
   then one "Add N" button sends `{ userIds }`. There is no team step.
@@ -396,7 +396,7 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
   `{ userIds }` request.
 - A (pick tabs and add members while creating a project) was done later the same day; see the next section up.
 
-## 11 Oct, Pipeline §16: many boards (agents:~/handoff/chat/PIPELINE-DASHBOARD.md §16)
+## 11 Oct, Pipeline §16: many boards (handoff/chat/PIPELINE-DASHBOARD.md §16)
 
 - Picking Pipeline Dashboard in New project now always asks for a name and creates a NEW empty board, like the other
   types. The "Opens the company's pipeline" card that opened the existing board is gone.
@@ -409,7 +409,7 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 - The pipeline API was already per project (/api/projects/:id/pipeline), so the boards stay apart.
 - Tests: PipelineBoardTest.manyBoardsAndAccess; PipelineTermsTest adjusted.
 
-## 11 Oct, Customize cleanup (agents:~/handoff/chat/PROJECT-CUSTOMIZE-CLEANUP.md)
+## 11 Oct, Customize cleanup (handoff/chat/PROJECT-CUSTOMIZE-CLEANUP.md)
 
 - **Duplicate is always on.** Multi-select is new on Android (TaskBulk.kt, after web task-bulk.tsx) and works in every
   project:
@@ -458,7 +458,7 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
   Folders keep their colour picker.
 - ProjectMarkTest updated (545 JVM tests).
 
-## 11 Oct, one default project icon (agents:~/handoff/chat/PROJECT-ICON.md; web 22dda1a LIVE)
+## 11 Oct, one default project icon (handoff/chat/PROJECT-ICON.md; web 22dda1a LIVE)
 
 - `ProjectMark(icon, color, size)` (feature/projects/ProjectMark.kt): every project draws the same mark, a rounded
   square in the project colour (fallback #7B2FBE) at 0.6 of the slot with a 28% corner radius. The one exception is an
@@ -472,7 +472,7 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
   - the general save never sends `icon`.
 - Test: ProjectMarkTest.
 
-## 10 Oct, Outlet Sales Dashboard (agents:~/handoff/chat/OUTLET-SALES.md; server/web 0cedc3a LIVE)
+## 10 Oct, Outlet Sales Dashboard (handoff/chat/OUTLET-SALES.md; server/web 0cedc3a LIVE)
 - **Project type:**
   - `OUTLET_SALES` replaces the Finance Dashboard card in "New project". The order is Task · Outlet Sales ·
     Content (soon) · Pipeline.
@@ -530,7 +530,7 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
   that the flag wins over the words.
 - Tests: PriorityHighRedTest, PipelinePhasesTest.serverFlagBeatsWords. APK not published.
 
-## 10 Oct, Faces on tasks and projects, compact priority pill (agents:~/handoff/chat/AVATARS-PRIORITY.md; web d576589, iOS 318550a)
+## 10 Oct, Faces on tasks and projects, compact priority pill (handoff/chat/AVATARS-PRIORITY.md; web d576589, iOS 318550a)
 - Most of Android already drew photos through `Avatar` (photo, initial on a colour when there is none or it fails
   to load; relative URLs go through the API client):
   - board/list/My Tasks cards, folder view rows;
@@ -546,11 +546,11 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 - Android's task detail has no @mention list and no threaded replies, so nothing changed there.
 - Test: AvatarsPriorityTest. Not checked on an emulator. APK not published.
 
-## 10 Oct, Projects tree: drag and drop, full folder and project menus (agents:~/handoff/chat/FOLDERS-DND.md; web d82b45d, iOS c322ce0; no server change)
+## 10 Oct, Projects tree: drag and drop, full folder and project menus (handoff/chat/FOLDERS-DND.md; web d82b45d, iOS c322ce0; no server change)
 - FolderTree mirrors the server's lib/folder-tree.ts:
   - at most 4 levels, and a folder never goes into itself or one of its own subfolders;
   - "New subfolder" is hidden at level 4;
-  - "Move to…" lists only valid places, by path ("Clients › ANKER › Launch").
+  - "Move to…" lists only valid places, by path ("Clients › ACME › Launch").
 - Sections: Pinned (pinned folders as whole trees + pinned projects), Folders, No folder. Folder pins come from
   GET/POST /api/project-folders/pins; project pins work as before.
 - Folder row:
@@ -595,7 +595,7 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 - Android has no folder depth cap, so the 3 → 4 change needs nothing here.
 - Test: PipelineExecutionFolderTest. Not checked on an emulator. APK not published.
 
-## 10 Oct, Board: Add task at the top of each lane (Berlin's request; iOS db37e62)
+## 10 Oct, Board: Add task at the top of each lane (the owner's request; iOS db37e62)
 - The lane's "Add task" (and its inline composer) moved from the end of the card list to just under the lane
   header, outside the scrolled list, like the web board's "+ Spawn card". A long lane no longer has to be
   scrolled to its end to add a task. The button has the web's dashed outline.
@@ -633,7 +633,7 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
   filters menu when the board uses more than one, with a removable chip. History shows service lists as "a, b, c".
 - Tests: PipelineDocsServicesTest (2). Upload not exercised against production; APK not published.
 
-## 9 Oct, Project "Add members" picker (agents:~/handoff/chat/MEMBER-PICKER.md; server 70a8fe6, web 70a8fe6, iOS bf96669)
+## 9 Oct, Project "Add members" picker (handoff/chat/MEMBER-PICKER.md; server 70a8fe6, web 70a8fe6, iOS bf96669)
 - Project settings › Members › "Add members" is a full-height dialog: search by name or email (autofocus), the
   workspace roster minus current members, A→Z; row = avatar, name, email, workspace role chip, checkbox; "N selected"
   + Clear; "Add (N)" / Cancel. Empty: "Everyone is already in this project." + the Invite-by-email hint; no results:
@@ -700,7 +700,7 @@ NOT published, version unchanged. Nothing called on production; not yet seen on 
 | Import | Values outside the lists (vregStatus "Not Assessed") and placeholder names ("BD 1") already show as-is | — |
 | Tests | PipelineBoardTest — 510 JVM tests | this step |
 
-## 9 Oct, Pipeline Dashboard (agents:~/handoff/chat/PIPELINE-DASHBOARD.md §8; server LIVE, web 0733d04, iOS 8b698df)
+## 9 Oct, Pipeline Dashboard (handoff/chat/PIPELINE-DASHBOARD.md §8; server LIVE, web 0733d04, iOS 8b698df)
 
 NOT published, version unchanged. Nothing called on production. Not yet seen on a device or emulator (no preview with data).
 Before this, a PIPELINE project already opened on Android as an empty task project (the server keeps its three
@@ -716,7 +716,7 @@ sections), as §8 requires of older builds.
 | Live + Audit | `pipeline-changed` (project room, already joined by the project screen) refetches; Audit `pipeline_deal`: "Restore deal" + its note, Open goes to the project | this step |
 | Tests | PipelineTest, ProjectKindsTest updated — 508 JVM tests | this step |
 
-## 9 Oct, Threads likes/mentions/push photo, Home "Task", Projects folders (agents:~/handoff/chat/THREADS-TASK-FOLDERS.md; server d6967c3 + web LIVE; iOS 8a401b6, 24e3864, dcf824c, 2388b2d)
+## 9 Oct, Threads likes/mentions/push photo, Home "Task", Projects folders (handoff/chat/THREADS-TASK-FOLDERS.md; server d6967c3 + web LIVE; iOS 8a401b6, 24e3864, dcf824c, 2388b2d)
 
 NOT published, version unchanged. NAV-HOME-GROUP (above) was already complete in 0fbef0c; nothing left there.
 
@@ -729,7 +729,7 @@ NOT published, version unchanged. NAV-HOME-GROUP (above) was already complete in
 | 5 Folders | Checked, already holds on Android: load fetches projects and folders before showing either, keeps the previous folders when that request fails, and /api/project-folders is cached for the first paint (the iOS bug was its refresh task being cancelled; viewModelScope isn't) | — |
 | Tests | ThreadsTaskFoldersTest — 501 JVM tests | this step |
 
-## 9 Oct, Threads likes/mentions/push photo, Home "Task", Projects folders (agents:~/handoff/chat/THREADS-TASK-FOLDERS.md; server d6967c3 + web LIVE; iOS 8a401b6, 24e3864, dcf824c, 2388b2d)
+## 9 Oct, Threads likes/mentions/push photo, Home "Task", Projects folders (handoff/chat/THREADS-TASK-FOLDERS.md; server d6967c3 + web LIVE; iOS 8a401b6, 24e3864, dcf824c, 2388b2d)
 
 NOT published, version unchanged. NAV-HOME-GROUP (below) was already complete in 0fbef0c; nothing left there.
 
@@ -742,7 +742,7 @@ NOT published, version unchanged. NAV-HOME-GROUP (below) was already complete in
 | 5 Folders | Checked, already holds on Android: load fetches projects and folders before showing either, keeps the previous folders when that request fails, and /api/project-folders is cached for the first paint (the iOS bug was its refresh task being cancelled; viewModelScope isn't) | — |
 | Tests | ThreadsTaskFoldersTest — 501 JVM tests | this step |
 
-## 9 Oct, Chat tab, Home tiles, bell → Inbox, group of two, board on today (agents:~/handoff/chat/NAV-HOME-GROUP.md; web 4d268c8, iOS b03edac + 1b04294)
+## 9 Oct, Chat tab, Home tiles, bell → Inbox, group of two, board on today (handoff/chat/NAV-HOME-GROUP.md; web 4d268c8, iOS b03edac + 1b04294)
 
 NOT published, versionCode/versionName unchanged (they move only with a published APK). No server change.
 
@@ -755,7 +755,7 @@ NOT published, versionCode/versionName unchanged (they move only with a publishe
 | 5 Board on today | Checked: a reload never swapped the grid for a spinner (spinner only with no rows). The days row used a delayed scroll after the first frame; now the scroll state starts at today's column before the first frame, keyed per period (today for the current one, the first day for a past one) | this step |
 | Tests | NavHomeGroupTest, ShellMotionTest updated — 496 JVM tests | this step |
 
-## 9 Oct, "… is typing" like WhatsApp (agents:~/handoff/chat/TYPING.md; iOS d4244ab)
+## 9 Oct, "… is typing" like WhatsApp (handoff/chat/TYPING.md; iOS d4244ab)
 
 NOT published (decision 13). Realtime only: nothing over HTTP, stored, pushed or polled; with the socket down nothing is
 sent or shown. Until the server sends `typing` nothing arrives and nothing breaks.
@@ -765,10 +765,10 @@ sent or shown. Until the server sends `typing` nothing arrives and nothing break
 | Socket | Receive `typing {conversationId, userId, name, avatar, typing}` (thread room and the user room); send `typing {conversationId, typing}` only on a connected socket (`Realtime.sendTyping`). `message-created` now carries its sender's id | this step |
 | Store | `TypingStore` (container): conversation → typers in the order they started; true adds/refreshes with a 6 s expiry (ticked each second), false removes, their message removes, me ignored, a drop clears everything | this step |
 | Sending | `TypingSender`: true at most every 3 s while the composer isn't blank; false when it empties, on send, on losing focus, after 5 s without a keystroke, and when the thread closes — only after a true went out; a dropped socket forgets it | this step |
-| UI | Thread bottom: up to 3 overlapping photos (then "+N") beside one incoming bubble with three dots rising in turn (1.2 s cycle, 0.15 s apart; still when animations are off); group/project line "Bagas Z is typing…" / "2 people are typing…" (no name: "Someone"), DM dots only; one accessibility element with that sentence; kept in view only when the list was at its end. Header subtitle and chat-list preview read "typing…" in the accent colour | this step |
+| UI | Thread bottom: up to 3 overlapping photos (then "+N") beside one incoming bubble with three dots rising in turn (1.2 s cycle, 0.15 s apart; still when animations are off); group/project line "Budi Z is typing…" / "2 people are typing…" (no name: "Someone"), DM dots only; one accessibility element with that sentence; kept in view only when the list was at its end. Header subtitle and chat-list preview read "typing…" in the accent colour | this step |
 | Tests | TypingTest — 492 JVM tests | this step |
 
-## 9 Oct, form builder (agents:~/handoff/chat/FORM-BUILDER.md; iOS d156e29/713792e; no server change)
+## 9 Oct, form builder (handoff/chat/FORM-BUILDER.md; iOS d156e29/713792e; no server change)
 
 NOT published (decision 13). Nothing called on production.
 
@@ -781,7 +781,7 @@ NOT published (decision 13). Nothing called on production.
 | Not like iOS | Field reorder is up/down arrows and delete is an icon (no drag or swipe), the safe standard controls without a device to try a drag list on | this step |
 | Tests | FormBuilderTest — 489 JVM tests | this step |
 
-## 9 Oct, member profile tidy + profile-photo viewer (agents:~/handoff/chat/PROFILE-TIDY.md; iOS MemberProfileView/ZoomableAvatar)
+## 9 Oct, member profile tidy + profile-photo viewer (handoff/chat/PROFILE-TIDY.md; iOS MemberProfileView/ZoomableAvatar)
 
 NOT published (decision 13). No server change.
 
@@ -794,7 +794,7 @@ NOT published (decision 13). No server change.
 | Period card | Label + "Day 12 of 30"; score 30 sp with +surplus and "Score" on one baseline; the six counts as a 3×2 grid of equal tiles (zero muted); divider; Late ("Never" / "45 min · 3 days"), Day-off allowance ("0 of 4 used · 4 left" + extra), XP ("+0 gained · 0 lost" + removed) as name … value rows that wrap the value under the name when narrow; the score explanation last as an info line. Fixed the Indonesian "Never late this period" that was still English | this step |
 | Tests | ProfileTidyTest — 482 JVM tests | this step |
 
-## 9 Oct, Z Vault: move, multi-upload, gallery, viewer, vault ping (agents:~/handoff/chat/VAULT-MOVE-DND.md; iOS 4c193a8)
+## 9 Oct, Z Vault: move, multi-upload, gallery, viewer, vault ping (handoff/chat/VAULT-MOVE-DND.md; iOS 4c193a8)
 
 NOT published (decision 13). Every new field optional: no `thumbUrl` → type icons; no "vault" ping → the screen's own 60 s pace.
 
@@ -807,7 +807,7 @@ NOT published (decision 13). Every new field optional: no `thumbUrl` → type ic
 | Realtime | `workspace-changed { kind: "vault" }` refetches the folder on screen (bursts folded; also after a reconnect); other screens ignore it | this step |
 | Tests | VaultMoveTest — 478 JVM tests | this step |
 
-## 9 Oct, project types, per-project tabs, Finance opt-in, named icons (agents:~/handoff/chat/PROJECT-TYPES-TABS.md; server LIVE 12db577/76d1ae4)
+## 9 Oct, project types, per-project tabs, Finance opt-in, named icons (handoff/chat/PROJECT-TYPES-TABS.md; server LIVE 12db577/76d1ae4)
 
 NOT published (decision 13). Nothing called on production.
 
@@ -820,7 +820,7 @@ NOT published (decision 13). Nothing called on production.
 | Words | Tab names as the web: Spreadsheet (both), ID Ringkasan / Daftar / Formulir | this step |
 | Tests | ProjectKindsTest — 474 JVM tests | this step |
 
-## 9 Oct, delete group (agents:~/handoff/chat/DELETE-GROUP.md; iOS 053c596; server NOT deployed yet)
+## 9 Oct, delete group (handoff/chat/DELETE-GROUP.md; iOS 053c596; server NOT deployed yet)
 
 NOT published (decision 13). Built for today's server: no `canDelete` → no Delete row; a DELETE without the route
 (405 or the framework's HTML 404) hides the row with "Deleting groups comes with the next server update.". A JSON 404
@@ -833,13 +833,13 @@ means already deleted → treated as done (the handoff's rule; the request's "40
 | Audit | `chat_group`: "Restore group chat", note "It shows in its members' chat lists again…", counts N messages (new `counts.messages`) and N members, `open {type: chat}` → "Open chat" → the thread | this step |
 | Tests | DeleteGroupTest — 469 JVM tests | this step |
 
-## 8 Oct, chat log lines + group info (agents:~/handoff/chat/SYSTEM-MESSAGES.md, iOS 7029ba5; server 35cd02e, 6599dab)
+## 8 Oct, chat log lines + group info (handoff/chat/SYSTEM-MESSAGES.md, iOS 7029ba5; server 35cd02e, 6599dab)
 
 NOT published (decision 13). Nothing called on production with a real account.
 
 | Part | What changed | Commit |
 |---|---|---|
-| Log lines | `Message.kind`/`event` (event read leniently: an unexpected shape becomes null, never a failed page). `ChatSystemText` builds "Bagas added Mey, Yuza and Angela" / "Bagas menambahkan … dan …", removed, left, created (with or without name), renamed, with You/Kamu (you/kamu first among the targets, duplicates once); anything it can't word is the server's `content`. Thread: centred muted pill, no avatar, bubble or actions, tap for the time. Chat list preview reads the sentence (no "Name:" prefix). The group "Added to the group." toast is gone (the log line confirms) | accc4d7 |
+| Log lines | `Message.kind`/`event` (event read leniently: an unexpected shape becomes null, never a failed page). `ChatSystemText` builds "Budi added Sari, Tono and Wati" / "Budi menambahkan … dan …", removed, left, created (with or without name), renamed, with You/Kamu (you/kamu first among the targets, duplicates once); anything it can't word is the server's `content`. Thread: centred muted pill, no avatar, bubble or actions, tap for the time. Chat list preview reads the sentence (no "Name:" prefix). The group "Added to the group." toast is gone (the log line confirms) | accc4d7 |
 | Group info | Tap the thread header → `chat-info/{id}` (GET /info): picture (DM: the person), name, "Group · N members" / "Project room · N members", description or "Add group description" (canEdit) → edit dialog (name ≤ 80, description ≤ 500; older server: name only via rename). Actions: Add people (Manager+, existing picker), Search, Mute menu ("Muted until …"). Media, links and docs row → `chat-media/{id}` (Photos grid / Links / Docs, paged by cursor; photo viewer, links in the browser, docs downloaded with the session and opened). Members: You first, Admin badge, Left pill; tap → Message (DM), View profile, Remove from group (Manager+, confirm). Exit group (GROUP, confirm) → back to the chat list. Project room: "Members follow the project" + Open project, no exit/remove. DM: the person, media and search, no members. Older server without /info (an HTML 404): what the list knows + "Media, search and member roles come with the next server update." Refusals in the app's words (MANAGER_REQUIRED, gone member, gone chat, last member, description length) | this step |
 | Search + jump | `chat-search/{id}` (≥ 2, ≤ 100 characters, debounced, paged); a hit reopens the thread with `?at=` → `around=` page, the message outlined and kept in view while newer ones arrive through the polls; UNKNOWN_MESSAGE → "That message isn't in this chat any more."; an older server without around: up to 5 older pages, else "Couldn't find that message…" | this step |
 | ChatPhoto | A chat picture is never an empty box (iOS ChatPhoto): spinner while loading, one quiet retry, then "Photo couldn't load. Tap to try again."; used in bubbles, the media grid and its viewer. RemoteImage's loader shared (`RemoteImages.load`) | this step |
@@ -848,7 +848,7 @@ NOT published (decision 13). Nothing called on production with a real account.
 ## 8 Oct, realtime fix: live right after the update (server f9759b1)
 
 NOT published (decision 13). Until f9759b1 the server refused every production socket ("Invalid session", wrong cookie
-name); Berlin wants realtime on as soon as people update, with no force-quit.
+name); the owner wants realtime on as soon as people update, with no force-quit.
 
 | Fix | What changed | Commit |
 |---|---|---|
@@ -858,9 +858,9 @@ name); Berlin wants realtime on as soon as people update, with no force-quit.
 | Cold start | Fresh process (an update): the ProcessLifecycleOwner observer is added in onCreate and the session is read synchronously, so the first ON_START starts it (guarded by a test) | this step |
 | Proof | RealtimeTest: init before every attempt, retry until refused, one retry per foreground, backoff — 455 JVM tests. One-off run against production with a bogus cookie: GET /api/realtime-init → 204, /api/socket/ upgrade → 101, "Invalid session" → OFF; temporary test deleted | this step |
 
-## 8 Oct, Restore for every kind of delete (agents:~/handoff/chat/RESTORE-ALL-TYPES.md)
+## 8 Oct, Restore for every kind of delete (handoff/chat/RESTORE-ALL-TYPES.md)
 
-NOT published (decision 13; it rides the next release). Server nexus-prod 6094fd1 … 7d8c7f8, LIVE (8 Oct
+NOT published (decision 13; it rides the next release). Server 6094fd1 … 7d8c7f8, LIVE (8 Oct
 request; the handoff predates the deploy). POST …/restore never called on production: JSON fixtures and the debug preview only.
 Project and task entries read exactly as before.
 
@@ -873,9 +873,9 @@ Project and task entries read exactly as before.
 | Tests | RestoreKindsTest + AuditRestoreTest on the new API — 452 JVM tests | 3b5a34f |
 | Screens | Debug preview `restore` (project/task cards unchanged) and `restore-kinds` (sheet rows with note, soft post with the CONFLICT text, purged Vault folder restored → "back in the Vault trash" + Open Vault), phone light + dark | this step |
 
-## 8 Oct, realtime connection + task creator (agents:~/handoff/chat/ANDROID-REALTIME.md)
+## 8 Oct, realtime connection + task creator (handoff/chat/ANDROID-REALTIME.md)
 
-NOT published (decision 13). Server LIVE (nexus-prod d054a39, web c1809a0). Never tested with a real account:
+NOT published (decision 13). Server LIVE (server d054a39, web c1809a0). Never tested with a real account:
 the only call to production was one handshake with a bogus cookie, to prove the path end to end (below).
 
 | Part | What changed | Commit |
@@ -885,9 +885,9 @@ the only call to production was one handshake with a bogus cookie, to prove the 
 | Created by | Task detail: avatar + "Created by {name}" / "Dibuat oleh {name}", with a "Left" pill when `creator.deactivatedAt` (web c1809a0, iOS c61edb6) | this step |
 | Proof | RealtimeTest (payloads, which screen listens to what, refusal, pace, room counting, foreground wiring, creator) — 446 JVM tests. assembleRelease (R8) builds with the library (local only). One-off JVM run against nexus.znetworks.id with a bogus cookie: CONNECTING → OFF in 0.4 s (websocket reached the server's auth middleware, refusal recognised, no retry loop); the temporary test was deleted. The connected path with a real session is still to be seen on the phone | this step |
 
-## 8 Oct, offboarding (agents:~/handoff/chat/ANDROID-OFFBOARD.md, OFFBOARD-CONTRACT.md)
+## 8 Oct, offboarding (handoff/chat/ANDROID-OFFBOARD.md, OFFBOARD-CONTRACT.md)
 
-NOT published (decision 13). Server + web LIVE (nexus-prod 70581e8, 416ea7a, edf6773, 0d6bda1). Group admins
+NOT published (decision 13). Server + web LIVE (server 70581e8, 416ea7a, edf6773, 0d6bda1). Group admins
 (56e25ff) and Restore (5017bf7) are deployed too (8 Oct afternoon). Nothing was called on production: JSON
 fixtures in JUnit and a debug preview only.
 
@@ -898,9 +898,9 @@ fixtures in JUnit and a debug preview only.
 | Left tags | Shared `LeftTag` ("Left · 10 Oct", muted; date read from the first 10 characters, never zone-shifted; TalkBack reads the last working day): attendance board name column (compact "Left", name muted), Reports roster cards + person report, member record header. Task detail: assignees with `deactivatedAt` read "Name · Left" + "Left the company. Their tasks stay assigned to them." Android has no deductions screen, so nothing there; the compact history (widgets) is the viewer's own and needs no tag | this step |
 | Tests | OffboardTest (models, codes, date rules, login, recaps, strings) — 439 JVM tests | this step |
 
-## 8 Oct, group chat admins + Restore in Audit (agents:~/handoff/chat/ANDROID-GROUP-ADMINS.md, ANDROID-RESTORE.md)
+## 8 Oct, group chat admins + Restore in Audit (handoff/chat/ANDROID-GROUP-ADMINS.md, ANDROID-RESTORE.md)
 
-NOT published (decision 13). Server: group admins nexus 56e25ff (deployed 8 Oct afternoon), restore LIVE (nexus-prod 5017bf7).
+NOT published (decision 13). Server: group admins nexus 56e25ff (deployed 8 Oct afternoon), restore LIVE (server 5017bf7).
 iOS references 1e9190f, ba38cf4. POST /api/audit/{id}/restore was never called on production: checked with JSON
 fixtures in JUnit and a debug preview only.
 
@@ -908,9 +908,9 @@ fixtures in JUnit and a debug preview only.
 |---|---|---|
 | Group members, Manager and above | `Conversation.canManageMembers` (null = old server, today's behaviour). New **Add people** in the thread header (iOS parity, a dialog not a bottom sheet): a project room adds to the project ("joins the project itself" hint, seat follows when they open the app), a GROUP adds to the room and shows only when `canManageMembers != false`, a DM never. 403 `MANAGER_REQUIRED` (recognised by code; other 403s unchanged) shows "Only managers and above can add or remove members." / "Hanya manager ke atas…", hides the button and refetches the conversation. Remove-member and leave-group UI not built (neither web nor iOS has them) (ChatGroupAdminsTest) | d46a9e1 |
 | Restore in Control Room › Audit | List: delete rows with `restore` get an outlined pill ↺ Restorable (violet) / ✓ Restored (muted); filter chip Restore between Delete and Login; action restore = ↺ in green. Entry, under the header: "Bring it back" card with the explanation (backup of {when, WIB} or as when deleted; "226 tasks, 7 lists and 155 files", subtasks for a task, joined with and/dan), the folder note for projects, error in red, full-width 48 dp "Restore project/task" (spinner + Restoring…) → confirm "Restore “{name}”?" / Yes, restore. After: "Restored. It's back where it was." / "Restored by {name} · {time}" + Open project/task; the list behind reloads. Errors per code (ALREADY_RESTORED, ALREADY_EXISTS, PARENT_MISSING, NOT_RESTORABLE, else "Couldn't restore it…"), the entry reloads first. Old delete of a project/task without `restore`: the "deleted before NEXUS kept…" note. Old server: nothing new shows (AuditRestoreTest) | this step |
-| Screens | Debug preview `--es screen restore` (checked on the phone, dark) and `addpeople` (phone, light); the other two shots were cut off by the emulator's system_server dying (DeadSystemException, low RAM on agents), not the app | 72e03e6 |
+| Screens | Debug preview `--es screen restore` (checked on the phone, dark) and `addpeople` (phone, light); the other two shots were cut off by the emulator's system_server dying (DeadSystemException, low RAM on the build host), not the app | 72e03e6 |
 
-## 8 Oct, attendance + navbar + chat (agents:~/handoff/chat/ANDROID-8OKT.md, CHAT-CONTRACT.md)
+## 8 Oct, attendance + navbar + chat (handoff/chat/ANDROID-8OKT.md, CHAT-CONTRACT.md)
 
 NOT published (decision 13). The server is being built in parallel: every new field is optional and each
 call has an old-server fallback (noted per row).
@@ -924,7 +924,7 @@ call has an old-server fallback (noted per row).
 | B navbar | Home · Tasks · **Calendar** · Projects · More; with `flags.calendar` off Inbox takes the slot back. Inbox moved into More (first tile, with its unread badge) and the More tab carries that badge; Inbox deep links/pushes push the screen when it has no tab. Messages tile (More) and Home's chat action show the chat unread (ShellMotionTest) | 6375687 |
 | Screens | Debug preview `--es screen nav8` (bars, board cell, inbox row, conversations, link, More with badges), phone light + dark, 10.1" tablet dark (tablet light never drew: the emulator showed black even on the launcher); chat list time at the row end, muted pill readable in dark | b379cb0 |
 
-## 8 Oct, Calendar — audit round 3, the remaining 8 findings (agents:~/handoff/calendar/AUDIT3-android.md)
+## 8 Oct, Calendar — audit round 3, the remaining 8 findings (handoff/calendar/AUDIT3-android.md)
 
 NOT published (decision 13).
 
@@ -939,7 +939,7 @@ NOT published (decision 13).
 | 7 | Project colours at night in the app (task rows, filters, quadrant list) go through `NightHues` (moved to ui/theme, shared with the widgets) | 3af6e06 |
 | 8 | Widget list rows 44 dp, "+N" a full-width 48 dp row | 74f113d |
 
-Screens: `agents:/tmp/a3-after` — phone light/dark, 360 dp, font 1.3× and 2×, landscape (914×411 dp), 10.1" tablet at 1280/960/600 dp, widgets ID/EN light/dark.
+Screens: `<build-host>:/tmp/a3-after` — phone light/dark, 360 dp, font 1.3× and 2×, landscape (914×411 dp), 10.1" tablet at 1280/960/600 dp, widgets ID/EN light/dark.
 
 ## 8 Oct, Calendar — audit round 3: three bugs
 
@@ -951,13 +951,13 @@ NOT published (decision 13).
 | P2 Today, or a second tap on the selected day, did nothing | `RevealDay` read `dayRequests` from the remembered screen handle (not keyed on it): now passed straight from the live state; `CalState.withDay` counts a request even for the same day (JVM test `todayOnTodayStillReveals`) | this step |
 | Rule 10.31 check too thin (~0.67 dp) | Own vector `ic_cal_check`: a 1.5 dp stroked check with round caps in a 10 dp box, small on screen (10 dp grid, 7 dp widget, 12 dp legend) | this step |
 
-Emulator: `agents:/tmp/a3` (widgets ID/EN, light/dark, font 1.0/1.3/2.0; month and person grids).
+Emulator: `<build-host>:/tmp/a3` (widgets ID/EN, light/dark, font 1.0/1.3/2.0; month and person grids).
 
-## 8 Oct, Calendar — rule 10.31 changed (Berlin): month marks (web 59eae9d, iOS 7648528)
+## 8 Oct, Calendar — rule 10.31 changed (the owner): month marks (web 59eae9d, iOS 7648528)
 
-NOT published (decision 13). Month grid: a full dot = something still to do; all done / no status = a small CHECK in the division's colour, the size of a dot (no ring any more). Legend: check + "done / no status" / "selesai / tanpa status". Widgets (3×3 month, mini month): done or status-less tasks drawn as a small tinted check (vector `ic_cal_check`) instead of a faded dot. Task lists keep their status icons (same as My Mission). CalendarAuditTest `monthMarksFollowRule1031`. Emulator: `agents:/tmp/a1031` (month light/dark, widgets ID/EN light/dark).
+NOT published (decision 13). Month grid: a full dot = something still to do; all done / no status = a small CHECK in the division's colour, the size of a dot (no ring any more). Legend: check + "done / no status" / "selesai / tanpa status". Widgets (3×3 month, mini month): done or status-less tasks drawn as a small tinted check (vector `ic_cal_check`) instead of a faded dot. Task lists keep their status icons (same as My Mission). CalendarAuditTest `monthMarksFollowRule1031`. Emulator: `<build-host>:/tmp/a1031` (month light/dark, widgets ID/EN light/dark).
 
-## 7 Oct, Calendar — "impeccable" round 2 (agents:~/handoff/calendar/AUDIT2-android.md, 28 findings; contract AUDIT2-CONTRACT.md)
+## 7 Oct, Calendar — "impeccable" round 2 (handoff/calendar/AUDIT2-android.md, 28 findings; contract AUDIT2-CONTRACT.md)
 
 NOT published (decision 13). Owner data (Bagan colours, names, tasks) untouched. Glyph meaning NOT changed (rule 10.31, contract 5): the month legend stays visible on the phone.
 
@@ -969,11 +969,11 @@ NOT published (decision 13). Owner data (Bagan colours, names, tasks) untouched.
 | People, Filters, list, logos | People: unit headers only where people are, with the path "Framework Agency › Project Management" (#12); tablet task lines 48 dp with status and action (#4). Filters: selected people/projects stay listed (pinned), loading note, no CTA over the keyboard (#16, #7). Quadrant list starts from the widget's snapshot (works offline), EmptyState with "Open Calendar", opens tasks directly so Back returns to it (#17). Bagan logos decoded to ≤ 256 px into a 4 MB thread-safe LRU (#11) | ab844ce |
 | Widgets | Night colours: the Bagan's colorDark for unit colours (from the Calendar's cached structure), else lightened to 3:1 on a dark surface (WidgetHuesTest) (#10). Dots grids (3×3 month, mini month) are one target opening today; per-day taps only where cells are large; "+N more" full-width targets; the 10 sp footer is no longer a link (#5). Day numbers without a fixed box, one line (#6). appWidgetBackground + the system corner radius on 12+, a rounded drawable below; attendance widget too (#27). Quadrant titles on two lines ("Penting dan mendesak" fits 2×2); "Hari ke-279 tahun ini · 76%", hidden in the dots size (#28) | 5e8db8c |
 | Large fonts (found on the emulator) | Segment and weekday labels stay on one line and shrink (no "Everyon/e", "MO/N"); widget text follows the system size up to 1.3× (fixed cells), row counts grow with it | c749b0d, df7523f |
-| Evidence | Debug preview keeps the shell's 80 dp NavigationBar (phone) / NavigationRail (tablet) space (#18). Real tablet AVD `nexustab` (10.1", 1280×800 dp), also at 960×600 and 600×960 dp; phone light/dark, font scale 1.3 and 2.0, landscape; widgets ID/EN light/dark: `agents:/tmp/a2-after` | this step |
+| Evidence | Debug preview keeps the shell's 80 dp NavigationBar (phone) / NavigationRail (tablet) space (#18). Real tablet AVD `nexustab` (10.1", 1280×800 dp), also at 960×600 and 600×960 dp; phone light/dark, font scale 1.3 and 2.0, landscape; widgets ID/EN light/dark: `<build-host>:/tmp/a2-after` | this step |
 
 Tests: ThemeContrastTest, CalendarAuditTest (scope not counted, Focus wording, no zoom keys, no duplicate keys, masked runs, People headers), WidgetHuesTest, CalendarWidgetLinksTest (+ background element, no fixed number box), CalendarLinkTest. Not verified on a real phone: TalkBack speech, the system corner radius on a real launcher, a real Bagan logo set.
 
-## 6 Oct, Calendar — the rest of the "impeccable" audit (agents:~/handoff/calendar/AUDIT-android.md, 46 findings)
+## 6 Oct, Calendar — the rest of the "impeccable" audit (handoff/calendar/AUDIT-android.md, 46 findings)
 
 NOT published (decision 13). The audit's positives (AUDIT-android-positives.md) are kept: EN/ID parity, sp type, WIB clock, masked rows never leak, ETag polling, owner-checked widget snapshots, redraws at WIB midnight.
 
@@ -986,10 +986,10 @@ NOT published (decision 13). The audit's positives (AUDIT-android-positives.md) 
 | Not dialogs | Filters are part of the screen (side panel 420 dp when expanded): back arrow, live "Show N tasks" button, LazyColumn (#12, #24, #39). The read-only preview is the route `task-preview/{id}`: back arrow, theme banner, Try again on failure, 640 dp text column (#12, #23, #38). Masked / not found = M3 AlertDialog with Lock / CloudOff (#45) | 65e60e4 |
 | Layout | Window size classes: compact < 600 one list; medium one list capped at 640 dp; expanded ≥ 840 (and ≥ 480 tall) grid + day list at 40 % (360–420 dp), wide cells show 2 titles (#11) | 65e60e4 |
 | Performance | Derivations split by what they read (index per structure, data per items/filters/focus/range, day per day/lens/collapsed); opening a task, pulling or collapsing rebuilds nothing heavy; colours parsed once; weekRows remembered (#18). Day panel = one lazy item per card header / sub-unit / person / task row (cards drawn in slices); rail capped (#19). Structure + items paint first, /overdue alongside and only when today is in range; last structure and 6 ranges on disk per user (cacheDir/calendar, wiped at sign-out) shown at once with "Updated 14.05 · offline" (#21) | 65e60e4 |
-| Widgets | Day/night text colours that pass 4.5:1, hues kept for bars (#17); NEXUS colours on Android 8–11, Material You on 12+ (#26); text ≥ 10 sp, day cells and rows spoken (#14); min resize 250 dp (Month + Coming up, Week), 180 dp (Month) (#13); every link carries `&scope=` and the Calendar applies it (#33); the quadrant header and "+N" open the new in-app list `calendar-list?q=&scope=` (#40); Mendesak / Suatu hari keep their names (Berlin) with the notes "mendesak, bukan prioritas tinggi" / "tidak mendesak, bukan prioritas tinggi", also in the picker descriptions (#41, #42); two-letter weekdays Sn Sl Rb Km Jm Sb Mg (#41); empty = an outcome with the scope (#44); config asks "Tugas siapa?" with the widget's name, EN "Mine" everywhere (#46); picker previews in EN and ID (#42); nothing clipped (week chips by height, "+N" by the number). Fetch only the scopes placed widgets use, nothing when none is placed, no redraw alarm without a widget, updatePeriodMillis 0, sign-out cancels the redraw too (#20) | 32519ba, 749c4fd |
+| Widgets | Day/night text colours that pass 4.5:1, hues kept for bars (#17); NEXUS colours on Android 8–11, Material You on 12+ (#26); text ≥ 10 sp, day cells and rows spoken (#14); min resize 250 dp (Month + Coming up, Week), 180 dp (Month) (#13); every link carries `&scope=` and the Calendar applies it (#33); the quadrant header and "+N" open the new in-app list `calendar-list?q=&scope=` (#40); Mendesak / Suatu hari keep their names (the owner) with the notes "mendesak, bukan prioritas tinggi" / "tidak mendesak, bukan prioritas tinggi", also in the picker descriptions (#41, #42); two-letter weekdays Sn Sl Rb Km Jm Sb Mg (#41); empty = an outcome with the scope (#44); config asks "Tugas siapa?" with the widget's name, EN "Mine" everywhere (#46); picker previews in EN and ID (#42); nothing clipped (week chips by height, "+N" by the number). Fetch only the scopes placed widgets use, nothing when none is placed, no redraw alarm without a widget, updatePeriodMillis 0, sign-out cancels the redraw too (#20) | 32519ba, 749c4fd |
 | Fix found on the emulator | Calendar screens had no content colour (dark icons on dark) — now from the theme | 71f44d4 |
 
-Tests: CalendarAuditTest (disk cache per user/range, flat panel keys, collapsed card, viewer first, notices only for the loaded range), CalendarWidgetLinksTest (scope in every link, masked → day, quadrant list, resize/previews/updatePeriod, no widget text under 10 sp), CalendarSnapshotsTest (no widget → no request, only placed scopes kept), LinksTest (scope + quadrant links), AttendanceGuardTest (calendar cache wiped at sign-out). Screenshots before/after on agents: `/tmp/audit-before`, `/tmp/audit-after` (screens, light/dark, tablet), `/tmp/audit-wg` (widgets, ID/EN, light/dark). Not verified on a device with a real account: TalkBack speech itself (semantics checked in code), the picker previews in a real launcher, a widget tap opening the Calendar with its scope.
+Tests: CalendarAuditTest (disk cache per user/range, flat panel keys, collapsed card, viewer first, notices only for the loaded range), CalendarWidgetLinksTest (scope in every link, masked → day, quadrant list, resize/previews/updatePeriod, no widget text under 10 sp), CalendarSnapshotsTest (no widget → no request, only placed scopes kept), LinksTest (scope + quadrant links), AttendanceGuardTest (calendar cache wiped at sign-out). Screenshots before/after on the build host: `/tmp/audit-before`, `/tmp/audit-after` (screens, light/dark, tablet), `/tmp/audit-wg` (widgets, ID/EN, light/dark). Not verified on a device with a real account: TalkBack speech itself (semantics checked in code), the picker previews in a real launcher, a widget tap opening the Calendar with its scope.
 
 ## 6 Oct, Calendar — audit Impeccable P0 + P1 (iOS fixed with the same rule)
 
@@ -1000,7 +1000,7 @@ NOT published (decision 13).
 | P0: a `task=` link re-opened the task on every return | `CalendarLinkGate`: the last applied link (all args + nonce `n`) is kept in the entry's SavedStateHandle, so recomposition, Back from the task, rotation and process restore never apply it again; Router links carry a fresh `n` so the same link tapped again (widget, notification) still works. Calendar → task navigation is `launchSingleTop`. CalendarLinkTest: deep link task → Back → Calendar stays on top (also after "rotation"), new nonce opens again, source guard on singleTop + gate | this step |
 | P1: a month loading or failed said "no tasks" | `CalState.itemsRange` (+ `current`): dots, day cards, counts, "empty month" and People rows only when the loaded range is the one on screen. Otherwise a LinearProgressIndicator under the grid + placeholder cards, or "The calendar could not be loaded. <reason>" + Try again. A failed refresh of data on screen keeps it and shows a snackbar "Couldn't update. Data as of 14.05" (once per failure streak; every pull). Checked on the emulator (debug `cal-loading`, `cal-failed`) | this step |
 
-## 6 Oct, Master Calendar — phase 4, the widgets (spec agents:~/handoff/calendar/SPEC-widgets.md; rules = web client/glance/glance.ts)
+## 6 Oct, Master Calendar — phase 4, the widgets (spec handoff/calendar/SPEC-widgets.md; rules = web client/glance/glance.ts)
 
 NOT published: decision 13 — the APK goes out only after iOS 0.1.7 is approved by the App Store. Release APK built to check it (7 receivers + the config activity, no preview activity); not copied anywhere.
 
@@ -1010,11 +1010,11 @@ NOT published: decision 13 — the APK goes out only after iOS 0.1.7 is approved
 | Bar.done (spec update, same day) | Golden files re-taken: each bar has `done` = done && !ns. ✓ only for ticked-done tasks; a calendar-only project stays faded (dim) without ✓. Test `tickOnlyForDoneNotForCalendarOnlyProjects` | 6ff2fd3 |
 | Snapshots + fetching | `widget/CalendarSnapshots.kt`: `/api/calendar/glance` for me/division/all, one private file each (`files/calendar-glance/*.json`: snapshot + savedAt + userId, tmp + rename). Never saves a snapshot whose userId is not the signed-in person's (also checked after the request); `load` re-checks the owner on every read. Fetched: hourly by `CalendarGlanceWorker` (WorkManager, network, skipped when no calendar widget is placed), on foreground, after the Calendar screen loads, when a widget is placed or configured (5-min throttle), and right after sign-in (forced). Sign-out (deliberate or expired): files deleted at once, worker cancelled, every widget redrawn. `flags.calendarWidgets` false → deleted, widgets say "Open NEXUS"; back on → fetched again. `CalendarRedrawWorker` redraws at the next `redrawTimes` moment (at the latest WIB midnight) and books the one after; a language change redraws too. CalendarSnapshotsTest (3 scopes, other person, sign-out mid-request, wipe, flag off, throttle, next redraw) | 9ba1943 |
 | 7 Glance widgets | **Kalender Bulan** (resizable; Exact size: < 250 dp dots, < 320×340 bars + "+N" by the number, larger bars with titles; header month + "Hari ke-279 · 76%"; today circled, Sunday/holiday red, outside the month faded, red mark = overdue ≤ 14 days), **Bulan + Tidak lama lagi** 4×2 (mini month with dots, up to 4 upcoming as fit + "+N lagi"), **Minggu Ini** 4×2 (7 columns, ≤ 3 bars with titles, today highlighted), **Penting dan mendesak / Penting / Mendesak / Suatu hari** (one widget per list, red/indigo/amber/grey, count, rows "Hari ini 19.00"/"Besok"/"Kam 8"/"Tanpa tenggat" + project when wide, overdue red, "+N lagi"). Config activity per widget: Saya / Divisi saya / Semua (default Saya; Android 12+ optional, reconfigurable). Footer "Saya · Diperbarui 14.05", stale "Buka NEXUS untuk memperbarui"; signed out "Buka NEXUS untuk masuk"; access none/off "Kalender belum aktif untuk akunmu". Masked rows "Tugas internal", never the project. Taps: day → `/calendar?date=`, task → `/calendar?date=&task=` (opens as the Calendar does), masked → the day, undated → the task. System colours (GlanceTheme), the app's language (not the phone's). 35 strings EN + ID, no duplicate keys | 9ba1943 + this step |
-| Debug widget preview | `src/debug/WidgetPreviewActivity`: hosts the real widgets (AppWidgetHost, `appwidget grantbind`) at launcher sizes with the web's fixtures. Screenshots on the emulator: every widget and size, ID and EN, light and dark (16 shots, `/tmp/shots-wg` on agents). One FATAL in the first shot run (`ConfigurationController.updateLocaleListFromAppContext` NPE during a process start, no app frame in the stack); not reproduced in a repeat run (install, mode switch, 3 preview launches) | this step |
+| Debug widget preview | `src/debug/WidgetPreviewActivity`: hosts the real widgets (AppWidgetHost, `appwidget grantbind`) at launcher sizes with the web's fixtures. Screenshots on the emulator: every widget and size, ID and EN, light and dark (16 shots, `/tmp/shots-wg` on the build host). One FATAL in the first shot run (`ConfigurationController.updateLocaleListFromAppContext` NPE during a process start, no app frame in the stack); not reproduced in a repeat run (install, mode switch, 3 preview launches) | this step |
 
 Not verified: a real signed-in fetch and sign-out on a phone (needs a staff account on the device; covered by CalendarSnapshotsTest), the placement flow in a real launcher, lock-screen widgets (skipped per plan 4.2).
 
-## 6 Oct, Master Calendar — phase 3, the screens (web reference d867ae2 + aa9ecdc; spec agents:~/handoff/calendar/SPEC-client.md)
+## 6 Oct, Master Calendar — phase 3, the screens (web reference d867ae2 + aa9ecdc; spec handoff/calendar/SPEC-client.md)
 
 NOT published: decision 13 — the APK goes out only after iOS 0.1.7 is approved by the App Store.
 
@@ -1031,7 +1031,7 @@ Android release of the Calendar waits for iOS 0.1.7's App Store approval; audien
 |---|---|---|
 | Model follows the revision | `CalPerson.titles` removed (structure no longer sends job titles); `CalItem.placement` from the new `placedBy` ("pic" / "project": no PIC in the Bagan → under the project's division, out-of-Bagan PICs as userIds, maybe none; unknown reads as pic); no "No PIC yet" section and no "Abandoned" list (`hasNoPic`, strings `calendar_no_pic` / `calendar_abandoned` removed — overdue past 14 days stays on its date, grey, a screen rule for later). Golden files replaced (+ `project-divisions.json`). Tests: 18 Sep = 8 with FA 4 (PM 1, Event 1, Multimedia 3), PATS 4 (3 placed by project in PATS Entertainment), Suwara 1, Fortunatus (a member with no Bagan card) not in the chart; every project-placed task sits on its project's division from `project-divisions.json`; structure has no `titles`; 3 Oct and masking unchanged | b8febb5 |
 
-## 5 Oct, Master Calendar — API + model layer only (server LIVE nexus 70f0d67; spec agents:~/handoff/calendar/SPEC-server.md)
+## 5 Oct, Master Calendar — API + model layer only (server LIVE nexus 70f0d67; spec handoff/calendar/SPEC-server.md)
 
 No screen yet (design, client rules — dots, counts, trees, quadrants — and their golden files come after the web's phase 2). No build.
 
@@ -1043,9 +1043,9 @@ No screen yet (design, client rules — dots, counts, trees, quadrants — and t
 
 | Change | What exists | Commit |
 |---|---|---|
-| Every org-chart text in strings.xml (Berlin: English AND Indonesian) | 106 `oc_*` keys (8 of them plurals so English counts read "1 person / 2 people"): English in `values` as the source, Indonesian in `values-in` with the words build 12 used; covers the header, stats, Ringkas/Lengkap chips (EN "Summary"/"Full"), card lines, people-box labels, the edit/add sheet, the place picker, the person sheet, the delete confirm, toasts and error messages, and the Control Room entry. The model no longer builds sentences: `CardInfo` carries counts and `boxLabel()` a `BoxLabel`, worded by the screen. Unit and people names stay as they are. No duplicate keys in either file; every `oc_*` key in both. AttendanceGuardTest `orgChartTextComesFromResources` fails on a hard-coded text in feature/admin/orgchart. Checked in English on the emulator | 5bb061d |
+| Every org-chart text in strings.xml (the owner: English AND Indonesian) | 106 `oc_*` keys (8 of them plurals so English counts read "1 person / 2 people"): English in `values` as the source, Indonesian in `values-in` with the words build 12 used; covers the header, stats, Ringkas/Lengkap chips (EN "Summary"/"Full"), card lines, people-box labels, the edit/add sheet, the place picker, the person sheet, the delete confirm, toasts and error messages, and the Control Room entry. The model no longer builds sentences: `CardInfo` carries counts and `boxLabel()` a `BoxLabel`, worded by the screen. Unit and people names stay as they are. No duplicate keys in either file; every `oc_*` key in both. AttendanceGuardTest `orgChartTextComesFromResources` fails on a hard-coded text in feature/admin/orgchart. Checked in English on the emulator | 5bb061d |
 
-## 5 Oct, Bagan IP & Divisi (→ build 12; server LIVE, web final 070c9f8, spec ~/refs/org-chart/SPEC.md)
+## 5 Oct, Bagan IP & Divisi (→ build 12; server LIVE, web final 070c9f8, spec <private reference>)
 
 | Change | What exists | Commit |
 |---|---|---|
@@ -1062,7 +1062,7 @@ No screen yet (design, client rules — dots, counts, trees, quadrants — and t
 | Change | What exists | Commit |
 |---|---|---|
 | Sick note required for everyone filing their own | `RequestRules.attachmentRequired`: SICK always (BoD too; this composer only files for the signed-in person), PERMIT still self-filed only; the label says "required" and Send stays off until a photo/PDF is attached. RequestRulesTest `sickNoteRequiredForBoDToo` | ec96df9 |
-| Annual leave as a RANGE (Berlin revision, iOS ed7545e; replaces the several-dates version 5aa66d1) | LEAVE picks one range with Material's `DateRangePicker` (tap the first day, then the last; days before today greyed), shown as "29 Sep – 4 Oct · 6 of 12 days"; a range longer than the days left is not taken ("That's N days — only M left."); sent as ONE request startDate..endDate. Checked on the emulator. LeaveRangeTest | 29d540d |
+| Annual leave as a RANGE (the owner revision, iOS ed7545e; replaces the several-dates version 5aa66d1) | LEAVE picks one range with Material's `DateRangePicker` (tap the first day, then the last; days before today greyed), shown as "29 Sep – 4 Oct · 6 of 12 days"; a range longer than the days left is not taken ("That's N days — only M left."); sent as ONE request startDate..endDate. Checked on the emulator. LeaveRangeTest | 29d540d |
 | No past day for any type, photo for sick AND permit — BoD included (revision; server BACKDATED_SELF) | `earliest()` = today for every type and everyone filing their own (date pickers start at today; "A request can't be for a day that has passed… a past day is filed by a BoD"); `attachmentRequired` = SICK or PERMIT for everyone; only the permit's location is still skipped for a BoD. Sick hint: "One day per request, today or later, with a photo of the doctor's note. A past day is filed by a BoD." RequestRulesTest `noPastDayForAnyType`, `photoRequiredForBoDToo`, `bodOnlySkipsThePermitLocation` | 29d540d |
 | Always-location gate, final scan | The button now always tries the system request first: with precise granted, Android 11+ opens the app's own **Location permission** screen ("Allow all the time" + "Use precise location") — checked on the emulator (API 34). Only when Android refuses without asking (refused for good: answered in < 400 ms, or no rationale left) is App info opened, the one screen Android lets an app open for that — also checked. Title, text and button come from remote config `location.always.*` (the Android copy now names "Allow all the time" / "Use precise location"); the old ask-once bookkeeping is gone | e6cb87f |
 | What's New 0.1.6 | One-line entry "Annual leave: pick a range of dates at once, up to the days you have left" (ID: "Cuti: pilih rentang tanggal sekaligus, sebanyak sisa jatahmu"), as iOS's `.also` line (worded for the range; iOS still says "several dates"). Seen-once is keyed by versionName, so a phone that already saw 0.1.6's sheet does not see it again. WhatsNewTest | this step |
@@ -1072,11 +1072,11 @@ No screen yet (design, client rules — dots, counts, trees, quadrants — and t
 | Change | What exists | Commit |
 |---|---|---|
 | Control Room › App: every device per person (server LIVE, iOS 7920142) | `installs[].devices[]` read; under each name one line per device: iPhone/Android icon, OS (+ model, last seen), version chip "0.1.6 (8)" or "Not reported"; an older server without `devices` falls back to the row's own device. AdminMoreTest `installsListEveryDevice` | e8b59b9 |
-| Confirmations as centred dialogs (Berlin, iOS 173ffff) | Checked every confirmation: extra day off (give/revoke), make TK, change status (board), revoke passkey, delete task/post/folder/vault item/attachment, empty trash, delete account were already plain `AlertDialog`s in the middle (Android has no popover confirmations; the 3 bottom sheets are content, not confirmations). What was missing: 5 red menu actions ran straight from the menu with no confirmation — remove from workspace (Members), remove from team, delete division, remove from project, revoke a vault share link. Each now asks in a centred `ConfirmDialog`. AttendanceGuardTest `destructiveMenuItemsAskInACentredDialog` | 8468e6f |
+| Confirmations as centred dialogs (the owner, iOS 173ffff) | Checked every confirmation: extra day off (give/revoke), make TK, change status (board), revoke passkey, delete task/post/folder/vault item/attachment, empty trash, delete account were already plain `AlertDialog`s in the middle (Android has no popover confirmations; the 3 bottom sheets are content, not confirmations). What was missing: 5 red menu actions ran straight from the menu with no confirmation — remove from workspace (Members), remove from team, delete division, remove from project, revoke a vault share link. Each now asks in a centred `ConfirmDialog`. AttendanceGuardTest `destructiveMenuItemsAskInACentredDialog` | 8468e6f |
 
-## Batch 2 (Berlin 29 Sep, into 0.1.6 → build 8; contract in the main session's batch2/CONTRACT.md)
+## Batch 2 (the owner 29 Sep, into 0.1.6 → build 8; contract in the server/web side's batch2/CONTRACT.md)
 
-Server routes read from nexus-prod `~/nexus` (e3091ab, cff1575, web 9f9313d); whether they are deployed is the main session's.
+Server routes read from the server repo (e3091ab, cff1575, web 9f9313d); whether they are deployed is the server/web side's.
 
 | Item | What exists | Commit |
 |---|---|---|
@@ -1084,7 +1084,7 @@ Server routes read from nexus-prod `~/nexus` (e3091ab, cff1575, web 9f9313d); wh
 | B Control Room keyboard | Every admin text field has a Done key (33 fields; multi-line notes/reasons too, only the announcement body keeps Enter for new lines); every admin screen root (Control Room and its sub-screens) closes the keyboard on a tap on empty space or a finger drag, with the same drag rule as the daily reflection (a bring-into-view scroll never closes it). AttendanceGuardTest `controlRoomKeyboardAlwaysCloses` | 6407216 |
 | C Announcements: targeted + SP PDF | Control Room tab "Announcements" (ID "Pengumuman"; "Attendance" tab no longer hard-coded Indonesian). Composer as iOS CreateAnnouncementSheet: full screen, TITLE/BODY/AUDIENCE (Everyone · Selected people: roster search by name/email, A–Z, ≤ 60 rows, check rows, "N selected")/PDF (SP) (pick a PDF → `POST /api/announcements/attachment`, ≤ 10 MB checked before upload, 413/415 said in words; attached = kind "sp")/TONE/REPEAT; Post says why it is off; a refused post stays open with the server's reason. List: SP / Warning badges, the PDF (opens in the viewer), "To: names" or "To everyone". Pop-up: SP = red "WARNING LETTER" eyebrow + SP badge + "Open PDF" (+ file name); warning = amber with the selfie shown whole. In-app PDF viewer (`PdfViewerDialog`: downloaded with the session into the shared cache that sign-out empties, pages drawn with PdfRenderer, "Open in another app"). AnnouncementBatch2Test; composer, SP pop-up and PDF pages checked on the emulator (debug preview) | 5d5447a |
 
-## 29 Sep (Berlin, into 0.1.6; iOS f068bbf)
+## 29 Sep (the owner, into 0.1.6; iOS f068bbf)
 
 | Change | What exists | Commit |
 |---|---|---|
@@ -1096,8 +1096,8 @@ Server routes read from nexus-prod `~/nexus` (e3091ab, cff1575, web 9f9313d); wh
 
 ## Security + parity audit of build 5 (docs/AUDIT.md 266af90): RILIS LAYAK, 8 RENDAH
 
-R2 (restrict the Firebase key) and R5 (server-side logout) are not the Android session's. No new build
-until the main session says; build 5 goes out for Berlin to test.
+R2 (restrict the Firebase key) and R5 (server-side logout) are not the Android side's. No new build
+until the server/web side says; build 5 goes out for the owner to test.
 
 | Finding | Fix | Commit |
 |---|---|---|
@@ -1111,17 +1111,17 @@ until the main session says; build 5 goes out for Berlin to test.
 ## Re-audit 28 Sep 2026 evening (docs/AUDIT.md, HEAD 8842c35, "RILIS BELUM LAYAK"): fixes
 
 Server findings (Manager → ADMIN, BoD edits OAA account, Manager removes members) fixed on the server
-(c021fda, main session). T1: stays as server + iOS (only APPROVED hides the button).
+(c021fda, server/web side). T1: stays as server + iOS (only APPROVED hides the button).
 
 | Finding | Fix | Commit |
 |---|---|---|
-| K1 (KRITIS) in-app update always "not a NEXUS build" on Android 9–10 | Archive read with GET_SIGNATURES + GET_SIGNING_CERTIFICATES on API 28–29 (only GET_SIGNING_CERTIFICATES from 30); signers fall back to the legacy field. Flags per SDK pinned in UpdateVerdictTest. Not yet run on an API 28/29 emulator (no image on agents) | 49d791a |
+| K1 (KRITIS) in-app update always "not a NEXUS build" on Android 9–10 | Archive read with GET_SIGNATURES + GET_SIGNING_CERTIFICATES on API 28–29 (only GET_SIGNING_CERTIFICATES from 30); signers fall back to the legacy field. Flags per SDK pinned in UpdateVerdictTest. Not yet run on an API 28/29 emulator (no image on the build host) | 49d791a |
 | T3 (TINGGI) update dialog stuck on "Installing…" | The system confirmation is a step of its own (`Confirm`, with the installer's intent): started at once when allowed, else a notification "Finish updating NEXUS" opens it; the dialog shows "Continue installing" (starts it from the app in front) and Cancel. Installing can be cancelled too; cancel/failure abandons the PackageInstaller session. Guarded in AttendanceGuardTest | b99064e |
 | T4 (TINGGI) Approval chart editable by Managers, every save 403 | The chart row in Users is drawn for BoD/OAA only (iOS `canManageAttendanceFlags`); the chart itself is read-only below BoD (no picker, hint says only BoD changes approvers) | c8f3a79 |
 | T5 (TINGGI) Camera button in the leave/sick form could crash | One camera path for the whole app, `rememberCameraCapture`: CAMERA asked first, launched only when granted; refused (or no camera app) → "Camera is off for NEXUS" with Open Settings, gallery still there. Used by the request form, chat, tickets and task files (those were silent taps). AttendanceGuardTest: `TakePicture(` only in CameraCapture.kt | 4076912 |
 | T6 (TINGGI) crew board could show another period's people and Score | Each load cancels the one before (latest request wins); rows and roster carry the period they were fetched for and are drawn only under that period, so while loading the new one the board shows the spinner, and on failure the error, never the old numbers (BoardModelTest) | 8ba3882 |
 | S4 (SEDANG) saved copies looked live on the crew board, requests and Reports | Each keeps the cache's `savedAtMillis` and says "Saved copy from HH:mm": under the board's dates (amber, only for this period's rows), above the requests list, under the Reports period bar and at the top of a person's report | 17a8c20 |
-| S5 (SEDANG) version lock (versionName) and updater (versionCode) not cross-checked | The updater installs only the announced build (archive versionCode AND versionName = `/api/app/android/release`), else "not the version NEXUS announced" (UpdateVerdictTest). Locked by the floor with nothing newer published: "The version this phone needs isn't published yet" instead of "already the latest". The publish script's own check (env version = current.json) is the main session's | fce1d60 |
+| S5 (SEDANG) version lock (versionName) and updater (versionCode) not cross-checked | The updater installs only the announced build (archive versionCode AND versionName = `/api/app/android/release`), else "not the version NEXUS announced" (UpdateVerdictTest). Locked by the floor with nothing newer published: "The version this phone needs isn't published yet" instead of "already the latest". The publish script's own check (env version = current.json) is the server/web side's | fce1d60 |
 | S6 (SEDANG) streak days on the member record not tappable | Each day opens the crew board's own day sheet (details, trail, selfies; for the BoD "Change status", clear check-out, delete), fed by that person's history rows (`history?…&userId=`); rights from `record.viewer.canManageAttendance`; a change reloads the record. Same opening rule as iOS (BoardModelTest) | 1b894d7 |
 | S7 (SEDANG) the APK download never really resumed | `download` reports the ETag as soon as the headers arrive and the updater stores it before the bytes, so a cut connection continues with Range + If-Range; a new build meanwhile still replaces the file whole (UpdaterDownloadTest) | 9fefc7e |
 | S8 (SEDANG) non-ApiError exceptions in the updater crashed the app | `run()` turns any failure (disk, PackageInstaller, SecurityException) into Failed and abandons the half-done session; a malformed absolute download URL is a failed download; `appScope` has an exception handler (logged, never a crash) | 0197481 |
@@ -1136,14 +1136,14 @@ Server findings (Manager → ADMIN, BoD edits OAA account, Manager removes membe
 | R5 (RENDAH) board period stuck past 00:00 WIB on the 28th | The board checks the period every minute and moves (and reloads) when it turns | this step |
 | R13 (RENDAH) cosmetics | Fixed: "Change status" never offered for a future day, row or not. Left as they are (cosmetic, no wrong data): face-check window does not follow the face, no month line on the board, empty cells darker than iOS; key rotation would need `signingCertificateHistory` compared by lineage (no rotation planned); sha256 stays optional as the server sends it | this step |
 
-**New for 0.1.6 (Berlin, 28 Sep; iOS b186172): no sign-out while a workday runs.** Logout in More is
+**New for 0.1.6 (the owner, 28 Sep; iOS b186172): no sign-out while a workday runs.** Logout in More is
 refused while checked in and not checked out (live, or a check-in still queued offline; before today was
 read this launch, an active work session counts): "Check out first — You're checked in, so your workday
 and live location are still running…", with a button to Attendance. Checked again on the confirmation. A
 queued check-out ends the day. A 401 still ends the session. WorkdayRule in PresenceTest; guarded in
 AttendanceGuardTest (e0ead22).
 
-**Remote config (Berlin, 28 Sep; iOS RemoteConfig.swift 77818ba).** `GET /api/app/config?platform=android`
+**Remote config (the owner, 28 Sep; iOS RemoteConfig.swift 77818ba).** `GET /api/app/config?platform=android`
 (public, no session, 426-exempt): fetched at launch (forced) and on every foreground (at most every 5 min),
 kept on disk, defaults = the server's current values, unknown keys ignored, a failed fetch changes nothing.
 Used for: holding logout (`blockSignOutDuringWorkday`, dialog texts `signout.blocked.*`), the Fake GPS tab
@@ -1151,7 +1151,7 @@ Used for: holding logout (`blockSignOutDuringWorkday`, dialog texts `signout.blo
 language (Android "in" = server "id"), else the server's English, else the app's own copy. **Rule from now
 on: a rule or sentence that may change is read from this config, not hard-coded.** RemoteConfigTest (48ce87c).
 
-**Check-in needs location "Allow all the time" + precise (Berlin, 28 Sep; iOS 77818ba; flag
+**Check-in needs location "Allow all the time" + precise (the owner, 28 Sep; iOS 77818ba; flag
 `requireAlwaysLocation`).** Check in without ACCESS_FINE_LOCATION (precise) and, from Android 10,
 ACCESS_BACKGROUND_LOCATION opens a required dialog (title/text/button = server `location.always.*`, else
 the app's copy): the system dialog the first time for each permission (Android 11+ takes "all the time"
@@ -1159,7 +1159,7 @@ to its setting page), Settings after a refusal; check-in starts by itself once a
 before. Taken away mid-workday: the dialog comes back on every return to the app. Check-out is not held.
 AlwaysLocationTest, AttendanceGuardTest (this step).
 
-**Fake GPS (Berlin, 28 Sep; server f7f5f1c, iOS c977091).** The mock flag, the main evidence on Android:
+**Fake GPS (the owner, 28 Sep; server f7f5f1c, iOS c977091).** The mock flag, the main evidence on Android:
 every fix sent is built from a real `Location` by `toFix()` with `simulated = isMock` (API 31+) /
 `isFromMockProvider`, and `simulated=1/0` goes on every check-in, check-out (incl. offsite) and offline
 replay; a mocked fix queued offline keeps the flag on disk. Locked by AttendanceApiTest,
@@ -1167,7 +1167,7 @@ AttendanceQueueTest and AttendanceGuardTest (this step).
 
 ## Audit 28 Sep 2026 (docs/AUDIT.md, HEAD 4b50f89): fixes
 
-No KRITIS findings. Decisions (Berlin, 28 Sep, replacing the main session's first answers): an approved request covering
+No KRITIS findings. Decisions (the owner, 28 Sep, replacing the server/web side's first answers): an approved request covering
 today hides Check in; versionName rises per published APK and stays what is compared; inside ANY active
 office is inside, and the office the person is in is shown; a replayed check-in answered 409 "already
 checked in" has landed.
@@ -1175,8 +1175,8 @@ checked in" has landed.
 | Finding | Fix | Commit |
 |---|---|---|
 | T1 (TINGGI) approved request covering today still showed Check in | Button replaced by the iOS card "Your approved request covers today · <type> · No check-in needed" (APPROVED only; a forgotten or started check-out still shows) | c10ca62 |
-| T2 (TINGGI) a new build with the same versionName was never offered | Resolved by the release rule instead: every published APK raises versionName (Berlin). The versionCode offer/floor of c283de2 was taken out again; R5 DROPPED | c283de2, reverted e86b974 |
-| S2 (SEDANG) "outside" judged against the record's office only | Inside ANY active office is inside, as the server's `officesForRecord`: the workspace's active offices (`/api/attendance/offices`, once per record, persisted with the trail) join the record's fence; outside only when clear of every one. Moving from A to B raises no exit, alarm or countdown. The office they are in is shown: Work session notification "At <office> · …", Attendance card office tile while working. iOS: main session | db36861 |
+| T2 (TINGGI) a new build with the same versionName was never offered | Resolved by the release rule instead: every published APK raises versionName (the owner). The versionCode offer/floor of c283de2 was taken out again; R5 DROPPED | c283de2, reverted e86b974 |
+| S2 (SEDANG) "outside" judged against the record's office only | Inside ANY active office is inside, as the server's `officesForRecord`: the workspace's active offices (`/api/attendance/offices`, once per record, persisted with the trail) join the record's fence; outside only when clear of every one. Moving from A to B raises no exit, alarm or countdown. The office they are in is shown: Work session notification "At <office> · …", Attendance card office tile while working. iOS: server/web side | db36861 |
 | S3 (SEDANG) one refusal at the head of the queue held the check-out behind it | A replayed check-in answered 409 "You have already checked in today." (no code) is done: dropped silently, counts as landed, the next entry goes on. PENDING_CHECKOUT and "approved request covers today" stay refusals. iOS fixed the same in db9295c; like it, the replay now also clears an earlier attempt's warning | ad9cf3b, this step |
 | S1 (SEDANG) check-in place per record not ported (iOS a0f1de4) | `AttendancePlace` (server flag first, else distance > radius; away → first two address parts, else `%.5f` coordinates, never the office). Attendance card: once checked in the record decides (away → "Where you checked in" + address, helper "Away from the office · In/Out"; inside the radius → the office even for location-free). Board day sheet: "Away from the office · <address>" instead of the office. Trail header: the place line (server `placeLabel`) | 57d1166 |
 | R1 (RENDAH) done time from the phone clock | The record's checkInAt/checkOutAt, the phone clock only when the server sent none | 71f9703 |
@@ -1186,14 +1186,14 @@ checked in" has landed.
 
 **Audit status:** every finding (T1, T2, S1–S3, R1–R4) closed; 260 JVM tests green.
 
-AttendanceGuardTest also locks, since: no confetti anywhere (Berlin, UPDATES §11); the Google Workspace temporary password lives only on its screen (never prefs, files or logs); the trail judges inside/outside against every active office (no single-fence call can bring back the false "left the office" alarm). 271 JVM tests.
+AttendanceGuardTest also locks, since: no confetti anywhere (the owner, UPDATES §11); the Google Workspace temporary password lives only on its screen (never prefs, files or logs); the trail judges inside/outside against every active office (no single-fence call can bring back the false "left the office" alarm). 271 JVM tests.
 
 Aligned with iOS 45ea4ea (the same change on iPhone): the office tile keeps the record's office and its
 helper says "Now at <office> · In … · Out …" after moving to another active office; the office in now is
 the nearest (edge distance) to the latest clear fix; the record's own office is removed from the list by
 place, not by equality.
 
-## Release rule (Berlin, 28 Sep 2026)
+## Release rule (the owner, 28 Sep 2026)
 
 Build 2 is **not** published. The Android release to all staff comes only after every feature is
 level with iOS 0.1.6 (Phase 3 + Phase 4 Control Room + every UPDATES section) and a clean audit; it
@@ -1209,24 +1209,24 @@ The first staff member's device checklist is in `docs/INSTALL-APK.md` (13 checks
 
 ## Release smoke test (28 Sep 2026)
 
-`NEXUS-0.1.6-3.apk` installed on the agents emulator (API 34), cold start: login screen drawn, no crash,
+`NEXUS-0.1.6-3.apk` installed on the emulator (API 34), cold start: login screen drawn, no crash,
 no R8 / serialization / missing-class errors in logcat. Nothing past login (no test account is used).
 
-## APK ready (for the main session, R2) — publish only on Berlin's go
+## APK ready (for the server/web side, R2) — publish only on the owner's go
 
 **APK siap (untuk audit, BELUM terbit): versionCode 6, sha256 `ec06a64eb4ecfb2c64c89d4113a205af1ea887b73c5264c8e26fe6221da11934`**
-`agents:~/nexus-android-release/NEXUS-0.1.6-6.apk` (+ `.sha256`) — versionName 0.1.6, versionCode 6, 23.9 MB,
+`<release-dir>/NEXUS-0.1.6-6.apk` (+ `.sha256`) — versionName 0.1.6, versionCode 6, 23.9 MB,
 built from **91dded1**, signed by the release key (SHA-256 53:22:FE:…:AD:26), with Firebase; 308 JVM tests
 green. Contains build 5 + the fixes of audit 266af90 (R1, R3, R4, R6, R7) + 29 Sep changes (logout revokes
 the token on the server, email change needs the current password, 401/sessionVersion checked, Z Vault and
-Threads only for the company workspace). Smoke test on the agents emulator (API 34): three cold starts of
+Threads only for the company workspace). Smoke test on the emulator (API 34): three cold starts of
 the app, no crash in the app's process. A crash in the crash buffer was a *stale* `BOOT_COMPLETED` to
 `WorkTrailBootReceiver` for the uid of the package the test script had just uninstalled (Start proc …
 u0a200 while the new install is u0a201, empty DexPathList): an artefact of uninstall+reinstall right after
 an emulator boot; a real update keeps the uid and cannot hit it. (An earlier build-6 file from 948f5e0,
 sha256 39f989f6…77ce1, was replaced by this one before anyone saw it.)
 
-Previous candidate, audited RILIS LAYAK (266af90) and going out for Berlin to test: `NEXUS-0.1.6-5.apk`
+Previous candidate, audited RILIS LAYAK (266af90) and going out for the owner to test: `NEXUS-0.1.6-5.apk`
 (versionCode 5, sha256 `4d75566d2e21e24d4ac93835e8cd7c1ba3875455168306c8de2bfb63c0943c38`, from b122e0f).
 
 Superseded, never published: `NEXUS-0.1.6-4.apk` (versionCode 4, sha256 `98b608ff…ceb8e`, before remote config).
@@ -1258,6 +1258,6 @@ on mobile (0.1.7 on iOS too).
 
 1. Audit pass over everything built today (bugs first), then the Phase 4 acceptance by role
    (STAFF/MANAGER/BOD/OAA see and may do exactly what iOS allows).
-2. Release per Berlin's rule (above): not before parity + a clean audit; new versionCode, publish via
+2. Release per the owner's rule (above): not before parity + a clean audit; new versionCode, publish via
    web /download/android, Android minimum 3 days later.
 3. On-device run of the acceptance lists on the first staff phone (docs/INSTALL-APK.md checklist).

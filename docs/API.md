@@ -309,7 +309,7 @@ All endpoints are under `/api/`. Authentication is required unless noted otherwi
 | GET | `/reports` | Generate project reports | Yes |
 | GET, POST, PATCH | `/time-entries` | List/create/update time entries | Yes |
 | GET, POST | `/status-updates` | List/create project status updates | Yes |
-| POST | `/gideon` | GIDEON AI assistant (Claude API) | Yes |
+| POST | `/gideon` | GIDEON AI assistant | Yes |
 | GET | `/files/[...path]` | Serve uploaded files from disk | Yes |
 
 ---

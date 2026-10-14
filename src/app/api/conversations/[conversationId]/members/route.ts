@@ -24,8 +24,8 @@ const memberInclude = {
  * userId — stays open to every member. Until then any member could add or remove anyone. Creating a
  * group with its first members (POST /api/conversations) is unchanged.
  *
- * Each change leaves a log line in the group, in the same transaction (chat-system.ts): "Bagas added
- * Mey and Yuza" (only the people really added), "Bagas removed Mey", "Mey left". The people added get
+ * Each change leaves a log line in the group, in the same transaction (chat-system.ts): "Budi added
+ * Mira and Yuda" (only the people really added), "Budi removed Mira", "Mira left". The people added get
  * one push each from that line — it replaces the "X added you to Y" Inbox notification written here
  * until then.
  */
@@ -158,7 +158,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
       return NextResponse.json({ error: LAST_MEMBER_MESSAGE, code: LAST_MEMBER }, { status: 400 })
     }
 
-    // The removal and its log line ("Bagas removed Mey" / "Mey left") together, or neither.
+    // The removal and its log line ("Budi removed Mira" / "Mira left") together, or neither.
     const system = await prisma.$transaction(async (tx) => {
       const { count } = await tx.conversationMember.deleteMany({ where: { conversationId, userId: target } })
       if (count === 0) return null

@@ -3,9 +3,9 @@ import type { HealthKey } from "@/lib/pipeline"
 import type { SerializedDeal } from "@/lib/pipeline-server"
 
 /**
- * The Pipeline Dashboard's "Download Excel" workbook (owner + GM Gerro, 14 Oct 2026: "benerin dan rapihin").
+ * The Pipeline Dashboard's "Download Excel" workbook (owner + GM, 14 Oct 2026: "benerin dan rapihin").
  *
- * Sheet 1 "Master Project" is Gerro's export, column for column: his 33 headers in his order (Indonesian, or
+ * Sheet 1 "Master Project" is the GM's export, column for column: his 33 headers in his order (Indonesian, or
  * their English equivalents with ?lang=en), header on row 1, so a NEXUS file and a Control Tower file
  * merge row for row; a 34th column at the very end, "Diperbarui Oleh", keeps the last editor the earlier
  * export carried. Values are real numbers, percentages and dates (not text) with Rupiah / % / date
@@ -51,7 +51,7 @@ export function wib(iso: string | Date | null | undefined): Date | null {
   return Number.isFinite(t) ? new Date(t + 7 * 3600_000) : null
 }
 
-/** "label: 1.500.000", one line per cost (Gerro's "Rincian Real Cost"). */
+/** "label: 1.500.000", one line per cost (the GM's "Rincian Real Cost"). */
 export function costLines(costs: readonly { label: string; amount: number }[]): string {
   return costs.map((c) => `${c.label || "-"}: ${Math.round(c.amount).toLocaleString("id-ID")}`).join("\n")
 }
@@ -68,7 +68,7 @@ function marginCell(d: SerializedDeal, key: "margin" | "marginPct"): number | nu
 }
 
 /**
- * Gerro's 33 columns, in his order, then "Diperbarui Oleh" (34). Payment status / receivable come from the
+ * The GM's 33 columns, in his order, then "Diperbarui Oleh" (34). Payment status / receivable come from the
  * terms when a deal has any.
  */
 export const MASTER_COLUMNS: Col[] = [
@@ -169,7 +169,7 @@ export function buildPipelineWorkbook(deals: SerializedDeal[], meta: ExportMeta)
   wb.created = meta.exportedAt
   wb.title = `${meta.boardName} — Pipeline`
 
-  // 1 · Master Project — Gerro's columns.
+  // 1 · Master Project — the GM's columns.
   tableSheet(
     wb,
     "Master Project",

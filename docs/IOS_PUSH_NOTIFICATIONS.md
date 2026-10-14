@@ -60,10 +60,8 @@ npx prisma db push
 docker compose -f docker-compose.prod.yml up -d --build app
 ```
 
-Deployment `nexus-prod` saat ini menjalankan backend utama sebagai container manual
-`nexus-app-beta` di `127.0.0.1:3002`. Setelah image `nexus-app:prod` selesai dibangun, gunakan
-`scripts/recreate-beta.sh`; script mengambil env dari container aktif, memasang APNs key read-only,
-dan mengembalikan container lama otomatis jika health check gagal.
+Di produksi, deploy memakai skrip blue-green (lihat `deploy/bluegreen/README.md`): env diambil dari
+container aktif dan APNs key dipasang read-only.
 
 ## 4. Scheduler
 

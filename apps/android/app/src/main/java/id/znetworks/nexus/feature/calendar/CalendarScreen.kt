@@ -227,7 +227,7 @@ sealed interface PanelRow {
     data class Task(override val key: String, val item: CalItem, val unitId: String?, val person: String?, val depth: Int, val cardUnit: String?, val last: Boolean) : PanelRow
     data class End(override val key: String, val cardUnit: String?) : PanelRow
     data class UnplacedHead(override val key: String, val count: Int) : PanelRow
-    /** Consecutive masked rows of one place, as one line: "4 internal tasks · Haykal, Geraldo" (audit 2 #26). */
+    /** Consecutive masked rows of one place, as one line: "4 internal tasks · Budi, Geraldo" (audit 2 #26). */
     data class MaskedGroup(override val key: String, val items: List<CalItem>, val unitId: String?, val depth: Int, val cardUnit: String?) : PanelRow
 }
 
@@ -866,7 +866,7 @@ private fun androidx.compose.foundation.layout.RowScope.DayCell(data: CalData, i
             cell?.dots.orEmpty().take(3).forEach { dot ->
                 // One dot per division present that day; a neighbouring month's day shows its dots quieter (still tappable, iOS / web QA 13 Oct).
                 val col = index.color(dot.unitId.takeIf { it != CalendarCore.OTHER }).let { if (inMonth) it else it.copy(alpha = it.alpha * QUIET_OUT_OF_MONTH) }
-                // Rule 10.31 (Berlin, 8 Oct): a full dot = still something to do; a small check in the division's colour = all done / no status.
+                // Rule 10.31 (owner, 8 Oct): a full dot = still something to do; a small check in the division's colour = all done / no status.
                 if (dot.filled) Box(Modifier.size(6.dp).clip(CircleShape).background(col))
                 else Icon(painterResource(R.drawable.ic_cal_check), null, tint = col, modifier = Modifier.size(10.dp))
             }
@@ -1218,7 +1218,7 @@ internal fun TaskRow(d: CalDerived, i: CalItem, unitId: String?, vm: CalendarVie
     }
 }
 
-/** "4 internal tasks · 09.00, 13.00 · Haykal, Geraldo Valentino": one line for a run of masked rows; a tap says why. */
+/** "4 internal tasks · 09.00, 13.00 · Budi, Sari Wulandari": one line for a run of masked rows; a tap says why. */
 @Composable
 private fun MaskedGroupRow(d: CalDerived, vm: CalendarViewModel, r: PanelRow.MaskedGroup) {
     val c = Nx.colors

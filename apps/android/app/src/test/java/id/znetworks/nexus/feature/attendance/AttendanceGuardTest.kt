@@ -50,7 +50,7 @@ class AttendanceGuardTest {
     }
 
     @Test fun neverCallsCronOrNotificationSendingRoutes() {
-        // CLAUDE.md: a POST there sends real notifications / runs real jobs on production.
+        // Project rule: a POST there sends real notifications / runs real jobs on production.
         assertEquals(sortedSetOf<String>(), filesMatching(Regex("""/api/cron|/api/notifications/due-check|/api/notifications/send""")))
     }
 
@@ -82,7 +82,7 @@ class AttendanceGuardTest {
         val api = sources.entries.first { it.key.name == "AttendanceApi.kt" }.value
         assertTrue(api.contains("\"simulated\" to"))
         // …and the flag comes from the platform: Location.isMock (API 31+) / isFromMockProvider, and
-        // every fix that is sent is built from a real Location by toFix() (Fake GPS, Berlin 28 Sep).
+        // every fix that is sent is built from a real Location by toFix() (Fake GPS, owner 28 Sep).
         val provider = sources.entries.first { it.key.name == "LocationProvider.kt" }.value
         assertTrue(provider.contains("simulated = isMockLocation()"))
         assertTrue(provider.contains("isMock else isFromMockProvider"))
@@ -94,7 +94,7 @@ class AttendanceGuardTest {
     }
 
     @Test fun noConfettiAnywhere() {
-        // Berlin, 28 Sep (UPDATES §11): steps inside the button, a tick and a light haptic; confetti is out.
+        // owner, 28 Sep (UPDATES §11): steps inside the button, a tick and a light haptic; confetti is out.
         assertEquals(sortedSetOf<String>(), filesMatching(Regex("confetti|Konfetti|particle", RegexOption.IGNORE_CASE)))
     }
 
@@ -119,7 +119,7 @@ class AttendanceGuardTest {
     }
 
     @Test fun logoutIsHeldWhileAWorkdayRuns() {
-        // Berlin 28 Sep (iOS b186172): the person's own logout goes through workdayOpen(); a 401 still ends
+        // owner 28 Sep (iOS b186172): the person's own logout goes through workdayOpen(); a 401 still ends
         // the session in AuthRepository (not from a screen).
         val shell = sources.entries.first { it.key.name == "SignedInShell.kt" }.value
         assertEquals(1, Regex("""onSignOut\(\)""").findAll(shell).count())
@@ -131,7 +131,7 @@ class AttendanceGuardTest {
     }
 
     @Test fun checkInNeedsLocationAllTheTime() {
-        // Berlin 28 Sep (iOS 77818ba): no check-in without "all the time" + precise while the server's flag is on.
+        // owner 28 Sep (iOS 77818ba): no check-in without "all the time" + precise while the server's flag is on.
         val screen = sources.entries.first { it.key.name == "AttendanceScreen.kt" }.value
         assertTrue(screen.contains("kind == AttendanceKind.CHECK_IN && config.requireAlwaysLocation && id.znetworks.nexus.feature.attendance.trail.AlwaysLocation.missing(context) != null"))
         val shell = sources.entries.first { it.key.name == "SignedInShell.kt" }.value
@@ -158,7 +158,7 @@ class AttendanceGuardTest {
     }
 
     @Test fun typingTheReflectionNeverClosesTheKeyboard() {
-        // Berlin 29 Sep (point 6): a scroll-based dismiss closed the keyboard at every letter (the
+        // owner 29 Sep (point 6): a scroll-based dismiss closed the keyboard at every letter (the
         // bring-into-view scroll counts as user input). Only a finger drag may close it; the shell's
         // padding is consumed so imePadding leaves no gap above the keyboard.
         val screen = sources.entries.first { it.key.name == "AttendanceScreen.kt" }.value
@@ -169,7 +169,7 @@ class AttendanceGuardTest {
     }
 
     @Test fun controlRoomKeyboardAlwaysCloses() {
-        // Batch 2 B (Berlin 29 Sep): every Control Room text field has a keyboard action (Done), apart from the
+        // Batch 2 B (owner 29 Sep): every Control Room text field has a keyboard action (Done), apart from the
         // announcement body (new lines), and every admin screen root closes the keyboard on a tap or drag.
         val admin = sources.filterKeys { it.parentFile.name == "admin" }
         admin.forEach { (f, src) ->
@@ -183,7 +183,7 @@ class AttendanceGuardTest {
     }
 
     @Test fun destructiveMenuItemsAskInACentredDialog() {
-        // Berlin 29 Sep (iOS 173ffff): confirmations are plain centred alerts. A red (destructive) menu item may
+        // owner 29 Sep (iOS 173ffff): confirmations are plain centred alerts. A red (destructive) menu item may
         // only open one, never call the server itself; no confirmation lives in a bottom sheet.
         sources.forEach { (f, src) ->
             src.lines().filter { it.contains("DropdownMenuItem(") && it.contains("color = c.danger") }.forEach { l ->
@@ -201,7 +201,7 @@ class AttendanceGuardTest {
     }
 
     @Test fun orgChartTextComesFromResources() {
-        // Berlin 5 Oct: every text in English AND Indonesian. The org chart's words live in strings.xml
+        // owner 5 Oct: every text in English AND Indonesian. The org chart's words live in strings.xml
         // (values = English, values-in = Indonesian); only data (unit and people names) is shown as is.
         val files = sources.filterKeys { it.parentFile.name == "orgchart" }
         assertTrue(files.size >= 3)

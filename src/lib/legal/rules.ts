@@ -3,14 +3,13 @@
 
 // ── Access (owner, 14 Oct 2026) ─────────────────────────────────────────────────────────────────────
 //
-//   - The root (Berlin, LEGAL_ROOT_EMAILS) always has Legal and may invite anyone.
+//   - The root (the owner, LEGAL_ROOT_EMAILS) always has Legal and may invite anyone.
 //   - A BoD (or One Above All) member whom the root invited may invite staff: people below BoD. (Staff a
 //     BoD member invited who are later promoted to BoD don't gain it: the power comes from the root.)
 //   - Staff who were invited may not invite anyone.
 //   - Nobody else has Legal — not BoD, not One Above All, not a system admin — until invited.
 // Revoking follows inviting: the root may revoke anyone; a BoD member only the people they invited.
 
-export const DEFAULT_LEGAL_ROOT_EMAILS = ["bagasputro.bp@gmail.com"]
 
 export type InvitePower = "ANY" | "STAFF" | "NONE"
 
@@ -44,9 +43,9 @@ export function mayRevoke(actor: { userId: string; power: InvitePower }, invited
   return false
 }
 
+/** LEGAL_ROOT_EMAILS, comma-separated. Unset or empty = no root: nobody has Legal until it is configured. */
 export function parseRootEmails(raw: string | undefined | null): string[] {
-  const list = (raw ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean)
-  return list.length ? list : DEFAULT_LEGAL_ROOT_EMAILS
+  return (raw ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean)
 }
 
 // ── Document types ──────────────────────────────────────────────────────────────────────────────────

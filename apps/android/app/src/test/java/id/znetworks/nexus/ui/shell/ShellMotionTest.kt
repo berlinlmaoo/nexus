@@ -15,7 +15,7 @@ class ShellMotionTest {
         assertFalse(ShellMotion.betweenTabs("task/{id}", "home"))
     }
 
-    // Berlin, 8 Oct: Calendar takes Inbox's tab; Inbox comes back when flags.calendar is off.
+    // owner, 8 Oct: Calendar takes Inbox's tab; Inbox comes back when flags.calendar is off.
     @Test fun calendarTakesInboxTab() {
         assertEquals(listOf("home", "messages", "calendar", "projects", "more"), ShellTabs.routes(calendarOn = true))
         assertEquals(listOf("home", "messages", "inbox", "projects", "more"), ShellTabs.routes(calendarOn = false))

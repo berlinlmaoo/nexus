@@ -1,7 +1,7 @@
 # NEXUS blue-green deploys
 
-Zero-downtime releases with instant rollback. Live on **dev** since 12 Oct 2026 (`~/deploy-nexus-dev.sh`);
-prepared for **prod** and the **VPS standby** (not applied — see `RUNBOOK.md`).
+Zero-downtime releases with instant rollback. Live on **dev** since 12 Oct 2026, then **prod** and the warm
+standby. The host-side deploy scripts and the operations runbook are kept privately, outside this repo.
 
 ## Shape
 
@@ -32,11 +32,11 @@ prepared for **prod** and the **VPS standby** (not applied — see `RUNBOOK.md`)
 ## In the app (`src/lib/bluegreen.ts`)
 
 * `NEXUS_SLOT` names the slot; the deploy writes the live slot to `bluegreen/shared/live`, mounted read-only
-  at `/app/data/bluegreen/live`. No `NEXUS_SLOT` (VPS today, single container) = always live.
+  at `/app/data/bluegreen/live`. No `NEXUS_SLOT` (the warm standby, single container) = always live.
 * **Singleton leader**: session advisory lock (`pg_try_advisory_lock(4632018812)`) on a dedicated pg
   connection (`application_name nexus-leader-<slot>`). Only the live slot competes; a non-live slot releases
   it. Crash ⇒ connection gone ⇒ lock gone ⇒ next holder within 5 s. If the live slot cannot hold it for
-  2 min, the idle slot covers for 5 min at a time. A read-only replica (VPS standby) never leads.
+  2 min, the idle slot covers for 5 min at a time. A read-only replica (the warm standby) never leads.
   The automation ticker and GIDEON schedules run only on the leader. (`/api/cron/*` routes are unaffected.)
 * **Demotion** (`SIGUSR2`): re-check the lock now and close every Socket.IO transport, so clients reconnect
   through nginx to the live slot and catch up. Sent only to a build that handles it (`/api/health` has
@@ -93,15 +93,11 @@ version against the current schema. So:
 | `nexus-sql.sh`, `schema-check.py` | SQL ledger, expand/contract lint, dry run, schema check (`dev|prod|vps`) |
 | `smoke.mjs` | pre-switch smoke test (QA login or anonymous) |
 | `switch-test.mjs`, `leader-sampler.sh` | the zero-downtime/realtime test and the leader sampler (Testing) |
-| `deploy-nexus-bluegreen.sh` | PROD deploy (prepared, not installed) — incl. VPS stage/follow |
-| `prod-migrate.sh` | PROD one-time migration from nexus-app-beta (prepared) |
-| `vps-bluegreen.sh` | VPS standby: follow / stop-all / start-live / emergency release (prepared) |
-| `prod-patches/*.diff` | host scripts that must follow (office-fence, vps-sync, vps-image-sync, failback-auto) |
-| `../dev/deploy-nexus-dev.sh` | DEV deploy (installed as `~/deploy-nexus-dev.sh`) |
+| `vps-bluegreen.sh` | warm standby: follow / stop-all / start-live / emergency release |
 
 ## Testing (dev, 12 Oct 2026)
 
-`switch-test.mjs`: 6 workers (half through the public tailscale URL, half on 127.0.0.1:8080; keep-alive like a
+`switch-test.mjs`: 6 workers (half through the public dev URL, half on 127.0.0.1:8080; keep-alive like a
 browser) over health, `/`, the entry bundle, two signed-in reads; plus one websocket client in `project:<id>`
 receiving `task-updated` for a task the test PATCHes every 3 s, and every 15 s a fresh client (a tab opened
 around the switch: realtime-init, connect, join-room, then its own PATCH) that must get its event within 6 s,

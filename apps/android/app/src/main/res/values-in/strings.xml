@@ -1987,7 +1987,7 @@
     <string name="chat_everyone_here_group">Semua anggota workspace sudah ada di obrolan ini.</string>
     <string name="chat_everyone_here_project">Semua anggota workspace sudah ada di proyek ini.</string>
     <string name="chat_manager_required">Hanya manager ke atas yang bisa menambah atau mengeluarkan anggota.</string>
-    <!-- Restore deleted projects and tasks, Control Room › Audit (Berlin, 8 Oct) -->
+    <!-- Restore deleted projects and tasks, Control Room › Audit (owner, 8 Oct) -->
     <string name="au_restore">Pulihkan</string>
     <string name="au_restorable">Bisa dipulihkan</string>
     <string name="au_restored">Sudah dipulihkan</string>
@@ -2035,7 +2035,7 @@
     <plurals name="au_n_members">
         <item quantity="other">%d anggota</item>
     </plurals>
-    <!-- Offboarding (Berlin, 8 Oct; web id-offboard.ts / id-former.ts) -->
+    <!-- Offboarding (owner, 8 Oct; web id-offboard.ts / id-former.ts) -->
     <string name="off_left">Keluar</string>
     <string name="off_left_on">Keluar · %1$s</string>
     <string name="off_left_desc">Sudah keluar — hari kerja terakhir %1$s</string>
@@ -2092,13 +2092,13 @@
     <plurals name="off_deductions_canceled">
         <item quantity="other">%d potongan otomatis setelah hari terakhirnya dibatalkan.</item>
     </plurals>
-    <!-- Realtime + task creator (Berlin, 8 Oct) -->
+    <!-- Realtime + task creator (owner, 8 Oct) -->
     <string name="rt_line">Realtime: %1$s</string>
     <string name="rt_connected">terhubung</string>
     <string name="rt_reconnecting">menyambung ulang</string>
     <string name="rt_off">mati</string>
     <string name="td_created_by">Dibuat oleh %1$s</string>
-    <!-- Restore every kind of delete (Berlin, 8 Oct; RESTORE-ALL-TYPES) -->
+    <!-- Restore every kind of delete (owner, 8 Oct; RESTORE-ALL-TYPES) -->
     <string name="au_restore_too_old_any">Ini dihapus sebelum NEXUS mulai menyimpan data yang dihapus, jadi tidak bisa dipulihkan.</string>
     <string name="au_restored_now_vault">Sudah dipulihkan. Kembali ke sampah Vault.</string>
     <string name="au_rb_comment">Pulihkan komentar</string>
@@ -2244,7 +2244,7 @@
     <plurals name="au_n_people">
         <item quantity="other">%d orang</item>
     </plurals>
-    <!-- Chat log lines, like WhatsApp (Berlin, 8 Oct; SYSTEM-MESSAGES) -->
+    <!-- Chat log lines, like WhatsApp (owner, 8 Oct; SYSTEM-MESSAGES) -->
     <string name="sys_you">Kamu</string>
     <string name="sys_you_object">kamu</string>
     <string name="sys_added">%1$s menambahkan %2$s</string>
@@ -2253,7 +2253,7 @@
     <string name="sys_created">%1$s membuat grup</string>
     <string name="sys_created_named">%1$s membuat grup “%2$s”</string>
     <string name="sys_renamed">%1$s mengubah nama grup jadi “%2$s”</string>
-    <!-- Chat info, media, search (Berlin, 8 Oct; SYSTEM-MESSAGES part 2, iOS 7029ba5) -->
+    <!-- Chat info, media, search (owner, 8 Oct; SYSTEM-MESSAGES part 2, iOS 7029ba5) -->
     <string name="ci_group_info">Info grup</string>
     <string name="ci_contact_info">Info kontak</string>
     <string name="ci_open_info">Buka info obrolan</string>
@@ -2315,7 +2315,7 @@
     <plurals name="ci_members">
         <item quantity="other">%d anggota</item>
     </plurals>
-    <!-- Delete group (Berlin, 9 Oct; DELETE-GROUP) -->
+    <!-- Delete group (owner, 9 Oct; DELETE-GROUP) -->
     <string name="dg_delete">Hapus grup</string>
     <string name="dg_delete_q">Hapus “%1$s”?</string>
     <string name="dg_delete_body">Pesan dan anggotanya ikut terhapus. Grup ini bisa dipulihkan dari Control Room → Audit.</string>
@@ -2333,7 +2333,7 @@
     <plurals name="au_n_messages">
         <item quantity="other">%d pesan</item>
     </plurals>
-    <!-- Project types and tabs (Berlin, 9 Oct; PROJECT-TYPES-TABS, web id-projects.ts) -->
+    <!-- Project types and tabs (owner, 9 Oct; PROJECT-TYPES-TABS, web id-projects.ts) -->
     <string name="ps_tabs">Tab</string>
     <string name="ps_tabs_sub">Pilih tab yang tampil di project ini. Mematikan tab cuma menyembunyikannya: isinya tidak dihapus, dan begitu dinyalakan lagi semuanya kembali.</string>
     <string name="ps_tabs_board_or_list">Board atau Daftar tetap nyala</string>
@@ -2345,7 +2345,7 @@
     <string name="pt_finance_sub">Revenue, OPEX, dan profit per bulan.</string>
     <string name="pt_content_sub">Rencanakan dan jadwalkan konten di semua channel.</string>
     <string name="pt_pipeline_sub">Pantau tiap deal dari kontak pertama sampai lunas.</string>
-    <!-- Z Vault move, gallery, viewer (Berlin, 9 Oct; VAULT-MOVE-DND) -->
+    <!-- Z Vault move, gallery, viewer (owner, 9 Oct; VAULT-MOVE-DND) -->
     <string name="vm_menu">Pindahkan ke…</string>
     <string name="vm_title">Pindahkan “%1$s”</string>
     <string name="vm_here">Pindah ke sini</string>
@@ -2360,7 +2360,7 @@
     <plurals name="vm_uploaded">
         <item quantity="other">%1$d berkas terunggah ke %2$s</item>
     </plurals>
-    <!-- Profile tidy (Berlin, 9 Oct; PROFILE-TIDY) -->
+    <!-- Profile tidy (owner, 9 Oct; PROFILE-TIDY) -->
     <string name="pp_view_photo">Lihat foto profil</string>
     <string name="pp_total_xp">Total XP</string>
     <string name="pp_period">Periode</string>
@@ -2373,7 +2373,7 @@
     <plurals name="pp_late_value">
         <item quantity="other">%1$d mnt · %2$d hari</item>
     </plurals>
-    <!-- Form builder (Berlin, 9 Oct; FORM-BUILDER, iOS d156e29) -->
+    <!-- Form builder (owner, 9 Oct; FORM-BUILDER, iOS d156e29) -->
     <string name="fb_new">Form baru</string>
     <string name="fb_edit">Ubah form</string>
     <string name="fb_name">Nama form</string>
@@ -2538,7 +2538,7 @@
     <plurals name="fb_delete_count">
         <item quantity="other">Ada %d pengajuan. Menghapus form ikut menghapus semuanya beserta riwayatnya di Pengajuan Saya.</item>
     </plurals>
-    <!-- Typing indicator (Berlin, 9 Oct; TYPING.md) -->
+    <!-- Typing indicator (owner, 9 Oct; TYPING.md) -->
     <string name="ty_typing">mengetik…</string>
     <string name="ty_one">%1$s sedang mengetik…</string>
     <string name="ty_someone">Seseorang</string>
@@ -2546,11 +2546,11 @@
         <item quantity="other">%d orang sedang mengetik…</item>
     </plurals>
     <string name="tab_chat">Chat</string>
-    <!-- Chat tab, Home tiles, group of two (Berlin, 9 Oct; NAV-HOME-GROUP) -->
+    <!-- Chat tab, Home tiles, group of two (owner, 9 Oct; NAV-HOME-GROUP) -->
     <string name="ng_make_group">Jadikan grup</string>
     <string name="ng_forced">Dua orang atau lebih otomatis jadi grup.</string>
     <string name="ng_one_other">Mulai grup berdua dulu, tambah orang lain nanti.</string>
-    <!-- Pipeline Dashboard (Berlin, 9 Oct; PIPELINE-DASHBOARD §8, web id-pipeline.ts) -->
+    <!-- Pipeline Dashboard (owner, 9 Oct; PIPELINE-DASHBOARD §8, web id-pipeline.ts) -->
     <string name="pl_tab">Pipeline</string>
     <string name="pl_new_deal">Deal baru</string>
     <string name="pl_export">Unduh Excel</string>
@@ -2712,7 +2712,7 @@
     <plurals name="pl_days_counted">
         <item quantity="other">%d hari, dihitung dari jatuh tempo</item>
     </plurals>
-    <!-- Pipeline: one board, access, execution project (Berlin, 9 Oct; PIPELINE-DASHBOARD §10) -->
+    <!-- Pipeline: one board, access, execution project (owner, 9 Oct; PIPELINE-DASHBOARD §10) -->
     <string name="pl_open_exec">Buka project eksekusi</string>
     <string name="pl_make_exec">Buat project eksekusi</string>
     <string name="pl_exec_note">Membuat folder untuk deal ini berisi Master Calendar dan Master Task. Tanggal event-nya masuk ke Master Calendar.</string>

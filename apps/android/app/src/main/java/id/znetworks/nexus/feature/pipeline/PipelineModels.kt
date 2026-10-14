@@ -9,7 +9,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
 
-// Pipeline Dashboard (Project.type "PIPELINE", Berlin 9 Oct; PIPELINE-DASHBOARD.md §8, web 0733d04, iOS 8b698df).
+// Pipeline Dashboard (Project.type "PIPELINE", owner 9 Oct; PIPELINE-DASHBOARD.md §8, web 0733d04, iOS 8b698df).
 // The GM's "Control Tower TZN" inside a NEXUS project: one deal per client job. Health, phases, days overdue and
 // the KPI summary are computed by the SERVER on every read, so nothing here ports the GM's formulas. Everything
 // is read leniently from raw JSON: a new field or option is shown as-is and never costs the whole pipeline.

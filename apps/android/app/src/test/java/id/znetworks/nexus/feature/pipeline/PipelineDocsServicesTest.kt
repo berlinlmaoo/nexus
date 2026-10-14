@@ -9,7 +9,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** PIPELINE-DASHBOARD §13 (Berlin, 9 Oct late night): attached files, several services. */
+/** PIPELINE-DASHBOARD §13 (owner, 9 Oct late night): attached files, several services. */
 class PipelineDocsServicesTest {
     private fun deal(json: String) = PipelineDeal(NexusJson.parseToJsonElement(json).jsonObject)
 

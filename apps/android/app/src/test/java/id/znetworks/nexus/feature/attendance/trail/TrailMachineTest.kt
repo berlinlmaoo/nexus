@@ -277,7 +277,7 @@ class TrailMachineTest {
         assertEquals(TrailZone.UNKNOWN, m.state.zone)
     }
 
-    // Audit S2 (Berlin): inside ANY active office is inside; the office they are in is the one shown.
+    // Audit S2 (owner): inside ANY active office is inside; the office they are in is the one shown.
     @Test fun anotherActiveOfficeIsInsideAndNamed() {
         m.start("r1", now, fence.copy(name = "HQ"), now)
         val b = TrailFence(-6.195, 106.8, 100.0, "Studio") // ~555 m north, where outside() lands

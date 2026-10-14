@@ -50,7 +50,7 @@ class FolderTree(val folders: List<ProjectFolder>, val projects: List<Project> =
     /** "New subfolder" is offered while the folder is above the last level. */
     fun canHaveSubfolder(id: String) = depth(id) < MAX_DEPTH
 
-    /** "Clients › ANKER › Launch" — how a folder is named in "Move to…". */
+    /** "Clients › ACME › Launch" — how a folder is named in "Move to…". */
     fun path(id: String): String {
         val names = ArrayList<String>(); var cur: String? = id; val seen = HashSet<String>()
         while (cur != null && seen.add(cur)) { val f = byId[cur] ?: break; names.add(f.name); cur = parentOf(f) }

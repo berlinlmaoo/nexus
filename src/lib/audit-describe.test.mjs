@@ -32,10 +32,10 @@ async function load() {
 const { describeAuditEntry, auditSummary, collectAuditIds, auditDiff, redactAuditMetadata } = await load()
 const PRINT = process.argv.includes("--print")
 
-const bagas = { id: "cmbagas0000000000000001", name: "Bagas Putro", email: "bagas@example.com", avatar: null }
+const budi = { id: "cmbudi00000000000000001", name: "Budi Santoso", email: "budi@example.com", avatar: null }
 const rina = { id: "cmrina00000000000000001", name: "Rina Kartika", email: "rina@example.com", avatar: null }
 const names = {
-  user: { [bagas.id]: bagas.name, [rina.id]: rina.name, cmmanager000000000000001: "Gerro" },
+  user: { [budi.id]: budi.name, [rina.id]: rina.name, cmmanager000000000000001: "Gilang" },
   task: { cmtask00000000000000001: "Design poster" },
   project: { cmproj00000000000000001: "Intoo Campaign" },
   customField: { cmfield0000000000000001: "Budget" },
@@ -71,16 +71,16 @@ function check(name, row, fn) {
 
 check("update task, OLD shape {changes:{title:new}} (1361/30d)", {
   action: "update", entityType: "task", entityId: "cmtask00000000000000001", entityName: "Design poster",
-  userId: bagas.id, user: bagas, metadata: { changes: { title: "Design poster" } },
+  userId: budi.id, user: budi, metadata: { changes: { title: "Design poster" } },
 }, (o, s) => {
-  assert.equal(o.title, "Bagas Putro changed the task “Design poster”")
+  assert.equal(o.title, "Budi Santoso changed the task “Design poster”")
   assert.equal(s, o.title)
   assert.deepEqual(o.changes, [{ field: "title", label: "Title", from: null, to: "Design poster" }])
   assert.deepEqual(o.details, [])
 })
 
 check("update task, OLD shape with status + dueDate + position", {
-  action: "update", entityType: "task", entityName: "Design poster", userId: bagas.id, user: bagas,
+  action: "update", entityType: "task", entityName: "Design poster", userId: budi.id, user: budi,
   metadata: { changes: { status: "IN_PROGRESS", dueDate: "2026-09-30T10:00:00.000Z", position: 3 } },
 }, (o) => {
   assert.equal(o.changes.find((c) => c.field === "status").to, "In progress")
@@ -90,9 +90,9 @@ check("update task, OLD shape with status + dueDate + position", {
 
 check("update custom_field_value, OLD shape {taskId, fieldId} (387/30d)", {
   action: "update", entityType: "custom_field_value", entityId: "cmcfv000000000000000001", entityName: "Budget",
-  userId: bagas.id, user: bagas, metadata: { taskId: "cmtask00000000000000001", fieldId: "cmfield0000000000000001" },
+  userId: budi.id, user: budi, metadata: { taskId: "cmtask00000000000000001", fieldId: "cmfield0000000000000001" },
 }, (o) => {
-  assert.equal(o.title, "Bagas Putro changed “Budget” on the task “Design poster”")
+  assert.equal(o.title, "Budi Santoso changed “Budget” on the task “Design poster”")
   assert.deepEqual(o.changes, [])
   assert.deepEqual(o.details, [
     { label: "Task", value: "Design poster", link: { type: "task", id: "cmtask00000000000000001" } },
@@ -102,9 +102,9 @@ check("update custom_field_value, OLD shape {taskId, fieldId} (387/30d)", {
 
 check("update attendance_request, OLD shape {status, xpRefunded, approvalSource} (175/30d)", {
   action: "update", entityType: "attendance_request", entityName: "DAY_OFF:Rina Kartika",
-  userId: bagas.id, user: bagas, metadata: { status: "APPROVED", xpRefunded: 15, approvalSource: "MANAGER" },
+  userId: budi.id, user: budi, metadata: { status: "APPROVED", xpRefunded: 15, approvalSource: "MANAGER" },
 }, (o) => {
-  assert.equal(o.title, "Bagas Putro approved Rina Kartika’s day-off request")
+  assert.equal(o.title, "Budi Santoso approved Rina Kartika’s day-off request")
   assert.deepEqual(o.changes, [{ field: "status", label: "Status", from: null, to: "Approved" }])
   assert.deepEqual(o.details, [
     { label: "XP refunded", value: "15" },
@@ -114,17 +114,17 @@ check("update attendance_request, OLD shape {status, xpRefunded, approvalSource}
 
 check("update workspace_member, OLD shape {} (144/30d)", {
   action: "update", entityType: "workspace_member", entityId: "cmmember000000000000001",
-  userId: bagas.id, user: bagas, metadata: {},
+  userId: budi.id, user: budi, metadata: {},
 }, (o) => {
-  assert.equal(o.title, "Bagas Putro changed a member")
+  assert.equal(o.title, "Budi Santoso changed a member")
   assert.deepEqual(o.changes, [])
   assert.deepEqual(o.details, [])
 })
 
 check("delete task, OLD shape (no metadata) (102/30d)", {
-  action: "delete", entityType: "task", entityName: "Old brief", userId: bagas.id, user: bagas, metadata: null,
+  action: "delete", entityType: "task", entityName: "Old brief", userId: budi.id, user: budi, metadata: null,
 }, (o) => {
-  assert.equal(o.title, "Bagas Putro deleted the task “Old brief”")
+  assert.equal(o.title, "Budi Santoso deleted the task “Old brief”")
   assert.deepEqual(o.changes, [])
   assert.deepEqual(o.details, [])
 })
@@ -147,9 +147,9 @@ check("create attendance_request (582/30d)", {
 })
 
 check("grant attendance_request", {
-  action: "grant", entityType: "attendance_request", entityName: "LEAVE:Rina Kartika", userId: bagas.id, user: bagas,
+  action: "grant", entityType: "attendance_request", entityName: "LEAVE:Rina Kartika", userId: budi.id, user: budi,
   metadata: { type: "LEAVE", startDate: "2026-10-01T00:00:00.000Z", endDate: "2026-10-01T00:00:00.000Z", granted: true, targetUserId: rina.id },
-}, (o) => assert.equal(o.title, "Bagas Putro granted Rina Kartika an annual-leave request"))
+}, (o) => assert.equal(o.title, "Budi Santoso granted Rina Kartika an annual-leave request"))
 
 check("create attendance_record = check-in (490/30d)", {
   action: "create", entityType: "attendance_record", entityName: "Rina Kartika check-in", userId: rina.id, user: rina,
@@ -168,12 +168,12 @@ check("update attendance_record = check-out (500/30d)", {
 }, (o) => assert.equal(o.title, "Rina Kartika checked out"))
 
 check("update attendance_record = remove check-out (must NOT read as a check-out)", {
-  action: "update", entityType: "attendance_record", entityName: "Rina Kartika — hapus check-out", userId: bagas.id, user: bagas,
+  action: "update", entityType: "attendance_record", entityName: "Rina Kartika — hapus check-out", userId: budi.id, user: budi,
   metadata: { part: "checkout", reason: "salah tap" },
-}, (o) => assert.equal(o.title, "Bagas Putro changed the attendance record “Rina Kartika — hapus check-out”"))
+}, (o) => assert.equal(o.title, "Budi Santoso changed the attendance record “Rina Kartika — hapus check-out”"))
 
 check("update attendance_record, complaint correction with nested before{}", {
-  action: "update", entityType: "attendance_record", entityName: "Rina Kartika — koreksi absen via tiket", userId: bagas.id, user: bagas,
+  action: "update", entityType: "attendance_record", entityName: "Rina Kartika — koreksi absen via tiket", userId: budi.id, user: budi,
   metadata: { complaintId: "cmcomplaint0000000001", date: "2026-09-22", before: { checkInAt: "2026-09-22T02:10:00.000Z", checkOutAt: null, status: "LATE" }, penaltiesReversed: 1 },
 }, (o) => {
   const before = o.details.find((d) => d.label === "Before")
@@ -186,8 +186,8 @@ check("update notification markAllRead (218/30d)", {
 }, (o) => assert.equal(o.title, "Rina Kartika marked all notifications as read"))
 
 check("create task (209/30d)", {
-  action: "create", entityType: "task", entityName: "Design poster", userId: bagas.id, user: bagas, metadata: null,
-}, (o) => assert.equal(o.title, "Bagas Putro created the task “Design poster”"))
+  action: "create", entityType: "task", entityName: "Design poster", userId: budi.id, user: budi, metadata: null,
+}, (o) => assert.equal(o.title, "Budi Santoso created the task “Design poster”"))
 
 check("login (208/30d) — a password-named boolean is kept, not redacted", {
   action: "login", entityType: "user", entityName: "Rina Kartika", userId: rina.id, user: rina,
@@ -214,24 +214,24 @@ check("create attachment (153/30d)", {
 })
 
 check("create task_assignee (95/30d)", {
-  action: "create", entityType: "task_assignee", entityName: "Design poster", userId: bagas.id, user: bagas,
+  action: "create", entityType: "task_assignee", entityName: "Design poster", userId: budi.id, user: budi,
   metadata: { assigneeUserId: rina.id },
 }, (o, s) => {
-  assert.equal(o.title, "Bagas Putro assigned Rina Kartika to the task “Design poster”")
-  assert.equal(s, "Bagas Putro added an assignee to the task “Design poster”") // list: no lookups
+  assert.equal(o.title, "Budi Santoso assigned Rina Kartika to the task “Design poster”")
+  assert.equal(s, "Budi Santoso added an assignee to the task “Design poster”") // list: no lookups
 })
 
 check("attendance_status_override (68/30d)", {
-  action: "attendance_status_override", entityType: "attendance_day", entityName: "override:waive:2026-09-20", userId: bagas.id, user: bagas,
+  action: "attendance_status_override", entityType: "attendance_day", entityName: "override:waive:2026-09-20", userId: budi.id, user: budi,
   metadata: { workspaceId: "cmws0000000000000000001", targetUserId: rina.id, date: "2026-09-20", override: "waive" },
-}, (o) => assert.equal(o.title, "Bagas Putro overrode Rina Kartika’s attendance on 20 Sep 2026 (waive)"))
+}, (o) => assert.equal(o.title, "Budi Santoso overrode Rina Kartika’s attendance on 20 Sep 2026 (waive)"))
 
 check("changes as a list of field names (forms/goals/docs)", {
-  action: "update", entityType: "doc", entityName: "SOP", userId: bagas.id, user: bagas, metadata: { changes: ["title", "content"] },
+  action: "update", entityType: "doc", entityName: "SOP", userId: budi.id, user: budi, metadata: { changes: ["title", "content"] },
 }, (o) => assert.deepEqual(o.changes.map((c) => [c.field, c.from, c.to]), [["title", null, null], ["content", null, null]]))
 
 check("old webhook row holding a secret in changes is shown redacted", {
-  action: "update", entityType: "webhook", userId: bagas.id, user: bagas, metadata: { changes: { url: "https://x.test/h", secret: "s3cr3t" } },
+  action: "update", entityType: "webhook", userId: budi.id, user: budi, metadata: { changes: { url: "https://x.test/h", secret: "s3cr3t" } },
 }, (o) => {
   assert.equal(o.changes.find((c) => c.field === "secret").to, "[redacted]")
   assert.ok(!JSON.stringify(o).includes("s3cr3t"))
@@ -252,41 +252,41 @@ check("metadata is an array", { action: "update", entityType: "thing", userId: "
 check("metadata is a string", { action: "weird_action", entityType: "someEntity", entityName: "X", user: null, metadata: "hello" },
   (o) => assert.equal(o.title, "Someone did “weird action” on the some entity “X”"))
 check("deeply nested + unknown keys", {
-  action: "update", entityType: "automation", entityName: "Auto", user: bagas,
+  action: "update", entityType: "automation", entityName: "Auto", user: budi,
   metadata: { a: { b: { c: { d: { e: 1 } } } }, someFlag: true, list: [{ x: 1 }], nothing: null, changes: { enabled: false, name: undefined } },
 }, (o) => {
   assert.equal(o.details.find((d) => d.label === "Some flag").value, "Yes")
   assert.equal(o.changes.find((c) => c.field === "enabled").to, "No")
 })
-check("changes is a string", { action: "update", entityType: "task", entityName: "T", user: bagas, metadata: { changes: "oops" } },
+check("changes is a string", { action: "update", entityType: "task", entityName: "T", user: budi, metadata: { changes: "oops" } },
   (o) => assert.deepEqual(o.changes, []))
 check("unresolvable ids fall back to the id", {
-  action: "create", entityType: "task_dependency", user: bagas, metadata: { taskId: "cmdeleted00000000000001", dependsOnTaskId: "cmdeleted00000000000002" },
+  action: "create", entityType: "task_dependency", user: budi, metadata: { taskId: "cmdeleted00000000000001", dependsOnTaskId: "cmdeleted00000000000002" },
 }, (o) => assert.deepEqual(o.details[0], { label: "Task", value: "cmdeleted00000000000001" }))
 
 // ── new shapes written from this change on ───────────────────────────────────────────────────────
 
 const newTaskUpdate = {
   id: "cmaudit0000000000000001", action: "update", entityType: "task", entityId: "cmtask00000000000000001", entityName: "Design poster v2",
-  userId: bagas.id, user: bagas, createdAt: new Date("2026-09-24T03:15:00Z"), ipAddress: "100.64.0.7", userAgent: "NEXUS/12 CFNetwork",
+  userId: budi.id, user: budi, createdAt: new Date("2026-09-24T03:15:00Z"), ipAddress: "203.0.113.7", userAgent: "NEXUS/12 CFNetwork",
   metadata: {
     projectId: "cmproj00000000000000001",
     changes: {
       title: { from: "Design poster", to: "Design poster v2" },
       status: { from: "TODO", to: "IN_REVIEW" },
       taskListId: { from: "cmlist00000000000000001", to: "cmlist00000000000000002" },
-      assigneeIds: { from: [bagas.id], to: [bagas.id, rina.id] },
+      assigneeIds: { from: [budi.id], to: [budi.id, rina.id] },
       dueDate: { from: null, to: "2026-09-30T10:00:00.000Z" },
     },
   },
 }
 check("update task, NEW shape {from,to}", newTaskUpdate, (o) => {
-  assert.equal(o.title, "Bagas Putro changed the task “Design poster v2”")
+  assert.equal(o.title, "Budi Santoso changed the task “Design poster v2”")
   assert.deepEqual(o.changes, [
     { field: "title", label: "Title", from: "Design poster", to: "Design poster v2" },
     { field: "status", label: "Status", from: "To do", to: "In review" },
     { field: "taskListId", label: "List", from: "In progress", to: "Review" },
-    { field: "assigneeIds", label: "Assignees", from: "Bagas Putro", to: "Bagas Putro, Rina Kartika" },
+    { field: "assigneeIds", label: "Assignees", from: "Budi Santoso", to: "Budi Santoso, Rina Kartika" },
     { field: "dueDate", label: "Due date", from: null, to: "30 Sep 2026, 17:00 WIB" },
   ])
   assert.deepEqual(o.details, [{ label: "Project", value: "Intoo Campaign", link: { type: "project", id: "cmproj00000000000000001" } }])
@@ -294,11 +294,11 @@ check("update task, NEW shape {from,to}", newTaskUpdate, (o) => {
 
 const newCustomField = {
   id: "cmaudit0000000000000002", action: "update", entityType: "custom_field_value", entityId: "cmcfv000000000000000001", entityName: "Budget",
-  userId: bagas.id, user: bagas, createdAt: new Date("2026-09-24T04:00:00Z"), ipAddress: null, userAgent: null,
+  userId: budi.id, user: budi, createdAt: new Date("2026-09-24T04:00:00Z"), ipAddress: null, userAgent: null,
   metadata: { taskId: "cmtask00000000000000001", fieldId: "cmfield0000000000000001", fieldName: "Budget", taskTitle: "Design poster", from: "Rp 1.500.000", to: "Rp 2.000.000" },
 }
 check("update custom_field_value, NEW shape", newCustomField, (o, s) => {
-  assert.equal(o.title, "Bagas Putro changed “Budget” on the task “Design poster”")
+  assert.equal(o.title, "Budi Santoso changed “Budget” on the task “Design poster”")
   assert.equal(s, o.title) // list summary gets the task title from metadata, no lookup
   assert.deepEqual(o.changes, [{ field: "value", label: "Budget", from: "Rp 1.500.000", to: "Rp 2.000.000" }])
   assert.deepEqual(o.details, [
@@ -309,26 +309,26 @@ check("update custom_field_value, NEW shape", newCustomField, (o, s) => {
 
 const newRequestReview = {
   id: "cmaudit0000000000000003", action: "update", entityType: "attendance_request", entityId: "cmreq000000000000000001", entityName: "DAY_OFF:Rina Kartika",
-  userId: bagas.id, user: bagas, createdAt: new Date("2026-09-24T05:30:00Z"), ipAddress: "100.64.0.9", userAgent: "Mozilla/5.0",
+  userId: budi.id, user: budi, createdAt: new Date("2026-09-24T05:30:00Z"), ipAddress: "203.0.113.9", userAgent: "Mozilla/5.0",
   metadata: { status: "REJECTED", previousStatus: "PENDING", approvalSource: "ADMIN", xpRefunded: 0, targetUserId: rina.id, type: "DAY_OFF", startDate: "2026-09-26T00:00:00.000Z", endDate: "2026-09-26T00:00:00.000Z" },
 }
 check("update attendance_request, NEW shape with previousStatus", newRequestReview, (o) => {
-  assert.equal(o.title, "Bagas Putro rejected Rina Kartika’s day-off request")
+  assert.equal(o.title, "Budi Santoso rejected Rina Kartika’s day-off request")
   assert.deepEqual(o.changes, [{ field: "status", label: "Status", from: "Pending", to: "Rejected" }])
   assert.deepEqual(o.details.find((d) => d.label === "Person"), { label: "Person", value: "Rina Kartika", link: { type: "user", id: rina.id } })
 })
 
 check("update workspace_member, NEW shape (legacy keys hidden behind changes)", {
-  action: "update", entityType: "workspace_member", entityName: "Rina Kartika", userId: bagas.id, user: bagas,
+  action: "update", entityType: "workspace_member", entityName: "Rina Kartika", userId: budi.id, user: budi,
   metadata: {
     newRole: "MANAGER", attendanceRole: "SUPERVISOR", approverId: "cmmanager000000000000001", targetUserId: rina.id,
     changes: { role: { from: "STAFF", to: "MANAGER" }, approverId: { from: null, to: "cmmanager000000000000001" }, phoneNumber: { redacted: true } },
   },
 }, (o) => {
-  assert.equal(o.title, "Bagas Putro changed the member “Rina Kartika”")
+  assert.equal(o.title, "Budi Santoso changed the member “Rina Kartika”")
   assert.deepEqual(o.changes, [
     { field: "role", label: "Role", from: "Staff", to: "Manager" },
-    { field: "approverId", label: "Approver", from: null, to: "Gerro" },
+    { field: "approverId", label: "Approver", from: null, to: "Gilang" },
     { field: "phoneNumber", label: "Phone number", from: null, to: null },
   ])
   // attendanceRole was not in changes (unchanged) → still a detail; newRole/approverId are not repeated.
@@ -336,31 +336,31 @@ check("update workspace_member, NEW shape (legacy keys hidden behind changes)", 
 })
 
 check("day-off quota change names the member", {
-  action: "update", entityType: "workspace_member", entityName: `dayoff-quota:${rina.id}`, userId: bagas.id, user: bagas,
+  action: "update", entityType: "workspace_member", entityName: `dayoff-quota:${rina.id}`, userId: budi.id, user: budi,
   metadata: { reason: "admin_dayoff_quota", quota: 6, targetUserId: rina.id, changes: { dayOffQuota: { from: 4, to: 6 } } },
 }, (o) => {
-  assert.equal(o.title, "Bagas Putro changed Rina Kartika’s day-off quota")
+  assert.equal(o.title, "Budi Santoso changed Rina Kartika’s day-off quota")
   assert.deepEqual(o.changes, [{ field: "dayOffQuota", label: "Day-off quota", from: "4", to: "6" }])
 })
 
 check("extra day off grant: people, days and period in the title; the people resolve", {
-  action: "grant", entityType: "dayoff_bonus", entityId: "cmbonus000000000000000001", entityName: "dayoff-bonus:2026-10", userId: bagas.id, user: bagas,
+  action: "grant", entityType: "dayoff_bonus", entityId: "cmbonus000000000000000001", entityName: "dayoff-bonus:2026-10", userId: budi.id, user: budi,
   metadata: { reason: "dayoff_bonus_grant", periodKey: "2026-10", days: 3, note: "Event 3 hari", people: 2, targetUserIds: [rina.id, "cmmanager000000000000001"], grantIds: ["cmbonus000000000000000001", "cmbonus000000000000000002"] },
 }, (o) => {
-  assert.equal(o.title, "Bagas Putro gave 2 people 3 extra days off for the 2026-10 period")
+  assert.equal(o.title, "Budi Santoso gave 2 people 3 extra days off for the 2026-10 period")
   assert.ok(JSON.stringify(o.details).includes("Rina Kartika"), "targetUserIds resolve to names")
 })
 
 check("extra day off revoke names the person", {
-  action: "revoke", entityType: "dayoff_bonus", entityId: "cmbonus000000000000000001", entityName: "dayoff-bonus:2026-10", userId: bagas.id, user: bagas,
+  action: "revoke", entityType: "dayoff_bonus", entityId: "cmbonus000000000000000001", entityName: "dayoff-bonus:2026-10", userId: budi.id, user: budi,
   metadata: { reason: "dayoff_bonus_revoke", periodKey: "2026-10", days: 1, note: "Event", targetUserId: rina.id },
-}, (o) => assert.equal(o.title, "Bagas Putro revoked Rina Kartika’s 1 extra day off for the 2026-10 period"))
+}, (o) => assert.equal(o.title, "Budi Santoso revoked Rina Kartika’s 1 extra day off for the 2026-10 period"))
 
 check("xp deduction removed: who, how much, what and the day", {
-  action: "refund", entityType: "xp_transaction", entityId: "cmxp00000000000000000001", entityName: "Late check-in · 45 min", userId: bagas.id, user: bagas,
+  action: "refund", entityType: "xp_transaction", entityId: "cmxp00000000000000000001", entityName: "Late check-in · 45 min", userId: budi.id, user: budi,
   metadata: { targetUserId: rina.id, amount: -45, refunded: 45, reason: "attendance:late:2026-09-14", kind: "late", date: "2026-09-14", note: "Macet parah", refundId: "cmref0000000000000000001" },
 }, (o) => {
-  assert.ok(o.title.startsWith("Bagas Putro removed Rina Kartika’s -45 XP deduction (late check-in · 45 min"), o.title)
+  assert.ok(o.title.startsWith("Budi Santoso removed Rina Kartika’s -45 XP deduction (late check-in · 45 min"), o.title)
 })
 
 check("update user_profile, NEW shape", {
@@ -372,10 +372,10 @@ check("update user_profile, NEW shape", {
 ]))
 
 check("delete task, NEW shape", {
-  action: "delete", entityType: "task", entityName: "Old brief", userId: bagas.id, user: bagas,
+  action: "delete", entityType: "task", entityName: "Old brief", userId: budi.id, user: budi,
   metadata: { title: "Old brief", projectId: "cmprojdeleted000000001", projectName: "Archived Campaign" },
 }, (o) => {
-  assert.equal(o.title, "Bagas Putro deleted the task “Old brief” from “Archived Campaign”")
+  assert.equal(o.title, "Budi Santoso deleted the task “Old brief” from “Archived Campaign”")
   // projectId no longer resolves → the stored name stands in, in ONE row, without a dead link.
   assert.deepEqual(o.details, [{ label: "Title", value: "Old brief" }, { label: "Project", value: "Archived Campaign" }])
 })
@@ -393,7 +393,7 @@ check("delete task, NEW shape", {
   const r = redactAuditMetadata({ changes: { secret: "abc", url: "u" }, apiKey: "k", nested: [{ token: "t" }], usedMobileNormalizedPassword: true })
   assert.deepEqual(r, { changes: { secret: "[redacted]", url: "u" }, apiKey: "[redacted]", nested: [{ token: "[redacted]" }], usedMobileNormalizedPassword: true })
   const ids = collectAuditIds(newTaskUpdate)
-  assert.deepEqual(ids.user.sort(), [bagas.id, rina.id].sort())
+  assert.deepEqual(ids.user.sort(), [budi.id, rina.id].sort())
   assert.deepEqual(ids.taskList.sort(), ["cmlist00000000000000001", "cmlist00000000000000002"])
   assert.deepEqual(ids.project, ["cmproj00000000000000001"])
   console.log("ok   auditDiff / redactAuditMetadata / collectAuditIds")

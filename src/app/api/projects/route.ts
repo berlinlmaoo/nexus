@@ -404,7 +404,7 @@ export async function POST(request: NextRequest) {
     }
 
     // The NAS folder pre-create used to live here. It is gone: the Files tab it existed for was
-    // removed, the Synology at 192.168.223.92 is unreachable from every machine here, and the call
+    // removed, the NAS is unreachable from every machine here, and the call
     // was fire-and-forget — so all it did was write one failure into the log every time anybody
     // created a project. A line that only ever reports the same known-dead dependency trains people
     // to skim the log, which is worse than having no line.

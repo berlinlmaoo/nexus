@@ -3,7 +3,8 @@
  * Communicates with DSM via HTTP API at /webapi/entry.cgi
  */
 
-const NAS_HOST = process.env.NAS_HOST || "192.168.223.92"
+// No default address: without NAS_HOST every call fails fast instead of reaching some LAN host.
+const NAS_HOST = process.env.NAS_HOST || "nas.invalid"
 const NAS_PORT = process.env.NAS_PORT || "5000"
 const NAS_PROTOCOL = process.env.NAS_PROTOCOL || "http"
 const NAS_BASE = `${NAS_PROTOCOL}://${NAS_HOST}:${NAS_PORT}`

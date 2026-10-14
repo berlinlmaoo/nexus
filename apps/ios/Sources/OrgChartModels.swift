@@ -180,7 +180,7 @@ struct OrgTree {
     func path(_ id: String) -> [OrgUnitDTO] {
         (Array(ancestors(id).reversed()) + [id]).compactMap { units[$0] }
     }
-    /// "PT. The Z Networks › Framework Agency" — where a unit sits (without itself).
+    /// "The Z Networks › Framework Agency" — where a unit sits (without itself).
     func trail(_ id: String) -> String {
         Array(ancestors(id).reversed()).compactMap { units[$0]?.name }.joined(separator: " › ")
     }

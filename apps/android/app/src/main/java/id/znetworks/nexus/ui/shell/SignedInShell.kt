@@ -200,7 +200,7 @@ internal enum class Tab(val route: String, val label: Int, val icon: ImageVector
 }
 
 /**
- * The tabs (Berlin, 8 Oct): Home · Tasks · Calendar · Projects · More; Inbox moved into More, which
+ * The tabs (owner, 8 Oct): Home · Tasks · Calendar · Projects · More; Inbox moved into More, which
  * carries its unread badge. With the server's `flags.calendar` off, Inbox takes the Calendar's place.
  */
 internal object ShellTabs {
@@ -338,7 +338,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
         // Opened straight from a link or a push (no tab seen yet): every other screen is reached from More.
         ?: tabs.firstOrNull { it == Tab.MORE }.takeIf { route != null }
     LaunchedEffect(current) { if (current != null) lastTab = current }
-    // Inbox's unread on whichever entry holds Inbox now: its own tab, or More (Berlin, 8 Oct).
+    // Inbox's unread on whichever entry holds Inbox now: its own tab, or More (owner, 8 Oct).
     val inboxUnread by container.badges.inboxUnread.collectAsStateWithLifecycle()
     // Chat carries the chat total (muted rooms left out); More only Inbox's, when Inbox has no tab (NAV-HOME-GROUP).
     val chatUnread by container.badges.chatUnread.collectAsStateWithLifecycle()
@@ -381,7 +381,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
       androidx.compose.foundation.layout.Row(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
         if (rail) ShellBar(tabs, current, badgeOn, rail = true) { goTab(it) }
         if (sidebar) ShellSidebar(session, ShellNav.itemOf(route), onItem = ::openItem, onSearch = { nav.navigate("search") { launchSingleTop = true } }, onLogout = shellLogout)
-        // iOS push/pop (Berlin, 29 Sep, point 7): a screen slides in from the right and, on back, out to
+        // iOS push/pop (owner, 29 Sep, point 7): a screen slides in from the right and, on back, out to
         // the right while the one below comes back from the left; never a scale/zoom. The predictive
         // back gesture drives the same pop transition. Switching tabs has no animation, as the iOS tab bar.
         NavHost(nav, startDestination = Tab.HOME.route, modifier = Modifier.weight(1f).fillMaxSize(),
@@ -692,7 +692,7 @@ private fun NotYet(tab: Tab) {
 
 /**
  * The person's own Logout, from More and from Tuning Room: confirmed, and refused while a workday
- * runs (Berlin 28 Sep, iOS b186172). The returned lambda starts it; the dialogs are drawn here.
+ * runs (owner 28 Sep, iOS b186172). The returned lambda starts it; the dialogs are drawn here.
  */
 @Composable
 private fun rememberLogout(onSignOut: () -> Unit, onOpenAttendance: () -> Unit): () -> Unit {
@@ -770,7 +770,7 @@ private fun openUrl(context: Context, url: String) {
 }
 
 /**
- * A tab label on ONE line (Berlin, 29 Sep, point 3): "Kotak Masuk" used to wrap and push the bar up.
+ * A tab label on ONE line (owner, 29 Sep, point 3): "Kotak Masuk" used to wrap and push the bar up.
  * The text shrinks to fit (12 → 9 sp) instead, so the bar keeps its height in every language.
  */
 @Composable

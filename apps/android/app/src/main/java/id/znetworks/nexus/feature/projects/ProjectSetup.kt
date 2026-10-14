@@ -53,7 +53,7 @@ import id.znetworks.nexus.R
 import id.znetworks.nexus.ui.components.Avatar
 import id.znetworks.nexus.ui.theme.Nx
 
-// New project setup + multi-add members (Berlin, 11 Oct; PROJECT-SETUP-MEMBERS, server eecca18).
+// New project setup + multi-add members (owner, 11 Oct; PROJECT-SETUP-MEMBERS, server eecca18).
 
 /**
  * What New project sends besides name/folder/type: null = key left out. [template] (DEV-REDESIGN §1) is built

@@ -11,7 +11,7 @@ import org.junit.Test
 import kotlinx.coroutines.test.advanceUntilIdle
 import java.io.File
 
-/** ANDROID-REALTIME (Berlin, 8 Oct): Socket.IO pings, rooms, fallback pace, the creator line. */
+/** ANDROID-REALTIME (owner, 8 Oct): Socket.IO pings, rooms, fallback pace, the creator line. */
 class RealtimeTest {
     @Test fun pingsReadAsTheServerSendsThem() {
         val w = RealtimeEvents.parse("workspace-changed", """{"kind":"folders","folderId":"f1","actorId":"u"}""")

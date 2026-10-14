@@ -5,7 +5,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 
 /**
- * The app's language (Berlin, 29 Sep 2026; iOS AppLanguage): English by default, whatever the phone's
+ * The app's language (owner, 29 Sep 2026; iOS AppLanguage): English by default, whatever the phone's
  * own language, with Bahasa Indonesia as the other choice; the choice is kept.
  */
 object AppLanguage {

@@ -6,7 +6,8 @@
  *
  * Each one goes through restorableDelete, exactly like deleting it in the app: a DeletionSnapshot with every
  * task's value / every submission, restorable from Control Room → Audit. Default is a dry run that lists what
- * would go; pass --apply to delete. --actor <email> is who the audit rows name (default the owner).
+ * would go; pass --apply to delete. --actor <email> is who the audit rows name
+ * (default env NEXUS_OWNER_EMAIL; one of the two is required).
  *
  * Run like scripts/pipeline-create-board.ts (nexus-builder image, --network container:nexus-postgres,
  * DATABASE_URL): npx tsx scripts/legal-cleanup-old-intake.ts [--apply] [--actor email]
@@ -24,7 +25,8 @@ function arg(name: string): string | undefined {
 
 async function main() {
   const apply = process.argv.includes("--apply")
-  const actorEmail = arg("actor") ?? "bagasputro.bp@gmail.com"
+  const actorEmail = arg("actor") ?? process.env.NEXUS_OWNER_EMAIL
+  if (!actorEmail) throw new Error("usage: [--apply] --actor <email> (or set NEXUS_OWNER_EMAIL)")
   const actor = await prisma.user.findUnique({ where: { email: actorEmail }, select: { id: true } })
   if (!actor) throw new Error(`actor ${actorEmail} not found`)
 

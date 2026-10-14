@@ -6,7 +6,7 @@ Web: `apps/web/src/routes/_app/legal.tsx`, `apps/web/src/components/legal/*`.
 
 ## Access (invitation only)
 
-- The owner (`LEGAL_ROOT_EMAILS`, default `bagasputro.bp@gmail.com`) always has Legal and may invite anyone of
+- The owner (`LEGAL_ROOT_EMAILS`, comma-separated emails; empty = nobody) always has Legal and may invite anyone of
   the company.
 - A BoD / One Above All member the owner invited may invite staff (anyone below BoD) and remove the people
   they invited. The power comes from the owner's invitation: a staff member a BoD member invited, who is

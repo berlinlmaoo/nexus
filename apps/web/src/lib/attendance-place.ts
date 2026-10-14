@@ -1,7 +1,7 @@
 import { t } from "@/lib/lang";
 /**
  * "Which office" for one day — or, when the check-in was made AWAY from the office, the address it was
- * made at (owner decision, Berlin, 28 Sep 2026). Per record, not per person: a location-free member
+ * made at (owner decision, owner, 28 Sep 2026). Per record, not per person: a location-free member
  * who checked in inside the office radius still gets the office name for that day.
  *
  * The server sends `checkInAway` (lib/attendance-place.ts there); a payload without it falls back to

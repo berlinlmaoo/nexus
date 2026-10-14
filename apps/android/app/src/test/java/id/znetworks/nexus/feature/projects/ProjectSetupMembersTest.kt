@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** PROJECT-SETUP-MEMBERS (Berlin, 11 Oct; server eecca18): tabs + members on create, multi-add without a team step. */
+/** PROJECT-SETUP-MEMBERS (owner, 11 Oct; server eecca18): tabs + members on create, multi-add without a team step. */
 class ProjectSetupMembersTest {
     private fun src(p: String) = File("src/main/java/id/znetworks/nexus/$p").readText()
 

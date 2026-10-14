@@ -38,28 +38,28 @@ if let me = decode(LegalMe.self, #"{"access": true, "invitePower": "SOMETHING_NE
 
 let membersJSON = #"""
 {"members": [
-  {"userId": "u1", "name": "Bagas", "email": "b@x.id", "avatar": null, "orgRole": "ONE_ABOVE_ALL", "isRoot": true,
+  {"userId": "u1", "name": "Budi", "email": "b@x.id", "avatar": null, "orgRole": "ONE_ABOVE_ALL", "isRoot": true,
    "active": true, "invitedAt": null, "invitedBy": null, "revokedAt": null, "revokedBy": null, "canRevoke": false, "invitePower": "ANY"},
-  {"userId": "u2", "name": "Mey", "email": "m@x.id", "avatar": "/a.png", "orgRole": "BOD", "isRoot": false, "active": false,
-   "invitedAt": "2026-10-14T03:00:00.000Z", "invitedBy": {"id": "u1", "name": "Bagas", "avatar": null},
-   "revokedAt": "2026-10-14T05:00:00.000Z", "revokedBy": {"id": "u1", "name": "Bagas", "avatar": null}, "canRevoke": true, "invitePower": "NONE"}
+  {"userId": "u2", "name": "Mira", "email": "m@x.id", "avatar": "/a.png", "orgRole": "BOD", "isRoot": false, "active": false,
+   "invitedAt": "2026-10-14T03:00:00.000Z", "invitedBy": {"id": "u1", "name": "Budi", "avatar": null},
+   "revokedAt": "2026-10-14T05:00:00.000Z", "revokedBy": {"id": "u1", "name": "Budi", "avatar": null}, "canRevoke": true, "invitePower": "NONE"}
 ], "invitePower": "ANY"}
 """#
 if let r = decode(LegalMembersResponse.self, membersJSON, "members") {
     expect(r.members.count, 2, "members count")
     expect(r.invitePower, .any, "members invitePower")
-    expect(r.members[1].revokedBy?.name ?? "", "Bagas", "revokedBy")
+    expect(r.members[1].revokedBy?.name ?? "", "Budi", "revokedBy")
     expect(r.members[1].active, false, "removed member inactive")
     expect(r.members[0].isRoot, true, "root")
 }
-if let c = decode(LegalCandidatesResponse.self, #"{"candidates": [{"userId": "u3", "name": "Yuza", "email": "y@x.id", "avatar": null, "orgRole": "STAFF"}]}"#, "candidates") {
+if let c = decode(LegalCandidatesResponse.self, #"{"candidates": [{"userId": "u3", "name": "Yuda", "email": "y@x.id", "avatar": null, "orgRole": "STAFF"}]}"#, "candidates") {
     expect(c.candidates.first?.id ?? "", "u3", "candidate id")
 }
 
 // MARK: Companies & numbering
 
 let companiesJSON = #"""
-{"companies": [{"id": "c1", "code": "PATS", "name": "PATS", "legalName": "PT Pats", "address": "Jakarta", "hasKop": true,
+{"companies": [{"id": "c1", "code": "PATS", "name": "PATS", "legalName": "PT Contoh", "address": "Jakarta", "hasKop": true,
   "kopFileName": "kop.docx", "kopUpdatedAt": "2026-10-14T03:00:00Z", "active": true, "documentCount": 3,
   "series": [{"id": "s1", "key": "PATS-SPK", "docType": "SPK", "label": "SPK", "format": "{SEQ:3}/SPK/{CO}/{ROMAWI}/{YYYY}",
               "resetPeriod": "YEAR", "active": true},
@@ -96,7 +96,7 @@ let templateJSON = #"""
      "columns": [{"name": "NAMA_BARANG", "label": "Nama", "type": "text", "required": true},
                  {"name": "JUMLAH", "label": "", "type": "number", "required": false}]}
   ],
-  "createdBy": {"id": "u1", "name": "Bagas", "avatar": null}, "createdAt": "2026-10-14T03:00:00Z", "updatedAt": "2026-10-14T04:00:00Z",
+  "createdBy": {"id": "u1", "name": "Budi", "avatar": null}, "createdAt": "2026-10-14T03:00:00Z", "updatedAt": "2026-10-14T04:00:00Z",
   "versions": [{"version": 2, "fileName": "spk.docx", "size": 20480, "note": "fix", "fieldCount": 5, "createdBy": null, "createdAt": "2026-10-14T04:00:00Z"},
                {"version": 1, "fileName": "spk.docx", "size": 20000, "note": "", "fieldCount": 4, "createdBy": null, "createdAt": "2026-10-14T03:00:00Z"}]}}
 """#
@@ -119,10 +119,10 @@ if let t = decode(LegalTemplateResponse.self, templateJSON, "template")?.templat
 // MARK: Documents
 
 let pageJSON = #"""
-{"documents": [{"id": "d1", "number": "001/SPK/PATS/X/2026", "docType": "SPK", "title": "SPK Mey", "counterparty": "Mey",
+{"documents": [{"id": "d1", "number": "001/SPK/PATS/X/2026", "docType": "SPK", "title": "SPK Mira", "counterparty": "Mira",
   "docDate": "2026-10-14", "status": "DRAFT", "source": "GENERATED", "company": {"id": "c1", "code": "PATS", "name": "PATS"},
   "project": null, "deal": {"id": "dl1", "code": "PL-001", "name": "Campaign", "projectId": "p1"}, "currentVersion": 1,
-  "createdBy": {"id": "u1", "name": "Bagas", "avatar": null}, "createdAt": "2026-10-14T03:00:00Z", "updatedAt": "2026-10-14T03:00:00Z"}],
+  "createdBy": {"id": "u1", "name": "Budi", "avatar": null}, "createdAt": "2026-10-14T03:00:00Z", "updatedAt": "2026-10-14T03:00:00Z"}],
  "total": 120, "page": 2, "pageSize": 50}
 """#
 if let p = decode(LegalDocumentsPage.self, pageJSON, "documents page") {
@@ -132,7 +132,7 @@ if let p = decode(LegalDocumentsPage.self, pageJSON, "documents page") {
 }
 
 let documentJSON = #"""
-{"document": {"id": "d1", "number": "001/SPK/PATS/X/2026", "docType": "SPK", "title": "SPK Mey", "counterparty": "Mey",
+{"document": {"id": "d1", "number": "001/SPK/PATS/X/2026", "docType": "SPK", "title": "SPK Mira", "counterparty": "Mira",
   "docDate": "2026-10-14", "status": "FINAL", "source": "GENERATED", "company": {"id": "c1", "code": "PATS", "name": "PATS"},
   "project": {"id": "p1", "name": "Campaign"}, "deal": null, "currentVersion": 3, "createdBy": null, "createdAt": "2026-10-14T03:00:00Z",
   "updatedAt": "2026-10-14T05:00:00Z", "notes": "", "series": {"id": "s1", "key": "PATS-SPK", "label": "SPK"},
@@ -140,7 +140,7 @@ let documentJSON = #"""
   "finalVersion": 2, "hasNumber": true, "updatedBy": null,
   "versions": [
     {"version": 3, "kind": "UPLOAD", "fileName": "signed.pdf", "mimeType": "application/pdf", "size": 300000, "hasDocx": false, "hasPdf": true, "hasFile": true, "note": "", "changes": null, "author": null, "createdAt": "2026-10-14T05:00:00Z"},
-    {"version": 2, "kind": "MANUAL", "fileName": "spk.docx", "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "size": 21000, "hasDocx": true, "hasPdf": true, "hasFile": false, "note": "fee", "changes": [{"index": 4}], "author": {"id": "u1", "name": "Bagas", "avatar": null}, "createdAt": "2026-10-14T04:00:00Z"},
+    {"version": 2, "kind": "MANUAL", "fileName": "spk.docx", "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "size": 21000, "hasDocx": true, "hasPdf": true, "hasFile": false, "note": "fee", "changes": [{"index": 4}], "author": {"id": "u1", "name": "Budi", "avatar": null}, "createdAt": "2026-10-14T04:00:00Z"},
     {"version": 1, "kind": "GENERATED", "fileName": "spk.docx", "mimeType": "", "size": 20000, "hasDocx": true, "hasPdf": false, "hasFile": false, "note": "", "changes": null, "author": null, "createdAt": "2026-10-14T03:00:00Z"}
   ]}}
 """#
@@ -209,7 +209,7 @@ if let c = decode(LegalCompareResponse.self, compareJSON, "compare") {
 let proposalsJSON = #"""
 {"proposals": [
   {"id": "pr2", "status": "CLARIFY", "baseVersion": 3, "instruction": "change the term", "question": "6 or 12 months?", "summary": "",
-   "changes": [], "appliedVersion": null, "createdBy": {"id": "u1", "name": "Bagas", "avatar": null}, "decidedBy": null, "decidedAt": null, "createdAt": "2026-10-14T06:00:00Z"},
+   "changes": [], "appliedVersion": null, "createdBy": {"id": "u1", "name": "Budi", "avatar": null}, "decidedBy": null, "decidedAt": null, "createdAt": "2026-10-14T06:00:00Z"},
   {"id": "pr1", "status": "PENDING", "baseVersion": 2, "instruction": "fee", "question": null, "summary": "Fee to Rp 2.000.000",
    "changes": [{"index": 4, "before": "Rp 1.000.000", "after": "Rp 2.000.000", "segments": [{"type": "same", "text": "Rp "}, {"type": "del", "text": "1.000.000"}, {"type": "ins", "text": "2.000.000"}]}],
    "appliedVersion": null, "createdBy": null, "decidedBy": null, "decidedAt": null, "createdAt": "2026-10-14T05:00:00Z"}
@@ -297,7 +297,7 @@ expect(JSONSerialization.isValidJSONObject(json), true, "values serialise")
 let signedDocJSON = #"""
 {"document": {"id": "d1", "number": "PKS/PATS-UNIV/YOGYAKARTA/OKT/2026/001", "docType": "PKS", "title": "PKS Venue", "status": "SIGNED",
  "source": "GENERATED", "currentVersion": 3, "finalVersion": 2, "signedVersion": 3, "hasNumber": true,
- "signedAt": "2026-10-14T09:00:00.000Z", "signedBy": {"id": "u1", "name": "Bagas", "avatar": null},
+ "signedAt": "2026-10-14T09:00:00.000Z", "signedBy": {"id": "u1", "name": "Budi", "avatar": null},
  "addenda": [{"id": "a1", "number": "PKS/PATS-UNIV/YOGYAKARTA/OKT/2026/001/ADD-1", "title": "Addendum Pertama", "status": "DRAFT",
    "docDate": "2026-10-20", "signedAt": null, "addendumSeq": 1, "numberReleased": false}],
  "versions": [
@@ -308,7 +308,7 @@ if let r = decode(LegalDocumentResponse.self, signedDocJSON, "signed document") 
     let d = r.document
     expect(d.isLocked, true, "signed is locked")
     expect(d.shownVersion?.version ?? 0, 3, "signed copy is the primary file")
-    expect(d.signedBy?.name ?? "", "Bagas", "signed by")
+    expect(d.signedBy?.name ?? "", "Budi", "signed by")
     expect(d.addenda.first?.number ?? "", "PKS/PATS-UNIV/YOGYAKARTA/OKT/2026/001/ADD-1", "addendum number")
     expect(d.statusChoices, ["SIGNED", "VOID"], "signed: only void")
     expect(d.voidReleasesNumber, false, "a signed void keeps its number retired")

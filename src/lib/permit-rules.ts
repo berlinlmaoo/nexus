@@ -5,7 +5,7 @@
  * and no limit on filing it after the fact. "Lupa absen" typed at 5pm looked identical to a real
  * client meeting, and an approver had nothing to tell them apart with.
  *
- * Three rules now, all decided by Bagas on 2026-08-13:
+ * Three rules now, all decided by the owner on 2026-08-13:
  *
  * 1. PHOTO + LOCATION REQUIRED on self-submitted izin. Same evidence check-in already demands, so
  *    filing izin is no longer cheaper than just showing up.

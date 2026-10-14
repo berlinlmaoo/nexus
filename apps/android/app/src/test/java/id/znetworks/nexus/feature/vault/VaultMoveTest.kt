@@ -10,7 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** VAULT-MOVE-DND (Berlin, 9 Oct): move, gallery, thumbnails, the vault ping. */
+/** VAULT-MOVE-DND (owner, 9 Oct): move, gallery, thumbnails, the vault ping. */
 class VaultMoveTest {
     private fun item(json: String) = NexusJson.decodeFromString(VaultItem.serializer(), json)
 

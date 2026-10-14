@@ -342,7 +342,7 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
                 _state.update { it.copy(notice = res.getString(if (added < 0) R.string.chat_add_partial else R.string.chat_added_project)) }
             } else {
                 val updated = api.addMembers(id, userIds)
-                // No toast: the thread's own log line ("You added Mey") is the confirmation now (SYSTEM-MESSAGES).
+                // No toast: the thread's own log line ("You added Mira") is the confirmation now (SYSTEM-MESSAGES).
                 _state.update { it.copy(conversation = if (updated.members.isNotEmpty()) updated else it.conversation) }
                 poll()
                 refreshConversation()
@@ -506,7 +506,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
             if (s.loading && s.messages.isEmpty()) item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
             if (!s.loading && s.messages.isEmpty()) item { Text(stringResource(R.string.chat_say_hi), fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.fillMaxWidth().padding(24.dp)) }
             items(s.messages, key = { it.id }) { m ->
-                // A group's log line ("Bagas added Mey"): a centred muted pill, no avatar, no bubble, no actions;
+                // A group's log line ("Budi added Mira"): a centred muted pill, no avatar, no bubble, no actions;
                 // a tap shows its time (SYSTEM-MESSAGES).
                 if (m.isSystem) { SystemPill(m, vm.meId); return@items }
                 val mine = m.userId == vm.meId || m.user?.id == vm.meId
@@ -753,7 +753,7 @@ private fun ColumnScope.DeletedGroup(onBack: () -> Unit) {
 
 /**
  * The typers' photos (up to 3 overlapping, then "+N") beside one incoming bubble of three dots rising in turn;
- * in a group, "Bagas is typing…" / "2 people are typing…" under it. Still dots when animations are off.
+ * in a group, "Budi is typing…" / "2 people are typing…" under it. Still dots when animations are off.
  */
 @Composable
 private fun TypingIndicator(typers: List<Typer>, isDm: Boolean) {

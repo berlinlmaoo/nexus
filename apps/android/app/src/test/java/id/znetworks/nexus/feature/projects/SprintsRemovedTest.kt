@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** SPRINTS-OVERVIEW §1–2 (Berlin, 11 Oct): no Sprints tab anywhere; Automations starts off in a new project. */
+/** SPRINTS-OVERVIEW §1–2 (owner, 11 Oct): no Sprints tab anywhere; Automations starts off in a new project. */
 class SprintsRemovedTest {
     private fun src(p: String) = File("src/main/java/id/znetworks/nexus/$p").readText()
 

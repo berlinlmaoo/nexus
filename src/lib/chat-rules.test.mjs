@@ -77,8 +77,8 @@ test("group: title = room, body = 'Sender: text', thread-id = conversation", () 
   assert.deepEqual(p.data, { conversationId: "conv1", messageId: "msg1", conversationName: "Tim Kreatif", senderName: "Budi Santoso", isGroup: true, text: "rapat jam 3" })
 })
 test("project room behaves like a group; nameless rooms get a fallback", () => {
-  const p = R.buildChatPush({ ...base, kind: "PROJECT", conversationName: "Step Up Festival", content: "ok" })
-  assert.equal(p.title, "Step Up Festival")
+  const p = R.buildChatPush({ ...base, kind: "PROJECT", conversationName: "Launch Party", content: "ok" })
+  assert.equal(p.title, "Launch Party")
   assert.equal(p.body, "Budi Santoso: ok")
   assert.equal(R.buildChatPush({ ...base, kind: "PROJECT", conversationName: null, content: "x" }).title, "Project chat")
   assert.equal(R.buildChatPush({ ...base, kind: "GROUP", conversationName: "  ", content: "x" }).title, "Group")
@@ -309,43 +309,43 @@ test("delete and last-member codes and sentences", () => {
 })
 
 // ── system messages (SYSTEM-MESSAGES contract, 8 Oct 2026) ──
-const bagas = { id: "u-bagas", name: "Bagas Putro" }
-const mey = { id: "u-mey", name: "Mey" }
-const yuza = { id: "u-yuza", name: "Yuza" }
-const angela = { id: "u-angela", name: "Angela" }
+const budi = { id: "u-budi", name: "Budi Santoso" }
+const mira = { id: "u-mira", name: "Mira" }
+const yuda = { id: "u-yuda", name: "Yuda" }
+const anita = { id: "u-anita", name: "Anita" }
 test("names joined the Indonesian way", () => {
   assert.equal(R.joinNames([]), "")
-  assert.equal(R.joinNames(["Mey"]), "Mey")
-  assert.equal(R.joinNames(["Mey", "Yuza"]), "Mey dan Yuza")
-  assert.equal(R.joinNames(["Mey", "Yuza", "Angela"]), "Mey, Yuza dan Angela")
-  assert.equal(R.joinNames(["Mey", " ", "Angela"]), "Mey dan Angela", "blank names dropped")
-  assert.equal(R.joinNames(["Mey", "Yuza", "Angela"], "and"), "Mey, Yuza and Angela")
+  assert.equal(R.joinNames(["Mira"]), "Mira")
+  assert.equal(R.joinNames(["Mira", "Yuda"]), "Mira dan Yuda")
+  assert.equal(R.joinNames(["Mira", "Yuda", "Anita"]), "Mira, Yuda dan Anita")
+  assert.equal(R.joinNames(["Mira", " ", "Anita"]), "Mira dan Anita", "blank names dropped")
+  assert.equal(R.joinNames(["Mira", "Yuda", "Anita"], "and"), "Mira, Yuda and Anita")
 })
 test("fallback sentence (content) for every event, third person", () => {
-  assert.equal(R.systemMessageFallback({ type: "members_added", actor: bagas, targets: [mey] }), "Bagas Putro menambahkan Mey ke grup")
-  assert.equal(R.systemMessageFallback({ type: "members_added", actor: bagas, targets: [mey, yuza, angela] }), "Bagas Putro menambahkan Mey, Yuza dan Angela ke grup")
-  assert.equal(R.systemMessageFallback({ type: "member_removed", actor: bagas, targets: [mey] }), "Bagas Putro mengeluarkan Mey dari grup")
-  assert.equal(R.systemMessageFallback({ type: "member_left", actor: mey, targets: [mey] }), "Mey keluar dari grup")
-  assert.equal(R.systemMessageFallback({ type: "member_left", actor: mey }), "Mey keluar dari grup", "no targets: the actor left")
-  assert.equal(R.systemMessageFallback({ type: "group_created", actor: bagas, targets: [mey], name: "QA" }), "Bagas Putro membuat grup “QA”")
-  assert.equal(R.systemMessageFallback({ type: "group_created", actor: bagas, targets: [mey] }), "Bagas Putro membuat grup")
-  assert.equal(R.systemMessageFallback({ type: "group_renamed", actor: bagas, name: "QA", previousName: "QA lama" }), "Bagas Putro mengubah nama grup jadi “QA”")
-  assert.equal(R.systemMessageFallback({ type: "members_added", actor: { id: "x", name: " " }, targets: [mey] }), "Seseorang menambahkan Mey ke grup")
+  assert.equal(R.systemMessageFallback({ type: "members_added", actor: budi, targets: [mira] }), "Budi Santoso menambahkan Mira ke grup")
+  assert.equal(R.systemMessageFallback({ type: "members_added", actor: budi, targets: [mira, yuda, anita] }), "Budi Santoso menambahkan Mira, Yuda dan Anita ke grup")
+  assert.equal(R.systemMessageFallback({ type: "member_removed", actor: budi, targets: [mira] }), "Budi Santoso mengeluarkan Mira dari grup")
+  assert.equal(R.systemMessageFallback({ type: "member_left", actor: mira, targets: [mira] }), "Mira keluar dari grup")
+  assert.equal(R.systemMessageFallback({ type: "member_left", actor: mira }), "Mira keluar dari grup", "no targets: the actor left")
+  assert.equal(R.systemMessageFallback({ type: "group_created", actor: budi, targets: [mira], name: "QA" }), "Budi Santoso membuat grup “QA”")
+  assert.equal(R.systemMessageFallback({ type: "group_created", actor: budi, targets: [mira] }), "Budi Santoso membuat grup")
+  assert.equal(R.systemMessageFallback({ type: "group_renamed", actor: budi, name: "QA", previousName: "QA lama" }), "Budi Santoso mengubah nama grup jadi “QA”")
+  assert.equal(R.systemMessageFallback({ type: "members_added", actor: { id: "x", name: " " }, targets: [mira] }), "Seseorang menambahkan Mira ke grup")
 })
 test("a stored event reads back; junk is null", () => {
-  const e = { type: "members_added", actor: bagas, targets: [mey, { id: "", name: "nobody" }, yuza] }
-  assert.deepEqual(R.parseSystemEvent(e), { type: "members_added", actor: bagas, targets: [mey, yuza] })
-  assert.deepEqual(R.parseSystemEvent({ type: "group_renamed", actor: bagas, name: "QA", previousName: "Old" }), { type: "group_renamed", actor: bagas, name: "QA", previousName: "Old" })
+  const e = { type: "members_added", actor: budi, targets: [mira, { id: "", name: "nobody" }, yuda] }
+  assert.deepEqual(R.parseSystemEvent(e), { type: "members_added", actor: budi, targets: [mira, yuda] })
+  assert.deepEqual(R.parseSystemEvent({ type: "group_renamed", actor: budi, name: "QA", previousName: "Old" }), { type: "group_renamed", actor: budi, name: "QA", previousName: "Old" })
   assert.equal(R.parseSystemEvent(null), null)
   assert.equal(R.parseSystemEvent("members_added"), null)
-  assert.equal(R.parseSystemEvent({ type: "reaction_added", actor: bagas }), null, "unknown type")
+  assert.equal(R.parseSystemEvent({ type: "reaction_added", actor: budi }), null, "unknown type")
   assert.equal(R.parseSystemEvent({ type: "member_left" }), null, "no actor")
 })
 test("system rows never count as unread and cannot be replied to", () => {
-  assert.equal(R.countsTowardUnread({ kind: "SYSTEM", userId: "u-bagas" }, "u-mey"), false)
-  assert.equal(R.countsTowardUnread({ kind: "USER", userId: "u-bagas" }, "u-mey"), true)
-  assert.equal(R.countsTowardUnread({ userId: "u-bagas" }, "u-mey"), true, "rows from before kind existed are USER")
-  assert.equal(R.countsTowardUnread({ kind: "USER", userId: "u-mey" }, "u-mey"), false, "own message")
+  assert.equal(R.countsTowardUnread({ kind: "SYSTEM", userId: "u-budi" }, "u-mira"), false)
+  assert.equal(R.countsTowardUnread({ kind: "USER", userId: "u-budi" }, "u-mira"), true)
+  assert.equal(R.countsTowardUnread({ userId: "u-budi" }, "u-mira"), true, "rows from before kind existed are USER")
+  assert.equal(R.countsTowardUnread({ kind: "USER", userId: "u-mira" }, "u-mira"), false, "own message")
   assert.equal(R.canReplyTo({ kind: "SYSTEM" }), false)
   assert.equal(R.canReplyTo({ kind: "USER" }), true)
   assert.equal(R.canReplyTo({}), true)
@@ -355,32 +355,32 @@ test("system rows never count as unread and cannot be replied to", () => {
   assert.equal(R.SYSTEM_MESSAGE_REPLY, "SYSTEM_MESSAGE_REPLY")
 })
 test("only the people a row ADDS are pushed — never the actor, never the room", () => {
-  assert.deepEqual(R.systemPushRecipients({ type: "members_added", actor: bagas, targets: [mey, yuza] }), ["u-mey", "u-yuza"])
-  assert.deepEqual(R.systemPushRecipients({ type: "group_created", actor: bagas, targets: [mey, bagas, mey] }), ["u-mey"], "actor and duplicates out")
+  assert.deepEqual(R.systemPushRecipients({ type: "members_added", actor: budi, targets: [mira, yuda] }), ["u-mira", "u-yuda"])
+  assert.deepEqual(R.systemPushRecipients({ type: "group_created", actor: budi, targets: [mira, budi, mira] }), ["u-mira"], "actor and duplicates out")
   for (const type of ["member_removed", "member_left", "group_renamed"]) {
-    assert.deepEqual(R.systemPushRecipients({ type, actor: bagas, targets: [mey] }), [], type)
+    assert.deepEqual(R.systemPushRecipients({ type, actor: budi, targets: [mira] }), [], type)
   }
   assert.deepEqual(R.systemPushRecipients(null), [])
 })
 test("system push decision per member: added → push (DND/mute quiet it), everyone else not_added", () => {
-  const ev = { type: "members_added", actor: bagas, targets: [mey] }
-  assert.deepEqual(R.systemPushDecision({ event: ev, userId: "u-mey", now: NOW }), { push: true, reason: "added" })
-  assert.deepEqual(R.systemPushDecision({ event: ev, userId: "u-yuza", now: NOW }), { push: false, reason: "not_added" }, "an old member is not told")
-  assert.deepEqual(R.systemPushDecision({ event: ev, userId: "u-bagas", now: NOW }), { push: false, reason: "not_added" }, "the actor is not told")
-  assert.deepEqual(R.systemPushDecision({ event: ev, userId: "u-mey", dndUntil: future, now: NOW }), { push: false, reason: "dnd" })
-  assert.deepEqual(R.systemPushDecision({ event: ev, userId: "u-mey", mutedUntil: future, now: NOW }), { push: false, reason: "muted" })
-  assert.equal(R.systemPushDecision({ event: ev, userId: "u-mey", dndUntil: past, now: NOW }).push, true)
-  const left = { type: "member_left", actor: mey, targets: [mey] }
-  assert.equal(R.systemPushDecision({ event: left, userId: "u-mey", now: NOW }).push, false)
+  const ev = { type: "members_added", actor: budi, targets: [mira] }
+  assert.deepEqual(R.systemPushDecision({ event: ev, userId: "u-mira", now: NOW }), { push: true, reason: "added" })
+  assert.deepEqual(R.systemPushDecision({ event: ev, userId: "u-yuda", now: NOW }), { push: false, reason: "not_added" }, "an old member is not told")
+  assert.deepEqual(R.systemPushDecision({ event: ev, userId: "u-budi", now: NOW }), { push: false, reason: "not_added" }, "the actor is not told")
+  assert.deepEqual(R.systemPushDecision({ event: ev, userId: "u-mira", dndUntil: future, now: NOW }), { push: false, reason: "dnd" })
+  assert.deepEqual(R.systemPushDecision({ event: ev, userId: "u-mira", mutedUntil: future, now: NOW }), { push: false, reason: "muted" })
+  assert.equal(R.systemPushDecision({ event: ev, userId: "u-mira", dndUntil: past, now: NOW }).push, true)
+  const left = { type: "member_left", actor: mira, targets: [mira] }
+  assert.equal(R.systemPushDecision({ event: left, userId: "u-mira", now: NOW }).push, false)
 })
 test("the 'added you' push: title = group, body names the actor, thread = conversation", () => {
-  const p = R.buildSystemPush({ conversationId: "conv9", messageId: "msg9", conversationName: "QA", actorName: "Bagas Putro" })
+  const p = R.buildSystemPush({ conversationId: "conv9", messageId: "msg9", conversationName: "QA", actorName: "Budi Santoso" })
   assert.equal(p.title, "QA")
-  assert.equal(p.body, "Bagas Putro menambahkan kamu ke grup")
+  assert.equal(p.body, "Budi Santoso menambahkan kamu ke grup")
   assert.equal(p.type, "MESSAGE")
   assert.equal(p.threadId, "conv9")
   assert.equal(p.link, "/messages?c=conv9")
-  assert.deepEqual(p.data, { conversationId: "conv9", messageId: "msg9", conversationName: "QA", senderName: "Bagas Putro", isGroup: true, text: "Bagas Putro menambahkan kamu ke grup", kind: "SYSTEM" })
+  assert.deepEqual(p.data, { conversationId: "conv9", messageId: "msg9", conversationName: "QA", senderName: "Budi Santoso", isGroup: true, text: "Budi Santoso menambahkan kamu ke grup", kind: "SYSTEM" })
   assert.equal(R.buildSystemPush({ conversationId: "c", messageId: "m", conversationName: null, actorName: "" }).title, "Group")
   assert.equal(R.buildSystemPush({ conversationId: "c", messageId: "m", conversationName: null, actorName: "" }).body, "Seseorang menambahkan kamu ke grup")
 })
@@ -406,10 +406,10 @@ test("Admin = Manager, BoD, One Above All in the room's workspace, or a system a
 })
 test("members: admins first, then A–Z, case-blind", () => {
   const rows = [
-    { name: "zaki", isAdmin: false }, { name: "Bagas", isAdmin: true }, { name: "ani", isAdmin: false },
-    { name: "Mey", isAdmin: false }, { name: "Angela", isAdmin: true },
+    { name: "zaki", isAdmin: false }, { name: "Budi", isAdmin: true }, { name: "ani", isAdmin: false },
+    { name: "Mira", isAdmin: false }, { name: "Anita", isAdmin: true },
   ]
-  assert.deepEqual(R.orderInfoMembers(rows).map((r) => r.name), ["Angela", "Bagas", "ani", "Mey", "zaki"])
+  assert.deepEqual(R.orderInfoMembers(rows).map((r) => r.name), ["Anita", "Budi", "ani", "Mira", "zaki"])
   assert.deepEqual(rows[0].name, "zaki", "input untouched")
 })
 test("media type and picture vs document", () => {

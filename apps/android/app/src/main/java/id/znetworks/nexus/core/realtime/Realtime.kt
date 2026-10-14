@@ -154,7 +154,7 @@ object RealtimeEvents {
 }
 
 /**
- * Socket.IO v4 at `/api/socket` (Berlin, 8 Oct): the same session cookie as the API, on the app's own
+ * Socket.IO v4 at `/api/socket` (owner, 8 Oct): the same session cookie as the API, on the app's own
  * OkHttp (identity headers, LAN route and the cookie-on-redirect guard all apply). Connected while signed
  * in and the app is in front; the server puts us in our workspace rooms (+ `audit`); we join `user:<me>`
  * and whatever the screens ask for ([join]/[leave], counted). Push stays for the background.

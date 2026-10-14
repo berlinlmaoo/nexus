@@ -9,7 +9,7 @@ import java.time.LocalDate
  * What the composer may offer and when it may submit (PRD §2.8), ported from iOS
  * `RequestComposerSheet`. Pure, so every rule is a unit test.
  *
- * [canGrant] = canManageAttendance (BoD). Since 29 Sep (Berlin, server BACKDATED_SELF, iOS ed7545e) filing
+ * [canGrant] = canManageAttendance (BoD). Since 29 Sep (owner, server BACKDATED_SELF, iOS ed7545e) filing
  * your OWN request is the same for everyone, a BoD included: today or later, a photo for sick and permit,
  * the quota; only the permit's location is still skipped for a BoD. A past day is filed by a BoD for the
  * person (Control Room), never from this composer.
@@ -93,7 +93,7 @@ class RequestRules(private val today: AttendanceToday?, private val canGrant: Bo
 }
 
 /**
- * Annual leave as ONE range (Berlin 29 Sep, iOS ed7545e): first day, last day, every day between; the
+ * Annual leave as ONE range (owner 29 Sep, iOS ed7545e): first day, last day, every day between; the
  * whole range may not be longer than the days left, and goes out as one request startDate..endDate.
  */
 object LeaveRange {

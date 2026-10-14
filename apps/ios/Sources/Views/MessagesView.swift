@@ -386,7 +386,7 @@ struct ConvoRow: View {
     var projectIcon: String?
 
     /// The last line under the name. A picture sent without a caption has empty content, which
-    /// used to leave the row with a blank second line. A system line ("Bagas Putro added Mey")
+    /// used to leave the row with a blank second line. A system line ("Budi Santoso added Mira")
     /// reads the way the thread draws it, in the app's language.
     private var preview: String {
         guard let last = convo.lastMessage else { return T("No messages yet") }
@@ -1458,7 +1458,7 @@ struct ChatThreadView: View {
         return body.count > 80 ? String(body.prefix(78)) + "…" : body
     }
 
-    /// A SYSTEM row: "Bagas Putro added Mey", centred and muted, the way WhatsApp draws it. No
+    /// A SYSTEM row: "Budi Santoso added Mira", centred and muted, the way WhatsApp draws it. No
     /// avatar, no bubble, no reply — it is the room's own log, not somebody's message. A long press
     /// gives its time and Copy, nothing else.
     @ViewBuilder private func systemLine(_ m: ChatMessage) -> some View {

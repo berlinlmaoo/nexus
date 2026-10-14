@@ -10,7 +10,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-// Batch 2 C (Berlin 29 Sep; server cff1575 AS BUILT, iOS 78bfe37): targeted announcements and SP PDFs.
+// Batch 2 C (owner 29 Sep; server cff1575 AS BUILT, iOS 78bfe37): targeted announcements and SP PDFs.
 class AnnouncementBatch2Test {
     @Test fun bodyForEveryoneStaysAsBefore() {
         val b = AnnounceRules.body("T", " B ", "info", 0, "09:00")

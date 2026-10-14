@@ -52,7 +52,7 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-// Offboarding (Berlin, 8 Oct; OFFBOARD-CONTRACT): someone who left keeps every record, loses sign-in.
+// Offboarding (owner, 8 Oct; OFFBOARD-CONTRACT): someone who left keeps every record, loses sign-in.
 
 @Serializable data class FormerMembership(val workspaceId: String? = null, val workspaceName: String? = null, val leftAt: String? = null, val reason: String? = null)
 @Serializable data class AdminUserRow(val id: String, val name: String? = null, val email: String? = null, val avatar: String? = null,

@@ -10,7 +10,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** RESTORE-ALL-TYPES (Berlin, 8 Oct): every kind of delete, as the web reads it. */
+/** RESTORE-ALL-TYPES (owner, 8 Oct): every kind of delete, as the web reads it. */
 class RestoreKindsTest {
     private fun page(json: String) = NexusJson.decodeFromString(AuditPage.serializer(), json)
     private fun entry(json: String) = NexusJson.decodeFromString(AuditEntryResponse.serializer(), json)

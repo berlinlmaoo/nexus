@@ -70,10 +70,10 @@ test("structure: no card has the colour of its own section", () => {
 })
 test("structure: home units (deepest card)", () => {
   const homes = (n) => personByName(n).homeUnitIds.map((id) => s.units.find((u) => u.id === id).name)
-  assert.deepEqual(homes("Henryca Aprillyana"), ["Framework Agency", "PATS", "INTOO", "Suwara"])
-  assert.deepEqual(homes("Geraldo Valentino"), ["Finance & Tech"])
-  assert.deepEqual(homes("Queen Lourdes Purba Tambak"), ["PATS X", "PATS BSD"])
-  assert.deepEqual(homes("Fortunatus Narendra"), [])
+  assert.deepEqual(homes("Person 21"), ["Framework Agency", "PATS", "INTOO", "Suwara"])
+  assert.deepEqual(homes("Person 17"), ["Finance & Tech"])
+  assert.deepEqual(homes("Person 36"), ["PATS X", "PATS BSD"])
+  assert.deepEqual(homes("Person 16"), [])
 })
 test("structure: no email, no canvas position, no job titles", () => {
   const text = JSON.stringify(s)

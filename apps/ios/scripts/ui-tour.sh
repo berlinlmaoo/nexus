@@ -15,7 +15,12 @@
 #                                       Legal, for the web's legal-hidden check; optional, skipped without it)
 #
 # Order of work: iPhone (app, then Safari), web desktop, iPad, Mac. Results: ~/nexus-ui-tour/<timestamp>/index.html, then copied to
-# the agents VM (~/ui-tour/<timestamp>/) over Tailscale so Claude can look at them.
+# UI_TOUR_HOST (~/ui-tour/<timestamp>/) when one is configured, so reviewers on that host can look at them.
+#
+# Host-specific values are not in the repo. Put them in ~/.config/nexus/ui-tour.env (or $UI_TOUR_CONFIG):
+#   TOUR_WEB_BASE=https://<dev server>      required: the dev web the tours open and log in to
+#   UI_TOUR_HOST=<user>@<host>              optional: where results are copied (no upload when unset)
+#   AGENTS=<user>@<host>                    --android only: the host that builds the APK
 #
 # The QA password is read from the Keychain (service "nexus-ui-tour"), or TOUR_PASSWORD. Never in git,
 # never on the command line of xcodebuild (it travels in the test runner's environment).
@@ -23,6 +28,14 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.." || exit 2
 REPO=$(pwd)
+UI_TOUR_CONFIG="${UI_TOUR_CONFIG:-$HOME/.config/nexus/ui-tour.env}"
+# shellcheck disable=SC1090
+[ -f "$UI_TOUR_CONFIG" ] && . "$UI_TOUR_CONFIG"
+if [ -z "${TOUR_WEB_BASE:-}" ]; then
+  printf '[ui-tour] TOUR_WEB_BASE is not set: add TOUR_WEB_BASE=https://<dev server> to %s\n' "$UI_TOUR_CONFIG"; exit 2
+fi
+export TOUR_WEB_BASE
+[ -n "${AGENTS:-}" ] && export AGENTS
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 ORIG_ARGS=("$@")
@@ -59,7 +72,7 @@ TOUR_NONMEMBER_EMAIL="${TOUR_NONMEMBER_EMAIL:-qa6@dev.invalid}"
 # Owner: watch the web half in a real Chrome window by default (--headless hides it).
 if [ "${TOUR_HEADLESS:-0}" = 1 ]; then unset TOUR_WATCH; else export TOUR_WATCH=1; fi
 KC_SERVICE="nexus-ui-tour"
-UPLOAD_HOST="${UI_TOUR_HOST:-debian@100.66.244.85}"
+UPLOAD_HOST="${UI_TOUR_HOST:-}"
 STAMP=$(date +%Y%m%d-%H%M%S)
 OUT="${UI_TOUR_OUT:-$HOME/nexus-ui-tour}/$STAMP"
 WORK="$OUT/.work"
@@ -77,7 +90,7 @@ keychain_password() { security find-generic-password -s "$KC_SERVICE" -a "$TOUR_
 ask_password() {
   [ -t 0 ] || return 1
   local pw
-  printf 'QA password for %s (the one Claude gave you; typing is hidden): ' "$TOUR_EMAIL" >&2
+  printf 'QA password for %s (typing is hidden): ' "$TOUR_EMAIL" >&2
   IFS= read -rs pw; echo >&2
   [ -n "$pw" ] || return 1
   security add-generic-password -U -s "$KC_SERVICE" -a "$TOUR_EMAIL" -l "NEXUS UI tour ($TOUR_EMAIL)" -w "$pw" >/dev/null || return 1
@@ -117,10 +130,10 @@ if [ "$DO_PULL" = 1 ]; then
     fi
   else say "git pull failed (local changes?) — continuing with what is checked out; see logs/git.log"; fi
 fi
-# Build from a frozen copy of this commit, not from the live checkout: the Orca agents work in ~/nexus too,
+# Build from a frozen copy of this commit, not from the live checkout: other tools may work in the same checkout,
 # and a pull halfway through the hour-long run made the iPad and Mac builds compile different (broken) code
 # than the iPhone build (owner's Mac, 14 Oct 2026). The copy is a git worktree that stays put between runs,
-# so Xcode's incremental build keeps working; uncommitted edits in ~/nexus are not part of the tour.
+# so Xcode's incremental build keeps working; uncommitted edits in the checkout are not part of the tour.
 if [ -z "${UI_TOUR_SNAPSHOT:-}" ] && [ -z "${UI_TOUR_NO_SNAPSHOT:-}" ]; then
   ROOT=$(git rev-parse --show-toplevel)
   SNAP="${UI_TOUR_SNAPSHOT_DIR:-$HOME/nexus-tour-src}"
@@ -147,7 +160,7 @@ case "$LOGIN_CHECK" in refused:*) say "stopping: fix the password first (--set-p
   echo "stamp=$STAMP"
   echo "commit=$COMMIT"
   echo "account=$TOUR_EMAIL"
-  echo "server=https://nexus-prod.tail765d02.ts.net:8443 (dev)"
+  echo "server=$TOUR_WEB_BASE (dev)"
   echo "web-desktop=1440x900 @1x, Chromium"
   [ "$SAFARI_MOBILE" = 1 ] || echo "web-mobile=440x956 @3x, Chrome emulation (iPhone UA)"
 } >"$OUT/meta.txt"
@@ -208,6 +221,7 @@ run_app() {
   TEST_RUNNER_TOUR_FORM_ID="${TOUR_FORM_ID:-}" \
   TEST_RUNNER_TOUR_MAC_WINDOW="${TOUR_MAC_WINDOW:-}" \
   TEST_RUNNER_TOUR_OUT_DIR="$direct_dir" \
+  TEST_RUNNER_TOUR_WEB_BASE="$TOUR_WEB_BASE" \
     xcodebuild test -project NEXUS.xcodeproj -scheme NEXUSUITour -destination "$dest" \
       -resultBundlePath "$result" "${tests[@]}" \
       -destination-timeout 180 ${extra[@]+"${extra[@]}"} >"$log" 2>&1 &
@@ -319,14 +333,16 @@ node "$TOOLS" index "$OUT" >/dev/null 2>&1 || say "index.html could not be built
 
 # ---------------------------------------------------------------------------------------------- upload
 REMOTE=""
-if [ "$DO_UPLOAD" = 1 ]; then
+if [ "$DO_UPLOAD" = 1 ] && [ -z "$UPLOAD_HOST" ]; then
+  say "no UI_TOUR_HOST configured: results stay on this Mac"
+elif [ "$DO_UPLOAD" = 1 ]; then
   SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"
   # shellcheck disable=SC2086,SC2029  # word-split options on purpose; $STAMP is meant to expand here
   if ssh $SSH_OPTS "$UPLOAD_HOST" "mkdir -p ~/ui-tour/$STAMP" >"$OUT/logs/upload.log" 2>&1 \
      && rsync -a --exclude .work -e "ssh $SSH_OPTS" "$OUT/" "$UPLOAD_HOST:ui-tour/$STAMP/" >>"$OUT/logs/upload.log" 2>&1; then
-    REMOTE="agents:~/ui-tour/$STAMP/"
+    REMOTE="$UPLOAD_HOST:~/ui-tour/$STAMP/"
   else
-    say "upload to $UPLOAD_HOST failed (SSH key not set up?). One-time fix: ssh-copy-id $UPLOAD_HOST  — or tell Claude the folder below."
+    say "upload to $UPLOAD_HOST failed (SSH key not set up?). One-time fix: ssh-copy-id $UPLOAD_HOST  — or share the folder below."
   fi
 fi
 
@@ -345,7 +361,7 @@ if [ "$DO_ANDROID" = 1 ]; then
   ADB="$HOME/Library/Android/sdk/platform-tools/adb"
   EMU="$HOME/Library/Android/sdk/emulator/emulator"
   if ! "$ADB" get-state >/dev/null 2>&1 && [ -x "$EMU" ]; then
-    # Nightly run: no Orca emulator open, so boot the first AVD without a window and wait for it.
+    # Nightly run: no emulator window open, so boot the first AVD without a window and wait for it.
     AVD=$("$EMU" -list-avds 2>/dev/null | head -1)
     if [ -n "$AVD" ]; then
       echo "== android: booting $AVD (headless)"

@@ -34,7 +34,7 @@ const rich = {
   type: "doc",
   content: [
     { type: "heading", attrs: { level: 2, blockId: "h1" }, content: [{ type: "text", text: "Agenda" }] },
-    { type: "paragraph", content: [{ type: "text", text: "Hi " }, { type: "mention", attrs: { id: "u1", label: "Mey", kind: "user" } }, { type: "text", text: " see " }, { type: "mention", attrs: { id: "t1", label: "Fix banner", kind: "task" } }] },
+    { type: "paragraph", content: [{ type: "text", text: "Hi " }, { type: "mention", attrs: { id: "u1", label: "Mira", kind: "user" } }, { type: "text", text: " see " }, { type: "mention", attrs: { id: "t1", label: "Fix banner", kind: "task" } }] },
     { type: "bulletList", content: [
       { type: "listItem", content: [P("one")] },
       { type: "listItem", content: [P("two"), { type: "bulletList", content: [{ type: "listItem", content: [P("nested")] }] }] },
@@ -63,7 +63,7 @@ const rich = {
 
 const richText = [
   "## Agenda",
-  "Hi @Mey see Fix banner",
+  "Hi @Mira see Fix banner",
   "- one",
   "- two",
   "  - nested",
@@ -101,7 +101,7 @@ t("unchanged text keeps the stored document", () => {
 
 t("an older app edits one line: other blocks survive", () => {
   const doc = sanitizeDoc(rich)
-  const edited = richText.replace("- [ ] todo", "- [ ] todo (edited)").replace("Hi @Mey see Fix banner\n", "Hi @Mey see Fix banner\nnew line\n")
+  const edited = richText.replace("- [ ] todo", "- [ ] todo (edited)").replace("Hi @Mira see Fix banner\n", "Hi @Mira see Fix banner\nnew line\n")
   const merged = resolveTaskBody(edited, doc)
   assert.equal(docToText(merged), edited)
   const types = merged.content.map((b) => b.type)
@@ -160,7 +160,7 @@ t("BlockNote shape for the released Android reader", () => {
   assert.equal(b[0].props.level, 2)
   assert.ok(types.includes("bulletListItem") && types.includes("checkListItem") && types.includes("numberedListItem") && types.includes("quote") && types.includes("codeBlock"))
   assert.equal(b.find((x) => x.type === "checkListItem").props.checked, true)
-  assert.equal(b[1].content[0].text, "Hi @Mey see Fix banner")
+  assert.equal(b[1].content[0].text, "Hi @Mira see Fix banner")
 })
 
 console.log(`blockdoc: ${n} tests passed`)

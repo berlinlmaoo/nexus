@@ -11,7 +11,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 
-// The form builder's data (Berlin, 9 Oct; FORM-BUILDER.md, iOS FormBuilderModels.swift, web form-kit.tsx).
+// The form builder's data (owner, 9 Oct; FORM-BUILDER.md, iOS FormBuilderModels.swift, web form-kit.tsx).
 // `fields` and `accessSchedule` are untyped JSON: each field keeps the object it was loaded from and saving
 // lays the builder's keys over it — only the ones that changed — so a key a newer web build adds survives.
 

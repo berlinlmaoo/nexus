@@ -26,7 +26,7 @@ interface PinRemote {
 /**
  * Pinned and recently opened projects (iOS ProjectShortcuts 286cada). Pins are the person's on every
  * device: they live on the server and this keeps a copy so Home draws before the network answers
- * (Berlin 29 Sep). Recents stay on the phone — what was opened here is about this phone. Per person,
+ * (owner 29 Sep). Recents stay on the phone — what was opened here is about this phone. Per person,
  * recorded by the project screen itself so every route in counts. Cleared on logout.
  */
 class ProjectShortcuts(

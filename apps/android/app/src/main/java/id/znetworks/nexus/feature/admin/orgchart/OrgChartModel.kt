@@ -111,7 +111,7 @@ fun boxPeople(g: Group, kind: String): List<OrgPerson> = when (kind) {
     else -> g.rt.firstOrNull { "rt:${it.first}" == kind }?.second ?: emptyList()
 }
 /** What a people box's label says, as data (the screen words it in the app's language): "BoD · 4",
- *  "Manager · 1", "7 people", "Under Abraham · 1". */
+ *  "Manager · 1", "7 people", "Under Adam · 1". */
 data class BoxLabel(val kind: Kind, val n: Int, val leaderFirstName: String? = null) { enum class Kind { BOD, MANAGER, STAFF, UNDER } }
 fun boxLabel(g: Group, kind: String, people: List<OrgPerson>): BoxLabel {
     val n = boxPeople(g, kind).size
@@ -241,7 +241,7 @@ class OrgTree(val data: OrgChartData) {
         while (cur != null && seen.add(cur.id)) { names.add(0, cur.name); cur = cur.parentId?.let(byId::get) }
         return names.joinToString(" › ")
     }
-    /** "PT. The Z Networks › Framework Agency" — the path ABOVE a unit. */
+    /** "The Z Networks › Framework Agency" — the path ABOVE a unit. */
     fun parentTrail(u: OrgUnit): String { val full = pathOf(u); val i = full.lastIndexOf(" › "); return if (i >= 0) full.substring(0, i) else "" }
 
     /** [people] on the card (in Ringkas: in its whole branch, each once) and, in Ringkas, [parts] below it; the screen words the line. */

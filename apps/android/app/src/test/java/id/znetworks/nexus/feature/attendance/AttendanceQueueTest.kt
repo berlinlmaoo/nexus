@@ -240,7 +240,7 @@ class AttendanceQueueTest {
         assertTrue(again.state.value.entries.single().fix.simulated)
     }
 
-    // Berlin 29 Sep: old tokens without sessionVersion get 401 once. The queued taps wait for the same
+    // owner 29 Sep: old tokens without sessionVersion get 401 once. The queued taps wait for the same
     // person's next sign-in and go out then; nobody else's session ever sends them.
     @Test fun a401KeepsTheQueueForTheSamePersonsNextSignIn() = runTest {
         val q = queue()

@@ -47,7 +47,7 @@ class PresenceTest {
         assertEquals((3..9).map { "2026-09-%02d".format(it) }, PresenceLogic.dots(days).map { it.dateKey })
     }
 
-    // Berlin 28 Sep (iOS b186172): no sign-out while a workday is running.
+    // owner 28 Sep (iOS b186172): no sign-out while a workday is running.
     @Test fun workdayOpenBlocksLogout() {
         fun q(kind: AttendanceKind) = PendingAttendance("x", kind, deviceAtMillis = 1, uptimeSec = 1, fix = LocationFix(0.0, 0.0))
         val inOnly = AttendanceRecord("r", checkInAt = "2026-09-28T01:00:00Z")

@@ -132,7 +132,7 @@ final class ChatTyping {
 
     // MARK: words
 
-    /// "Bagas is typing…" / "3 people are typing…".
+    /// "Budi is typing…" / "3 people are typing…".
     static func sentence(_ typers: [Typer]) -> String {
         if typers.count == 1 {
             let name = typers[0].name.isEmpty ? T("Someone") : typers[0].name

@@ -6,7 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** TYPING.md (Berlin, 9 Oct): who is typing, when this phone says so, what the thread reads. */
+/** TYPING.md (owner, 9 Oct): who is typing, when this phone says so, what the thread reads. */
 class TypingTest {
     private var clock = 0L
     private fun ev(json: String) = RealtimeEvents.parse(if ("\"typing\"" in json) "typing" else "message-created", json)
@@ -15,12 +15,12 @@ class TypingTest {
 
     @Test fun storeFollowsTheSocket() {
         val s = TypingStore { clock }
-        s.apply(typing("c", "a", true, "Bagas Z"), "me")
+        s.apply(typing("c", "a", true, "Budi Z"), "me")
         s.apply(typing("c", "b", true), "me")
         assertEquals(listOf("a", "b"), s.rooms.value["c"]!!.map { it.userId })
-        assertEquals("Bagas Z", s.rooms.value["c"]!![0].name); assertEquals("/api/files/a.png", s.rooms.value["c"]!![0].avatar)
+        assertEquals("Budi Z", s.rooms.value["c"]!![0].name); assertEquals("/api/files/a.png", s.rooms.value["c"]!![0].avatar)
         // Refreshing keeps the order; stopping removes at once.
-        clock = 4_000; s.apply(typing("c", "a", true, "Bagas Z"), "me")
+        clock = 4_000; s.apply(typing("c", "a", true, "Budi Z"), "me")
         assertEquals(listOf("a", "b"), s.rooms.value["c"]!!.map { it.userId })
         s.apply(typing("c", "b", false), "me"); assertEquals(listOf("a"), s.rooms.value["c"]!!.map { it.userId })
         // Their message ends it.
@@ -48,8 +48,8 @@ class TypingTest {
     }
 
     @Test fun threadSentence() {
-        fun s(n: Int, dm: Boolean, name: String? = "Bagas Z") = TypingText.sentence((1..n).map { Typer("u$it", name, null, 0) }, dm, { "$it is typing…" }, "Someone", { "$it people are typing…" })
-        assertEquals("Bagas Z is typing…", s(1, false)); assertEquals("Someone is typing…", s(1, false, null))
+        fun s(n: Int, dm: Boolean, name: String? = "Budi Z") = TypingText.sentence((1..n).map { Typer("u$it", name, null, 0) }, dm, { "$it is typing…" }, "Someone", { "$it people are typing…" })
+        assertEquals("Budi Z is typing…", s(1, false)); assertEquals("Someone is typing…", s(1, false, null))
         assertEquals("2 people are typing…", s(2, false)); assertNull(s(1, true)); assertNull(s(0, false))
     }
 }

@@ -80,9 +80,9 @@ test("A3 3 Oct: sections Finance & Tech, Framework Agency, PATS, Suwara", () => 
 test("A5 by person: Dava under Project Management, Hary with 2 tasks under Multimedia", () => {
   const g = golden["2026-09-18.bod.fa.json"]
   const pm = g.tree.root.children.find((c) => c.unit === "Project Management")
-  assert.deepEqual(pm.people.map((p) => p.userId), [person("Dava Erlangga").userId])
+  assert.deepEqual(pm.people.map((p) => p.userId), [person("Person 14").userId])
   const mm = g.tree.root.children.find((c) => c.unit === "Multimedia")
-  assert.equal(mm.people.find((p) => p.userId === person("Hary Ade Saputra").userId).items.length, 2)
+  assert.equal(mm.people.find((p) => p.userId === person("Person 19").userId).items.length, 2)
 })
 test("People week: a PIC outside the chart beside charted PICs gets a row at the end", () => {
   const g = golden["2026-09-18.bod.top.json"]
@@ -121,8 +121,8 @@ test("overdue: within the window red, older grey, done never", () => {
 })
 test("filters: mine, my division, people, projects, priority, hide done", () => {
   const items = sg("items-2026-09-18.bod.json")
-  const hary = person("Hary Ade Saputra").userId
-  const ctx = { ix, meId: hary, myHomes: person("Hary Ade Saputra").homeUnitIds, today: TODAY, nowMs: NOW, windowDays: WINDOW }
+  const hary = person("Person 19").userId
+  const ctx = { ix, meId: hary, myHomes: person("Person 19").homeUnitIds, today: TODAY, nowMs: NOW, windowDays: WINDOW }
   const f = (patch) => core.filterItems(items, { ...core.NO_FILTERS, ...patch }, ctx).length
   assert.equal(f({}), 5)
   assert.equal(f({ scope: "me" }), 2)

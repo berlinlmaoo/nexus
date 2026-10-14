@@ -564,7 +564,7 @@ struct PipelineDealView: View {
         }
     }
 
-    /// "Bagas changed Stage", or for a payment term "Bagas · Termin 1 · Amount" / "Termin 1 added".
+    /// "Budi changed Stage", or for a payment term "Budi · Termin 1 · Amount" / "Termin 1 added".
     private func historyTitle(_ h: PipelineChange) -> String {
         let who = h.user?.name ?? T("Someone")
         // A file attached, or a link/file taken off (owner, 9 Oct 2026): its type and name.

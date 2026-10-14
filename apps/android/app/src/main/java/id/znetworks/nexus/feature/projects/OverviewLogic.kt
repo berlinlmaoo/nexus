@@ -6,7 +6,7 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
 /**
- * A task project's Overview (Berlin, 11 Oct; SPRINTS-OVERVIEW §3, web fc81517 ProjectOverview.tsx). Everything is
+ * A task project's Overview (owner, 11 Oct; SPRINTS-OVERVIEW §3, web fc81517 ProjectOverview.tsx). Everything is
  * computed from the project's own tasks, never the board's search, so filtering the board doesn't change the
  * numbers. Top-level tasks only, as the header progress. Days are office days (WIB): overdue = due before today,
  * next 7 days = today and the six after it. Open = not Done and not Cancelled.

@@ -1,7 +1,7 @@
-# Server requests from the Android session
+# Server requests from the Android side
 
-What the Android app needs from the server/web, for the **main session** to build. Nothing here is
-done by the Android session (CLAUDE.md, coordination rule 1). Each item: what, why, exact shape, and
+What the Android app needs from the server/web, for the **server/web side** to build. Nothing here is
+done by the Android side (coordination rule 1). Each item: what, why, exact shape, and
 how Android behaves before and after it lands. Server reference: `nexus` @ `6545d28`.
 
 Status legend: **OPEN** (not started) · **DONE** (live, with commit) · **DROPPED**.
@@ -51,7 +51,7 @@ Add `data.channel` = the channel id below, so channel choice stays on the server
 `attendance`/`messages`/`general`, reads `data.channel` when present (falls back to the type), draws
 data-only messages itself with the "File a permit" action for `category: NEXUS_OUTSIDE_OFFICE`,
 re-reads today on `attendance_auto_offsite_checkout`, and marks the inbox row read from
-`notificationId` on tap. Push is configured from `~/.nexus-android-secrets/firebase.properties`
+`notificationId` on tap. Push is configured from `<android-secrets-dir>/firebase.properties`
 (projectId, applicationId, apiKey, senderId), so it stays off until the owner's Firebase project exists.
 
 **Before it lands:** the app still works, but background notifications are shown by the system under
@@ -60,12 +60,12 @@ tapping one opens the app on Home instead of the target.
 
 ---
 
-## R2. APK distribution (no Play Store yet) — DONE (server a79796b). Publish: copy the APK into `nexus-prod:~/nexus-data/android/`, then atomically replace `current.json` = `{versionName, versionCode, file, sha256?, releasedAt?, notes?}` (hand both to the main session). `/download/android` and `GET /api/app/android/apk` (+ `/api/app/android/release`) are live and exempt from 426
+## R2. APK distribution (no Play Store yet) — DONE (server a79796b). Publish: copy the APK into `<server>:<apk-dir>/`, then atomically replace `current.json` = `{versionName, versionCode, file, sha256?, releasedAt?, notes?}` (hand both to the server/web side). `/download/android` and `GET /api/app/android/apk` (+ `/api/app/android/release`) are live and exempt from 426
 
 **Owner decision (24 Sep 2026):** sideloaded APK, download only for signed-in people.
 
-1. **Storage.** Keep release APKs outside the web root, e.g. `nexus-prod:~/nexus-data/android/`
-   (`nexus-<versionName>-<versionCode>.apk`). The Android session builds and hands over the file
+1. **Storage.** Keep release APKs outside the web root, e.g. `<server>:<apk-dir>/`
+   (`nexus-<versionName>-<versionCode>.apk`). the Android side builds and hands over the file
    (signed with the release key below) plus its SHA-256.
 2. **`GET /download/android`** (web page, same origin): signed-out → the normal login, then back here.
    Signed-in → the current version, size, release notes, a big **Download** button, and the short
@@ -90,20 +90,20 @@ tapping one opens the app on Home instead of the target.
 
 ## R3. Release certificate fingerprint — DONE (in the container; `/.well-known/assetlinks.json` serves it)
 
-Set on `nexus-prod`:
+Set on the server:
 
 ```
 NEXUS_ANDROID_CERT_SHA256=53:22:FE:4C:77:ED:CC:73:36:81:76:67:0C:E5:D8:E1:41:C6:58:2D:4B:CD:36:E2:85:E0:EE:30:FF:A6:AD:26
 ```
 
-Release key created 24 Sep 2026 (RSA 4096, valid to 2056). Keystore: `agents:~/.nexus-android-secrets/`
-(not in git), backup `host:/mnt/nexus-backup/android-signing/`. This feeds `assetlinks.json` and the
+Release key created 24 Sep 2026 (RSA 4096, valid to 2056). Keystore: `<android-secrets-dir>`
+(not in git), with an offline backup. This feeds `assetlinks.json` and the
 passkey origin. Remember `NEXUS_ANDROID_CERT_SHA256` must be in the deploy's OVERRIDABLE list, or the
 edit to `.env.production` will not win over the runtime value.
 
 ---
 
-## R4. Android minimum/latest by env — DONE: grace window needs `NEXUS_ANDROID_LATEST_RELEASED_AT` (ISO) with `NEXUS_ANDROID_LATEST_VERSION`; main session sets them per release
+## R4. Android minimum/latest by env — DONE: grace window needs `NEXUS_ANDROID_LATEST_RELEASED_AT` (ISO) with `NEXUS_ANDROID_LATEST_VERSION`; server/web side sets them per release
 
 Owner: "tayang" is set by hand via `NEXUS_ANDROID_LATEST_VERSION`, and the minimum follows the iOS
 rule (new version becomes minimum 3 days after release) via `NEXUS_ANDROID_MIN_VERSION`. The app reads
@@ -113,9 +113,9 @@ you want the once-a-day "Update NEXUS by <date>" warning on Android too, add `ne
 
 ---
 
-## R5. Android build numbers in the version policy and the 426 floor — DROPPED (Berlin, 28 Sep: versionName rises per published APK and stays what is compared; nothing to build)
+## R5. Android build numbers in the version policy and the 426 floor — DROPPED (the owner, 28 Sep: versionName rises per published APK and stays what is compared; nothing to build)
 
-**Decision (main session, 28 Sep):** versionName stays 0.1.6, versionCode +1 per APK; update offers and
+**Decision (server/web side, 28 Sep):** versionName stays 0.1.6, versionCode +1 per APK; update offers and
 the floor compare the **versionCode**.
 
 **Why.** `android.minSupported/latest/nextMinimum` and the 426 gate (`src/lib/client-version.ts`,
@@ -137,7 +137,7 @@ refuse when `versionCode < minBuild` too, with the same body (`minSupported`, `s
 **Why.** Check-in/out already carry a server verdict (`checkInSuspect` / `checkInSuspectReason` /
 `checkInImpliedKmh`, same for check-out; `src/lib/attendance.ts` integrity check) but nothing lets anybody
 look at them: no list, no "reviewed" state, no decision. PRD Phase 5 asks for a review UI on web + iOS +
-Android; Berlin (28 Sep): Android builds it only once the endpoints exist. Nothing is built on Android yet.
+Android; the owner (28 Sep): Android builds it only once the endpoints exist. Nothing is built on Android yet.
 
 **Proposed shape** (BoD / One Above All; a direct manager sees their reports only, like offsite review):
 - `GET /api/attendance/suspects?period=YYYY-MM[&status=open|reviewed|all]` →
@@ -157,7 +157,7 @@ Android; Berlin (28 Sep): Android builds it only once the endpoints exist. Nothi
 switch) with the evidence (selfie, map point, speed, accuracy, mock flag, reason) and Cleared / Confirmed
 with a note; the board day sheet shows the badge. iOS and web the same.
 
-## Found while porting (iOS, for the main session) — not Android work
+## Found while porting (iOS, for the server/web side) — not Android work
 
 ### I1. Queued check-in refused for distance is retried 5× instead of dropped and said — DONE on iOS (caaca89). Server unchanged: adding `code` would flip live check-in into the offsite prompt on 0.1.4–0.1.6
 

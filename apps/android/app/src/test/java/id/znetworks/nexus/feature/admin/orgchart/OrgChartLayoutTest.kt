@@ -108,7 +108,7 @@ class OrgChartLayoutTest {
 
     @Test fun fixtureIsTheRealChart() {
         assertEquals(26, data.units.size); assertEquals(48, data.people.size)
-        assertEquals(listOf("PT. The Z Networks"), tree.roots.map { it.name })
+        assertEquals(listOf("The Z Networks"), tree.roots.map { it.name })
     }
 
     @Test fun noOverlapsNoCrossingsInRingkasAndEveryIp() {
@@ -140,7 +140,7 @@ class OrgChartLayoutTest {
         val (sizes, chips) = measure(ChartMode.RINGKAS, Model(1.0))
         val l = layoutChart(tree, ChartMode.RINGKAS, null, sizes, chips)
         val cards = l.rects.keys.filter { it.startsWith("c:") }.map { tree.byId.getValue(it.substring(2)) }.filterNot { it.isGroup }.map { it.name }.toSet()
-        assertEquals(setOf("PT. The Z Networks") + tree.topUnits.map { it.name }, cards)
+        assertEquals(setOf("The Z Networks") + tree.topUnits.map { it.name }, cards)
         val fa = tree.cardInfo(data.units.first { it.name == "Framework Agency" }, ChartMode.RINGKAS)
         assertTrue(fa.people > 0 && fa.parts > 0)
     }

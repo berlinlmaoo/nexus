@@ -380,7 +380,7 @@ private fun PersonPick(label: String, userId: String?, shown: String?, people: L
     }
 }
 
-/** Who changed what, newest first: "Bagas changed Stage: Incoming → Negosiasi". */
+/** Who changed what, newest first: "Budi changed Stage: Incoming → Negosiasi". */
 @Composable
 private fun History(vm: PipelineViewModel, deal: PipelineDeal) {
     val c = Nx.colors

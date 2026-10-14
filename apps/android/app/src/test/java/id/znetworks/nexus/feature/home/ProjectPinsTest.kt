@@ -7,7 +7,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-// Berlin 29 Sep (iOS 286cada): pins live on the server (/api/projects/pins), same list as the web sidebar.
+// owner 29 Sep (iOS 286cada): pins live on the server (/api/projects/pins), same list as the web sidebar.
 class ProjectPinsTest {
     private class MapStore : ShortcutStore {
         val m = mutableMapOf<String, Any>()

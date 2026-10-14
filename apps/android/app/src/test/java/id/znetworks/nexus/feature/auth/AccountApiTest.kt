@@ -24,7 +24,7 @@ class AccountApiTest {
     }
     @After fun tearDown() { server.close() }
 
-    // Berlin 29 Sep (iOS f068bbf): changing the email needs the current password; the server requires it.
+    // owner 29 Sep (iOS f068bbf): changing the email needs the current password; the server requires it.
     @Test fun emailChangeSendsTheCurrentPassword() = runTest {
         server.enqueue(MockResponse.Builder().code(200).body("""{"email":"new@z.id","resendCooldownSeconds":60}""").build())
         val sent = api.changeEmailRequest(" new@z.id ", "s3cret pass")

@@ -97,7 +97,7 @@ class AttendanceApiTest {
         assertEquals(4, t.dayOffQuota)
     }
 
-    // Fake GPS (Berlin 28 Sep): the mock flag is the main evidence on Android, on every attendance send.
+    // Fake GPS (owner 28 Sep): the mock flag is the main evidence on Android, on every attendance send.
     @Test fun mockFlagOnCheckOutAndReplays() = runTest {
         fun simulatedField(body: String) = Regex("name=\"simulated\"\r\n(?:[^\r\n]*\r\n)*?\r\n([01])\r\n").find(body)?.groupValues?.get(1)
         reply(200, """{"record":{"id":"r"}}""")

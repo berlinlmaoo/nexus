@@ -20,8 +20,8 @@ const path = require("path")
 
 const PORT = parseInt(process.env.ORACLE_LLM_PORT || "8765", 10)
 const SECRET = process.env.ORACLE_LLM_SECRET || ""
-const CODEX = process.env.CODEX_BIN || "/Users/jagainmacmini1/.local/bin/codex"
-const HERMES = process.env.HERMES_BIN || "/Users/jagainmacmini1/.local/bin/hermes"
+const CODEX = process.env.CODEX_BIN || "codex"
+const HERMES = process.env.HERMES_BIN || "hermes"
 
 // The three GIDEON tiers, and the only place that knows which model each one is. NEXUS sends a tier
 // name; nothing upstream of here needs to learn a model id, so retuning a tier is a change to this

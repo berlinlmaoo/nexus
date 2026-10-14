@@ -103,7 +103,7 @@ describe("fanOutChatMessage", () => {
   })
 
   it("project room: only people in the project's workspace; the project's current name", async () => {
-    m.conversationFindUnique.mockResolvedValue({ type: "PROJECT", name: "Old name", workspaceId: "W", project: { name: "Step Up Festival", workspaceId: "W" } })
+    m.conversationFindUnique.mockResolvedValue({ type: "PROJECT", name: "Old name", workspaceId: "W", project: { name: "Launch Party", workspaceId: "W" } })
     m.memberFindMany.mockResolvedValue([member("S", "Sender Satu"), member("A", "Ani"), member("E", "Eko")])
     m.workspaceFindMany.mockResolvedValue([{ userId: "S", workspaceId: "W" }, { userId: "A", workspaceId: "W" }, { userId: "E", workspaceId: "P" }])
     await fanOutChatMessage({
@@ -113,7 +113,7 @@ describe("fanOutChatMessage", () => {
     })
     const [items] = m.sendPushToUsers.mock.calls[0] as unknown as [Array<{ userId: string; payload: Record<string, unknown> }>]
     expect(items.map((i) => i.userId)).toEqual(["A"])
-    expect(items[0].payload).toMatchObject({ title: "Step Up Festival", body: "Sender Satu: ok" })
+    expect(items[0].payload).toMatchObject({ title: "Launch Party", body: "Sender Satu: ok" })
   })
 
   it("everyone muted or in DND: no push call at all", async () => {

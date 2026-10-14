@@ -5,7 +5,7 @@ import Foundation
 // "tiap kali buat project tuh ada dikasih pilihan ada Task Project, Finance Dashboard, Content
 // Planner, Pipeline Dashboard" — every project has a type, chosen first in New project. Task Project
 // and, since 9 Oct 2026, Pipeline Dashboard exist (the GM's deal board, PipelineView.swift); Finance
-// Dashboard and Content Planner wait for Berlin's references, are shown as coming soon, and the server
+// Dashboard and Content Planner wait for the owner's references, are shown as coming soon, and the server
 // refuses them too (POST /api/projects → 400 TYPE_COMING_SOON), so nothing half-built can be created.
 // Since 10 Oct 2026 the Finance Dashboard card is the Outlet Sales Dashboard (OutletSalesView.swift).
 //

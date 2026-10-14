@@ -23,7 +23,7 @@ data class AndroidPolicy(
     val graceUntil: String? = null,
     /**
      * The APK actually published (server current.json). The versionName can stay the same across
-     * builds (Berlin: 0.1.6 until further notice), so the build number decides between equal names.
+     * builds (owner: 0.1.6 until further notice), so the build number decides between equal names.
      */
     val latestName: String? = null,
     val latestBuild: Int? = null,

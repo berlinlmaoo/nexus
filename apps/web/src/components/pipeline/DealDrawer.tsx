@@ -28,7 +28,7 @@ import {
   BlockerBanner, HealthPill, PhaseStepper, StagePill, TERM_TONE, fmtDay, fmtIdr, fmtIdrFull, fmtMarginPct, fmtPct, marginTone, useReasonText, useVocabLabels,
 } from "./pipeline-ui";
 
-/** English names of the fields, for the history ("Bagas changed Stage …"). Translated with t(). */
+/** English names of the fields, for the history ("Budi changed Stage …"). Translated with t(). */
 const FIELD_LABEL: Record<string, string> = {
   name: "Name", brand: "Brand / client", service: "Service", services: "Services", bdUserId: "BD / account owner", bdName: "BD / account owner",
   pmUserId: "PM", pmName: "PM", stage: "Stage", probability: "Probability", contractValue: "Contract value",
