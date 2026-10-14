@@ -125,7 +125,7 @@ export const MonthGrid = memo(function MonthGrid({
           day is named by one letter, as a printed calendar has it. Screen readers get the full name. */}
       <div role="row" className="@container relative grid grid-cols-7 border-b border-border bg-muted/40">
         {names.map((n, i) => (
-          <div key={i} role="columnheader" className={cn("min-w-0 overflow-hidden whitespace-nowrap py-2 text-muted-foreground", CAPS, compact ? "px-0.5 text-center" : "px-2 text-left")}>
+          <div key={i} role="columnheader" className={cn("min-w-0 overflow-hidden whitespace-nowrap py-2 text-muted-foreground", CAPS, compact ? "px-1.5 text-left" : "px-2 text-left")}>
             <span aria-hidden className="@max-[13rem]:hidden">{n}</span>
             <span aria-hidden className="hidden @max-[13rem]:inline">{narrow[i]}</span>
             <span className="sr-only">{long[i]}</span>
@@ -184,7 +184,7 @@ export const MonthGrid = memo(function MonthGrid({
                       isSel && "z-[1] ring-2 ring-inset ring-cal-accent",
                     )}
                   >
-                    <span className={cn("flex items-start gap-1", compact ? "justify-center" : "justify-between")}>
+                    <span className={cn("flex items-start gap-1", compact ? "justify-start" : "justify-between")}>
                       <span className={cn(
                         "grid h-6 min-w-6 place-items-center rounded-full px-1 text-xs font-semibold tabular-nums md:h-7 md:min-w-7 md:text-sm",
                         isToday ? "bg-cal-accent text-cal-accent-foreground dark:bg-primary dark:text-primary-foreground"
@@ -196,11 +196,11 @@ export const MonthGrid = memo(function MonthGrid({
                       </span>
                       {!compact && cell && cell.count > 0 && <span className="pt-1 text-2xs font-semibold tabular-nums text-muted-foreground">{cell.count}</span>}
                     </span>
-                    {cell?.overdue && <span aria-hidden className={cn("mt-0.5 h-[2px] w-4 rounded-full bg-cal-overdue", compact && "mx-auto")} />}
+                    {cell?.overdue && <span aria-hidden className="mt-0.5 h-[2px] w-4 rounded-full bg-cal-overdue" />}
                     {!compact && holiday && (
                       <span className={cn("mt-0.5 line-clamp-1 text-2xs font-medium", inMonth ? "text-cal-holiday" : "text-muted-foreground")}>{holiday}</span>
                     )}
-                    <span className={cn("mt-auto flex flex-wrap items-center gap-[3px] pt-1", compact && "justify-center")}>
+                    <span className="mt-auto flex flex-wrap items-center gap-[3px] pt-1">
                       {shown.map((d) => (
                         <span key={d.unitId} data-unit={d.unitId} className={cn("inline-flex transition-opacity", busy ? "opacity-40" : !inMonth && "opacity-60")}>
                           <UnitDot unit={ix.byId.get(d.unitId)} filled={d.filled} size={compact ? 6 : 7} />

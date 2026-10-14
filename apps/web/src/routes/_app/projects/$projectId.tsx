@@ -1940,7 +1940,8 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
         <div className="space-y-3">
           <div className="overflow-hidden rounded-lg border border-border" onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
             <div className="grid grid-cols-7 border-b border-border text-[11px] text-muted-foreground">
-              {weekdays.map((d, i) => <div key={i} className={cn("py-1.5 text-center", CAPS)}>{d}</div>)}
+              {/* Left / top-left like every month grid, on a phone too (UI tour run 15, R15-WB-3). */}
+              {weekdays.map((d, i) => <div key={i} className={cn("px-1.5 py-1.5 text-left", CAPS)}>{d}</div>)}
             </div>
             <div className="grid grid-cols-7">
               {days.map((day, idx) => {
@@ -1957,7 +1958,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
                     onClick={() => setPickedDay(key)}
                     aria-pressed={picked}
                     aria-label={`${new Intl.DateTimeFormat(locale, { day: "numeric", month: "long" }).format(day)}${dayTasks.length ? ` · ${tn(dayTasks.length, "{n} task", "{n} tasks")}` : ""}`}
-                    className={cn("flex h-12 flex-col items-center justify-start gap-1 border-border pt-1.5", idx % 7 !== 6 && "border-r", idx >= 7 && "border-t", !inMonth && "bg-muted/30", picked && "bg-accent")}
+                    className={cn("flex h-12 flex-col items-start justify-start gap-1 border-border px-1 pt-1.5", idx % 7 !== 6 && "border-r", idx >= 7 && "border-t", !inMonth && "bg-muted/30", picked && "bg-accent")}
                   >
                     <span className={cn("grid h-6 min-w-6 place-items-center rounded-full px-1 text-xs tabular-nums", isToday ? todayMark : inMonth ? "text-foreground" : "text-muted-foreground/50", picked && !isToday && "font-semibold")}>{day.getDate()}</span>
                     {dayTasks.length > 0 && (

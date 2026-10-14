@@ -72,7 +72,7 @@ export function OutletCalendar({
         <div aria-hidden className="grid grid-cols-7 border-b border-border bg-muted/40">
           {weekdays.map((w) => (
             // One month-grid style (UI tour run 15, R15-WB-3): "MON TUE" as the Calendar writes them.
-            <div key={w} className={cn("truncate px-1 py-2 text-center text-muted-foreground sm:px-2 sm:text-left", CAPS)}>{w}</div>
+            <div key={w} className={cn("truncate px-1.5 py-2 text-left text-muted-foreground sm:px-2", CAPS)}>{w}</div>
           ))}
         </div>
         <div className="grid grid-cols-7">
@@ -105,20 +105,20 @@ export function OutletCalendar({
               >
                 <span
                   className={cn(
-                    "grid h-6 w-6 place-items-center self-center rounded-full text-xs tabular-nums sm:self-start",
+                    "grid h-6 w-6 place-items-center self-start rounded-full text-xs tabular-nums",
                     isToday && "bg-cal-accent font-semibold text-cal-accent-foreground dark:bg-primary dark:text-primary-foreground",
                   )}
                 >
                   {Number(d.slice(8))}
                 </span>
                 {/* Wider screens: the day-target mark in the corner, inset clear of the selection ring. A phone's
-                    cell is too narrow for a corner mark beside the centred date (UI tour run 14, R14-WM-12: it
+                    cell is too narrow for a corner mark beside the date (UI tour run 14, R14-WM-12: it
                     touched the "15" badge and the ring), so there it leads the row of dots under the date. */}
                 {hasTarget && (
                   <Target aria-hidden className="absolute right-2 top-2 hidden h-3.5 w-3.5 text-primary sm:block" />
                 )}
                 {(hasTarget || evs.length > 0) && (
-                  <span aria-hidden className="flex items-center justify-center gap-0.5 sm:hidden">
+                  <span aria-hidden className="flex items-center gap-0.5 sm:hidden">
                     {hasTarget && <Target className="h-3 w-3 shrink-0 text-primary" />}
                     {/* One dot per night (three at most), coloured by status. */}
                     {evs.slice(0, 3).map((e) => <span key={e.id} className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[e.status])} />)}
