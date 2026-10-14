@@ -1,3 +1,4 @@
+import { NumberValue } from "@/components/projects/number-field";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, CalendarDays, ChevronRight, CircleCheck, Clock, ImageOff, ListChecks, MessageSquare, Plus, UserRound } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
@@ -114,7 +115,11 @@ export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; c
   }
   if (def.kind === "number") {
     const n = Number(vals[0]);
-    // Rp only for Rupiah fields; any other number field is a plain grouped number.
+    // A number field in its own format ("Rp 1.500.000", "42%", "US$12,00") and Show as (Bar / Ring); any
+    // other number (a rating) is a plain grouped number.
+    if (!Number.isNaN(n) && def.number) {
+      return <NumberValue n={n} options={def.number} title={def.label} className={cn("text-[11px] text-muted-foreground", def.number.showAs === "bar" ? "w-28 shrink-0" : "shrink-0")} />;
+    }
     const text = Number.isNaN(n) ? vals[0] : formatNumberProp(n, def.numberFormat, 2, locale);
     return <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground" title={def.label}>{text}</span>;
   }

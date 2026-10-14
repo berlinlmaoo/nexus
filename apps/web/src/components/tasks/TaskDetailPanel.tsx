@@ -20,6 +20,7 @@ import {
   Link2,
   ListChecks,
   Loader2,
+  MapPin,
   MessageCircle,
   MoreHorizontal,
   Paperclip,
@@ -50,7 +51,7 @@ import {
   type NexusTask,
   type NexusUser,
 } from "@/lib/nexus-api";
-import { RupiahInput } from "@/components/RupiahInput";
+import { NumberFieldInput } from "@/components/projects/number-field";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
@@ -1219,6 +1220,15 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
         {choices.length === 0 && <span className="text-xs text-muted-foreground">{tr("No options.")}</span>}
       </div>
     );
+  } else if (type === "PLACE" && hideLabel) {
+    // A table cell keeps one line (UI tour run 14, WD-11: two stacked fields made the row taller): the
+    // place's name, with its map link as an icon. The link itself is edited in the task.
+    body = (
+      <div className="flex min-w-0 items-center gap-1">
+        <input value={place.label} onChange={(e) => { const v = e.target.value; setPlace((p) => ({ ...p, label: v })); }} onBlur={() => commit(place, true)} aria-label={field.name} className={cls} />
+        {place.mapUrl.trim() && <a href={place.mapUrl} target="_blank" rel="noopener noreferrer" aria-label={tr("Open map")} title={tr("Open map")} className="shrink-0 text-muted-foreground hover:text-primary"><MapPin className="h-3.5 w-3.5" /></a>}
+      </div>
+    );
   } else if (type === "PLACE") {
     body = (
       <div className="space-y-1.5">
@@ -1238,6 +1248,14 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
         <div className={cn("text-muted-foreground", name ? "text-xs" : "text-sm")}>{when || strVal || "—"}</div>
       </div>
     );
+  } else if (type === "URL" && hideLabel) {
+    // One line in a table cell: the address, then an icon that opens it (WD-11).
+    body = (
+      <div className="flex min-w-0 items-center gap-1">
+        <input type="url" value={local} onChange={(e) => setLocal(e.target.value)} onBlur={() => commit(local, local !== strVal)} aria-label={field.name} className={cls} />
+        {strVal.trim() && <a href={strVal} target="_blank" rel="noopener noreferrer" aria-label={tr("Open link")} title={tr("Open link")} className="shrink-0 text-muted-foreground hover:text-primary"><Link2 className="h-3.5 w-3.5" /></a>}
+      </div>
+    );
   } else if (type === "URL") {
     body = (
       <div className="space-y-1">
@@ -1250,17 +1268,18 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
       </div>
     );
   } else if (type === "FILE") {
-    body = <FileFieldEditor projectId={projectId} value={Array.isArray(field.value) ? (field.value as CustomFieldFile[]) : []} onSet={onSet} />;
-  } else if (type === "NUMBER" && field.options && typeof field.options === "object" && !Array.isArray(field.options) && (field.options as { format?: string }).format === "currency-idr") {
-    // Rupiah-formatted number: show "Rp 9.240.943" (id-ID separators), store the raw digits.
-    body = <RupiahInput value={local} onChange={setLocal} onBlur={() => commit(local, local !== strVal)} className={cls} ariaLabel={field.name} />;
+    body = <FileFieldEditor projectId={projectId} value={Array.isArray(field.value) ? (field.value as CustomFieldFile[]) : []} onSet={onSet} compact={hideLabel} />;
+  } else if (type === "NUMBER") {
+    // The field's own format (Rupiah, Percent, a currency… and Bar / Ring), Indonesian grouping; a click edits.
+    // Rupiah keeps its "Rp" box that groups while typing. In a table cell numbers sit right-aligned (Notion).
+    body = <NumberFieldInput raw={strVal} fieldOptions={field.options} onSet={(v) => onSet(v)} ariaLabel={field.name} inline={hideLabel} align={hideLabel ? "end" : "start"} placeholder={hideLabel ? "" : tr("Not set")} />;
   } else if (type === "DATE") {
     // Notion-style date: the day as text, a calendar on click; no "mm/dd/yyyy" in empty fields.
     body = <DateField value={local || null} onChange={(v) => { setLocalState(v ?? ""); onSet(v ?? ""); }} ariaLabel={field.name} className={hideLabel ? undefined : "h-[34px] rounded-lg border border-border bg-background px-2.5 hover:bg-background hover:border-primary/40"} placeholder={hideLabel ? "" : tr("Not set")} />;
   } else {
     body = (
       <input
-        type={type === "NUMBER" ? "number" : "text"}
+        type="text"
         value={local}
         onChange={(e) => setLocal(e.target.value)}
         onBlur={() => commit(local, local !== shownVal)}
@@ -1278,7 +1297,7 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
   );
 }
 
-function FileFieldEditor({ projectId, value, onSet }: { projectId?: string; value: CustomFieldFile[]; onSet: (value: unknown) => void }) {
+function FileFieldEditor({ projectId, value, onSet, compact }: { projectId?: string; value: CustomFieldFile[]; onSet: (value: unknown) => void; /** A table cell: one line (WD-11). */ compact?: boolean }) {
   const { t: tr } = useLang();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -1303,6 +1322,26 @@ function FileFieldEditor({ projectId, value, onSet }: { projectId?: string; valu
     }
   };
   const remove = (url: string) => onSet(files.filter((f) => f.url !== url));
+
+  if (compact) {
+    // A table cell: small thumbnails / names on one line and a "+", so the row keeps its height.
+    return (
+      <div className="flex min-w-0 items-center gap-1 overflow-hidden">
+        {files.slice(0, 3).map((f) => (
+          <a key={f.url} href={f.url} target="_blank" rel="noopener noreferrer" title={f.name} aria-label={f.name} className="shrink-0">
+            {isImg(f)
+              ? <img src={f.url} alt={f.name} className="h-7 w-7 rounded border border-border object-cover" />
+              : <span className="flex max-w-[7rem] items-center gap-1 rounded border border-border bg-background px-1.5 py-0.5 text-[11px] font-medium"><Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" /><span className="truncate">{f.name}</span></span>}
+          </a>
+        ))}
+        {files.length > 3 && <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">+{files.length - 3}</span>}
+        <input ref={fileRef} type="file" multiple hidden onChange={(e) => onPick(e.target.files)} />
+        <button type="button" disabled={busy || !projectId} onClick={() => fileRef.current?.click()} aria-label={tr("Add files")} title={tr("Add files")} className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-primary disabled:opacity-50">
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-1.5">

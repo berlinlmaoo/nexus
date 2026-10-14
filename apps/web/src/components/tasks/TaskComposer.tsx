@@ -166,7 +166,8 @@ export function TaskComposer({ project, selectedListId, initialDueDate, onClose 
               const input = "h-8 min-w-0 flex-1 appearance-none rounded-md border border-transparent bg-transparent px-1.5 text-sm hover:bg-muted focus:border-border focus:outline-none";
               let control: React.ReactNode;
               if (type === "NUMBER" && numberFieldFormat(f.options) === "currency-idr") control = <RupiahInput value={typeof val === "string" ? val : ""} onChange={set} className={input} wrapperClassName="min-w-0 flex-1" placeholder={t("Not set")} ariaLabel={f.name} />;
-              else if (type === "NUMBER") control = <input type="number" value={typeof val === "string" ? val : ""} onChange={(e) => set(e.target.value)} className={input} placeholder={t("Not set")} />;
+              // Text, not type="number": "1,5", "2.500" and "42%" are typed the Indonesian way; the server stores the number.
+              else if (type === "NUMBER") control = <input type="text" inputMode="decimal" autoComplete="off" value={typeof val === "string" ? val : ""} onChange={(e) => set(e.target.value)} className={cn(input, "tabular-nums")} placeholder={t("Not set")} aria-label={f.name} />;
               else if (type === "DATE") control = <span className="min-w-0 flex-1"><DateField value={typeof val === "string" && val ? val : null} onChange={(v) => set(v ?? "")} ariaLabel={f.name} placeholder={t("Not set")} className="w-auto" /></span>;
               else if ((type === "SELECT" || type === "STATUS" || type === "DROPDOWN") && opts.length) control = (
                 <SelectPicker value={typeof val === "string" ? val : ""} onChange={set} clearable placeholder={t("Not set")} ariaLabel={f.name} options={opts.map((c) => ({ value: c, label: c, color: choiceColor(f, c, opts) }))} />

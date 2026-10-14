@@ -88,7 +88,8 @@ export function QuestionControl({ field, value, onChange, disabled, attachment, 
     );
   } else if (field.type === "number" && field.numberFormat === "currency-idr") {
     control = disabled
-      ? <input disabled value="" placeholder="Rp 0" className={inputCls} aria-label={label} />
+      // The builder's canvas: the same "Rp" box as the live form, empty (UI tour run 14, R14-WB-1).
+      ? <div className="relative"><span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-sm font-semibold text-muted-foreground">Rp</span><input disabled value="" className={cn(inputCls, "pl-8")} aria-label={label} /></div>
       : <RupiahInput required={field.required} value={String(value ?? "")} onChange={(digits) => onChange(digits)} className={inputCls} ariaLabel={label} />;
   } else if (field.autofill) {
     control = (

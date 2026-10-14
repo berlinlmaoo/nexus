@@ -4,6 +4,8 @@ import { Check, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import { CUSTOM_FIELD_TYPES, nexusApi, type NexusCustomField, type NexusCustomFieldOptions } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
+import { NumberFieldSettings } from "@/components/projects/number-field";
+import { numberFormatLabel, numberOptions, numberOptionsToStore } from "@/lib/custom-field-number";
 
 const TYPE_LABELS: Record<string, string> = {
   TEXT: "Text",
@@ -31,15 +33,9 @@ function fieldOptionList(field: NexusCustomField): string[] {
   return [];
 }
 
-function fieldNumberFormat(field: NexusCustomField): "plain" | "currency-idr" {
-  const o = field.options;
-  if (o && typeof o === "object" && !Array.isArray(o) && (o as { format?: string }).format === "currency-idr") return "currency-idr";
-  return "plain";
-}
-
-function buildOptions(type: string, optionList: string[], numberFormat: "plain" | "currency-idr"): NexusCustomFieldOptions | null {
+function buildOptions(type: string, optionList: string[], numberOpts: Record<string, unknown> | null): NexusCustomFieldOptions | null {
   if (OPTION_TYPES.has(type)) return { options: optionList.map((s) => s.trim()).filter(Boolean) };
-  if (type === "NUMBER") return numberFormat === "currency-idr" ? { format: "currency-idr" } : null;
+  if (type === "NUMBER") return numberOptionsToStore(numberOpts) as NexusCustomFieldOptions | null;
   return null;
 }
 
@@ -52,7 +48,7 @@ export function FieldEditor({ initial, saving, onSave, onCancel }: { initial?: N
     const list = initial ? fieldOptionList(initial) : [];
     return list.length ? list : OPTION_TYPES.has(type) ? [""] : [];
   });
-  const [numberFormat, setNumberFormat] = useState<"plain" | "currency-idr">(initial ? fieldNumberFormat(initial) : "plain");
+  const [numberOpts, setNumberOpts] = useState<Record<string, unknown> | null>(() => (initial && (initial.type ?? "").toUpperCase() === "NUMBER" ? numberOptionsToStore(initial.options) : null));
 
   const showOptions = OPTION_TYPES.has(type);
   const canSave = name.trim().length > 0 && (!showOptions || optionList.some((o) => o.trim()));
@@ -88,18 +84,13 @@ export function FieldEditor({ initial, saving, onSave, onCancel }: { initial?: N
       )}
 
       {type === "NUMBER" && (
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Format")}</span>
-          {(["plain", "currency-idr"] as const).map((f) => (
-            <button key={f} type="button" onClick={() => setNumberFormat(f)} className={cn("rounded-full border px-2.5 py-1 text-[11px] font-bold transition-colors", numberFormat === f ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-muted-foreground")}>
-              {f === "plain" ? tr("Plain") : "Rp (IDR)"}
-            </button>
-          ))}
+        <div className="rounded-xl border border-border bg-background p-1.5">
+          <NumberFieldSettings value={numberOpts} onChange={setNumberOpts} />
         </div>
       )}
 
       <div className="flex items-center gap-2">
-        <button type="button" disabled={!canSave || saving} onClick={() => onSave({ name: name.trim(), type, options: buildOptions(type, optionList, numberFormat) })} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">
+        <button type="button" disabled={!canSave || saving} onClick={() => onSave({ name: name.trim(), type, options: buildOptions(type, optionList, numberOpts) })} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} {initial ? tr("Update") : tr("New field")}
         </button>
         <button type="button" onClick={onCancel} className="rounded-xl px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">{tr("Cancel")}</button>
@@ -110,7 +101,7 @@ export function FieldEditor({ initial, saving, onSave, onCancel }: { initial?: N
 
 export function ProjectCustomFieldsManager({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
-  const { t: tr } = useLang();
+  const { t: tr, lang } = useLang();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -155,7 +146,7 @@ export function ProjectCustomFieldsManager({ projectId }: { projectId: string })
                 <div className="truncate text-sm font-semibold">{f.name}</div>
                 <div className="text-[11px] text-muted-foreground">
                   {TYPE_LABELS[(f.type ?? "").toUpperCase()] ? tr(TYPE_LABELS[(f.type ?? "").toUpperCase()]) : f.type}
-                  {(() => { const opts = fieldOptionList(f); return opts.length ? ` · ${opts.slice(0, 4).join(", ")}${opts.length > 4 ? "…" : ""}` : fieldNumberFormat(f) === "currency-idr" ? " · Rp" : ""; })()}
+                  {(() => { const opts = fieldOptionList(f); return opts.length ? ` · ${opts.slice(0, 4).join(", ")}${opts.length > 4 ? "…" : ""}` : (f.type ?? "").toUpperCase() === "NUMBER" ? ` · ${numberFormatLabel(numberOptions(f.options).numberFormat, lang, true)}` : ""; })()}
                 </div>
               </div>
               <button onClick={() => { setEditingId(f.id); setAdding(false); }} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground" aria-label={tr("Edit")} title={tr("Edit")}><Pencil className="h-3.5 w-3.5" /></button>

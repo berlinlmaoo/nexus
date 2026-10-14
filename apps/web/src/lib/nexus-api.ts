@@ -1557,6 +1557,13 @@ export type NexusCustomFieldOptions = {
   defaultSource?: string;
   editable?: boolean;
   format?: string; // "currency-idr" | "name-and-map-link"
+  /** NUMBER display settings (lib/custom-field-number.ts): numberFormat, decimals, showAs, barColor, divideBy, showNumber. */
+  numberFormat?: string;
+  decimals?: number;
+  showAs?: string;
+  barColor?: string;
+  divideBy?: number;
+  showNumber?: boolean;
 };
 
 /** Supported field types (uppercase enum from core NEXUS). */

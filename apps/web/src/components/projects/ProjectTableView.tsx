@@ -2,11 +2,13 @@ import { DateField } from "@/components/DateField";
 import { EscClose } from "@/hooks/use-escape";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useEdgeFade } from "@/hooks/use-edge-fade";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, Plus, Sparkles, X } from "lucide-react";
 import { useAutofillMarks } from "@/components/gideon/AutofillPanel";
 import { useLang } from "@/lib/lang";
-import { optionColor, propDef, type PropDef, type TaskGroup, type ViewConfig } from "@/lib/project-views";
+import { COLUMN_CALC_LABEL, columnCalcValue, columnCalcsFor, optionColor, propDef, type ColumnCalc, type PropDef, type TaskGroup, type ViewConfig } from "@/lib/project-views";
+import { NumberFieldSettings } from "@/components/projects/number-field";
 import { PropIcon, usePropLabel } from "@/components/projects/views/view-controls";
 import { GroupHeader } from "@/components/projects/views/view-layouts";
 import { StatusPicker } from "@/components/tasks/StatusPicker";
@@ -56,7 +58,7 @@ type GroupBuilder = (tasks: NexusTask[], by: string | null, opts?: { keepHidden?
  * old per-project column list (Project.tableColumns) seeded the built-in Table view and is no longer
  * written.
  */
-export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs, columns, canEditColumns, onColumnsChange, collapsed, onToggleGroup, onOpen, onCreateInGroup }: {
+export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs, columns, canEditColumns, onColumnsChange, onCalcsChange, collapsed, onToggleGroup, onOpen, onCreateInGroup }: {
   project: NexusProject;
   groups: TaskGroup[];
   groupBy: string | null;
@@ -67,6 +69,8 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   columns: string[];
   canEditColumns: boolean;
   onColumnsChange: (cols: string[]) => void;
+  /** The footer's calculations (Notion's "Calculate"), saved with the view. Absent = read-only footer. */
+  onCalcsChange?: (calcs: Record<string, ColumnCalc>) => void;
   collapsed: Set<string>;
   onToggleGroup: (key: string) => void;
   onOpen: (task: NexusTask) => void;
@@ -221,7 +225,13 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
               const def = propDef(defs, key);
               return (
                 <div key={key} className="group relative flex items-center justify-between gap-1 border-l border-border px-3 py-2">
-                  <span className="flex min-w-0 items-center gap-1.5" title={propLabel(def)}><PropIcon def={def} /><span className="truncate">{propLabel(def)}</span>{key.startsWith("cf:") && ai.aiFields.has(key.slice(3)) && <Sparkles aria-label={t("AI Autofill")} className="h-3 w-3 shrink-0 text-primary" />}</span>
+                  {(() => {
+                    const label = <span className="flex min-w-0 items-center gap-1.5" title={propLabel(def)}><PropIcon def={def} /><span className="truncate">{propLabel(def)}</span>{key.startsWith("cf:") && ai.aiFields.has(key.slice(3)) && <Sparkles aria-label={t("AI Autofill")} className="h-3 w-3 shrink-0 text-primary" />}</span>;
+                    // A number field's name opens its Number settings (format, decimals, Show as), as in Notion.
+                    const field = key.startsWith("cf:") ? cfById.get(key.slice(3)) : undefined;
+                    if (!field || (field.type ?? "").toUpperCase() !== "NUMBER" || !canEditColumns) return label;
+                    return <NumberHeaderSettings field={field} projectId={projectId}>{label}</NumberHeaderSettings>;
+                  })()}
                   {canEditColumns && <button type="button" onClick={() => setColumns(columns.filter((c) => c !== key))} title={t("Hide column")} aria-label={t("Hide column")} className="tap-area opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:hidden"><X className="h-3 w-3" /></button>}
                   {/* Drag the edge to resize; double-click puts the column back to its shared width. */}
                   <span role="separator" aria-orientation="vertical" aria-label={t("Resize column")} title={t("Drag to resize, double-click to reset")}
@@ -267,6 +277,20 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
               </div>
             );
           })}
+
+          {/* Footer: a calculation per column (Notion's "Calculate"). Sum, Average… keep the number's format. */}
+          <div className="sticky bottom-0 z-[1] grid items-stretch border-t border-border bg-card text-xs text-muted-foreground" style={{ gridTemplateColumns: gridTemplate }}>
+            <div />
+            {columns.map((key) => (
+              <FooterCalc key={key} def={propDef(defs, key)} tasks={viewTasks} calc={cfg.columnCalcs?.[key]} readOnly={!onCalcsChange || !canEditColumns}
+                onPick={(c) => {
+                  const next = { ...(cfg.columnCalcs ?? {}) };
+                  if (c) next[key] = c; else delete next[key];
+                  onCalcsChange?.(next);
+                }} />
+            ))}
+            <div />
+          </div>
         </div>
       </div>
 
@@ -537,5 +561,61 @@ function TagsCell({ task, onSave }: { task: NexusTask; onSave: (tags: string[]) 
         className="min-w-[3rem] flex-1 border-none bg-transparent px-1 py-0.5 text-xs outline-none"
       />
     </div>
+  );
+}
+
+/** A column's footer: "Calculate" until one is picked, then e.g. "Sum Rp 6.000.000". */
+function FooterCalc({ def, tasks, calc, readOnly, onPick }: { def: PropDef | undefined; tasks: NexusTask[]; calc: ColumnCalc | undefined; readOnly: boolean; onPick: (c: ColumnCalc | null) => void }) {
+  const { t } = useLang();
+  const [open, setOpen] = useState(false);
+  const options = columnCalcsFor(def);
+  const active = calc && def && options.includes(calc) ? calc : undefined;
+  const value = active && def ? columnCalcValue(tasks, active, def) : "";
+  const shown = active
+    ? <span className="flex min-w-0 items-baseline justify-end gap-1.5"><span className="shrink-0 text-[10px] uppercase tracking-wide">{t(COLUMN_CALC_LABEL[active].short)}</span><span className="truncate text-sm tabular-nums text-foreground">{value || "—"}</span></span>
+    : <span className="opacity-0 transition-opacity group-hover/foot:opacity-100 pointer-coarse:opacity-60">{t("Calculate")}</span>;
+  if (readOnly || !def || options.length === 0) return <div className="flex min-w-0 items-center justify-end border-l border-border px-3 py-1.5">{active ? shown : null}</div>;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className="group/foot flex min-w-0 items-center justify-end border-l border-border px-3 py-1.5 text-right hover:bg-muted" aria-label={`${t("Calculate")}: ${def.builtin ? t(def.label) : def.label}`}>{shown}</button>
+      </PopoverTrigger>
+      <PopoverContent align="end" side="top" className="w-52 p-1">
+        {([null, ...options] as Array<ColumnCalc | null>).map((c) => (
+          <button key={c ?? "none"} type="button" onClick={() => { onPick(c); setOpen(false); }} className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted">
+            <span>{c ? t(COLUMN_CALC_LABEL[c].name) : t("None")}</span>
+            {(c ?? undefined) === active && <Check className="h-3.5 w-3.5" />}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** A number column's header: its name opens the field's Number settings, saved at once for every view. */
+function NumberHeaderSettings({ field, projectId, children }: { field: NexusCustomField; projectId: string; children: ReactNode }) {
+  const { t } = useLang();
+  const qc = useQueryClient();
+  const [opts, setOpts] = useState<unknown>(field.options ?? null);
+  const save = useMutation({
+    mutationFn: (options: Record<string, unknown> | null) => nexusApi.updateCustomField(field.id, { options: options as NexusCustomFieldOptions | null }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["nexus", "project-custom-fields", projectId] });
+      qc.invalidateQueries({ queryKey: ["project-custom-fields", projectId] });
+      // Task payloads carry each value's field options (legacy Rupiah reading): refresh the project too.
+      qc.invalidateQueries({ predicate: (q) => q.queryKey.map(String).some((k) => k === projectId) });
+    },
+    onError: (e) => { setOpts(field.options ?? null); toast.error(t("Couldn't save the property"), { description: e instanceof Error ? e.message : undefined }); },
+  });
+  return (
+    <Popover onOpenChange={(o) => { if (o) setOpts(field.options ?? null); }}>
+      <PopoverTrigger asChild>
+        <button type="button" className="-mx-1 flex min-w-0 items-center rounded px-1 py-0.5 text-left hover:bg-muted hover:text-foreground" title={t("Edit property")}>{children}</button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 p-1.5">
+        <p className="px-2 pb-1 pt-0.5 text-xs font-medium text-muted-foreground">{field.name}</p>
+        <NumberFieldSettings value={opts} onChange={(o) => { setOpts(o); save.mutate(o); }} />
+      </PopoverContent>
+    </Popover>
   );
 }
