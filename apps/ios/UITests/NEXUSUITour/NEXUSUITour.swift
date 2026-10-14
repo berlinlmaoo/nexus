@@ -848,9 +848,10 @@ final class NEXUSUITour: XCTestCase {
             }
             #endif
             if data == last { break }
-            // Moved, but by less than about a third of the view: the end of the scroll, or nothing moved at
-            // all and only a clock or a hover changed. That picture is the page before again (UI tour run 13,
-            // F-08 / M-27: project-templates-2 and calendar-2 were page 1), so no page for it.
+            // Moved, but by less than about a sixth of the view: the end of the scroll, or nothing moved at
+            // all and only a clock or a hover changed. That picture is mostly the page before again (UI tour
+            // run 13, F-08 / M-27; run 15, R15-I-20 / T-1 / T-2: a 28–60 pt scroll and a pixel-identical page
+            // were still kept, because exact pixel rows never matched and the check gave up).
             if let shift = contentShift(from: last, to: data, in: target.visible, window: root.windows.firstMatch.frame),
                shift < minPageShift {
                 #if targetEnvironment(macCatalyst)
@@ -860,14 +861,6 @@ final class NEXUSUITour: XCTestCase {
                     continue
                 }
                 #endif
-                break
-            }
-            // Moved, but the picture holds almost nothing the page before did not show already (run 14,
-            // P-T2 / N-11 / N-12: pages that scrolled 17–130 pt, a sheet's last rows, a rubber-banded end).
-            // Measured by rows of the whole window, so a sticky header or a sheet over the scroll view can't
-            // hide it the way a pure shift of the scroll view's rect could.
-            if let fresh = newContentFraction(from: last, to: data, window: root.windows.firstMatch.frame),
-               fresh < minNewContent {
                 break
             }
             #if targetEnvironment(macCatalyst)
@@ -881,46 +874,44 @@ final class NEXUSUITour: XCTestCase {
     }
 
     /// The least a page must have moved (fraction of the scrolled view's visible height) to be kept. A drag
-    /// asks for half; touch slop and rubber-banding take a little of that.
-    private var minPageShift: CGFloat { CGFloat(Double(env["TOUR_MIN_PAGE_SHIFT"] ?? "") ?? 0.35) }
-
-    /// The least share of a new page's rows that must be new (not anywhere on the page before) to keep it.
-    private var minNewContent: Double { Double(env["TOUR_MIN_NEW_CONTENT"] ?? "") ?? 0.2 }
-
-    /// The share of the window's pixel rows in `new` that appear nowhere in `old` (0 = nothing new). Plain
-    /// background rows are on both pages, so empty space never makes a page look new.
-    private func newContentFraction(from old: Data, to new: Data, window: CGRect) -> Double? {
-        guard let a = rowHashes(old, rect: window, window: window), let b = rowHashes(new, rect: window, window: window),
-              !b.isEmpty else { return nil }
-        let seen = Set(a)
-        let fresh = b.filter { !seen.contains($0) }.count
-        return Double(fresh) / Double(b.count)
-    }
+    /// asks for half; the last page of a list often moves less, and its new rows still count (run 15: the
+    /// leaderboard's last page moved ~0.19 and held the bottom of the ranking).
+    private var minPageShift: CGFloat { CGFloat(Double(env["TOUR_MIN_PAGE_SHIFT"] ?? "") ?? 0.15) }
 
     /// How far the content inside `rect` (screen points) moved up between two screenshots, as a fraction of
     /// the rect's height: 0 = the same rows, 0.5 = half a view. nil when no shift explains the new picture
-    /// (a different screen, a sheet that opened): then it counts as a new page. Rows are compared by a hash
-    /// of their pixels inside the rect.
+    /// (a different screen, a sheet that opened): then it counts as a new page.
+    ///
+    /// The rect is cut into vertical strips, each matched on its own, and the largest shift wins: a column
+    /// that does not scroll (the Settings section list, a sticky Name column) shares every pixel row with
+    /// the column that does, so whole rows never matched at any shift (run 15).
     private func contentShift(from old: Data, to new: Data, in rect: CGRect, window: CGRect) -> CGFloat? {
-        guard let a = rowHashes(old, rect: rect, window: window), let b = rowHashes(new, rect: rect, window: window),
-              a.count == b.count, a.count > 40 else { return nil }
-        let h = a.count
-        var best = (shift: -1, match: 0.0)
-        for s in 0..<(h * 3 / 4) {
-            let n = h - s
-            var same = 0
-            for i in 0..<n where b[i] == a[i + s] { same += 1 }
-            let match = Double(same) / Double(n)
-            if match > best.match + 0.01 { best = (s, match) }
-            if match > 0.97 { break }
+        guard let a = stripHashes(old, rect: rect, window: window),
+              let b = stripHashes(new, rect: rect, window: window), a.count == b.count else { return nil }
+        var moved: CGFloat?
+        for (sa, sb) in zip(a, b) {
+            guard sa.count == sb.count, sa.count > 40 else { continue }
+            let h = sa.count
+            var best = (shift: -1, match: 0.0)
+            for s in 0..<(h * 3 / 4) {
+                let n = h - s
+                var same = 0
+                for i in 0..<n where sb[i] == sa[i + s] { same += 1 }
+                let match = Double(same) / Double(n)
+                if match > best.match + 0.01 { best = (s, match) }
+                if match > 0.97 { break }
+            }
+            guard best.shift >= 0, best.match >= 0.6 else { continue }
+            moved = max(moved ?? 0, CGFloat(best.shift) / CGFloat(h))
         }
-        guard best.shift >= 0, best.match >= 0.6 else { return nil }
-        return CGFloat(best.shift) / CGFloat(h)
+        return moved
     }
 
-    /// One hash per pixel row of `rect` in a PNG screenshot (the picture is of `window`, or of the whole
-    /// screen when its size says so).
-    private func rowHashes(_ png: Data, rect: CGRect, window: CGRect) -> [UInt64]? {
+    /// For each of 4 vertical strips of `rect`, one hash per pixel row (every other row) in a PNG screenshot
+    /// (the picture is of `window`, or of the whole screen when its size says so). A row hashes the mean
+    /// colour of 24 blocks, coarsened to 16 levels: a sub-point scroll re-rasterises text a little, and
+    /// exact pixels then never matched (run 15: pixel-identical pages differed in 0.1% of their pixels).
+    private func stripHashes(_ png: Data, rect: CGRect, window: CGRect) -> [[UInt64]]? {
         guard let image = UIImage(data: png)?.cgImage else { return nil }
         let width = image.width, height = image.height
         let bytesPerRow = width * 4
@@ -937,22 +928,27 @@ final class NEXUSUITour: XCTestCase {
         let local = rect.offsetBy(dx: -window.minX, dy: -window.minY)
         let x0 = max(0, Int(local.minX * scale)), x1 = min(width, Int(local.maxX * scale))
         let y0 = max(0, Int(local.minY * scale)), y1 = min(height, Int(local.maxY * scale))
-        guard x1 - x0 > 8, y1 - y0 > 8 else { return nil }
-        var out: [UInt64] = []
-        out.reserveCapacity(y1 - y0)
-        for y in y0..<y1 {
-            var hash: UInt64 = 0xcbf29ce484222325
-            var x = x0
-            while x < x1 {
-                let i = y * bytesPerRow + x * 4
-                hash = (hash ^ UInt64(pixels[i])) &* 0x100000001b3
-                hash = (hash ^ UInt64(pixels[i + 1])) &* 0x100000001b3
-                hash = (hash ^ UInt64(pixels[i + 2])) &* 0x100000001b3
-                x += 2
+        let strips = 4, blocks = 24
+        let blockWidth = (x1 - x0) / (strips * blocks)
+        guard blockWidth > 0, y1 - y0 > 8 else { return nil }
+        return (0..<strips).map { strip in
+            var out: [UInt64] = []
+            out.reserveCapacity((y1 - y0) / 2)
+            for y in stride(from: y0, to: y1, by: 2) {
+                var hash: UInt64 = 0xcbf29ce484222325
+                for block in 0..<blocks {
+                    let start = x0 + (strip * blocks + block) * blockWidth
+                    var sum = 0
+                    for x in start..<(start + blockWidth) {
+                        let i = y * bytesPerRow + x * 4
+                        sum += Int(pixels[i]) + Int(pixels[i + 1]) + Int(pixels[i + 2])
+                    }
+                    hash = (hash ^ UInt64((sum / (blockWidth * 3)) >> 4)) &* 0x100000001b3
+                }
+                out.append(hash)
             }
-            out.append(hash)
+            return out
         }
-        return out
     }
 
     /// Where the drags go: an element, and the part of it that is actually on screen.
