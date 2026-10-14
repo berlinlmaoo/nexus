@@ -2,8 +2,8 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { OUTLET_FORM, outletToday } from "@/lib/outlet-sales"
-import { deleteOutletEvent, findOutletEvent, outletGate, serializeEvent, updateOutletEvent } from "@/lib/outlet-sales-server"
+import { legacyFormFor, outletToday } from "@/lib/outlet-sales"
+import { deleteOutletEvent, findOutletEvent, loadReportConfig, outletGate, serializeEvent, updateOutletEvent } from "@/lib/outlet-sales-server"
 
 type Ctx = { params: Promise<{ projectId: string; eventId: string }> }
 
@@ -17,9 +17,9 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
     const { projectId, eventId } = await params
     const gate = await outletGate(session.user.id, projectId, "read")
     if (!gate.ok) return gate.response
-    const row = await findOutletEvent(projectId, eventId)
+    const [row, config] = await Promise.all([findOutletEvent(projectId, eventId), loadReportConfig(projectId)])
     if (!row) return notFound()
-    return NextResponse.json({ event: serializeEvent(row, outletToday()), form: OUTLET_FORM })
+    return NextResponse.json({ event: serializeEvent(row, outletToday(), config), form: legacyFormFor(config), config })
   } catch (error) {
     console.error("Error loading outlet event:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

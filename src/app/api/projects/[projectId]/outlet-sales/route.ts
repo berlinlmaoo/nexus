@@ -28,7 +28,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       loadOutletMonth(projectId, month, today),
       canManageOutletTargets(session.user.id, projectId),
     ])
-    return NextResponse.json({ project: gate.project, canManageTargets, ...data })
+    // canManageSettings (owner, 14 Oct 2026): the report settings follow the targets' rule.
+    return NextResponse.json({ project: gate.project, canManageTargets, canManageSettings: canManageTargets, ...data })
   } catch (error) {
     console.error("Error loading outlet sales:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -11,10 +11,13 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  outletApi, outletEventKey, outletKey, type OutletEvent, type OutletEventPatch, type OutletFieldKey, type OutletFormField,
-  type OutletMonthResponse,
+  outletApi, outletEventKey, outletKey, type OutletEvent, type OutletEventWrite, type OutletFieldKey, type OutletFormField,
+  type OutletItem, type OutletMonthResponse, type OutletReportConfig,
 } from "@/lib/outlet-sales-api";
-import { StatusPill, count, dayShort, pick, rupiah, vsTarget, wibToday } from "./outlet-ui";
+import { StatusPill, count, dayShort, defaultOutletConfig, figureOf, pick, rupiah, sumOf, visibleItems, vsTarget, wibToday } from "./outlet-ui";
+
+/** The form's sections the outlet's own breakdown replaces (owner, 14 Oct 2026). */
+const BREAKDOWN_SECTIONS = new Set(["rsvp", "hosting"]);
 
 /** What the form is open on: an existing event, or a new one (with a day already chosen). */
 export type FormTarget = { eventId?: string; date?: string };
@@ -176,8 +179,23 @@ function FormBody({
 }) {
   const { t, lang } = useLang();
   const qc = useQueryClient();
-  const fields = useMemo(() => data.form.sections.flatMap((s) => s.fields), [data.form]);
+  const fields = useMemo(() => data.form.sections.filter((s) => !BREAKDOWN_SECTIONS.has(s.key)).flatMap((s) => s.fields), [data.form]);
+  const config: OutletReportConfig = data.config ?? defaultOutletConfig();
   const [draft, setDraft] = useState<Draft>(() => toDraft(fields, event, defaultDate, lang));
+  // The breakdown figures by item id, as typed (grouped digits); "" = not filled.
+  const [figures, setFigures] = useState<Draft>(() => {
+    const nf = nfOf(lang);
+    const out: Draft = {};
+    const ids = [
+      ...config.rsvp, ...config.hosting,
+      ...config.communities.flatMap((c) => [{ id: c.id, label: c.name }, ...c.items]),
+    ].map((i) => i.id);
+    for (const id of ids) {
+      const v = figureOf(event, id);
+      out[id] = v === null ? "" : nf.format(v);
+    }
+    return out;
+  });
   const [invalid, setInvalid] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const nf = nfOf(lang);
@@ -189,8 +207,14 @@ function FormBody({
     onDirty(true);
   };
 
+  const setFigure = (id: string, raw: string) => {
+    const n = numberOf(raw);
+    setFigures((d) => ({ ...d, [id]: n === null ? "" : nf.format(n) }));
+    onDirty(true);
+  };
+
   /** New: every field with something in it. Edit: only what changed, so two people never undo each other. */
-  const payload = (): OutletEventPatch => {
+  const payload = (): OutletEventWrite => {
     const out: Record<string, unknown> = {};
     for (const f of fields) {
       const next = valueOf(f, draft[f.key] ?? "");
@@ -201,7 +225,14 @@ function FormBody({
       const before = (event as unknown as Record<string, unknown>)[f.key] ?? (f.type === "money" || f.type === "count" ? null : "");
       if (before !== next) out[f.key] = next;
     }
-    return out as OutletEventPatch;
+    const values: Record<string, number | null> = {};
+    for (const [id, raw] of Object.entries(figures)) {
+      const next = numberOf(raw);
+      if (!event) { if (next !== null) values[id] = next; continue; }
+      if (figureOf(event, id) !== next) values[id] = next;
+    }
+    if (Object.keys(values).length > 0) out.values = values;
+    return out as OutletEventWrite;
   };
 
   const save = useMutation({
@@ -224,6 +255,8 @@ function FormBody({
     onError: (error) => {
       const { text, field } = errorOf(error);
       if (field) setInvalid(field);
+      // The report settings changed meanwhile: fetch them, the typed figures stay.
+      if (field?.startsWith("values.")) qc.invalidateQueries({ queryKey: outletKey(projectId) });
       toast.error(text ?? t("That wasn't saved. Try again."));
     },
   });
@@ -246,9 +279,90 @@ function FormBody({
   };
 
   const n = (k: OutletFieldKey) => numberOf(draft[k] ?? "");
-  const sumOf = (keys: OutletFieldKey[]) => {
-    const parts = keys.map(n).filter((x): x is number => x !== null);
-    return parts.length ? parts.reduce((a, b) => a + b, 0) : null;
+  const fig = (id: string) => numberOf(figures[id] ?? "");
+  const shown = (items: OutletItem[]) => visibleItems(items, event);
+
+  /** One breakdown section: its items as number boxes, the live total in the title. */
+  const breakdown = (key: string, title: string, items: OutletItem[], extra?: { allIds?: string[]; legend?: string }) => {
+    const list = shown(items);
+    const total = sumOf((extra?.allIds ?? items.map((i) => i.id)).map(fig));
+    return (
+      <fieldset key={key} className="rounded-xl border border-border bg-card p-4">
+        <legend className="sr-only">{extra?.legend ?? title}</legend>
+        <div aria-hidden className="mb-3 flex items-baseline justify-between gap-2">
+          <span className="text-sm font-semibold">{title}: <span className="tabular-nums">{total === null ? "—" : count(total, lang)}</span></span>
+        </div>
+        {list.length === 0 ? (
+          <p className="text-xs text-muted-foreground">{t("No items yet. Report settings sets them up.")}</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {list.map((i) => numberBox(i.id, i.archived ? `${i.label} · ${t("archived")}` : i.label))}
+          </div>
+        )}
+      </fieldset>
+    );
+  };
+
+  const numberBox = (id: string, label: string) => {
+    const htmlId = `os-v-${id}`;
+    return (
+      <div key={id} className="min-w-0">
+        <label htmlFor={htmlId} className="mb-1 block truncate text-xs font-medium text-muted-foreground">{label}</label>
+        <input
+          id={htmlId}
+          inputMode="numeric"
+          autoComplete="off"
+          placeholder="0"
+          value={figures[id] ?? ""}
+          onChange={(e) => setFigure(id, e.target.value)}
+          aria-invalid={invalid === `values.${id}` || undefined}
+          className={cn(
+            "h-10 w-full rounded-lg border bg-background px-3 text-right text-sm tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 hover:border-control-border focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11",
+            invalid === `values.${id}` ? "border-destructive" : "border-border",
+          )}
+        />
+      </div>
+    );
+  };
+
+  /** Communities: per community one number (Total only) or its own items (Breakdown); the grand total on top. */
+  const communities = () => {
+    const list = config.communities.filter((c) => !c.archived || figureOf(event, c.id) !== null || c.items.some((i) => figureOf(event, i.id) !== null));
+    if (list.length === 0) return null;
+    const totalOf = (c: (typeof list)[number]) => sumOf([fig(c.id), ...c.items.map((i) => fig(i.id))]);
+    const grand = sumOf(list.map(totalOf));
+    return (
+      <fieldset key="communities" className="rounded-xl border border-border bg-card p-4">
+        <legend className="sr-only">{t("Communities")}</legend>
+        <div aria-hidden className="mb-3 flex items-baseline justify-between gap-2">
+          <span className="text-sm font-semibold">{t("Communities – TOTAL")}: <span className="tabular-nums">{grand === null ? "—" : count(grand, lang)}</span></span>
+        </div>
+        <div className="flex flex-col gap-3">
+          {list.map((c) => {
+            const subs = shown(c.items);
+            const name = c.archived ? `${c.name} · ${t("archived")}` : c.name;
+            const own = figureOf(event, c.id) !== null;
+            if (c.mode === "total" || subs.length === 0) {
+              return <div key={c.id} className="max-w-[16rem]">{numberBox(c.id, name)}</div>;
+            }
+            const tot = totalOf(c);
+            return (
+              <div key={c.id} className="rounded-lg border border-border/70 p-3">
+                <p className="mb-2 flex items-baseline justify-between gap-2 text-xs font-semibold">
+                  <span className="truncate">{name}</span>
+                  <span className="tabular-nums text-muted-foreground">{tot === null ? "—" : count(tot, lang)}</span>
+                </p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {subs.map((i) => numberBox(i.id, i.archived ? `${i.label} · ${t("archived")}` : i.label))}
+                  {/* Filled as one number before the community was split: still editable here. */}
+                  {own && numberBox(c.id, t("Total only"))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </fieldset>
+    );
   };
   const pct = (a: number | null, b: number | null) => (a === null || !b ? null : Math.floor((a * 100) / b + 1e-9));
   const live: Record<string, string | null> = {
@@ -301,15 +415,15 @@ function FormBody({
         </div>
       )}
       {data.form.sections.map((s) => {
-        const total = s.total === "rsvpTotal"
-          ? sumOf(["rsvpWalkIn", "rsvpTeam", "rsvpPr", "rsvpEo"])
-          : s.total === "hostingTotal" ? sumOf(["hostingTeam", "hostingPr", "hostingEo"]) : undefined;
+        // RSVP and Hosting come from the outlet's own items; Communities follow Hosting.
+        if (s.key === "rsvp") return breakdown("rsvp", pick(s.title, lang), config.rsvp);
+        if (s.key === "hosting") return [breakdown("hosting", pick(s.title, lang), config.hosting), communities()];
         const grid = s.fields.every((f) => f.type === "count") ? "grid gap-3 grid-cols-2 sm:grid-cols-4" : s.fields.every((f) => f.type === "money" || f.type === "count") ? "grid gap-3 sm:grid-cols-2" : "grid gap-3";
         return (
           <fieldset key={s.key} className="rounded-xl border border-border bg-card p-4">
             <legend className="sr-only">{pick(s.title, lang)}</legend>
             <div aria-hidden className="mb-3 flex items-baseline justify-between gap-2">
-              <span className="text-sm font-semibold">{pick(s.title, lang)}{total !== undefined && <>: <span className="tabular-nums">{total === null ? "—" : count(total, lang)}</span></>}</span>
+              <span className="text-sm font-semibold">{pick(s.title, lang)}</span>
               {(s.key === "sales" || s.key === "pax") && live[s.key] && <span className="text-sm tabular-nums text-muted-foreground">{live[s.key]}</span>}
             </div>
             <div className={grid}>
