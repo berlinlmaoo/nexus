@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, CircleCheck, Clock, ImageOff, ListChecks, MessageSquare, Plus, UserRound } from "lucide-react";
+import { ArrowRight, CalendarDays, ChevronRight, CircleCheck, Clock, ImageOff, ListChecks, MessageSquare, Plus, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
 import { Avatar } from "@/components/Avatar";
 import { StatusPill } from "@/components/tasks/StatusPicker";
@@ -102,7 +102,15 @@ export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; c
       return <span className={cn(pill, "bg-muted text-muted-foreground")} title={def.label}><UserRound className="h-3 w-3 shrink-0" />{vals[0]}</span>;
     }
     const overdue = def.key === "due" && !isDoneStatus(task.status) && new Date(vals[0]).getTime() < new Date().setHours(0, 0, 0, 0);
-    return <span title={def.label} className={cn("inline-flex shrink-0 items-center gap-1 text-[11px]", overdue ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}><Clock className="h-3 w-3" />{fmt(vals[0])}</span>;
+    const label = def.builtin ? t(def.label) : def.label;
+    // The two task dates read as what they are: due wears the clock, a lone start date the arrow it starts
+    // from ("24 May →"); any other date field gets a calendar icon and its own name on hover (UI tour run 9:
+    // "26 May · Rp… · 24 May 24 May" gave no way to tell which date was which).
+    if (def.key === "start") {
+      return <span title={`${label}: ${fmt(vals[0])}`} className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground"><Clock className="h-3 w-3" />{fmt(vals[0])}<ArrowRight className="h-3 w-3" /></span>;
+    }
+    const Icon = def.key === "due" ? Clock : CalendarDays;
+    return <span title={`${label}: ${fmt(vals[0])}`} className={cn("inline-flex shrink-0 items-center gap-1 text-[11px]", overdue ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}><Icon className="h-3 w-3" />{fmt(vals[0])}</span>;
   }
   if (def.kind === "number") {
     const n = Number(vals[0]);
@@ -139,10 +147,64 @@ export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; c
 export function PropLine({ task, keys, defs, ctx, className }: { task: NexusTask; keys: string[]; defs: PropDef[]; ctx: ViewCtx; className?: string }) {
   const items = keys.map((k) => propDef(defs, k)).filter(Boolean) as PropDef[];
   if (!items.length) return null;
+  // Dates read as one ordered group (UI tour run 9: "26 May · Rp… · 24 May 24 May" gave no way to tell
+  // which date was which, nor a fixed order). Every date property the view shows is drawn together where
+  // the first of them sits: start → due first (one chip, the clock icon), then the other date fields in
+  // the view's order with a calendar icon and their name on hover. A day already on screen is not drawn
+  // again; its field name joins the tooltip of the chip that shows it.
+  const isDateItem = (d: PropDef) => d.kind === "date" && taskValues(task, d.key).some((v) => !Number.isNaN(new Date(v).getTime()));
+  const firstDate = items.find(isDateItem)?.key ?? null;
   return (
     <div className={cn("flex flex-wrap items-center gap-1.5", className)}>
-      {items.map((d) => <PropValue key={d.key} task={task} def={d} ctx={ctx} />)}
+      {items.map((d) => {
+        if (isDateItem(d)) return d.key === firstDate ? <DateChips key="dates" task={task} items={items.filter(isDateItem)} /> : null;
+        return <PropValue key={d.key} task={task} def={d} ctx={ctx} />;
+      })}
     </div>
+  );
+}
+
+/** A task's date properties as one ordered group: start → due, then every other date field, each day once. */
+function DateChips({ task, items }: { task: NexusTask; items: PropDef[] }) {
+  const { t } = useLang();
+  const fmt = useDateFmt();
+  const label = (d: PropDef) => (d.builtin ? t(d.label) : d.label);
+  const start = items.find((d) => d.key === "start");
+  const due = items.find((d) => d.key === "due");
+  const startText = start && task.startDate ? fmt(task.startDate) : null;
+  const dueText = due && task.dueDate ? fmt(task.dueDate) : null;
+  const overdue = !!dueText && !isDoneStatus(task.status) && new Date(task.dueDate!).getTime() < new Date().setHours(0, 0, 0, 0);
+  // day text → the field names that day stands for (so a repeated day becomes one chip with two names).
+  const shown = new Map<string, string[]>();
+  if (startText) shown.set(startText, [label(start!)]);
+  if (dueText) shown.set(dueText, [...(shown.get(dueText) ?? []), label(due!)]);
+  const others: string[] = [];
+  for (const d of items) {
+    if (d.key === "start" || d.key === "due") continue;
+    const v = taskValues(task, d.key)[0];
+    const text = fmt(v);
+    if (!shown.has(text)) others.push(text);
+    shown.set(text, [...(shown.get(text) ?? []), label(d)]);
+  }
+  const tip = (text: string) => `${(shown.get(text) ?? []).join(", ")}: ${text}`;
+  const lead = startText && dueText && startText !== dueText ? (
+    <span title={`${tip(startText)} · ${tip(dueText)}`} className={cn("inline-flex shrink-0 items-center gap-1 text-[11px] tabular-nums", overdue ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
+      <Clock className="h-3 w-3" />{startText}<ArrowRight className="h-3 w-3 opacity-70" aria-hidden />{dueText}
+    </span>
+  ) : dueText || startText ? (
+    <span title={tip((dueText ?? startText)!)} className={cn("inline-flex shrink-0 items-center gap-1 text-[11px] tabular-nums", overdue ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
+      <Clock className="h-3 w-3" />{dueText ?? startText}{!dueText && <ArrowRight className="h-3 w-3 opacity-70" aria-hidden />}
+    </span>
+  ) : null;
+  return (
+    <>
+      {lead}
+      {others.map((text) => (
+        <span key={text} title={tip(text)} className="inline-flex shrink-0 items-center gap-1 text-[11px] tabular-nums text-muted-foreground">
+          <CalendarDays className="h-3 w-3" />{text}
+        </span>
+      ))}
+    </>
   );
 }
 

@@ -137,7 +137,7 @@ export const ID_VIEWS: Record<string, string> = {
   "{n} more": "{n} lagi",
   "No date · {n}": "Tanpa tanggal · {n}",
   "drag one onto a day to give it a date": "seret ke salah satu hari untuk memberi tanggal",
-  "Nothing on the calendar this month.": "Belum ada apa-apa di kalender bulan ini.",
+  "Nothing on this day, nor anywhere else this month.": "Tidak ada apa-apa di tanggal ini, begitu juga sepanjang bulan ini.",
   "Nothing on the timeline": "Timeline masih kosong",
   "Tasks show here as bars from their start date to their due date.": "Task tampil di sini sebagai bar dari tanggal mulai sampai tenggatnya.",
   "This date can't be changed by dragging.": "Tanggal ini tidak bisa diubah dengan diseret.",
@@ -211,4 +211,5 @@ export const ID_VIEWS: Record<string, string> = {
   "Task name": "Nama task",
   "The task was created, but its description couldn't be saved.": "Task sudah dibuat, tapi deskripsinya gagal disimpan.",
   "To-do": "Belum dikerjakan",
+  "Drag to resize, double-click to reset": "Tarik buat ubah lebar, klik 2x buat mengembalikan",
 };

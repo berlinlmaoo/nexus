@@ -154,7 +154,27 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   useTouchDrag();
   const dropRing = "ring-2 ring-inset ring-[color:var(--accent-foreground)]/40";
 
-  const gridTemplate = `minmax(240px,2fr) ${columns.map(() => "minmax(140px,1fr)").join(" ")} 40px`;
+  // Column widths a person dragged (UI tour run 9: "Tanggal Pe…" could not be read). Per project, in this
+  // browser only: a width is a reading preference, not project data. Untouched columns keep sharing the space.
+  const widthKey = `nexus.table-col-widths.${projectId}`;
+  const [colW, setColW] = useState<Record<string, number>>(() => {
+    try { return JSON.parse(localStorage.getItem(widthKey) ?? "{}") as Record<string, number>; } catch { return {}; }
+  });
+  const startResize = (e: React.PointerEvent, key: string) => {
+    e.preventDefault(); e.stopPropagation();
+    const cell = (e.currentTarget as HTMLElement).parentElement;
+    const startX = e.clientX;
+    const startW = cell?.getBoundingClientRect().width ?? 140;
+    let last = startW;
+    const move = (ev: PointerEvent) => { last = Math.round(Math.min(640, Math.max(90, startW + ev.clientX - startX))); setColW((w) => ({ ...w, [key]: last })); };
+    const up = () => {
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
+      setColW((w) => { const next = { ...w, [key]: last }; try { localStorage.setItem(widthKey, JSON.stringify(next)); } catch { /* private mode */ } return next; });
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+  };
+  const resetWidth = (key: string) => setColW((w) => { const next = { ...w }; delete next[key]; try { localStorage.setItem(widthKey, JSON.stringify(next)); } catch { /* private mode */ } return next; });
+  const gridTemplate = `minmax(240px,2fr) ${columns.map((k) => (colW[k] ? `${colW[k]}px` : "minmax(160px,1fr)")).join(" ")} 40px`;
   const rowIn = (gKey: string | null, subKey: string | null) => (task: NexusTask) => row(task, mover.enabled && gKey !== null && canDragTask(task, projectId)
     ? <DragHandle onDragStart={(e) => mover.startDrag(e, task, gKey, subKey)} onDragEnd={mover.endDrag} className="group-hover:opacity-100" />
     : null);
@@ -183,16 +203,20 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
       <div className="overflow-x-auto overscroll-x-contain rounded-lg border border-border">
         {/* Width from the columns' minimums, never from cell contents (perf pass, 12 Oct 2026): with min-w-max a
             row that loaded wider content widened every column and the header jumped. */}
-        <div className="w-full" style={{ minWidth: 240 + 140 * columns.length + 40 }}>
+        <div className="w-full" style={{ minWidth: 240 + columns.reduce((n, k) => n + (colW[k] ?? 160), 0) + 40 }}>
           {/* Header row */}
           <div className="sticky top-0 z-[1] grid items-stretch border-b border-border bg-card text-xs text-muted-foreground" style={{ gridTemplateColumns: gridTemplate }}>
             <div className="flex items-center gap-1.5 px-3 py-2"><PropIcon def={propDef(defs, "title")} />{t("Name")}</div>
             {columns.map((key) => {
               const def = propDef(defs, key);
               return (
-                <div key={key} className="group flex items-center justify-between gap-1 border-l border-border px-3 py-2">
-                  <span className="flex min-w-0 items-center gap-1.5"><PropIcon def={def} /><span className="truncate">{propLabel(def)}</span>{key.startsWith("cf:") && ai.aiFields.has(key.slice(3)) && <Sparkles aria-label={t("AI Autofill")} className="h-3 w-3 shrink-0 text-primary" />}</span>
+                <div key={key} className="group relative flex items-center justify-between gap-1 border-l border-border px-3 py-2">
+                  <span className="flex min-w-0 items-center gap-1.5" title={propLabel(def)}><PropIcon def={def} /><span className="truncate">{propLabel(def)}</span>{key.startsWith("cf:") && ai.aiFields.has(key.slice(3)) && <Sparkles aria-label={t("AI Autofill")} className="h-3 w-3 shrink-0 text-primary" />}</span>
                   {canEditColumns && <button type="button" onClick={() => setColumns(columns.filter((c) => c !== key))} title={t("Hide column")} aria-label={t("Hide column")} className="tap-area opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:hidden"><X className="h-3 w-3" /></button>}
+                  {/* Drag the edge to resize; double-click puts the column back to its shared width. */}
+                  <span role="separator" aria-orientation="vertical" aria-label={t("Resize column")} title={t("Drag to resize, double-click to reset")}
+                    onPointerDown={(e) => startResize(e, key)} onDoubleClick={() => resetWidth(key)}
+                    className="absolute -right-1 top-0 z-[2] h-full w-2 cursor-col-resize touch-none after:absolute after:inset-y-1 after:left-1/2 after:w-0.5 after:-translate-x-1/2 after:rounded after:bg-transparent hover:after:bg-[color:var(--accent-foreground)]/50" />
                 </div>
               );
             })}

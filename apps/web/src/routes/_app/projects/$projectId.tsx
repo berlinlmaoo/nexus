@@ -716,7 +716,11 @@ function ProjectDetail() {
 
   return (
     <ProjectAccessContext.Provider value={data?.viewerAccessLevel}>
-    <div className="min-h-dvh bg-card">
+    {/* Phone: the app shell adds pb-28 under every page for the floating tab bar. On top of this sheet's
+        min-h-dvh that made every short project view 112 px taller than the screen, a grey strip scrolled
+        into view under the tab bar (UI tour run 9). The sheet takes that room over as its own padding, so a
+        short view is exactly one screen tall and the white runs to the bottom edge. */}
+    <div className="min-h-dvh bg-card max-md:-mb-28 max-md:pb-28">
       <PageHeader
         compact
         className="bg-card/95"
@@ -1708,6 +1712,9 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
   const dateOf = (task: NexusTask) => parseDate(taskValues(task, cfg.dateProp)[0]);
   const dated = tasks.filter((task) => dateOf(task));
   const undated = tasks.filter((task) => !dateOf(task));
+  // null = untouched: open while the tray is short, folded once it would bury the page (> 8).
+  const [undatedOpen, setUndatedOpen] = useState<boolean | null>(null);
+  const showUndated = undatedOpen ?? undated.length <= 8;
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
   const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -1841,7 +1848,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
                   </button>
                 );
               })}
-              {pickedTasks.length === 0 && <p className="rounded-lg border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">{agenda.length ? t("Nothing on this day. Days with a dot have tasks.") : t("Nothing on the calendar this month.")}</p>}
+              {pickedTasks.length === 0 && <p className="rounded-lg border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">{agenda.length ? t("Nothing on this day. Days with a dot have tasks.") : t("Nothing on this day, nor anywhere else this month.")}</p>}
             </div>
           )}
         </div>
@@ -1923,23 +1930,38 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
         </div>
       )}
       {undated.length > 0 && (
-        <div className="rounded-lg border border-dashed border-border p-3">
-          <div className="mb-2 text-xs text-muted-foreground">{t("No date · {n}", { n: undated.length })}{canDrag && !isMobile ? ` — ${t("drag one onto a day to give it a date")}` : ""}</div>
-          <div className="flex flex-wrap gap-1.5">
-            {undated.map((task) => (
-              <button
-                key={task.id}
-                type="button"
-                draggable={canDrag}
-                onDragStart={(e) => startChipDrag(e, task)}
-                onDragEnd={() => { setDragTaskId(null); setDropKey(null); }}
-                {...bulk.bindCard(task, () => onOpen(task))}
-                className={cn("max-w-[220px] truncate rounded-md border border-border bg-card px-2 py-1 text-xs transition hover:border-foreground/20", canDrag && "cursor-grab active:cursor-grabbing", bulk.isSelected(task.id) && "ring-2 ring-[color:var(--accent-foreground)]")}
-              >
-                {task.title}
-              </button>
-            ))}
-          </div>
+        <div className="rounded-lg border border-dashed border-border">
+          {/* Notion's "No date" tray (UI tour run 9: 84 truncated chips made a wall under the month). A count
+              header that opens and closes, folded by default once there are more than 8, and a list that
+              scrolls inside its own box instead of stretching the page. */}
+          <button type="button" onClick={() => setUndatedOpen(!showUndated)} aria-expanded={showUndated}
+            className="flex w-full items-center gap-1.5 rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground">
+            <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 transition-transform", showUndated && "rotate-90")} />
+            <span className="font-medium text-foreground">{t("No date")}</span>
+            <span className="rounded-full bg-muted px-1.5 text-[11px] tabular-nums">{undated.length}</span>
+            {showUndated && canDrag && !isMobile && <span className="truncate">— {t("drag one onto a day to give it a date")}</span>}
+          </button>
+          {showUndated && (
+            <div className="max-h-72 overflow-y-auto overscroll-contain border-t border-dashed border-border p-1.5">
+              <div className="grid gap-0.5 sm:grid-cols-2 lg:grid-cols-3">
+                {undated.map((task) => (
+                  <button
+                    key={task.id}
+                    type="button"
+                    draggable={canDrag}
+                    onDragStart={(e) => startChipDrag(e, task)}
+                    onDragEnd={() => { setDragTaskId(null); setDropKey(null); }}
+                    {...bulk.bindCard(task, () => onOpen(task))}
+                    title={task.title}
+                    className={cn("flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition hover:bg-muted", canDrag && !isMobile && "cursor-grab active:cursor-grabbing", isDone(task.status) && "text-muted-foreground line-through", bulk.isSelected(task.id) && "bg-accent ring-1 ring-inset ring-[color:var(--accent-foreground)]")}
+                  >
+                    <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", isDone(task.status) ? "bg-emerald-500" : CAL_STRIPE[(task.priority ?? "NONE").toUpperCase()] ?? CAL_STRIPE.NONE)} aria-hidden />
+                    <span className="min-w-0 truncate">{task.parentId ? `↳ ${task.title}` : task.title}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
