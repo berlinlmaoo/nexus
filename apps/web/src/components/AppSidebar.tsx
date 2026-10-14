@@ -2,7 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Inbox, MessageCircle, CheckSquare, Calendar, CalendarClock, FolderKanban,
   Users, Trophy, ClipboardCheck, Settings, Shield, FileText, Megaphone,
-  Search, PanelLeftClose, LogOut, Loader2, AtSign, Ticket, Sun, Moon,
+  Search, PanelLeftClose, PanelLeftOpen, LogOut, Loader2, AtSign, Ticket, Sun, Moon,
  HardDrive, Languages, Keyboard, Scale,
 } from "lucide-react";
 import { useState } from "react";
@@ -116,7 +116,17 @@ export function AppSidebar() {
             overflow as the bar narrows, and the controls fade out via CSS, so the
             logo never jumps or pops when expanding/collapsing. */}
         <div className="flex items-center gap-1 overflow-hidden">
-          <Link to="/dashboard" className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden px-2 py-1.5">
+          {/* Collapsed rail: the logo's place holds the "open sidebar" button (Notion / Linear), so reopening
+              is one obvious click instead of hunting for the rail's edge (owner, 14 Oct 2026). */}
+          <button
+            onClick={toggleSidebar}
+            aria-label={t("Expand sidebar")}
+            title={t("Expand ({keys})", { keys: modKey("B") })}
+            className="mx-auto hidden h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:grid"
+          >
+            <PanelLeftOpen className="h-4 w-4" />
+          </button>
+          <Link to="/dashboard" className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden px-2 py-1.5 group-data-[collapsible=icon]:hidden">
             <img src={nexusLogo} alt="NEXUS" data-nexus-logo="" className="h-8 w-8 shrink-0 object-contain dark:invert" />
             <div className="flex min-w-0 flex-col whitespace-nowrap leading-tight">
               <span className="truncate text-sm font-semibold tracking-tight">NEXUS</span>

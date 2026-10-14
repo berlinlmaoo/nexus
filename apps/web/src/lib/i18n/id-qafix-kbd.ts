@@ -10,6 +10,7 @@ export const ID_QAFIX_KBD: Record<string, string> = {
   "Click": "Klik",
   "Close the dialog or menu": "Tutup dialog atau menu",
   "Collapse ({keys})": "Ciutkan ({keys})",
+  "Expand ({keys})": "Buka ({keys})",
   "Copy text": "Salin teks",
   "Duplicate block": "Duplikat blok",
   "Keyboard shortcuts (?)": "Pintasan keyboard (?)",

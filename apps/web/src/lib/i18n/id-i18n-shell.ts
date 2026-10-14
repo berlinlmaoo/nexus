@@ -271,6 +271,7 @@ export const ID_I18N_SHELL: Record<string, string> = {
   "Save & continue": "Simpan & lanjut",
   "Start using NEXUS": "Mulai pakai NEXUS",
   "Collapse sidebar": "Ciutkan sidebar",
+  "Expand sidebar": "Buka sidebar",
   "Collapse (⌘B)": "Ciutkan (⌘B)",
   "Search…": "Cari…",
   "Log out": "Keluar",
