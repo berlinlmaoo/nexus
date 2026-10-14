@@ -123,7 +123,8 @@ struct InboxView: View {
                             VStack(spacing: 0) {
                                 ForEach(Array(shown.enumerated()), id: \.element.id) { idx, n in
                                     if idx > 0 { Divider().overlay(NX.border) }
-                                    NotificationRow(notification: n, onDelete: { Task { await delete(n) } }) { open(n) }
+                                    NotificationRow(notification: n, onDelete: { Task { await delete(n) } },
+                                                    onMarkRead: { Task { await markRead(n) } }) { open(n) }
                                 }
                             }
                             // Hairline card like the web's (rounded-xl border bg-card), no drop shadow.
@@ -225,10 +226,34 @@ struct InboxView: View {
     }
 }
 
+/// The Inbox row's context menu; none at all where the row has no actions (Dashboard's list).
+private struct NotificationRowMenu: ViewModifier {
+    let isRead: Bool
+    let onMarkRead: (() -> Void)?
+    let onDelete: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if onMarkRead == nil && onDelete == nil {
+            content
+        } else {
+            content.contextMenu {
+                if let onMarkRead, !isRead {
+                    Button(action: onMarkRead) { Label(T("Mark as read"), systemImage: "checkmark") }
+                }
+                if let onDelete {
+                    Button(role: .destructive, action: onDelete) { Label(T("Delete notification"), systemImage: "trash") }
+                }
+            }
+        }
+    }
+}
+
 struct NotificationRow: View {
     let notification: NexusNotification
     /// The web's trash button at the row's right (Inbox only; nil elsewhere).
     var onDelete: (() -> Void)? = nil
+    /// The web's per-row "Mark as read" on an unread row, without opening it (UI tour run 9, P12).
+    var onMarkRead: (() -> Void)? = nil
     let onTap: () -> Void
 
     var body: some View {
@@ -243,6 +268,18 @@ struct NotificationRow: View {
             if !notification.isRead {
                 // Near-black like the web's unread dot (it was violet).
                 Circle().fill(NX.foreground).frame(width: 8, height: 8).padding(.top, 6)
+            }
+            if let onMarkRead, !notification.isRead {
+                Button(action: onMarkRead) {
+                    Image(systemName: "checkmark").font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(NX.foreground)
+                        .frame(width: 34, height: 34)
+                        .background(NX.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                }
+                .buttonStyle(.plain)
+                .help(T("Mark as read"))
+                .accessibilityLabel(T("Mark as read"))
             }
             if let onDelete {
                 Button(action: onDelete) {
@@ -262,6 +299,8 @@ struct NotificationRow: View {
         .padding(14)
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
+        // Long press (right click on the Mac): the row's actions, as the web row's buttons.
+        .modifier(NotificationRowMenu(isRead: notification.isRead, onMarkRead: onMarkRead, onDelete: onDelete))
     }
 
     /// The sender's avatar with the kind as a small badge (web inbox, 13 Oct 2026, from `actor`); system

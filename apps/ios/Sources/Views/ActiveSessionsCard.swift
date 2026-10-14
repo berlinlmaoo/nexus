@@ -264,7 +264,9 @@ struct ActiveSessionsCard: View {
 
     // MARK: labels
 
-    private static var locale: Locale { Locale(identifier: AppLanguage.shared.lang == .id ? "id_ID" : "en_US") }
+    /// The app's date language (en_GB: "14 Oct", day before month, as the web), not en_US's "Oct 14"
+    /// (UI tour run 9, M3).
+    private static var locale: Locale { AppDateLocale.current }
 
     private static func parse(_ iso: String?) -> Date? {
         guard let iso else { return nil }
@@ -295,8 +297,8 @@ struct ActiveSessionsCard: View {
     static func startedLabel(_ iso: String?) -> String {
         guard let d = parse(iso) else { return "—" }
         let sameYear = Calendar.current.component(.year, from: d) == Calendar.current.component(.year, from: Date())
-        var style = Date.FormatStyle(locale: locale).day().month(.abbreviated)
-        if !sameYear { style = style.year() }
-        return d.formatted(style)
+        // "14 Oct" / "14 Okt", the year only when it is not this one; "Sept" is written "Sep" as on the web.
+        return AppDateLocale.formatter(sameYear ? "d MMM" : "d MMM yyyy").string(from: d)
+            .replacingOccurrences(of: "Sept", with: "Sep")
     }
 }

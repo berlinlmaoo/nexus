@@ -385,13 +385,6 @@ struct ConvoRow: View {
     let meId: String?
     var projectIcon: String?
 
-    /// A project's `icon` is a path most of the time, but it can also hold an emoji. Only treat it
-    /// as a picture when it actually looks like one, otherwise CachedImage silently shows nothing.
-    private var projectIconURL: URL? {
-        guard let icon = projectIcon, icon.hasPrefix("/") || icon.hasPrefix("http") else { return nil }
-        return URL(string: icon.hasPrefix("http") ? icon : Config.baseURL.absoluteString + icon)
-    }
-
     /// The last line under the name. A picture sent without a caption has empty content, which
     /// used to leave the row with a blank second line. A system line ("Bagas Putro added Mey")
     /// reads the way the thread draws it, in the app's language.
@@ -402,28 +395,13 @@ struct ConvoRow: View {
         return last.content
     }
 
-    private var groupGlyph: some View {
-        ZStack {
-            // Grey circle with the outline people glyph, as web's group and project rooms (UI tour run 7).
-            Circle().fill(NX.muted).frame(width: 40, height: 40)
-            Image(systemName: "person.2").font(.system(size: 14, weight: .medium)).foregroundStyle(NX.mutedFg)
-        }
-    }
-
     var body: some View {
         let muted = ChatStore.shared.isMuted(convo)
         // Someone is typing there right now (realtime only): said in place of the last message.
         let typingHere = ChatTyping.shared.isTyping(in: convo.id)
         HStack(spacing: 12) {
             if convo.isGroupish {
-                if let url = projectIconURL {
-                    CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { groupGlyph }
-                        .frame(width: 40, height: 40)
-                        .clipShape(Circle())
-                        .overlay(Circle().strokeBorder(NX.border, lineWidth: 0.5))
-                } else {
-                    groupGlyph
-                }
+                ChatRoomGlyph(projectId: convo.projectId, projectIcon: projectIcon)
             } else {
                 AvatarView(url: convo.avatarURL(meId: meId), initial: convo.initial(meId: meId), size: 40)
             }
@@ -658,12 +636,18 @@ struct ChatThreadView: View {
     /// Only a GROUP has a name of its own to change, and only while it exists.
     private var showsRename: Bool { type == "GROUP" && !roomDeleted }
 
+    /// A project or group room draws its picture beside the title (project mark or grey people glyph,
+    /// UI tour run 9) — the same one the chat list shows. A DM's title stays text only.
+    private var isRoom: Bool { projectId != nil || type == "GROUP" || type == "PROJECT" }
+
     /// Stands in for the navigation bar in the split layout: the same title and the same two
     /// actions, drawn inside the column so they sit over the conversation they belong to.
     private var inlineHeader: some View {
         HStack(spacing: 12) {
             // The title opens the chat's info, as on WhatsApp.
             Button { if !roomDeleted { showInfo = true } } label: {
+                HStack(spacing: 10) {
+                if isRoom { ChatRoomGlyph(projectId: projectId, size: 32) }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(shownTitle ?? title)
                         .font(NXFont.display(17, .bold))
@@ -674,6 +658,7 @@ struct ChatThreadView: View {
                         .font(NXFont.text(11, typingHere ? .semibold : .regular))
                         .foregroundStyle(typingHere ? NX.violetText : NX.mutedFg)
                         .lineLimit(1)
+                }
                 }
                 .contentShape(Rectangle())
             }
@@ -716,15 +701,18 @@ struct ChatThreadView: View {
     /// The title in the navigation bar, as a button that opens the chat's info.
     private var titleButton: some View {
         Button { if !roomDeleted { showInfo = true } } label: {
-            VStack(spacing: 0) {
-                Text(shownTitle ?? title)
-                    .font(NXFont.text(15, .semibold))
-                    .foregroundStyle(NX.foreground)
-                    .lineLimit(1)
-                Text(typingHere ? T("typing…") : T("Tap for info"))
-                    .font(NXFont.text(10, typingHere ? .semibold : .regular))
-                    .foregroundStyle(typingHere ? NX.violetText : NX.mutedFg)
-                    .lineLimit(1)
+            HStack(spacing: 8) {
+                if isRoom { ChatRoomGlyph(projectId: projectId, size: 28) }
+                VStack(spacing: 0) {
+                    Text(shownTitle ?? title)
+                        .font(NXFont.text(15, .semibold))
+                        .foregroundStyle(NX.foreground)
+                        .lineLimit(1)
+                    Text(typingHere ? T("typing…") : T("Tap for info"))
+                        .font(NXFont.text(10, typingHere ? .semibold : .regular))
+                        .foregroundStyle(typingHere ? NX.violetText : NX.mutedFg)
+                        .lineLimit(1)
+                }
             }
             .frame(maxWidth: 260)
             .contentShape(Rectangle())

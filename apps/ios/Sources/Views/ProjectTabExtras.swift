@@ -32,6 +32,13 @@ struct TableColumns: Equatable {
         let flex = CGFloat(fixedCount + fieldCount)
         let minTotal = minName + minCol * flex + 40
         let share = max(0, width - minTotal) / (flex + 2)
+        if compact && share == 0 {
+            // A phone never fits the table: size the name so the screen's edge falls through the MIDDLE of
+            // a column (Notion's peek), never on a column's edge, where "Due date" read as the last column,
+            // cut with no ellipsis (UI tour run 9, I5).
+            let name = max(170, min(260, width - minCol * 1.5))
+            return TableColumns(name: name, col: minCol, field: minCol, fieldCount: fieldCount)
+        }
         return TableColumns(name: minName + 2 * share, col: minCol + share, field: minCol + share, fieldCount: fieldCount)
     }
 }
@@ -79,7 +86,7 @@ struct ProjectTableTab: View {
                 GeometryReader { geo in
                     let pad: CGFloat = compact ? 12 : 24
                     let cols = TableColumns.fit(width: geo.size.width - pad * 2, fieldCount: fields.count, compact: compact)
-                    grid(cols)
+                    grid(cols, visibleWidth: geo.size.width - pad * 2)
                         .padding(.horizontal, pad).padding(.vertical, 12)
                 }
             }
@@ -87,7 +94,7 @@ struct ProjectTableTab: View {
         .task { fields = (try? await APIClient.shared.projectCustomFields(projectId)) ?? [] }
     }
 
-    private func grid(_ cols: TableColumns) -> some View {
+    private func grid(_ cols: TableColumns, visibleWidth: CGFloat) -> some View {
         ScrollView(.horizontal, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 0) {
                 TableHeaderRow(cols: cols, fields: fields)
@@ -103,6 +110,14 @@ struct ProjectTableTab: View {
         }
         .background(NX.card)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        // More columns to the right: the edge fades instead of cutting a label clean (UI tour run 9, I5).
+        .overlay(alignment: .trailing) {
+            if cols.total > visibleWidth + 1 {
+                LinearGradient(colors: [NX.card.opacity(0), NX.card], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: 28)
+                    .allowsHitTesting(false)
+            }
+        }
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
     }
 
@@ -267,11 +282,12 @@ struct TableHeaderRow: View {
     private func cell(_ title: String, icon: String, width: CGFloat, first: Bool = false) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon).font(.system(size: 12))
-            Text(title).font(NXFont.text(13)).lineLimit(1)
+            Text(title).font(NXFont.text(13)).lineLimit(1).truncationMode(.tail)
         }
         .foregroundStyle(NX.mutedFg)
         .padding(.horizontal, 12)
         .frame(width: width, height: 40, alignment: .leading)
+        .clipped()
         .overlay(alignment: .leading) { if !first { Rectangle().fill(NX.border).frame(width: 1) } }
     }
 
@@ -420,7 +436,7 @@ struct ProjectTableRow: View {
                 Text(ProjLocaleDate.fmt("d MMM yyyy").string(from: due))
                     .font(NXFont.text(14, overdue ? .medium : .regular))
                     .foregroundStyle(overdue ? NX.danger : NX.foreground.opacity(0.9))
-                    .lineLimit(1)
+                    .lineLimit(1).truncationMode(.tail)
             }
         }
     }
@@ -522,6 +538,8 @@ struct TableCell: ViewModifier {
         content
             .padding(.horizontal, inset)
             .frame(width: width, height: height, alignment: .leading)
+            // A pill wider than its column stays in it (a status menu's chevron drew over the next cell).
+            .clipped()
             .overlay(alignment: .leading) { Rectangle().fill(NX.border).frame(width: 1) }
     }
 }

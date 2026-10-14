@@ -293,7 +293,7 @@ struct GideonChatListColumn: View {
         } else if (rows ?? []).isEmpty {
             EmptyState(icon: "bubble.left.and.text.bubble.right",
                        title: query.isEmpty ? T("No chats yet") : T("No chats match"),
-                       subtitle: query.isEmpty ? T("No chats yet. Ask something to start one.")
+                       subtitle: query.isEmpty ? T("Ask something to start one.")
                                                : String(format: T("No chat mentions “%@”."), query),
                        compact: true)
                 .padding(.top, 24)

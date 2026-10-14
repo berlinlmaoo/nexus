@@ -361,11 +361,8 @@ struct ChatInfoView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(T("View profile"))
         } else {
-            ZStack {
-                Circle().fill(NX.muted).frame(width: 88, height: 88)
-                Image(systemName: "person.2").font(.system(size: 30, weight: .medium)).foregroundStyle(NX.mutedFg)
-            }
-            .accessibilityHidden(true)
+            // A project room shows its project's mark (photo or grey page), a group the people glyph.
+            ChatRoomGlyph(projectId: isProject ? (conversation?.projectId ?? context.projectId) : nil, size: 88)
         }
     }
 

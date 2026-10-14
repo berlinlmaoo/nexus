@@ -131,3 +131,31 @@ final class ProjectIconStore {
         _ = try? await APIClient.shared.projects()
     }
 }
+
+/// The round picture of a group-ish chat room (UI tour run 9): a PROJECT room shows its project's
+/// mark — the uploaded photo, else the calm grey page — the way web does; a plain GROUP keeps the grey
+/// people glyph. Used by the chat list, the chat header and Chat info so the three always agree.
+struct ChatRoomGlyph: View {
+    /// Set for a project room.
+    let projectId: String?
+    /// The project's icon the caller already has (list payload); the live store wins when it knows it.
+    var projectIcon: String? = nil
+    var size: CGFloat = 40
+
+    var body: some View {
+        ZStack {
+            Circle().fill(NX.muted)
+            if let projectId {
+                ProjectMark(icon: projectIcon, color: nil, size: size, glyph: size * 0.5, projectId: projectId)
+            } else {
+                Image(systemName: "person.2")
+                    .font(.system(size: size * 0.35, weight: .medium))
+                    .foregroundStyle(NX.mutedFg)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay(Circle().strokeBorder(NX.border, lineWidth: 0.5))
+        .accessibilityHidden(true)
+    }
+}

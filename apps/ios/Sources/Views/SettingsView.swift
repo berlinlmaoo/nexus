@@ -697,10 +697,13 @@ private struct WebEmailField: View {
 
     var body: some View {
         HStack(spacing: 8) {
+            // Shrinks, then wraps, before it cuts: "qa5...invalid" told nobody which address it was
+            // (UI tour run 9, P9).
             Text(email.isEmpty ? "—" : email)
                 .font(NXFont.text(15)).foregroundStyle(NX.mutedFg)
-                .lineLimit(1).truncationMode(.middle)
-                .padding(.horizontal, 12)
+                .lineLimit(2).minimumScaleFactor(0.75).truncationMode(.middle)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 12).padding(.vertical, 6)
                 .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
                 .background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))

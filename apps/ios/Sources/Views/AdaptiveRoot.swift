@@ -415,6 +415,8 @@ struct SidebarRoot: View {
     @State private var offsitePending = 0
     /// Needed by the new-project sheet (Projects +). Loaded once; + stays disabled until it is known.
     @State private var workspaceId: String?
+    /// The sidebar's folder tree (SidebarFolderTree.swift).
+    private let folderStore = SidebarFolderStore.shared
 
     /// Company-only screens (Z Vault, Threads) left out for anyone outside the company workspace,
     /// Legal for anyone not invited to it, and the Calendar while the server's `flags.calendar` holds it back.
@@ -466,6 +468,16 @@ struct SidebarRoot: View {
                     .accessibilityAddTraits(.isHeader)
                     projectRows(shortcuts.pinned)
                 }
+                // The web's folder tree under the pins (UI tour run 9, P11).
+                if !folderStore.roots.isEmpty {
+                    Text(T("Folders")).font(NXFont.text(12, .medium))
+                        .foregroundStyle(NX.mutedFg)
+                        .selectionDisabled()
+                        .accessibilityAddTraits(.isHeader)
+                    ForEach(folderStore.roots) { f in
+                        SidebarFolderNode(folder: f, store: folderStore)
+                    }
+                }
             } header: {
                 HStack {
                     SidebarGroupLabel(text: T("Projects"))
@@ -486,6 +498,7 @@ struct SidebarRoot: View {
             }
         }
         .listStyle(.sidebar)
+        .modifier(SidebarSelection.Tint())
         #if targetEnvironment(macCatalyst)
         // The web's sidebar is 256 wide with 30 pt rows. The Mac (the iPad app at 77 %) used the iPad's
         // touch sidebar: about 375 wide with 47 pt rows, so the nav ran off the bottom before Team and
@@ -531,6 +544,7 @@ struct SidebarRoot: View {
             // at once on coming back to the front, and on the realtime client's word once it exists.
             .liveRefresh(every: 30, on: [.nexusWorkspaceChanged], kinds: [RealtimeKind.projects]) {
                 await shortcuts.syncPins()
+                await folderStore.load(workspaceId: workspaceId)
                 keepProjectSelection()
             }
         } detail: {
@@ -620,7 +634,10 @@ struct SidebarRoot: View {
             }
         }
         .task { await viewer.loadIfNeeded() }
-        .task { if workspaceId == nil { workspaceId = try? await APIClient.shared.workspaceInfo().workspaceId } }
+        .task {
+            if workspaceId == nil { workspaceId = try? await APIClient.shared.workspaceInfo().workspaceId }
+            await folderStore.load(workspaceId: workspaceId)
+        }
         // The counts beside Notifications and Messages (the phone's tab bar keeps them fresh there).
         .task { await inboxBadge.refresh(force: true) }
         .task(id: auth.session?.userId) { await chat.refreshUnread(userId: auth.session?.userId) }
@@ -758,18 +775,30 @@ struct SidebarRoot: View {
     /// One nav row: outline glyph, the web's name, and its live count when there is one.
     @ViewBuilder private func navRow(_ screen: NXScreen) -> some View {
         let selected = selection == .screen(screen)
+        // On the Mac the selection is a quiet grey (SidebarSelection), so the row keeps dark text; elsewhere
+        // the system fill is strong and the glyph turns white on it.
+        let onFill = selected && !SidebarSelection.isQuiet
+        let glyph: Color = onFill ? Color.white : (selected ? NX.foreground : NX.mutedFg)
         Label {
             HStack(spacing: 6) {
                 Text(screen.sidebarTitle).font(NXFont.text(15)).lineLimit(1)
+                    .modifier(SidebarSelection.TextColor())
                 Spacer(minLength: 4)
                 let n = badgeCount(screen)
-                if n > 0 { SidebarCountBadge(count: n, warning: screen == .attendance, onSelection: selected) }
+                if n > 0 { SidebarCountBadge(count: n, warning: screen == .attendance, onSelection: onFill) }
             }
         } icon: {
             // Calm, one colour (dev web); white on the selection fill.
-            Image(systemName: screen.sidebarIcon)
-                .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(selected ? Color.white : NX.mutedFg)
+            if screen == .gideon {
+                // GIDEON's own mark, as the web sidebar (UI tour run 9, P11), not the generic sparkles.
+                Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
+                    .frame(width: 15, height: 15)
+                    .foregroundStyle(glyph)
+            } else {
+                Image(systemName: screen.sidebarIcon)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(glyph)
+            }
         }
         .tag(NXSelection.screen(screen))
         .modifier(MacSidebarRowInsets())
@@ -790,7 +819,7 @@ struct SidebarRoot: View {
         ForEach(refs) { ref in
             HStack(spacing: 10) {
                 projectIcon(ref)
-                Text(ref.name).font(NXFont.text(15)).lineLimit(1)
+                Text(ref.name).font(NXFont.text(15)).lineLimit(1).modifier(SidebarSelection.TextColor())
             }
             .tag(NXSelection.project(ref))
             .modifier(MacSidebarRowInsets())
@@ -838,6 +867,32 @@ enum SidebarRootSheet: String, Identifiable {
 /// A sidebar group label in the web's style: small, medium weight, muted, not upper-cased
 /// (SidebarGroupLabel, text-xs). `textCase(nil)` because List headers upper-case by default.
 /// Mac only: the web sidebar's row padding (py-1.5 px-2) instead of the iPad's touch insets.
+/// The sidebar's selection on the Mac: a subtle grey like the iPad's and the web's (Notion), not the
+/// solid accent purple Catalyst draws by default (UI tour run 9, M6). The emphasized selection takes the
+/// list's tint, so a grey tint gives a grey fill; the rows then keep their own dark text instead of the
+/// white the system puts on a strong fill. The iPad keeps the system's own behaviour.
+enum SidebarSelection {
+    #if targetEnvironment(macCatalyst)
+    static let isQuiet = true
+    #else
+    static let isQuiet = false
+    #endif
+    /// Notion's selected-row grey on the sidebar's background.
+    static let fill = Color(light: 0xdcdbd8, dark: 0x3c3c3e)
+
+    struct Tint: ViewModifier {
+        func body(content: Content) -> some View {
+            if SidebarSelection.isQuiet { content.tint(SidebarSelection.fill) } else { content }
+        }
+    }
+
+    struct TextColor: ViewModifier {
+        func body(content: Content) -> some View {
+            if SidebarSelection.isQuiet { content.foregroundStyle(NX.foreground) } else { content }
+        }
+    }
+}
+
 struct MacSidebarRowInsets: ViewModifier {
     func body(content: Content) -> some View {
         #if targetEnvironment(macCatalyst)
