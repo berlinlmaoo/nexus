@@ -279,9 +279,9 @@ struct SecurityCard: View {
             // Title case like the web's card title, not a shouted caps label (UI tour run 7).
             Text(T("Password")).font(NXFont.text(17, .semibold)).foregroundStyle(NX.foreground)
                 .accessibilityAddTraits(.isHeader)
-            secureField(T("Current password"), $current)
-            secureField(T("New password (min 8)"), $new1)
-            secureField(T("Repeat new password"), $new2)
+            // Labelled fields with the length rule under the new one, as on the web; placeholders alone
+            // vanished once typing began (UI tour run 15, R15-I-05).
+            passwordFields
             if mismatch && msg == nil {
                 Text(T("Those passwords don't match.")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
             }
@@ -300,7 +300,9 @@ struct SecurityCard: View {
     }
 
     private var webBody: some View {
-        NXCard(padding: 24) {
+        // The same card and inset as Passkeys and Active sessions below it: the 24 pt card sat its fields
+        // 8 pt further in (UI tour run 15, Q-IB29).
+        Group {
             VStack(alignment: .leading, spacing: 16) {
                 Text(T("Password")).font(NXFont.text(17, .semibold)).foregroundStyle(NX.foreground)
                     .accessibilityAddTraits(.isHeader)
@@ -330,15 +332,17 @@ struct SecurityCard: View {
                 }
             }
         }
+        .nexusCard()
     }
 
     @ViewBuilder private var passwordFields: some View {
         webSecure(T("Current password"), $current)
-        webSecure(T("New password (min 8)"), $new1)
+        webSecure(T("New password"), $new1, hint: T("At least 8 characters"),
+                  hintIsError: !new1.isEmpty && new1.utf16.count < 8)
         webSecure(T("Repeat new password"), $new2)
     }
 
-    private func webSecure(_ label: String, _ text: Binding<String>) -> some View {
+    private func webSecure(_ label: String, _ text: Binding<String>, hint: String? = nil, hintIsError: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label).font(NXFont.text(13, .medium)).foregroundStyle(NX.mutedFg)
                 .lineLimit(1).fixedSize(horizontal: true, vertical: false)
@@ -350,13 +354,11 @@ struct SecurityCard: View {
                 .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
                 .accessibilityLabel(label)
+            if let hint {
+                Text(hint).font(NXFont.text(11)).foregroundStyle(hintIsError ? NX.danger : NX.mutedFg)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func secureField(_ ph: String, _ text: Binding<String>) -> some View {
-        SecureField(ph, text: text).font(NXFont.text(15)).padding(10)
-            .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
     private func change() async {
         busy = true; msg = nil; defer { busy = false }
