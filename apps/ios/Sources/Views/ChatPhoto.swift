@@ -65,7 +65,7 @@ struct ChatPhoto: View {
             }
             .task(id: Attempt(url: url, number: attempt)) { await load() }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(failed ? T("Photo couldn't load. Tap to try again.") : T("Photo"))
+            .accessibilityLabel(failed ? PlatformWording.tapOrClick(tap: "Photo couldn't load. Tap to try again.", click: "Photo couldn't load. Click to try again.") : T("Photo"))
             .accessibilityAddTraits(.isButton)
     }
 
@@ -97,7 +97,7 @@ struct ChatPhoto: View {
                 .font(.system(size: 22, weight: .regular))
             if failed {
                 Text(T("Photo couldn't load")).font(NXFont.text(12, .semibold))
-                Label(T("Tap to try again"), systemImage: "arrow.clockwise")
+                Label(PlatformWording.tapOrClick(tap: "Tap to try again", click: "Click to try again"), systemImage: "arrow.clockwise")
                     .font(NXFont.text(11))
                     .opacity(0.8)
             } else {

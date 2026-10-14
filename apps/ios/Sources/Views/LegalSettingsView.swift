@@ -131,7 +131,7 @@ private struct LegalCompanyCard: View {
 
     private var kopText: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(T("Kop")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+            Text(T("Letterhead")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
             Text(company.hasKop
                  ? String(format: T("%@, uploaded %@"), company.kopFileName ?? "kop.docx", LegalLabels.date(company.kopUpdatedAt))
                  : T("Not uploaded: documents get no letterhead."))
@@ -150,7 +150,7 @@ private struct LegalCompanyCard: View {
                 Button { route = .pick([LegalFileTypes.docx], tag: "kop") } label: {
                     HStack(spacing: 5) {
                         if kopBusy { ProgressView() } else { Image(systemName: "arrow.up.doc") }
-                        Text(company.hasKop ? T("Replace") : T("Upload kop"))
+                        Text(company.hasKop ? T("Replace") : T("Upload letterhead"))
                     }
                 }
                 .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
@@ -206,7 +206,7 @@ private struct LegalCompanyCard: View {
         defer { kopBusy = false }
         do {
             _ = try await APIClient.shared.legalUploadKop(companyId: company.id, file: file)
-            LegalToasts.shared.success(T("Kop uploaded"))
+            LegalToasts.shared.success(T("Letterhead uploaded"))
             await reload()
         } catch {
             LegalToasts.shared.failure(error)
@@ -247,7 +247,8 @@ private struct LegalSeriesRow: View {
                 (Text(series.label).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground)
                  + Text("  ·  \(LegalLabels.docType(series.docType))  ·  \(LegalLabels.resetPeriod(series.resetPeriod))")
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg))
-                    .lineLimit(1).truncationMode(.tail)
+                    // Wraps instead of cutting the period to "Yea…" on a narrow row (UI tour run 11, PD-10).
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(verbatim: LegalText.wrappable(series.format)).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.mutedFg)
                     .fixedSize(horizontal: false, vertical: true)
             }

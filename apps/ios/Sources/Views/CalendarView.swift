@@ -986,6 +986,8 @@ struct CalendarView: View {
                 }
             }
         }
+        // The last chip ran into the screen edge cut ("PATS 5", UI tour run 11 IP-11): fade where more lies.
+        .nxEdgeFade()
     }
 
     private func legendChip(_ e: CalLegendEntry, on: Bool) -> some View {
@@ -1487,7 +1489,10 @@ struct CalendarView: View {
     /// cells, keys and buttons further on. At the accessibility text sizes the date has a line of its
     /// own, wrapping between words, with TODAY under it.
     private func dayHeading(tree: CalDayTree, rel: Int, holiday: String?) -> some View {
-        let date = Text(CalFormat.day(selected, "EEEEdMMMyyyy")).font(NXFont.display(CalType.size(twoPane ? 19 : 17), .bold)).foregroundStyle(NX.foreground)
+        // The two-pane rail (iPad, Mac) is narrow: "Wednesday, 14…" was cut there (UI tour run 11, MC-3), so it
+        // writes the short "Wed, 14 Oct"; the phone has the width for the whole date.
+        let date = Text(twoPane ? AppDateLocale.formatter("EEE, d MMM", timeZone: TimeZone(identifier: "UTC")).string(from: CalDays.date(selected))
+                                : CalFormat.day(selected, "EEEEdMMMyyyy")).font(NXFont.display(CalType.size(twoPane ? 19 : 17), .bold)).foregroundStyle(NX.foreground)
         let tag: String? = rel == 0 ? T("Today") : rel == 1 ? T("Tomorrow") : rel == -1 ? T("Yesterday") : nil
         return VStack(alignment: .leading, spacing: 3) {
             if typeSize.isAccessibilitySize {

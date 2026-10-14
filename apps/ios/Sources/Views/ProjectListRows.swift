@@ -70,6 +70,8 @@ struct ListPropLine: View {
     var wrap = false
     /// Wide: the custom fields shown as columns, in this order (ListColumns). nil = chips as they come.
     var fieldColumns: [String]? = nil
+    /// The List is grouped by priority: its header says it, the row does not repeat it.
+    var hidePriority = false
 
     /// The custom values a row shows (web: up to four), with every date apart from start and due folded
     /// out when it repeats one of them or another date (UI tour run 9, I7: "24 May 24 May ⏱ 26 May").
@@ -130,16 +132,18 @@ struct ListPropLine: View {
         }
     }
 
-    /// Fixed slots, always in this order: the fields, due date, priority, status, people.
+    /// Fixed slots, always in this order: the fields, due date, priority, status, people. A slot with no
+    /// value stays as wide, blank: an empty `if` with a frame on it collapsed in the HStack, so a row
+    /// without a due date or an assignee slid its other values over (UI tour run 11, MC-1 / PD-6).
     private func columns(_ ids: [String]) -> some View {
         HStack(spacing: 12) {
             ForEach(ids, id: \.self) { id in
-                fieldSlot(id).frame(width: ListColumns.fieldW, alignment: .leading)
+                ListSlot(width: ListColumns.fieldW) { fieldSlot(id) }
             }
-            dueSlot.frame(width: ListColumns.dueW, alignment: .leading)
-            prioritySlot.frame(width: ListColumns.priorityW, alignment: .leading)
-            statusSlot.frame(width: ListColumns.statusW, alignment: .leading)
-            people.frame(width: ListColumns.peopleW, alignment: .trailing)
+            ListSlot(width: ListColumns.dueW) { dueSlot }
+            ListSlot(width: ListColumns.priorityW) { prioritySlot }
+            ListSlot(width: ListColumns.statusW) { statusSlot }
+            ListSlot(width: ListColumns.peopleW, alignment: .trailing) { people }
         }
     }
 
@@ -164,7 +168,7 @@ struct ListPropLine: View {
     }
 
     @ViewBuilder private var prioritySlot: some View {
-        if let p = task.priority, p.uppercased() != "NONE" { TablePill(text: TaskPriorityName.label(p), tone: prioTone(p)) }
+        if !hidePriority, let p = task.priority, p.uppercased() != "NONE" { TablePill(text: TaskPriorityName.label(p), tone: prioTone(p)) }
     }
 
     @ViewBuilder private var statusSlot: some View {
@@ -175,11 +179,15 @@ struct ListPropLine: View {
         let layout = wrap ? AnyLayout(FlowLayout(spacing: 6)) : AnyLayout(HStackLayout(spacing: 8))
         return layout {
             let chips = customChips
-            ForEach(chips.filter { !$0.isDate }) { chip in customValue(chip) }
+            ForEach(chips.filter { !$0.isDate && !$0.isPerson }) { chip in customValue(chip) }
             dateRange
             ForEach(chips.filter(\.isDate)) { chip in customValue(chip) }
-            if let p = task.priority, p.uppercased() != "NONE" { PriorityPill(priority: p) }
+            if !hidePriority, let p = task.priority, p.uppercased() != "NONE" { PriorityPill(priority: p) }
             if let status { StatusPill(name: status.name, colorKey: status.colorKey, size: 11).fixedSize() }
+            // People last, always: a person field ("ryan ceo pats") sat after the amount on some rows while
+            // the assignees' avatars ended others, so "who" jumped between the start and the end of the
+            // line (UI tour run 11, PD-6).
+            ForEach(chips.filter(\.isPerson)) { chip in customValue(chip) }
             people
         }
     }
@@ -207,6 +215,21 @@ struct ListPropLine: View {
     }
 }
 
+/// One fixed-width column of a wide List row. The clear base keeps the slot when its content is empty.
+private struct ListSlot<Content: View>: View {
+    let width: CGFloat
+    var alignment: Alignment = .leading
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ZStack(alignment: alignment) {
+            Color.clear.frame(width: width, height: 1)
+            content
+        }
+        .frame(width: width, alignment: alignment)
+    }
+}
+
 /// One flat List row: the done circle, the title, the properties, a hairline underneath.
 struct ListTaskRow: View {
     let task: BoardTask
@@ -214,6 +237,8 @@ struct ListTaskRow: View {
     let wide: Bool
     /// Wide: the custom-field columns every row of this List draws (same order, same width).
     var fieldColumns: [String] = []
+    /// Grouped by priority: the row leaves the priority pill out.
+    var hidePriority = false
     let onOpen: (String) -> Void
     var selection: TaskSelection? = nil
     var order: () -> [String] = { [] }
@@ -271,7 +296,7 @@ struct ListTaskRow: View {
         HStack(spacing: 10) {
             leading
             titleLine.frame(minWidth: 220, idealWidth: 220, maxWidth: .infinity, alignment: .leading)
-            ListPropLine(task: task, status: status, fieldColumns: fields)
+            ListPropLine(task: task, status: status, fieldColumns: fields, hidePriority: hidePriority)
         }
     }
 
@@ -280,7 +305,7 @@ struct ListTaskRow: View {
             leading.padding(.top, 1)
             VStack(alignment: .leading, spacing: 5) {
                 titleLine
-                ListPropLine(task: task, status: status, wrap: true)
+                ListPropLine(task: task, status: status, wrap: true, hidePriority: hidePriority)
             }
         }
     }

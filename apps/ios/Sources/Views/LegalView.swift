@@ -255,7 +255,7 @@ struct LegalDocumentsPane: View {
             }
             .padding(.vertical, 1)
         }
-        .nxEdgeFade()
+        .nxEdgeFade(40)
     }
 
     private var dateLabel: String {
@@ -309,11 +309,11 @@ struct LegalDocumentsPane: View {
 
     private var wideHeader: some View {
         HStack(spacing: 12) {
-            Text(T("Number")).frame(width: 170, alignment: .leading)
+            Text(T("Number")).frame(width: 230, alignment: .leading)
             Text(T("Title")).frame(maxWidth: .infinity, alignment: .leading)
             Text(T("Counterparty")).frame(width: 160, alignment: .leading)
             Text(T("Company")).frame(width: 120, alignment: .leading)
-            Text(T("Date")).frame(width: 100, alignment: .leading)
+            Text(T("Date")).frame(width: 90, alignment: .leading)
             Text(T("Status")).frame(width: 80, alignment: .leading)
         }
         .font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg)
@@ -327,24 +327,38 @@ struct LegalDocumentsPane: View {
         if let deal = d.deal { s += " · " + deal.code } else if let p = d.project { s += " · " + p.name }
         if let parent = d.parent { s += " · " + String(format: T("Addendum to %@"), parent.number) }
         if d.addendaCount > 0 { s += " · " + String(format: T("%d addenda"), d.addendaCount) }
-        if d.status == "VOID", let by = d.numberReusedBy { s += " · " + String(format: T("Number reused by %@"), by.number) }
         if let at = d.signedAt { s += " · " + String(format: T("Signed %@ by %@"), LegalLabels.date(at), d.signedBy?.name ?? "—") }
         return s
     }
 
+    /// "Number reused by PKS/…/ADD-1" on a line of its own, cut in the middle: inside the subtitle it wrapped or
+    /// was cut part-way through the number (UI tour run 11, IP-12 / PD-13).
+    @ViewBuilder private func reusedLine(_ d: LegalDocumentSummary) -> some View {
+        if d.status == "VOID", let by = d.numberReusedBy {
+            Text(String(format: T("Number reused by %@"), by.number))
+                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                .lineLimit(1).truncationMode(.middle)
+                .help(by.number)
+        }
+    }
+
     private func wideRow(_ d: LegalDocumentSummary) -> some View {
         HStack(spacing: 12) {
+            // Numbers run long ("SPK/CH/PATS-UNIV/YOGYAKARTA/JAN/2027/001"): cut in the middle so the series
+            // prefix and the sequence both stay readable, with the full number on hover (UI tour run 11, MC-2).
             Text(d.number.isEmpty ? "—" : d.number).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.foreground)
-                .strikethrough(d.numberReleased).lineLimit(1).frame(width: 170, alignment: .leading)
+                .strikethrough(d.numberReleased).lineLimit(1).truncationMode(.middle).frame(width: 230, alignment: .leading)
+                .help(d.number)
             VStack(alignment: .leading, spacing: 2) {
                 Text(d.title).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
                 Text(subtitle(d)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                reusedLine(d)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Text(d.counterparty.isEmpty ? "—" : d.counterparty).font(NXFont.text(13)).foregroundStyle(NX.foreground)
                 .lineLimit(1).frame(width: 160, alignment: .leading)
             Text(d.company?.name ?? "—").font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(1).frame(width: 120, alignment: .leading)
-            Text(LegalLabels.day(d.docDate)).font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(1).frame(width: 100, alignment: .leading)
+            Text(LegalLabels.shortDay(d.docDate)).font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(1).frame(width: 90, alignment: .leading)
             LegalStatusChip(status: d.status).frame(width: 80, alignment: .leading)
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
@@ -360,9 +374,10 @@ struct LegalDocumentsPane: View {
                 LegalStatusChip(status: d.status)
             }
             Text(d.title).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(2).multilineTextAlignment(.leading)
-            Text([d.counterparty.isEmpty ? nil : d.counterparty, d.company?.name, LegalLabels.day(d.docDate)].compactMap { $0 }.joined(separator: " · "))
+            Text([d.counterparty.isEmpty ? nil : d.counterparty, d.company?.name, LegalLabels.shortDay(d.docDate)].compactMap { $0 }.joined(separator: " · "))
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
             Text(subtitle(d)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2)
+            reusedLine(d)
         }
         .padding(.horizontal, 14).padding(.vertical, 11)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -60,7 +60,8 @@ struct LegalParagraphEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(T("Tap a paragraph to edit it, or tick paragraphs to ask GIDEON to change them."))
+            Text(PlatformWording.tapOrClick(tap: "Tap a paragraph to edit it, or tick paragraphs to ask GIDEON to change them.",
+                                            click: "Click a paragraph to edit it, or tick paragraphs to ask GIDEON to change them."))
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             if editor.loading && editor.paragraphs.isEmpty {
                 LegalLoadingRow()

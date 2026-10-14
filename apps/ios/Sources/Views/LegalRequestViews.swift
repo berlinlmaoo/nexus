@@ -84,7 +84,7 @@ struct LegalRequestFormView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Image(NX.legalSymbol).font(.system(size: 20)).foregroundStyle(NX.mutedFg)
                     .frame(width: 44, height: 44).background(NX.muted, in: Circle())
-                Text(T("Legal request")).font(NXFont.display(26)).foregroundStyle(NX.foreground)
+                // The navigation bar already says "Legal request"; a second large heading repeated it (UI tour run 11).
                 content
             }
             .padding(20)
@@ -350,7 +350,8 @@ struct MyLegalRequestsStrip: View {
     private func card(_ r: MyLegalRequest) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top) {
-                Text(r.templateName.isEmpty ? LegalLabels.docType(r.docType) : r.templateName)
+                // Never break inside "(SP I/II/III)" (UI tour run 11, MC-15).
+                Text(nxUnbreakableParentheses(r.templateName.isEmpty ? LegalLabels.docType(r.docType) : r.templateName))
                     .font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(2).multilineTextAlignment(.leading)
                 Spacer(minLength: 4)
                 LegalChip(text: LegalRequestLabels.stage(r.stage), tone: LegalRequestLabels.stageTone(r.stage))
@@ -631,6 +632,7 @@ struct LegalRequestsPane: View {
             }
             .padding(.vertical, 1)
         }
+        .nxEdgeFade(40)
     }
 
     @ViewBuilder private var content: some View {

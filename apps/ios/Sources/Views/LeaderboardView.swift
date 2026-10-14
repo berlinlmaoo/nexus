@@ -126,6 +126,14 @@ struct LeaderboardView: View {
                         Podium(rows: Array(ranked.prefix(3)), labels: Array(ranks.prefix(3))) { row in
                             openProfile = ProfileTarget(userId: row.userId, name: row.name, avatar: row.avatar)
                         }
+                        // More people share 1st than the podium has steps: three equal "1" blocks read as
+                        // the whole story, so say how many are tied (UI tour run 11, PD-17).
+                        let tiedFirst = ranks.filter { $0 == 1 }.count
+                        if tiedFirst > 3 {
+                            Text(String(format: T("%d-way tie for 1st"), tiedFirst))
+                                .font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                                .frame(maxWidth: .infinity)
+                        }
                     }
 
                     VStack(spacing: 0) {

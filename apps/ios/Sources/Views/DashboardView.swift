@@ -192,7 +192,10 @@ struct DashboardView: View {
             // bottom edge) on top of the tab bar's own inset, so the page can always scroll its last
             // section and tiles clear of both (UI tour run 7: the button sat on Room Booking and the
             // next section label stayed behind the tab bar). Padding only; the layout is unchanged.
-            .contentMargins(.bottom, hSize == .regular ? 0 : 72, for: .scrollContent)
+            // iPad / Mac: the button sits 28 pt above the window's bottom edge (52 + 28 = 80 pt), and with
+            // no margin it covered the agenda's last day ("Sun 25", UI tour run 11 PD-19). 92 pt lets every
+            // card scroll clear of it. The phone's 72 is unchanged.
+            .contentMargins(.bottom, hSize == .regular ? 92 : 72, for: .scrollContent)
             .background(NX.background.ignoresSafeArea())
             .overlay { statModal }
             .overlay { levelModal }
@@ -1003,7 +1006,8 @@ if !XpRules.tiers.isEmpty {
             HStack(spacing: 8) {
                 Image(systemName: "person.badge.key.fill")
                     .font(.system(size: 15, weight: .semibold)).foregroundStyle(NX.violetText)
-                Text(T("Sign in with Face ID")).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
+                Text(PlatformWording.biometric(faceID: "Sign in with Face ID", touchID: "Sign in with Touch ID",
+                                               other: "Sign in with a passkey")).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
                 Spacer(minLength: 0)
                 Button { dismissPasskeyNudge() } label: {
                     Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(NX.mutedFg)

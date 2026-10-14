@@ -690,12 +690,14 @@ struct ProjectDetailView: View {
                         .accessibilityLabel(T("New view"))
                     }
                 }
-                .padding(.horizontal, wide ? 18 : 8)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { tabsWidth = $0 }
             }
-            .modifier(TabRowOverflow(activeId: activeTabItemId, itemIds: chipItems.map(\.id), proxy: proxy,
-                                     overflowing: $tabsOverflow, contentWidth: tabsWidth))
+            .modifier(NXTabRowScroller(activeId: activeTabItemId, itemIds: chipItems.map(\.id), proxy: proxy,
+                                       overflowing: $tabsOverflow, contentWidth: tabsWidth))
             }
+            // The inset sits OUTSIDE the scroll view, so a scrolled row never cuts its first tab against the
+            // screen edge (UI tour run 11: "rview", "er kategori").
+            .padding(.leading, wide ? 18 : 8)
             if tabsOverflow { tabOverflowMenu(chipItems) }
             if let layout = layoutOf(tab), let v = activeView(layout) {
                 let filtered = configOf(v).isFiltered
@@ -791,8 +793,8 @@ struct ProjectDetailView: View {
                 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { tabsWidth = $0 }
             }
-            .modifier(TabRowOverflow(activeId: activeTabItemId, itemIds: wideMenuItems.map(\.id), proxy: proxy,
-                                     overflowing: $tabsOverflow, contentWidth: tabsWidth))
+            .modifier(NXTabRowScroller(activeId: activeTabItemId, itemIds: wideMenuItems.map(\.id), proxy: proxy,
+                                       overflowing: $tabsOverflow, contentWidth: tabsWidth))
             }
             // The inset sits OUTSIDE the scroll view: inside it, it scrolled away with the tabs and a
             // scrolled row put its first tab flush against the sidebar (UI tour run 10, MAC-1).
@@ -1233,8 +1235,6 @@ struct ProjectDetailView: View {
 
     /// One column, built outside the ForEach so the type checker sees one plain call.
     private func laneColumn(_ lane: ProjectDetail.Lane, at i: Int, in shown: [ProjectDetail.Lane], statusStyle: Bool, grouped: Bool) -> LaneColumn {
-        let firstOfGroup = i == 0 || shown[i - 1].group != lane.group
-        let label: String? = statusStyle && firstOfGroup ? lane.group.header(above: lane.name) : nil
         var sectionStatus: ((String?) async -> Void)? = nil
         // Status columns are edited with Full access only (project access levels).
         let manages = detail?.canManageProject ?? true
@@ -1245,7 +1245,6 @@ struct ProjectDetailView: View {
         return LaneColumn(
             lane: lane, allLanes: shown, selection: selection,
             statusStyle: statusStyle || grouped,
-            groupLabel: label,
             onOpen: { id in open(id) },
             onAddTask: { title, kept in await addTask(laneId: lane.id, title: title, kept: kept) },
             onDrop: { ids, before in dropped(ids, on: lane.id, before: before, visible: shown) },
@@ -1747,8 +1746,6 @@ struct LaneColumn: View {
     /// The project works with status options: the column is tinted in its option's colour and its
     /// header is the option's pill (web board, owner 12 Oct 2026). Plain sections keep the old look.
     var statusStyle = false
-    /// "To-do" / "In progress" / "Complete" above the first column of each group; nil elsewhere.
-    var groupLabel: String? = nil
     let onOpen: (String) -> Void
     /// Creates a task in this column from the inline card; answers its id (nil = failed).
     let onAddTask: (String, @escaping @MainActor () -> Bool) async -> String?
@@ -1791,9 +1788,8 @@ struct LaneColumn: View {
         // A FIXED column header above a per-column vertical scroll (one axis each; the board's
         // horizontal scroll is the parent's). Proven on device; no lazy stack in a two-way scroll.
         VStack(alignment: .leading, spacing: 4) {
-            if statusStyle || groupRow {
-                Text(groupLabel ?? " ").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg).padding(.leading, 6)
-            }
+            // No group label ("In progress", "Complete") above the column any more: it doubled the column's
+            // own status name ("In progress" over "On Progress"). One label per column (UI tour run 11).
             VStack(alignment: .leading, spacing: 10) {
                 header
                 // "New task" sits under the header, above the cards, so a long column never has to be
@@ -1859,6 +1855,8 @@ struct LaneColumn: View {
                         .padding(.horizontal, 6).padding(.vertical, 1)
                         .background(NX.muted, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
                         .fixedSize()
+                        // The source project is named once, here, not as "From …" on every card (UI tour run 11).
+                        .help(String(format: T("From %@"), lane.name))
                 }
                 if let status = lane.taskStatus {
                     Text(TaskStatusName.label(status)).font(NXFont.text(10, .semibold)).foregroundStyle(NX.violetText)
@@ -1880,7 +1878,7 @@ struct LaneColumn: View {
             editableCard(task)
         } else {
             // Read-only: the card opens the task, nothing else.
-            Button { onOpen(task.id) } label: { BoardCard(task: task, linkedFrom: linked ? lane.name : nil, fieldIds: fieldIds) }
+            Button { onOpen(task.id) } label: { BoardCard(task: task, fieldIds: fieldIds) }
                 .buttonStyle(.plain)
                 .hoverEffect(.lift)
         }
@@ -1892,7 +1890,7 @@ struct LaneColumn: View {
             if selection.active { selection.toggle(task.id) } else { onOpen(task.id) }
         } label: {
             // The tick is drawn inside the card, so the column's scroll view never clips it.
-            BoardCard(task: task, selectMark: selection.active ? selection.contains(task.id) : nil, linkedFrom: linked ? lane.name : nil, fieldIds: fieldIds)
+            BoardCard(task: task, selectMark: selection.active ? selection.contains(task.id) : nil, fieldIds: fieldIds)
                 .overlay {
                     if selection.active && selection.contains(task.id) {
                         RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.violet, lineWidth: 2)
@@ -2096,72 +2094,5 @@ struct BoardCard: View {
     private var isOverdue: Bool {
         guard !task.isDone, let d = ProjDate.parse(task.dueDate) else { return false }
         return ProjDate.cal.startOfDay(for: d) < ProjDate.cal.startOfDay(for: Date())
-    }
-}
-
-
-/// A row of tabs wider than the screen (iPad / Mac with many views: "Timeli…" cut at the edge, UI tour
-/// run 5), as the web's view-toolbar does it: the selected tab is scrolled into view, and the trailing
-/// edge fades out so a cut tab reads as "more this way" rather than a broken label. The content gets a
-/// matching trailing margin, so the last tab can always scroll clear of the fade.
-private struct TabRowOverflow: ViewModifier {
-    let activeId: String
-    /// Every tab's id, in order: when the project's views load after the row first drew, the active tab
-    /// may only now exist, and nothing else would scroll it into view (UI tour run 9: the active Board /
-    /// Timeline tab sat off screen).
-    let itemIds: [String]
-    let proxy: ScrollViewProxy
-    /// True while the tabs are wider than the row; the row then offers its "…" menu.
-    @Binding var overflowing: Bool
-    private let fade: CGFloat = 28
-    /// The tabs' own width (measured by the row's HStack: onScrollGeometryChange needs iOS 18).
-    let contentWidth: CGFloat
-    @State private var viewportWidth: CGFloat = 0
-    /// Scrolled away from the start: the leading edge fades too, so a tab cut there ("gori" for "Per
-    /// kategori" on the iPhone) reads as "more this way" (UI tour run 10, MAC-1). iOS 18 knows the
-    /// offset; iOS 17 keeps the trailing fade only.
-    @State private var scrolled = false
-
-    func body(content: Content) -> some View {
-        tracked(content)
-            .contentMargins(.trailing, fade, for: .scrollContent)
-            .mask {
-                HStack(spacing: 0) {
-                    LinearGradient(colors: [.black.opacity(scrolled ? 0 : 1), .black], startPoint: .leading, endPoint: .trailing)
-                        .frame(width: fade)
-                    Rectangle()
-                    LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .leading, endPoint: .trailing)
-                        .frame(width: fade)
-                }
-            }
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { viewportWidth = $0; update() }
-            .onChange(of: contentWidth) { _, _ in update() }
-            .onAppear { reveal(animated: false) }
-            .onChange(of: activeId) { _, _ in reveal(animated: true) }
-            .onChange(of: itemIds) { _, _ in reveal(animated: false) }
-    }
-
-    @ViewBuilder private func tracked(_ content: Content) -> some View {
-        if #available(iOS 18.0, *) {
-            content.onScrollGeometryChange(for: Bool.self) { g in
-                g.contentOffset.x > -g.contentInsets.leading + 1
-            } action: { _, now in scrolled = now }
-        } else {
-            content
-        }
-    }
-
-    private func update() {
-        let over = viewportWidth > 0 && contentWidth + fade > viewportWidth + 1
-        if over != overflowing { overflowing = over }
-    }
-
-    private func reveal(animated: Bool) {
-        let id = activeId
-        // After the next layout, or scrollTo finds no frames yet.
-        DispatchQueue.main.async {
-            if animated { withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(id) } }
-            else { proxy.scrollTo(id) }
-        }
     }
 }

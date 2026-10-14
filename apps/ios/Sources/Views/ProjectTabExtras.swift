@@ -32,6 +32,14 @@ struct TableColumns: Equatable {
         let flex = CGFloat(fixedCount + fieldCount)
         let minTotal = minName + minCol * flex + 40
         let share = max(0, width - minTotal) / (flex + 2)
+        if !compact && share == 0 {
+            // Wider than the window on an iPad / Mac: the window's edge falls on a column boundary, the
+            // name column taking up the rest, so no amount is cut mid-number at the edge ("Rp 6.842.09",
+            // UI tour run 11, PD-1); the trailing fade still says more columns lie that way.
+            let fit = max(1, floor((width - minName) / minCol))
+            let name = max(minName, width - fit * minCol)
+            return TableColumns(name: name, col: minCol, field: minCol, fieldCount: fieldCount)
+        }
         if compact && share == 0 {
             // A phone never fits the table: size the name so the screen's edge falls through the MIDDLE of
             // a column (Notion's peek), never on a column's edge, where "Due date" read as the last column,
@@ -75,6 +83,11 @@ struct ProjectTableTab: View {
     @FocusState private var draftFocused: Bool
 
     private var compact: Bool { hSize != .regular }
+    /// Date fields that hold names ("Request by" from a Notion import): a person icon, not a calendar.
+    private var nameFields: Set<String> {
+        let tasks = lanes.flatMap { $0.tasks ?? [] }
+        return Set(fields.filter { ["DATE", "CREATED"].contains($0.type.uppercased()) && cfFieldHoldsNames($0.id, in: tasks) }.map(\.id))
+    }
     private var hasTasks: Bool { lanes.contains { !($0.tasks ?? []).isEmpty } }
 
     var body: some View {
@@ -97,7 +110,7 @@ struct ProjectTableTab: View {
     private func grid(_ cols: TableColumns, visibleWidth: CGFloat) -> some View {
         ScrollView(.horizontal, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 0) {
-                TableHeaderRow(cols: cols, fields: fields)
+                TableHeaderRow(cols: cols, fields: fields, nameFields: nameFields)
                 ScrollView(.vertical, showsIndicators: true) {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(lanes) { lane in group(lane, cols) }
@@ -263,6 +276,8 @@ struct TableHairline: View {
 struct TableHeaderRow: View {
     let cols: TableColumns
     let fields: [CustomField]
+    /// Date fields holding names (cfFieldHoldsNames).
+    var nameFields: Set<String> = []
 
     var body: some View {
         HStack(spacing: 0) {
@@ -272,7 +287,9 @@ struct TableHeaderRow: View {
             // The project's fields come right after the dates, as on the web's table (Harga, Request by,
             // Tanggal Penggunaan…, then Priority and Status): an iPad beside the sidebar showed the four
             // built-in columns and never a field (UI tour run 10, IPD-4).
-            ForEach(fields) { f in cell(f.name, icon: Self.icon(f.type), width: cols.field) }
+            ForEach(fields) { f in
+                cell(f.name, icon: nameFields.contains(f.id) ? "person" : Self.icon(f.type), width: cols.field)
+            }
             cell(T("Priority"), icon: "flag", width: cols.col)
             cell(T("Status"), icon: "rectangle.split.3x1", width: cols.col)
             Color.clear.frame(width: cols.open, height: 40)
@@ -292,12 +309,15 @@ struct TableHeaderRow: View {
         .frame(width: width, height: 40, alignment: .leading)
         .clipped()
         .overlay(alignment: .leading) { if !first { Rectangle().fill(NX.border).frame(width: 1) } }
+        // A long name is cut ("Tanggal Peng…"): the pointer shows it whole (UI tour run 11, MC-10).
+        .help(title)
     }
 
     static func icon(_ type: String) -> String {
         switch type.uppercased() {
         case "NUMBER": return "number"
-        case "DATE", "CREATED": return "calendar"
+        case "DATE": return "calendar"
+        case "CREATED": return "clock"
         case "SELECT", "STATUS": return "chevron.down.circle"
         case "MULTI_SELECT": return "list.bullet"
         case "PLACE": return "mappin.and.ellipse"
@@ -436,7 +456,7 @@ struct ProjectTableRow: View {
         openButton {
             if let due = ProjDate.parse(task.dueDate) {
                 let overdue = !task.isDone && due < ProjDate.cal.startOfDay(for: Date())
-                Text(ProjLocaleDate.fmt("d MMM yyyy").string(from: due))
+                Text(AppDateLocale.shortDate(due, timeZone: ProjDate.cal.timeZone))
                     .font(NXFont.text(14, overdue ? .medium : .regular))
                     .foregroundStyle(overdue ? NX.danger : NX.foreground.opacity(0.9))
                     .lineLimit(1).truncationMode(.tail)
@@ -528,7 +548,12 @@ struct ProjectTableRow: View {
     /// a card.
     private func fieldText(_ f: CustomField) -> String {
         guard let cfv = (task.customFieldValues ?? []).first(where: { $0.customFieldId == f.id }) else { return "" }
-        return customFieldChip(cfv)?.label ?? (cfv.value ?? "")
+        let chip = customFieldChip(cfv)
+        // A date says its year only when it is not this year ("15 Apr", "3 Mar 2025"), as on the web.
+        if chip?.isDate == true, let day = cfParseDay(cfv.value ?? "") {
+            return AppDateLocale.shortDate(day, timeZone: ProjDate.cal.timeZone)
+        }
+        return chip?.label ?? (cfv.value ?? "")
     }
 }
 

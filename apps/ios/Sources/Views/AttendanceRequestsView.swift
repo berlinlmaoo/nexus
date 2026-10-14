@@ -101,7 +101,7 @@ struct RequestAttachmentView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "photo").font(.system(size: 10)).foregroundStyle(NX.mutedFg)
                         Text(label).font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
-                        Text("· " + T("Tap to enlarge")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        Text("· " + PlatformWording.tapOrClick(tap: "Tap to enlarge", click: "Click to enlarge")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     }
                 }
             } else {
@@ -111,7 +111,7 @@ struct RequestAttachmentView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(label).font(NXFont.text(11, .semibold)).foregroundStyle(NX.violetText).lineLimit(1)
-                        Text(T("Tap to enlarge")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
+                        Text(PlatformWording.tapOrClick(tap: "Tap to enlarge", click: "Click to enlarge")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
                     }
                     Spacer(minLength: 0)
                 }
@@ -131,7 +131,7 @@ struct RequestAttachmentView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(fileName).font(NXFont.text(large ? 13 : 11, .semibold))
                     .foregroundStyle(kind == nil ? NX.foreground : NX.violetText).lineLimit(1)
-                Text(failed ? T("Couldn't open this file.") : (kind == nil ? T("Open it on the web") : T("Tap to open")))
+                Text(failed ? T("Couldn't open this file.") : (kind == nil ? T("Open it on the web") : PlatformWording.tapOrClick(tap: "Tap to open", click: "Click to open")))
                     .font(NXFont.text(10)).foregroundStyle(failed ? NX.danger : NX.mutedFg)
             }
             Spacer(minLength: 0)
@@ -604,7 +604,7 @@ struct AttendanceRequestsCard: View {
                        actionTitle: T("Show all"), actionIcon: nil, action: { filter = "ALL" }, compact: true)
         } else if window == .recent {
             EmptyState(icon: "clock.arrow.circlepath", title: Self.emptyTitle(f, recent: true),
-                       subtitle: T("Only the last 3 days are shown, so the list opens on what just happened. The rest of this period is one tap away."),
+                       subtitle: PlatformWording.tapOrClick(tap: "Only the last 3 days are shown, so the list opens on what just happened. The rest of this period is one tap away.", click: "Only the last 3 days are shown, so the list opens on what just happened. The rest of this period is one click away."),
                        actionTitle: T("Show this period"), actionIcon: nil, action: { window = .period }, compact: true)
         } else if f != "ALL" {
             EmptyState(icon: "calendar", title: Self.emptyTitle(f, recent: false),
@@ -1270,7 +1270,7 @@ struct RequestComposerSheet: View {
 
     private var leaveSummary: String {
         let days = leaveDays
-        guard let first = days.first, let last = days.last else { return T("Tap the first day, then the last") }
+        guard let first = days.first, let last = days.last else { return PlatformWording.tapOrClick(tap: "Tap the first day, then the last", click: "Click the first day, then the last") }
         let f = DateFormatter(); f.dateFormat = "d MMM"; f.timeZone = ProjDate.cal.timeZone
         f.locale = Locale(identifier: AppLanguage.shared.lang.rawValue == "id" ? "id_ID" : "en_US")
         let range = days.count == 1 ? f.string(from: first) : "\(f.string(from: first)) – \(f.string(from: last))"

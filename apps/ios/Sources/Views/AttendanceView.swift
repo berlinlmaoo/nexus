@@ -494,13 +494,22 @@ struct AttendanceView: View {
         }
         if let name = dispRec?.officeLocation?.name { return name }
         if let n = nearby { return n.office.name }
+        // A Mac never takes a GPS fix (locateWithinOffice is phone-only), so "Finding you…" spun forever
+        // there (UI tour run 11, MC-12). Say where the location is read instead.
+        #if targetEnvironment(macCatalyst)
+        return T("On your phone")
+        #else
         if locationOff { return T("Location is off") }
         return T("Finding you…")
+        #endif
     }
     private var officeLabel: String {
         if recordAway == true { return T("Where you checked in") }
         if recordAway == false { return dispRec?.officeLocation?.name != nil ? T("Office") : T("Where you are") }
         if locationFree { return dispRec?.checkInAt != nil ? T("Where you checked in") : T("Any location") }
+        #if targetEnvironment(macCatalyst)
+        if dispRec?.officeLocation?.name == nil { return T("Check-in location") }
+        #endif
         return dispRec?.officeLocation?.name != nil ? T("Office") : T("Where you are")
     }
     private var officeHelper: String {
@@ -520,8 +529,12 @@ struct AttendanceView: View {
                 ? T("You're inside this office area")
                 : String(format: T("%@ from here"), Self.distanceLabel(n.distance))
         }
+        #if targetEnvironment(macCatalyst)
+        return T("Check-in location is taken by the NEXUS app on your phone.")
+        #else
         if locationOff { return T("Turn location on to see which office you're at") }
         return T("Checking where you are…")
+        #endif
     }
     private var officeTint: Color {
         guard dispRec?.officeLocation?.name == nil else { return NX.violetText }
@@ -1891,6 +1904,11 @@ struct StreakBoardCard: View {
                         cells
                     }
                 }
+                // Comes to rest on a whole day (the date row is the scroll-target layout), and the edges
+                // fade where more days lie, so a cut column reads as "scroll for more" instead of a
+                // clipped "ION 28" (UI tour run 11: IP-10, MC-11).
+                .scrollTargetBehavior(.viewAligned)
+                .nxEdgeFade(14)
                 // Opens on today, not on the 28th: the column that matters is the one being filled in
                 // (owner, 8 and 9 Oct 2026: "rata kiri", three times). Scrolling there after the fact
                 // — timed tries, then measuring where today's column was — never held on the phone, so
@@ -1932,6 +1950,7 @@ struct StreakBoardCard: View {
                 }
             }
         }
+        .scrollTargetLayout()
     }
 
     private var nameColumn: some View {

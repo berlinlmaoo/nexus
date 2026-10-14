@@ -116,7 +116,20 @@ struct ActiveSessionsCard: View {
     @State private var confirmOne: UserSessionRow?
     @State private var confirmOthers = false
 
+    @State private var showAll = false
+
     private var others: Int { rows.filter { $0.current != true }.count }
+
+    /// This device first, then the most recently active. Only the 5 latest are drawn until "Show all"
+    /// (UI tour run 11, MC-16: a Mac account listed 40+ rows and pushed the rest of Security off the page).
+    private static let collapsedCount = 5
+    private var ordered: [UserSessionRow] {
+        rows.sorted { a, b in
+            if (a.current == true) != (b.current == true) { return a.current == true }
+            return (a.lastActiveAt ?? a.createdAt ?? "") > (b.lastActiveAt ?? b.createdAt ?? "")
+        }
+    }
+    private var shown: [UserSessionRow] { showAll ? ordered : Array(ordered.prefix(Self.collapsedCount)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -150,13 +163,25 @@ struct ActiveSessionsCard: View {
                 EmptyState(icon: "iphone", title: T("No active sessions."),
                            subtitle: T("Every device you sign in on shows up here."), compact: true)
             } else {
+                let list = shown
                 VStack(spacing: 0) {
-                    ForEach(rows) { s in
+                    ForEach(list) { s in
                         row(s)
-                        if s.id != rows.last?.id { Divider() }
+                        if s.id != list.last?.id { Divider() }
                     }
                 }
                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NX.mutedFg.opacity(0.2)))
+                if rows.count > Self.collapsedCount {
+                    Button {
+                        withAnimation(.snappy(duration: 0.2)) { showAll.toggle() }
+                    } label: {
+                        Text(showAll ? T("Show less") : String(format: T("Show all %d"), rows.count))
+                            .font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+                            .frame(minHeight: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             if failed {
                 Text(T("Couldn't sign that out. Try again.")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)

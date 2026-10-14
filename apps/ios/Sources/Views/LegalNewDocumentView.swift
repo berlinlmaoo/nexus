@@ -195,7 +195,7 @@ struct LegalNewDocumentSheet: View {
         } else if let prepared {
             numberCard(prepared)
             if prepared.company?.hasKop == false {
-                Label(T("This company has no kop yet: the document will have no letterhead."), systemImage: "exclamationmark.triangle.fill")
+                Label(T("This company has no letterhead yet: the document will be printed without one."), systemImage: "exclamationmark.triangle.fill")
                     .font(NXFont.text(12)).foregroundStyle(ChipTone.warning.fg)
             }
             NXCard(padding: 16) {

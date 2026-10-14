@@ -260,13 +260,15 @@ struct SecurityCard: View {
     @State private var busy = false
     @State private var msg: (text: String, ok: Bool)?
 
-    /// Regular width is the web's Password card: Current | New side by side and Change password at the
-    /// right, no repeat field (PasswordSection in settings.tsx). The phone keeps its repeat field.
+    /// Regular width is the web's Password card: the fields side by side and Change password at the right.
+    /// It has the repeat field too, as the phone and the web do (UI tour run 11, PD-5 / MC-5).
     private var web: Bool { hSize == .regular }
+    /// Said under the fields once the repeat has been typed and differs.
+    private var mismatch: Bool { !new2.isEmpty && new1 != new2 }
     /// The server (and the web) take a new password of 8 characters or more, counted in UTF-16 units as
     /// zod counts them; the app said and checked "min 6", so a 6- or 7-character password passed here and
     /// was refused by the server (run 10).
-    private var valid: Bool { !current.isEmpty && new1.utf16.count >= 8 && (web || new1 == new2) }
+    private var valid: Bool { !current.isEmpty && new1.utf16.count >= 8 && new1 == new2 }
 
     var body: some View {
         if web { webBody } else { phoneBody }
@@ -280,6 +282,9 @@ struct SecurityCard: View {
             secureField(T("Current password"), $current)
             secureField(T("New password (min 8)"), $new1)
             secureField(T("Repeat new password"), $new2)
+            if mismatch && msg == nil {
+                Text(T("Those passwords don't match.")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+            }
             if let msg { Text(msg.text).font(NXFont.text(12, .semibold)).foregroundStyle(msg.ok ? NX.success : NX.danger) }
             // Near-black like the web's primary, not the old violet fill.
             Button { Task { await change() } } label: {
@@ -302,9 +307,13 @@ struct SecurityCard: View {
                 HStack(alignment: .top, spacing: 16) {
                     webSecure(T("Current password"), $current)
                     webSecure(T("New password (min 8)"), $new1)
+                    webSecure(T("Repeat new password"), $new2)
                 }
                 HStack(spacing: 10) {
                     Spacer(minLength: 0)
+                    if mismatch && msg == nil {
+                        Text(T("Those passwords don't match.")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger)
+                    }
                     if let msg {
                         Text(msg.text).font(NXFont.text(13, .semibold)).foregroundStyle(msg.ok ? NX.success : NX.danger)
                     }
@@ -354,7 +363,7 @@ struct SecurityCard: View {
 
 // MARK: - Passkeys
 
-/// Enrol this device's Face ID / Touch ID as a passkey. Strictly additive: the password form in
+/// Enrol this device's Face ID / Touch ID as a passkey (wording per device: PlatformWording). Strictly additive: the password form in
 /// SecurityCard above keeps working, and nothing here can take it away.
 struct PasskeyCard: View {
     @State private var busy = false
@@ -371,7 +380,10 @@ struct PasskeyCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(T("PASSKEYS")).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violetText)
-            Text(T("Sign in with Face ID or Touch ID instead of typing your password. Your password keeps working."))
+            Text(PlatformWording.biometric(
+                faceID: "Sign in with Face ID or Touch ID instead of typing your password. Your password keeps working.",
+                touchID: "Sign in with Touch ID instead of typing your password. Your password keeps working.",
+                other: "Sign in with a passkey instead of typing your password. Your password keeps working."))
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             enrolled
             if let msg {
@@ -410,7 +422,10 @@ struct PasskeyCard: View {
             Text(T("Couldn't load your passkeys."))
                 .font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
         } else if passkeys.isEmpty {
-            Text(T("No passkeys yet — add one and this device can sign you in with Face ID."))
+            Text(PlatformWording.biometric(
+                faceID: "No passkeys yet — add one and this device can sign you in with Face ID.",
+                touchID: "No passkeys yet — add one and this device can sign you in with Touch ID.",
+                other: "No passkeys yet — add one and this device can sign you in without your password."))
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 10).padding(.horizontal, 11)
