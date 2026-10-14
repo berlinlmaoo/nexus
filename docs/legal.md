@@ -73,6 +73,10 @@ Web: `apps/web/src/routes/_app/legal.tsx`, `apps/web/src/components/legal/*`.
   to the next version by field name. A document keeps the template version it was made from.
 - The language is in `src/lib/legal/filters.ts`:
   - `{{TGL | hari | upper}}`, `{{HONOR | terbilang_rupiah}}`
+  - Money (owner, 14 Oct 2026): every amount in a document is written `{{NILAI | rupiah}}` →
+    "Rp. 6.250.000,00" (prefix "Rp. ", "." thousands, always ",00"), never "IDR …,-"; computed amounts too
+    (`{{HONOR | persen:50 | rupiah}}`). The words stay `({{NILAI | terbilang_rupiah}})`. Only the documents:
+    the forms and the rest of the app keep "Rp 6.250.000".
   - `{{#ROWS}}…{{/ROWS}}` for tables, and a section with no placeholders inside is a yes/no switch
   - `{{#NPWP}}, NPWP {{NPWP}}{{/NPWP}}`: a section that prints its own field shows only when it has a value
     (empty or "-" hides it); the field is optional
