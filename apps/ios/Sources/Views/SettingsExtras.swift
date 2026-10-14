@@ -271,7 +271,9 @@ struct SecurityCard: View {
 
     private var phoneBody: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(T("Password").uppercased()).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+            // Title case like the web's card title, not a shouted caps label (UI tour run 7).
+            Text(T("Password")).font(NXFont.text(17, .semibold)).foregroundStyle(NX.foreground)
+                .accessibilityAddTraits(.isHeader)
             secureField(T("Current password"), $current)
             secureField(T("New password (min 6)"), $new1)
             secureField(T("Repeat new password"), $new2)

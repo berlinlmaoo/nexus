@@ -214,7 +214,7 @@ struct ProjectsView: View {
     private var pageHeader: some View {
         NXPageHeader(title: T("Projects"), subtitle: T("Every project you're part of.")) {
             // The same search as the phone's field: projects here, tasks from /api/search.
-            NXHeaderSearchField(prompt: T("Search projects and tasks…"), text: $query)
+            NXHeaderSearchField(prompt: T("Search projects, owners, sections…"), text: $query)
             NXHeaderIconToggle(systemImage: "square.grid.2x2", label: T("Grid view"), on: viewMode != "list") { viewMode = "grid" }
             NXHeaderIconToggle(systemImage: "list.bullet", label: T("List view"), on: viewMode == "list") { viewMode = "list" }
             Button { sheet = .newFolder } label: { Label(T("Folder"), systemImage: "folder.badge.plus") }
@@ -241,7 +241,10 @@ struct ProjectsView: View {
             ScrollView {
                 LazyVStack(spacing: 16) {
                     // On the iPad / Mac page the search lives in the header.
-                    if !isRoot { searchField }
+                    if !isRoot {
+                        searchField
+                        phoneViewBar
+                    }
                     if !query.trimmingCharacters(in: .whitespaces).isEmpty {
                         searchResults
                     } else {
@@ -349,10 +352,24 @@ struct ProjectsView: View {
         if setChanged { await loadProgress() }
     }
 
+    /// Web mobile's row under the search (projects/index.tsx PageHeader, UI tour run 7): grid / list and
+    /// Folder. New project stays the nav bar's +.
+    private var phoneViewBar: some View {
+        HStack(spacing: 8) {
+            NXHeaderIconToggle(systemImage: "square.grid.2x2", label: T("Grid view"), on: viewMode != "list") { viewMode = "grid" }
+            NXHeaderIconToggle(systemImage: "list.bullet", label: T("List view"), on: viewMode == "list") { viewMode = "list" }
+            Button { sheet = .newFolder } label: { Label(T("Folder"), systemImage: "folder.badge.plus") }
+                .buttonStyle(.nxBordered)
+                .disabled(workspaceId == nil)
+                .accessibilityLabel(T("New folder"))
+            Spacer(minLength: 0)
+        }
+    }
+
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
-            TextField(T("Search projects and tasks…"), text: $query)
+            TextField(T("Search projects, owners, sections…"), text: $query)
                 .font(NXFont.text(15)).autocorrectionDisabled().submitLabel(.search)
             if searching { ProgressView().scaleEffect(0.7) }
             if !query.isEmpty {
@@ -372,7 +389,12 @@ struct ProjectsView: View {
     private var matchedProjects: [Project] {
         let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
         guard !needle.isEmpty else { return [] }
-        return projects.filter { $0.name.lowercased().contains(needle) }
+        // Web visibleProjects' haystack: name, description, status (the list payload carries no owner or
+        // section names, so those match nothing on web either).
+        return projects.filter { p in
+            let hay = [p.name, p.description ?? "", p.status ?? ""].joined(separator: " ").lowercased()
+            return hay.contains(needle)
+        }
     }
 
     @ViewBuilder private var searchResults: some View {
@@ -768,35 +790,31 @@ struct FolderNode: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // The whole row opens / closes the folder (owner, 10 Oct 2026: the small arrow alone sat next
-            // to the Master Calendar button and was easy to miss). Only the calendar button does
-            // something else; the arrow stays as the visual cue.
+            // Web FolderSection header (UI tour run 7): the open / close arrow first, then the folder, its count,
+            // and a ⋯ menu with everything the long-press menu has (the folder view among them). The whole row
+            // still opens / closes the folder (owner, 10 Oct 2026).
             HStack(spacing: 8) {
                 Button(action: toggle) {
                     HStack(spacing: 10) {
+                        Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0)).frame(width: 20, height: 30)
                         FolderIconTile(folder: folder)
                         Text(folder.name).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Text("\(count)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
-                            .padding(.horizontal, 8).padding(.vertical, 2).background(NX.muted, in: Capsule())
+                        Text("\(count)").font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.mutedFg)
                         Spacer(minLength: 4)
                     }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                NavigationLink {
-                    FolderAggregateView(folder: folder, allFolders: allFolders, allProjects: Array(projectsByFolder.values.joined()))
-                } label: {
-                    Image(systemName: "calendar").font(.system(size: 14, weight: .medium)).foregroundStyle(NX.foreground)
-                        .frame(width: 30, height: 30).background(NX.muted, in: Circle())
+                .accessibilityLabel(folder.name)
+                .accessibilityHint(isExpanded ? T("Close folder") : T("Open folder"))
+                Menu { menu } label: {
+                    Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                        .rotationEffect(.degrees(90))
+                        .frame(width: 30, height: 30).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, 6)
-                Button(action: toggle) {
-                    Image(systemName: "chevron.down").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.mutedFg)
-                        .rotationEffect(.degrees(isExpanded ? 0 : -90)).frame(width: 30, height: 30)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                .accessibilityLabel(String(format: T("More for %@"), folder.name))
             }
             .padding(12)
             // The padding around the row opens it too, so a tap anywhere on the card counts.
@@ -1266,7 +1284,6 @@ struct ProjectCard: View {
     /// project rendered as a permanent "0% mission energy".
     var tally: ProjectTally? = nil
 
-    private var accent: Color { Color(hex: project.color ?? "#a168be") }
     private var done: Int? { tally?.done }
     private var total: Int { tally?.total ?? project.taskCount }
     private var progress: Double {
@@ -1282,8 +1299,10 @@ struct ProjectCard: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(project.name).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    Text(project.description?.isEmpty == false ? project.description! : T("No description yet."))
-                        .font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                    // Nothing when there is no description, like web (UI tour run 7: "No description yet." on every card).
+                    if let d = project.description?.trimmingCharacters(in: .whitespacesAndNewlines), !d.isEmpty {
+                        Text(d).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                    }
                 }
                 Spacer(minLength: 4)
                 NexusChip(text: project.statusLabel, tone: statusTone)
@@ -1348,11 +1367,8 @@ struct ProjectCard: View {
         // collapses the previous double NX.card fill into one.
         .background {
             // A hairline card like the web's (rounded-xl border bg-card); the drop shadow went.
+            // No corner blob behind the status pill any more (UI tour run 7): web's card is plain.
             RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NX.card)
-                .overlay(alignment: .topTrailing) {
-                    Circle().fill(accent.opacity(0.10)).frame(width: 110, height: 110).offset(x: 36, y: -36)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border, lineWidth: 1))
         }
     }

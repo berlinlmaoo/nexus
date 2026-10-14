@@ -665,9 +665,10 @@ struct VaultView: View {
             // Not while selecting: a tap anywhere on the row chooses it then.
             if !trash && !selecting {
                 Button { sheet = .shareLink(item) } label: {
-                    Image(systemName: "link")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(webChrome ? NX.mutedFg : NX.violetText)
+                    // Web's share-nodes glyph, grey (UI tour run 7).
+                    Image(systemName: "point.3.connected.trianglepath.dotted")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(NX.mutedFg)
                         .frame(width: 40, height: 44)
                         .contentShape(Rectangle())
                 }
@@ -722,11 +723,12 @@ struct VaultView: View {
     }
 
     private func rowIcon(_ item: VaultItem) -> some View {
-        // Regular width: the web's outline folder in the text colour.
-        let symbol = webChrome && item.isFolder ? "folder" : Self.icon(for: item)
+        // Every width: the web's outline folder, grey like the other row glyphs (UI tour run 7: the phone
+        // drew a filled violet folder).
+        let symbol = item.isFolder ? "folder" : Self.icon(for: item)
         return Image(systemName: symbol)
             .font(.system(size: webChrome ? 19 : 18))
-            .foregroundStyle(item.isFolder ? (webChrome ? NX.foreground : NX.violetText) : NX.mutedFg)
+            .foregroundStyle(item.isFolder ? NX.foreground.opacity(0.75) : NX.mutedFg)
             .frame(width: 26)
     }
 
@@ -1428,8 +1430,15 @@ struct VaultView: View {
         String(format: T("“%@” moved to %@"), moved.name, destination)
     }
 
+    /// Web humanSize (lib/vault-media.ts): 1024-based, one decimal under 10, whole numbers above —
+    /// "19 MB of 60 GB", not "18.5 MB of 60.0 GB" (UI tour run 7).
     static func human(_ bytes: Int) -> String {
-        AppNumber.bytes(bytes)
+        if bytes < 1024 { return "\(AppNumber.int(max(0, bytes))) B" }
+        let units = ["KB", "MB", "GB", "TB"]
+        var n = Double(bytes) / 1024
+        var i = 0
+        while n >= 1024 && i < units.count - 1 { n /= 1024; i += 1 }
+        return (n < 10 ? AppNumber.decimal(n) : AppNumber.int(Int(n.rounded()))) + " " + units[i]
     }
 
     private static func subtitle(_ item: VaultItem) -> String {

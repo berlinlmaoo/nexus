@@ -834,7 +834,7 @@ struct CalendarTab: View {
             Text(ProjDate.fmt("MMMM yyyy").string(from: monthDate).capitalized).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
             Spacer(minLength: 8)
             Button { monthOffset = 0; selected = nil } label: {
-                Text(T("Today")).font(NXFont.text(14)).foregroundStyle(monthOffset == 0 ? NX.mutedFg.opacity(0.6) : NX.mutedFg)
+                Text(T("Today")).font(NXFont.text(14)).foregroundStyle(NX.foreground)
                     .padding(.horizontal, 10).frame(minHeight: 44).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -889,18 +889,15 @@ struct CalendarTab: View {
                     let has = !(map[day]?.isEmpty ?? true)
                     Button { selected = day } label: {
                         VStack(spacing: 3) {
-                            Text("\(day)").font(NXFont.text(13, selected == day || day == today ? .bold : .regular))
-                                .foregroundStyle(selected == day ? .white : NX.foreground)
+                            // Today = the number in a filled rose circle, as web's month grid (bg-rose-500, UI tour run 7).
+                            Text("\(day)").font(NXFont.text(13, selected == day || day == today ? .semibold : .regular))
+                                .foregroundStyle(selected == day || day == today ? .white : NX.foreground)
+                                .frame(minWidth: 24, minHeight: 24)
+                                .background { if day == today { Circle().fill(Color(light: 0xf43f5e, dark: 0xfb7185)) } }
                             Circle().fill(has ? (selected == day ? Color.white : NX.violet) : .clear).frame(width: 5, height: 5)
                         }
                         .frame(maxWidth: .infinity, minHeight: 42)
                         .background(selected == day ? NX.violet : (has ? NX.violet.opacity(0.08) : Color.clear), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        // Today ringed, as on the web's month grid.
-                        .overlay {
-                            if day == today, selected != day {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.foreground, lineWidth: 1.5)
-                            }
-                        }
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(selected == day ? .isSelected : [])

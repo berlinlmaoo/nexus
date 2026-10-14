@@ -302,7 +302,8 @@ struct NotificationRow: View {
 
     private var dateText: String {
         guard let d = ProjDate.parse(notification.createdAt) else { return "" }
-        return ProjDate.fmt("d MMM, HH:mm").string(from: d)   // cached parser + formatter
+        // Day and month only, as web fmtDay ("13 Oct"), UI tour run 7. Cached parser + formatter.
+        return ProjDate.fmt("d MMM").string(from: d)
     }
 }
 

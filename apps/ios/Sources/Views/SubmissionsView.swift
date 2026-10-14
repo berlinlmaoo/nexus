@@ -332,15 +332,26 @@ struct SubmissionsView: View {
                 }
                 Divider().frame(height: 20)
                 chip(needCount > 0 ? "\(T("Needs my action")) · \(needCount)" : T("Needs my action"), on: needsMine, icon: "exclamationmark.circle") { needsMine.toggle() }
-                HStack(spacing: 4) {
-                    Image(systemName: "lock.fill").font(.system(size: 9))
-                    Text(T("Read-only. The team moves the cards.")).font(NXFont.text(13))
-                }
-                .foregroundStyle(NX.mutedFg)
-                .padding(.leading, 4)
+                // Wide (web header row): the note sits at the end of the filters.
+                if isRoot { readOnlyNote.padding(.leading, 4) }
             }
             .padding(.horizontal, gutter).padding(.top, 10)
         }
+        // Phone: the filter row scrolls sideways, so the note got pushed off screen (UI tour run 7);
+        // it gets its own line under the filters instead.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !isRoot {
+                readOnlyNote.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, gutter).padding(.top, 2)
+            }
+        }
+    }
+
+    private var readOnlyNote: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "lock").font(.system(size: 10))
+            Text(T("Read-only. The team moves the cards.")).font(NXFont.text(13))
+        }
+        .foregroundStyle(NX.mutedFg)
     }
 
     private func chip(_ text: String, on: Bool, icon: String? = nil, action: @escaping () -> Void) -> some View {
@@ -403,8 +414,14 @@ struct SubmissionsView: View {
                                 .hoverEffect(.highlight)
                         }
                         if items.isEmpty {
-                            Text(T("Nothing here")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                                .frame(maxWidth: .infinity).padding(.vertical, 22)
+                            // Say WHY the column is empty, not just that it is (UI tour run 7).
+                            VStack(spacing: 4) {
+                                Text(T("Nothing here")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                                Text(emptyReason(col.statusGroup)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                                    .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(maxWidth: .infinity).padding(.horizontal, 6).padding(.vertical, 22)
                         }
                     }
                     .padding(.horizontal, 8).padding(.bottom, 8)
@@ -414,9 +431,21 @@ struct SubmissionsView: View {
             .background(sw.lane, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .frame(maxHeight: .infinity, alignment: .top)
-        // One column plus a hint of the next on a phone, at most 300 wide (sized to the container,
+        // One column plus a hint of the next on a phone, at most 320 wide (sized to the container,
         // not the device screen, so Split View / a resized Mac window / a folding phone all fit).
-        .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(300, width * 0.82) }
+        // An empty column is narrower, so it doesn't push the cards of the next one off screen
+        // (UI tour run 7: an empty To Do took most of the phone's width).
+        .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in
+            items.isEmpty ? min(200, width * 0.5) : min(320, width * 0.85)
+        }
+    }
+
+    private func emptyReason(_ group: StatusGroup) -> String {
+        switch group {
+        case .todo: return T("New requests wait here until the team picks them up.")
+        case .inProgress: return T("The team isn't working on any of your requests at this stage.")
+        case .complete: return T("Finished requests land here.")
+        }
     }
 
     private func card(_ s: MySubmission) -> some View {

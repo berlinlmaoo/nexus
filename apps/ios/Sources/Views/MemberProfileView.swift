@@ -642,13 +642,15 @@ struct MemberProfileView: View {
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             } else {
                 ForEach(projects) { project in
+                    // The project's own mark (photo or the grey page), not a colour dot; the status only when it
+                    // is something other than Active, so it isn't repeated on every row (UI tour run 7).
                     HStack(spacing: 10) {
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(Color(hex: project.color ?? "#7b68ee"))
-                            .frame(width: 10, height: 10)
+                        ProjectMark(icon: project.icon, color: project.color, size: 18, projectId: project.id)
                         Text(project.name).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
                         Spacer(minLength: 6)
-                        Text(project.statusLabel).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        if (project.status ?? "ACTIVE").uppercased() != "ACTIVE" {
+                            Text(project.statusLabel).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        }
                     }
                 }
             }
