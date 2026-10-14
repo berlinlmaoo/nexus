@@ -22,6 +22,22 @@ out for the owner to test. The fixes for that audit's RENDAH findings (R1, R3, R
 after it and ride in the next build, which is made only when the server/web side says so.
 Phases 1–5 done; Wear OS not built (the owner: not a Play Store priority).
 
+## 14 Oct (late), parity before QA (owner order; build + JVM tests only, no tour yet)
+
+Done and on `dev`, each built and unit-tested on the build VM (all green); none of it has been checked on a device yet:
+- Form Share tab QR code: ZXing core, made on the phone, black on white, save or share as PNG.
+- GIDEON: `@` adds a page, task or project as context; Review before writing (Always ask / Review / Don't ask) with Apply / Discard proposal cards behind centred confirmations.
+- Pipeline Real profit tile, "x of y deals have costs", the no-net-value warning and the card margin line (DEV has no deal with costs yet, so the margin line is unseen).
+- Project marks wherever iOS draws them (search, member profile Teams/Projects cards, Duplicate to another project, Submissions project chip), live on a photo change.
+- Run 9: English dates say "1 Sep" (en-150); a linked lane header shows the full project name on two lines.
+- Legal (docs/legal-android.md, docs/legal-api.md): documents, new document, review/edit, compare, status rules with VOID and addendum, upload of the signed version, templates, companies and numbering, members and invites, the Requests board and request detail, the `/f/legal-…` request form (deep link, waits through sign-in), my Legal requests in My Submissions, gated on `canAccessLegal`.
+
+Not done / not verified:
+- Nothing above has been run against the server from the app or seen on a device; the UI tour is on hold (owner).
+- GIDEON: chips, sources and created items are not tappable; the page on screen is not attached automatically; proposals appear only after the whole answer.
+- Legal: one board column at a time (no tablet three-column board), moving cards is long-press only, downloads go through the share sheet, kop/template uploads are not pre-checked on the phone.
+- QA matrix per role × access level: after the parity work.
+
 ## 14 Oct, UI tour rounds 1–3 (Android vs iPhone first, then web; monorepo `dev`)
 
 Done (each pushed to `dev`, author the owner):
