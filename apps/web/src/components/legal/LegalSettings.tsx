@@ -78,17 +78,32 @@ function CompanyCard({ company, canEdit }: { company: LegalCompany; canEdit: boo
       </div>
       {canEdit && <Button size="sm" disabled={!dirty || save.isPending} onClick={() => save.mutate()}>{t("Save")}</Button>}
 
-      <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted/40 px-3 py-2 text-sm">
-        <span className="font-medium">{t("Letterhead")}</span>
-        <span className="flex-1 text-muted-foreground">
-          {company.hasKop ? t("{file}, uploaded {date}", { file: company.kopFileName ?? "kop.docx", date: fmtDate(company.kopUpdatedAt) }) : t("Not uploaded: documents get no letterhead.")}
-        </span>
-        {company.hasKop && <Button asChild variant="ghost" size="sm" className="gap-1.5"><a href={legalSettingsApi.kopUrl(company.id)}><Download className="h-4 w-4" /> {t("Download")}</a></Button>}
-        {canEdit && (
-          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-sm hover:bg-accent">
-            {kop.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} {company.hasKop ? t("Replace") : t("Upload letterhead")}
-            <input type="file" accept=".docx" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) kop.mutate(f); e.target.value = ""; }} />
-          </label>
+      {/* One layout for every company (UI tour run 12, WM5: with flex-wrap the file name wrapped "14 / Oct" on one
+          and Download / Replace landed in different places on each). Label and file on the left, the file name
+          cut with an ellipsis and the date kept whole; the buttons in a fixed order, on their own row on a phone
+          and at the right from sm. */}
+      <div className="flex flex-col gap-2 rounded-md bg-muted/40 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="font-medium">{t("Letterhead")}</div>
+          {company.hasKop ? (
+            <div className="flex min-w-0 items-baseline gap-1 text-xs text-muted-foreground">
+              <span className="truncate" title={company.kopFileName ?? "kop.docx"}>{company.kopFileName ?? "kop.docx"}</span>
+              <span className="shrink-0 whitespace-nowrap">· {t("Uploaded {date}", { date: fmtDate(company.kopUpdatedAt) })}</span>
+            </div>
+          ) : (
+            <div className="text-xs text-muted-foreground">{t("Not uploaded: documents get no letterhead.")}</div>
+          )}
+        </div>
+        {(company.hasKop || canEdit) && (
+          <div className="flex shrink-0 items-center gap-2">
+            {company.hasKop && <Button asChild variant="outline" size="sm" className="gap-1.5"><a href={legalSettingsApi.kopUrl(company.id)}><Download className="h-4 w-4" /> {t("Download")}</a></Button>}
+            {canEdit && (
+              <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium hover:bg-accent">
+                {kop.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} {company.hasKop ? t("Replace") : t("Upload letterhead")}
+                <input type="file" accept=".docx" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) kop.mutate(f); e.target.value = ""; }} />
+              </label>
+            )}
+          </div>
         )}
       </div>
 

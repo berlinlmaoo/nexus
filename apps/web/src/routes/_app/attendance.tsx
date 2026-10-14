@@ -95,6 +95,8 @@ const REQ_LABEL: Record<string, string> = { LEAVE: "Leave", SICK: "Sick", PERMIT
 // sick note. The type says what the photo is; the file name only ever said what the app guessed.
 // Anything that isn't an image (a PDF) keeps its name — there, the name is the person's own.
 const PHOTO_EXT = /\.(jpe?g|png|gif|webp|heic|heif|avif|bmp)$/i;
+/** Width of the attendance board's right-edge fade on a phone (w-6); landing keeps today clear of it. */
+const BOARD_FADE = 24;
 function isPhotoDocument(url?: string | null, name?: string | null) {
   const path = (url ?? "").split(/[?#]/)[0];
   // The stored file keeps the uploaded extension (see POST /api/attendance/requests); the original
@@ -329,20 +331,32 @@ function Attendance() {
   // Never again while the person scrolls; a period without today stays at its start.
   const boardScrollRef = useRef<HTMLDivElement>(null);
   const landedPeriod = useRef<string | null>(null);
+  // Phone: a fade on the right edge while more days lie that way, so the column cut there reads as "more".
+  const [boardMore, setBoardMore] = useState(false);
+  const setBoardEdge = () => {
+    const el = boardScrollRef.current;
+    if (el) setBoardMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+  };
   useEffect(() => {
     if (viewMode !== "grid" || history.isLoading || landedPeriod.current === monthKey) return;
     const box = boardScrollRef.current;
     const cell = box?.querySelector<HTMLElement>(`th[data-day="${todayKey}"]`);
     if (!box || !cell) return;
     const pinned = box.querySelector<HTMLElement>("th[data-member-col]")?.offsetWidth ?? 0;
-    // Snap to a column edge (QA S-25: day columns differ in width, so "3 × today's width" left the
-    // first visible day half under the pinned member column — "D )"). The first column in view starts
-    // exactly at the pinned column's edge; no scroll at all when today already fits.
+    // Land on a column edge (QA S-25: day columns differ in width, so "3 × today's width" left the first
+    // visible day half under the pinned member column — "D )"): the first column in view starts exactly at
+    // the pinned column's edge. As many days before today as fit, with today whole and clear of the right
+    // fade (UI tour run 12, WM4: landing on "today - 3" cut today at the right edge). No scroll when today fits.
     const days = [...box.querySelectorAll<HTMLElement>("th[data-day]")];
-    const at = days.indexOf(cell);
-    const first = days[Math.max(0, at - 3)];
-    const fits = cell.offsetLeft + cell.offsetWidth <= box.clientWidth;
-    box.scrollLeft = fits || !first ? 0 : Math.max(0, first.offsetLeft - pinned);
+    const todayRight = cell.offsetLeft + cell.offsetWidth;
+    const fits = todayRight <= box.clientWidth - BOARD_FADE;
+    let target = cell.offsetLeft - pinned;
+    for (const d of days) {
+      if (d === cell) break;
+      if (todayRight <= d.offsetLeft - pinned + box.clientWidth - BOARD_FADE) { target = d.offsetLeft - pinned; break; }
+    }
+    box.scrollLeft = fits ? 0 : Math.max(0, target);
+    setBoardEdge();
     landedPeriod.current = monthKey;
   }, [viewMode, history.isLoading, monthKey, todayKey, periodDays.length]);
   // Cut-off aware: past the 27th we're already in NEXT month's payroll period, so the board's
@@ -537,7 +551,11 @@ function Attendance() {
           // Its own scroll box, as tall as the screen allows: the date row can only stay pinned inside
           // the element that scrolls, and a page-level sticky cannot cross `overflow-x`. So the days
           // and weekdays stay above the dots while you scroll down the crew (owner, 28 Sep 2026).
-          <div ref={boardScrollRef} className="isolate max-h-[calc(100dvh-11rem)] overflow-auto overscroll-contain">
+          // Phone: a swipe sideways stops on whole columns, a day starting right at the pinned member column
+          // (scroll-snap with the column's width as padding), and the right edge fades while more days lie
+          // that way (UI tour run 12, WM4: "Wed 14" was cut there with nothing saying so).
+          <div className="relative">
+          <div ref={boardScrollRef} onScroll={setBoardEdge} className="isolate max-h-[calc(100dvh-11rem)] overflow-auto overscroll-contain max-sm:snap-x max-sm:snap-proximity max-sm:[scroll-padding-left:7.5rem]">
             {/* `min-w-max`: with a plain `w-full` the 31 day columns and the member column were
                 squeezed into the phone's width, so the name, the pills and the dots all landed on
                 top of each other. Now the table keeps its natural width and this container scrolls,
@@ -547,7 +565,7 @@ function Attendance() {
                 <tr>
                   <th data-member-col className="sticky left-0 top-0 z-30 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] bg-muted px-2 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:max-w-[20rem] sm:px-4">{tr("Member")}</th>
                   {periodDays.map((pd) => (
-                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} className={cn("sticky top-0 z-20 bg-muted px-1 py-1.5 font-medium text-[10px] leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
+                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} className={cn("sticky top-0 z-20 snap-start bg-muted px-1 py-1.5 font-medium text-[10px] leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
                       <span className={cn("block text-[9px] uppercase", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" })}</span>
                       {pd.key === todayKey
                         ? <span className="inline-grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 font-bold text-primary-foreground">{pd.day}</span>
@@ -723,6 +741,8 @@ function Attendance() {
                 )}
               </tbody>
             </table>
+          </div>
+          {boardMore && <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 z-30 w-6 bg-gradient-to-l from-card to-transparent sm:hidden" />}
           </div>
           )}
         </div>

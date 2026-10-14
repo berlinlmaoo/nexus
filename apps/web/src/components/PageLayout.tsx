@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState, type ComponentType, type Keyb
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
+import { hidePartialTabs, revealTab } from "@/components/tab-overflow";
+
+/** Width of PageTabs' edge arrows (w-10), the zone a tab must clear to stay shown. */
+const ARROW_W = 40;
 
 /**
  * The page layout primitives every list page shares (UI sweep, 12 Oct 2026).
@@ -49,7 +53,10 @@ export function PageTabs<K extends string>({ tabs, value, onChange, label, class
   const measure = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    setEdge({ left: el.scrollLeft > 2, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2 });
+    const next = { left: el.scrollLeft > 2, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2 };
+    // A tab cut by an arrow is hidden whole, never left as a glyph fragment beside it (UI tour run 12, WM1).
+    hidePartialTabs(el, "[role='tab']", next, ARROW_W);
+    setEdge((e) => (e.left === next.left && e.right === next.right ? e : next));
   }, []);
   useEffect(() => {
     measure();
@@ -59,10 +66,13 @@ export function PageTabs<K extends string>({ tabs, value, onChange, label, class
     ro.observe(el);
     return () => ro.disconnect();
   }, [measure, tabs.length]);
+  // The selected tab is brought into view clear of the arrows, so it is never the one cut (and hidden) at an edge.
   useEffect(() => {
-    const el = ref.current?.querySelector<HTMLElement>(`[data-tab="${value}"]`);
-    el?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
-  }, [value]);
+    const box = ref.current;
+    const el = box?.querySelector<HTMLElement>(`[data-tab="${value}"]`);
+    if (box && el) revealTab(box, el, "[role='tab']", ARROW_W);
+    measure();
+  }, [value, measure, tabs.length]);
   const nudge = (dir: 1 | -1) => ref.current?.scrollBy({ left: dir * Math.max(160, (ref.current?.clientWidth ?? 0) * 0.6), behavior: "smooth" });
   const onWheel = (e: WheelEvent<HTMLDivElement>) => {
     const el = ref.current;
@@ -82,7 +92,7 @@ export function PageTabs<K extends string>({ tabs, value, onChange, label, class
   const arrow = "absolute top-0 bottom-[2px] z-10 flex w-10 items-center text-muted-foreground transition hover:text-foreground";
   return (
     <div className={cn("relative min-w-0", className)}>
-    <div ref={ref} role="tablist" aria-label={label} onKeyDown={onKey} onScroll={measure} onWheel={onWheel} className="flex items-end gap-5 overflow-x-auto overscroll-x-contain whitespace-nowrap [scrollbar-width:none] [touch-action:pan-x_pan-y] [&::-webkit-scrollbar]:hidden">
+    <div ref={ref} role="tablist" aria-label={label} onKeyDown={onKey} onScroll={measure} onWheel={onWheel} className="flex snap-x snap-proximity items-end gap-5 overflow-x-auto overscroll-x-contain whitespace-nowrap [scroll-padding-inline:40px] [scrollbar-width:none] [touch-action:pan-x_pan-y] [&::-webkit-scrollbar]:hidden">
       {tabs.map((t) => {
         const on = t.key === value;
         const Icon = t.icon;
@@ -96,7 +106,7 @@ export function PageTabs<K extends string>({ tabs, value, onChange, label, class
             tabIndex={on ? 0 : -1}
             onClick={() => onChange(t.key)}
             className={cn(
-              "relative inline-flex shrink-0 items-center gap-1.5 border-b-2 pb-2.5 pt-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-t-sm pointer-coarse:min-h-11",
+              "relative inline-flex shrink-0 snap-start items-center gap-1.5 border-b-2 pb-2.5 pt-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-t-sm pointer-coarse:min-h-11",
               on ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >

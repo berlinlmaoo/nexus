@@ -6,12 +6,11 @@ import { SelectPicker } from "@/components/SelectPicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
-import { Segmented } from "@/components/PageLayout";
+import { PageTabs, Segmented } from "@/components/PageLayout";
 import { nexusApi, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusWorkspaceMember } from "@/lib/nexus-api";
 import { Settings as SettingsIcon, User, Bell, Lock, Palette, Zap, Loader2, Trash2, ImagePlus, Users, UserPlus, ShieldCheck, KeyRound, Copy, Check, X, Plug, Sparkles, AlertTriangle, Globe, Terminal, Monitor, AtSign, Sun, Moon, Languages } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { useEdgeFade } from "@/hooks/use-edge-fade";
 import { passkeysSupported, registerPasskey } from "@/lib/passkey";
 import { useTheme, type Theme } from "@/lib/theme";
 import { useLang, type Lang } from "@/lib/lang";
@@ -53,25 +52,17 @@ function Settings() {
   const navigate = Route.useNavigate();
   const active: string = search.section ?? "profile";
   const setActive = (id: string) => { void navigate({ search: { section: id === "profile" ? undefined : (id as SectionId) }, replace: true }); };
-  const strip = useRef<HTMLElement>(null);
-  const stripFade = useEdgeFade(strip, [], true);
-  // Phone/tablet strip: bring the open section's tab into view (a deep link to ?section=security opened on a
-  // tab cut at "Securi…"). Only the strip scrolls sideways; the page itself is never moved.
-  useEffect(() => {
-    const el = strip.current;
-    const btn = el?.querySelector<HTMLElement>('[aria-current="page"]');
-    if (!el || !btn || el.scrollWidth <= el.clientWidth) return;
-    const left = btn.offsetLeft; // the strip is `relative`, so it is the offsetParent
-    const pad = 40;
-    if (left - pad < el.scrollLeft) el.scrollTo({ left: Math.max(0, left - pad), behavior: "smooth" });
-    else if (left + btn.offsetWidth + pad > el.scrollLeft + el.clientWidth) el.scrollTo({ left: left + btn.offsetWidth + pad - el.clientWidth, behavior: "smooth" });
-  }, [active]);
   return (
     <div>
-      <PageHeader title={t("Settings")} subtitle={t("Your profile, security, notifications and workspace preferences.")} />
+      {/* Below lg the sections are the shared page tab strip in the header (PageTabs: pinned on a phone, arrows on
+          the side that has more, no cut tab), like Legal and the project views. Its own strip hard-clipped
+          "Securi" with no sign of more (UI tour run 12, WM2). From lg the list on the left. */}
+      <PageHeader title={t("Settings")} subtitle={t("Your profile, security, notifications and workspace preferences.")} tabs={
+        <PageTabs className="lg:hidden" label={t("Settings sections")} value={active} onChange={setActive}
+          tabs={sections.map((s) => ({ key: s.id, label: t(s.label), icon: s.icon }))} />
+      } />
       <div className="p-4 md:p-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Below lg the sections are a sideways-scrolling strip (stacked, the list pushed the section below the fold). */}
-        <aside ref={strip} className={cn("relative -mx-4 flex gap-1 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:-mx-8 md:px-8 lg:col-span-1 lg:mx-0 lg:block lg:space-y-1 lg:overflow-visible lg:px-0", stripFade)}>
+        <aside className="hidden lg:col-span-1 lg:block lg:space-y-1">
           {sections.map((s) => (
             <button key={s.id} onClick={() => setActive(s.id)} aria-current={active === s.id ? "page" : undefined}
               className={`shrink-0 whitespace-nowrap min-h-11 lg:min-h-0 lg:w-full text-left flex items-center gap-2 px-3 py-2 rounded-md text-sm transition ${active === s.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-accent text-muted-foreground"}`}>
