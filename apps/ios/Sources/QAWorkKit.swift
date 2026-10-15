@@ -22,6 +22,14 @@ enum UntitledText {
         let v = (name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return isBlank(v) || v == "Untitled project" ? T("Untitled project") : v
     }
+    /// A title as wrapped text: a spaced dash stays with the word before it (a no-break space in front),
+    /// so no line ends "Gaji Clippers" over "–Cymenggs" or ends in "–…" (UI tour run 16, R16-B-11,
+    /// decision 12; the web does the same).
+    static func wrapped(_ title: String) -> String {
+        title.replacingOccurrences(of: " – ", with: "\u{00A0}– ")
+            .replacingOccurrences(of: " — ", with: "\u{00A0}— ")
+            .replacingOccurrences(of: " - ", with: "\u{00A0}- ")
+    }
     /// Anything else (a page, an event): "Untitled" / "Tanpa judul".
     static func any(_ title: String?) -> String {
         isBlank(title) ? T("Untitled") : (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)

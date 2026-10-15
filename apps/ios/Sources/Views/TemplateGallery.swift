@@ -229,7 +229,7 @@ private struct GalleryCard<Preview: View>: View {
                     .frame(width: 32, height: 32)
                     .background(NX.muted, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    Text(UntitledText.wrapped(title)).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground).lineLimit(2)
                     // Four lines kept for every description, so the cards of a row are one height and their
                     // previews line up (Q-IA34; the whole text as before, P-I32 / P-M18).
                     Text(blurb).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)

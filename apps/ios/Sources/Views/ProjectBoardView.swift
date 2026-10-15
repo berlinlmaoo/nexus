@@ -1339,7 +1339,10 @@ struct ProjectDetailView: View {
                 // "+ Status" column was cut at the other (UI tour run 14, N-13 / P-I13). The margin is the
                 // scroll's own (not padding inside it), so the snapped column keeps its 14 pt inset.
                 .scrollTargetBehavior(.viewAligned)
-                .contentMargins(.horizontal, 14, for: .scrollContent)
+                .contentMargins(.leading, 14, for: .scrollContent)
+                // A wider end margin on iPad / Mac, so "Add status" never sits against the window's edge
+                // (UI tour run 16, R16-M-16).
+                .contentMargins(.trailing, wide ? 32 : 14, for: .scrollContent)
                 // The column peeking in at the edge fades out, so a card cut mid-word reads as "more this way"
                 // (UI tour run 15, R15-I-11 / Q-IA21 / Q-M12). Wider on iPad / Mac, where 40 pt over a 280 pt
                 // column did not read as a fade at all (run 16, R16-I-13).
@@ -2226,7 +2229,7 @@ struct BoardCard: View {
                 if let selectMark { TaskSelectionMark(selected: selectMark) }
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 16)).foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.5))
-                Text(task.title).font(NXFont.text(14, .bold))
+                Text(UntitledText.wrapped(task.title)).font(NXFont.text(14, .bold))
                     .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
                     // The whole title, as on the web card: three lines cut "FLSHA (TETRA COFFEE AND EATERY
                     // PEKANB…" (UI tour run 15, Q-M11).

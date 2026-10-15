@@ -258,9 +258,11 @@ struct OverviewTab: View {
                     // the row grew past the screen and the right column, and the header above it, were
                     // cut off at the edge (UI tour run 4). Narrower than that, one column.
                     ViewThatFits(in: .horizontal) {
+                        // Status updates in the left column under "Who's working on what", as the web's, so
+                        // the left column does not end in empty space (UI tour run 16, R16-M-09).
                         HStack(alignment: .top, spacing: 20) {
-                            main(stats).frame(minWidth: 400, idealWidth: 400, maxWidth: .infinity)
-                            side(stats).frame(width: 340)
+                            main(stats, updates: true).frame(minWidth: 400, idealWidth: 400, maxWidth: .infinity)
+                            side(stats, updates: false).frame(width: 340)
                         }
                         VStack(spacing: 16) {
                             main(stats)
@@ -280,7 +282,7 @@ struct OverviewTab: View {
         }
     }
 
-    @ViewBuilder private func main(_ s: OverviewStats) -> some View {
+    @ViewBuilder private func main(_ s: OverviewStats, updates: Bool = false) -> some View {
         VStack(spacing: 16) {
             if s.total == 0 {
                 EmptyState(icon: "checklist", title: T("No tasks in this project yet"),
@@ -295,10 +297,11 @@ struct OverviewTab: View {
                 OverviewDeadlinesCard(stats: s, onOpenTask: onOpenTask, onDrill: onDrill)
                 OverviewTeamCard(stats: s, onDrill: onDrill)
             }
+            if updates { OverviewStatusUpdatesCard(projectId: detail.id, canPost: detail.canEditProject) }
         }
     }
 
-    @ViewBuilder private func side(_ s: OverviewStats) -> some View {
+    @ViewBuilder private func side(_ s: OverviewStats, updates: Bool = true) -> some View {
         VStack(spacing: 16) {
             OverviewBriefCard(detail: detail, onEdit: onEditBrief, onOpenMember: onOpenMember)
             if s.total > 0 {
@@ -306,7 +309,7 @@ struct OverviewTab: View {
                 if s.sections.count > 1 { OverviewSectionsCard(stats: s, onDrill: onDrill) }
                 OverviewRecentCard(stats: s, onOpenTask: onOpenTask)
             }
-            OverviewStatusUpdatesCard(projectId: detail.id, canPost: detail.canEditProject)
+            if updates { OverviewStatusUpdatesCard(projectId: detail.id, canPost: detail.canEditProject) }
         }
     }
 }
@@ -541,10 +544,8 @@ private struct OverviewProgressCard: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             Spacer(minLength: 0)
-                            if c.value > 0 && onDrill != nil {
-                                Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(NX.mutedFg.opacity(0.6)).accessibilityHidden(true)
-                            }
+                            // No ↗ on the tiles: the web's tiles are plain (UI tour run 16, R16-B-10); the tile
+                            // still opens its tasks, and says so to VoiceOver.
                         }
                         Text("\(c.value)").font(NXFont.display(20, .bold)).monospacedDigit()
                             .foregroundStyle(c.value == 0 ? NX.mutedFg.opacity(0.6) : (c.late ? OverviewStyle.late : NX.foreground))
@@ -1056,7 +1057,7 @@ private struct OverviewRecentCard: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     // The whole title, wrapped: two lines still cut "…PATS GOLF @topgolf j…" on
                                     // the Mac (UI tour run 15, Q-M10; P-M23).
-                                    Text(UntitledText.task(t.title)).font(NXFont.text(14)).foregroundStyle(NX.foreground)
+                                    Text(UntitledText.wrapped(UntitledText.task(t.title))).font(NXFont.text(14)).foregroundStyle(NX.foreground)
                                         .multilineTextAlignment(.leading)
                                         .fixedSize(horizontal: false, vertical: true)
                                     if !meta.isEmpty {

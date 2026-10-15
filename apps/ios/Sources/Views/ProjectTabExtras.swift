@@ -531,7 +531,7 @@ struct ProjectTableRow: View {
                 }
                 // Two lines before an ellipsis, as the web's Table (R14-WB-12): one line cut "reimburse transport
                 // take content pe…" while the row had room for the rest (UI tour run 15, Q-IA25 / Q-M14).
-                Text(task.title)
+                Text(UntitledText.wrapped(task.title))
                     .font(NXFont.text(15, .medium))
                     .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
                     .strikethrough(task.isDone)
@@ -662,10 +662,9 @@ struct ProjectTableRow: View {
 
     private func statusFace(menu: Bool) -> some View {
         HStack(spacing: 6) {
+            // No ⌄ beside the pill: the web's cell is the pill alone, and the whole cell is still the menu
+            // (UI tour run 16, R16-B-11).
             StatusPill(name: status.name, colorKey: status.colorKey, size: 13).fixedSize()
-            if menu {
-                Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(NX.mutedFg)
-            }
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)

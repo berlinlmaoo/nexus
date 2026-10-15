@@ -389,7 +389,12 @@ struct FormBuilderView: View {
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
         if loaded && loadError == nil {
             if regular {
-                ToolbarItem(placement: .topBarLeading) { breadcrumb }
+                // A plain breadcrumb, as the web's, not a glass bubble of its own (UI tour run 16, R16-M-10).
+                if #available(iOS 26.0, *) {
+                    ToolbarItem(placement: .topBarLeading) { breadcrumb }.sharedBackgroundVisibility(.hidden)
+                } else {
+                    ToolbarItem(placement: .topBarLeading) { breadcrumb }
+                }
                 if barTabs {
                     ToolbarItem(placement: .principal) {
                         // Full labels always (web, Mac): the tabs keep their ideal width and the breadcrumb truncates.
@@ -400,9 +405,10 @@ struct FormBuilderView: View {
                 // Phone: a smaller inline title beside the three bar buttons, cut at its end. While the form's
                 // own heading is in view under the bar the title is left out: it said "Pengajua…ance PATS" right
                 // above the whole name (UI tour run 12, IP12).
+                // Two lines rather than "Pengajuan Finance P…" (UI tour run 16, R16-I-18).
                 ToolbarItem(placement: .principal) {
-                    Text(displayName).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
-                        .lineLimit(1).truncationMode(.tail)
+                    Text(displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                        .lineLimit(2).multilineTextAlignment(.center).truncationMode(.tail)
                         .opacity(headOnScreen && tab == .questions ? 0 : 1)
                         .animation(.easeInOut(duration: 0.15), value: headOnScreen)
                         .accessibilityHidden(headOnScreen && tab == .questions)
@@ -441,7 +447,8 @@ struct FormBuilderView: View {
     }
 
     @ViewBuilder private var previewButton: some View {
-        if regular && !tightBar {
+        // Named on every iPad / Mac bar, as the web's "Preview" (UI tour run 16, R16-M-10: an icon-only eye).
+        if regular {
             Button { Task { await openPreview() } } label: { Label(T("Preview"), systemImage: "eye").labelStyle(.titleAndIcon) }
                 .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
         } else {

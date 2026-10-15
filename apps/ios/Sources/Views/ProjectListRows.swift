@@ -369,7 +369,7 @@ struct ListTaskRow: View {
             if task.isSubtask {
                 Image(systemName: "arrow.turn.down.right").font(.system(size: 11)).foregroundStyle(NX.mutedFg)
             }
-            Text(task.title)
+            Text(UntitledText.wrapped(task.title))
                 .font(NXFont.text(15))
                 .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
                 .strikethrough(task.isDone)
