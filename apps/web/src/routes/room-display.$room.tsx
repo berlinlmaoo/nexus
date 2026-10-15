@@ -135,7 +135,7 @@ function RoomDisplay() {
                 {next && dayKey(next.start) === todayK ? t("Free until {time}", { time: fmtTime(next.start, locale) }) : t("Free to use")}
               </div>
               <div className="mt-2 text-2xl font-semibold text-muted-foreground">
-                {next ? (dayKey(next.start) === todayK ? t("Up next: {title} · starts in {n} min", { title: next.title, n: Math.max(0, relMins(now, next.start)) }) : t("Next booking {day}, {time}", { day: fmtDayLong(next.start, locale), time: fmtTime(next.start, locale) })) : t("No bookings coming up")}
+                {next ? (dayKey(next.start) === todayK ? t("Up next: {title} · starts in {n} min", { title: next.title, n: Math.max(0, relMins(now, next.start)) }) : t("Next booking {day} {time}", { day: fmtDayLong(next.start, locale), time: fmtTime(next.start, locale) })) : t("No bookings coming up")}
               </div>
             </>
           )}

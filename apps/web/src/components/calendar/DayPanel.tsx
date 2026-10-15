@@ -285,13 +285,15 @@ function NodeBody({ node, own, lens, level, common }: { node: TreeNode; own?: bo
   );
 }
 
-/** A sub-card inside a section, or a group drawn as a thin ribbon ("CREATIVE · 1") around its cards. */
+/** A sub-card inside a section, or a group drawn as a thin ribbon ("CREATIVE · 1 TASK") around its cards. */
 function SubNode({ node, lens, level, common }: { node: TreeNode; lens: Lens; level: number; common: Common }) {
+  const { tn } = useLang();
   if (node.unit.kind === "GROUP") {
     return (
       <div className="mx-[4px] mt-2 rounded-xl border border-dashed border-cal-line bg-cal-accent-soft/50 px-[4px] pb-1 pt-1.5 dark:bg-cal-accent-soft/40">
+        {/* The count with its unit, "CREATIVE · 1 task", as the apps write it (iPhone run 14 N-38). */}
         <Heading level={level} className={cn("px-[6px] pb-0.5 [overflow-wrap:anywhere]", CAPS, SLATE.text)}>
-          {node.unit.name}<span aria-hidden> · {node.count}</span><span className="sr-only">, </span><SrCount n={node.count} />
+          {node.unit.name} · {tn(node.count, "{n} task", "{n} tasks")}
         </Heading>
         {node.children.map((k) => <SubNode key={k.unit.id} node={k} lens={lens} level={subLevel(level)} common={common} />)}
       </div>

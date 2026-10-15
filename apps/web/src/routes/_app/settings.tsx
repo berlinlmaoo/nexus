@@ -413,7 +413,7 @@ function ProfileSection() {
             <div className="mt-1 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
               {u?.googleWorkspaceEmail
                 ? <><AtSign className="h-4 w-4 shrink-0 text-primary" /><span className="truncate font-medium">{u.googleWorkspaceEmail}</span></>
-                : <span className="text-muted-foreground">{t("No company Google account linked yet. A BoD links it from Control Room.")}</span>}
+                : <span className="text-muted-foreground">{t("No company Google account linked yet. A board member links it from Control Room.")}</span>}
             </div>
           </label>
           <label className="block sm:col-span-2">
