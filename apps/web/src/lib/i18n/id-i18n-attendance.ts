@@ -223,6 +223,7 @@ export const ID_I18N_ATTENDANCE: Record<string, string> = {
   "{n} waiting for review": "{n} menunggu ditinjau",
   "Couldn't save the date.": "Tanggal gagal disimpan.",
   "Employment start date": "Tanggal mulai kerja",
+  "The basis for annual leave: eligible after 12 months of work. Not filled in = not eligible yet.": "Dasar cuti tahunan: berhak setelah 12 bulan bekerja. Belum diisi = belum berhak.",
   "The basis for annual leave ({n} days a year, reset on 1 January). Eligible after 12 months of work. Not filled in = not eligible yet.": "Dasar hak cuti tahunan ({n} hari/tahun, reset 1 Januari). Berhak setelah 12 bulan kerja. Yang belum diisi = belum berhak.",
   "{filled}/{total} filled in · {eligible} eligible": "{filled}/{total} terisi · {eligible} berhak",
   "Not filled in — can't request leave yet": "Belum diisi — belum bisa mengajukan cuti",

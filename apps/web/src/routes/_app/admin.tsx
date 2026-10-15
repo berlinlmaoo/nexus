@@ -32,6 +32,7 @@ import { CalendarSettingsAdmin } from "@/components/calendar/CalendarSettingsAdm
 import { useLang } from "@/lib/lang";
 import { LeftTag } from "@/components/LeftTag";
 import { HScroll } from "@/components/HScroll";
+import { DateField } from "@/components/DateField";
 import { UnitTreePicker } from "@/components/UnitTreePicker";
 
 // The section is in the URL (?tab=audit), like Reports' ?tab=team: a reload, Back or a shared link lands
@@ -935,6 +936,12 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                 </Card>
               )}
 
+              {canManageShift && (
+                <Card title={t("Employment start date")} hint={t("The basis for annual leave: eligible after 12 months of work. Not filled in = not eligible yet.")}>
+                  <EmploymentStartField userId={user.id} />
+                </Card>
+              )}
+
               {gwConfigured && (
                 <Card title="Google Workspace" hint={t("The work email linked to this profile.")}>
                   <GoogleLinkCell user={user} accounts={gwAccounts} domains={gwDomains} configured={gwConfigured} canEdit={canLinkGoogle} />
@@ -1035,6 +1042,48 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * One person's employment start date, inside their Users card (owner, 16 Oct 2026: set per person in
+ * Control Room, not as a crew list on Attendance). Same route as before: BoD and up, audited.
+ */
+function EmploymentStartField({ userId }: { userId: string }) {
+  const { t, locale } = useLang();
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["employment-start"], queryFn: () => nexusApi.employmentStartDates(), retry: 1 });
+  const save = useMutation({
+    mutationFn: (date: string | null) => nexusApi.setEmploymentStartDate(userId, date),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["employment-start"] });
+      qc.invalidateQueries({ queryKey: ["attendance-today"] });
+    },
+    onError: (e) => toastFailure(t("Couldn't save the date."), e),
+  });
+  const m = q.data?.members.find((r) => r.userId === userId);
+  if (q.isLoading) return <p className="text-sm text-muted-foreground">{t("Loading…")}</p>;
+  const current = m?.employmentStartDate ? String(m.employmentStartDate).slice(0, 10) : null;
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <DateField
+        value={current}
+        max={new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" })}
+        yearPicker
+        ariaLabel={t("Employment start date")}
+        placeholder={t("Pick a date")}
+        disabled={save.isPending}
+        onChange={(next) => { if (next !== current) save.mutate(next); }}
+        className="w-auto shrink-0 rounded-lg border border-border bg-card px-3 py-2"
+      />
+      <span className="min-w-0 flex-1 text-xs text-muted-foreground">
+        {!current
+          ? t("Can't request leave yet")
+          : m?.eligible
+            ? t("Eligible for annual leave")
+            : t("Eligible from {date}", { date: m?.eligibleFrom ? new Date(m.eligibleFrom).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" }) : "—" })}
+      </span>
     </div>
   );
 }
