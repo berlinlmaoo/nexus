@@ -1053,11 +1053,15 @@ struct CalItemRow: View {
 
     /// The overdue words are for the eye: VoiceOver already heard them from the status mark, once.
     @ViewBuilder private func meta(_ od: CalOverdue) -> some View {
-        HStack(spacing: 6) {
+        // Wraps instead of cutting the project to "DRAMA GE…" in a nested division card on the Mac's narrow
+        // rail (UI tour run 16, R16-M-04); the mark stays with its name.
+        FlowLayout(spacing: 6) {
             if let p = item.project {
-                RoundedRectangle(cornerRadius: 2).fill(calProjectColor(p.color)).frame(width: 8, height: 8)
-                    .accessibilityHidden(true)
-                Text(p.name).font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg).lineLimit(1)
+                HStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 2).fill(calProjectColor(p.color)).frame(width: 8, height: 8)
+                        .accessibilityHidden(true)
+                    Text(p.name).font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg).lineLimit(1)
+                }
                 if !item.linkedProjectIds.isEmpty {
                     Text(String(format: T("+%d project"), item.linkedProjectIds.count)).font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg)
                 }

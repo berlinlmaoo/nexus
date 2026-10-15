@@ -952,17 +952,23 @@ struct CalendarView: View {
     /// cut ("No division 1…", UI tour run 14, P-I17). The phone keeps one scrolling row with its fade.
     @ViewBuilder private var legendRow: some View {
         if hSize == .regular {
-            FlowLayout(spacing: 6) { legendItems }
+            // One row as on the web wherever it fits, a little tighter if it must; wrapping is the last
+            // resort ("No division 11" alone on a second row, UI tour run 16, R16-I-18 iPad).
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) { legendItems() }
+                HStack(spacing: 4) { legendItems(tight: true) }
+                FlowLayout(spacing: 6) { legendItems() }
+            }
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) { legendItems }
+                HStack(spacing: 6) { legendItems() }
             }
             // The last chip ran into the screen edge cut ("PATS 5", UI tour run 11 IP-11): fade where more lies.
             .nxEdgeFade(44)
         }
     }
 
-    @ViewBuilder private var legendItems: some View {
+    @ViewBuilder private func legendItems(tight: Bool = false) -> some View {
         let entries = legendEntries
         let picked = Set(filters.units)
         if let top = ix.top, focus != top.id {
@@ -996,11 +1002,11 @@ struct CalendarView: View {
             }
         }
         ForEach(entries, id: \.unitId) { e in
-            legendChip(e, on: picked.contains(e.unitId))
+            legendChip(e, on: picked.contains(e.unitId), tight: tight)
         }
     }
 
-    private func legendChip(_ e: CalLegendEntry, on: Bool) -> some View {
+    private func legendChip(_ e: CalLegendEntry, on: Bool, tight: Bool = false) -> some View {
         let unit = ix.byId[e.unitId]
         let focusable = unit != nil && e.unitId != focus && !(ix.children[e.unitId] ?? []).isEmpty
         let name = e.unitId == "other" ? T("No division") : (unit?.name ?? "")
@@ -1019,7 +1025,7 @@ struct CalendarView: View {
                 filtersBinding.wrappedValue = f
             }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: tight ? 4 : 6) {
                 Circle().fill(calUnitColor(unit)).frame(width: 8, height: 8)
                 Text(name).font(NXFont.text(CalType.size(12), .semibold)).lineLimit(1)
                 Text("\(e.count)").font(NXFont.text(CalType.size(12))).monospacedDigit().foregroundStyle(NX.mutedFg)
@@ -1032,7 +1038,7 @@ struct CalendarView: View {
                     Image(systemName: "scope").font(NXFont.text(CalType.size(11), .semibold)).foregroundStyle(NX.mutedFg)
                 }
             }
-            .padding(.horizontal, 10).frame(minHeight: 30)
+            .padding(.horizontal, tight ? 7 : 10).frame(minHeight: 30)
             // On: an outline and the check, not the filled capsule of the filter tokens and buttons.
             .background(NX.card, in: Capsule())
             .overlay(Capsule().strokeBorder(on ? NX.violetText : NX.border, lineWidth: on ? 1.5 : 1))
@@ -1516,16 +1522,24 @@ struct CalendarView: View {
                 date.fixedSize(horizontal: false, vertical: true)
                 if let tag { relativeTag(tag) }
             } else {
-                HStack(spacing: 8) {
-                    // One line, shrinking a little before it wraps: in the Mac's day rail the date broke
-                    // into three lines with the comma starting the second ("Wednesday / , 14 Oct /
-                    // 2026", UI tour run 4). The web keeps it on one line beside TODAY.
+                if twoPane {
+                    // The narrow rail (iPad, Mac): the whole "Thursday 15 Oct" on its own line, TODAY moving
+                    // down beside the counts, so the date never falls back to "Thu 15 Oct" (UI tour run 16,
+                    // R16-M-04).
                     date.lineLimit(1).minimumScaleFactor(0.7)
-                    if let tag { relativeTag(tag).fixedSize() }
+                } else {
+                    HStack(spacing: 8) {
+                        // One line, shrinking a little before it wraps: in the Mac's day rail the date broke
+                        // into three lines with the comma starting the second ("Wednesday / , 14 Oct /
+                        // 2026", UI tour run 4). The web keeps it on one line beside TODAY.
+                        date.lineLimit(1).minimumScaleFactor(0.7)
+                        if let tag { relativeTag(tag).fixedSize() }
+                    }
                 }
             }
             if let holiday { Text(holiday).font(NXFont.text(CalType.size(12), .semibold)).foregroundStyle(CalTone.overdue) }
             HStack(spacing: 6) {
+                if twoPane, !typeSize.isAccessibilitySize, let tag { relativeTag(tag).fixedSize() }
                 Text(tree.total > 0 ? "\(CalFormat.tasks(tree.total)) · \(CalFormat.people(tree.people))"
                      : !rangeLoaded ? (failedHere ? T("Couldn't load this") : T("Loading…"))
                      : T("No tasks"))
