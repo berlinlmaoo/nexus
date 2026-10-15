@@ -619,7 +619,8 @@ html:has([data-snap-rows], [data-snap-row]) {
   scroll-padding-top: calc(var(--page-sticky-top, 0px) + 1rem);
 }
 [data-snap-rows] > *,
-[data-snap-row] {
+[data-snap-row],
+[data-snap-top] {
   scroll-snap-align: start;
 }
 /* A scroll box of its own (a table, a side panel) snaps its rows under its own sticky head. */

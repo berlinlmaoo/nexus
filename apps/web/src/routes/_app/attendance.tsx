@@ -348,27 +348,57 @@ function Attendance() {
     setBoardMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
     setBoardMoreDown(el.scrollTop + el.clientHeight < el.scrollHeight - 2);
   };
+  // Until the person moves the board themselves, the landing is redone whenever the table changes size: the
+  // first landing could run before the member rows (and their wider day cells) were drawn, so the offsets
+  // were those of the narrow header-only table and the board stood half a column off, with the last day cut
+  // at the right edge (UI tour run 16, R16-WM-R5: "FRI 9 … WED 14" with WED 14 halved).
+  const boardTouched = useRef(false);
   useEffect(() => {
-    if (viewMode !== "grid" || history.isLoading || landedPeriod.current === monthKey) return;
+    if (viewMode !== "grid" || history.isLoading) return;
     const box = boardScrollRef.current;
-    const cell = box?.querySelector<HTMLElement>(`th[data-day="${todayKey}"]`);
-    if (!box || !cell) return;
-    const pinned = box.querySelector<HTMLElement>("th[data-member-col]")?.offsetWidth ?? 0;
-    // Land on a column edge (QA S-25: day columns differ in width, so "3 × today's width" left the first
-    // visible day half under the pinned member column — "D )"): the first column in view starts exactly at
-    // the pinned column's edge. As many days before today as fit, with today whole and clear of the right
-    // fade (UI tour run 12, WM4: landing on "today - 3" cut today at the right edge). No scroll when today fits.
-    const days = [...box.querySelectorAll<HTMLElement>("th[data-day]")];
-    const todayRight = cell.offsetLeft + cell.offsetWidth;
-    const fits = todayRight <= box.clientWidth - BOARD_FADE;
-    let target = cell.offsetLeft - pinned;
-    for (const d of days) {
-      if (d === cell) break;
-      if (todayRight <= d.offsetLeft - pinned + box.clientWidth - BOARD_FADE) { target = d.offsetLeft - pinned; break; }
-    }
-    box.scrollLeft = fits ? 0 : Math.max(0, target);
-    setBoardEdge();
-    landedPeriod.current = monthKey;
+    const table = box?.querySelector("table");
+    if (!box || !table) return;
+    if (landedPeriod.current !== monthKey) boardTouched.current = false;
+    const land = () => {
+      if (boardTouched.current) return;
+      const cell = box.querySelector<HTMLElement>(`th[data-day="${todayKey}"]`);
+      if (!cell) return;
+      const pinned = box.querySelector<HTMLElement>("th[data-member-col]")?.offsetWidth ?? 0;
+      // Land on a column edge (QA S-25: day columns differ in width, so "3 × today's width" left the first
+      // visible day half under the pinned member column — "D )"): the first column in view starts exactly at
+      // the pinned column's edge. As many days before today as fit, with today whole and clear of the right
+      // fade (UI tour run 12, WM4: landing on "today - 3" cut today at the right edge). No scroll when today fits.
+      const days = [...box.querySelectorAll<HTMLElement>("th[data-day]")];
+      const todayRight = cell.offsetLeft + cell.offsetWidth;
+      const fits = todayRight <= box.clientWidth - BOARD_FADE;
+      let target = cell.offsetLeft - pinned;
+      for (const d of days) {
+        if (d === cell) break;
+        if (todayRight <= d.offsetLeft - pinned + box.clientWidth - BOARD_FADE) { target = d.offsetLeft - pinned; break; }
+      }
+      box.scrollLeft = fits ? 0 : Math.max(0, target);
+      setBoardEdge();
+      landedPeriod.current = monthKey;
+    };
+    land();
+    const touched = () => { boardTouched.current = true; };
+    box.addEventListener("pointerdown", touched);
+    box.addEventListener("wheel", touched, { passive: true });
+    box.addEventListener("keydown", touched);
+    if (typeof ResizeObserver === "undefined") return () => {
+      box.removeEventListener("pointerdown", touched);
+      box.removeEventListener("wheel", touched);
+      box.removeEventListener("keydown", touched);
+    };
+    const ro = new ResizeObserver(() => land());
+    ro.observe(table);
+    ro.observe(box);
+    return () => {
+      ro.disconnect();
+      box.removeEventListener("pointerdown", touched);
+      box.removeEventListener("wheel", touched);
+      box.removeEventListener("keydown", touched);
+    };
   }, [viewMode, history.isLoading, monthKey, todayKey, periodDays.length]);
   // The day header stays in view while the PAGE scrolls too (UI tour run 14, R14-WM-16: scrolling the page past
   // the board's top took MON 12…FRI 16 away and the dots lost their dates). The header row is sticky inside the
@@ -803,7 +833,7 @@ function Attendance() {
           {boardMore && (
             <button
               type="button"
-              onClick={() => boardScrollRef.current?.scrollBy({ left: 7 * 28, behavior: reduceMotion ? "auto" : "smooth" })}
+              onClick={() => { boardTouched.current = true; boardScrollRef.current?.scrollBy({ left: 7 * 28, behavior: reduceMotion ? "auto" : "smooth" }); }}
               aria-label={tr("Show later days")} title={tr("Show later days")}
               className="absolute right-1 top-1.5 z-40 hidden h-7 w-7 place-items-center rounded-full bg-card text-muted-foreground shadow-sm ring-1 ring-border transition hover:text-foreground sm:grid"
             >

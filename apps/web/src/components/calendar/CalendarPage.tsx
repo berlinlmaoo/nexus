@@ -705,6 +705,9 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
           {truncated}
         </div>
         <aside data-cal-region="panel" className={cn("shrink-0 overflow-y-auto border-l border-border bg-card/40 [scroll-padding-top:var(--cal-sticky-room,0px)] [scroll-snap-type:y_proximity]", lay.wideAside ? "w-105" : "w-95")}>
+          {/* The panel's own top is a snap point, so it opens at its first section header ("OVERDUE · 53",
+              Show all) instead of snapping to the first card under it (UI tour run 16, R16-WD-R3). */}
+          <div aria-hidden data-snap-top="" className="h-px -mb-px" />
           {panel}
         </aside>
       </div>
