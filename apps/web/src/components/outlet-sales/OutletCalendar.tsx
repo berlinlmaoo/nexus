@@ -114,15 +114,14 @@ export function OutletCalendar({
                 >
                   {Number(d.slice(8))}
                 </span>
-                {/* Wider screens: the day-target mark in the corner, inset clear of the selection ring. A phone's
-                    cell is too narrow for a corner mark beside the date (UI tour run 14, R14-WM-12: it
-                    touched the "15" badge and the ring), so there it leads the row of dots under the date. */}
+                {/* The day-target mark sits in the cell's top-right corner on every width (decision 12, UI tour run 17,
+                    R17-WM-4), inset clear of the selection ring; a phone's smaller mark stays clear of the date
+                    badge too (R14-WM-12). */}
                 {hasTarget && (
-                  <Target aria-hidden className="absolute right-2 top-2 hidden h-3.5 w-3.5 text-primary sm:block" />
+                  <Target aria-hidden className="absolute right-1.5 top-1.5 h-3 w-3 text-primary sm:right-2 sm:top-2 sm:h-3.5 sm:w-3.5" />
                 )}
-                {(hasTarget || evs.length > 0) && (
+                {evs.length > 0 && (
                   <span aria-hidden className="flex items-center gap-0.5 sm:hidden">
-                    {hasTarget && <Target className="h-3 w-3 shrink-0 text-primary" />}
                     {/* One dot per night (three at most), coloured by status. */}
                     {evs.slice(0, 3).map((e) => <span key={e.id} className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[e.status])} />)}
                   </span>

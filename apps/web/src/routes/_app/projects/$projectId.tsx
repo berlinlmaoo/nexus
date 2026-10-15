@@ -2568,7 +2568,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                                 since UI tour run 14, WD-8). Phone: the hidden Duration and Progress columns are a small
                                 line under the name (WM-10). */}
                             <span className="min-w-0" title={task.title}>
-                              <span className={cn("line-clamp-2 break-words text-sm font-medium leading-snug", isDone && "text-muted-foreground line-through")}>{task.title}</span>
+                              <span className={cn("line-clamp-2 break-words text-sm font-medium leading-snug", isDone && "text-muted-foreground line-through")}>{glueDash(task.title)}</span>
                               {compact && (win || pct !== null) && (
                                 <span className="mt-0.5 block text-[11px] tabular-nums text-muted-foreground">{[win ? tn(dur, "{n} day", "{n} days") : null, pct !== null ? `${pct}%` : null].filter(Boolean).join(" · ")}</span>
                               )}

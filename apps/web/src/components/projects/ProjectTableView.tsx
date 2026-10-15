@@ -349,7 +349,7 @@ function NameCell({ task, handle, onRename, onOpen }: { task: NexusTask; handle?
           onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey) return; setEditing(true); }}
           title={task.title}
           // Breaks between words only (break-words splits a word only when it alone is wider than the cell), and a
-          // spaced dash stays with the word before it (UI tour run 16, R16-WM-1: "Gaji Clippers / –…").
+          // spaced dash stays with the word after it, so a clamp never ends on "–…" (UI tour run 17, R17-WM-2).
           className={cn("line-clamp-2 min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm font-medium leading-snug break-words hover:border-border", done && "text-muted-foreground line-through")}
         >
           {glueDash(title)}

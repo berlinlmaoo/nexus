@@ -192,9 +192,11 @@ function Overview({ data, onRecord, onSetup }: { data: SocialMonthResponse; onRe
         <h3 id="sm-posts" className="text-sm font-semibold">{t("Posts published")}</h3>
         <ul className="mt-3 flex flex-col gap-3">
           {o.platforms.map((p) => (
-            <li key={p.platformId} className="grid grid-cols-[minmax(6rem,9rem)_1fr] items-center gap-x-4 gap-y-1 sm:grid-cols-[minmax(6rem,10rem)_1fr_auto]">
+            // Fixed name and value columns, so every platform's track has the same length (UI tour run 17, R17-WD-4:
+            // with an `auto` value column the YouTube track ran ~80px further than Instagram's and TikTok's).
+            <li key={p.platformId} className="grid grid-cols-[minmax(6rem,9rem)_1fr] items-center gap-x-4 gap-y-1 sm:grid-cols-[10rem_1fr_11rem]">
               <span className="truncate text-sm font-medium">{p.name}{p.archived && <span className="text-muted-foreground"> · {t("archived")}</span>}</span>
-              <span className="tabular-nums text-sm sm:order-3 sm:text-right">
+              <span className="whitespace-nowrap tabular-nums text-sm sm:order-3 sm:text-right">
                 {p.postsTargetToDate === null
                   ? tn(p.posts, "1 post", "{n} posts", { n: num(p.posts, lang) })
                   : tn(p.postsTargetToDate, "{n} / {target} post", "{n} / {target} posts", { n: num(p.posts, lang), target: num(p.postsTargetToDate, lang) })}

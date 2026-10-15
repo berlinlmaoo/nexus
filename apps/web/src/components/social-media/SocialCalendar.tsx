@@ -87,10 +87,12 @@ export function SocialCalendar({ data, onOpen }: { data: SocialMonthResponse; on
                     {hasTarget && <Target className="h-3 w-3 text-primary" />}
                   </span>
                 </span>
-                {(notes || hasTarget) && (
+                {/* Phone: the day-target mark in the cell's top-right corner, as on wider screens and every other month
+                    grid (decision 12, UI tour run 17, R17-WM-4); the notes mark keeps its row under the date. */}
+                {hasTarget && <Target aria-hidden className="absolute right-1.5 top-1.5 h-3 w-3 text-primary sm:hidden" />}
+                {notes && (
                   <span aria-hidden className="flex items-center gap-0.5 text-muted-foreground sm:hidden">
-                    {notes && <NotebookPen className="h-3 w-3" />}
-                    {hasTarget && <Target className="h-3 w-3 text-primary" />}
+                    <NotebookPen className="h-3 w-3" />
                   </span>
                 )}
                 {day && day.engagement !== null && (

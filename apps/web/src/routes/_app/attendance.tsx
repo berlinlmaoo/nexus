@@ -23,7 +23,7 @@ import { SelfieCapture, type SelfieCaptureHandle } from "@/components/attendance
 import { AttendanceButton, CoveredByRequestCard, placeLine, REFLECTION_MIN, successTitle, useAttendancePress, workedLabel, type DayState } from "@/components/attendance/AttendanceButton";
 import { MobileCheckInHero } from "@/components/attendance/MobileCheckInHero";
 import { MorphPanel, rectCenter, type MorphOrigin } from "@/components/motion/MorphPanel";
-import { cn } from "@/lib/utils";
+import { cn, glueDash } from "@/lib/utils";
 import { PERIOD_BASELINE_XP } from "@/lib/levels";
 // The board's colours and the BoD "Change status" panel live in shared files since the member record
 // page (/people/:userId) draws the same cells and offers the same panel (28 Sep 2026).
@@ -421,7 +421,10 @@ function Attendance() {
       const head = box.querySelector<HTMLElement>("thead");
       const headH = head?.offsetHeight ?? 0;
       const room = Math.max(0, box.clientHeight - headH - 56);
-      const shift = Math.min(room, Math.max(0, pageHeaderBottom - box.getBoundingClientRect().top));
+      // From md up the header draws a 1rem fade band under itself once the page has scrolled; the pinned head
+      // sits below that band, or the band covered the weekday letters' top half (UI tour run 17, R17-WD-2).
+      const band = window.matchMedia("(min-width: 768px)").matches ? 16 : 0;
+      const shift = Math.min(room, Math.max(0, pageHeaderBottom + band - box.getBoundingClientRect().top));
       box.style.setProperty("--board-head-shift", `${Math.round(shift)}px`);
       // Rows snap whole under the (possibly shifted) day header, not half under it (UI tour run 15, R15-WB-1).
       box.style.setProperty("--board-snap-top", `${Math.round(shift + headH)}px`);
@@ -505,13 +508,15 @@ function Attendance() {
           />
           <FunMetric
             icon={<MapPin className="h-5 w-5" />}
+            // Before check-in the helper says what the card lists, not a second state name: the state is "Ready to
+            // check in" on the status card beside it (decision 7, UI tour run 17; it read "Not checked in yet").
             // Per record (owner, 28 Sep 2026): a check-in made away from the office shows the address it
             // was made at, not the office the record is filed under; inside the radius it stays the office.
             label={todayPlace.away ? tr("Where you checked in") : today.data?.noGeofence && !today.data?.today?.checkInAt ? tr("Any location") : tr("Offices")}
             value={today.data?.today?.checkInAt
               ? (todayPlace.label || tr("{n} active offices", { n: today.data?.activeOfficeCount ?? 0 }))
               : today.data?.noGeofence ? tr("Check in from anywhere") : (today.data?.today?.officeLocation?.name || tr("{n} active offices", { n: today.data?.activeOfficeCount ?? 0 }))}
-            helper={`${todayPlace.away ? `${tr("Away from the office")} · ` : ""}${today.data?.today?.checkInAt ? `${tr("In {time}", { time: fmtTime(today.data.today.checkInAt) })} · ${tr("Out {time}", { time: fmtTime(today.data.today.checkOutAt) })}` : tr("Not checked in yet")}${today.data?.today?.id && today.data.today.checkInAt ? ` · ${tr("see your location trail")}` : ""}`}
+            helper={`${todayPlace.away ? `${tr("Away from the office")} · ` : ""}${today.data?.today?.checkInAt ? `${tr("In {time}", { time: fmtTime(today.data.today.checkInAt) })} · ${tr("Out {time}", { time: fmtTime(today.data.today.checkOutAt) })}` : tr("Where you can check in")}${today.data?.today?.id && today.data.today.checkInAt ? ` · ${tr("see your location trail")}` : ""}`}
             tone="purple"
             onClick={today.data?.today?.id && today.data.today.checkInAt ? () => setTrailFor({ id: today.data!.today!.id, title: tr("Your location trail"), subtitle: `${tr("Today")}${todayPlace.label ? ` · ${todayPlace.label}${todayPlace.away ? ` (${tr("away from the office")})` : ""}` : ""}` }) : undefined}
           />
@@ -1910,7 +1915,8 @@ function EmploymentStartSection() {
         {shownRows.map((m) => (
           <div key={m.userId} className="flex flex-wrap items-center gap-3 px-5 py-2.5">
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold">{m.name || m.email}</div>
+              {/* Two lines, then "…" (decision 14, UI tour run 17, R17-WM-5: a long name was cut on one line). */}
+              <div className="line-clamp-2 break-words text-sm font-semibold">{glueDash(m.name || m.email || "")}</div>
               <div className="text-xs text-muted-foreground">
                 {/* Short enough for one line beside the date picker on a phone; the empty picker already says the date
                     is missing (UI tour run 14, R14-WM-19: "…can't request leave / yet" left "yet" on its own line). */}
