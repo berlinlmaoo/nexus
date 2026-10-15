@@ -660,7 +660,7 @@ struct ChatThreadView: View {
                         .foregroundStyle(NX.foreground)
                         .lineLimit(1)
                     // "typing…" in place of the hint while someone types here, as WhatsApp does.
-                    Text(typingHere ? T("typing…") : PlatformWording.tapOrClick(tap: "Tap for info", click: "Click for info"))
+                    Text(typingHere ? T("typing…") : headerSubtitle)
                         .font(NXFont.text(11, typingHere ? .semibold : .regular))
                         .foregroundStyle(typingHere ? NX.violetText : NX.mutedFg)
                         .lineLimit(1)
@@ -674,14 +674,9 @@ struct ChatThreadView: View {
             .accessibilityHint(T("Opens the chat's info"))
             Spacer(minLength: 8)
             // Same conditions as the toolbar below: a DM can neither grow nor be renamed.
-            if showsAddPeople {
-                Button { sheet = .addPeople } label: {
-                    Image(systemName: "person.badge.plus")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(NX.violetText)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(T("Add people"))
+            // The web's order: mute, rename, add people (UI tour run 15, Q-IA11).
+            if showsMuteMenu {
+                muteMenu(iconSize: 16)
             }
             if showsRename {
                 Button {
@@ -695,13 +690,27 @@ struct ChatThreadView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(T("Rename group"))
             }
-            if showsMuteMenu {
-                muteMenu(iconSize: 16)
+            if showsAddPeople {
+                Button { sheet = .addPeople } label: {
+                    Image(systemName: "person.badge.plus")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(NX.violetText)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(T("Add people"))
             }
         }
         .padding(.horizontal, 16)
         .frame(height: 52)
         .background(NX.background)
+    }
+
+    /// Under the title, as on the web: "3 members · project room" (UI tour run 15, Q-IA11 / Q-M20: the app
+    /// said "Tap for info" / "Click for info").
+    private var headerSubtitle: String {
+        let n = members.filter { !$0.uid.isEmpty }.count
+        let count = n == 1 ? T("1 member") : String(format: T("%d members"), n)
+        return (type ?? "").uppercased() == "PROJECT" ? "\(count) · \(T("project room"))" : count
     }
 
     /// The title in the navigation bar, as a button that opens the chat's info.
@@ -714,7 +723,7 @@ struct ChatThreadView: View {
                         .font(NXFont.text(15, .semibold))
                         .foregroundStyle(NX.foreground)
                         .lineLimit(1)
-                    Text(typingHere ? T("typing…") : PlatformWording.tapOrClick(tap: "Tap for info", click: "Click for info"))
+                    Text(typingHere ? T("typing…") : headerSubtitle)
                         .font(NXFont.text(10, typingHere ? .semibold : .regular))
                         .foregroundStyle(typingHere ? NX.violetText : NX.mutedFg)
                         .lineLimit(1)
@@ -1253,7 +1262,8 @@ struct ChatThreadView: View {
                     Button { showPhotoPicker = true } label: { Label(T("Send a photo"), systemImage: "photo") }
                     Button { showCamera = true } label: { Label(T("Take a photo"), systemImage: "camera") }
                 } label: {
-                    Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(NX.violetText)
+                    // The web's image glyph for attaching (UI tour run 15, Q-IA11).
+                    Image(systemName: "photo").font(.system(size: 16, weight: .semibold)).foregroundStyle(NX.violetText)
                         .frame(width: 36, height: 36).background(NX.muted, in: Circle())
                 }
                 .disabled(sending)
@@ -1276,7 +1286,8 @@ struct ChatThreadView: View {
                     .buttonStyle(.plain)
                 }
 
-                TextField(T("Write a message…"), text: $input, axis: .vertical)
+                // The web's placeholder (UI tour run 15, Q-IA11 / Q-M20).
+                TextField(T("Type a message…  (@ to tag someone)"), text: $input, axis: .vertical)
                     .font(NXFont.text(15)).lineLimit(1...4)
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(NX.muted, in: RoundedRectangle(cornerRadius: 18, style: .continuous))

@@ -33,6 +33,14 @@ extension AppLanguage {
         "%d more dates": "%d tanggal lagi",
         // Project calendar: the no-date hint folds the list away again (Q-IA28)
         "Hide them": "Sembunyikan",
+        // Messages: the web's room subtitle and composer placeholder (Q-IA11, Q-M20)
+        "project room": "ruang project",
+        "Type a message…  (@ to tag someone)": "Tulis pesan…  (@ untuk menandai orang)",
+        // Member profile XP log (R15-I-21), attendance hint with a no-break hyphen (R15-I-22), timeline legend
+        // in US spelling (Q-IA29), the web's form access line (Q-IA32)
+        "+%@ XP gained · %@ XP lost": "+%@ XP didapat · %@ XP hilang",
+        "This month's public\u{2011}holiday allowance": "Jatah tanggal merah bulan ini",
+        "Bar color by priority:": "Warna bar menurut prioritas:",
         // R15-MORE
     ]
 }

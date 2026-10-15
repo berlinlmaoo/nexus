@@ -460,7 +460,7 @@ struct AttendanceView: View {
                 FunMetricCard(icon: "sparkles", label: T("Days off"), value: Self.quotaValue(today?.dayOffUsedThisMonth, today?.dayOffQuota),
                               helper: dayOffHelper, tint: NX.warning)
                 FunMetricCard(icon: "calendar", label: T("Public holidays"), value: Self.quotaValue(today?.redDateUsedThisMonth, today?.redDateQuota),
-                              helper: T("This month's public-holiday allowance"), tint: Color(hex: "#fb7185"))
+                              helper: T("This month's public\u{2011}holiday allowance"), tint: Color(hex: "#fb7185"))
             }
         }
     }

@@ -47,6 +47,14 @@ struct ProjectMark: View {
                 CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { defaultMark }
                     .frame(width: size, height: size)
                     .clipShape(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
+            } else if let symbol = dashboardSymbol {
+                // A dashboard project without a photo wears its template's icon, the one its card shows in
+                // New project, in the same muted outline as the default page — as on the web (R14-WB-10;
+                // UI tour run 15, Q-IB16: the outlet and socmed headers showed the plain page).
+                Image(systemName: symbol)
+                    .font(.system(size: (glyph ?? size) * 0.82, weight: .regular))
+                    .foregroundStyle(Self.stroke)
+                    .frame(width: size, height: size)
             } else {
                 defaultMark.frame(width: size, height: size)
             }
@@ -55,6 +63,17 @@ struct ProjectMark: View {
         // A project this device has not listed yet (a search hit, a GIDEON source): fetch the list once.
         .task(id: projectId) {
             if let projectId, ProjectIconStore.shared.icons[projectId] == nil { await ProjectIconStore.shared.loadOnce() }
+        }
+    }
+
+    /// The web's DASHBOARD_MARK: Store, Megaphone, Filter.
+    private var dashboardSymbol: String? {
+        guard let projectId, let kind = ProjectIconStore.shared.types[projectId] else { return nil }
+        switch kind {
+        case "OUTLET_SALES": return "storefront"
+        case "SOCIAL_MEDIA_REPORT": return "megaphone"
+        case "PIPELINE": return "line.3.horizontal.decrease"
+        default: return nil
         }
     }
 
@@ -122,6 +141,15 @@ final class ProjectIconStore {
 
     func record(_ pairs: [(String, String?)]) {
         for (id, icon) in pairs { set(id, icon) }
+    }
+
+    /// Each project's template kind, for the dashboard marks (ProjectMark.dashboardSymbol).
+    private(set) var types: [String: String] = [:]
+    func recordTypes(_ pairs: [(String, String?)]) {
+        for (id, kind) in pairs {
+            guard let kind, types[id] != kind else { continue }
+            types[id] = kind
+        }
     }
 
     /// One GET /api/projects per launch, for marks of projects no screen has listed yet.

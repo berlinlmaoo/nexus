@@ -598,7 +598,9 @@ struct ProjectDetailView: View {
                 .accessibilityLabel(T("Back"))
             }
             ProjectMark(icon: detail?.icon, color: nil, size: wide ? 34 : 28, projectId: projectId)
-            Text(displayName).font(NXFont.display(wide ? 26 : 20, wide ? .semibold : .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+            // Two lines on a phone: beside the two buttons "ZZ QA Manager Out…" was cut (UI tour run 15, R15-I-06).
+            Text(displayName).font(NXFont.display(wide ? 26 : 20, wide ? .semibold : .bold)).foregroundStyle(NX.foreground)
+                .lineLimit(wide ? 1 : 2).fixedSize(horizontal: false, vertical: true)
                 // The name before the buttons: a portrait iPad cut it to "Finance P…" (UI tour run 5).
                 .layoutPriority(1)
             if let chip = detail?.readOnlyLevelChip { ProjectLevelChip(text: chip) }

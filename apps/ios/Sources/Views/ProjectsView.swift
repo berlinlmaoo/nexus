@@ -15,7 +15,9 @@ struct ProjectsView: View {
     /// The one sheet this screen shows (owner rule: one sheet per view — two on the same view is how
     /// one of them silently never presents). New project always opens the type picker first.
     @State private var sheet: ProjectsSheet?
-    @State private var collapsed: Set<String> = []
+    /// "No folder" starts folded like the web's (UI tour run 15, Q-IA18: 23 cards filled the page); with no
+    /// folders at all its projects show anyway (below).
+    @State private var collapsed: Set<String> = [UnfiledDropZone.collapseKey]
     /// Folders start closed. With everything open, a workspace this size opens as a wall of rows
     /// and the folder structure stops being useful. Only applied once, so a pull-to-refresh does
     /// not re-close what the person just opened.

@@ -13,7 +13,8 @@ struct NotificationMark {
 
     static func of(_ type: String?) -> NotificationMark {
         let t = (type ?? "").lowercased()
-        if isLegal(t) { return .init(symbol: "doc.text", color: Color(hex: "#475569"), asset: "LegalScaleGlyph") }
+        // The web's lavender circle with the purple scales (UI tour run 15, Q-IA13: grey on grey).
+        if isLegal(t) { return .init(symbol: "doc.text", color: Color(hex: "#7c3aed"), asset: "LegalScaleGlyph") }
         if t.contains("mention") { return .init(symbol: "at", color: Color(hex: "#0284c7")) }
         if t == "task_assigned" || t == "project_invite" || t == "members_added" {
             return .init(symbol: "person.badge.plus", color: NX.foreground)

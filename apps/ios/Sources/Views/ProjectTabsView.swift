@@ -519,7 +519,7 @@ struct TimelineTab: View {
         let shown = TaskPriorityName.all.filter { used.contains($0) }
         if !shown.isEmpty {
             FlowLayout(spacing: 12) {
-                Text(T("Bar colour by priority:")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                Text(T("Bar color by priority:")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 ForEach(shown, id: \.self) { p in
                     HStack(spacing: 5) {
                         RoundedRectangle(cornerRadius: 3, style: .continuous).fill(Self.barColor(p)).frame(width: 14, height: 8)
@@ -682,7 +682,7 @@ struct TimelineTab: View {
             Button { onOpen(t.id) } label: {
                 HStack(spacing: 8) {
                     Image(systemName: t.isDone ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 16)).foregroundStyle(t.isDone ? NX.onyx : NX.mutedFg.opacity(0.45))
+                        .font(.system(size: 16)).foregroundStyle(t.isDone ? NX.success : NX.mutedFg.opacity(0.45))   // green like List and Board (run 15, Q-M17)
                     if t.isSubtask {
                         Image(systemName: "arrow.turn.down.right").font(.system(size: 11)).foregroundStyle(NX.mutedFg)
                     }
@@ -857,7 +857,14 @@ struct TimelineTab: View {
     private func monthRow(_ ax: Axis) -> some View {
         HStack(spacing: 0) {
             ForEach(Array(ax.months.enumerated()), id: \.offset) { _, m in
-                Text(m.label).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground.opacity(0.75)).lineLimit(1)
+                // The month, else its short name, else nothing: a two-day segment at the edge read "No…"
+                // (UI tour run 15, Q-IA30 / Q-M17).
+                ViewThatFits(in: .horizontal) {
+                    Text(m.label).fixedSize()
+                    Text(String(m.label.prefix(3))).fixedSize()
+                    Color.clear.frame(width: 1, height: 1)
+                }
+                .font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground.opacity(0.75))
                     .padding(.leading, 8)
                     .frame(width: CGFloat(m.span) * dayW, height: monthH, alignment: .leading)
                     .clipped()
@@ -972,7 +979,8 @@ struct TimelineTab: View {
     static func barColor(_ p: String?) -> Color {
         switch (p ?? "NONE").uppercased() {
         case "URGENT": return Color(hex: "#f43f5e")
-        case "HIGH":   return Color(hex: "#ef4444")
+        // Orange, so High is not a second red beside Urgent (UI tour run 15, Q-IA29 / Q-M17).
+        case "HIGH":   return Color(hex: "#f97316")
         case "MEDIUM": return Color(hex: "#0ea5e9")
         case "LOW":    return Color(hex: "#8b5cf6")
         default:       return Color(hex: "#14b8a6")

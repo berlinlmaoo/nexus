@@ -633,8 +633,8 @@ private struct CalMonthGridBody: View {
                     Text(names[i].uppercased()).calCaps()
                         .foregroundStyle(i >= 5 ? NX.mutedFg.opacity(0.8) : NX.mutedFg)
                         .lineLimit(1).minimumScaleFactor(0.7)
-                        .frame(maxWidth: .infinity, alignment: grid.wide ? .leading : .center)
-                        .padding(.horizontal, grid.wide ? 8 : 0)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, grid.wide ? 8 : 4)
                         .padding(.vertical, 8)
                 }
             }
@@ -834,7 +834,9 @@ private struct CalMonthGridBody: View {
     @ViewBuilder private func compactContent(_ day: String, dots: [CalDot], info: CalMonthDay, inMonth: Bool, isToday: Bool, isSel: Bool,
                                              holiday: String?) -> some View {
         let shown = Array(dots.prefix(3))
-        VStack(spacing: 2) {
+        // Top-left like every month grid on every platform, the web phone's included (UI tour run 15, decision
+        // on one month-grid style: R15-WB-3).
+        VStack(alignment: .leading, spacing: 2) {
             number(day, inMonth: inMonth, isToday: isToday, isSel: isSel, holiday: holiday)
             // The web's mark on every width (mobile web and desktop MonthGrid): a short red dash under
             // the date, not a red count badge (UI tour run 3: desktop web is the reference).
@@ -852,7 +854,7 @@ private struct CalMonthGridBody: View {
                         .lineLimit(1).minimumScaleFactor(0.6)
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: CalType.size(dotRow))
+            .frame(maxWidth: .infinity, minHeight: CalType.size(dotRow), alignment: .leading)
         }
         .padding(.horizontal, 3)
         .padding(.top, 4).padding(.bottom, 5)

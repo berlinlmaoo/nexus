@@ -259,7 +259,8 @@ private struct LegalSeriesRow: View {
                 HStack(spacing: 0) {
                     // The short type ("MoU", "PKS"): the long one was cut inside its brackets (N-40).
                     Text(LegalLabels.docTypeShort(series.docType)).lineLimit(1)
-                    Text("  ·  \(LegalLabels.resetPeriod(series.resetPeriod))").lineLimit(1).fixedSize()
+                    // One space each side of the dot, as every other meta line (UI tour run 15, R15-I-24).
+                    Text(" · \(LegalLabels.resetPeriod(series.resetPeriod))").lineLimit(1).fixedSize()
                 }
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 Text(verbatim: series.format).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.mutedFg)

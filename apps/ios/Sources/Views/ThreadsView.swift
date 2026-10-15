@@ -455,7 +455,7 @@ struct ThreadsView: View {
                     }
                     .buttonStyle(.plain)
                     Button { openPost = p } label: {
-                        Label(p.comments > 0 ? "\(p.comments)" : "", systemImage: "bubble.left")
+                        Label(p.comments > 0 ? "\(p.comments)" : "", systemImage: "message")
                             .font(NXFont.text(13, .medium)).foregroundStyle(NX.mutedFg)
                             .frame(minHeight: 32).contentShape(Rectangle())
                     }

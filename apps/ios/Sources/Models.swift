@@ -27,6 +27,8 @@ struct Project: Decodable, Identifiable, Sendable {
     let color: String?
     let icon: String?
     let status: String?
+    /// The template kind ("OUTLET_SALES", "SOCIAL_MEDIA_REPORT", "PIPELINE", …); nil from an older server.
+    let type: String?
     /// `var` so the Projects screen can move a card at once, before the server answers.
     var folderId: String?
     let workspaceId: String?
@@ -49,7 +51,7 @@ struct Project: Decodable, Identifiable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, description, color, icon, status, folderId, workspaceId, taskLists, members
+        case id, name, description, color, icon, status, type, folderId, workspaceId, taskLists, members
         case count = "_count"
     }
 
