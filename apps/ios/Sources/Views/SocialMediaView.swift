@@ -238,9 +238,14 @@ struct SocialHeader: View {
                 row(labelled: false)
             }
         } else {
-            // The primary action keeps its web label, "Record today"; the settings icon beside it carries its
-            // name for VoiceOver (UI tour run 17, iPhone R17-I-20, decision 15).
+            // Both named, as on the web and the outlet's header: on a row of their own under the month when they
+            // do not fit beside it (UI tour run 18, iPhone R18-I-05: a bare sliders icon), before icons.
             ViewThatFits(in: .horizontal) {
+                row(labelled: true)
+                VStack(alignment: .leading, spacing: 8) {
+                    monthSwitcher(large: false)
+                    HStack(spacing: 6) { actions(labelled: true, primary: true); Spacer(minLength: 0) }
+                }
                 row(labelled: false, primary: true)
                 row(labelled: false)
             }
@@ -449,8 +454,10 @@ struct SocialOverviewView: View {
                 // targets)" (UI tour run 16, R16-B-20); the figures below line up across the row.
                 // Two lines where one does not fit: at 0.75 scale a narrow iPad card still cut "(incl. day
                 // targets)" to "(in…" (UI tour run 17, iPad R17-I-02).
+                // Two lines kept on every card side by side, so one card's wrapped helper does not push its
+                // sparkline and figures below the others' (UI tour run 18, R18-M-06).
                 Text(monthTargetLine(p)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                    .lineLimit(2).minimumScaleFactor(0.9)
+                    .lineLimit(2, reservesSpace: wide).minimumScaleFactor(0.9)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let trend = p.trend, trend.count > 1, trend.contains(where: { $0 > 0 }) {
@@ -458,6 +465,9 @@ struct SocialOverviewView: View {
                     .frame(height: 36)
                     .accessibilityLabel(String(format: T("%@ engagement per day"), p.name))
             }
+            // The figures rest on the card's bottom, level across the row whatever sits above them (a card
+            // without a target or a sparkline; R18-M-06). Side by side only: stacked cards have their own height.
+            if wide { Spacer(minLength: 0) }
             Divider().overlay(NX.border)
             // Four across while every figure fits on one line, else two by two: in the narrow three-across
             // cards of a portrait iPad "41.000" broke into "41.00 / 0" and read as a decimal (UI tour run 16,

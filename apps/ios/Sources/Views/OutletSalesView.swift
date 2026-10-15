@@ -512,9 +512,15 @@ struct OutletHeader: View {
                 row(labelled: false)
             }
         } else {
-            // The primary action keeps its web label, "Add event"; the icons beside it carry their names for
-            // VoiceOver (UI tour run 17, iPhone R17-I-20, decision 15).
+            // The web's words on a phone too: the three named actions on a row of their own under the month, a
+            // little tighter, before the primary alone and icons (UI tour run 18, iPhone R18-I-05: sliders, link
+            // and + read as bare icons where the web names them).
             ViewThatFits(in: .horizontal) {
+                row(labelled: true)
+                VStack(alignment: .leading, spacing: 8) {
+                    OutletMonthSwitcher(store: store)
+                    HStack(spacing: 6) { actions(labelled: true, tight: true); Spacer(minLength: 0) }
+                }
                 row(labelled: false, primary: true)
                 row(labelled: false)
             }
@@ -530,15 +536,18 @@ struct OutletHeader: View {
         }
     }
 
-    @ViewBuilder private func actions(labelled: Bool, primary: Bool = false) -> some View {
+    /// `tight`: 13 pt words and 10 pt sides, so the three named buttons share a phone's row.
+    @ViewBuilder private func actions(labelled: Bool, primary: Bool = false, tight: Bool = false) -> some View {
+            let size: CGFloat = tight ? 13 : 14
+            let side: CGFloat = tight ? 10 : 14
             if store.canManageSettings {
                 Button { store.settingsOpen = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "slider.horizontal.3").font(.system(size: 14, weight: .semibold))
-                        if labelled { Text(T("Report settings")).font(NXFont.text(14, .semibold)).lineLimit(1).fixedSize() }
+                        if labelled { Text(T("Report settings")).font(NXFont.text(size, .semibold)).lineLimit(1).fixedSize() }
                     }
                     .foregroundStyle(NX.foreground)
-                    .padding(.horizontal, labelled ? 14 : 0)
+                    .padding(.horizontal, labelled ? side : 0)
                     .frame(minWidth: 40, minHeight: 40)
                     .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
@@ -551,10 +560,10 @@ struct OutletHeader: View {
             Button { store.copyFormLink() } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "link").font(.system(size: 14, weight: .semibold))
-                    if labelled { Text(T("Copy form link")).font(NXFont.text(14, .semibold)).lineLimit(1).fixedSize() }
+                    if labelled { Text(T("Copy form link")).font(NXFont.text(size, .semibold)).lineLimit(1).fixedSize() }
                 }
                 .foregroundStyle(NX.foreground)
-                .padding(.horizontal, labelled ? 14 : 0)
+                .padding(.horizontal, labelled ? side : 0)
                 .frame(minWidth: 40, minHeight: 40)
                 .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
@@ -569,10 +578,10 @@ struct OutletHeader: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "plus").font(.system(size: 14, weight: .bold))
-                    if labelled || primary { Text(T("Add event")).font(NXFont.text(14, .semibold)).lineLimit(1).fixedSize() }
+                    if labelled || primary { Text(T("Add event")).font(NXFont.text(size, .semibold)).lineLimit(1).fixedSize() }
                 }
                 .foregroundStyle(NX.background)
-                .padding(.horizontal, labelled || primary ? 14 : 0)
+                .padding(.horizontal, labelled || primary ? side : 0)
                 .frame(minWidth: 40, minHeight: 40)
                 .background(NX.onyx, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -739,6 +748,8 @@ struct OutletOverviewView: View {
 
     @Environment(\.horizontalSizeClass) private var hSize
     @State private var editingTarget = false
+    /// The room the two target cards share (iPad / Mac): side by side only where each keeps its line whole.
+    @State private var cardsWidth: CGFloat = 0
     @State private var salesTargetText = ""
     @State private var paxTargetText = ""
     @State private var savingTarget = false
@@ -781,12 +792,19 @@ struct OutletOverviewView: View {
                              actual: OutletFormat.count(s.pax ?? 0),
                              target: s.paxTarget.map { OutletFormat.count($0) },
                              pct: s.paxTarget == nil ? nil : s.paxPct)
-        if wide {
-            HStack(alignment: .top, spacing: 16) { sales; pax }
-                .fixedSize(horizontal: false, vertical: true)   // both cards as tall as the taller one
-        } else {
-            VStack(spacing: 12) { sales; pax }
+        // Side by side from 700 pt; a portrait iPad beside the sidebar (~660 pt) stacks them full width, as the
+        // phone does, so "Rp 6.000.000 / Rp 150.000.000 4%" stays on one line: in a half-width card it dropped
+        // under the figure even at the smaller sizes (UI tour run 17 iPad R17-I-17, run 18 R18-I-04).
+        Group {
+            if wide && (cardsWidth == 0 || cardsWidth >= 700) {
+                HStack(alignment: .top, spacing: 16) { sales; pax }
+                    .fixedSize(horizontal: false, vertical: true)   // both cards as tall as the taller one
+            } else {
+                VStack(spacing: wide ? 16 : 12) { sales; pax }
+            }
         }
+        .frame(maxWidth: .infinity)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { cardsWidth = $0 }
     }
 
     /// One target card, as the web's (UI tour run 16, R16-B-12): the title with its hint under it, then
