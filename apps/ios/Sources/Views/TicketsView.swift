@@ -518,7 +518,13 @@ struct TicketsView: View {
             HStack(spacing: 10) {
                 NexusChip(text: t.statusLabel, tone: t.tone)
                 if let c = t.category, !c.isEmpty { Text(ticketCategoryName(c)) }
-                if isBod, let n = t.reporter?.name, !n.isEmpty { Text(String(format: T("from %@"), n)).lineLimit(1) }
+                // With the person's face, as the web's From column (UI tour run 15, Q-IB22).
+                if isBod, let r = t.reporter, let n = r.name, !n.isEmpty {
+                    HStack(spacing: 5) {
+                        AvatarView(url: r.avatar, initial: String(n.prefix(1)).uppercased(), size: 16)
+                        Text(String(format: T("from %@"), n)).lineLimit(1)
+                    }
+                }
                 if let m = t.messageCount { Label("\(m)", systemImage: "bubble.left") }
             }
             .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)

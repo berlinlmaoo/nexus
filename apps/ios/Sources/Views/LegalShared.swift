@@ -359,16 +359,36 @@ struct LegalSectionHeader<Trailing: View>: View {
     let title: String
     var subtitle: String? = nil
     @ViewBuilder var trailing: () -> Trailing
+    @Environment(\.horizontalSizeClass) private var hSize
+    /// The blurb runs the full width under the title: squeezed beside the buttons it broke into a narrow
+    /// column ("{{PLACEHOLDERS}}." alone on a line, "…is made / from them."). On a phone the buttons go
+    /// under the blurb (UI tour run 15, R15-I-23 / Q-IB24).
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(NXFont.text(16, .semibold)).foregroundStyle(NX.foreground)
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 8) {
+            if hSize == .regular {
+                HStack(alignment: .center, spacing: 12) {
+                    titleText
+                    Spacer(minLength: 0)
+                    trailing()
                 }
+                subtitleText
+            } else {
+                VStack(alignment: .leading, spacing: 3) {
+                    titleText
+                    subtitleText
+                }
+                trailing()
             }
-            Spacer(minLength: 0)
-            trailing()
+        }
+    }
+
+    private var titleText: some View {
+        Text(title).font(NXFont.text(16, .semibold)).foregroundStyle(NX.foreground)
+    }
+
+    @ViewBuilder private var subtitleText: some View {
+        if let subtitle, !subtitle.isEmpty {
+            Text(subtitle).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
         }
     }
 }

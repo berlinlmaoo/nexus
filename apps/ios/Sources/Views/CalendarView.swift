@@ -428,6 +428,8 @@ struct CalendarView: View {
         ZStack {
             NX.background.ignoresSafeArea()
             content
+                // The scrolled month never runs under the status bar (UI tour run 15, Q-IA10).
+                .modifier(StatusBarScrollEdge())
                 .background {
                     GeometryReader { g in
                         Color.clear

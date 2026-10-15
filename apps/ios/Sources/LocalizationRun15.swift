@@ -41,6 +41,18 @@ extension AppLanguage {
         "+%@ XP gained · %@ XP lost": "+%@ XP didapat · %@ XP hilang",
         "This month's public\u{2011}holiday allowance": "Jatah tanggal merah bulan ini",
         "Bar color by priority:": "Warna bar menurut prioritas:",
+        // Legal letterhead line (Q-IB25)
+        "Uploaded {date}": "Diunggah {date}",
+        // Legal archive: the addendum marker's spoken name (Q-IB30)
+        "Addendum": "Adendum",
+        // iPad / Mac Home: the web's schedule, messages and leaderboard cards (Q-IA8, Q-M6)
+        "See all": "Lihat semua",
+        "Your schedule": "Jadwalmu",
+        "No upcoming tasks with a due date.": "Belum ada task dengan tenggat.",
+        "{n} unread": "{n} belum dibaca",
+        "No conversations yet": "Belum ada percakapan",
+        "1 conversation": "1 percakapan",
+        "{n} conversations": "{n} percakapan",
         // R15-MORE
     ]
 }

@@ -196,6 +196,17 @@ struct DashboardView: View {
             // no margin it covered the agenda's last day ("Sun 25", UI tour run 11 PD-19). 92 pt lets every
             // card scroll clear of it. The phone's 72 is unchanged.
             .contentMargins(.bottom, hSize == .regular ? 16 : 72, for: .scrollContent)
+            // iPad / Mac: the cards fade out at the scroll's bottom edge rather than being sliced through
+            // above the band kept for the GIDEON button (UI tour run 15, Q-IA9 / Q-M7).
+            .mask {
+                VStack(spacing: 0) {
+                    Rectangle()
+                    if hSize == .regular {
+                        LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: 28)
+                    }
+                }
+                .ignoresSafeArea()
+            }
             .modifier(StatusBarScrollEdge())
             // iPad / Mac: the scroll area ends above the floating GIDEON button (52 pt, 28 pt above the window's
             // bottom edge), so no card scrolls under it, on the first screen or further down (UI tour runs 12
@@ -264,10 +275,24 @@ struct DashboardView: View {
             quickActions
             projectShortcuts
             dailyCalendarCard
+            // A portrait iPad gets the web Home's widgets too; the iPhone Home stays as it is (owner rule).
+            if hSize == .regular {
+                scheduleCard
+                messagesCard
+                leaderboardCard
+            }
             profileCard
             Color.clear.frame(height: 8)
         }
     }
+
+    // MARK: web Home widgets (iPad / Mac; UI tour run 15, Q-IA8 / Q-M6)
+
+    private var scheduleCard: some View {
+        HomeScheduleCard(tasks: tasksList, onOpenTask: { openTarget = .task($0) }, onOpenMyTasks: { router.go(.tasks) })
+    }
+    private var messagesCard: some View { HomeMessagesCard { router.go(.messages) } }
+    private var leaderboardCard: some View { HomeLeaderboardCard { router.go(.leaderboard) } }
 
     /// Mac, wide window: the day's work on the left, the person (level, profile, XP rules) on the right.
     private var wideColumns: some View {
@@ -282,6 +307,7 @@ struct DashboardView: View {
                     statCards
                     xpRulesCard
                     dailyCalendarCard
+                    scheduleCard
                     quickActions
                     projectShortcuts
                 }
@@ -290,6 +316,8 @@ struct DashboardView: View {
                     levelCard
                     profileCard
                     if showPasskeyNudge { passkeyNudge }
+                    messagesCard
+                    leaderboardCard
                 }
                 .frame(width: 340)
             }
@@ -312,6 +340,7 @@ struct DashboardView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .leading, spacing: 18) {
                     dailyCalendarCard
+                    scheduleCard
                     projectShortcuts
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -320,6 +349,8 @@ struct DashboardView: View {
                     profileCard
                     if showPasskeyNudge { passkeyNudge }
                     xpRulesCard
+                    messagesCard
+                    leaderboardCard
                 }
                 .frame(width: 380)
             }
@@ -1415,15 +1446,15 @@ enum XpRules {
 /// clock (UI tour run 13, F-25). An empty bar at the top edge gives the scroll view the system's scroll-edge
 /// effect there, as under every other screen's bar; the layout itself is untouched. iOS 26+.
 struct StatusBarScrollEdge: ViewModifier {
+    /// The page's own background over the status bar, fully opaque: under the system's hard scroll edge a
+    /// blurred ghost of the scrolled tiles still showed behind the clock (UI tour run 14, N-30; run 15,
+    /// R15-I-08 / Q-IA10). A zero-height strip at the top that extends into the top safe area.
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content
-                .safeAreaBar(edge: .top, spacing: 0) { Color.clear.frame(height: 0) }
-                // Hard, not soft: under the soft edge the tiles' text stayed readable behind the clock
-                // (UI tour run 14, N-30). The hard style is the system's opaque edge, as under a bar.
-                .scrollEdgeEffectStyle(.hard, for: .top)
-        } else {
-            content
+        content.overlay(alignment: .top) {
+            NX.background
+                .frame(height: 0)
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
         }
     }
 }

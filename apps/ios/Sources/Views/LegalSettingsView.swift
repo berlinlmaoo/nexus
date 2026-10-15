@@ -12,6 +12,8 @@ struct LegalSettingsPane: View {
 
     @State private var companies: [LegalCompany]?
     @State private var error: String?
+    /// The company card at the top of the scroll: the jump chip it lights up, and where a chip scrolls to.
+    @State private var current: String?
 
     var body: some View {
         ScrollView {
@@ -27,12 +29,39 @@ struct LegalSettingsPane: View {
                 } else {
                     ForEach(companies ?? []) { c in
                         LegalCompanyCard(company: c, canEdit: canEdit) { await load() }
+                            .id(c.id)
                     }
                 }
                 LegalTokenHelp()
             }
+            .scrollTargetLayout()
             .padding(.horizontal, gutter)
             .padding(.vertical, 16)
+        }
+        .scrollPosition(id: $current, anchor: .top)
+        // The web's company jump chips, pinned above the cards, the one in view lit up: The Z Networks sat
+        // five pages down with no way to it but scrolling (UI tour run 15, Q-IB26 / R15-WB-7).
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let list = companies, list.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(list) { c in
+                            let on = (current ?? list.first?.id) == c.id
+                            Button { withAnimation(.snappy) { current = c.id } } label: {
+                                Text(c.name).font(NXFont.text(13, .medium)).lineLimit(1)
+                                    .padding(.horizontal, 12).padding(.vertical, 6)
+                                    .nxChoiceChip(on: on)
+                                    .frame(minHeight: 44).contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(on ? .isSelected : [])
+                        }
+                    }
+                    .padding(.horizontal, gutter)
+                }
+                .nxEdgeFade()
+                .background(NX.background)
+            }
         }
         .refreshable { await load() }
         .task { await load() }
@@ -137,13 +166,20 @@ private struct LegalCompanyCard: View {
     private var kopText: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(T("Letterhead")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).fixedSize()
-            Text(company.hasKop
-                 ? String(format: T("%@, uploaded %@"), company.kopFileName ?? "kop.docx", LegalLabels.date(company.kopUpdatedAt))
-                 : T("Not uploaded: documents get no letterhead."))
+            if company.hasKop {
+                // The file name on its line and "Uploaded 14 Oct" on the next, as on the web: one sentence
+                // left "14 Oct" hanging under the name (UI tour run 15, Q-IB25). The whole name, wrapping when
+                // it must ("Kop_Surat_Suwara_Lo….docx", run 14, P-I27).
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(company.kopFileName ?? "kop.docx").fixedSize(horizontal: false, vertical: true)
+                    Text(T("Uploaded {date}").replacingOccurrences(of: "{date}", with: LegalLabels.date(company.kopUpdatedAt)))
+                }
                 .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                // The whole file name, wrapping when it must: cut in the middle it read
-                // "Kop_Surat_Suwara_Lo….docx" (four dots; run 14, P-I27).
-                .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(T("Not uploaded: documents get no letterhead."))
+                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -257,8 +293,12 @@ private struct LegalSeriesRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(series.label).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
                 HStack(spacing: 0) {
-                    // The short type ("MoU", "PKS"): the long one was cut inside its brackets (N-40).
-                    Text(LegalLabels.docTypeShort(series.docType)).lineLimit(1)
+                    // The full type where it fits ("Warning letter (SP)", as on the web; UI tour run 15, Q-IB26), the
+                    // short one ("MoU", "PKS") where it would be cut inside its brackets (N-40).
+                    ViewThatFits(in: .horizontal) {
+                        Text(LegalLabels.docType(series.docType)).lineLimit(1).fixedSize()
+                        Text(LegalLabels.docTypeShort(series.docType)).lineLimit(1)
+                    }
                     // One space each side of the dot, as every other meta line (UI tour run 15, R15-I-24).
                     Text(" · \(LegalLabels.resetPeriod(series.resetPeriod))").lineLimit(1).fixedSize()
                 }
