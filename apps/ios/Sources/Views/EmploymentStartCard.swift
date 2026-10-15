@@ -114,7 +114,9 @@ struct EmploymentStartCard: View {
     private func row(_ m: EmploymentStartMember) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(m.name ?? m.email ?? "—").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                // Two lines then "…", the dash kept with its word (decision 14 of run 17).
+                Text(UntitledText.wrapped(m.name ?? m.email ?? "—")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 Text(statusLine(m)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
             }
             Spacer(minLength: 8)

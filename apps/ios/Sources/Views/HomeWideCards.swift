@@ -23,7 +23,9 @@ private struct HomeWideCard<Content: View>: View {
             }
             content()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // Fills the height its row gives it, so Calendar and Your schedule side by side end level, as on the
+        // web (UI tour run 17, iPad R17-I-10); alone in a column it is its own height.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .nexusCard()
     }
 }

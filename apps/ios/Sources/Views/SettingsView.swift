@@ -499,7 +499,7 @@ struct SettingsView: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(T("Log out")).font(NXFont.text(16, .semibold)).foregroundStyle(NX.foreground)
-                    Text(T("Sign out of NEXUS on this device.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    Text(T("Log out of NEXUS on this device.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer(minLength: 8)
                 Button { if !auth.signOutIfAllowed() { signOutBlocked = true } } label: {

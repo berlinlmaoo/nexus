@@ -130,6 +130,8 @@ struct AttendanceView: View {
     @Environment(\.horizontalSizeClass) private var hSize
     /// The sidebar's Attendance page on an iPad or Mac: the web's page header instead of the nav bar.
     private var isRoot: Bool { NXSidebarPage.isRoot(.attendance, hSize: hSize, router: router) }
+    /// The page scroll's top content inset (the pinned header above it).
+    @State private var pageTopInset: CGFloat = 0
 
     /// Web attendance.tsx PageHeader; the subtitle follows whether this person sees the crew board.
     private var pageHeader: some View {
@@ -214,6 +216,9 @@ struct AttendanceView: View {
                     .padding(.horizontal, NXSidebarPage.gutter(isRoot))
                     .padding(.vertical, isRoot ? 24 : 16)
                 }
+                // Where the page's visible top is, for the board's sticky day row (`StickyInPageScroll`).
+                .modifier(PageTopInsetReader(inset: $pageTopInset))
+                .environment(\.pageScrollTopInset, pageTopInset)
                 // Dragging the page down puts the keyboard away too.
                 .scrollDismissesKeyboard(.interactively)
                 // On the ScrollView, not beside `.permissionAlert` further down: two alerts on one view
@@ -537,7 +542,8 @@ struct AttendanceView: View {
         switch locateProblem {
         case .noFix: return T("Location not found")
         case .noOffices: return T("No office set up")
-        case nil: return T("Finding you…")
+        // One wording with the map pill (UI tour run 17, iPhone R17-I-16, decision 8).
+        case nil: return T("Finding your location…")
         }
         #endif
     }
@@ -567,8 +573,9 @@ struct AttendanceView: View {
             return recordAway == true ? "\(T("Away from the office")) · \(times)" : times
         }
         // Location-free and not in yet: no office to measure against, so not "Checking where you are…".
-        if locationFree { return T("Not checked in yet") }
-        if showsOfficeCount { return T("Not checked in yet") }
+        // The web's wording before check-in, everywhere (UI tour run 17, decision 7).
+        if locationFree { return T("Ready to check in") }
+        if showsOfficeCount { return T("Ready to check in") }
         if let n = nearby {
             return n.inside
                 ? T("You're inside this office area")
@@ -1136,8 +1143,10 @@ struct AttendanceView: View {
         if checkedIn { return T("Currently clocked-in") }
         // A Mac cannot check in (the card under the map says so), so its chip must not invite one
         // (UI tour run 14, P-M3).
+        // The card under the map already says "Check in from your phone": said once (UI tour run 17,
+        // R17-M-11, decision 9), the chip gives the day's state like every other platform.
         #if targetEnvironment(macCatalyst)
-        return T("Check in on your phone")
+        return T("Ready to check in")
         #else
         // Ready only once it is known where the person is: "Ready to check in" beside "Finding you…"
         // contradicted itself (UI tour run 15, Q-IB7).
@@ -1748,6 +1757,8 @@ struct StreakBoardCard: View {
     @State private var periodDays: [PeriodDay] = []
     /// The visible width of the scrolling day strip (whole-day alignment, scrollToToday).
     @State private var stripWidth: CGFloat = 0
+    /// The day at the strip's left edge ("day-yyyy-MM-dd"), kept by identity (`alignLeadDay`).
+    @State private var leadDay: String?
 
     private func buildPeriodDays() -> [PeriodDay] {
         let cal = ProjDate.cal
@@ -1888,9 +1899,13 @@ struct StreakBoardCard: View {
                         Button { Task { await exportMonth() } } label: {
                             if exporting { ProgressView().scaleEffect(0.7).frame(width: 30, height: 30).touchTarget44(drawn: 30) }
                             else {
-                                // Named, as the web's "Export" (UI tour run 16, R16-B-24: bare icons).
-                                Label(T("Export"), systemImage: "square.and.arrow.up")
+                                // Named, as the web's "Export" (UI tour run 16, R16-B-24: bare icons), with the
+                                // download tray the other downloads use (run 17, iPad R17-I-18), and never cut to
+                                // "Exp…" beside the title on a phone (run 17, iPhone R17-I-05).
+                                Label(T("Export"), systemImage: "tray.and.arrow.down")
+                                    .labelStyle(ExportLabelStyle(iconOnly: hSize == .compact))
                                     .font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                                    .lineLimit(1).fixedSize()
                                     .padding(.horizontal, 10).frame(height: 30)
                                     .overlay(Capsule().strokeBorder(NX.border))
                                     .frame(minHeight: 44).contentShape(Rectangle())
@@ -2019,7 +2034,15 @@ struct StreakBoardCard: View {
     /// Centring today left a half day at the strip's left edge, its date cut in two (UI tour run 9: I10 on
     /// the phone, M5 on the Mac). With the strip's width known, the scroll now lines a WHOLE day up with
     /// the left edge, chosen so today still sits in the middle; before the width is known it centres.
+    /// Puts a whole day flush with the strip's left edge: the one that centres today, or the period's first.
+    private func alignLeadDay() {
+        guard !periodDays.isEmpty else { return }
+        let key = todayKey.flatMap { leadingDayKey(today: $0) } ?? (wholeDaysWidth == nil ? periodDays[0].key : nil)
+        if let key, leadDay != "day-\(key)" { leadDay = "day-\(key)" }
+    }
+
     private func scrollToToday(_ proxy: ScrollViewProxy) {
+        alignLeadDay()
         guard let t = todayKey else { return }
         Task { @MainActor in
             for delay in [0, 150, 500] {
@@ -2144,7 +2167,7 @@ struct StreakBoardCard: View {
     }
 
     /// Date row: weekday over day number.
-    private let headerH: CGFloat = 24
+    private let headerH: CGFloat = 30
     private let scoreW: CGFloat = 48
     /// The gutter between the names and the first day, and between the last day and the Score.
     private let lane: CGFloat = 6
@@ -2165,6 +2188,12 @@ struct StreakBoardCard: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: gap) {
                         dateRow
+                            .background(NX.card)
+                            // Sticky under the page's top edge while the rows scroll by, as the web keeps MEMBER /
+                            // days / SCORE: thirty rows down nobody could tell which column was which day (UI
+                            // tour run 17, iPhone R17-I-05).
+                            .modifier(StickyInPageScroll(limit: CGFloat(shownMembers.count) * (cell + gap) - headerH))
+                            .zIndex(1)
                         cells
                     }
                 }
@@ -2179,6 +2208,11 @@ struct StreakBoardCard: View {
                 // the scroll view now STARTS there: its initial position comes from `daysAnchor`, not
                 // from anything that has to happen after layout. The tries below only centre it.
                 .defaultScrollAnchor(daysAnchor)
+                // The day flush with the strip's left edge, by identity: the strip changes width after the
+                // first scroll (the members, then the iPad / Mac pills column load and the day width follows),
+                // and a position kept in points then sat mid-day, so both edges cut a column ("N" of SUN 11,
+                // "MO 2("; UI tour run 17, iPhone R17-I-05 / R17-I-12, iPad R17-I-07, Mac R17-M-05).
+                .scrollPosition(id: $leadDay, anchor: .leading)
                 // Exactly as wide as the whole days that fit: with the scroll resting on a day, neither edge
                 // ever cuts one ("TU…" at the right, a sliver at the left; UI tour run 16, R16-I-17 /
                 // R16-M-14). The width is measured outside this frame, on the room the board leaves.
@@ -2188,6 +2222,8 @@ struct StreakBoardCard: View {
                 // One scroll view per period, so another month opens from its own anchor.
                 .id(monthOffset)
                 .onAppear { scrollToToday(proxy) }
+                .onChange(of: stripWidth) { _, _ in alignLeadDay() }
+                .onChange(of: periodDays) { _, _ in alignLeadDay() }
             }
             VStack(alignment: .trailing, spacing: gap) {
                 Text(T("Score")).font(.system(size: 8, weight: .semibold)).foregroundStyle(NX.mutedFg)
@@ -2229,12 +2265,17 @@ struct StreakBoardCard: View {
         HStack(spacing: gap) {
             ForEach(periodDays) { pd in
                 let isToday = pd.key == todayKey
+                // Two readable lines as on the web, 9 and 11 pt (they were 7 and 8; UI tour run 17, R17-B-11).
+                // A narrow day takes the weekday's first two letters rather than shrinking it.
                 VStack(spacing: 1) {
-                    Text(pd.weekdayLabel).font(.system(size: 7, weight: isToday ? .bold : .medium))
-                        .foregroundStyle(isToday ? NX.violetText : NX.mutedFg.opacity(0.8))
-                        .lineLimit(1).minimumScaleFactor(0.6)
-                    Text("\(pd.day)").font(.system(size: 8, weight: isToday ? .bold : .regular))
-                        .foregroundStyle(isToday ? Color.white : NX.mutedFg).frame(width: cell, height: 13)
+                    Text(cellW < 24 ? String(pd.weekdayLabel.prefix(2)) : pd.weekdayLabel)
+                        .font(.system(size: 9, weight: isToday ? .bold : .medium))
+                        .foregroundStyle(isToday ? NX.violetText : NX.mutedFg)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    Text("\(pd.day)").font(.system(size: 11, weight: isToday ? .bold : .medium))
+                        .foregroundStyle(isToday ? Color.white : NX.foreground.opacity(0.75))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .frame(width: max(cellW, 18), height: 15)
                         .background(isToday ? NX.violet : Color.clear, in: Capsule())
                 }
                 .frame(width: cellW, height: headerH)
@@ -2866,3 +2907,17 @@ func attendanceStatusLabel(_ raw: String) -> String {
     default: return raw.replacingOccurrences(of: "_", with: " ").capitalized
     }
 }
+
+/// The board's Export: icon and word where the header has room, the icon alone on a phone (its accessibility
+/// label still says Export).
+private struct ExportLabelStyle: LabelStyle {
+    let iconOnly: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        if iconOnly {
+            configuration.icon
+        } else {
+            HStack(spacing: 6) { configuration.icon; configuration.title }
+        }
+    }
+}
+

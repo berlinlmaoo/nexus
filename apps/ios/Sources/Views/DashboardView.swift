@@ -300,6 +300,8 @@ struct DashboardView: View {
                 HomeCalendarCard { router.go(.teamCalendar) }.frame(maxWidth: .infinity)
                 scheduleCard.frame(maxWidth: .infinity)
             }
+            // One height for the pair: the row is as tall as the taller card and both fill it.
+            .fixedSize(horizontal: false, vertical: true)
             .frame(minWidth: 620)
             VStack(alignment: .leading, spacing: 18) {
                 HomeCalendarCard { router.go(.teamCalendar) }
@@ -460,9 +462,9 @@ struct DashboardView: View {
         }
         if let s = t.myShift {
             let window = s.flexi == true ? "Flexi \(s.startTime)–\(s.endTime)" : "\(s.startTime)–\(s.endTime)"
-            return (String(format: T("Not checked in yet · %@"), window), NX.warning, T("Check in"))
+            return (String(format: T("Ready to check in · %@"), window), NX.warning, T("Check in"))
         }
-        return (T("Not checked in yet"), NX.warning, T("Check in"))
+        return (T("Ready to check in"), NX.warning, T("Check in"))
     }
 
     private static func expectedEnd(from start: Date, shift: AttendanceToday.Shift?) -> Date? {
@@ -1035,8 +1037,10 @@ if !XpRules.tiers.isEmpty {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .nexusCard(padding: 14)
+        // The content is clipped, not the card: clipped after the card, the soft shadow was cut to a square
+        // that showed past the rounded corners (UI tour run 17, iPhone R17-I-17).
         .clipped()
+        .nexusCard(padding: 14)
     }
 
     private func xpRulesSection(title: String, icon: String, tone: Color, rows: [XpRules.Row]) -> some View {
