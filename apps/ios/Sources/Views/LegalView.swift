@@ -516,7 +516,7 @@ private struct LegalDateRangeSheet: View {
         let date = Binding<Date>(get: { LegalText.date(fromDay: value.wrappedValue ?? "") ?? Date() },
                                  set: { value.wrappedValue = LegalText.dayString($0); onChange() })
         return Section {
-            Toggle(label, isOn: on).tint(NX.violet)
+            Toggle(label, isOn: on).tint(NX.violetText)
             if value.wrappedValue != nil {
                 DatePicker(label, selection: date, displayedComponents: .date)
                     .environment(\.locale, AppDateLocale.current)

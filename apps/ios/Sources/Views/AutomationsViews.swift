@@ -150,7 +150,7 @@ struct AutomationsTab: View {
         return HStack(alignment: .top, spacing: 12) {
             if canEdit {
                 Toggle("", isOn: Binding(get: { on }, set: { v in Task { await toggle(a, v) } }))
-                    .labelsHidden().tint(NX.violet)
+                    .labelsHidden().tint(NX.violetText)
                     .accessibilityLabel(String(format: T("Turn %@ on or off"), a.name))
             } else {
                 Image(systemName: "bolt.fill").font(.system(size: 14, weight: .semibold))
