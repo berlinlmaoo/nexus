@@ -42,9 +42,14 @@ const GROUP_LABEL: Record<string, string> = { todo: "To-do", in_progress: "In pr
 const STATUS_LABEL: Record<string, string> = { TODO: "To do", IN_PROGRESS: "In progress", IN_REVIEW: "In review", DONE: "Done", CANCELLED: "Cancelled" };
 const GROUP_COLOR: Record<string, string> = { todo: "gray", in_progress: "blue", complete: "green" };
 const GROUP_ORDER = ["todo", "in_progress", "complete"] as const;
-/** What an empty lane of each group is for (UI tour run 14, R14-WB-4): a reason, not a bare "Nothing here yet". */
+/**
+ * What an empty lane is for (UI tour run 14, R14-WB-4): a reason, not a bare "Nothing here yet". The intake
+ * text belongs only to the lane new requests really land in; another empty To-do lane is moved into by the
+ * team (UI tour run 18, R18-WD-2: an empty "To Do" said new requests wait there beside "New 4").
+ */
+const EMPTY_INTAKE = "New requests wait here until the team picks them up.";
 const EMPTY_LANE: Record<string, string> = {
-  todo: "New requests wait here until the team picks them up.",
+  todo: "Nothing here yet. Requests move here when the team moves them.",
   in_progress: "Requests the team is working on move here.",
   complete: "Finished requests end up here.",
 };
@@ -338,8 +343,11 @@ function MySubmissions() {
   const [phoneColState, setPhoneColState] = useState<string | null>(null);
   const phoneCol = (phoneColState && visibleCols.some((c) => c.key === phoneColState) ? phoneColState : null)
     ?? visibleCols.find((c) => shown.some((s) => keyOf(s) === c.key))?.key ?? visibleCols[0]?.key;
-  // Where to send a request from: shown in the first empty To-do lane, so an empty board has a next step.
-  const firstEmptyTodo = visibleCols.find((c) => c.group === "todo" && !shown.some((s) => keyOf(s) === c.key))?.key;
+  // The intake lane, where new requests land: the "New" lane of requests not yet on the board, else the first
+  // To-do lane holding requests, else the first To-do lane (a form files into its project's first section).
+  // Only it says new requests wait there and links to the forms when empty, so an empty board has a next step.
+  const todoCols = visibleCols.filter((c) => c.group === "todo");
+  const intakeKey = (todoCols.find((c) => c.key === "new") ?? todoCols.find((c) => subs.some((s) => keyOf(s) === c.key)) ?? todoCols[0])?.key;
 
   // `/submissions?id=<submissionId>` opens straight onto that submission (the `submission_status`
   // notification links here).
@@ -462,12 +470,12 @@ function MySubmissions() {
                         <div className="flex-1 space-y-2 px-2 pb-2">
                           {/* Long columns render in slices as they scroll into view (perf pass, 12 Oct 2026). */}
                           <Incremental items={items} first={25} step={30} keyOf={(s) => s.id} render={(s) => <Card s={s} onOpen={() => setOpenId(s.id)} />} />
-                          {/* An empty lane says what lands in it (UI tour run 14, R14-WB-4); the first empty To-do lane
+                          {/* An empty lane says what lands in it (UI tour run 14, R14-WB-4); the empty intake lane
                               also links to the forms, the way a request gets here. */}
                           {items.length === 0 && (
                             <div className="flex flex-col items-center gap-2 px-2 py-4 text-center text-[11px] leading-snug text-muted-foreground">
-                              <span>{t(EMPTY_LANE[col.group] ?? EMPTY_LANE.in_progress)}</span>
-                              {col.key === firstEmptyTodo && (
+                              <span>{t(col.key === intakeKey ? EMPTY_INTAKE : EMPTY_LANE[col.group] ?? EMPTY_LANE.in_progress)}</span>
+                              {col.key === intakeKey && (
                                 <Link to="/forms" className="font-semibold text-primary hover:underline">{t("Open forms")}</Link>
                               )}
                             </div>
