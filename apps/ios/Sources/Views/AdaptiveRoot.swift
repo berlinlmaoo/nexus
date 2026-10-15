@@ -534,6 +534,11 @@ struct SidebarRoot: View {
         // the account footer instead of half of it (UI tour run 16, R16-M-06).
         .environment(\.defaultMinListHeaderHeight, 24)
         .listSectionSpacing(.compact)
+        #else
+        // The iPad keeps its 44 pt touch rows but not the wide gaps between the groups: with them a portrait
+        // 13" iPad ended its nav under the account footer, "Pin a project to keep it here." half hidden on
+        // every page (UI tour run 18, iPad R18-I-03; R17-I-06 and R16-I-14 before it).
+        .listSectionSpacing(.compact)
         #endif
         // The list's end clears the fade above the footer, so its last row ("Pin a project to keep it here.")
         // is never left half under it (UI tour run 16, R16-I-14 iPad).
