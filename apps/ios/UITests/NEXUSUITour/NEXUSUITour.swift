@@ -854,9 +854,9 @@ final class NEXUSUITour: XCTestCase {
             // check measured a scroll SHIFT, and blank rows matched at any shift, so real pages read as "not
             // moved" and were lost (project overview 4 → 1, leaderboard 5 → 2).
             let fresh = newContent(from: last, to: data, in: target.visible, window: root.windows.firstMatch.frame)
-            if let fresh, fresh < minNewContent {
+            if let fresh, fresh.new < minNewContent, fresh.inPlace >= minInPlace {
                 #if targetEnvironment(macCatalyst)
-                if fresh < 0.02 && !scrolled && !flipped {
+                if fresh.new < 0.02 && !scrolled && !flipped {
                     flipped = true
                     macWheelSign = -macWheelSign
                     continue
@@ -879,11 +879,15 @@ final class NEXUSUITour: XCTestCase {
     /// the 0.5 of runs 3–16 did (run 16, T-1: 40–70% repeats, while the Mac List covered 35 of 106 rows).
     private var pageStep: CGFloat { CGFloat(Double(env["TOUR_PAGE_STEP"] ?? "") ?? 0.7) }
 
-    /// The least share of new content rows a page needs to be kept. Measured offline on runs 15 and 16:
-    /// true repeats score 0.00–0.09 (Mac overview-4 0.00, iPad table-5 0.04, iPhone templates-2 0.06, iPad
-    /// settings-2 0.09); every real page scores 0.11 or more (iPhone overview-2…4 0.81–0.87, leaderboard-2…5
-    /// 0.33–1.00, legal-document-2 0.81, settings-security-2 0.71, outlet-calendar-2 0.83).
-    private var minNewContent: CGFloat { CGFloat(Double(env["TOUR_MIN_NEW_CONTENT"] ?? "") ?? 0.10) }
+    /// A page is dropped only when BOTH tests say it is the page before again (losing a real page is worse than
+    /// keeping a repeat). Measured offline on every consecutive pair of runs 15 and 16 (296 pages):
+    /// - new rows (`minNewContent`): a list of look-alike rows ("REIMBURSE PATS SPORTS · 4 May") can score low
+    ///   though it scrolled a whole screen (run 15 iPad timeline-3: 0.09), so this alone is not enough;
+    /// - rows still in place (`minInPlace`): the share of the page's rows found within 5% of the same height
+    ///   on the page before. That timeline page scores 0.25; true repeats 0.91–1.00 (iPad settings-2 0.09 /
+    ///   0.91, Mac overview-4 0.00 / 1.00). No real page with new rows under 0.20 stays above 0.82 in place.
+    private var minNewContent: CGFloat { CGFloat(Double(env["TOUR_MIN_NEW_CONTENT"] ?? "") ?? 0.08) }
+    private var minInPlace: CGFloat { CGFloat(Double(env["TOUR_MIN_IN_PLACE"] ?? "") ?? 0.85) }
 
     /// The share of the new picture's content rows inside `rect` (screen points) that the old picture does
     /// not hold ANYWHERE in that rect: 0 = nothing new, 1 = all new. It does not depend on how far the page
@@ -893,18 +897,27 @@ final class NEXUSUITour: XCTestCase {
     /// The rect is cut into 4 vertical strips, each compared on its own, and the strip with the most new
     /// rows decides: a column that does not scroll (the Settings section list, a sticky Name column) holds no
     /// new rows, and must not water down the column that scrolled.
-    private func newContent(from old: Data, to new: Data, in rect: CGRect, window: CGRect) -> CGFloat? {
+    /// `inPlace`: the share of the new picture's content rows found in the old one within 5% of the rect's
+    /// height of the same place; the strip with the fewest decides (the one that scrolled).
+    private func newContent(from old: Data, to new: Data, in rect: CGRect, window: CGRect) -> (new: CGFloat, inPlace: CGFloat)? {
         guard let a = stripRows(old, rect: rect, window: window, every: 1),
-              let b = stripRows(new, rect: rect, window: window, every: 2), a.count == b.count else { return nil }
+              let b = stripRows(new, rect: rect, window: window, every: 1), a.count == b.count else { return nil }
         var fresh: CGFloat?
+        var inPlace: CGFloat = 1
         for (sa, sb) in zip(a, b) {
             let seen = Set(sa.compactMap { $0 })
-            let rows = sb.compactMap { $0 }
-            guard rows.count >= 20 else { continue }
-            let unseen = rows.filter { !seen.contains($0) }.count
-            fresh = max(fresh ?? 0, CGFloat(unseen) / CGFloat(rows.count))
+            let sampled = stride(from: 0, to: sb.count, by: 2).compactMap { i in sb[i].map { (i, $0) } }
+            guard sampled.count >= 20 else { continue }
+            let unseen = sampled.filter { !seen.contains($0.1) }.count
+            fresh = max(fresh ?? 0, CGFloat(unseen) / CGFloat(sampled.count))
+            let reach = max(1, sa.count / 20)
+            let near = sampled.filter { i, h in
+                let lo = max(0, i - reach), hi = min(sa.count - 1, i + reach)
+                return lo <= hi && sa[lo...hi].contains(h)
+            }.count
+            inPlace = min(inPlace, CGFloat(near) / CGFloat(sampled.count))
         }
-        return fresh
+        return fresh.map { ($0, inPlace) }
     }
 
     /// For each of 4 vertical strips of `rect`, one hash per pixel row (every `every` rows) in a PNG
