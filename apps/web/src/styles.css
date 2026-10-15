@@ -617,14 +617,16 @@
    (PageHeader publishes its height as --page-sticky-top; a page with a pinned bar of its own under the header
    adds that bar as --page-snap-extra) instead of half-cut by it. Proximity only, so
    free scrolling still ends anywhere between far-apart rows; the gap clears the header's 1rem fade. */
-html:has([data-snap-rows], [data-snap-row]) {
+/* Only rows of the page itself: a row inside a drawer or dialog (the outlet report in its sheet) must not turn
+   the page under it into a snap container. */
+html:has([data-snap-rows]:not([role="dialog"] *), [data-snap-row]:not([role="dialog"] *)) {
   scroll-snap-type: y proximity;
   /* Phone: no fade under the pinned header, so a row stops right under it; a 1rem gap there showed the tail
      of the row before (UI tour run 16, R16-WB-1: avatar and meta-line slivers under the tab strip). */
   scroll-padding-top: calc(var(--page-sticky-top, 0px) + var(--page-snap-extra, 0px));
 }
 @media (min-width: 768px) {
-  html:has([data-snap-rows], [data-snap-row]) {
+  html:has([data-snap-rows]:not([role="dialog"] *), [data-snap-row]:not([role="dialog"] *)) {
     scroll-padding-top: calc(var(--page-sticky-top, 0px) + var(--page-snap-extra, 0px) + 1rem);
   }
 }
