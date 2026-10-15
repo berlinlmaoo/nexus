@@ -1075,20 +1075,29 @@ function CalendarCard() {
         {monthLabel}
         <button onClick={() => setAnchor((a) => shiftMonth(a, 1))} aria-label={t("Next month")} className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><ChevronRight className="h-4 w-4" /></button>
       </div>
-      <div className="grid grid-cols-7 gap-y-1.5 text-center text-xs">
-        {/* 5 Jan 2026 is a Monday: the weekday initials in the interface language. */}
-        {Array.from({ length: 7 }, (_, i) => new Date(Date.UTC(2026, 0, 5 + i)).toLocaleDateString(locale, { weekday: locale.startsWith("id") ? "short" : "narrow", timeZone: "UTC" })).map((d, i) => <span key={i} className="text-muted-foreground">{d}</span>)}
-        {days.map((key) => {
-          const inMonth = sameMonth(key, anchor);
-          const isToday = key === todayKey;
-          const hasDue = dueDays.has(key);
-          return (
-            <Link key={key} to="/calendar" search={{ date: key }} aria-label={key} className="relative mx-auto grid h-7 w-7 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-              <span className={cn("grid h-7 w-7 place-items-center rounded-full", isToday ? "bg-primary font-semibold text-primary-foreground" : !inMonth ? "text-muted-foreground/40" : "text-foreground/80 hover:bg-accent")}>{Number(key.slice(8, 10))}</span>
-              {hasDue && !isToday && <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-primary" />}
-            </Link>
-          );
-        })}
+      {/* The app's one month-grid style (UI tour run 16, R16-WB-7 / lead decision 8): a bordered joined grid,
+          "MON TUE" left-aligned, the date top-left in every cell, today in the Calendar's navy. */}
+      <div className="overflow-clip rounded-lg border border-border">
+        <div aria-hidden className="grid grid-cols-7 border-b border-border bg-muted/40">
+          {/* 5 Jan 2026 is a Monday: the weekday names in the interface language. */}
+          {Array.from({ length: 7 }, (_, i) => new Date(Date.UTC(2026, 0, 5 + i)).toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" }).replace(/\.$/, "")).map((d, i) => <span key={i} className="truncate px-1 py-1.5 text-left text-2xs font-semibold uppercase tracking-wider text-muted-foreground">{d}</span>)}
+        </div>
+        <div className="grid grid-cols-7">
+          {days.map((key, i) => {
+            const inMonth = sameMonth(key, anchor);
+            const isToday = key === todayKey;
+            const hasDue = dueDays.has(key);
+            return (
+              <Link key={key} to="/calendar" search={{ date: key }} aria-label={key}
+                className={cn("relative flex h-9 min-w-0 flex-col items-start border-border p-0.5 text-xs transition-colors focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+                  i % 7 !== 6 && "border-r", i < 35 && "border-b",
+                  inMonth ? "bg-card hover:bg-muted/40" : "bg-muted/30 text-muted-foreground/60")}>
+                <span className={cn("grid h-5 min-w-5 place-items-center rounded-full px-1 tabular-nums", isToday ? "bg-cal-accent font-semibold text-cal-accent-foreground dark:bg-primary dark:text-primary-foreground" : inMonth && "text-foreground/80")}>{Number(key.slice(8, 10))}</span>
+                {hasDue && <span aria-hidden className="absolute bottom-1 left-1.5 h-1 w-1 rounded-full bg-primary" />}
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </Section>
   );

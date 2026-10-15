@@ -668,9 +668,11 @@ function ProjectDetail() {
               {layout !== "calendar" && <GroupButton cfg={cfg} layout={layout} defs={defs} ctx={ctx} onPatch={patchConfig} readOnly={!canEdit} />}
             </>
           )}
-          {/* Without the view's own tools (Overview, Sheet, Docs…) there is room to name these two (WD-7). */}
-          <ToolbarButton icon={Zap} label={tr("Automations")} active={activeModule === "automations"} onClick={() => select("automations")} showLabel={!(cfg && activeView && !activeModule)} />
-          <ToolbarButton icon={Sparkles} label={tr("AI Autofill")} iconOnly active={autofillOpen} onClick={() => setAutofillOpen(true)} showLabel={!(cfg && activeView && !activeModule)} />
+          {/* Named on every view from lg, as on the Overview (WD-7; UI tour run 16, R16-WD-6: the Board showed bare
+              icons where the Overview said "Automations" and "AI Autofill"). Tabs that no longer fit scroll behind
+              the arrow, which counts them. */}
+          <ToolbarButton icon={Zap} label={tr("Automations")} active={activeModule === "automations"} onClick={() => select("automations")} showLabel />
+          <ToolbarButton icon={Sparkles} label={tr("AI Autofill")} iconOnly active={autofillOpen} onClick={() => setAutofillOpen(true)} showLabel />
           {cfg && activeView && !activeModule && (
             <>
               <ToolbarSearch value={query} onChange={(q) => setSearch({ q: q || undefined })} />
@@ -1066,7 +1068,9 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   // fade: the narrow one fell mostly on the board's side padding and the cut card still read as a hard clip
   // (UI tour run 14, WD-3).
   const boardRef = useRef<HTMLDivElement>(null);
-  const boardFade = useEdgeFade(boardRef, [tasks.length, cfg.cardSize, linkedLanes.length], true);
+  // A long fade on the board: a column cut at the edge fades out across most of a card's width, so a cut
+  // amount ("Rp 50…") never reads as a value (UI tour run 16, R16-WD-1).
+  const boardFade = useEdgeFade(boardRef, [tasks.length, cfg.cardSize, linkedLanes.length], "board");
   // Phone: the board opens on the first column that holds cards, not on an empty To Do that fills the screen
   // while the cards only peek in (UI tour run 15, R15-WB-8). Once per board.
   const openedOn = useRef(false);
@@ -1388,7 +1392,9 @@ function AddListColumn({ projectId, statusOptions }: { projectId: string; status
   const label = statusOptions ? t("Add status") : t("Add section");
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className="flex h-9 w-56 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground">
+      // As wide as its label: a fixed 14rem left an empty gap before the linked column, which was then cut at the
+      // screen edge (UI tour run 16, R16-WD-1).
+      <button type="button" onClick={() => setOpen(true)} className="flex h-9 w-auto shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground">
         <Plus className="h-4 w-4" />{label}
       </button>
     );

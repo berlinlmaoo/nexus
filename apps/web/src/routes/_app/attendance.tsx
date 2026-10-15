@@ -102,6 +102,9 @@ const PHOTO_EXT = /\.(jpe?g|png|gif|webp|heic|heif|avif|bmp)$/i;
 const BOARD_FADE = 40;
 /** The board's header cells follow --board-head-shift (set while the page scrolls, see pageHeaderBottom). */
 const HEAD_SHIFT: CSSProperties = { transform: "translateY(var(--board-head-shift, 0px))" };
+/** Phone board names break between words only: a one-word name is cut with "…" on one line, not split
+ *  mid-word ("Abimanyug / m", UI tour run 16, R16-WM-2); a name with spaces takes two lines. */
+const phoneNameClamp = (name: string | null | undefined) => (name && /\s/.test(name.trim()) ? "line-clamp-2" : "block min-w-0 truncate");
 function isPhotoDocument(url?: string | null, name?: string | null) {
   const path = (url ?? "").split(/[?#]/)[0];
   // The stored file keeps the uploaded extension (see POST /api/attendance/requests); the original
@@ -640,8 +643,11 @@ function Attendance() {
                 <tr>
                   <th data-member-col style={HEAD_SHIFT} className="sticky left-0 top-0 z-30 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] bg-muted px-2 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:max-w-[20rem] sm:px-4">{tr("Member")}</th>
                   {periodDays.map((pd) => (
-                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} style={HEAD_SHIFT} className={cn("sticky top-0 z-20 snap-start bg-muted px-1 py-1.5 font-medium text-[10px] lg:px-0 leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
-                      <span className={cn("block text-[9px] uppercase", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" })}</span>
+                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} style={HEAD_SHIFT} className={cn("sticky top-0 z-20 snap-start bg-muted px-1 py-1.5 font-medium text-[10px] lg:px-0 lg:text-xs leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
+                      {/* From lg, where the whole period fits, the weekday is one letter over the date at a readable
+                          size; "MON" had to shrink to a few pixels to fit 30 columns (UI tour run 16, R16-WD-3). */}
+                      <span className={cn("block text-[9px] uppercase lg:hidden", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" })}</span>
+                      <span className={cn("hidden text-[11px] uppercase lg:block", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString(locale, { weekday: "narrow", timeZone: "UTC" })}</span>
                       {pd.key === todayKey
                         ? <span className="inline-grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 font-bold text-primary-foreground">{pd.day}</span>
                         : pd.day}
@@ -675,7 +681,7 @@ function Attendance() {
                             <MemberAvatar user={u} />
                             <div className="min-w-0">
                               {/* Phone: first name only, so the pinned column stays narrow (UI tour run 9). */}
-                              <div className="flex min-w-0 items-center gap-1.5"><span className="line-clamp-2 text-[13px] font-medium leading-tight tracking-tight [overflow-wrap:anywhere] sm:hidden" title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
+                              <div className="flex min-w-0 items-center gap-1.5"><span className={cn("text-[13px] font-medium leading-tight tracking-tight sm:hidden", phoneNameClamp(shortName(u.name)))} title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
                               <div className="hidden truncate text-[10px] text-muted-foreground sm:block">{memberSubtitle(u)}</div>
                               <PhoneMemberSummary d={canManage ? dayOffOf(u.id) : null} />
                             </div>
@@ -685,7 +691,7 @@ function Attendance() {
                             <MemberAvatar user={u} />
                             <div className="min-w-0">
                               {/* Phone: first name only, so the pinned column stays narrow (UI tour run 9). */}
-                              <div className="flex min-w-0 items-center gap-1.5"><span className="line-clamp-2 text-[13px] font-medium leading-tight tracking-tight [overflow-wrap:anywhere] sm:hidden" title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
+                              <div className="flex min-w-0 items-center gap-1.5"><span className={cn("text-[13px] font-medium leading-tight tracking-tight sm:hidden", phoneNameClamp(shortName(u.name)))} title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
                               <div className="hidden truncate text-[10px] text-muted-foreground sm:block">{memberSubtitle(u)}</div>
                               <PhoneMemberSummary d={canManage ? dayOffOf(u.id) : null} />
                             </div>
@@ -715,6 +721,21 @@ function Attendance() {
                           const pill = "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ring-1";
                           return (
                             <>
+                              {/* Right after Record: at the end of the row it wrapped onto a line of its own
+                                  (UI tour run 16, R16-WD-4). */}
+                              <button
+                                type="button"
+                                aria-label={tr("Export this person's attendance (xlsx): one row per day, check-in/out times, lateness, notes")} title={tr("Export this person's attendance (xlsx): one row per day, check-in/out times, lateness, notes")}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const slug = (u.name || "staff").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+                                  void downloadFile(`/api/attendance/history?scope=workspace&month=${monthKey}&userId=${u.id}&format=xlsx`, `absensi-${slug}-${monthKey}.xlsx`)
+                                    .catch((err) => alert(err instanceof ApiError ? err.message : tr("Export failed. Try again.")));
+                                }}
+                                className={cn(pill, "tap-area bg-muted text-muted-foreground ring-border transition hover:bg-accent hover:text-foreground")}
+                              >
+                                <Download className="inline h-3 w-3" />
+                              </button>
                               <span title={tr("Day off left this period: {left} of {quota} (used {used})", { left: d.remaining, quota: d.quota, used: d.used }) + (d.bonus && d.bonus.days > 0 ? "\n" + tr("Quota {base} + {n} extra ({reasons}) — expires on the 27th", { base: d.baseQuota ?? d.quota - d.bonus.days, n: d.bonus.days, reasons: d.bonus.grants.map((g) => `${g.days}: ${g.reason}`).join("; ") }) : "")}
                                 className={cn(pill, quotaTone(d.remaining), d.bonus && d.bonus.days > 0 && "ring-emerald-300 dark:ring-emerald-400/60")}>
                                 {/* Spelled out (UI tour run 13, W-D24: "0/4 DO" and "0/0 PH" were cryptic). */}
@@ -730,19 +751,6 @@ function Attendance() {
                                 className={cn(pill, xpTone)}>
                                 {formatCount(d.xp.score)} XP
                               </span>
-                              <button
-                                type="button"
-                                aria-label={tr("Export this person's attendance (xlsx): one row per day, check-in/out times, lateness, notes")} title={tr("Export this person's attendance (xlsx): one row per day, check-in/out times, lateness, notes")}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const slug = (u.name || "staff").toLowerCase().replace(/[^a-z0-9]+/g, "-");
-                                  void downloadFile(`/api/attendance/history?scope=workspace&month=${monthKey}&userId=${u.id}&format=xlsx`, `absensi-${slug}-${monthKey}.xlsx`)
-                                    .catch((err) => alert(err instanceof ApiError ? err.message : tr("Export failed. Try again.")));
-                                }}
-                                className={cn(pill, "tap-area bg-muted text-muted-foreground ring-border transition hover:bg-accent hover:text-foreground")}
-                              >
-                                <Download className="inline h-3 w-3" />
-                              </button>
                             </>
                           );
                         })()}

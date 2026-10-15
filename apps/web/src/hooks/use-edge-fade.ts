@@ -4,7 +4,7 @@ import { useEffect, useState, type RefObject } from "react";
  * A soft fade on the cut edge(s) of a sideways-scrolling strip, so it reads as "there is more" instead of
  * a hard clip (chips, tab strips on a phone). Returns a mask-image class for the scroller; "" when it fits.
  */
-export function useEdgeFade(ref: RefObject<HTMLElement | null>, deps: unknown[] = [], wide = false): string {
+export function useEdgeFade(ref: RefObject<HTMLElement | null>, deps: unknown[] = [], wide: boolean | "board" = false): string {
   const [edges, setEdges] = useState({ left: false, right: false });
   useEffect(() => {
     const el = ref.current;
@@ -24,6 +24,15 @@ export function useEdgeFade(ref: RefObject<HTMLElement | null>, deps: unknown[] 
   }, deps);
   // `wide`: a strip with side padding (a tab row bleeding to the screen edge) needs a longer fade, or the
   // 28 px lands mostly on the padding and the cut word still ends hard (UI tour run 9, Settings tabs).
+  // "board": the project board, whose cut column holds cards with amounts. From md the right fade spans most of a
+  // card; a phone keeps the short one, its next lane only peeks by its card edges.
+  if (wide === "board") {
+    return edges.left && edges.right
+      ? "[mask-image:linear-gradient(to_right,transparent,black_56px,black_calc(100%-56px),transparent)] md:[mask-image:linear-gradient(to_right,transparent,black_56px,black_calc(100%-8rem),transparent)]"
+      : edges.right ? "[mask-image:linear-gradient(to_right,black_calc(100%-56px),transparent)] md:[mask-image:linear-gradient(to_right,black_calc(100%-8rem),transparent)]"
+      : edges.left ? "[mask-image:linear-gradient(to_right,transparent,black_56px)]"
+      : "";
+  }
   if (wide) {
     return edges.left && edges.right
       ? "[mask-image:linear-gradient(to_right,transparent,black_56px,black_calc(100%-56px),transparent)]"

@@ -511,8 +511,10 @@
  *      Safari (which ignores backdrop-filter:url) — set inline in the component;
  *   2. this .glass-bar layer paints the multi-inset "thick glass" edge recipe
  *      (lifted from the reference) + a faint tint for text legibility. */
+/* The tint is dense enough that text and a red button under the bar no longer show through it (UI tour run 16,
+   R16-WM-6: "QA Dev 3" and "Delete account" ghosted through the bar). */
 .glass-bar {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.28) 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(255, 255, 255, 0.74) 100%);
   box-shadow:
     0 16px 40px -14px rgba(15, 23, 42, 0.26),
     0 2px 6px -3px rgba(15, 23, 42, 0.1),
@@ -521,7 +523,7 @@
     inset 0 0 0 1px rgba(255, 255, 255, 0.45);
 }
 .dark .glass-bar {
-  background: linear-gradient(180deg, rgba(72, 74, 86, 0.5) 0%, rgba(30, 32, 40, 0.32) 100%);
+  background: linear-gradient(180deg, rgba(56, 58, 68, 0.86) 0%, rgba(30, 32, 40, 0.78) 100%);
   box-shadow:
     0 16px 40px -14px rgba(0, 0, 0, 0.6),
     inset 0 1px 1px rgba(255, 255, 255, 0.22),

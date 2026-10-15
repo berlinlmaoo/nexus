@@ -142,7 +142,7 @@ export function MobileTabBar() {
           <div
             aria-hidden
             className="absolute inset-0 -z-10 overflow-hidden rounded-[26px]"
-            style={{ backdropFilter: 'url("#nexus-glass") blur(3px) saturate(160%)', WebkitBackdropFilter: "blur(18px) saturate(180%)" }}
+            style={{ backdropFilter: 'url("#nexus-glass") blur(14px) saturate(160%)', WebkitBackdropFilter: "blur(24px) saturate(180%)" }}
           />
           {/* 2. thick-glass edges + faint tint */}
           <div aria-hidden className="glass-bar absolute inset-0 rounded-[26px]" />

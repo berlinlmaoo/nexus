@@ -49,6 +49,25 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
   const filtered = Object.entries(filters).some(([k, v]) => k !== "q" && v);
 
   const isMobile = useIsMobile();
+  // From xl the column header sticks under the page header (UI tour run 16, R16-WD-8: pages 2 to 5 had no
+  // column labels), and rows snap whole under it: its height, less the 1rem the page already keeps for the
+  // header's fade (the header row covers that fade), is extra snap room for the page.
+  const headRef = useRef<HTMLTableSectionElement>(null);
+  useEffect(() => {
+    const head = headRef.current;
+    if (!head) return;
+    const root = document.documentElement;
+    const wide = window.matchMedia("(min-width: 1280px)");
+    const read = () => {
+      if (wide.matches) root.style.setProperty("--page-snap-extra", `${Math.max(0, Math.round(head.offsetHeight) - 16)}px`);
+      else root.style.removeProperty("--page-snap-extra");
+    };
+    read();
+    wide.addEventListener("change", read);
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(read);
+    ro?.observe(head);
+    return () => { wide.removeEventListener("change", read); ro?.disconnect(); root.style.removeProperty("--page-snap-extra"); };
+  });
   const [filtersOpen, setFiltersOpen] = useState(false);
   const activeFilters = Object.entries(filters).filter(([k, v]) => k !== "q" && k !== "parentId" && v).length;
   const clearFilters = () => { setFilters((f) => ({ q: f.q })); setLink(null); setPage(1); };
@@ -172,8 +191,8 @@ export function LegalDocuments({ openId, onOpen }: { openId: string | null; onOp
                 <col className="w-[6rem]" />
                 <col className="w-[9.5rem]" />
               </colgroup>
-              <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-                <tr>
+              <thead ref={headRef} className="bg-card text-left text-xs text-muted-foreground xl:sticky xl:top-[var(--page-sticky-top,0px)] xl:z-[41] xl:shadow-[0_1px_0_0_var(--border)]">
+                <tr className="bg-muted/40">
                   <th className="px-3 py-2 font-medium">{t("Document no.")}</th>
                   <th className="px-3 py-2 font-medium">{t("Title")}</th>
                   <th className="px-3 py-2 font-medium">{t("Counterparty")}</th>
