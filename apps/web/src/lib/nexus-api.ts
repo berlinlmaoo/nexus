@@ -3359,7 +3359,8 @@ export function fmtDue(value?: string | null) {
   const wibMidnight = wib.getUTCHours() === 0 && wib.getUTCMinutes() === 0;
   if (utcMidnight) return fmtDate(`${date.toISOString().slice(0, 10)}T12:00:00Z`);
   if (wibMidnight) return fmtDate(`${wib.toISOString().slice(0, 10)}T12:00:00Z`);
-  return `${fmtDate(value)}, ${fmtTime(value)}`;
+  // No comma between the date and the time (UI tour run 15, decision 16).
+  return `${fmtDate(value)} ${fmtTime(value)}`;
 }
 
 /** Convert a TipTap JSON doc to plain text (paragraphs joined by blank lines). */

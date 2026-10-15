@@ -2134,9 +2134,10 @@ function pctTone(pct: number) {
   if (pct > 0) return "bg-rose-500";
   return "bg-muted-foreground/30";
 }
+// High is orange (#f97316), not a second red beside Urgent, on every platform (UI tour run 15, iPad Q-IA29).
 const GANTT_BAR: Record<string, string> = {
   URGENT: "bg-rose-500",
-  HIGH: "bg-red-500",
+  HIGH: "bg-orange-500",
   MEDIUM: "bg-sky-500",
   LOW: "bg-violet-500",
   NONE: "bg-teal-500",

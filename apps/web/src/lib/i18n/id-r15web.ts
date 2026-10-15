@@ -3,4 +3,6 @@ export const ID_R15WEB: Record<string, string> = {
   // Attendance
   "Show later days": "Tampilkan hari berikutnya",
   "iPhone app": "App iPhone",
+  // Outlet day (round 2, aligned with the apps)
+  "No report yet. Fill report to add the figures.": "Belum ada laporan. Isi laporan untuk menambahkan angkanya.",
 }

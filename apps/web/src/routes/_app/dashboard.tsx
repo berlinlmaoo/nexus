@@ -70,7 +70,7 @@ function fmtDueDay(value: string | null | undefined, locale: string) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   const hasTime = d.getUTCHours() !== 0 || d.getUTCMinutes() !== 0;
-  return hasTime ? `${fmtDay(value, locale)}, ${fmtTime(value)}` : fmtDay(value, locale);
+  return hasTime ? `${fmtDay(value, locale)} ${fmtTime(value)}` : fmtDay(value, locale);
 }
 
 // Before the dashboard loads (or if it fails) the stats show zeros: never demo data. It used to fall

@@ -62,7 +62,7 @@ const STATUS_SEGMENTS = [
 
 const PRIORITY_ROWS = [
   { key: "URGENT", label: "Urgent", bar: "bg-rose-500" },
-  { key: "HIGH", label: "High", bar: "bg-red-500" },
+  { key: "HIGH", label: "High", bar: "bg-orange-500" },
   { key: "MEDIUM", label: "Medium", bar: "bg-sky-500" },
   { key: "LOW", label: "Low", bar: "bg-muted-foreground/40" },
   { key: "NONE", label: "No priority", bar: "bg-muted-foreground/25" },

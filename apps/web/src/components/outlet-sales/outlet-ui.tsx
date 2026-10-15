@@ -325,6 +325,7 @@ export function EventDetail({
   const who = event.reportedBy ?? event.updatedBy;
   // A night after today: its report opens on the night itself (W-B5).
   const notYet = !reportOpen(event.date, today);
+  const hasReport = event.status === "REPORTED" || event.rsvpTotal != null || event.hostingTotal != null;
   const captionId = `os-not-yet-${event.id}`;
   return (
     <article className="rounded-xl border border-border bg-card p-4">
@@ -349,22 +350,28 @@ export function EventDetail({
           </div>
         )}
       </header>
-      <div className={cn(wide && "lg:grid lg:grid-cols-2 lg:gap-x-8")}>
+      {/* Name, date, sales and pax always; the rest once something is reported. A night with nothing reported says
+          so in one line instead of ~20 rows of "—" and "Not filled", as the apps do (UI tour run 15, iPad Q-IB20). */}
+      <div className={cn(wide && hasReport && "lg:grid lg:grid-cols-2 lg:gap-x-8")}>
         <div className="min-w-0">
           <dl>
             <Row label={label("name", "Event name")}><span className="font-semibold">{event.name}</span></Row>
-            <Row label={label("date", "Day/Date")}>{dayLong(event.date, locale, today.slice(0, 4))}</Row>
+            {/* "Date", not the form question's "Day/Date": the answer is one date (iPhone run 14 N-28). */}
+            <Row label={t("Date")}>{dayLong(event.date, locale, today.slice(0, 4))}</Row>
             <Row label={label("sales", "Sales")}>{vsTarget(event.sales, event.salesTarget, event.salesPct, money)}</Row>
             <Row label={label("pax", "Pax")}>{vsTarget(event.pax, event.paxTarget, event.paxPct, num)}</Row>
           </dl>
-          {total("rsvp")}
-          {total("hosting")}
-          {communities()}
+          {hasReport && total("rsvp")}
+          {hasReport && total("hosting")}
+          {hasReport && communities()}
+          {!hasReport && !notYet && <p className="pt-2 text-sm text-muted-foreground">{t("No report yet. Fill report to add the figures.")}</p>}
         </div>
-        <div className="min-w-0">
-          {story("success")}
-          {story("fail")}
-        </div>
+        {hasReport && (
+          <div className="min-w-0">
+            {story("success")}
+            {story("fail")}
+          </div>
+        )}
       </div>
       {who && (
         <p className="mt-2 border-t border-border/70 pt-2 text-xs text-muted-foreground">
