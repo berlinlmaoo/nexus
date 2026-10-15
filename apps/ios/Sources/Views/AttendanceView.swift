@@ -1685,14 +1685,26 @@ struct StreakBoardCard: View {
         let n = CGFloat(periodDays.count)
         // iPad / Mac: a day may narrow to 20 pt so the whole period fits, as on the web; at 24 pt a 13" iPad
         // missed by a few points and opened mid-period with a cut column at each edge (UI tour run 15, Q-IB21).
-        let least: CGFloat = hSize == .regular ? 18 : cell
+        // 16 pt since run 16 (R16-M-14): a default Mac window missed the whole 28 Sep – 27 Oct period by three
+        // days at 18.
+        let least: CGFloat = hSize == .regular ? 16 : cell
         return min(40, max(least, ((stripWidth - gap * (n - 1)) / n).rounded(.down)))
     }
     private let gap: CGFloat = 3
+    /// The strip's width rounded down to whole days, while the period does not fit; nil = all the room.
+    private var wholeDaysWidth: CGFloat? {
+        guard stripWidth > 0, periodDays.count > 1 else { return nil }
+        let step = cellW + gap
+        let fit = Int((stripWidth + gap) / step)
+        guard fit > 0, fit < periodDays.count else { return nil }
+        return CGFloat(fit) * step - gap
+    }
     @Environment(\.horizontalSizeClass) private var hSize
     /// Wide enough that "Muhammad …" rows can be told apart (UI tour run 13, F-16 / I-24: 76 pt cut every
     /// name to about ten characters); more on an iPad or Mac, where the board has room.
-    private var nameW: CGFloat { hSize == .regular ? 150 : 104 }
+    /// 190 on iPad / Mac: full names, as the web's board, where 150 turned them into "Irvandes Hasri Ilham M."
+    /// (UI tour run 16, R16-B-24).
+    private var nameW: CGFloat { hSize == .regular ? 190 : 104 }
 
     // ProjDate's shared Calendar and DateFormatter cache instead of fresh ones. These are read from
     // `body`, and constructing a DateFormatter there is about the most expensive thing you can do:
@@ -1875,8 +1887,17 @@ struct StreakBoardCard: View {
                     if wide {
                         Button { Task { await exportMonth() } } label: {
                             if exporting { ProgressView().scaleEffect(0.7).frame(width: 30, height: 30).touchTarget44(drawn: 30) }
-                            else { Image(systemName: "square.and.arrow.up").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.foreground).frame(width: 30, height: 30).touchTarget44(drawn: 30) }
+                            else {
+                                // Named, as the web's "Export" (UI tour run 16, R16-B-24: bare icons).
+                                Label(T("Export"), systemImage: "square.and.arrow.up")
+                                    .font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                                    .padding(.horizontal, 10).frame(height: 30)
+                                    .overlay(Capsule().strokeBorder(NX.border))
+                                    .frame(minHeight: 44).contentShape(Rectangle())
+                            }
                         }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 4)
                         .disabled(exporting)
                         .accessibilityLabel(T("Export this month as a spreadsheet"))
                         .sheet(item: $exportItem) { item in ActivityView(items: [item.url]) }
@@ -2095,10 +2116,10 @@ struct StreakBoardCard: View {
     @ViewBuilder static func trackingMark(_ row: AttendanceRow?) -> some View {
         switch row?.locationTrackingState {
         case "web":
-            Image(systemName: "globe").font(.system(size: 9, weight: .bold)).foregroundStyle(Color(hex: "#0284c7"))
+            Image(systemName: "globe").font(.system(size: 8, weight: .bold)).foregroundStyle(Color(hex: "#0284c7"))
                 .accessibilityLabel(T("Web check-in · location not tracked"))
         case "denied":
-            Image(systemName: "location.slash").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.mutedFg)
+            Image(systemName: "location.slash").font(.system(size: 8, weight: .bold)).foregroundStyle(NX.mutedFg)
                 .accessibilityLabel(T("Location off"))
         default:
             EmptyView()
@@ -2158,6 +2179,11 @@ struct StreakBoardCard: View {
                 // the scroll view now STARTS there: its initial position comes from `daysAnchor`, not
                 // from anything that has to happen after layout. The tries below only centre it.
                 .defaultScrollAnchor(daysAnchor)
+                // Exactly as wide as the whole days that fit: with the scroll resting on a day, neither edge
+                // ever cuts one ("TU…" at the right, a sliver at the left; UI tour run 16, R16-I-17 /
+                // R16-M-14). The width is measured outside this frame, on the room the board leaves.
+                .frame(width: wholeDaysWidth, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { stripWidth = $0 }
                 // One scroll view per period, so another month opens from its own anchor.
                 .id(monthOffset)
@@ -2295,7 +2321,10 @@ struct StreakBoardCard: View {
                             .modifier(OutsideNowMark(since: Self.outsideSince(m.rowByDay[pd.key], dayKey: pd.key, todayKey: liveKey),
                                                      name: m.name, cell: cell))
                             // Web check-in / location off, as the web board's corner marks (Q-IB8).
-                            .overlay(alignment: .topTrailing) { Self.trackingMark(m.rowByDay[pd.key]).offset(x: 3, y: -3) }
+                            // Inside the cell's corner: offset out of it, the mark crossed into the row above
+                            // and showed as a clipped ")" beside the first day in view (UI tour run 16,
+                            // R16-I-13 / R16-M-14).
+                            .overlay(alignment: .topTrailing) { Self.trackingMark(m.rowByDay[pd.key]).padding(1) }
                         // Every cell with a record opens it — a manager reviewing their people
                         // and staff on their own board need the day's detail and its
                         // location trail too. The BoD also opens id-less and empty days to

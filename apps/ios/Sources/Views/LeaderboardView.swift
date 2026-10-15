@@ -109,7 +109,6 @@ struct LeaderboardView: View {
         } else {
             ScrollView {
                 VStack(spacing: 16) {
-                    // No "XP ranking for everyone" line: the subtitle above already says it (UI tour run 14, N-36).
                     // Why the viewer is missing from the list (UI tour run 13, W-B4), in the web's bordered
                     // info banner rather than plain text (run 14, P-I34 / P-M29).
                     if viewerLeftOut {
@@ -123,6 +122,11 @@ struct LeaderboardView: View {
                             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
                     }
 
+                    // The web card's caption over the ranking (UI tour run 16, R16-I-25; web master over run 14 N-36).
+                    if !ranked.isEmpty {
+                        Text(T("XP ranking for everyone")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     if ranked.count >= 1 {
                         // More people share 1st than the podium has steps: one gold band with everyone tied
                         // and "7-way tie for 1st · 1.000" on it, as on the web. Three "1" blocks left four of
@@ -272,7 +276,9 @@ struct TieRibbon: View {
             }
             .font(NXFont.text(14, .semibold)).foregroundStyle(ink)
             .multilineTextAlignment(.center)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 84, maximum: 96), spacing: 12, alignment: .top)], alignment: .center, spacing: 12) {
+            // Down to 70 pt a person, so seven tied fit one row on an iPad as on the web (UI tour run 16, R16-I-25:
+            // "Zaki Mahmuda" alone on a second row).
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 70, maximum: 96), spacing: 10, alignment: .top)], alignment: .center, spacing: 12) {
                 ForEach(rows) { row in
                     Button { onOpen(row) } label: {
                         VStack(spacing: 5) {

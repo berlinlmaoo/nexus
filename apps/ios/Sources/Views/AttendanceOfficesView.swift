@@ -391,8 +391,17 @@ struct AddressLine: View {
     var body: some View {
         ViewThatFits(in: .horizontal) {
             ForEach(variants, id: \.self) { v in Text(v + suffix).lineLimit(1).fixedSize() }
-            Text(address + suffix).lineLimit(1)
+            // Not even the first part fits: it is cut with one "…" and the radius after it always stays
+            // ("RT.12/RW.11,..." lost "· radius 100 m"; UI tour run 16, R16-I-12).
+            HStack(spacing: 0) {
+                Text(firstPart).lineLimit(1).truncationMode(.tail)
+                Text(suffix).lineLimit(1).fixedSize()
+            }
         }
         .accessibilityLabel(address + suffix)
+    }
+
+    private var firstPart: String {
+        address.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? address
     }
 }

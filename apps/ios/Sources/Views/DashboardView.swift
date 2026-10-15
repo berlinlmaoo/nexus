@@ -82,7 +82,7 @@ struct DashboardView: View {
     }
     private var statData: [StatDatum] {
         [
-            .init(value: projectCount, total: nil, label: T("Projects"), icon: "rectangle.stack.fill", from: "#c4b5fd", to: "#7c3aed", glow: "#a78bfa"),
+            .init(value: projectCount, total: nil, label: T("Projects"), icon: "doc.text.fill", from: "#c4b5fd", to: "#7c3aed", glow: "#a78bfa"),
             .init(value: mission.done, total: mission.total, label: T("Tasks"), icon: "checklist", from: "#6ee7b7", to: "#059669", glow: "#34d399"),
             .init(value: game?.questsDone ?? 0, total: game?.questList.count ?? 0, label: T("Quests"), icon: "sparkles", from: "#fcd34d", to: "#ea580c", glow: "#fbbf24"),
         ]
@@ -274,7 +274,7 @@ struct DashboardView: View {
             dailyCalendarCard
             // A portrait iPad gets the web Home's widgets too; the iPhone Home stays as it is (owner rule).
             if hSize == .regular {
-                scheduleCard
+                calendarAndSchedule
                 messagesCard
                 leaderboardCard
             }
@@ -289,6 +289,21 @@ struct DashboardView: View {
         HomeScheduleCard(tasks: tasksList, onOpenTask: { openTarget = .task($0) }, onOpenMyTasks: { router.go(.tasks) })
     }
     private var messagesCard: some View { HomeMessagesCard { router.go(.messages) } }
+    /// The web Home's Calendar widget beside "Your schedule" where both fit, else one over the other
+    /// (UI tour run 16, R16-B-14: the Calendar widget was missing on iPad and Mac).
+    private var calendarAndSchedule: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 18) {
+                HomeCalendarCard { router.go(.teamCalendar) }.frame(maxWidth: .infinity)
+                scheduleCard.frame(maxWidth: .infinity)
+            }
+            .frame(minWidth: 620)
+            VStack(alignment: .leading, spacing: 18) {
+                HomeCalendarCard { router.go(.teamCalendar) }
+                scheduleCard
+            }
+        }
+    }
     private var leaderboardCard: some View { HomeLeaderboardCard { router.go(.leaderboard) } }
 
     /// Mac, wide window: the day's work on the left, the person (level, profile, XP rules) on the right.
@@ -304,7 +319,7 @@ struct DashboardView: View {
                     statCards
                     xpRulesCard
                     dailyCalendarCard
-                    scheduleCard
+                    calendarAndSchedule
                     quickActions
                     projectShortcuts
                 }
@@ -337,7 +352,7 @@ struct DashboardView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .leading, spacing: 18) {
                     dailyCalendarCard
-                    scheduleCard
+                    calendarAndSchedule
                     projectShortcuts
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1325,7 +1340,11 @@ if !XpRules.tiers.isEmpty {
                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(NX.border, lineWidth: 1))
             }
             .buttonStyle(.plain)
-            Text(name).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            // The phone's card names the person here; on iPad / Mac the greeting above already does, and the
+            // web card has no name under Edit profile (UI tour run 16, R16-B-14).
+            if hSize != .regular {
+                Text(name).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            }
         }
         .nexusCard()
     }

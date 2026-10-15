@@ -135,21 +135,87 @@ struct HomeLeaderboardCard: View {
             if rows.isEmpty {
                 Text(T("Loading…")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
-                VStack(spacing: 6) {
+                // The web widget's rows: a crown on the first place (a rank number after it), the level under
+                // the name, each row a bordered tile (UI tour run 16, R16-B-14).
+                VStack(spacing: 8) {
                     ForEach(ranked, id: \.row.id) { item in
                         HStack(spacing: 10) {
-                            Text("\(item.rank)").font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
-                                .frame(width: 18, alignment: .leading)
-                            AvatarView(url: item.row.avatar, initial: item.row.initial, size: 26)
-                            Text(item.row.name ?? "—").font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+                            Group {
+                                if item.rank == 1 {
+                                    Image(systemName: "crown.fill").font(.system(size: 11)).foregroundStyle(Color(hex: "#d97706"))
+                                        .frame(width: 24, height: 24)
+                                        .background(Color(hex: "#fef3c7"), in: Circle())
+                                } else {
+                                    Text("\(item.rank)").font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                                        .frame(width: 24, height: 24)
+                                }
+                            }
+                            .accessibilityLabel(String(format: T("Rank %d"), item.rank))
+                            AvatarView(url: item.row.avatar, initial: item.row.initial, size: 30)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(item.row.name ?? "—").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                                Text(DashboardView.levelText(item.row.level, item.row.levelName))
+                                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                            }
                             Spacer(minLength: 6)
                             Text("\(AppNumber.int(item.row.totalXp)) XP").font(NXFont.text(13, .semibold))
                                 .foregroundStyle(NX.foreground).monospacedDigit()
                         }
+                        .padding(.horizontal, 10).padding(.vertical, 8)
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
                     }
                 }
             }
         }
         .task { rows = (try? await APIClient.shared.leaderboardResponse().rows) ?? [] }
+    }
+}
+
+/// The web Home's Calendar widget (UI tour run 16, R16-B-14): this month in the app's one month-grid style
+/// (NXMonthGrid), today on the navy disc; "See all" and a day open the Calendar.
+struct HomeCalendarCard: View {
+    let onOpen: () -> Void
+    @State private var month = String(OutletFormat.wibToday().prefix(7))
+
+    var body: some View {
+        let today = OutletFormat.wibToday()
+        HomeWideCard(title: T("Calendar"), onSeeAll: onOpen) {
+            HStack(spacing: 4) {
+                Spacer(minLength: 0)
+                Button { month = OutletFormat.shiftMonth(month, by: -1) } label: {
+                    Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                        .frame(width: 32, height: 32).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).hoverEffect(.highlight)
+                .accessibilityLabel(T("Previous month"))
+                Text(OutletFormat.monthLabel(month)).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                    .lineLimit(1)
+                Button { month = OutletFormat.shiftMonth(month, by: 1) } label: {
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                        .frame(width: 32, height: 32).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).hoverEffect(.highlight)
+                .accessibilityLabel(T("Next month"))
+                Spacer(minLength: 0)
+            }
+            VStack(spacing: 0) {
+                NXMonthWeekdayRow(names: OutletFormat.weekHeader)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 0) {
+                    ForEach(OutletFormat.gridDays(month), id: \.self) { d in
+                        let inMonth = d.hasPrefix(month)
+                        Button(action: onOpen) {
+                            NXMonthDayNumber(day: OutletFormat.parts(d)?.d ?? 0, inMonth: inMonth, isToday: d == today)
+                                .padding(3)
+                                .frame(maxWidth: .infinity, minHeight: 38, alignment: .topLeading)
+                                .nxMonthCell(inMonth: inMonth, selected: false)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(OutletFormat.dayLong(d))
+                    }
+                }
+            }
+            .nxMonthGridCard()
+        }
     }
 }

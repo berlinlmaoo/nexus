@@ -18,5 +18,9 @@ extension AppLanguage {
         "Nothing on this day. Days with a dot have tasks.": "Tidak ada apa-apa di hari ini. Hari yang bertitik ada tugasnya.",
         "Nothing on this day. Tap another day to see its tasks.": "Tidak ada apa pun di hari ini. Ketuk hari lain untuk melihat tugasnya.",
         "Nothing on this day. Click another day to see its tasks.": "Tidak ada apa pun di hari ini. Klik hari lain untuk melihat tugasnya.",
+        // Attendance board: the web's labelled export (R16-B-24)
+        "Export": "Ekspor",
+        // Home leaderboard widget (R16-B-14)
+        "Rank %d": "Peringkat %d",
     ]
 }

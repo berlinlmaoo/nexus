@@ -23,6 +23,9 @@ struct EmploymentStartCard: View {
         }
     }
 
+    @State private var showAll = false
+    private static let foldAt = 8
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
@@ -76,11 +79,23 @@ struct EmploymentStartCard: View {
             } else if shown.isEmpty {
                 Text(T("No one matches.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
+                // The first eight, then "Show all n": 54 rows ran three screens down the page (UI tour run 16,
+                // R16-I-28). A search or "Not filled in only" shows every match.
+                let folded = !showAll && query.isEmpty && !missingOnly && shown.count > Self.foldAt
+                let rows = folded ? Array(shown.prefix(Self.foldAt)) : shown
                 VStack(spacing: 0) {
-                    ForEach(shown) { m in
+                    ForEach(rows) { m in
                         row(m)
-                        if m.id != shown.last?.id { Divider() }
+                        if m.id != rows.last?.id { Divider() }
                     }
+                }
+                if shown.count > Self.foldAt && query.isEmpty && !missingOnly {
+                    Button { withAnimation(.snappy) { showAll.toggle() } } label: {
+                        Text(showAll ? T("Show fewer") : String(format: T("Show all %d"), shown.count))
+                            .font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                            .frame(minHeight: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
