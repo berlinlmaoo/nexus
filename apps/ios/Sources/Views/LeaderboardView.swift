@@ -155,6 +155,9 @@ struct LeaderboardView: View {
                     // Hairline card like the web's, no drop shadow.
                     .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+
+                    // The web's admin XP log under the ranking, BoD and up (UI tour run 18, iPhone R18-I-06).
+                    if Viewer.shared.isBoD { XpAuditLogCard() }
                 }
                 .padding(.horizontal, NXSidebarPage.gutter(isRoot))
                 .padding(.vertical, isRoot ? 24 : 16)

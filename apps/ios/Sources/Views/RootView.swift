@@ -107,6 +107,9 @@ struct RootView: View {
                                     // A form to fill: "Cancel", as on every other sheet that edits (F-30).
                                     Button(T("Cancel")) { router.formRequest = nil }
                                 }
+                                // Plain text on the Mac, as the other Mac sheets since run 17 (UI tour run 18, R18-M-05:
+                                // this one still sat in a round glass bubble).
+                                .nxPlainOnMac()
                             }
                     }
                     // Page wide on iPad / Mac: the form sheet was half the screen and its pinned Send bar cut
@@ -364,7 +367,7 @@ struct AccountFooter: View {
                 .buttonStyle(.plain)
             }
             Button { if !auth.signOutIfAllowed() { signOutBlocked = true } } label: {
-                Label(T("Log out"), systemImage: "rectangle.portrait.and.arrow.right")
+                Label(AppLanguage.signOutOwn, systemImage: "rectangle.portrait.and.arrow.right")
                     .font(NXFont.text(14, .semibold)).foregroundStyle(NX.danger)
                     .frame(maxWidth: .infinity).padding(.vertical, 13)
                     .background(NX.danger.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))

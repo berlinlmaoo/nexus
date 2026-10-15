@@ -913,7 +913,7 @@ struct FormStudioSettingsTab: View {
                     Text(T("Anyone logged in can submit, and their submissions show in My Submissions.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
             }
-            .tint(NX.onyx)
+            .tint(NX.violetText)
             if draft.requireAuth {
                 Label(T("People always sign in with their NEXUS account to send, so every request has a name and shows up in their My Submissions."), systemImage: "lock")
                     .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
@@ -1063,7 +1063,7 @@ struct FormStudioSettingsTab: View {
                     Text(String(format: T("%d so far"), responseCount)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
             }
-            .tint(NX.onyx)
+            .tint(NX.violetText)
             if draft.settings.responseLimit > 0 {
                 HStack(spacing: 10) {
                     TextField(T("Maximum responses"), text: limitBinding)

@@ -59,10 +59,11 @@ struct NXMonthDayNumber: View {
 }
 
 extension View {
-    /// A month-grid cell: joined hairlines, greyed outside the month, a navy outline when picked.
+    /// A month-grid cell: joined hairlines, a navy outline when picked. A day outside the month has no fill,
+    /// only its grey number (`NXMonthDayNumber`), as on the web: the grey fill read as a rounded block inside
+    /// the square cell (UI tour run 17 R17-I-18, run 18 R18-I-03). `inMonth` stays for the callers' clarity.
     func nxMonthCell(inMonth: Bool, selected: Bool) -> some View {
         self
-            .background(inMonth ? Color.clear : NX.muted.opacity(0.35))
             .overlay(Rectangle().strokeBorder(NXMonthGrid.hairline, lineWidth: 0.5))
             .overlay { if selected { Rectangle().strokeBorder(NXMonthGrid.navy, lineWidth: 1.5) } }
     }

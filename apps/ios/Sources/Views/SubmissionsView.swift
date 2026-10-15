@@ -511,18 +511,29 @@ struct SubmissionsView: View {
         }
     }
 
+    /// What an empty lane is for. The intake text only on the lane new requests really land in; another empty
+    /// To-do lane is one the team moves requests into (UI tour run 18, R18-WD-2, decision 3: an empty "To Do"
+    /// said new requests wait there beside "New 4").
     private func emptyText(_ col: SubmissionColumn) -> String {
+        if col.key == intakeKey { return T("New requests wait here until the team picks them up.") }
         switch col.statusGroup {
-        case .todo: return T("New requests wait here until the team picks them up.")
+        case .todo: return T("Nothing here yet. Requests move here when the team moves them.")
         case .complete: return T("Finished requests end up here.")
         default: return T("Requests the team is working on move here.")
         }
     }
 
-    /// The first To-do lane without cards: the one that links to the forms.
+    /// The intake lane, as the web's: the "new" lane of requests not yet on a board, else the first To-do lane
+    /// holding requests, else the first To-do lane (a form files into its project's first section).
+    private var intakeKey: String? {
+        let todo = visibleColumns.filter { $0.statusGroup == .todo }
+        return (todo.first { $0.key == "new" } ?? todo.first { c in subs.contains { $0.columnKey == c.key } } ?? todo.first)?.key
+    }
+
+    /// The intake lane when it has no cards: the one that links to the forms.
     private var firstEmptyTodo: String? {
-        let cards = shown
-        return visibleColumns.first { c in c.statusGroup == .todo && !cards.contains { $0.columnKey == c.key } }?.key
+        guard let key = intakeKey, !shown.contains(where: { $0.columnKey == key }) else { return nil }
+        return key
     }
 
     private func card(_ s: MySubmission) -> some View {

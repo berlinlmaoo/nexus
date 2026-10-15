@@ -773,6 +773,9 @@ private struct OverviewTeamCard: View {
                     OverviewCardTitle(title: T("Who's working on what"), icon: "person.2")
                     Divider().overlay(NX.border)
                     header
+                    // The head's own bottom edge, as a table's: pinned, a row passing under it read as a stray
+                    // sliver of avatar and bar below the labels (UI tour run 18, R18-M-12).
+                    Divider().overlay(NX.border)
                 }
                 .background(NX.card)
                 .modifier(StickyInPageScroll(limit: rowsHeight - 40))

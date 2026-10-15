@@ -239,10 +239,9 @@ struct ListTab: View {
             .padding(.horizontal, hSize == .regular ? 32 : 14)
             .padding(.vertical, 12)
         }
-        // Rows come to rest whole at the top, as the Table's (decision 16 of run 17): a scrolled List started
-        // with a row's orphan meta line, "Rp 1.260.000 SBU 14 May" cut mid-glyph (iPhone R17-I-07). Each group's
-        // header and rows are the resting places (group(_:columns:)).
-        .scrollTargetBehavior(.viewAligned(limitBehavior: .never))
+        // No view-aligned snapping here: inside a LazyVStack its targets (the rows of groups not laid out yet)
+        // were guessed, so a slow drag came to rest ABOVE where it started; the tour's List pages went back up,
+        // repeated byte for byte, and never reached the Done rows (UI tour run 18, iPhone R18-I-01, iPad T-2).
         .environment(slotWidths)
     }
 
@@ -286,7 +285,6 @@ struct ListTab: View {
                 }
             }
         }
-        .scrollTargetLayout()
         .contentShape(Rectangle())
         // A whole group takes a drop (web: drag a row's grip onto another group).
         .dropDestination(for: String.self) { ids, _ in

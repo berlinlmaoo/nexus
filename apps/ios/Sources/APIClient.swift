@@ -1040,6 +1040,15 @@ struct APIClient {
         try await run(makeRequest("/api/gamification/leaderboard"), decode: LeaderboardResponse.self, cache: "leaderboard")
     }
 
+    /// Every XP change, added or deducted, for everyone (BoD and up; the web leaderboard's XP log).
+    /// `sign` "pos" / "neg" (nil = both), `scope` "period" or "all".
+    func xpAuditLog(sign: String?, scope: String, offset: Int, limit: Int = 40) async throws -> XpAuditResponse {
+        var q = "scope=\(enc(scope))&limit=\(limit)"
+        if let sign { q += "&sign=\(enc(sign))" }
+        if offset > 0 { q += "&offset=\(offset)" }
+        return try await run(makeRequest("/api/gamification/xp-transactions?\(q)"), decode: XpAuditResponse.self)
+    }
+
     /// A workspace peer's XP ledger for the current period. Peer-scoped by the server — it answers
     /// 403 for somebody the caller shares no workspace with — which is also how the profile screen
     /// asks "may I show this person at all" without inventing a permission rule of its own.

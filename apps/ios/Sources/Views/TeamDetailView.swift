@@ -192,7 +192,7 @@ struct TeamDetailView: View {
                 Toggle(isOn: Binding(get: { shiftOn }, set: { shiftOn = $0; shiftDirty = true })) {
                     Text(T("Use custom hours for this team")).font(NXFont.text(13)).foregroundStyle(NX.foreground)
                 }
-                .tint(NX.violet)
+                .tint(NX.violetText)
                 if shiftOn {
                     HStack(spacing: 14) {
                         DatePicker(T("Masuk"), selection: Binding(get: { shiftStart }, set: { shiftStart = $0; shiftDirty = true }), displayedComponents: .hourAndMinute)

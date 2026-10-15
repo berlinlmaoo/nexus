@@ -287,10 +287,15 @@ private struct MeasuredSlot<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        content
-            .fixedSize()
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { widths.report(key, $0) }
-            .frame(width: widths.widths[key], alignment: .leading)
+        // A clear base keeps the column when the row has no value: an empty `if` with a frame on it collapsed,
+        // so a Done row without an assignee drew its date in the assignee's place (UI tour run 18, R18-M-03).
+        ZStack(alignment: .leading) {
+            Color.clear.frame(width: widths.widths[key] ?? 0, height: 1)
+            content
+                .fixedSize()
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { widths.report(key, $0) }
+        }
+        .frame(width: widths.widths[key], alignment: .leading)
     }
 }
 

@@ -144,6 +144,10 @@ struct XpLogEntry: Decodable, Identifiable, Sendable {
     /// A late penalty's real minutes. The ledger amount is capped at 120 of them, so for anyone
     /// who arrived later than that the two numbers deliberately disagree.
     let lateMinutes: Int?
+    /// Whose change it is: only in the admin log of everyone (GET /api/gamification/xp-transactions).
+    var userId: String? = nil
+    var userName: String? = nil
+    var userAvatar: String? = nil
 
     private var parts: [String] {
         reason.split(separator: ":", maxSplits: 2, omittingEmptySubsequences: false).map(String.init)
@@ -169,6 +173,13 @@ struct XpLogEntry: Decodable, Identifiable, Sendable {
 
     var signedAmount: String { amount > 0 ? "+\(amount)" : "\(amount)" }
     var dayLabel: String { createdAt.map { AgendaRange.dayLabel(AgendaRange.dayKey($0)) } ?? "" }
+}
+
+/// The admin XP log of everyone, newest first, a page at a time (the web's XpAuditLog, BoD and up).
+struct XpAuditResponse: Decodable, Sendable {
+    let rows: [XpLogEntry]?
+    let hasMore: Bool?
+    let nextOffset: Int?
 }
 
 struct XpLogResponse: Decodable, Sendable {

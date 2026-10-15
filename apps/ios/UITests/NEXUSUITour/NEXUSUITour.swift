@@ -551,14 +551,26 @@ final class NEXUSUITour: XCTestCase {
 
     /// The labels of one `appTaps` / `webTaps` step: "?Add|Tambah" → ["Add", "Tambah"].
     private static func labels(_ step: String) -> [String] {
-        let names = (step.hasPrefix("?") ? String(step.dropFirst()) : step).split(separator: "|").map(String.init)
+        var body = step.hasPrefix("?") ? String(step.dropFirst()) : step
+        if body.hasPrefix("~") { body = String(body.dropFirst()) }
+        let names = body.split(separator: "|").map(String.init)
         return names.isEmpty ? [step] : names
+    }
+
+    /// A step whose labels are matched as a part of the button's label ("~QA Dev": a leaderboard row, whose
+    /// label also holds its rank, level and XP), after the optional "?".
+    private static func partial(_ step: String) -> Bool {
+        (step.hasPrefix("?") ? String(step.dropFirst()) : step).hasPrefix("~")
     }
 
     /// The app's button with one of a step's labels (a menu item is a button too).
     @MainActor
     private func appButton(_ step: String) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "label IN %@", Self.labels(step))).firstMatch
+        if Self.partial(step) {
+            let any = NSCompoundPredicate(orPredicateWithSubpredicates: Self.labels(step).map { NSPredicate(format: "label CONTAINS %@", $0) })
+            return app.buttons.matching(any).firstMatch
+        }
+        return app.buttons.matching(NSPredicate(format: "label IN %@", Self.labels(step))).firstMatch
     }
 
     private struct Skip: Error { let reason: String }
@@ -853,6 +865,22 @@ final class NEXUSUITour: XCTestCase {
         var flipped = false
         var scrolled = false
         #endif
+        // Run 18 (iPhone R18-I-01, iPad T-2): the List's pages went back UP and two were byte-identical, so the
+        // Done rows were never shot. Pages now only go down: a page whose rows were ALL on an earlier page (fine
+        // pixel rows, so look-alike rows with other words still count as new) ends the paging, as does an earlier
+        // page's exact picture. And a page the pages around it show whole is replaced by the next one (the
+        // short end of a scroll): each page is attached one step late for that.
+        let window0 = root.windows.firstMatch.frame
+        var seenRows = Set(fineRows(last, in: target.compare, window: window0).compactMap { $0 })
+        var savedShots: [Data] = [last]
+        var keptRows: [UInt64?] = fineRows(last, in: target.compare, window: window0)
+        var pending: (shot: XCUIScreenshot, rows: [UInt64?])?
+        func flush() {
+            guard let p = pending else { return }
+            attachShot(p.shot, "\(prefix)\(id)-\(page)")
+            pending = nil
+        }
+        // `page` counts the pending page too, so the cap holds.
         while page < maxPages {
             drag(target, dx: 0, dy: -pageStep)
             if navigatedAway() { break }
@@ -881,25 +909,104 @@ final class NEXUSUITour: XCTestCase {
             // moved up by the drag (or less, at the end of the scroll) and counts what that leaves unexplained.
             let moved = shiftedNew(from: last, to: data, in: target.compare, window: window)
             let repeatsBefore = fresh.map { $0.new < minNewContent && $0.inPlace >= minInPlace } ?? false
-            if repeatsBefore || (moved.map { $0 < minShiftedNew } ?? false) {
-                #if targetEnvironment(macCatalyst)
-                // Nothing new at all on the first scroll: maybe the wheel goes the other way.
-                if (fresh?.new ?? 1) < 0.02 && (moved ?? 1) < 0.02 && !scrolled && !flipped {
-                    flipped = true
-                    macWheelSign = -macWheelSign
-                    continue
-                }
-                #endif
-                break
+            let looksRepeated = repeatsBefore || (moved.map { $0 < minShiftedNew } ?? false)
+            #if targetEnvironment(macCatalyst)
+            // Nothing new at all on the first scroll: maybe the wheel goes the other way.
+            if looksRepeated && (fresh?.new ?? 1) < 0.02 && (moved ?? 1) < 0.02 && !scrolled && !flipped {
+                flipped = true
+                macWheelSign = -macWheelSign
+                continue
             }
+            #endif
+            if savedShots.contains(data) { break }
+            let rows = fineRows(data, in: target.compare, window: window)
+            let content = rows.compactMap { $0 }
+            // The share of this page's content rows on no earlier page. Measured offline on runs 16-18 (every
+            // vertical page): repeats 0.000 (run 17 iPhone gideon-2, run 18 iPhone / iPad project-list-5); the
+            // lowest real page 0.029 (run 17 iPhone legal-settings-6, whose series rows look like PATS's).
+            let unseen: CGFloat = content.isEmpty ? (looksRepeated ? 0 : 1)
+                : CGFloat(content.filter { !seenRows.contains($0) }.count) / CGFloat(content.count)
+            if unseen < minUnseen { break }
+            // The shift tests above alone dropped a last page that adds a line or two: the iPad outlet day ended on
+            // "No report yet. Fill report…" cut by the screen's bottom, with no page 2 (UI tour run 18, iPad
+            // R18-I-07; run 17 iPad outlet-day-2 adds 5.5% new rows). A page they call a repeat goes only when its
+            // own rows add almost nothing too (decision 5: a last page stays when it adds content).
+            // On the Mac a wheel scroll redraws text at sub-pixel offsets, so nearly every row reads as new: there
+            // the shift tests alone decide, as before.
+            #if targetEnvironment(macCatalyst)
+            if looksRepeated { break }
+            #else
+            if looksRepeated && unseen < minUnseenOfRepeat { break }
+            #endif
             #if targetEnvironment(macCatalyst)
             scrolled = true
             #endif
             last = data
-            page += 1
-            attachShot(shot, "\(prefix)\(id)-\(page)")
+            savedShots.append(data)
+            if let p = pending {
+                // The page before this one adds nothing that the page before it and this one do not show
+                // (>= 98% of its rows): it goes, this one takes its place. Runs 16-18 offline: run 16 iPhone
+                // tickets-2 and iPad projects-4, project-table-4 and project-timeline-5, each shown whole by its
+                // neighbours; no other page.
+                let kept = Set(keptRows.compactMap { $0 }), next = Set(content)
+                let own = p.rows.compactMap { $0 }
+                let shown = own.filter { kept.contains($0) || next.contains($0) }.count
+                if own.isEmpty || CGFloat(shown) / CGFloat(own.count) < minCovered {
+                    flush()
+                    keptRows = p.rows
+                    page += 1
+                }
+            } else {
+                page += 1
+            }
+            content.forEach { seenRows.insert($0) }
+            pending = (shot, rows)
         }
+        flush()
         return page - 1
+    }
+
+    /// A page is a repeat when less than this share of its content rows (`fineRows`) is on no earlier page.
+    private var minUnseen: CGFloat { CGFloat(Double(env["TOUR_MIN_UNSEEN"] ?? "") ?? 0.01) }
+    /// A page shown by the pages around it to at least this share of its rows is replaced by the next page.
+    /// A page the shift tests call a repeat stays only when at least this share of its rows is new.
+    private var minUnseenOfRepeat: CGFloat { CGFloat(Double(env["TOUR_MIN_UNSEEN_OF_REPEAT"] ?? "") ?? 0.03) }
+    private var minCovered: CGFloat { CGFloat(Double(env["TOUR_MIN_COVERED"] ?? "") ?? 0.98) }
+
+    /// One hash per pixel row of `rect` at full resolution (grey, 8 levels), the right 10 pt (the scroll bar)
+    /// left out; nil for a blank row. Unlike `wideRows`, two rows with different words never share a hash, so
+    /// "on an earlier page" means the very same row.
+    private func fineRows(_ png: Data, in rect: CGRect, window: CGRect) -> [UInt64?] {
+        guard let image = UIImage(data: png)?.cgImage, window.width > 0 else { return [] }
+        let width = image.width, height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        let drawn: Bool = pixels.withUnsafeMutableBytes { buffer in
+            guard let ctx = CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: width, space: CGColorSpaceCreateDeviceGray(),
+                                      bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return false }
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return [] }
+        let scale = CGFloat(width) / window.width
+        let local = rect.offsetBy(dx: -window.minX, dy: -window.minY)
+        let x0 = max(0, Int(local.minX * scale)), x1 = min(width, Int((local.maxX - 10) * scale))
+        let y0 = max(0, Int(local.minY * scale)), y1 = min(height, Int(local.maxY * scale))
+        guard x1 > x0 + 8, y1 > y0 else { return [] }
+        return pixels.withUnsafeBufferPointer { px in
+            (y0..<y1).map { y -> UInt64? in
+                var hash: UInt64 = 0xcbf29ce484222325
+                let row = y * width
+                let first = px[row + x0] >> 5
+                var flat = true
+                for x in x0..<x1 {
+                    let v = px[row + x] >> 5
+                    if v != first { flat = false }
+                    hash = (hash ^ UInt64(v)) &* 0x100000001b3
+                }
+                return flat ? nil : hash
+            }
+        }
     }
 
     /// How far each page drag scrolls, as a fraction of the visible scroll area. 0.7 leaves about 30% of
@@ -1174,7 +1281,42 @@ final class NEXUSUITour: XCTestCase {
                 }
             }
         }
+        // iPhone: a header laid over the scroll view's top (a safe-area inset: Settings' subtitle and tab strip,
+        // ~200 pt) hides what scrolls under it, yet the rect began at the screen top. The step (0.7 of the rect)
+        // then left almost no visible overlap, and the rows that sat under the tab bar on page 1 scrolled straight
+        // under the header: the "Active sessions" title was never shot (run 18, iPhone R18-I-02; run 17 the
+        // same). The rect starts under that header.
+        if !web, sidebar == nil, let b = best, let top = overlayBottom(over: b, in: root),
+           top > b.visible.minY + 20, top < b.visible.minY + b.visible.height * 0.45 {
+            func below(_ r: CGRect) -> CGRect { CGRect(x: r.minX, y: top, width: r.width, height: r.maxY - top) }
+            best = ScrollTarget(element: b.element, visible: below(b.visible), compare: below(b.compare))
+        }
         return best
+    }
+
+    /// The bottom of the controls drawn over the top of `target` that are not part of its content (a navigation
+    /// bar, a page header in a safe-area inset), from one accessibility snapshot; nil when there are none.
+    @MainActor
+    private func overlayBottom(over target: ScrollTarget, in root: XCUIApplication) -> CGFloat? {
+        guard let tree = try? root.snapshot() else { return nil }
+        let frame = target.element.frame
+        let rect = target.visible
+        let kinds: Set<XCUIElement.ElementType> = [.staticText, .button, .textField, .searchField, .image,
+                                                  .segmentedControl, .navigationBar]
+        var bottom: CGFloat?
+        func visit(_ node: XCUIElementSnapshot) {
+            if [.scrollView, .collectionView, .table].contains(node.elementType),
+               abs(node.frame.minY - frame.minY) < 1, abs(node.frame.height - frame.height) < 1,
+               abs(node.frame.minX - frame.minX) < 1 { return }   // the content: not an overlay
+            if kinds.contains(node.elementType), node.frame.height > 0, node.frame.height < 120,
+               node.frame.intersects(rect), node.frame.minY >= rect.minY - 1,
+               node.frame.maxY <= rect.minY + rect.height * 0.45 {
+                bottom = max(bottom ?? node.frame.maxY, node.frame.maxY)
+            }
+            node.children.forEach(visit)
+        }
+        visit(tree)
+        return bottom
     }
 
     /// The sidebar's on-screen frame in a regular-width layout (UIKit names its list "Sidebar" on the

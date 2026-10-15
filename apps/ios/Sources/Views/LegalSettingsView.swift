@@ -12,8 +12,15 @@ struct LegalSettingsPane: View {
 
     @State private var companies: [LegalCompany]?
     @State private var error: String?
-    /// The company card at the top of the scroll: the jump chip it lights up, and where a chip scrolls to.
+    /// Where a jump chip scrolls to (the card's top at the page's top).
     @State private var current: String?
+    /// The chip that is lit: the company whose card header has reached the chip row (`updateLit`).
+    @State private var lit: String?
+    /// Each card's top, and the end of the page, in the scroll view's visible space; the chip row's height.
+    @State private var cardTops: [String: CGFloat] = [:]
+    @State private var pageEnd: CGFloat = .infinity
+    @State private var viewport: CGFloat = 0
+    @State private var chipRowH: CGFloat = 0
 
     var body: some View {
         ScrollView {
@@ -30,24 +37,34 @@ struct LegalSettingsPane: View {
                     ForEach(companies ?? []) { c in
                         LegalCompanyCard(company: c, canEdit: canEdit) { await load() }
                             .id(c.id)
+                            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .scrollView(axis: .vertical)).minY } action: {
+                                cardTops[c.id] = $0
+                                updateLit()
+                            }
                     }
                 }
                 LegalTokenHelp()
+                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .scrollView(axis: .vertical)).maxY } action: {
+                        pageEnd = $0
+                        updateLit()
+                    }
             }
             .scrollTargetLayout()
             .padding(.horizontal, gutter)
             .padding(.vertical, 16)
         }
         .scrollPosition(id: $current, anchor: .top)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewport = $0; updateLit() }
         // The web's company jump chips, pinned above the cards, the one in view lit up: The Z Networks sat
         // five pages down with no way to it but scrolling (UI tour run 15, Q-IB26 / R15-WB-7).
         .safeAreaInset(edge: .top, spacing: 0) {
             if let list = companies, list.count > 1 {
+                ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(list) { c in
-                            let on = (current ?? list.first?.id) == c.id
-                            Button { withAnimation(.snappy) { current = c.id } } label: {
+                            let on = (lit ?? list.first?.id) == c.id
+                            Button { withAnimation(.snappy) { current = c.id; lit = c.id } } label: {
                                 // The code beside the name when it says something more ("Intoo INTOO" stays
                                 // "Intoo", "Z" beside "The Z Networks"), as the web's chips (UI tour run 16, R16-B-22).
                                 HStack(spacing: 5) {
@@ -62,6 +79,7 @@ struct LegalSettingsPane: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityAddTraits(on ? .isSelected : [])
+                            .id(c.id)
                         }
                     }
                 }
@@ -70,11 +88,34 @@ struct LegalSettingsPane: View {
                 // iPhone R17-I-15).
                 .contentMargins(.horizontal, gutter, for: .scrollContent)
                 .nxEdgeFade(44)
+                // The lit chip scrolls into view whole, its end margin included: lit, "The Z Networks TZN" sat cut
+                // at the screen edge (UI tour run 18, iPhone R18-I-11).
+                .onChange(of: lit) { _, id in
+                    guard let id else { return }
+                    withAnimation(.snappy) { proxy.scrollTo(id, anchor: id == list.last?.id ? .trailing : .center) }
+                }
+                }
                 .background(NX.background)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chipRowH = $0; updateLit() }
             }
         }
         .refreshable { await load() }
         .task { await load() }
+    }
+
+    /// The company whose card header has reached the chip row, as the web lights its chips; at the page's
+    /// end, where a last short card can never reach the top, the last card whose header is in view. It
+    /// switched while ~75% of the screen still showed the company before (UI tour run 18, iPhone R18-I-10):
+    /// the scroll position named the card whose top was NEAREST the page top, from below as well.
+    private func updateLit() {
+        guard let list = companies, !list.isEmpty, viewport > 0 else { return }
+        let top = chipRowH + 1
+        var pick = list.first?.id
+        for c in list { if let y = cardTops[c.id], y <= top { pick = c.id } }
+        if pageEnd <= viewport + 1, let last = list.last(where: { (cardTops[$0.id] ?? .infinity) < viewport * 0.5 }) {
+            pick = last.id
+        }
+        if pick != lit { lit = pick }
     }
 
     private func load() async {
@@ -338,12 +379,13 @@ private struct LegalSeriesRow: View {
     }
 
     @ViewBuilder private var inUseToggle: some View {
-        // The web's switch: dark, its words on the right (UI tour run 16, R16-B-22).
+        // Its words on the right as the web's switch, in the brand tint every switch shares (UI tour run 18,
+        // R18-B-02: black here, purple on the attendance offices).
         let toggle = Toggle(isOn: Binding(get: { series.active }, set: { v in Task { await patch(["active": v]) } })) {
             Text(T("In use")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
         }
         .labelsHidden()
-        .tint(NX.onyx)
+        .tint(NX.violetText)
         .accessibilityLabel(T("In use"))
         // Its words beside it on every width, as the web's (UI tour run 17, iPhone R17-I-15), with the standard
         // 8 pt of air: at 6 the label read as part of the switch (R17-B-07).

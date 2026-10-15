@@ -32,7 +32,10 @@ struct LegalTemplatesPane: View {
                 }
                 // On a phone the switch sits at the list's right edge (F-29 / M-23).
                 if hSize != .regular {
+                    // The switch is drawn ~3 pt past its frame's end, so it stood out past the cards' edge (UI
+                    // tour run 18, iPhone R18-I-14); inset by that much it ends where the cards do.
                     LegalToggle(label: T("Show archived"), isOn: $showArchived)
+                        .padding(.trailing, 3)
                 }
                 list
                 LegalPlaceholderHelp()
@@ -582,7 +585,7 @@ struct LegalFieldEditorList: View {
         Toggle(isOn: Binding(get: { f.required }, set: { v in onChange(p) { $0.required = v } })) {
             Text(T("Required")).font(NXFont.text(14)).foregroundStyle(NX.foreground)
         }
-        .tint(NX.violet)
+        .tint(NX.violetText)
         .disabled(locked)
     }
 }

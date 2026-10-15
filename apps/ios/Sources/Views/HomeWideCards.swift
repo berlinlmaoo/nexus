@@ -9,6 +9,7 @@ private struct HomeWideCard<Content: View>: View {
     let title: String
     var onSeeAll: (() -> Void)? = nil
     @ViewBuilder let content: () -> Content
+    @Environment(\.homeCardFillsRow) private var fillsRow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -24,9 +25,19 @@ private struct HomeWideCard<Content: View>: View {
             content()
         }
         // Fills the height its row gives it, so Calendar and Your schedule side by side end level, as on the
-        // web (UI tour run 17, iPad R17-I-10); alone in a column it is its own height.
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // web (UI tour run 17, iPad R17-I-10). Only there: in the Mac's right rail Messages stretched into
+        // ~700 pt of empty card and pushed the Leaderboard below the fold (UI tour run 18, R18-M-01).
+        .frame(maxWidth: .infinity, maxHeight: fillsRow ? .infinity : nil, alignment: .topLeading)
         .nexusCard()
+    }
+}
+
+private struct HomeCardFillsRowKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    /// A Home card in a row of cards that end level (Calendar beside Your schedule) fills the row's height.
+    var homeCardFillsRow: Bool {
+        get { self[HomeCardFillsRowKey.self] }
+        set { self[HomeCardFillsRowKey.self] = newValue }
     }
 }
 

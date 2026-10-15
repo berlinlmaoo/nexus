@@ -134,6 +134,10 @@ struct LegalDocumentsPane: View {
     /// on an iPad in portrait beside the sidebar they overflowed, pushed the whole page off both edges and
     /// squeezed Title out (UI tour run 10, IPD-1). Narrower than `tableWidth` reads the phone's cards.
     @State private var width: CGFloat = 0
+    /// The page scroll's top inset and the table card's height: the column heads stay pinned under the page top
+    /// while its rows scroll (Mac / iPad; UI tour run 18, R18-M-09: pages 2+ had no column labels).
+    @State private var pageTop: CGFloat = 0
+    @State private var tableH: CGFloat = 0
     /// The web's table from 680 pt, so a portrait iPad gets it too, without the Counterparty column below
     /// 860 pt (UI tour run 16, R16-I-27 iPad: a card list where the web has a table).
     /// 620 since run 17: beside the open sidebar a portrait 13" iPad has ~665 pt, so 680 was never reached and
@@ -153,6 +157,8 @@ struct LegalDocumentsPane: View {
             .padding(.vertical, 16)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .modifier(PageTopInsetReader(inset: $pageTop))
+        .environment(\.pageScrollTopInset, pageTop)
         .refreshable { await load() }
         .task(id: text) {
             if !text.isEmpty { try? await Task.sleep(nanoseconds: 300_000_000) }
@@ -299,7 +305,11 @@ struct LegalDocumentsPane: View {
                 .frame(maxWidth: .infinity)
         } else if let result {
             LegalListCard {
-                if table { wideHeader; Divider().overlay(NX.border) }
+                if table {
+                    VStack(spacing: 0) { wideHeader; Divider().overlay(NX.border) }
+                        .modifier(StickyInPageScroll(limit: max(0, tableH - 120)))
+                        .zIndex(1)
+                }
                 ForEach(Array(result.documents.enumerated()), id: \.element.id) { i, d in
                     if i > 0 { Divider().overlay(NX.border) }
                     VStack(alignment: .leading, spacing: 0) {
@@ -325,12 +335,13 @@ struct LegalDocumentsPane: View {
                             }
                             .buttonStyle(.plain)
                             .hoverEffect(.highlight)
-                            .padding(.leading, table ? 14 + Self.numberW + 12 : 14)
+                            .padding(.leading, table ? 14 + numberW + 12 : 14)
                             .padding(.bottom, 6)
                         }
                     }
                 }
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { tableH = $0 }
             .opacity(loading ? 0.6 : 1)
             pager(result)
         }
@@ -345,25 +356,33 @@ struct LegalDocumentsPane: View {
 
     private var wideHeader: some View {
         HStack(spacing: 12) {
-            Text(T("Number")).frame(width: Self.numberW, alignment: .leading)
+            Text(T("Number")).frame(width: numberW, alignment: .leading)
             Text(T("Title")).frame(maxWidth: .infinity, alignment: .leading)
             if showCounterparty { Text(T("Counterparty")).frame(width: Self.counterpartyW, alignment: .leading) }
-            Text(T("Company")).frame(width: Self.companyW, alignment: .leading)
-            Text(T("Date")).frame(width: 90, alignment: .leading)
-            Text(T("Status")).frame(width: 80, alignment: .leading)
+            Text(T("Company")).frame(width: companyW, alignment: .leading)
+            Text(T("Date")).frame(width: dateW, alignment: .leading)
+            Text(T("Status")).frame(width: statusW, alignment: .leading)
         }
         .font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg)
         .padding(.horizontal, 14).padding(.vertical, 9)
         .background(NX.muted.opacity(0.5))
+        // Opaque, so pinned it hides the rows passing under it.
+        .background(NX.card)
     }
 
     /// The archive table's columns (UI tour run 16, R16-M-01 / R16-M-13): a folded number, a narrower
     /// Counterparty (mostly "—"), a Company wide enough for "The Z Networks" on one line; Title takes the rest.
     /// 170 since run 17: the folded number needs at most ~170 pt ("PATS/PKS-UNIV/…/2026/005"), and the 40 pt
     /// spare went to Title, which still stopped at "…University" after two lines (UI tour run 17, R17-M-09).
-    private static let numberW: CGFloat = 170
     private static let counterpartyW: CGFloat = 130
-    private static let companyW: CGFloat = 120
+    /// A narrow table (a portrait iPad beside the sidebar, ~665 pt) gives its spare width to Title: with the
+    /// wide columns Title had ~130 pt and ended "[TEST] seq 03_SPK_City_…", while "PATS" and "14 Oct" sat in
+    /// ~150 pt of empty room each (UI tour run 18, iPad R18-I-02).
+    private var narrowTable: Bool { width - 2 * gutter < 760 }
+    private var numberW: CGFloat { narrowTable ? 150 : 170 }
+    private var companyW: CGFloat { narrowTable ? 84 : 120 }
+    private var dateW: CGFloat { narrowTable ? 62 : 90 }
+    private var statusW: CGFloat { narrowTable ? 74 : 80 }
 
     private func subtitle(_ d: LegalDocumentSummary) -> String {
         // An addendum says "Addendum to …" on its own line below, so the type isn't repeated (run 14, N-26).
@@ -413,7 +432,7 @@ struct LegalDocumentsPane: View {
                 Text(d.number.isEmpty ? "—" : LegalLabels.shortNumber(d.number)).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.foreground)
                     .strikethrough(d.numberReleased).lineLimit(1).minimumScaleFactor(0.85)
             }
-            .frame(width: Self.numberW, alignment: .leading)
+            .frame(width: numberW, alignment: .leading)
             .help(d.number)
             VStack(alignment: .leading, spacing: 2) {
                 Text(LegalLabels.unbroken(d.title)).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(2)
@@ -428,9 +447,10 @@ struct LegalDocumentsPane: View {
                 Text(d.counterparty.isEmpty ? "—" : d.counterparty).font(NXFont.text(13)).foregroundStyle(NX.foreground)
                     .lineLimit(2).frame(width: Self.counterpartyW, alignment: .leading)
             }
-            Text(d.company?.name ?? "—").font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(2).frame(width: Self.companyW, alignment: .leading)
-            Text(LegalLabels.shortDay(d.docDate)).font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(1).frame(width: 90, alignment: .leading)
-            LegalStatusChip(status: d.status).frame(width: 80, alignment: .leading)
+            Text(d.company?.name ?? "—").font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(2).frame(width: companyW, alignment: .leading)
+            Text(LegalLabels.shortDay(d.docDate)).font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(1)
+                .minimumScaleFactor(0.8).frame(width: dateW, alignment: .leading)
+            LegalStatusChip(status: d.status).frame(width: statusW, alignment: .leading)
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
         .contentShape(Rectangle())
@@ -516,7 +536,7 @@ private struct LegalDateRangeSheet: View {
         let date = Binding<Date>(get: { LegalText.date(fromDay: value.wrappedValue ?? "") ?? Date() },
                                  set: { value.wrappedValue = LegalText.dayString($0); onChange() })
         return Section {
-            Toggle(label, isOn: on).tint(NX.violet)
+            Toggle(label, isOn: on).tint(NX.violetText)
             if value.wrappedValue != nil {
                 DatePicker(label, selection: date, displayedComponents: .date)
                     .environment(\.locale, AppDateLocale.current)

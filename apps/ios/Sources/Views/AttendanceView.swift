@@ -2052,17 +2052,24 @@ struct StreakBoardCard: View {
     /// the phone, M5 on the Mac). With the strip's width known, the scroll now lines a WHOLE day up with
     /// the left edge, chosen so today still sits in the middle; before the width is known it centres.
     /// Puts a whole day flush with the strip's left edge: the one that centres today, or the period's first.
-    private func alignLeadDay() {
+    /// Scrolls there every time, not only when the bound id differs: the id the scroll view reports is the day
+    /// NEAREST its leading edge, so with half of SUN 11 showing it already said MON 12 and nothing moved; both
+    /// edges kept a half day ("N 1", "S 1") and the leave badge sat on the cut one (UI tour run 18, iPhone
+    /// R18-I-04, iPad R18-I-05).
+    private func alignLeadDay(_ proxy: ScrollViewProxy? = nil) {
         guard !periodDays.isEmpty else { return }
         let key = todayKey.flatMap { leadingDayKey(today: $0) } ?? (wholeDaysWidth == nil ? periodDays[0].key : nil)
-        if let key, leadDay != "day-\(key)" { leadDay = "day-\(key)" }
+        guard let key else { return }
+        if leadDay != "day-\(key)" { leadDay = "day-\(key)" }
+        proxy?.scrollTo("day-\(key)", anchor: .leading)
     }
 
     private func scrollToToday(_ proxy: ScrollViewProxy) {
-        alignLeadDay()
+        alignLeadDay(proxy)
         guard let t = todayKey else { return }
         Task { @MainActor in
-            for delay in [0, 150, 500] {
+            // A last try once the members, the pills column and the day width have settled.
+            for delay in [0, 150, 500, 1200] {
                 if delay > 0 { try? await Task.sleep(for: .milliseconds(delay)) }
                 if let lead = leadingDayKey(today: t) {
                     proxy.scrollTo("day-\(lead)", anchor: .leading)
@@ -2197,8 +2204,11 @@ struct StreakBoardCard: View {
     /// Plain stacks throughout: lazy ones inside a scroll view left whole rows empty.
     private var grid: some View {
         HStack(alignment: .top, spacing: lane) {
+            // The day row's band runs over the name, score and pills columns too, opaque and sticky with it, so a
+            // row scrolling under it is hidden whole: on the name side it collided with the day labels (iPad), and
+            // a name and score showed with their cells covered (Mac; UI tour run 18, R18-B-01).
             VStack(alignment: .leading, spacing: gap) {
-                Color.clear.frame(width: nameW, height: headerH)
+                stickyBand(width: nameW)
                 nameColumn
             }
             ScrollViewReader { proxy in
@@ -2209,7 +2219,7 @@ struct StreakBoardCard: View {
                             // Sticky under the page's top edge while the rows scroll by, as the web keeps MEMBER /
                             // days / SCORE: thirty rows down nobody could tell which column was which day (UI
                             // tour run 17, iPhone R17-I-05).
-                            .modifier(StickyInPageScroll(limit: CGFloat(shownMembers.count) * (cell + gap) - headerH))
+                            .modifier(StickyInPageScroll(limit: stickyLimit))
                             .zIndex(1)
                         cells
                     }
@@ -2239,19 +2249,22 @@ struct StreakBoardCard: View {
                 // One scroll view per period, so another month opens from its own anchor.
                 .id(monthOffset)
                 .onAppear { scrollToToday(proxy) }
-                .onChange(of: stripWidth) { _, _ in alignLeadDay() }
-                .onChange(of: periodDays) { _, _ in alignLeadDay() }
+                .onChange(of: stripWidth) { _, _ in alignLeadDay(proxy) }
+                .onChange(of: periodDays) { _, _ in alignLeadDay(proxy) }
             }
             VStack(alignment: .trailing, spacing: gap) {
                 Text(T("Score")).font(.system(size: 8, weight: .semibold)).foregroundStyle(NX.mutedFg)
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .frame(width: scoreW, height: headerH, alignment: .bottomTrailing)
+                    .background(NX.card)
+                    .modifier(StickyInPageScroll(limit: stickyLimit))
+                    .zIndex(1)
                 scoreColumn
             }
             // The web board's per-person pills, "0/4 days off" and "−590 XP" (managers, iPad / Mac; Q-IB8).
             if webTools && !deductions.isEmpty {
                 VStack(alignment: .leading, spacing: gap) {
-                    Color.clear.frame(width: Self.pillsW, height: headerH)
+                    stickyBand(width: Self.pillsW)
                     ForEach(shownMembers) { m in
                         HStack(spacing: 4) {
                             if let d = deductions[m.id] {
@@ -2269,6 +2282,17 @@ struct StreakBoardCard: View {
                 }
             }
         }
+    }
+
+    /// How far the header band may follow the page down: the rows' height.
+    private var stickyLimit: CGFloat { CGFloat(shownMembers.count) * (cell + gap) - headerH }
+
+    /// The header band over a column without day labels: opaque, sticky with the day row.
+    private func stickyBand(width: CGFloat) -> some View {
+        NX.card.frame(width: width, height: headerH)
+            .modifier(StickyInPageScroll(limit: stickyLimit))
+            .zIndex(1)
+            .accessibilityHidden(true)
     }
 
     private static func pill(_ text: String, tone: Color) -> some View {

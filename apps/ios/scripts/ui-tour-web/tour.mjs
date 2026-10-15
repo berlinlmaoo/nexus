@@ -224,6 +224,32 @@ async function capture(page, dir, id) {
       if (before >= limit) continue;
       let target = Math.min(limit, before + Math.round(height * 0.85));
       let snappedHere = false;
+      // Snap points of this scroller: the top of every [data-snap-row], [data-snap-rows] > * and [data-snap-top]
+      // whose nearest scroll container it is, less scroll-padding-top and the element's scroll-margin-top.
+      const padEl = s === doc ? document.documentElement : s;
+      const pad = parseFloat(getComputedStyle(padEl).scrollPaddingTop) || 0;
+      const top0 = s === doc ? 0 : s.getBoundingClientRect().top;
+      const snaps = [];
+      for (const el of s.querySelectorAll("[data-snap-row], [data-snap-rows] > *, [data-snap-top]")) {
+        const r = el.getBoundingClientRect();
+        if (!r.height) continue;
+        let owner = doc;
+        for (let a = el.parentElement; a && a !== document.body && a !== document.documentElement; a = a.parentElement) {
+          if (a === s || /(auto|scroll|hidden)/.test(getComputedStyle(a).overflowY)) { owner = a; break; }
+        }
+        if (owner !== s) continue;
+        const margin = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+        snaps.push(Math.floor((s === doc ? r.top + scrollY : r.top - top0 + s.scrollTop) - pad - margin));
+      }
+      const realMax = s === doc ? doc.scrollHeight - vh : s.scrollHeight - s.clientHeight;
+      // A middle page rests on the furthest snap point in the last stretch of its step (run 18, R18-WB-1: Chrome's
+      // proximity snap does not pull a page that lands ~100 px from one, so wm attendance-2 began mid-card). Only
+      // from 0.7 of a page, so a screen at the page cap reaches about as far as before.
+      if (target < limit) {
+        const lo = before + height * 0.7;
+        const mid = snaps.filter((at) => at > lo && at <= target);
+        if (mid.length) target = Math.max(...mid);
+      }
       // The last step: pinned at the scroller's end the browser cannot snap, so the page started on a half
       // row (run 17, R17-WB-1: wm tickets-2, wd/wm outlet-day-2, wm socmed-day-2, wd project-overview-2).
       // Rest on the last snap point (the web's [data-snap-row], [data-snap-rows] > *, [data-snap-top], less
@@ -231,22 +257,23 @@ async function capture(page, dir, id) {
       // longer reaches at the bottom must already be on the page before, and the step must still be worth a
       // page (MIN_LAST_STEP). Otherwise the end, as before.
       if (target === limit) {
-        const padEl = s === doc ? document.documentElement : s;
-        const pad = parseFloat(getComputedStyle(padEl).scrollPaddingTop) || 0;
-        const top0 = s === doc ? 0 : s.getBoundingClientRect().top;
+        // Run 18 (R18-WB-1): the first snap point whose page still reaches the content's end, up to how far
+        // the scroller REALLY scrolls (the web's end room after the last row, SnapTail, included), not only up
+        // to `limit`. Then the last page starts on a whole row and loses nothing; without end room this is the
+        // run 17 rule (a snap point within the 16 px end padding).
         let snap = -1;
-        for (const el of s.querySelectorAll("[data-snap-row], [data-snap-rows] > *, [data-snap-top]")) {
-          const r = el.getBoundingClientRect();
-          if (!r.height) continue;
-          const at = Math.floor((s === doc ? r.top + scrollY : r.top - top0 + s.scrollTop) - pad);
-          if (at <= limit && at > before && at > snap) snap = at;
+        for (const at of snaps) {
+          // Nothing lost: the snapped page still reaches the content's end.
+          if (at + height < bottom - 1 || at > Math.max(limit, realMax) || at <= before) continue;
+          if (snap < 0 || at < snap) snap = at;
         }
-        const seen = before + height;
-        // Nothing lost: the snapped page still reaches the content's end, or the page before already showed it.
-        const keepsEnd = snap + height >= bottom - 1 || bottom <= seen + 1;
-        if (snap >= 0 && keepsEnd && (snap - before) / height >= MIN_LAST_STEP_IN) {
+        if (snap >= 0 && (snap - before) / height >= MIN_LAST_STEP_IN) {
           target = snap;
           snapped = snappedHere = true;
+        } else if (realMax > limit && realMax - limit <= height * 0.25) {
+          // No snap point there: the real end, which the end room makes a whole-row stop (the Legal drawer's
+          // 24 px after its tail left `limit` 8 px short). A long empty tail (an app shell) stays unshot.
+          target = realMax;
         }
       }
       if (target < limit && !snappedHere) more = true;
