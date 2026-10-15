@@ -421,6 +421,8 @@ struct SidebarRoot: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewer = Viewer.shared
     @State private var selection: NXSelection? = .screen(.dashboard)
+    /// The sidebar list runs on below the footer (iOS 18+ reads it; before that, always).
+    @State private var sidebarMoreBelow = true
     @State private var columns: NavigationSplitViewVisibility = .all
     /// The collapsed sidebar floating over the page while the pointer rests on ≡ (Notion's peek).
     @State private var peeking = false
@@ -455,7 +457,7 @@ struct SidebarRoot: View {
 
     /// The sidebar itself: the docked column, and the same list floating over the page while it peeks.
     @ViewBuilder private func sidebarList() -> some View {
-        List(selection: $selection) {
+        List(selection: listSelection) {
             ForEach(Array(navGroups.enumerated()), id: \.offset) { _, group in
                 Section {
                     // Control Room is drawn only for MANAGER and above, matching the web and the
@@ -545,6 +547,7 @@ struct SidebarRoot: View {
         .scrollIndicators(.automatic, axes: .vertical)
         #endif
         .scrollIndicatorsFlash(onAppear: true)
+        .modifier(SidebarMoreBelow(moreBelow: $sidebarMoreBelow))
         // Fixed header and footer, like the web's SidebarHeader / SidebarFooter: they stay put while
         // the nav scrolls between them.
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -563,12 +566,15 @@ struct SidebarRoot: View {
             )
             .background(.bar)
             // The list fades into the footer, so a row passing under it reads as "more below" instead of
-            // a clipped icon (UI tour run 15, Q-M19 / P-M6).
+            // a clipped icon (UI tour run 15, Q-M19 / P-M6). Only while there IS more below: with the whole
+            // nav on screen the fade sat on its last row, "Pin a project to keep it here." (UI tour run 17,
+            // iPad R17-I-06; R16-I-14 still open).
             .background(alignment: .top) {
                 Rectangle().fill(.bar)
                     .mask(LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom))
                     .frame(height: 24)
                     .offset(y: -24)
+                    .opacity(sidebarMoreBelow ? 1 : 0)
                     .allowsHitTesting(false)
             }
             .overlay(alignment: .top) { Rectangle().fill(NX.border).frame(height: 0.5) }
@@ -823,6 +829,28 @@ struct SidebarRoot: View {
         return !shortcuts.pinned.contains { $0.id == ref.id }
     }
 
+    /// What the List itself shows as selected. iPad: nothing. Its own selection is the system's grey pill
+    /// whenever the sidebar is not focused (always, after a tap on the page), whatever the tint, so every
+    /// screen row was grey while only the Projects stand-in drew the web's lavender (UI tour run 17, iPad
+    /// R17-I-03, R16-B-26 still open). The rows draw the lavender pill themselves (`selectedRowBackground`);
+    /// a tap still writes the selection. The Mac draws the tint, so it keeps the List's own selection.
+    private var listSelection: Binding<NXSelection?> {
+        #if targetEnvironment(macCatalyst)
+        $selection
+        #else
+        Binding(get: { nil }, set: { if let new = $0 { selection = new } })
+        #endif
+    }
+
+    /// The web's selected-row pill, drawn by the row (iPad); nil = the List's own background.
+    private func selectedRowBackground(_ on: Bool) -> AnyView? {
+        #if targetEnvironment(macCatalyst)
+        return nil
+        #else
+        return on ? AnyView(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(SidebarSelection.fill).padding(.horizontal, 10)) : nil
+        #endif
+    }
+
     @ViewBuilder private func navRow(_ screen: NXScreen) -> some View {
         let standIn = screen == .projects && openProjectWithoutRow
         let selected = selection == .screen(screen) || standIn
@@ -862,7 +890,7 @@ struct SidebarRoot: View {
         .tag(NXSelection.screen(screen))
         .modifier(MacSidebarRowInsets())
         // Not the List's own selection (that is the open project): the quiet muted pill the web draws.
-        .listRowBackground(standIn ? AnyView(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(SidebarSelection.fill).padding(.horizontal, 10)) : nil)
+        .listRowBackground(standIn ? AnyView(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(SidebarSelection.fill).padding(.horizontal, 10)) : selectedRowBackground(selected))
     }
 
     private func badgeCount(_ screen: NXScreen) -> Int {
@@ -880,10 +908,12 @@ struct SidebarRoot: View {
         ForEach(refs) { ref in
             HStack(spacing: 10) {
                 projectIcon(ref)
-                Text(ref.name).font(NXFont.text(15)).lineLimit(1).modifier(SidebarSelection.TextColor())
+                Text(ref.name).font(NXFont.text(15, selection == .project(ref) ? .medium : .regular)).lineLimit(1)
+                    .foregroundStyle(selection == .project(ref) ? NX.violetText : NX.foreground)
             }
             .tag(NXSelection.project(ref))
             .modifier(MacSidebarRowInsets())
+            .listRowBackground(selectedRowBackground(selection == .project(ref)))
             .contextMenu {
                 Button {
                     shortcuts.togglePin(ref)
@@ -989,5 +1019,21 @@ struct SidebarCountBadge: View {
             .frame(minWidth: 18)
             .background(warning ? NX.warning : (onSelection ? Color.white.opacity(0.25) : NX.muted), in: Capsule())
             .accessibilityLabel(String(count))
+    }
+}
+
+/// Whether a scroll view has content below its visible end (iOS 18 scroll geometry; true before that).
+struct SidebarMoreBelow: ViewModifier {
+    @Binding var moreBelow: Bool
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: Bool.self) { g in
+                g.contentOffset.y + g.containerSize.height < g.contentSize.height + g.contentInsets.bottom - 4
+            } action: { _, below in
+                moreBelow = below
+            }
+        } else {
+            content
+        }
     }
 }

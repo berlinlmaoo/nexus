@@ -826,9 +826,11 @@ struct FormPanelHint: View {
                 .font(NXFont.text(15)).foregroundStyle(NX.mutedFg)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 8) {
-                hint("plus", T("Add question picks the type of a new one"))
-                hint("arrow.up.arrow.down", T("Move up and Move down reorder questions"))
-                hint("eye", T("Preview shows the form exactly as people see it"))
+                // The control's name, then what it does, as the web's help (UI tour run 17, R17-B-10: one run-on
+                // line in one weight read as a sentence about nothing).
+                hint("plus", T("Add question"), T("Pick the type of a new question."))
+                hint("arrow.up.arrow.down", T("Move up / Move down"), T("Reorder the questions."))
+                hint("eye", T("Preview"), T("See the form exactly as people see it."))
             }
             .padding(.top, 6)
         }
@@ -836,12 +838,13 @@ struct FormPanelHint: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func hint(_ icon: String, _ text: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: icon).font(.system(size: 12)).frame(width: 16)
-            Text(text).font(NXFont.text(13)).fixedSize(horizontal: false, vertical: true)
+    private func hint(_ icon: String, _ label: String, _ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: icon).font(.system(size: 12)).frame(width: 16).foregroundStyle(NX.mutedFg)
+            (Text(label).fontWeight(.semibold).foregroundColor(NX.foreground)
+             + Text(" — " + text).foregroundColor(NX.mutedFg))
+                .font(NXFont.text(13)).fixedSize(horizontal: false, vertical: true)
         }
-        .foregroundStyle(NX.mutedFg)
     }
 }
 

@@ -357,6 +357,7 @@ struct FormBuilderView: View {
         .navigationTitle(regular ? "" : displayName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
+        .modifier(MacPlainBackButton())
         // Once: coming back from a pushed screen must not reload over the edits.
         .task { if !loaded { await load() } }
         .onChange(of: draft) { _, _ in scheduleSave() }
@@ -406,9 +407,13 @@ struct FormBuilderView: View {
                 // own heading is in view under the bar the title is left out: it said "Pengajua…ance PATS" right
                 // above the whole name (UI tour run 12, IP12).
                 // Two lines rather than "Pengajuan Finance P…" (UI tour run 16, R16-I-18).
+                // A bar item is laid out at its ideal size, so `lineLimit(2)` alone never wrapped: the text
+                // took one line and the bar cut it (run 17, iPhone R17-I-03). A width of its own makes it wrap.
                 ToolbarItem(placement: .principal) {
                     Text(displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                         .lineLimit(2).multilineTextAlignment(.center).truncationMode(.tail)
+                        .frame(width: max(120, barWidth - 250))
+                        .fixedSize(horizontal: false, vertical: true)
                         .opacity(headOnScreen && tab == .questions ? 0 : 1)
                         .animation(.easeInOut(duration: 0.15), value: headOnScreen)
                         .accessibilityHidden(headOnScreen && tab == .questions)
@@ -421,6 +426,7 @@ struct FormBuilderView: View {
                 previewButton
                 moreMenu
             }
+            .nxPlainOnMac()
         }
     }
 
@@ -448,9 +454,17 @@ struct FormBuilderView: View {
 
     @ViewBuilder private var previewButton: some View {
         // Named on every iPad / Mac bar, as the web's "Preview" (UI tour run 16, R16-M-10: an icon-only eye).
+        // Not a Label: a bar draws a Label as its icon alone, whatever its style, which is why the Mac still
+        // showed a bare eye after run 16 (run 17, R17-M-04). An icon and a word are a view of their own.
         if regular {
-            Button { Task { await openPreview() } } label: { Label(T("Preview"), systemImage: "eye").labelStyle(.titleAndIcon) }
-                .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+            Button { Task { await openPreview() } } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "eye").font(.system(size: 13, weight: .medium))
+                    Text(T("Preview")).font(NXFont.text(13, .medium))
+                }
+            }
+            .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+            .accessibilityLabel(T("Preview"))
         } else {
             Button { Task { await openPreview() } } label: { Label(T("Preview"), systemImage: "eye") }
         }
