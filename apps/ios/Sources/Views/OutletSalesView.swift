@@ -508,23 +508,29 @@ struct OutletHeader: View {
                     OutletMonthSwitcher(store: store, large: true)
                     HStack(spacing: 10) { actions(labelled: true); Spacer(minLength: 0) }
                 }
+                row(labelled: false, primary: true)
                 row(labelled: false)
             }
         } else {
-            row(labelled: false)
+            // The primary action keeps its web label, "Add event"; the icons beside it carry their names for
+            // VoiceOver (UI tour run 17, iPhone R17-I-20, decision 15).
+            ViewThatFits(in: .horizontal) {
+                row(labelled: false, primary: true)
+                row(labelled: false)
+            }
         }
     }
 
-    private func row(labelled: Bool) -> some View {
+    private func row(labelled: Bool, primary: Bool = false) -> some View {
         let wide = hSize == .regular
         return HStack(spacing: wide ? 10 : 6) {
             OutletMonthSwitcher(store: store, large: wide)
             Spacer(minLength: 4)
-            actions(labelled: labelled)
+            actions(labelled: labelled, primary: primary)
         }
     }
 
-    @ViewBuilder private func actions(labelled: Bool) -> some View {
+    @ViewBuilder private func actions(labelled: Bool, primary: Bool = false) -> some View {
             if store.canManageSettings {
                 Button { store.settingsOpen = true } label: {
                     HStack(spacing: 6) {
@@ -563,10 +569,10 @@ struct OutletHeader: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "plus").font(.system(size: 14, weight: .bold))
-                    if labelled { Text(T("Add event")).font(NXFont.text(14, .semibold)).lineLimit(1).fixedSize() }
+                    if labelled || primary { Text(T("Add event")).font(NXFont.text(14, .semibold)).lineLimit(1).fixedSize() }
                 }
                 .foregroundStyle(NX.background)
-                .padding(.horizontal, labelled ? 14 : 0)
+                .padding(.horizontal, labelled || primary ? 14 : 0)
                 .frame(minWidth: 40, minHeight: 40)
                 .background(NX.onyx, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -796,8 +802,13 @@ struct OutletOverviewView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            // One line at a smaller size before the target drops under the figure: a portrait iPad's card put
+            // "/ Rp 150.000.000 4%" on a second line where the Mac and the web keep one (UI tour run 17, iPad
+            // R17-I-17).
             ViewThatFits(in: .horizontal) {
                 figureLine(actual: actual, target: target, pct: pct)
+                figureLine(actual: actual, target: target, pct: pct, size: wide ? 24 : 22, tail: wide ? 14 : 13)
+                figureLine(actual: actual, target: target, pct: pct, size: wide ? 20 : 18, tail: 12)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(actual).font(NXFont.display(wide ? 30 : 26, .bold)).foregroundStyle(NX.foreground)
                         .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
@@ -817,18 +828,18 @@ struct OutletOverviewView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func figureLine(actual: String, target: String?, pct: Int64?) -> some View {
+    private func figureLine(actual: String, target: String?, pct: Int64?, size: CGFloat? = nil, tail: CGFloat? = nil) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(actual).font(NXFont.display(wide ? 30 : 26, .bold)).foregroundStyle(NX.foreground)
+            Text(actual).font(NXFont.display(size ?? (wide ? 30 : 26), .bold)).foregroundStyle(NX.foreground)
                 .monospacedDigit().lineLimit(1).fixedSize()
-            figureTail(target: target, pct: pct)
+            figureTail(target: target, pct: pct, size: tail)
         }
     }
 
-    @ViewBuilder private func figureTail(target: String?, pct: Int64?) -> some View {
+    @ViewBuilder private func figureTail(target: String?, pct: Int64?, size: CGFloat? = nil) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             if let target {
-                Text("/ \(target)").font(NXFont.text(wide ? 16 : 14)).foregroundStyle(NX.mutedFg)
+                Text("/ \(target)").font(NXFont.text(size ?? (wide ? 16 : 14))).foregroundStyle(NX.mutedFg)
                     .monospacedDigit().lineLimit(1).fixedSize()
             }
             if let pct { SocialPctChip(pct: pct, size: 12).fixedSize() }

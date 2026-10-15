@@ -68,10 +68,10 @@ struct OutletCalendarView: View {
                         // Two lines for the name: one line cut every event to "ZZ QA cu…" on an iPad (run 14, P-I28).
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
                             Circle().fill(e.status.tone.fg).frame(width: 6, height: 6)
-                            // The whole name: three lines still cut "ZZ QA / custom / report ni…" in a portrait
-                            // iPad's cell (UI tour run 15, Q-IB18; run 16, R16-I-16), so four, a size smaller there.
+                            // Two lines and "…" (decision 14 of run 17): four lines grew the whole week's row (UI
+                            // tour run 17, iPad R17-I-11). The day panel names the event in full.
                             Text(e.name).font(NXFont.text(11, .semibold)).foregroundStyle(NX.foreground)
-                                .lineLimit(4).minimumScaleFactor(0.85).multilineTextAlignment(.leading)
+                                .lineLimit(2).truncationMode(.tail).multilineTextAlignment(.leading)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(.horizontal, 5).padding(.vertical, 2)

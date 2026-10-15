@@ -226,20 +226,37 @@ struct SocialHeader: View {
         if hSize == .regular {
             // Words while they fit on one line, icons when they don't: a portrait iPad wrapped "Report
             // settings" and "Copy form link" onto two lines (UI tour run 13, I-10).
+            // Then the labelled pair on a row of its own under the month, as the outlet's header does, before
+            // icons: the two sibling pages must not disagree (UI tour run 17, iPad R17-I-14, decision 15).
             ViewThatFits(in: .horizontal) {
                 row(labelled: true)
+                VStack(alignment: .leading, spacing: 10) {
+                    monthSwitcher(large: true)
+                    HStack(spacing: 10) { actions(labelled: true, primary: true); Spacer(minLength: 0) }
+                }
+                row(labelled: false, primary: true)
                 row(labelled: false)
             }
         } else {
-            row(labelled: false)
+            // The primary action keeps its web label, "Record today"; the settings icon beside it carries its
+            // name for VoiceOver (UI tour run 17, iPhone R17-I-20, decision 15).
+            ViewThatFits(in: .horizontal) {
+                row(labelled: false, primary: true)
+                row(labelled: false)
+            }
         }
     }
 
-    private func row(labelled: Bool) -> some View {
+    private func row(labelled: Bool, primary: Bool = false) -> some View {
         let wide = hSize == .regular
         return HStack(spacing: wide ? 10 : 6) {
             monthSwitcher(large: wide)
             Spacer(minLength: 4)
+            actions(labelled: labelled, primary: primary)
+        }
+    }
+
+    @ViewBuilder private func actions(labelled: Bool, primary: Bool) -> some View {
             if store.canManage {
                 Button { store.settingsOpen = true } label: {
                     HStack(spacing: 6) {
@@ -261,11 +278,11 @@ struct SocialHeader: View {
                 Button { store.open(store.today) } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "square.and.pencil").font(.system(size: 14, weight: .bold))
-                        if labelled { Text(T("Record today")).font(NXFont.text(14, .semibold)).lineLimit(1).fixedSize() }
+                        if labelled || primary { Text(T("Record today")).font(NXFont.text(14, .semibold)).lineLimit(1).fixedSize() }
                     }
                     // The web's near-black primary (UI tour run 15, Q-IB22).
                     .foregroundStyle(NX.background)
-                    .padding(.horizontal, labelled ? 14 : 0)
+                    .padding(.horizontal, labelled || primary ? 14 : 0)
                     .frame(minWidth: 40, minHeight: 40)
                     .background(NX.onyx, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -274,7 +291,6 @@ struct SocialHeader: View {
                 .hoverEffect(.highlight)
                 .accessibilityLabel(T("Record today"))
             }
-        }
     }
 
     private func monthSwitcher(large: Bool) -> some View {
@@ -422,21 +438,20 @@ struct SocialOverviewView: View {
             OutletMeter(pct: p.engagementPct)
             if p.engagementTargetToDate == nil {
                 // No target: the next step, not a dead end (W-B15 / M-15).
-                HStack(spacing: 8) {
-                    Text(T("No engagement target")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                    if store.canManage {
-                        Button { store.settingsOpen = true } label: {
-                            Label(T("Set a target"), systemImage: "target").font(NXFont.text(12, .semibold))
-                        }
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(NX.violetText)
-                    }
+                // Side by side where they fit, else one under the other, never broken mid-phrase ("No engagement
+                // / target", "Set a / target" in a narrow iPad card; UI tour run 17, iPad R17-I-13).
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) { noTargetParts }
+                    VStack(alignment: .leading, spacing: 6) { noTargetParts }
                 }
             } else {
                 // One line on every card, as the web's, stepping the size down rather than wrapping "(incl. day
                 // targets)" (UI tour run 16, R16-B-20); the figures below line up across the row.
+                // Two lines where one does not fit: at 0.75 scale a narrow iPad card still cut "(incl. day
+                // targets)" to "(in…" (UI tour run 17, iPad R17-I-02).
                 Text(monthTargetLine(p)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                    .lineLimit(1).minimumScaleFactor(0.75)
+                    .lineLimit(2).minimumScaleFactor(0.9)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if let trend = p.trend, trend.count > 1, trend.contains(where: { $0 > 0 }) {
                 SocialSparkline(values: trend)
@@ -460,6 +475,19 @@ struct SocialOverviewView: View {
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder private var noTargetParts: some View {
+        Text(T("No engagement target")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            .lineLimit(1).fixedSize()
+        if store.canManage {
+            Button { store.settingsOpen = true } label: {
+                Label(T("Set a target"), systemImage: "target").font(NXFont.text(12, .semibold))
+                    .lineLimit(1).fixedSize()
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(NX.violetText)
         }
     }
 
@@ -620,9 +648,12 @@ struct SocialCalendarView: View {
                     Text(SocialFormat.count(e)).font(NXFont.text(wide ? 14 : 11, .semibold)).foregroundStyle(NX.foreground)
                         .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
                 }
-                if wide, let posts = day?.posts {
+                // The posts line on every width, as the web and the caption under the grid say (UI tour run 17,
+                // iPhone R17-I-04, decision 13).
+                if let posts = day?.posts {
                     Text(SocialFormat.posts(posts))
-                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                        .font(NXFont.text(wide ? 11 : 9)).foregroundStyle(NX.mutedFg)
+                        .lineLimit(1).minimumScaleFactor(0.8)
                 }
                 Spacer(minLength: 0)
                 // A day up to today with nothing recorded: the web's small grey dot (run 14, P-I30).
@@ -721,6 +752,7 @@ struct SocialDaySheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(editable ? T("Cancel") : T("Close")) { if dirty { confirmDiscard = true } else { dismiss() } }
                 }
+                .nxPlainOnMac()
                 if editable && !wide {
                     ToolbarItem(placement: .confirmationAction) {
                         Button { Task { await save() } } label: {
@@ -1011,6 +1043,7 @@ private struct SocialPlatformRow: Identifiable, Equatable {
 
 struct SocialSettingsSheet: View {
     @Bindable var store: SocialMediaStore
+    @Environment(\.horizontalSizeClass) private var hSize
 
     @Environment(\.dismiss) private var dismiss
     @State private var usage: [String: Int] = [:]
@@ -1044,14 +1077,38 @@ struct SocialSettingsSheet: View {
             .navigationTitle(T("Platforms & targets"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(T("Cancel")) { if dirty { confirmDiscard = true } else { dismiss() } }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button { Task { await save() } } label: {
-                        if saving { ProgressView() } else { Text(T("Save")).fontWeight(.semibold) }
+                if hSize != .regular {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(T("Cancel")) { if dirty { confirmDiscard = true } else { dismiss() } }
                     }
-                    .disabled(!dirty || saving)
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button { Task { await save() } } label: {
+                            if saving { ProgressView() } else { Text(T("Save")).fontWeight(.semibold) }
+                        }
+                        .disabled(!dirty || saving)
+                    }
+                }
+            }
+            // iPad / Mac: Cancel and "Save settings" at the bottom, the same footer as the outlet's Report
+            // settings and the web (UI tour run 17, R17-B-04, decision 10).
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if hSize == .regular && loaded {
+                    HStack(spacing: 10) {
+                        Spacer(minLength: 0)
+                        Button(T("Cancel")) { if dirty { confirmDiscard = true } else { dismiss() } }
+                            .buttonStyle(.nxBordered)
+                        Button { Task { await save() } } label: {
+                            HStack(spacing: 6) {
+                                if saving { ProgressView().controlSize(.small) }
+                                Text(T("Save settings"))
+                            }
+                        }
+                        .buttonStyle(.nxPrimary)
+                        .disabled(!dirty || saving)
+                    }
+                    .padding(.horizontal, 20).padding(.vertical, 12)
+                    .background(NX.background)
+                    .overlay(alignment: .top) { Rectangle().fill(NX.border).frame(height: 1) }
                 }
             }
         }
@@ -1166,21 +1223,15 @@ struct SocialSettingsSheet: View {
                 ForEach(Array(active.enumerated()), id: \.element.id) { pos, p in
                     HStack(spacing: 14) {
                         TextField(T("Platform name"), text: nameBinding(p.id))
-                        Button { movePlatform(p.id, by: -1) } label: { Label(T("Move up"), systemImage: "arrow.up") }
-                            .disabled(pos == 0)
-                        Button { movePlatform(p.id, by: 1) } label: { Label(T("Move down"), systemImage: "arrow.down") }
-                            .disabled(pos == active.count - 1)
-                        Button {
+                            .foregroundStyle(NX.foreground)
+                        NXRowIconButton(title: T("Move up"), icon: "arrow.up", enabled: pos > 0) { movePlatform(p.id, by: -1) }
+                        NXRowIconButton(title: T("Move down"), icon: "arrow.down", enabled: pos < active.count - 1) { movePlatform(p.id, by: 1) }
+                        NXRowIconButton(title: String(format: T("Archive %@"), p.name), icon: "archivebox", enabled: active.count > 1) {
                             if !p.platformId.isEmpty && (usage[p.platformId] ?? 0) > 0 { pendingArchive = p }
                             else if p.platformId.isEmpty { rows.removeAll { $0.id == p.id } }
                             else { setArchived(p.id, true) }
-                        } label: { Label(String(format: T("Archive %@"), p.name), systemImage: "archivebox") }
-                        .disabled(active.count <= 1)
+                        }
                     }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(NX.mutedFg)
-                    .tint(NX.mutedFg)
                 }
                 HStack {
                     Image(systemName: "plus").foregroundStyle(NX.mutedFg)
