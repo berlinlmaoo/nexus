@@ -13,5 +13,10 @@ extension AppLanguage {
         "From {date}: {days} days, {working} working days ({days} − {quota} days off, the {full}-day allowance prorated).": "Sejak {date}: {days} hari, {working} hari kerja ({days} − {quota} day off, jatah {full} hari dihitung proporsional).",
         // Projects summary: the web's hint (R16-B-15)
         "Select a project to open it.": "Pilih proyek untuk membukanya.",
+        // Project calendar day panel: the web's sentences (R16-B-09)
+        "Nothing on this day, nor anywhere else this month.": "Tidak ada apa-apa di tanggal ini, begitu juga sepanjang bulan ini.",
+        "Nothing on this day. Days with a dot have tasks.": "Tidak ada apa-apa di hari ini. Hari yang bertitik ada tugasnya.",
+        "Nothing on this day. Tap another day to see its tasks.": "Tidak ada apa pun di hari ini. Ketuk hari lain untuk melihat tugasnya.",
+        "Nothing on this day. Click another day to see its tasks.": "Tidak ada apa pun di hari ini. Klik hari lain untuk melihat tugasnya.",
     ]
 }

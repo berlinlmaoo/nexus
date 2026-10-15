@@ -170,16 +170,20 @@ struct ProjectRangeHint: View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: icon).font(.system(size: 13)).foregroundStyle(NX.mutedFg)
                 .accessibilityHidden(true)
-            FlowLayout(spacing: 6) {
-                Text(text + " —").font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-                Button(action: action) {
-                    Text(actionTitle).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground)
-                        .underline()
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .hoverEffect(.highlight)
+            // One line of text with the action inline and bold, as the web's "84 tasks have no date — Show
+            // them": as two pieces the action wrapped onto a line of its own (UI tour run 16, R16-B-10).
+            Button(action: action) {
+                (Text(text + " — ").foregroundColor(NX.mutedFg)
+                 + Text(actionTitle).fontWeight(.semibold).foregroundColor(NX.foreground))
+                    .font(NXFont.text(14))
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            .accessibilityLabel(text)
+            .accessibilityHint(actionTitle)
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1138,27 +1142,6 @@ struct CalendarTab: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 14) {
-                    if !plotChoices.isEmpty, let onPlotBy {
-                        HStack {
-                            Menu {
-                                ForEach(plotChoices) { c in
-                                    Button { onPlotBy(c.id) } label: {
-                                        if c.id == dateFieldId { Label(c.name, systemImage: "checkmark") } else { Text(c.name) }
-                                    }
-                                }
-                            } label: {
-                                HStack(spacing: 5) {
-                                    Image(systemName: "calendar.badge.clock").font(.system(size: 12, weight: .semibold))
-                                    Text("\(T("Plot by")): \(plotName)").font(NXFont.text(12, .semibold)).lineLimit(1)
-                                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
-                                }
-                                .foregroundStyle(NX.violetText)
-                                .padding(.horizontal, 10).padding(.vertical, 6)
-                                .background(NX.violet.opacity(0.10), in: Capsule())
-                            }
-                            Spacer(minLength: 0)
-                        }
-                    }
                     header
                     // An empty month says why when the tasks are waiting for a date (UI tour run 12, IP5): the
                     // "No date" box itself comes up here, titled "84 tasks have no date". A banner saying so
@@ -1178,32 +1161,17 @@ struct CalendarTab: View {
                             }
                         }
                     }
-                    weekdayRow
-                    grid
-                    if let sel = selected {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                // "Thursday 15 Oct", as the web's day panel (UI tour run 15, Q-IA26).
-                                Text(dateFor(sel).map { AppDateLocale.weekdayDate($0, timeZone: cal.timeZone) } ?? "\(sel)")
-                                    .font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
-                                Spacer()
-                                if canCreate {
-                                    Button { onCreate(dateFor(sel)) } label: {
-                                        Label(T("Add task"), systemImage: "plus").font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
-                                    }
-                                }
-                            }
-                            if let items = tasksByDay[sel], !items.isEmpty {
-                                ForEach(items) { ProjectTaskRow(task: $0, onOpen: onOpen) }
-                            } else {
-                                Text(T("No tasks on this date.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                            }
+                    // One month-grid style everywhere (NXMonthGrid.swift; UI tour run 16, R16-I-06). On iPad / Mac
+                    // the picked day's panel sits beside the month, as the web's: under it, the Mac's panel
+                    // was below the fold (UI tour run 16, R16-M-08).
+                    if wideGrid {
+                        HStack(alignment: .top, spacing: 16) {
+                            monthCard
+                            dayPanel.frame(width: 260)
                         }
                     } else {
-                        // No "+" is on screen until a date is picked (its "Add task" comes with it): the hint said
-                        // "click + to create one" with no + in sight (UI tour run 14, P-M12).
-                        Text(canCreate ? T("Pick a date to see its tasks and add one there.") : T("Pick a date to see its tasks."))
-                            .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.top, 4)
+                        monthCard
+                        dayPanel
                     }
                     if !rest.isEmpty && (!emptyMonth || showUndated) { undatedBox(rest, leading: false).id("undated") }
                 }.padding(16)
@@ -1213,6 +1181,53 @@ struct CalendarTab: View {
         // as the web's (UI tour run 15, Q-IA26).
         .onAppear { if selected == nil, monthOffset == 0 { selected = todayDay } }
         .onChange(of: monthOffset) { _, offset in if offset == 0 { selected = todayDay } }
+    }
+
+    private var monthCard: some View {
+        VStack(spacing: 0) {
+            weekdayRow
+            grid
+        }
+        .nxMonthGridCard()
+    }
+
+    /// The picked day: its tasks, or the web's words for an empty day in a dashed box, and "+ New task".
+    @ViewBuilder private var dayPanel: some View {
+        if let sel = selected {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    // "Thursday 15 Oct", as the web's day panel (UI tour run 15, Q-IA26).
+                    Text(dateFor(sel).map { AppDateLocale.weekdayDate($0, timeZone: cal.timeZone) } ?? "\(sel)")
+                        .font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                    Spacer()
+                    if canCreate {
+                        Button { onCreate(dateFor(sel)) } label: {
+                            Label(T("New task"), systemImage: "plus").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                if let items = tasksByDay[sel], !items.isEmpty {
+                    ForEach(items) { ProjectTaskRow(task: $0, onOpen: onOpen) }
+                } else {
+                    // The web's sentences (UI tour run 16, R16-B-09).
+                    Text(tasksByDay.isEmpty ? T("Nothing on this day, nor anywhere else this month.")
+                         : wideGrid ? PlatformWording.tapOrClick(tap: "Nothing on this day. Tap another day to see its tasks.",
+                                                                 click: "Nothing on this day. Click another day to see its tasks.")
+                         : T("Nothing on this day. Days with a dot have tasks."))
+                        .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 14).padding(.vertical, 18)
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+                }
+            }
+        } else {
+            // No "+" is on screen until a date is picked (its "New task" comes with it): the hint said
+            // "click + to create one" with no + in sight (UI tour run 14, P-M12).
+            Text(canCreate ? T("Pick a date to see its tasks and add one there.") : T("Pick a date to see its tasks."))
+                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.top, 4)
+        }
     }
 
     /// Web: a dashed box under the month, "No date · 3", the tasks as small chips that open them.
@@ -1260,6 +1275,10 @@ struct CalendarTab: View {
     private var header: some View {
         HStack(spacing: 2) {
             Text(ProjDate.fmt("MMMM yyyy").string(from: monthDate).capitalized).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                .lineLimit(1)
+            // "Plot by" rides in the month's row, a quiet menu: a purple chip on a row of its own added a
+            // ~60 pt band (UI tour run 16, R16-B-09).
+            plotByMenu.padding(.leading, 10)
             Spacer(minLength: 8)
             Button { monthOffset = 0; selected = todayDay } label: {
                 Text(T("Today")).font(NXFont.text(14)).foregroundStyle(NX.foreground)
@@ -1283,6 +1302,28 @@ struct CalendarTab: View {
             .accessibilityLabel(T("Next month"))
         }
     }
+    @ViewBuilder private var plotByMenu: some View {
+        if !plotChoices.isEmpty, let onPlotBy {
+            Menu {
+                ForEach(plotChoices) { c in
+                    Button { onPlotBy(c.id) } label: {
+                        if c.id == dateFieldId { Label(c.name, systemImage: "checkmark") } else { Text(c.name) }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text("\(T("Plot by")): \(plotName)").font(NXFont.text(13)).lineLimit(1)
+                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+                }
+                .foregroundStyle(NX.mutedFg)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+        }
+    }
+
     /// Monday first, in the app's language (it was "Sen Sel Rab…" hard-coded, so an English app read
     /// Indonesian day names — UI tour run 5).
     private var weekdayNames: [String] {
@@ -1292,14 +1333,7 @@ struct CalendarTab: View {
     /// "MON … SUN", left-aligned over the day numbers: one month-grid style on every calendar and platform
     /// (UI tour run 15, R15-WB-3 / Q-IA26 / Q-M16).
     private var weekdayRow: some View {
-        HStack(spacing: 4) {
-            ForEach(Array(weekdayNames.enumerated()), id: \.offset) { _, d in
-                Text(d.uppercased().replacingOccurrences(of: ".", with: "")).font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
-                    .lineLimit(1)
-                    .padding(.leading, 6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
+        NXMonthWeekdayRow(names: weekdayNames, wide: wideGrid)
     }
     /// The days of the next month that complete the last week.
     private var trailingDays: Int { (7 - (leadingBlanks + daysInMonth) % 7) % 7 }
@@ -1315,7 +1349,7 @@ struct CalendarTab: View {
         return now.year == comps.year && now.month == comps.month ? now.day : nil
     }
     private var grid: some View {
-        let cols = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+        let cols = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
         let map = tasksByDay   // build the day→tasks map ONCE, not once per day cell (was a full task-scan ×31)
         let today = todayDay
         // One ForEach over every cell. The blanks and the days used to be two ForEach with Int ids 0…n-1
@@ -1324,17 +1358,14 @@ struct CalendarTab: View {
         // Days of the months around it fill the first and last week, greyed, as on the web. Their ids sit
         // outside 1…31 (negative before, 100+ after) so they never collide with this month's.
         let cells = Array(-leadingBlanks..<0) + Array(1...daysInMonth) + Array(stride(from: 101, through: 100 + trailingDays, by: 1))
-        return LazyVGrid(columns: cols, spacing: 4) {
+        return LazyVGrid(columns: cols, spacing: 0) {
             ForEach(cells, id: \.self) { day in
                 if day < 0 || day > 100 {
-                    // Bordered like the rest, the number muted and not a button.
-                    Text("\(day < 0 ? previousMonthDay(day) : day - 100)")
-                        .font(NXFont.text(13)).foregroundStyle(NX.mutedFg.opacity(0.5))
-                        .frame(minWidth: 24, minHeight: 24)
-                        .padding(wideGrid ? 5 : 3)
-                        .frame(maxWidth: .infinity, minHeight: wideGrid ? Self.wideCellH : 46, alignment: .topLeading)
-                        .background(NX.muted.opacity(0.25), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border.opacity(0.6)))
+                    // Joined like the rest, greyed, the number muted and not a button.
+                    NXMonthDayNumber(day: day < 0 ? previousMonthDay(day) : day - 100, inMonth: false, wide: wideGrid)
+                        .padding(wideGrid ? 6 : 4)
+                        .frame(maxWidth: .infinity, minHeight: wideGrid ? Self.wideCellH : 50, alignment: .topLeading)
+                        .nxMonthCell(inMonth: false, selected: false)
                         .accessibilityHidden(true)
                 } else {
                     if wideGrid {
@@ -1345,15 +1376,14 @@ struct CalendarTab: View {
                         let has = !(map[day]?.isEmpty ?? true)
                         let on = selected == day
                         Button { selected = day } label: {
-                            VStack(alignment: .leading, spacing: 3) {
+                            VStack(alignment: .leading, spacing: 4) {
                                 dayNumber(day, today: today, onFill: on)
-                                Circle().fill(has ? (on ? Color.white : NX.violet) : .clear).frame(width: 5, height: 5)
-                                    .padding(.leading, 9)
+                                Circle().fill(has ? NX.foreground.opacity(0.7) : .clear).frame(width: 5, height: 5)
+                                    .padding(.leading, 2)
                             }
-                            .padding(3)
-                            .frame(maxWidth: .infinity, minHeight: 46, alignment: .topLeading)
-                            .background(on ? NX.violet : (has ? NX.violet.opacity(0.08) : NX.card), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(on ? Color.clear : NX.border))
+                            .padding(4)
+                            .frame(maxWidth: .infinity, minHeight: 50, alignment: .topLeading)
+                            .nxMonthCell(inMonth: true, selected: on)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -1375,11 +1405,8 @@ extension CalendarTab {
     /// Today = the number on the app's violet disc, as on the main Calendar and the outlet calendar (it was
     /// rose here alone; UI tour run 14, N-19). On a selected (violet) cell the disc turns white.
     func dayNumber(_ day: Int, today: Int?, onFill: Bool) -> some View {
-        let isToday = day == today
-        return Text("\(day)").font(NXFont.text(13, onFill || isToday ? .semibold : .regular))
-            .foregroundStyle(isToday ? (onFill ? NX.violetText : .white) : (onFill ? .white : NX.foreground))
-            .frame(minWidth: 24, minHeight: 24)
-            .background { if isToday { Circle().fill(onFill ? Color.white : CalTone.accentFill) } }
+        // Today on the navy disc of every month grid (NXMonthGrid; UI tour run 16, R16-I-06 / R16-B-09).
+        NXMonthDayNumber(day: day, isToday: day == today, wide: wideGrid)
     }
 
     func wideCell(_ day: Int, items: [BoardTask], today: Int?) -> some View {
@@ -1417,10 +1444,9 @@ extension CalendarTab {
             }
             Spacer(minLength: 0)
         }
-        .padding(5)
+        .padding(6)
         .frame(maxWidth: .infinity, minHeight: Self.wideCellH, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(isSelected ? NX.violet.opacity(0.08) : NX.card))
-        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(isSelected ? NX.violet : NX.border))
+        .nxMonthCell(inMonth: true, selected: isSelected)
         .contentShape(Rectangle())
         .onTapGesture { selected = day }
     }

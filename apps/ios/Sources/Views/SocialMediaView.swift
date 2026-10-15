@@ -589,26 +589,14 @@ struct SocialCalendarView: View {
 
     private var grid: some View {
         let cols = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
+        // One month-grid style everywhere (NXMonthGrid.swift; UI tour run 16, R16-I-06).
         return VStack(spacing: 0) {
-            LazyVGrid(columns: cols, spacing: 0) {
-                // "MON", left-aligned over left-aligned day numbers: one month-grid style everywhere (UI tour
-                // run 15, Q-IB13 / R15-WB-3).
-                ForEach(OutletFormat.weekHeader, id: \.self) { w in
-                    Text(w.uppercased()).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
-                        .lineLimit(1)
-                        .padding(.leading, wide ? 8 : 5)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
-                }
-            }
-            .background(NX.muted.opacity(0.5))
-            Divider().overlay(NX.border)
+            NXMonthWeekdayRow(names: OutletFormat.weekHeader, wide: wide)
             LazyVGrid(columns: cols, spacing: 0) {
                 ForEach(OutletFormat.gridDays(store.month), id: \.self) { d in cell(d) }
             }
         }
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
+        .nxMonthGridCard()
     }
 
     @ViewBuilder private func cell(_ d: String) -> some View {
@@ -619,17 +607,11 @@ struct SocialCalendarView: View {
         Button { store.open(d) } label: {
             // Every day number top-left: centred, a day with a note icon pushed its number aside (UI tour run
             // 15, R15-I-18).
+            // The number and the figures under it share one left inset; the notes and own-target marks sit in
+            // the top-right corner, as on the outlet calendar and the web (UI tour run 16, R16-I-08).
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 2) {
-                    Text("\(OutletFormat.parts(d)?.d ?? 0)")
-                        .font(NXFont.text(12, isToday ? .bold : .regular)).monospacedDigit()
-                        .foregroundStyle(isToday ? Color.white : (inMonth && !future ? NX.foreground : NX.mutedFg))
-                        .frame(width: 24, height: 24)
-                        .background(isToday ? NX.violetFill : Color.clear, in: Circle())
-                    if wide { Spacer(minLength: 0) }
-                    if inMonth && (day?.hasNotes == true) { Image(systemName: "square.and.pencil").font(.system(size: 9)).foregroundStyle(NX.mutedFg) }
-                    if inMonth && store.hasOwnTarget(d) { Image(systemName: "target").font(.system(size: 9)).foregroundStyle(NX.violetText) }
-                }
+                NXMonthDayNumber(day: OutletFormat.parts(d)?.d ?? 0, inMonth: inMonth, isToday: isToday,
+                                 muted: future, wide: wide)
                 // The plain dotted figure ("2.200"), never a compact "2.2k" (owner rule R14-WB-2, N-22 / P-M22).
                 if let e = day?.engagement {
                     Text(SocialFormat.count(e)).font(NXFont.text(wide ? 14 : 11, .semibold)).foregroundStyle(NX.foreground)
@@ -650,8 +632,16 @@ struct SocialCalendarView: View {
             }
             .padding(wide ? 6 : 3)
             .frame(maxWidth: .infinity, minHeight: wide ? 92 : 58, alignment: .topLeading)
-            .background(inMonth ? Color.clear : NX.muted.opacity(0.35))
-            .overlay(Rectangle().strokeBorder(NX.border.opacity(0.6), lineWidth: 0.5))
+            .overlay(alignment: .topTrailing) {
+                HStack(spacing: 2) {
+                    if inMonth && (day?.hasNotes == true) {
+                        Image(systemName: "square.and.pencil").font(.system(size: 9)).foregroundStyle(NX.mutedFg)
+                    }
+                    if inMonth && store.hasOwnTarget(d) { NXMonthTargetMark(wide: wide) }
+                }
+                .padding(wide ? 7 : 4)
+            }
+            .nxMonthCell(inMonth: inMonth, selected: false)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
