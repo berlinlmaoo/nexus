@@ -1815,7 +1815,22 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
   const bulk = useTaskBulk();
   const isMobile = useIsMobile();
   // The view's date property (owner, 12 Oct 2026): due date by default, or the start date / a date field.
-  const dateOf = (task: NexusTask) => parseDate(taskValues(task, cfg.dateProp)[0]);
+  const ownDate = (task: NexusTask) => parseDate(taskValues(task, cfg.dateProp)[0]);
+  // A task without that date is plotted on the first date it does have, in the order the Timeline uses: due,
+  // start, then the project's visible date fields. So Calendar and Timeline agree on which tasks are dated, and
+  // "n tasks have no date" counts only tasks with no date at all (UI tour run 17, R17-WB-2). Such a chip is
+  // read-only, like the Timeline's marker: a drag writes the view's own date property.
+  const fallbackKeys = useMemo(
+    () => ["due", "start", ...scheduleDateKeys(defs)].filter((k) => k !== cfg.dateProp),
+    [defs, cfg.dateProp],
+  );
+  const dateOf = (task: NexusTask) => {
+    const own = ownDate(task);
+    if (own) return own;
+    for (const k of fallbackKeys) { const d = parseDate(taskValues(task, k)[0]); if (d) return d; }
+    return null;
+  };
+  const movable = (task: NexusTask) => canDrag && !!ownDate(task);
   const dated = tasks.filter((task) => dateOf(task));
   const undated = tasks.filter((task) => !dateOf(task));
   // null = untouched: open while the tray is short, folded once it would bury the page (> 8).
@@ -1871,17 +1886,18 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
     if (!dragTaskId) return;
     const src = tasks.find((x) => x.id === dragTaskId);
     if (!src) return;
-    const prev = dateOf(src);
+    if (dateOf(src) && !ownDate(src)) return; // plotted on another date field: read-only
+    const prev = ownDate(src);
     if (prev && dayKey(prev) === dayKey(day)) return; // same day = no write
     // A dragged chip that is part of the selection takes the whole selection along to the drop day
     // (C-BUG-5), like a multi-drag onto a Board column.
     const group = (bulk.isSelected(src.id) && bulk.selectedIds.length > 1
       ? [src, ...tasks.filter((x) => x.id !== src.id && bulk.isSelected(x.id))]
-      : [src]).filter((task) => { const d = dateOf(task); return !d || dayKey(d) !== dayKey(day); });
+      : [src]).filter((task) => { if (dateOf(task) && !ownDate(task)) return false; const d = ownDate(task); return !d || dayKey(d) !== dayKey(day); });
     // Moving a task keeps its CLOCK TIME — these calendars hold timed events ("10:00 PM"), and sending a
     // bare date would silently reset them to midnight. Undated tasks land on the plain date.
     const target = (task: NexusTask) => {
-      const d = dateOf(task);
+      const d = ownDate(task);
       return d ? new Date(day.getFullYear(), day.getMonth(), day.getDate(), d.getHours(), d.getMinutes()).toISOString() : ymd(day);
     };
     if (group.length) onSetDates(group.map((task) => ({ task, iso: target(task) })));
@@ -2034,11 +2050,11 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
                           data-morph-id={`calendar-taskcard-${task.id}`}
                           style={{ borderRadius: 4, ...(cs && !done ? cs : {}) }}
                           {...bulk.bindCard(task, () => onOpen(task))}
-                          draggable={canDrag}
+                          draggable={movable(task)}
                           onDragStart={(e) => startChipDrag(e, task)}
                           onDragEnd={() => { setDragTaskId(null); setDropKey(null); }}
                           title={task.title}
-                          className={cn("block w-full truncate px-1.5 py-0.5 text-left text-[11px] font-medium leading-tight", canDrag && "cursor-grab active:cursor-grabbing", done ? "bg-muted text-muted-foreground line-through" : !cs && (CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? CAL_CHIP.NONE), dragTaskId === task.id && "opacity-40", bulk.isSelected(task.id) && "ring-1 ring-inset ring-[color:var(--accent-foreground)]")}
+                          className={cn("block w-full truncate px-1.5 py-0.5 text-left text-[11px] font-medium leading-tight", movable(task) && "cursor-grab active:cursor-grabbing", done ? "bg-muted text-muted-foreground line-through" : !cs && (CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? CAL_CHIP.NONE), dragTaskId === task.id && "opacity-40", bulk.isSelected(task.id) && "ring-1 ring-inset ring-[color:var(--accent-foreground)]")}
                         >
                           {task.parentId ? `↳ ${task.title}` : task.title}
                         </button>
@@ -2175,6 +2191,14 @@ function taskWindow(task: NexusTask, startProp = "start", endProp = "due"): { st
   if (end < start) end = start;
   return { start, end };
 }
+/**
+ * The project's own date fields that can place a task on Calendar and Timeline when the view's dates are empty,
+ * in field order. A CREATED field ("Request by") is not a schedule: it holds who asked, or a timestamp on old
+ * tasks (UI tour run 17, R17-WB-2 / decision 5).
+ */
+function scheduleDateKeys(defs: PropDef[]): string[] {
+  return defs.filter((d) => d.kind === "date" && d.key.startsWith("cf:") && !d.hidden && d.fieldType !== "CREATED").map((d) => d.key);
+}
 /** Date properties a Timeline drag can write. */
 const tlWritable = (prop: string) => prop === "due" || prop === "start" || prop.startsWith("cf:");
 
@@ -2201,7 +2225,9 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   // A task with neither of the view's dates but with a date field the List shows (a request's usage date) is a
   // one-day marker on that day, as a due-only task is, instead of "No date" beside a date the List and Board
   // show (UI tour run 16, R16-WB-2). Read-only: a drag would write the view's own dates.
-  const markerKeys = defs.filter((d) => d.kind === "date" && d.key.startsWith("cf:") && !d.hidden).map((d) => d.key);
+  // The same fallback order as the Calendar (due, start, then the visible date fields), so both views plot the
+  // same tasks whatever dates a view is set to (UI tour run 17, R17-WB-2).
+  const markerKeys = ["due", "start", ...scheduleDateKeys(defs)].filter((k) => k !== cfg.startProp && k !== cfg.endProp);
   const markerOf = (task: NexusTask): { start: Date; end: Date } | null => {
     for (const k of markerKeys) {
       const d = parseDate(taskValues(task, k)[0]);
