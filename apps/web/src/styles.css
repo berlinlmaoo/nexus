@@ -612,11 +612,19 @@
 
 /* Row snapping for long pages (UI tour run 15, R15-WB-1 / R15-WD-1): a page that holds a list marked
    `data-snap-rows` snaps the document so the row at the top sits whole under the pinned page header
-   (PageHeader publishes its height as --page-sticky-top) instead of half-cut by it. Proximity only, so
+   (PageHeader publishes its height as --page-sticky-top; a page with a pinned bar of its own under the header
+   adds that bar as --page-snap-extra) instead of half-cut by it. Proximity only, so
    free scrolling still ends anywhere between far-apart rows; the gap clears the header's 1rem fade. */
 html:has([data-snap-rows], [data-snap-row]) {
   scroll-snap-type: y proximity;
-  scroll-padding-top: calc(var(--page-sticky-top, 0px) + 1rem);
+  /* Phone: no fade under the pinned header, so a row stops right under it; a 1rem gap there showed the tail
+     of the row before (UI tour run 16, R16-WB-1: avatar and meta-line slivers under the tab strip). */
+  scroll-padding-top: calc(var(--page-sticky-top, 0px) + var(--page-snap-extra, 0px));
+}
+@media (min-width: 768px) {
+  html:has([data-snap-rows], [data-snap-row]) {
+    scroll-padding-top: calc(var(--page-sticky-top, 0px) + var(--page-snap-extra, 0px) + 1rem);
+  }
 }
 [data-snap-rows] > *,
 [data-snap-row],

@@ -1351,8 +1351,10 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
         </div>
       ) : tab === "questions" ? (
         <div className="flex min-h-0 flex-1">
-          <div className="@container min-h-0 flex-1 overflow-y-auto" onClick={() => { setSelected(null); setSlashFor(null); }}>
-            <div className="group/head relative">
+          {/* Question cards snap whole at the top of the column, the form head first, so a scroll never stops
+              with a card cut through its title (UI tour run 16, R16-WB-1: the Harga card's top was cut). */}
+          <div className="@container min-h-0 flex-1 overflow-y-auto [scroll-snap-type:y_proximity]" onClick={() => { setSelected(null); setSlashFor(null); }}>
+            <div className="group/head relative snap-start">
               <FormHead branding={draft.branding}>
                 {/* Shown on every size, as on a phone (UI tour run 13, W-D16: on a desktop they appeared on hover only). */}
                 <div className={cn("flex flex-wrap gap-1", draft.branding?.cover || draft.branding?.icon ? "mt-2" : "")} onClick={(e) => e.stopPropagation()}>
@@ -1385,7 +1387,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
                 {/* questions */}
                 <div className="mt-6 pb-24 md:pl-0" onDragOver={(e) => { if (dragFrom.current) e.preventDefault(); }}>
                   {fields.map((f, i) => (
-                    <div key={f.id}>
+                    <div key={f.id} className="snap-start">
                       {/* gap above each card: drop target + "add a question here" */}
                       <div
                         className="group/gap relative flex h-5 items-center justify-center"

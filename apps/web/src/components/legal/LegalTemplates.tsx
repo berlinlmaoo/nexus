@@ -57,14 +57,16 @@ export function LegalTemplates() {
       ) : rows.length === 0 ? (
         <EmptyState icon={FileText} title={t("No templates yet")} message={t("Upload a Word file with {{PLACEHOLDERS}} to start making documents.")} />
       ) : (
-        <ul className="divide-y divide-border rounded-lg border border-border">
+        // Rows snap whole under the pinned header and tabs (UI tour run 16, R16-WB-1); a long name takes two
+        // lines before "…" (R16-WM-12).
+        <ul data-snap-rows className="divide-y divide-border rounded-lg border border-border">
           {rows.map((tpl) => (
             <li key={tpl.id}>
               <button className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-accent/50" onClick={() => setOpenId(tpl.id)}>
                 <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="truncate text-sm font-medium">{tpl.name}</span>
+                    <span className="line-clamp-2 min-w-0 text-sm font-medium">{tpl.name}</span>
                     {tpl.archived && <Badge variant="outline">{t("Archived")}</Badge>}
                   </div>
                   <div className="truncate text-xs text-muted-foreground">

@@ -73,6 +73,10 @@ export const DayPanel = memo(function DayPanel({
       const scroller = scrollerOf(section);
       const below = scroller === document.documentElement ? parseFloat(getComputedStyle(el).getPropertyValue("--cal-sticky-top")) || 0 : 0;
       room.set(scroller, sticks ? below + el.offsetHeight + 8 : null);
+      // When the page scrolls the day, its rows snap whole under this header (UI tour run 16, R16-WB-1:
+      // calendar-2 on a phone stopped with a row's "with …" line cut under it).
+      if (scroller === document.documentElement && sticks) document.documentElement.style.setProperty("--page-snap-extra", `${Math.round(below + el.offsetHeight)}px`);
+      else document.documentElement.style.removeProperty("--page-snap-extra");
     };
     check();
     const ro = new ResizeObserver(check);
@@ -82,6 +86,7 @@ export const DayPanel = memo(function DayPanel({
       ro.disconnect();
       window.removeEventListener("resize", check);
       room.release();
+      document.documentElement.style.removeProperty("--page-snap-extra");
     };
   }, []);
 

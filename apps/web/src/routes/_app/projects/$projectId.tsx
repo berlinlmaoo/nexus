@@ -1302,8 +1302,12 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
       <>
       {/* Phone: one chip per column with its count, which brings that column in; one column fills the screen
           and the others had no sign at all (UI tour run 13, W-M11). */}
+      {/* The chip row stays pinned under the header while the page scrolls, so it is never left half-cut under
+          the tabs (UI tour run 16, R16-WB-1), and its right edge fades while more chips lie that way
+          (R16-WM-7: "SPECIAL BUSINESS U…" ended hard at the screen edge). */}
       {lanes.length > 1 && (
-        <div role="group" aria-label={t("Columns")} className="flex gap-1.5 overflow-x-auto px-4 pt-3 [scrollbar-width:none] sm:hidden [&::-webkit-scrollbar]:hidden">
+        <div className="sticky top-[var(--page-sticky-top,0px)] z-20 bg-card pb-1 sm:hidden">
+        <div role="group" aria-label={t("Columns")} className="flex gap-1.5 overflow-x-auto px-4 pt-3 [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] [scrollbar-width:none] after:block after:w-6 after:shrink-0 after:content-[''] [&::-webkit-scrollbar]:hidden">
           {lanes.map((g) => {
             const tone = COLOR_PRESETS[laneColor(g)];
             return (
@@ -1322,6 +1326,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
               <span className="max-w-[9rem] truncate">{lane.name}</span><span className="tabular-nums opacity-70">{lane.tasks.length}</span>
             </button>
           ))}
+        </div>
         </div>
       )}
       <div ref={boardRef} data-touch-drag-root="" className={cn("overflow-x-auto overscroll-x-contain px-4 pb-6 pt-3 max-sm:snap-x max-sm:snap-mandatory max-sm:scroll-px-4 md:px-8", boardFade)}>

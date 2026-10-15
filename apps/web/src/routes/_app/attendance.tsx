@@ -1233,8 +1233,8 @@ function OfficesSection() {
     onError: (e: unknown) => alert(e instanceof Error ? e.message : tr("Couldn't delete the office.")) });
 
   return (
-    <section className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
+    <section className="rounded-[28px] border border-border bg-card shadow-soft overflow-clip">
+      <div data-snap-row className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
         <div>
           <h2 className="text-lg font-semibold tracking-tight">{tr("Offices and check-in area")}</h2>
           <p className="text-sm text-muted-foreground">{tr("Set office locations and the radius for check-in.")}</p>
@@ -1348,8 +1348,8 @@ function ReflectionsSection({ canPickPeople, members }: { canPickPeople: boolean
   const summarizeError = summarize.error instanceof ApiError ? ((summarize.error.payload as { error?: string } | null)?.error ?? summarize.error.message) : summarize.error ? tr("GIDEON didn't answer. Try again in a minute.") : null;
 
   return (
-    <div className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
+    <div className="rounded-[28px] border border-border bg-card shadow-soft overflow-clip">
+      <div data-snap-row className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
         <div>
           <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><PenLine className="h-4 w-4 text-primary" /> {tr("Reflections")}</h2>
           <p className="text-sm text-muted-foreground">{tr("What was written at check-out, with GIDEON's summary of each day and of the month so far.")}</p>
@@ -1755,8 +1755,8 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
   })();
 
   return (
-    <section className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
+    <section className="rounded-[28px] border border-border bg-card shadow-soft overflow-clip">
+      <div data-snap-row className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
         <div>
           <h2 className="text-lg font-semibold tracking-tight">{tr("Requests and approvals")}</h2>
           <p className="text-sm text-muted-foreground">
@@ -1866,7 +1866,7 @@ function EmploymentStartSection() {
 
   return (
     <section className="rounded-3xl border border-border bg-card">
-      <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
+      <div data-snap-row className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0 flex-1">
           <h2 className="font-display text-base font-bold tracking-tight">{tr("Employment start date")}</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">

@@ -375,13 +375,14 @@ export function ItemRow({
   // already mark it, and fading took the text below 4.5:1.
   const cls = cn(
     // A snap point for the day panel's own scroller (UI tour run 15, R15-WB-1): a scrolled day stops on a whole
-    // row under the panel's sticky header, not on half a name line.
+    // row under the panel's sticky header, not on half a name line. data-snap-row: the same when the page itself
+    // scrolls the day (a phone), under the day header (UI tour run 16, R16-WB-1).
     "flex w-full snap-start items-start gap-[10px] rounded-xl px-[10px] py-2 text-left",
     clickable && cn("transition-colors hover:bg-muted/70 focus-visible:bg-muted/70", FOCUS_ROW),
   );
   return clickable ? (
-    <button type="button" className={cls} onClick={() => onOpen(item)} data-cal-item={item.key}>{body}</button>
+    <button type="button" className={cls} onClick={() => onOpen(item)} data-cal-item={item.key} data-snap-row="">{body}</button>
   ) : (
-    <div className={cls} data-cal-item={item.key}>{body}</div>
+    <div className={cls} data-cal-item={item.key} data-snap-row="">{body}</div>
   );
 }
