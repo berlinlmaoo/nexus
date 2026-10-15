@@ -551,14 +551,26 @@ final class NEXUSUITour: XCTestCase {
 
     /// The labels of one `appTaps` / `webTaps` step: "?Add|Tambah" → ["Add", "Tambah"].
     private static func labels(_ step: String) -> [String] {
-        let names = (step.hasPrefix("?") ? String(step.dropFirst()) : step).split(separator: "|").map(String.init)
+        var body = step.hasPrefix("?") ? String(step.dropFirst()) : step
+        if body.hasPrefix("~") { body = String(body.dropFirst()) }
+        let names = body.split(separator: "|").map(String.init)
         return names.isEmpty ? [step] : names
+    }
+
+    /// A step whose labels are matched as a part of the button's label ("~QA Dev": a leaderboard row, whose
+    /// label also holds its rank, level and XP), after the optional "?".
+    private static func partial(_ step: String) -> Bool {
+        (step.hasPrefix("?") ? String(step.dropFirst()) : step).hasPrefix("~")
     }
 
     /// The app's button with one of a step's labels (a menu item is a button too).
     @MainActor
     private func appButton(_ step: String) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "label IN %@", Self.labels(step))).firstMatch
+        if Self.partial(step) {
+            let any = NSCompoundPredicate(orPredicateWithSubpredicates: Self.labels(step).map { NSPredicate(format: "label CONTAINS %@", $0) })
+            return app.buttons.matching(any).firstMatch
+        }
+        return app.buttons.matching(NSPredicate(format: "label IN %@", Self.labels(step))).firstMatch
     }
 
     private struct Skip: Error { let reason: String }
@@ -897,30 +909,38 @@ final class NEXUSUITour: XCTestCase {
             // moved up by the drag (or less, at the end of the scroll) and counts what that leaves unexplained.
             let moved = shiftedNew(from: last, to: data, in: target.compare, window: window)
             let repeatsBefore = fresh.map { $0.new < minNewContent && $0.inPlace >= minInPlace } ?? false
-            if repeatsBefore || (moved.map { $0 < minShiftedNew } ?? false) {
-                #if targetEnvironment(macCatalyst)
-                // Nothing new at all on the first scroll: maybe the wheel goes the other way.
-                if (fresh?.new ?? 1) < 0.02 && (moved ?? 1) < 0.02 && !scrolled && !flipped {
-                    flipped = true
-                    macWheelSign = -macWheelSign
-                    continue
-                }
-                #endif
-                break
-            }
+            let looksRepeated = repeatsBefore || (moved.map { $0 < minShiftedNew } ?? false)
             #if targetEnvironment(macCatalyst)
-            scrolled = true
+            // Nothing new at all on the first scroll: maybe the wheel goes the other way.
+            if looksRepeated && (fresh?.new ?? 1) < 0.02 && (moved ?? 1) < 0.02 && !scrolled && !flipped {
+                flipped = true
+                macWheelSign = -macWheelSign
+                continue
+            }
             #endif
             if savedShots.contains(data) { break }
             let rows = fineRows(data, in: target.compare, window: window)
             let content = rows.compactMap { $0 }
-            if !content.isEmpty {
-                let unseen = content.filter { !seenRows.contains($0) }.count
-                // Measured offline on runs 16-18 (every vertical page): repeats 0.000 (run 17 iPhone gideon-2,
-                // run 18 iPhone / iPad project-list-5); the lowest real page 0.029 (run 17 iPhone legal-settings-6,
-                // whose series rows look like PATS's).
-                if CGFloat(unseen) / CGFloat(content.count) < minUnseen { break }
-            }
+            // The share of this page's content rows on no earlier page. Measured offline on runs 16-18 (every
+            // vertical page): repeats 0.000 (run 17 iPhone gideon-2, run 18 iPhone / iPad project-list-5); the
+            // lowest real page 0.029 (run 17 iPhone legal-settings-6, whose series rows look like PATS's).
+            let unseen: CGFloat = content.isEmpty ? (looksRepeated ? 0 : 1)
+                : CGFloat(content.filter { !seenRows.contains($0) }.count) / CGFloat(content.count)
+            if unseen < minUnseen { break }
+            // The shift tests above alone dropped a last page that adds a line or two: the iPad outlet day ended on
+            // "No report yet. Fill report…" cut by the screen's bottom, with no page 2 (UI tour run 18, iPad
+            // R18-I-07; run 17 iPad outlet-day-2 adds 5.5% new rows). A page they call a repeat goes only when its
+            // own rows add almost nothing too (decision 5: a last page stays when it adds content).
+            // On the Mac a wheel scroll redraws text at sub-pixel offsets, so nearly every row reads as new: there
+            // the shift tests alone decide, as before.
+            #if targetEnvironment(macCatalyst)
+            if looksRepeated { break }
+            #else
+            if looksRepeated && unseen < minUnseenOfRepeat { break }
+            #endif
+            #if targetEnvironment(macCatalyst)
+            scrolled = true
+            #endif
             last = data
             savedShots.append(data)
             if let p = pending {
@@ -949,6 +969,8 @@ final class NEXUSUITour: XCTestCase {
     /// A page is a repeat when less than this share of its content rows (`fineRows`) is on no earlier page.
     private var minUnseen: CGFloat { CGFloat(Double(env["TOUR_MIN_UNSEEN"] ?? "") ?? 0.01) }
     /// A page shown by the pages around it to at least this share of its rows is replaced by the next page.
+    /// A page the shift tests call a repeat stays only when at least this share of its rows is new.
+    private var minUnseenOfRepeat: CGFloat { CGFloat(Double(env["TOUR_MIN_UNSEEN_OF_REPEAT"] ?? "") ?? 0.03) }
     private var minCovered: CGFloat { CGFloat(Double(env["TOUR_MIN_COVERED"] ?? "") ?? 0.98) }
 
     /// One hash per pixel row of `rect` at full resolution (grey, 8 levels), the right 10 pt (the scroll bar)
