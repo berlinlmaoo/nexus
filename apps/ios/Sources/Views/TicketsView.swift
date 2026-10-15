@@ -273,6 +273,9 @@ struct TicketsView: View {
     @State private var landed = false
 
     private var isBod: Bool { viewer.isBoD }
+    /// The page scroll's top inset and the wide table's height, for its pinned column heads (R18-M-09).
+    @State private var pageTop: CGFloat = 0
+    @State private var tableH: CGFloat = 0
     /// BoD: the queues (Inbox → In review → All). Everyone else: their tickets by status.
     private var filters: [String] { isBod ? ["OPEN", "IN_REVIEW", "ALL"] : ["ALL", "OPEN", "IN_REVIEW", "RESOLVED", "CLOSED"] }
     private func count(_ f: String) -> Int {
@@ -395,6 +398,8 @@ struct TicketsView: View {
                         .padding(.horizontal, NXSidebarPage.gutter(isRoot))
                         .padding(.vertical, 24)
                     }
+                    .modifier(PageTopInsetReader(inset: $pageTop))
+                    .environment(\.pageScrollTopInset, pageTop)
                     .refreshable { await load() }
                 } else {
                     ScrollView {
@@ -441,8 +446,13 @@ struct TicketsView: View {
                 .font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg)
                 .padding(.horizontal, 16).padding(.vertical, 8)
                 .background(NX.muted.opacity(0.4))
+                .background(NX.card)
+                .overlay(alignment: .bottom) { Divider().overlay(NX.border) }
                 .accessibilityHidden(true)
-                Divider().overlay(NX.border)
+                // Pinned under the page top while the rows scroll, so a scrolled page still says which column
+                // is which (UI tour run 18, R18-M-09).
+                .modifier(StickyInPageScroll(limit: max(0, tableH - 100)))
+                .zIndex(1)
             }
             ForEach(Array(filtered.enumerated()), id: \.element.id) { idx, t in
                 if idx > 0 { Divider().overlay(NX.border) }
@@ -459,6 +469,7 @@ struct TicketsView: View {
         .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { if wide { tableH = $0 } }
     }
 
     private func wideRow(_ t: Complaint) -> some View {
@@ -499,10 +510,16 @@ struct TicketsView: View {
             Text(t.category.map(ticketCategoryName) ?? "—").font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
                 .lineLimit(1).frame(width: Col.category, alignment: .leading)
             NexusChip(text: t.statusLabel, tone: t.tone).frame(width: Col.status, alignment: .leading)
-            Label("\(t.messageCount ?? 0)", systemImage: "bubble.left")
-                .font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-                .frame(width: Col.replies, alignment: .trailing)
-                .opacity(t.messageCount == nil ? 0 : 1)
+            // The icon in a fixed slot and the count right-aligned in its own: as one Label the icon moved ~9 px
+            // left for "10" (UI tour run 18, R18-M-08).
+            HStack(spacing: 4) {
+                Image(systemName: "bubble.left").frame(width: 18)
+                Text("\(t.messageCount ?? 0)").monospacedDigit().frame(width: 24, alignment: .trailing)
+            }
+            .font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+            .frame(width: Col.replies, alignment: .trailing)
+            .opacity(t.messageCount == nil ? 0 : 1)
+            .accessibilityElement(children: .combine)
             Text(activityLabel(t)).font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.mutedFg)
                 .lineLimit(1).frame(width: Col.activity, alignment: .trailing)
         }
