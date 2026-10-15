@@ -25,6 +25,14 @@ extension AppLanguage {
         "At least 8 characters": "Minimal 8 karakter",
         // Board (Q-IA21)
         "Add status": "Tambah status",
+        // Project overview (decision: web wording per width)
+        "Done ({month})": "Selesai ({month})",
+        // Status updates: no internal "BoD" in an empty state (R15-I-25)
+        "No updates yet. Post one so the team and the board can follow along without asking.": "Belum ada update. Kirim satu supaya tim dan direksi bisa mengikuti tanpa harus bertanya.",
+        // List / board: at most two dates, then "+N" (Q-IA24, Q-M11)
+        "%d more dates": "%d tanggal lagi",
+        // Project calendar: the no-date hint folds the list away again (Q-IA28)
+        "Hide them": "Sembunyikan",
         // R15-MORE
     ]
 }

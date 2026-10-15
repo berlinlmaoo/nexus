@@ -2174,13 +2174,16 @@ struct BoardCard: View {
                     .font(.system(size: 16)).foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.5))
                 Text(task.title).font(NXFont.text(14, .bold))
                     .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
-                    .strikethrough(task.isDone).lineLimit(3)
+                    // The whole title, as on the web card: three lines cut "FLSHA (TETRA COFFEE AND EATERY
+                    // PEKANB…" (UI tour run 15, Q-M11).
+                    .strikethrough(task.isDone)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
                 if let p = task.priority, p.uppercased() != "NONE" {
                     PriorityPill(priority: p)
                 }
             }
-            CFChipRow(values: task.customFieldValues, only: fieldIds)
+            CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText)
             HStack(spacing: 8) {
                 // No "No due" placeholder on every card (Notion shows nothing when there is no date).
                 if let due = dueText {

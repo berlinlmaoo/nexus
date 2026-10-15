@@ -807,6 +807,7 @@ enum OutletFormat {
         let p = c.dateComponents([.month, .day, .hour, .minute], from: d)
         let mn = (isID ? monthsShortID : monthsShortEN)[max(0, min(11, (p.month ?? 1) - 1))]
         let sep = isID ? "." : ":"
-        return String(format: "%d %@, %02d%@%02d", p.day ?? 1, mn, p.hour ?? 0, sep, p.minute ?? 0)
+        // "14 Oct 18:50": no comma between date and time, like every other date in the app (UI tour run 15, R15-I-19).
+        return String(format: "%d %@ %02d%@%02d", p.day ?? 1, mn, p.hour ?? 0, sep, p.minute ?? 0)
     }
 }

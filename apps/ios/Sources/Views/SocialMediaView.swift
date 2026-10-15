@@ -182,7 +182,9 @@ struct SocialMediaTab: View {
         .onChange(of: store.signedOut) { _, out in if out { auth.logout() } }
         .sheet(item: Binding(get: { store.sheetDate.map(SocialSheetItem.init) },
                              set: { store.sheetDate = $0?.id })) { item in
-            SocialDaySheet(store: store, date: item.id)
+            // Page sized on iPad / Mac: the form sheet showed only Instagram and one TikTok row, and the notes,
+            // targets and "Last changed by" were never seen (UI tour run 15, Q-IB4).
+            SocialDaySheet(store: store, date: item.id).tallSheet()
         }
         .alert(store.actionError ?? "", isPresented: Binding(
             get: { store.sheetDate == nil && !store.settingsOpen && store.actionError != nil },
@@ -563,9 +565,13 @@ struct SocialCalendarView: View {
         let cols = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
         return VStack(spacing: 0) {
             LazyVGrid(columns: cols, spacing: 0) {
+                // "MON", left-aligned over left-aligned day numbers: one month-grid style everywhere (UI tour
+                // run 15, Q-IB13 / R15-WB-3).
                 ForEach(OutletFormat.weekHeader, id: \.self) { w in
-                    Text(w).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
-                        .frame(maxWidth: .infinity).padding(.vertical, 8)
+                    Text(w.uppercased()).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                        .lineLimit(1)
+                        .padding(.leading, wide ? 8 : 5)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
                 }
             }
             .background(NX.muted.opacity(0.5))
@@ -585,7 +591,9 @@ struct SocialCalendarView: View {
         let isToday = d == store.today
         let future = d > store.today
         Button { store.open(d) } label: {
-            VStack(alignment: wide ? .leading : .center, spacing: 3) {
+            // Every day number top-left: centred, a day with a note icon pushed its number aside (UI tour run
+            // 15, R15-I-18).
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 2) {
                     Text("\(OutletFormat.parts(d)?.d ?? 0)")
                         .font(NXFont.text(12, isToday ? .bold : .regular)).monospacedDigit()
@@ -775,8 +783,10 @@ struct SocialDaySheet: View {
                 }
             }
         }
-        // No empty band under the title: the intro sits right under it (run 14, P-I31).
+        // No empty band under the title: the intro sits right under it (run 14, P-I31), and no ~60 pt gap
+        // between the intro and the first platform (run 15, Q-IB15).
         .contentMargins(.top, 8, for: .scrollContent)
+        .listSectionSpacing(.compact)
         .scrollDismissesKeyboard(.interactively)
     }
 
@@ -816,10 +826,16 @@ struct SocialDaySheet: View {
                 if let info, info.engagementTarget != nil || info.postsTarget != nil {
                     let parts = [info.engagementTarget.map { String(format: T("%@ engagement"), SocialFormat.count($0)) },
                                  info.postsTarget.map(SocialFormat.posts)].compactMap { $0 }
-                    // The source on its own line, so "÷ days" never wraps alone (F-18).
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(T("Day target")): \(parts.joined(separator: " · "))")
-                        Text(info.ownTarget ? T("Own target") : T("Month's target ÷ days"))
+                    // One line where it fits, as on the web (UI tour run 15, Q-IB15); else the source on its own
+                    // line, so "÷ days" never wraps alone (F-18).
+                    let target = "\(T("Day target")): \(parts.joined(separator: " · "))"
+                    let source = info.ownTarget ? T("Own target") : T("Month's target ÷ days")
+                    ViewThatFits(in: .horizontal) {
+                        Text("\(target) · \(source)").lineLimit(1)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(target)
+                            Text(source)
+                        }
                     }
                 } else {
                     Text(T("No target set for this day"))

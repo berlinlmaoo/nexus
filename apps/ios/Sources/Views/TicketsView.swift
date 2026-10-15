@@ -529,7 +529,7 @@ struct TicketsView: View {
     /// The date the list is SORTED by (last message), with the time, as the web's Last activity.
     private func activityLabel(_ t: Complaint) -> String {
         guard let d = ProjDate.parse(t.lastMessageAt ?? t.createdAt) else { return "" }
-        return ProjDate.fmt("d MMM, HH:mm").string(from: d)
+        return ProjDate.fmt("d MMM HH:mm").string(from: d)
     }
 
     private var filterBar: some View {

@@ -171,13 +171,15 @@ private struct OverviewStats {
             let key = Self.statusKeys.contains(s) ? s : (OverviewMath.isDoneStatus(s) ? "DONE" : "TODO")
             byStatus[key, default: 0] += 1
             let ids = OverviewMath.assigneeIds(task)
-            for id in ids { person(id, task) }
+            // An assignee joins the list through work that counts (open, or done this month), as on the
+            // web: someone only on old done or cancelled tasks made iPad say "Show 3 more" where the web
+            // said "Show 2 more" (UI tour run 15, Q-IA2).
             if OverviewMath.isDoneStatus(s) {
                 done += 1
                 completed.append(task)
                 if let at = ProjDate.parse(task.completedAt) {
                     if at >= weekAgo { doneLast7 += 1 }
-                    if at >= monthStart { for id in ids { people[id]?.doneMonth += 1 } }
+                    if at >= monthStart { for id in ids { person(id, task); people[id]?.doneMonth += 1 } }
                 }
                 continue
             }
@@ -193,6 +195,7 @@ private struct OverviewStats {
             } else { noDue += 1 }
             if ids.isEmpty { unassigned += 1 }
             for id in ids {
+                person(id, task)
                 people[id]?.open += 1
                 if let d, d < 0 { people[id]?.overdue += 1 }
             }
@@ -701,6 +704,7 @@ private struct OverviewDeadlinesCard: View {
 private struct OverviewTeamCard: View {
     let stats: OverviewStats
     let onDrill: ((OverviewDrill) -> Void)?
+    @Environment(\.horizontalSizeClass) private var hSize
     @State private var all = false
     private let limit = 8
 
@@ -744,11 +748,23 @@ private struct OverviewTeamCard: View {
             Text(T("Person")).frame(maxWidth: .infinity, alignment: .leading)
             // "Done" over a column of this month's counts, on one line like "Open" / "Overdue": "Done this
             // month" broke onto two (UI tour run 14, N-17 / P-I22 / P-M23); the card says the month below.
-            numbers(Text(T("Open")), Text(T("Overdue")), Text(T("Done (month)")))
+            // The web's words: "Done this month" where there is room, "Done (Oct)" on a phone (UI tour run 15).
+            numbers(Text(T("Open")), Text(T("Overdue")), Text(doneHeader))
         }
         .font(NXFont.text(11, .medium)).foregroundStyle(NX.mutedFg).lineLimit(1)
         .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
         .accessibilityHidden(true)
+    }
+
+    private var doneHeader: String {
+        if hSize == .regular { return T("Done this month") }
+        let month = AppDateLocale.formatter("MMM").string(from: Date()).replacingOccurrences(of: ".", with: "")
+            .replacingOccurrences(of: "Sept", with: "Sep")
+        return T("Done ({month})").replacingOccurrences(of: "{month}", with: month)
+    }
+
+    private var dash: some View {
+        Text("—").font(NXFont.text(14)).foregroundStyle(NX.mutedFg.opacity(0.6)).accessibilityHidden(true)
     }
 
     private func num(_ n: Int, late: Bool = false) -> some View {
@@ -816,7 +832,9 @@ private struct OverviewTeamCard: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                numbers(num(stats.unassigned), Color.clear.frame(height: 1), Color.clear.frame(height: 1))
+                // Overdue and done are counted per person; for nobody they read as a quiet dash, so the row
+                // fills its three columns like the others (UI tour run 15, R15-I-14 / Q-IA19 / Q-M10).
+                numbers(num(stats.unassigned), dash, dash)
             }
             .padding(.horizontal, 16).padding(.vertical, 8)
             .contentShape(Rectangle())
@@ -1042,10 +1060,12 @@ private struct OverviewRecentCard: View {
                             HStack(spacing: 10) {
                                 Image(systemName: "checkmark.circle.fill").font(.system(size: 15))
                                     .foregroundStyle(NX.success).accessibilityHidden(true)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    // Two lines before an ellipsis ("Reimburse Bonus Hosting PR PA…", P-M23).
+                                VStack(alignment: .leading, spacing: 2) {
+                                    // The whole title, wrapped: two lines still cut "…PATS GOLF @topgolf j…" on
+                                    // the Mac (UI tour run 15, Q-M10; P-M23).
                                     Text(UntitledText.task(t.title)).font(NXFont.text(14)).foregroundStyle(NX.foreground)
-                                        .lineLimit(2).multilineTextAlignment(.leading)
+                                        .multilineTextAlignment(.leading)
+                                        .fixedSize(horizontal: false, vertical: true)
                                     if !meta.isEmpty {
                                         Text(meta).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                                     }
@@ -1056,7 +1076,9 @@ private struct OverviewRecentCard: View {
                                         .accessibilityHidden(true)
                                 }
                             }
-                            .padding(.horizontal, 16).frame(minHeight: 48)
+                            // The same padding above and below every row, so a two-line title never touches the
+                            // next one (UI tour run 15, R15-I-15 / Q-M10).
+                            .padding(.horizontal, 16).padding(.vertical, 8).frame(minHeight: 48)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -1150,7 +1172,7 @@ private struct OverviewStatusUpdatesCard: View {
                 if loading {
                     ProgressView().frame(maxWidth: .infinity).padding(.vertical, 8)
                 } else if updates.isEmpty {
-                    Text(canPost ? T("No updates yet. Post one so the team and BoD can follow along without asking.") : T("No updates yet."))
+                    Text(canPost ? T("No updates yet. Post one so the team and the board can follow along without asking.") : T("No updates yet."))
                         .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
