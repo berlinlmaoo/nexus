@@ -1439,8 +1439,9 @@ struct ProjectDetailView: View {
                 .contentMargins(.trailing, wide ? wideTrailingRoom(detail, shown: shown, statusStyle: statusStyle, grouped: grouped) : 14,
                                 for: .scrollContent)
                 // Phone: the column peeking in at the edge fades out, so a card cut mid-word reads as "more this
-                // way" (UI tour run 15, R15-I-11 / Q-IA21 / Q-M12).
-                .nxEdgeFade(wide ? 0 : 48)
+                // way" (UI tour run 15, R15-I-11 / Q-IA21 / Q-M12). 72 pt: over 48 the cut chips at the very edge
+                // ("S" of SBU) still read at ~40% and the fade did not show (UI tour run 18, iPhone R18-I-13).
+                .nxEdgeFade(wide ? 0 : 72)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { boardViewport = $0 }
                 .overlay(alignment: .trailing) {
                     // In the 12 pt gap the whole columns leave at the board's right edge.

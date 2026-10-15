@@ -697,8 +697,10 @@ struct UnfiledDropZone: View {
             HStack(spacing: 10) {
                 Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
                     .rotationEffect(.degrees(isExpanded ? 90 : 0)).frame(width: 20, height: 30)
+                // The folder glyph's 34 pt slot, so "No folder" starts where the folder names do (UI tour run 18,
+                // R18-M-07: ~10 px further left).
                 Image(systemName: "tray").font(.system(size: 17, weight: .regular)).foregroundStyle(NX.mutedFg)
-                    .frame(width: 26, height: 26)
+                    .frame(width: 34, height: 26)
                 Text(T("No folder")).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
                 Text("\(count)").font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.mutedFg)
                 if isEmpty || targeted {

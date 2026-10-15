@@ -26,10 +26,12 @@ enum UntitledText {
     /// behind it), as the web does since run 17. A line may start with "– Cymenggs" but never ends on a dash,
     /// so a two-line clamp never reads "Clippers –…" (it replaces the run 16 "dash with the word before" rule,
     /// R16-B-11 / iPad R17-I-12).
+    /// Any spaced dash counts (decision 4 of run 18): "-", "–" or "—" with any whitespace around it, a no-break
+    /// space or several spaces included. "PATS ARCHIVE -  INVOICE" kept a plain space after the glue and still
+    /// ended a line on its dash (UI tour run 18, R18-M-10).
     static func wrapped(_ title: String) -> String {
-        title.replacingOccurrences(of: " – ", with: " –\u{2060}\u{00A0}")
-            .replacingOccurrences(of: " — ", with: " —\u{2060}\u{00A0}")
-            .replacingOccurrences(of: " - ", with: " -\u{2060}\u{00A0}")
+        title.replacingOccurrences(of: "[\\s\u{00A0}]+([-–—])[\\s\u{00A0}]+", with: " $1\u{2060}\u{00A0}",
+                                   options: .regularExpression)
     }
     /// Anything else (a page, an event): "Untitled" / "Tanpa judul".
     static func any(_ title: String?) -> String {
