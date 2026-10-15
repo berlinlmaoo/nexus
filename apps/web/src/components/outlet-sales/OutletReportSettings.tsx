@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { SnapTail } from "@/components/SnapTail";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
@@ -80,7 +81,10 @@ export function OutletReportSettings({ projectId, open, onOpenChange }: { projec
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+        {/* Each block snaps under the sheet's header, and the end of the list is a snap point too (SnapTail), so a
+            scrolled sheet starts on a whole block, not at a card's last row (UI tour run 18, R18-WB-1:
+            outlet-settings-2). */}
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 [scroll-padding-top:1rem] [scroll-snap-type:y_proximity]">
           {!draft ? (
             q.isError ? (
               <p className="py-10 text-center text-sm text-muted-foreground">{t("The settings didn't load. Check your connection, then try again.")}</p>
@@ -114,6 +118,7 @@ export function OutletReportSettings({ projectId, open, onOpenChange }: { projec
               </Block>
             </div>
           )}
+          <SnapTail scroller="parent" />
         </div>
 
         <footer className="flex items-center justify-end gap-2 border-t border-border bg-background/95 px-5 py-3">
@@ -169,7 +174,7 @@ export function OutletReportSettings({ projectId, open, onOpenChange }: { projec
 
 function Block({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-2">
+    <section data-snap-row className="flex flex-col gap-2">
       <div>
         <h3 className="text-sm font-semibold">{title}</h3>
         <p className="text-xs text-muted-foreground">{hint}</p>
