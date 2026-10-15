@@ -1259,7 +1259,42 @@ final class NEXUSUITour: XCTestCase {
                 }
             }
         }
+        // iPhone: a header laid over the scroll view's top (a safe-area inset: Settings' subtitle and tab strip,
+        // ~200 pt) hides what scrolls under it, yet the rect began at the screen top. The step (0.7 of the rect)
+        // then left almost no visible overlap, and the rows that sat under the tab bar on page 1 scrolled straight
+        // under the header: the "Active sessions" title was never shot (run 18, iPhone R18-I-02; run 17 the
+        // same). The rect starts under that header.
+        if !web, sidebar == nil, let b = best, let top = overlayBottom(over: b, in: root),
+           top > b.visible.minY + 20, top < b.visible.minY + b.visible.height * 0.45 {
+            func below(_ r: CGRect) -> CGRect { CGRect(x: r.minX, y: top, width: r.width, height: r.maxY - top) }
+            best = ScrollTarget(element: b.element, visible: below(b.visible), compare: below(b.compare))
+        }
         return best
+    }
+
+    /// The bottom of the controls drawn over the top of `target` that are not part of its content (a navigation
+    /// bar, a page header in a safe-area inset), from one accessibility snapshot; nil when there are none.
+    @MainActor
+    private func overlayBottom(over target: ScrollTarget, in root: XCUIApplication) -> CGFloat? {
+        guard let tree = try? root.snapshot() else { return nil }
+        let frame = target.element.frame
+        let rect = target.visible
+        let kinds: Set<XCUIElement.ElementType> = [.staticText, .button, .textField, .searchField, .image,
+                                                  .segmentedControl, .navigationBar]
+        var bottom: CGFloat?
+        func visit(_ node: XCUIElementSnapshot) {
+            if [.scrollView, .collectionView, .table].contains(node.elementType),
+               abs(node.frame.minY - frame.minY) < 1, abs(node.frame.height - frame.height) < 1,
+               abs(node.frame.minX - frame.minX) < 1 { return }   // the content: not an overlay
+            if kinds.contains(node.elementType), node.frame.height > 0, node.frame.height < 120,
+               node.frame.intersects(rect), node.frame.minY >= rect.minY - 1,
+               node.frame.maxY <= rect.minY + rect.height * 0.45 {
+                bottom = max(bottom ?? node.frame.maxY, node.frame.maxY)
+            }
+            node.children.forEach(visit)
+        }
+        visit(tree)
+        return bottom
     }
 
     /// The sidebar's on-screen frame in a regular-width layout (UIKit names its list "Sidebar" on the
