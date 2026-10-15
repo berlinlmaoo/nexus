@@ -1284,7 +1284,8 @@ struct CalSectionCard: View {
         } else {
             HStack(spacing: 10) {
                 CalUnitMark(unit: node.unit, size: 24)
-                name.lineLimit(1)
+                // Two lines before it is cut: "FRAMEWORK AGE…" on the Mac (UI tour run 15, Q-M8).
+                name.lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
                 if mine { CalYouBadge() }
                 number

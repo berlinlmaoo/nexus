@@ -330,7 +330,9 @@ struct SocialOverviewView: View {
     private var wide: Bool { hSize == .regular }
     /// The width the platform cards share.
     @State private var gridWidth: CGFloat = 0
-    private static let cardMinWidth: CGFloat = 280
+    /// Three across on a portrait iPad as on the web: at 280 YouTube sat alone on a full-width row (UI tour
+    /// run 15, Q-IB10).
+    private static let cardMinWidth: CGFloat = 200
 
     var body: some View {
         ScrollView {
@@ -427,7 +429,10 @@ struct SocialOverviewView: View {
                     }
                 }
             } else {
+                // Two lines reserved on every card, so the figures below line up across the row whether or not
+                // the line wraps ("(incl. day targets)", UI tour run 15, Q-IB10).
                 Text(monthTargetLine(p)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    .lineLimit(2, reservesSpace: true)
             }
             if let trend = p.trend, trend.count > 1, trend.contains(where: { $0 > 0 }) {
                 SocialSparkline(values: trend)
@@ -1054,12 +1059,13 @@ struct SocialSettingsSheet: View {
 
     private var form: some View {
         List {
-            // The web's subtitle (run 14, P-I31 / P-M31).
+            // The web's subtitle (run 14, P-I31 / P-M31), on the same left edge as the section headers and with
+            // no empty band above it (UI tour run 15, Q-IB14).
             Section {
                 Text(T("What this report tracks, and the month's goals per platform."))
                     .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
             }
             Section {
                 ForEach(originalRows.filter { !$0.archived }) { p in
@@ -1117,7 +1123,9 @@ struct SocialSettingsSheet: View {
             } header: {
                 Text(T("Platforms"))
             } footer: {
-                Text(T("Renaming keeps every figure. Archiving hides a platform from the form; its past days keep their numbers."))
+                // The web's note on new platforms too (UI tour run 15, Q-IB14).
+                Text(T("Renaming keeps every figure. Archiving hides a platform from the form; its past days keep their numbers.")
+                     + " " + T("A new platform gets its targets after you save."))
             }
 
             if !archived.isEmpty {
@@ -1135,6 +1143,7 @@ struct SocialSettingsSheet: View {
         }
         .listStyle(.insetGrouped)
         .listSectionSpacing(.compact)
+        .contentMargins(.top, 8, for: .scrollContent)
         // The sheet goes on below its edge (Platforms, Add platform): the indicator shows once.
         .scrollIndicatorsFlash(onAppear: true)
         .environment(\.editMode, .constant(.active))

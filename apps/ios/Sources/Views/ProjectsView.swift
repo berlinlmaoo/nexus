@@ -1377,6 +1377,7 @@ struct ProjectCard: View {
                             .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     }
                 }
+                // No empty bar under "No tasks yet" (UI tour run 15, Q-M23); the line keeps its height.
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule().fill(NX.muted)
@@ -1384,6 +1385,7 @@ struct ProjectCard: View {
                     }
                 }
                 .frame(height: 7)
+                .opacity(done != nil && total == 0 ? 0 : 1)
             }
             .padding(.top, 16)
 

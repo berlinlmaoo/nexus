@@ -53,6 +53,10 @@ extension AppLanguage {
         "No conversations yet": "Belum ada percakapan",
         "1 conversation": "1 percakapan",
         "{n} conversations": "{n} percakapan",
+        // Socmed settings: the web's note on a new platform (Q-IB14)
+        "A new platform gets its targets after you save.": "Platform baru bisa diberi target setelah disimpan.",
+        // Outlet day: an unreported night in one line (Q-IB20)
+        "No report yet. Fill report to add the figures.": "Belum ada laporan. Isi laporan untuk menambahkan angkanya.",
         // R15-MORE
     ]
 }
