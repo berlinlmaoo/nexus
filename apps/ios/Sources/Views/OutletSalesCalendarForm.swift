@@ -117,13 +117,12 @@ struct OutletCalendarView: View {
                 store.openForm(eventId: nil, date: day)
                 tab = .reportForm
             } label: {
-                Label(T("Add event on this day"), systemImage: "plus")
-                    .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
+                // A bordered button, as the web's (UI tour run 16, R16-B-13: a purple text link).
+                Label(T("Add event on this day"), systemImage: "calendar.badge.plus")
                     .lineLimit(1).minimumScaleFactor(0.85)
-                    .frame(minHeight: 40)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+            .frame(minHeight: 44)
             HStack(alignment: .center, spacing: 8) { title; Spacer(minLength: 4); add }
             OutletDayTargetCard(store: store, day: day)
             if list.isEmpty {

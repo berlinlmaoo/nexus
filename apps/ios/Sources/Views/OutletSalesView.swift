@@ -783,44 +783,56 @@ struct OutletOverviewView: View {
         }
     }
 
-    /// One target card: the month's figure as the hero, the share of the target beside it, a real bar
-    /// under it and the target itself in words. Equal halves on Mac/iPad, stacked on iPhone.
+    /// One target card, as the web's (UI tour run 16, R16-B-12): the title with its hint under it, then
+    /// "Rp 6.000.000 / Rp 150.000.000" with a grey percent chip, and the bar. Equal halves on Mac/iPad,
+    /// stacked on iPhone.
     private func metricCard(title: String, hint: String?, actual: String, target: String?, pct: Int64?) -> some View {
-        let reached = (pct ?? 0) >= 100
-        return VStack(alignment: .leading, spacing: wide ? 14 : 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(title).font(NXFont.text(wide ? 15 : 13, .semibold)).foregroundStyle(NX.mutedFg)
+        VStack(alignment: .leading, spacing: wide ? 12 : 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(NXFont.text(wide ? 15 : 14, .semibold)).foregroundStyle(NX.foreground)
                     .lineLimit(1)
-                Spacer(minLength: 8)
-                if let pct {
-                    Text("\(pct)%")
-                        .font(NXFont.display(wide ? 22 : 17, .bold))
-                        .foregroundStyle(reached ? ChipTone.success.fg : NX.violetText)
-                        .monospacedDigit()
+                if let hint, !hint.isEmpty {
+                    Text(hint).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            Text(actual)
-                .font(NXFont.display(wide ? 44 : 32, .bold)).foregroundStyle(NX.foreground)
-                .monospacedDigit()
-                .lineLimit(1).minimumScaleFactor(0.5)
-            if let target {
-                OutletMeter(pct: pct, height: wide ? 10 : 8)
-                Text(String(format: T("of %@ target"), target))
-                    .font(NXFont.text(wide ? 14 : 13, .medium)).foregroundStyle(NX.mutedFg)
-                    .monospacedDigit()
+            ViewThatFits(in: .horizontal) {
+                figureLine(actual: actual, target: target, pct: pct)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(actual).font(NXFont.display(wide ? 30 : 26, .bold)).foregroundStyle(NX.foreground)
+                        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+                    figureTail(target: target, pct: pct)
+                }
+            }
+            if target != nil {
+                OutletMeter(pct: pct, height: 8)
             } else {
                 Text(T("No target for this month")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             }
-            if let hint, !hint.isEmpty {
-                Text(hint).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
-        .padding(wide ? 24 : 16)
+        .padding(wide ? 20 : 16)
         .frame(maxWidth: .infinity, maxHeight: wide ? CGFloat.infinity : nil, alignment: .topLeading)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(NX.border))
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
         .accessibilityElement(children: .combine)
+    }
+
+    private func figureLine(actual: String, target: String?, pct: Int64?) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(actual).font(NXFont.display(wide ? 30 : 26, .bold)).foregroundStyle(NX.foreground)
+                .monospacedDigit().lineLimit(1).fixedSize()
+            figureTail(target: target, pct: pct)
+        }
+    }
+
+    @ViewBuilder private func figureTail(target: String?, pct: Int64?) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            if let target {
+                Text("/ \(target)").font(NXFont.text(wide ? 16 : 14)).foregroundStyle(NX.mutedFg)
+                    .monospacedDigit().lineLimit(1).fixedSize()
+            }
+            if let pct { SocialPctChip(pct: pct, size: 12).fixedSize() }
+        }
     }
 
     // MARK: who set the target, and the editor for those who may
@@ -865,9 +877,12 @@ struct OutletOverviewView: View {
                 Spacer(minLength: 0)
                 if store.canManageTargets {
                     let has = store.target?.salesTarget != nil || store.target?.paxTarget != nil
-                    Button(has ? T("Change target") : T("Set target")) { startEditing() }
-                        .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
-                        .frame(minHeight: 40)
+                    // A bordered button with a pencil, as the web's (UI tour run 16, R16-B-12).
+                    Button { startEditing() } label: {
+                        Label(has ? T("Change target") : T("Set target"), systemImage: "pencil")
+                    }
+                    .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+                    .frame(minHeight: 44)
                 }
             }
         }

@@ -206,14 +206,28 @@ struct OutletDayTargetCard: View {
                         .font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)
                     Spacer(minLength: 4)
                     if store.canManageTargets && !editing {
-                        Button(store.ownTarget(day) != nil ? T("Change day target") : T("Set day target")) { start() }
-                            .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
-                            .frame(minHeight: 40)
+                        // A bordered button, as the web's (UI tour run 16, R16-B-13: a purple text link).
+                        Button { start() } label: {
+                            Label(store.ownTarget(day) != nil ? T("Change day target") : T("Set day target"), systemImage: "pencil")
+                        }
+                        .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+                        .frame(minHeight: 44)
                     }
                 }
                 if editing { editor } else {
-                    metric(T("Sales"), info.sales, info.salesTarget, info.salesPct, info.salesTargetSource, money: true)
-                    metric(T("Pax"), info.pax, info.paxTarget, info.paxPct, info.paxTargetSource, money: false)
+                    // Sales and Pax side by side where they fit, as the web's (R16-B-13), else one over the other.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 20) {
+                            metric(T("Sales"), info.sales, info.salesTarget, info.salesPct, info.salesTargetSource, money: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            metric(T("Pax"), info.pax, info.paxTarget, info.paxPct, info.paxTargetSource, money: false)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        VStack(alignment: .leading, spacing: 12) {
+                            metric(T("Sales"), info.sales, info.salesTarget, info.salesPct, info.salesTargetSource, money: true)
+                            metric(T("Pax"), info.pax, info.paxTarget, info.paxPct, info.paxTargetSource, money: false)
+                        }
+                    }
                 }
             }
             .padding(14)
