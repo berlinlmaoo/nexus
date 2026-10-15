@@ -1229,8 +1229,8 @@ struct CreateProjectSheet: View {
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
         }
         // Page wide on an iPad / Mac, so the gallery has room for three cards across like the web (UI tour run
-        // 13 M-8, run 14 P-M18), but only as tall as its content: full height left ~1250 pt empty under the
-        // cards (UI tour run 15, Q-IA34).
+        // 13 M-8, run 14 P-M18), but not full height: that left ~1250 pt empty under the cards (UI tour run 15,
+        // Q-IA34). Capped, not fitted (run 16, R16-B-02).
         .modifier(PageWideFittedSheet())
     }
 
@@ -1533,13 +1533,26 @@ struct ProjectsPageListRow: View {
 }
 
 
-/// A sheet as wide as `.page` and as tall as its content (iOS 18); a large detent before.
+/// A sheet as wide as `.page`, at most `maxHeight` tall (iOS 18); a large detent before. Run 15 made it
+/// `.page.fitted(vertical:)`, but a scroll view has no height of its own to fit, so the sheet collapsed to a
+/// ~200 pt strip with no template card (UI tour run 16, R16-B-02). A fixed cap keeps the web's compact modal:
+/// title, search, chips and a full row of three cards, the rest scrolls; a short window gets `.page`.
 struct PageWideFittedSheet: ViewModifier {
+    var maxHeight: CGFloat = 760
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
-            content.presentationSizing(.page.fitted(horizontal: false, vertical: true))
+            content.presentationSizing(PageWideCappedSizing(maxHeight: maxHeight))
         } else {
             content.presentationDetents([.large])
         }
+    }
+}
+
+@available(iOS 18.0, *)
+struct PageWideCappedSizing: PresentationSizing {
+    let maxHeight: CGFloat
+    func proposedSize(for root: PresentationSizingRoot, context: PresentationSizingContext) -> ProposedViewSize {
+        let page = PagePresentationSizing.page.proposedSize(for: root, context: context)
+        return ProposedViewSize(width: page.width, height: min(page.height ?? maxHeight, maxHeight))
     }
 }
