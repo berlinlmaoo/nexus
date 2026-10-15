@@ -1442,19 +1442,29 @@ enum XpRules {
     static let tiers: [Tier] = []
 }
 
-/// Home has no navigation bar, so cards scrolled under the status bar with nothing between them and the
-/// clock (UI tour run 13, F-25). An empty bar at the top edge gives the scroll view the system's scroll-edge
-/// effect there, as under every other screen's bar; the layout itself is untouched. iOS 26+.
+/// Home and Calendar have no navigation bar, so their scrolled content ran under the status bar with
+/// nothing between it and the clock (UI tour run 13, F-25; run 14, N-30; run 15, R15-I-08 / Q-IA10).
+/// A top safe-area inset whose background is the page's own colour: the scroll view scrolls under the inset,
+/// and the background (a ShapeStyle background extends into the safe area) covers the status bar opaquely.
+/// The run 15 version framed the colour to 0 pt BEFORE `ignoresSafeArea`, so the fixed frame never grew
+/// into the status bar and nothing was drawn (R16-I-02 / R16-I-11). On the Mac the window's hidden title bar
+/// leaves no top safe area, so a short band keeps scrolled cards off the traffic-light row (R16-M-05).
 struct StatusBarScrollEdge: ViewModifier {
-    /// The page's own background over the status bar, fully opaque: under the system's hard scroll edge a
-    /// blurred ghost of the scrolled tiles still showed behind the clock (UI tour run 14, N-30; run 15,
-    /// R15-I-08 / Q-IA10). A zero-height strip at the top that extends into the top safe area.
     func body(content: Content) -> some View {
-        content.overlay(alignment: .top) {
-            NX.background
-                .frame(height: 0)
-                .ignoresSafeArea(edges: .top)
+        content.safeAreaInset(edge: .top, spacing: 0) {
+            Color.clear
+                .frame(height: Self.band)
+                .background(NX.background)
                 .allowsHitTesting(false)
+                .accessibilityHidden(true)
         }
+    }
+
+    private static var band: CGFloat {
+        #if targetEnvironment(macCatalyst)
+        return 12
+        #else
+        return 0
+        #endif
     }
 }
