@@ -332,6 +332,10 @@ private struct LegalDocumentOverview: View {
     @State private var notes = ""
     @State private var pdf: URL?
     @State private var pdfFailed = false
+    /// The preview's page counter and full-screen view (the web's "Open full screen"; UI tour run 15, Q-IB28).
+    @State private var pdfPage = 1
+    @State private var pdfPages = 0
+    @State private var fullScreen = false
     @State private var saving = false
     @State private var restoring: Int?
 
@@ -357,9 +361,26 @@ private struct LegalDocumentOverview: View {
     }
 
     private func preview(_ v: LegalDocVersion) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            previewBox(v)
+            if let pdf {
+                Button { fullScreen = true } label: {
+                    Label(T("Open full screen"), systemImage: "arrow.up.left.and.arrow.down.right")
+                        .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
+                        .frame(minHeight: 36).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .fullScreenCover(isPresented: $fullScreen) { LegalPDFFullScreen(file: pdf, title: doc.title) }
+            }
+        }
+    }
+
+    private func previewBox(_ v: LegalDocVersion) -> some View {
         ZStack {
             if let pdf {
-                LegalPDFView(file: pdf)
+                LegalPDFView(file: pdf, page: $pdfPage, pageCount: $pdfPages)
+                    .overlay(alignment: .bottom) { LegalPageCounter(page: pdfPage, count: pdfPages).padding(.bottom, 10) }
             } else if pdfFailed {
                 Text(T("Couldn't open this file.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {

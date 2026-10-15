@@ -29,8 +29,10 @@ struct NXUnderlineTabs<ID: Hashable>: View {
                     ForEach(items) { item in
                         NXUnderlineTab(item: item, on: item.id == selection) { selection = item.id }
                             .id(Self.key(item.id))
+                            .nxTabFrame(Self.key(item.id))
                     }
                 }
+                .coordinateSpace(.named(NXTabFramesKey.space))
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
                 .scrollTargetLayout()
             }
@@ -168,7 +170,7 @@ struct NXTabRowScroller: ViewModifier {
     var overflowing: Binding<Bool>? = nil
     /// The tabs' own width, measured on the row's HStack.
     let contentWidth: CGFloat
-    var fade: CGFloat = 28
+    var fade: CGFloat = 16
 
     @State private var viewportWidth: CGFloat = 0
     /// Scrolled away from either end (iOS 18 knows the offset; iOS 17 fades the trailing edge while the
@@ -179,19 +181,19 @@ struct NXTabRowScroller: ViewModifier {
     /// edges come from the widths: at rest the row starts at its leading edge (UI tour run 14, N-09 / N-07:
     /// the row opened with no fade at all, "Tin" and "]" cut hard, because nothing had changed yet).
     @State private var observed = false
+    /// Where the row is scrolled to, and every tab's frame in the row's content (`nxTabFrame`): only whole
+    /// tabs are drawn. A tab the edge cuts is masked out entirely, so neither edge shows a fragment such as
+    /// "oard" or a stray faded glyph beside "…" (UI tour run 15, Q-IA20 / Q-IA22). iOS 18; iOS 17 fades.
+    @State private var offsetX: CGFloat = 0
+    @State private var frames: [String: CGRect] = [:]
 
     func body(content: Content) -> some View {
         tracked(content)
-            .mask {
-                HStack(spacing: 0) {
-                    LinearGradient(colors: [.black.opacity(moreBefore ? 0 : 1), .black], startPoint: .leading, endPoint: .trailing)
-                        .frame(width: fade)
-                    Rectangle()
-                    LinearGradient(colors: [.black, .black.opacity(moreAfter ? 0 : 1)], startPoint: .leading, endPoint: .trailing)
-                        .frame(width: fade)
-                }
-                .allowsHitTesting(false)
-            }
+            // Room after the last tab, so the row's farthest scroll position is also a tab's start: a scroll
+            // to the active tab that clamped at the end used to leave part of a tab at the leading edge.
+            .contentMargins(.trailing, trailingRoom, for: .scrollContent)
+            .mask { mask.allowsHitTesting(false) }
+            .onPreferenceChange(NXTabFramesKey.self) { frames = $0 }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
                 viewportWidth = width
                 update()
@@ -204,15 +206,57 @@ struct NXTabRowScroller: ViewModifier {
             .onChange(of: itemIds) { _, _ in reveal(animated: false) }
     }
 
+    /// Whole tabs only where the frames are known; else the soft fades of before.
+    @ViewBuilder private var mask: some View {
+        if wholeTabsOnly, let window = visibleWindow {
+            HStack(spacing: 0) {
+                Color.clear.frame(width: window.lowerBound)
+                Rectangle().frame(width: max(0, window.upperBound - window.lowerBound))
+                Color.clear
+            }
+        } else {
+            HStack(spacing: 0) {
+                LinearGradient(colors: [.black.opacity(moreBefore ? 0 : 1), .black], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: 28)
+                Rectangle()
+                LinearGradient(colors: [.black, .black.opacity(moreAfter ? 0 : 1)], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: 28)
+            }
+        }
+    }
+
+    private var wholeTabsOnly: Bool {
+        guard #available(iOS 18.0, *) else { return false }
+        return observed && overflows && !frames.isEmpty
+    }
+
+    /// The part of the viewport (in its own coordinates) that holds only whole tabs.
+    private var visibleWindow: ClosedRange<CGFloat>? {
+        let lo = offsetX, hi = offsetX + viewportWidth
+        let whole = frames.values.filter { $0.minX >= lo - 0.5 && $0.maxX <= hi + 0.5 }
+        guard let first = whole.map(\.minX).min(), let last = whole.map(\.maxX).max(), last > first else { return nil }
+        return (first - lo)...(last - lo)
+    }
+
+    private var trailingRoom: CGFloat {
+        let maxOffset = contentWidth - viewportWidth
+        guard maxOffset > 0, !frames.isEmpty else { return 0 }
+        let starts = frames.values.map(\.minX).sorted()
+        guard let next = starts.first(where: { $0 >= maxOffset - 0.5 }) else { return 0 }
+        return max(0, next - maxOffset)
+    }
+
     @ViewBuilder private func tracked(_ content: Content) -> some View {
         if #available(iOS 18.0, *) {
-            content.onScrollGeometryChange(for: [Bool].self) { g in
-                [g.contentOffset.x > -g.contentInsets.leading + 1,
-                 g.contentOffset.x < g.contentSize.width + g.contentInsets.trailing - g.containerSize.width - 1]
-            } action: { _, edges in
+            content.onScrollGeometryChange(for: [CGFloat].self) { g in
+                [g.contentOffset.x + g.contentInsets.leading,
+                 g.contentOffset.x > -g.contentInsets.leading + 1 ? 1 : 0,
+                 g.contentOffset.x < g.contentSize.width + g.contentInsets.trailing - g.containerSize.width - 1 ? 1 : 0]
+            } action: { _, v in
                 observed = true
-                moreBefore = edges[0]
-                moreAfter = edges[1]
+                offsetX = v[0]
+                moreBefore = v[1] > 0
+                moreAfter = v[2] > 0
             }
         } else {
             content
@@ -235,5 +279,27 @@ struct NXTabRowScroller: ViewModifier {
         let target = itemIds[max(0, i - 1)]
         if animated { withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(target, anchor: .leading) } }
         else { proxy.scrollTo(target, anchor: .leading) }
+    }
+}
+
+
+/// Each tab's frame in its row's content (coordinate space `NXTabFramesKey.space`), for NXTabRowScroller.
+struct NXTabFramesKey: PreferenceKey {
+    static let space = "nxTabRow"
+    static let defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
+    }
+}
+
+extension View {
+    /// Reports this tab's frame to the row's NXTabRowScroller (put the row's HStack in
+    /// `.coordinateSpace(.named(NXTabFramesKey.space))`).
+    func nxTabFrame(_ id: String) -> some View {
+        background {
+            GeometryReader { g in
+                Color.clear.preference(key: NXTabFramesKey.self, value: [id: g.frame(in: .named(NXTabFramesKey.space))])
+            }
+        }
     }
 }

@@ -3487,3 +3487,26 @@ extension APIClient {
         _ = try await run(req, decode: NotificationPrefsLite.self)
     }
 }
+
+// MARK: - Attendance parity with the web page (UI tour run 15, Q-IB8)
+
+extension APIClient {
+    /// The crew's employment start dates (web EmploymentStartSection): GET /api/attendance/employment-start.
+    func employmentStartDates() async throws -> EmploymentStartList {
+        try await run(makeRequest("/api/attendance/employment-start"), decode: EmploymentStartList.self)
+    }
+
+    /// Sets (or clears, nil) one person's employment start date ("2025-03-01").
+    func setEmploymentStartDate(userId: String, date: String?) async throws {
+        var req = makeRequest("/api/attendance/employment-start", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["userId": userId, "date": date as Any])
+        _ = try await run(req, decode: EmploymentStartSaved.self)
+    }
+
+    /// Day off, public holidays and XP per person for an attendance period (web board pills):
+    /// GET /api/attendance/deductions?month=.
+    func attendanceDeductionsSummary(month: String) async throws -> AttendanceDeductionsSummary {
+        try await run(makeRequest("/api/attendance/deductions?month=\(month)"), decode: AttendanceDeductionsSummary.self)
+    }
+}

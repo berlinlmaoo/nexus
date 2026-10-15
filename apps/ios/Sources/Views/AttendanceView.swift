@@ -205,7 +205,11 @@ struct AttendanceView: View {
                                         canReview: today?.canReviewAttendanceRequests ?? false,
                                         ready: today != nil || !loading)
                             .id(Self.crewBoardAnchor)
-                        if today?.canManageAttendance == true { OfficesCard() }
+                        if today?.canManageAttendance == true {
+                            // The web page's Employment start date section (iPad / Mac; UI tour run 15, Q-IB8).
+                            if hSize == .regular { EmploymentStartCard() }
+                            OfficesCard()
+                        }
                     }
                     .padding(.horizontal, NXSidebarPage.gutter(isRoot))
                     .padding(.vertical, isRoot ? 24 : 16)
@@ -518,6 +522,11 @@ struct AttendanceView: View {
         }
         if let name = dispRec?.officeLocation?.name { return name }
         if let n = nearby { return n.office.name }
+        // iPad / Mac before check-in: the web's "4 active offices" (UI tour run 15, Q-IB8); the location state
+        // is already the chip's on the map.
+        if hSize == .regular, dispRec?.checkInAt == nil, let n = today?.activeOfficeCount, n > 0 {
+            return T("{n} active offices").replacingOccurrences(of: "{n}", with: AppNumber.int(n))
+        }
         // A Mac never takes a GPS fix (locateWithinOffice is phone-only), so "Finding you…" spun forever
         // there (UI tour run 11, MC-12). Say where the location is read instead.
         #if targetEnvironment(macCatalyst)
@@ -531,7 +540,13 @@ struct AttendanceView: View {
         }
         #endif
     }
+    /// iPad / Mac before check-in with no office in reach: the web's OFFICES tile, "4 active offices".
+    private var showsOfficeCount: Bool {
+        hSize == .regular && dispRec?.checkInAt == nil && nearby == nil && (today?.activeOfficeCount ?? 0) > 0
+    }
+
     private var officeLabel: String {
+        if showsOfficeCount { return T("Offices") }
         if recordAway == true { return T("Where you checked in") }
         if recordAway == false { return dispRec?.officeLocation?.name != nil ? T("Office") : T("Where you are") }
         if locationFree { return dispRec?.checkInAt != nil ? T("Where you checked in") : T("Any location") }
@@ -552,6 +567,7 @@ struct AttendanceView: View {
         }
         // Location-free and not in yet: no office to measure against, so not "Checking where you are…".
         if locationFree { return T("Not checked in yet") }
+        if showsOfficeCount { return T("Not checked in yet") }
         if let n = nearby {
             return n.inside
                 ? T("You're inside this office area")
@@ -1634,6 +1650,13 @@ struct StreakBoardCard: View {
     @State private var members: [Member] = []
     /// The board's name filter (the web board's Search; UI tour run 15, Q-IB8).
     @State private var query = ""
+    /// iPad / Mac, as the web board (UI tour run 15, Q-IB8): Board or Log, the viewer's own record, and each
+    /// person's day-off and XP pills from /api/attendance/deductions (managers only, as on the web).
+    @State private var showLog = false
+    @State private var showMyRecord = false
+    @State private var deductions: [String: AttendanceDeductionsSummary.Member] = [:]
+    @Environment(AppRouter.self) private var router
+    private var webTools: Bool { hSize == .regular && wide }
     private var shownMembers: [Member] {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return members }
@@ -1660,7 +1683,7 @@ struct StreakBoardCard: View {
         let n = CGFloat(periodDays.count)
         // iPad / Mac: a day may narrow to 20 pt so the whole period fits, as on the web; at 24 pt a 13" iPad
         // missed by a few points and opened mid-period with a cut column at each edge (UI tour run 15, Q-IB21).
-        let least: CGFloat = hSize == .regular ? 20 : cell
+        let least: CGFloat = hSize == .regular ? 18 : cell
         return min(40, max(least, ((stripWidth - gap * (n - 1)) / n).rounded(.down)))
     }
     private let gap: CGFloat = 3
@@ -1864,7 +1887,23 @@ struct StreakBoardCard: View {
                 }
             }
             legend
-            if wide && members.count > 8 { searchField }
+            if webTools {
+                // The web board's toolbar: Board / Log, Search, My record.
+                HStack(spacing: 10) {
+                    Picker(T("Attendance view"), selection: $showLog) {
+                        Text(T("Board")).tag(false)
+                        Text(T("Log")).tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                    if members.count > 8 { searchField.frame(maxWidth: 320) }
+                    Spacer(minLength: 0)
+                    Button { showMyRecord = true } label: {
+                        Text(T("My record")).font(NXFont.text(13, .semibold))
+                    }
+                    .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+                }
+            } else if wide && members.count > 8 { searchField }
             // The spinner only while there is nothing to show yet. A reload (the permissions landing
             // after the first paint, an attendance change, the minute's refresh) keeps the grid: tearing
             // it down rebuilt the scroll view at the 28th, after it had already been brought to today —
@@ -1877,6 +1916,8 @@ struct StreakBoardCard: View {
                                ? T("Nobody has checked in this month yet. The first check-in fills the first cell; use the arrows to look at earlier months.")
                                : T("Your check-ins fill this board day by day — green for present, purple for a day off, red for a missed day. Check in from the card above."),
                            compact: true)
+            } else if webTools && showLog {
+                logList
             } else {
                 grid
             }
@@ -1904,6 +1945,19 @@ struct StreakBoardCard: View {
         }
         .sheet(item: $selectedRow) { row in
             RecordActionsSheet(row: row, canDelete: canManage, canChangeStatus: canManage) { await load() }
+        }
+        .fullScreenCover(isPresented: $showMyRecord) {
+            NavigationStack {
+                MemberProfileView(target: ProfileTarget(userId: auth.session?.userId ?? "", name: auth.session?.userName, avatar: nil))
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { showMyRecord = false } } }
+            }
+            .environment(auth).environment(router)
+        }
+        .task(id: "\(monthKey)|\(canManage)|\(webTools)") {
+            guard canManage, webTools else { return }
+            if let r = try? await APIClient.shared.attendanceDeductionsSummary(month: monthKey) {
+                deductions = Dictionary(r.members.map { ($0.userId, $0) }, uniquingKeysWith: { a, _ in a })
+            }
         }
     }
 
@@ -1975,6 +2029,77 @@ struct StreakBoardCard: View {
                     Text(t == .dayoff ? T("Days off") : t.label).font(NXFont.text(9, .medium)).foregroundStyle(NX.mutedFg)
                 }
             }
+            // The web's two marks on a cell (iPad / Mac, where the legend has the room).
+            if webTools {
+                Label(T("Web check-in"), systemImage: "globe").font(NXFont.text(9, .medium)).foregroundStyle(NX.mutedFg)
+                Label(T("Location off"), systemImage: "location.slash").font(NXFont.text(9, .medium)).foregroundStyle(NX.mutedFg)
+            }
+        }
+    }
+
+    /// The month as a list, newest first (the web board's Log): who, the day, the status, in and out.
+    private struct LogEntry {
+        let member: Member
+        let day: String
+        let row: AttendanceRow
+    }
+
+    private var logEntries: [LogEntry] {
+        var out: [LogEntry] = []
+        for m in shownMembers {
+            for (day, row) in m.rowByDay where row.checkInAt != nil || row.attendanceDayType != nil || row.status != nil {
+                out.append(LogEntry(member: m, day: day, row: row))
+            }
+        }
+        out.sort { a, b in a.day != b.day ? a.day > b.day : a.member.name < b.member.name }
+        return out
+    }
+
+    private var logList: some View {
+        let entries = logEntries
+        return VStack(spacing: 0) {
+            if entries.isEmpty {
+                Text(T("No attendance this month yet")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).padding(.vertical, 12)
+            }
+            ForEach(Array(entries.prefix(300).enumerated()), id: \.offset) { i, e in
+                Button { selectedRow = e.row } label: {
+                    HStack(spacing: 10) {
+                        RoundedRectangle(cornerRadius: 3).fill((e.member.cells[e.day] ?? .none).color).frame(width: 10, height: 10)
+                        Text(e.member.name).font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+                            .frame(width: 200, alignment: .leading)
+                        Text(ProjDate.fmt("yyyy-MM-dd").date(from: e.day).map { AppDateLocale.weekdayDate($0, timeZone: nil) } ?? e.day)
+                            .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                        Spacer(minLength: 8)
+                        Text((e.member.cells[e.day] ?? .none).label).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                        Text("\(e.row.checkInAt.flatMap(Self.logTime) ?? "--:--") – \(e.row.checkOutAt.flatMap(Self.logTime) ?? "--:--")")
+                            .font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.foreground)
+                            .frame(width: 100, alignment: .trailing)
+                        Self.trackingMark(e.row)
+                    }
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if i < min(entries.count, 300) - 1 { Divider() }
+            }
+        }
+    }
+
+    private static func logTime(_ iso: String) -> String? {
+        ProjDate.parse(iso).map { ProjDate.fmt("HH:mm").string(from: $0) }
+    }
+
+    /// The web's mark for a record checked in from a browser (location not tracked) or with location off.
+    @ViewBuilder static func trackingMark(_ row: AttendanceRow?) -> some View {
+        switch row?.locationTrackingState {
+        case "web":
+            Image(systemName: "globe").font(.system(size: 9, weight: .bold)).foregroundStyle(Color(hex: "#0284c7"))
+                .accessibilityLabel(T("Web check-in · location not tracked"))
+        case "denied":
+            Image(systemName: "location.slash").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.mutedFg)
+                .accessibilityLabel(T("Location off"))
+        default:
+            EmptyView()
         }
     }
 
@@ -2042,7 +2167,34 @@ struct StreakBoardCard: View {
                     .frame(width: scoreW, height: headerH, alignment: .bottomTrailing)
                 scoreColumn
             }
+            // The web board's per-person pills, "0/4 days off" and "−590 XP" (managers, iPad / Mac; Q-IB8).
+            if webTools && !deductions.isEmpty {
+                VStack(alignment: .leading, spacing: gap) {
+                    Color.clear.frame(width: 150, height: headerH)
+                    ForEach(shownMembers) { m in
+                        HStack(spacing: 4) {
+                            if let d = deductions[m.id] {
+                                Self.pill(T("{left}/{quota} days off").replacingOccurrences(of: "{left}", with: AppNumber.int(d.remaining))
+                                            .replacingOccurrences(of: "{quota}", with: AppNumber.int(d.quota)),
+                                          tone: d.remaining == 0 ? NX.danger : d.remaining <= 1 ? NX.warning : NX.mutedFg)
+                                if let xp = d.xp {
+                                    Self.pill("\(xp.score < 0 ? "−" : "")\(AppNumber.int(abs(xp.score))) XP",
+                                              tone: xp.score < 0 ? NX.danger : xp.score > 1000 ? NX.success : NX.mutedFg)
+                                }
+                            }
+                        }
+                        .frame(width: 150, height: cell, alignment: .leading)
+                    }
+                }
+            }
         }
+    }
+
+    private static func pill(_ text: String, tone: Color) -> some View {
+        Text(text).font(NXFont.text(9, .bold)).monospacedDigit().foregroundStyle(tone)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(tone.opacity(0.12), in: Capsule())
+            .lineLimit(1).fixedSize()
     }
 
     private var dateRow: some View {
@@ -2140,6 +2292,8 @@ struct StreakBoardCard: View {
                             }
                             .modifier(OutsideNowMark(since: Self.outsideSince(m.rowByDay[pd.key], dayKey: pd.key, todayKey: liveKey),
                                                      name: m.name, cell: cell))
+                            // Web check-in / location off, as the web board's corner marks (Q-IB8).
+                            .overlay(alignment: .topTrailing) { Self.trackingMark(m.rowByDay[pd.key]).offset(x: 3, y: -3) }
                         // Every cell with a record opens it — a manager reviewing their people
                         // and staff on their own board need the day's detail and its
                         // location trail too. The BoD also opens id-less and empty days to
