@@ -12,14 +12,15 @@ import { useEffect, useState } from "react";
 export type PriorityLevel = "urgent" | "high" | "medium" | "low";
 
 /**
- * URGENT and HIGH red, MEDIUM blue, LOW / none quiet (owner, 10 Oct 2026: HIGH back to red, as the
- * board always had it; it was amber here after the Oct audit). Chip text comes from the Tailwind ramps, not text-destructive /
+ * URGENT red, HIGH orange (#f97316 family, so it is not a second red), MEDIUM blue, LOW / none quiet. HIGH is
+ * orange on every surface, chips included, as its bars and dots already were (UI tour run 17, R17-WB-3,
+ * decision 4; it was red here since 10 Oct 2026). Chip text comes from the Tailwind ramps, not text-destructive /
  * text-warning: those token colours are only 2.2–3.8:1 as small text on white, and chip text stays
  * at 4.5:1 or more in both themes.
  */
 const PRIORITY_CHIP: Record<PriorityLevel, string> = {
   urgent: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
-  high: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
+  high: "bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-300",
   medium: "bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300",
   low: "bg-muted text-muted-foreground",
 };

@@ -635,6 +635,12 @@ html:has([data-snap-rows]:not([role="dialog"] *), [data-snap-row]:not([role="dia
 [data-snap-top] {
   scroll-snap-align: start;
 }
+/* Rows inside a part marked data-snap-off are no snap points (the Overview's pinned column). An attribute, not a
+   utility class: this file's rules are unlayered and win over any Tailwind utility (UI tour run 17, R17-WB-1). */
+[data-snap-off] [data-snap-rows] > *,
+[data-snap-off] [data-snap-row] {
+  scroll-snap-align: none;
+}
 /* A scroll box of its own (a table, a side panel) snaps its rows under its own sticky head. */
 [data-snap-box] {
   scroll-snap-type: y proximity;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowUpRight, CalendarClock, CheckCircle2, FileText, ListChecks, Loader2, Pencil, Plus, Sparkles, Users } from "lucide-react";
 import { Avatar, AvatarFace, AvatarStack } from "@/components/Avatar";
@@ -70,17 +70,32 @@ const PRIORITY_ROWS = [
 
 const CARD = "rounded-2xl border border-border bg-card shadow-soft";
 
-function Section({ title, icon, action, children, className, id }: { title: string; icon?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; id: string }) {
+function Section({ title, icon, action, children, className, id, pinHead, headExtra, headRef }: {
+  title: string; icon?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; id: string;
+  /** The title (and `headExtra`, a column-label row) stay pinned under the page header while the card scrolls past,
+   *  so its numbers never lose their labels (UI tour run 17, R17-WB-1: "Who's working on what" started at a person
+   *  row with its title and Open / Overdue / Done this month labels scrolled away). */
+  pinHead?: boolean; headExtra?: ReactNode; headRef?: Ref<HTMLDivElement>;
+}) {
+  const head = (
+    <div className="flex min-h-12 items-center gap-2 border-b border-border px-4 py-2.5">
+      <h3 id={id} className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold">
+        {icon && <span className="text-muted-foreground" aria-hidden>{icon}</span>}
+        <span className="truncate">{title}</span>
+      </h3>
+      {action}
+    </div>
+  );
   return (
     // A card stops whole under the pinned project header while the page scrolls (UI tour run 15, R15-WB-1).
-    <section aria-labelledby={id} data-snap-row className={cn(CARD, "min-w-0 overflow-hidden", className)}>
-      <div className="flex min-h-12 items-center gap-2 border-b border-border px-4 py-2.5">
-        <h3 id={id} className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold">
-          {icon && <span className="text-muted-foreground" aria-hidden>{icon}</span>}
-          <span className="truncate">{title}</span>
-        </h3>
-        {action}
-      </div>
+    // `overflow-clip` (not hidden) when the head is pinned: a sticky head cannot stick inside an overflow-hidden box.
+    <section aria-labelledby={id} data-snap-row className={cn(CARD, "min-w-0", pinHead ? "overflow-clip" : "overflow-hidden", className)}>
+      {pinHead ? (
+        <div ref={headRef} className="sticky top-[var(--page-sticky-top,0px)] z-[5] rounded-t-2xl bg-card md:top-[calc(var(--page-sticky-top,0px)+1rem)]">
+          {head}
+          {headExtra}
+        </div>
+      ) : head}
       {children}
     </section>
   );
@@ -123,10 +138,13 @@ function useColumnPin() {
   const classOf = (side: "left" | "right") => {
     if (state.side !== side) return "";
     return state.fits
-      ? "lg:sticky lg:top-[calc(var(--page-sticky-top,0px)+1rem)] lg:[&_[data-snap-row]]:[scroll-snap-align:none]"
+      ? "lg:sticky lg:top-[calc(var(--page-sticky-top,0px)+1rem)]"
       : "lg:before:pointer-events-none lg:before:sticky lg:before:top-[var(--page-sticky-top,0px)] lg:before:z-10 lg:before:-mt-8 lg:before:block lg:before:h-8 lg:before:bg-gradient-to-b lg:before:from-card lg:before:to-transparent lg:before:content-['']";
   };
-  return { leftRef, rightRef, classOf };
+  // The pinned column's cards stop being snap points through an attribute (styles.css): the snap rule is unlayered
+  // CSS, so a Tailwind utility could not switch it off (it never did since run 16).
+  const snapOffOf = (side: "left" | "right") => (state.side === side && state.fits ? "" : undefined);
+  return { leftRef, rightRef, classOf, snapOffOf };
 }
 
 export function ProjectOverview({
@@ -162,6 +180,8 @@ export function ProjectOverview({
     let next7 = 0;
     let noDue = 0;
     let unassigned = 0;
+    // The Unassigned row's own counts, like a person's (decision 3, UI tour run 17, R17-WB-4).
+    const nobody = { open: 0, overdue: 0, doneMonth: 0 };
     let done = 0;
     let doneLast7 = 0;
     const completed: NexusTask[] = [];
@@ -185,7 +205,10 @@ export function ProjectOverview({
         completed.push(task);
         const at = dateOf(task.completedAt)?.getTime();
         if (at !== undefined && at >= weekAgo) doneLast7++;
-        if (at !== undefined && at >= monthStart) for (const id of ids) person(id).doneMonth++;
+        if (at !== undefined && at >= monthStart) {
+          for (const id of ids) person(id).doneMonth++;
+          if (ids.length === 0) nobody.doneMonth++;
+        }
         continue;
       }
       if (CLOSED.has(s)) continue;
@@ -199,7 +222,11 @@ export function ProjectOverview({
         if (d <= 6) next7++;
         if (d <= 13) upcoming.push(task);
       }
-      if (ids.length === 0) unassigned++;
+      if (ids.length === 0) {
+        unassigned++;
+        nobody.open++;
+        if (d !== null && d < 0) nobody.overdue++;
+      }
       for (const id of ids) {
         const p = person(id);
         p.open++;
@@ -218,7 +245,7 @@ export function ProjectOverview({
         const closedN = own.filter((x) => CLOSED.has(statusOf(x))).length;
         return { id: list.id, name: list.name, total: own.length, open: own.length - closedN, done: own.filter((x) => isDoneStatus(statusOf(x))).length };
       });
-    return { byStatus, byPriority, open, overdue, upcoming, next7, noDue, unassigned, done, doneLast7, completed, people, sections };
+    return { byStatus, byPriority, open, overdue, upcoming, next7, noDue, unassigned, nobody, done, doneLast7, completed, people, sections };
   }, [tasks, project.members, project.taskLists]);
 
   const total = tasks.length;
@@ -285,7 +312,7 @@ export function ProjectOverview({
 
   return (
     <div className="mx-auto grid max-w-6xl gap-4 p-4 md:gap-6 md:p-8 lg:grid-cols-12">
-      <div ref={cols.leftRef} className={cn("min-w-0 space-y-4 md:space-y-6 lg:col-span-8 lg:self-start", cols.classOf("left"))}>
+      <div ref={cols.leftRef} data-snap-off={cols.snapOffOf("left")} className={cn("min-w-0 space-y-4 md:space-y-6 lg:col-span-8 lg:self-start", cols.classOf("left"))}>
         {/* Progress: the stacked status bar is the progress visual; the counters open the board filtered. */}
         <section aria-labelledby="ov-progress" className={cn(CARD, "overflow-hidden")}>
           <div className="p-4 md:p-5">
@@ -342,14 +369,14 @@ export function ProjectOverview({
 
         <DeadlinesCard overdue={m.overdue} upcoming={m.upcoming} noDue={m.noDue} openCount={m.open.length} dueLabel={dueLabel} onOpenTask={onOpenTask} onDrill={onDrill} />
 
-        <TeamCard people={m.people} memberById={memberById} unassigned={m.unassigned} onDrill={onDrill} />
+        <TeamCard people={m.people} memberById={memberById} nobody={m.nobody} onDrill={onDrill} />
 
         {/* In the wide column: on the right it made that column much longer than this one, which ended in a
             large empty hole (UI tour run 13, W-D13). */}
         <StatusUpdatesCard projectId={project.id} />
       </div>
 
-      <div ref={cols.rightRef} className={cn("min-w-0 space-y-4 md:space-y-6 lg:col-span-4 lg:self-start", cols.classOf("right"))}>
+      <div ref={cols.rightRef} data-snap-off={cols.snapOffOf("right")} className={cn("min-w-0 space-y-4 md:space-y-6 lg:col-span-4 lg:self-start", cols.classOf("right"))}>
         <BriefCard project={project} onEdit={onEditBrief} />
 
         <Section id="ov-priority" title={t("Open tasks by priority")} icon={<AlertTriangle className="h-4 w-4" />}>
@@ -460,12 +487,24 @@ function DeadlinesCard({ overdue, upcoming, noDue, openCount, dueLabel, onOpenTa
   );
 }
 
-function TeamCard({ people, memberById, unassigned, onDrill }: { people: Map<string, { open: number; overdue: number; doneMonth: number }>; memberById: Map<string, { name?: string | null; avatar?: string | null; role?: string }>; unassigned: number; onDrill: (d: OverviewDrill) => void }) {
+function TeamCard({ people, memberById, nobody, onDrill }: { people: Map<string, { open: number; overdue: number; doneMonth: number }>; memberById: Map<string, { name?: string | null; avatar?: string | null; role?: string }>; nobody: { open: number; overdue: number; doneMonth: number }; onDrill: (d: OverviewDrill) => void }) {
   const { t, tn, locale } = useLang();
   const [all, setAll] = useState(false);
   const rows = [...people.entries()]
     .map(([id, v]) => ({ id, ...v, name: memberById.get(id)?.name ?? "—", avatar: memberById.get(id)?.avatar, role: memberById.get(id)?.role }))
     .sort((a, b) => b.open - a.open || b.overdue - a.overdue || b.doneMonth - a.doneMonth || a.name.localeCompare(b.name));
+  const unassigned = nobody.open;
+  const headRef = useRef<HTMLDivElement>(null);
+  const [headH, setHeadH] = useState(0);
+  useEffect(() => {
+    const el = headRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const read = () => setHeadH(Math.round(el.offsetHeight));
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [rows.length > 0]);
   const max = Math.max(1, ...rows.map((r) => r.open), unassigned);
   const LIMIT = 8;
   const shown = all ? rows : rows.slice(0, LIMIT);
@@ -474,20 +513,23 @@ function TeamCard({ people, memberById, unassigned, onDrill }: { people: Map<str
   // "Done (Oct)"). Its column is wide enough on a phone for the label on one line (UI tour run 14, WM-26).
   const num = (n: number, bad?: boolean) => <span className={cn("text-right text-sm tabular-nums", n === 0 ? "text-muted-foreground/60" : bad ? cn("font-semibold", STATUS.overdueText) : "font-semibold")}>{n}</span>;
   return (
-    <Section id="ov-team" title={t("Who's working on what")} icon={<Users className="h-4 w-4" />}>
+    <Section id="ov-team" title={t("Who's working on what")} icon={<Users className="h-4 w-4" />} pinHead={rows.length > 0} headRef={headRef}
+      headExtra={rows.length > 0 ? (
+        <div className={cn(grid, "px-4 pb-1 pt-3 text-[11px] font-medium text-muted-foreground")}>
+          <span>{t("Person")}</span>
+          <span className="text-right">{t("Open")}</span>
+          <span className="text-right">{t("Overdue")}</span>
+          <span className="whitespace-nowrap text-right">{t("Done this month")}</span>
+        </div>
+      ) : undefined}>
       {rows.length === 0 ? (
         <p className="px-4 py-6 text-sm text-muted-foreground">{t("No members or assignees yet. Add people to the project, then assign tasks to see the workload here.")}</p>
       ) : (
         <div className="pb-2">
-          <div className={cn(grid, "px-4 pb-1 pt-3 text-[11px] font-medium text-muted-foreground")}>
-            <span>{t("Person")}</span>
-            <span className="text-right">{t("Open")}</span>
-            <span className="text-right">{t("Overdue")}</span>
-            <span className="whitespace-nowrap text-right">{t("Done this month")}</span>
-          </div>
           <ul>
+            {/* Each row stops whole right under the card's pinned head (its height as scroll margin). */}
             {shown.map((r) => (
-              <li key={r.id}>
+              <li key={r.id} data-snap-row style={{ scrollMarginTop: headH }}>
                 <button type="button" disabled={!r.open} onClick={() => onDrill({ assigneeId: r.id })} title={r.open ? tn(r.open, "Show 1 open task", "Show {n} open tasks") : undefined} className={cn(grid, "w-full px-4 py-2 text-left transition-colors hover:bg-muted/50 disabled:cursor-default disabled:hover:bg-transparent")}>
                   <span className="flex min-w-0 items-center gap-2.5">
                     <Avatar userId={r.id} name={r.name} avatar={r.avatar} size={28} />
@@ -507,9 +549,9 @@ function TeamCard({ people, memberById, unassigned, onDrill }: { people: Map<str
                 </button>
               </li>
             ))}
-            {unassigned > 0 && (
-              <li>
-                <button type="button" onClick={() => onDrill({ assigneeId: "NONE" })} className={cn(grid, "w-full px-4 py-2 text-left transition-colors hover:bg-muted/50")}>
+            {(unassigned > 0 || nobody.doneMonth > 0) && (
+              <li data-snap-row style={{ scrollMarginTop: headH }}>
+                <button type="button" disabled={!unassigned} onClick={() => onDrill({ assigneeId: "NONE" })} className={cn(grid, "w-full px-4 py-2 text-left transition-colors hover:bg-muted/50 disabled:cursor-default disabled:hover:bg-transparent")}>
                   <span className="flex min-w-0 items-center gap-2.5">
                     <span aria-hidden className="h-7 w-7 shrink-0 rounded-full border-2 border-dashed border-control-border" />
                     <span className="min-w-0 flex-1">
@@ -517,11 +559,11 @@ function TeamCard({ people, memberById, unassigned, onDrill }: { people: Map<str
                       <span className="mt-1 block h-1 max-w-40 overflow-hidden rounded-full bg-muted"><span className="block h-full rounded-full bg-muted-foreground/40" style={{ width: `${(unassigned / max) * 100}%` }} /></span>
                     </span>
                   </span>
+                  {/* Its real counts, zero as "0" like every person row (decision 3, UI tour run 17, R17-WB-4: it
+                      read "12 — —" under rows of "0 0 0"). */}
                   {num(unassigned)}
-                  {/* Overdue and done are counted per person; for nobody they read as a quiet dash, so the row
-                      fills its three columns like the others (UI tour run 11, WM-7). */}
-                  <span className="text-right text-sm text-muted-foreground/60" aria-hidden>—</span>
-                  <span className="text-right text-sm text-muted-foreground/60" aria-hidden>—</span>
+                  {num(nobody.overdue, true)}
+                  {num(nobody.doneMonth)}
                 </button>
               </li>
             )}
