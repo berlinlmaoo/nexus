@@ -123,7 +123,7 @@ struct SidebarAccountFooter: View {
             .hoverEffect(.highlight)
             .accessibilityLabel(T("Language"))
             // The same rule as everywhere else in the app: no sign-out during a running workday.
-            SidebarIconButton(systemImage: "rectangle.portrait.and.arrow.right", label: T("Log out"), tint: NX.mutedFg) {
+            SidebarIconButton(systemImage: "rectangle.portrait.and.arrow.right", label: T("Sign out"), tint: NX.mutedFg) {
                 if !auth.signOutIfAllowed() { signOutBlocked = true }
             }
         }

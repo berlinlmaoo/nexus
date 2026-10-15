@@ -456,15 +456,21 @@ struct FormBuilderView: View {
         // Named on every iPad / Mac bar, as the web's "Preview" (UI tour run 16, R16-M-10: an icon-only eye).
         // Not a Label: a bar draws a Label as its icon alone, whatever its style, which is why the Mac still
         // showed a bare eye after run 16 (run 17, R17-M-04). An icon and a word are a view of their own.
+        // A Button that is itself the bar item is bridged to a bar button and drawn as its image alone on the Mac,
+        // whatever its label (run 18, R18-M-02: the bare eye again). Inside a stack the item is a view of its own,
+        // drawn as laid out here, like "Saved" beside it.
         if regular {
-            Button { Task { await openPreview() } } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "eye").font(.system(size: 13, weight: .medium))
-                    Text(T("Preview")).font(NXFont.text(13, .medium))
+            HStack(spacing: 0) {
+                Button { Task { await openPreview() } } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "eye").font(.system(size: 13, weight: .medium))
+                        Text(T("Preview")).font(NXFont.text(13, .medium))
+                    }
                 }
+                .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+                .accessibilityLabel(T("Preview"))
             }
-            .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
-            .accessibilityLabel(T("Preview"))
+            .fixedSize()
         } else {
             Button { Task { await openPreview() } } label: { Label(T("Preview"), systemImage: "eye") }
         }
