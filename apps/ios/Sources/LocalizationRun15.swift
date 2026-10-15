@@ -5,7 +5,7 @@ import Foundation
 extension AppLanguage {
     static let indonesianRun15: [String: String] = [
         // Settings → Security → Active sessions: the web's verb and its groups per device (R15-I-02/03, Q-IB2/3)
-        "Sign out": "Keluar",
+        "Sign out": "Keluarkan",
         "Sign out all": "Keluarkan semua",
         "Sign out this device?": "Keluarkan perangkat ini?",
         "Sign out other sessions": "Keluarkan sesi lain",
