@@ -721,7 +721,7 @@ function Attendance() {
                                 {tr("{left}/{quota} days off", { left: d.remaining, quota: d.quota })}{d.bonus && d.bonus.days > 0 && <span className="ml-0.5 text-emerald-600 dark:text-emerald-400">+</span>}
                               </span>
                               <span title={d.redDate.quota === 0
-                                  ? tr("The BoD hasn't set this month's public-holiday allowance yet")
+                                  ? tr("The board hasn't set this month's public-holiday allowance yet")
                                   : tr("Public holidays left this calendar month: {left} of {quota} (used {used})", { left: d.redDate.remaining, quota: d.redDate.quota, used: d.redDate.used })}
                                 className={cn(pill, d.redDate.quota === 0 ? "bg-muted/50 text-muted-foreground/70 ring-border" : quotaTone(d.redDate.remaining))}>
                                 {tr("{left}/{quota} holidays", { left: d.redDate.remaining, quota: d.redDate.quota })}
@@ -1991,7 +1991,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
   const typeHint = granting
     ? tr("Granted to the person you pick below and approved straight away; it doesn't use up their quota.")
     : type === "LEAVE" ? (!leave ? tr("Uses one day of your annual leave.") : !leave.eligible ? (leave.reason ?? tr("Annual leave needs 12 months of service.")) : tr("Annual leave: {left} of {quota} days left this year.", { left: leave.remaining, quota: leave.quota }))
-    : type === "SICK" ? tr("A photo of the doctor's note is required. Today or later — a past day is filed by a BoD.")
+    : type === "SICK" ? tr("A photo of the doctor's note is required. Today or later — a past day is filed by a board member.")
     : type === "PERMIT" ? tr("Today or later, with a photo and your location.")
     : type === "DAY_OFF" ? tr("Day off: {left} of {quota} left this period.", { left: remainingDays ?? 0, quota: todayQ.data?.dayOffQuota ?? 0 })
     : tr("Public holiday: {left} of {quota} left this month.", { left: remainingDays ?? 0, quota: redQuota });
@@ -2125,7 +2125,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
               )}
               {geoError && <p className="text-xs font-semibold text-destructive">{geoError}</p>}
               {permitBackdated && (
-                <p className="text-xs font-semibold text-destructive">{tr("A permit can't be filed for a day that has passed. Ask the BoD to enter it if it's really needed.")}</p>
+                <p className="text-xs font-semibold text-destructive">{tr("A permit can't be filed for a day that has passed. Ask the board to enter it if it's really needed.")}</p>
               )}
               {lateReportPreview != null && !permitBackdated && (
                 <p className="text-xs font-semibold text-warning">
@@ -2259,7 +2259,7 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
     mutationFn: (payload: AttendanceActionPayload) => nexusApi.attendanceCheckOut(payload),
     onSuccess: (data) => {
       refresh(); setNotes(""); setOffsitePrompt(null); setOffsiteReason(""); setReflection("");
-      if (data?.pendingApproval) { press.set(null); setOkMessage(tr("Offsite check-out sent — waiting for BoD approval.")); }
+      if (data?.pendingApproval) { press.set(null); setOkMessage(tr("Offsite check-out sent — waiting for board approval.")); }
       else { setOkMessage(""); press.succeed(successTitle("out", atOf(data?.record?.checkOutAt), data?.record)); }
     },
     onError: (e) => {
@@ -2378,7 +2378,7 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
       {offsitePrompt && (
         <div className="mt-3 space-y-2 rounded-2xl border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/40 dark:bg-amber-500/10">
           <div className="text-sm font-bold text-amber-800 dark:text-amber-300">{tr("You’re outside the office area")}</div>
-          <p className="text-xs text-amber-700 dark:text-amber-300">{tr("±{m}m from {office}. Check out from here? A reason is required, and it waits for BoD approval first.", { m: Math.round(offsitePrompt.distanceMeters), office: offsitePrompt.officeName })}</p>
+          <p className="text-xs text-amber-700 dark:text-amber-300">{tr("±{m}m from {office}. Check out from here? A reason is required, and it waits for board approval first.", { m: Math.round(offsitePrompt.distanceMeters), office: offsitePrompt.officeName })}</p>
           <textarea value={offsiteReason} onChange={(e) => setOffsiteReason(e.target.value)} rows={2} placeholder={tr("Reason (e.g. content shoot or client meeting at X)")} className="w-full resize-none rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500 dark:border-amber-500/40 dark:bg-background" />
           <div className="flex gap-2">
             <button onClick={() => { setOffsitePrompt(null); setOffsiteReason(""); }} disabled={busy} className="flex-1 rounded-lg border border-border bg-white py-2 text-xs font-semibold dark:bg-background text-muted-foreground transition hover:bg-accent disabled:opacity-50">{tr("Cancel")}</button>
@@ -2387,7 +2387,7 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
         </div>
       )}
       {okMessage && !offsitePrompt && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">{okMessage}</p>}
-      {checkOutApproval === "PENDING" && !offsitePrompt && !okMessage && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">{tr("Offsite check-out — waiting for BoD approval")}</p>}
+      {checkOutApproval === "PENDING" && !offsitePrompt && !okMessage && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">{tr("Offsite check-out — waiting for board approval")}</p>}
       {!iosOnly && message && <p className="mt-3 text-sm font-semibold text-destructive">{message}</p>}
     </section>
   );

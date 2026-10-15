@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Lock, Loader2, Mail, MessageSquare, ScrollText, Undo2, UserRound, X } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { formatCount } from "@/lib/number-format";
 import { ZoomableAvatar } from "@/components/PhotoLightbox";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { celebrate } from "@/components/Celebration";
@@ -97,7 +98,7 @@ function MemberRecordPage() {
           <div className="grid place-items-center py-24 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
         ) : code === "FORBIDDEN" ? (
           <EmptyState icon={Lock} tone="muted" title={tr("Not in your view")}
-            message={tr("You can open your own record. A manager sees the people under them in the approval chart, and the BoD sees everyone.")}
+            message={tr("You can open your own record. A manager sees the people under them in the approval chart, and the board sees everyone.")}
             action={<EmptyAction to="/people/me">{tr("Open my record")}</EmptyAction>} />
         ) : record.isError || !data ? (
           <EmptyState icon={AlertTriangle} tone="muted" title={tr("Couldn’t load this record")} message={errorText(record.error, tr("Check your connection and try again."))}
@@ -205,7 +206,9 @@ function SummaryCard({ data }: { data: NexusMemberRecord }) {
   return (
     <Card title={data.period.isCurrent ? tr("This period") : tr("Attendance period")} hint={`${periodRangeText(data.period.from, data.period.to)} · ${score.days !== undefined && score.days < data.period.days && score.from
           // Joined during the period: the score counts from their first day (QA S-20).
-          ? tr("from {date}: {days} days, {working} working days ({days} − {quota} days off allowance)", { date: periodRangeText(score.from, score.from).split(" – ")[0], days: score.days, working: score.working, quota: score.allowance ?? 0 })
+          // The allowance here is the period's allowance prorated to the days since they joined; it names the full
+          // allowance too, so it never reads as a different number from the "Days off" figure (UI tour run 16).
+          ? tr("from {date}: {days} days, {working} working days ({days} − {quota} days off, the {full}-day allowance prorated)", { date: periodRangeText(score.from, score.from).split(" – ")[0], days: score.days, working: score.working, quota: score.allowance ?? 0, full: dayOff.quota })
           : tr("{days} days, {working} working days ({days} − {quota} days off allowance)", { days: data.period.days, working: score.working, quota: dayOff.quota })}`}>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,14rem)_1fr]">
         <div className="rounded-2xl bg-primary/5 p-4" title={tr("Days worked (present or permit) out of the period's working days — the board's Score column")}>
@@ -223,7 +226,7 @@ function SummaryCard({ data }: { data: NexusMemberRecord }) {
           <Stat label={tr("Absent")} value={counts.absent} tone={sCls.absent} />
           <Stat label={tr("Late")} value={counts.lateMinutes > 0 ? tr("{n} min", { n: counts.lateMinutes }) : "—"} hint={tr(counts.lateDays === 1 ? "{n} late day" : "{n} late days", { n: counts.lateDays })} />
           <Stat label={tr("Day-off balance")} value={tr("{n} left", { n: dayOff.remaining })} hint={tr("Used {used} of {quota}: {base} base{bonus}. Includes days cut automatically for TK or >120 min late.", { used: dayOff.usedRaw, quota: dayOff.quota, base: dayOff.baseQuota, bonus })} />
-          <Stat label={tr("XP this period")} value={<span><span className="text-emerald-600 dark:text-emerald-400">+{xp.gained}</span> <span className="text-muted-foreground">·</span> <span className="text-rose-600 dark:text-rose-400">{xp.lost > 0 ? `−${xp.lost}` : xp.lost < 0 ? `−${Math.abs(xp.lost)}` : "−0"}</span></span>} hint={xp.removed > 0 ? tr("{n} XP of deductions removed by the BoD", { n: xp.removed }) : undefined} />
+          <Stat label={tr("XP this period")} value={<span><span className="text-emerald-600 dark:text-emerald-400">{tr("+{n} XP gained", { n: formatCount(xp.gained) })}</span> <span className="text-muted-foreground">·</span> <span className="text-rose-600 dark:text-rose-400">{tr("{n} XP lost", { n: formatCount(Math.abs(xp.lost)) })}</span></span>} hint={xp.removed > 0 ? tr("{n} XP of deductions removed by the board", { n: xp.removed }) : undefined} />
         </div>
       </div>
       {dayOff.bonusDays > 0 && <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">{tr("Days off allowance {quota} = {base} + {n} extra for this period ({reasons}).", { quota: dayOff.quota, base: dayOff.baseQuota, n: dayOff.bonusDays, reasons: dayOff.bonusGrants.map((g) => `${g.days}: ${g.reason}`).join("; ") })}</p>}
@@ -344,13 +347,13 @@ function XpRow({ entry: e, data, compact = false }: { entry: NexusRecordXpEntry;
         </div>
         {e.removed && (
           <div className="truncate text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
-            {tr("Removed by {name}", { name: e.removed.by?.name ?? tr("a BoD") })} · {fmtDate(e.removed.at)}{e.removed.note ? ` — ${e.removed.note}` : ""}
+            {tr("Removed by {name}", { name: e.removed.by?.name ?? tr("a board member") })} · {fmtDate(e.removed.at)}{e.removed.note ? ` — ${e.removed.note}` : ""}
           </div>
         )}
       </div>
       <div className={cn("shrink-0 text-sm font-black tabular-nums", removed ? "text-muted-foreground line-through" : pos ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>{signed(e.originalAmount)} XP</div>
       {e.canRemove && (
-        <button onClick={ask} disabled={remove.isPending} title={tr("Remove this deduction (BoD)")} className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-bold text-muted-foreground transition hover:border-primary hover:text-primary disabled:opacity-50">
+        <button onClick={ask} disabled={remove.isPending} title={tr("Remove this deduction (board)")} className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-bold text-muted-foreground transition hover:border-primary hover:text-primary disabled:opacity-50">
           {remove.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />} {tr("Remove")}
         </button>
       )}

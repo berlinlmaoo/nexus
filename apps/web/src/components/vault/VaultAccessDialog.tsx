@@ -56,7 +56,7 @@ function AccessBody({ item, onClose, onSaved }: { item: VaultItem; onClose: () =
     <>
       <SelectItem value={INHERIT}>{inheritLabel}</SelectItem>
       <SelectItem value="MANAGER_PLUS">{t("Managers and above")}</SelectItem>
-      <SelectItem value="BOD_PLUS">{t("BoD and above")}</SelectItem>
+      <SelectItem value="BOD_PLUS">{t("Board and above")}</SelectItem>
     </>
   );
   const changed = read !== initialRead || (isFolder && write !== initialWrite);

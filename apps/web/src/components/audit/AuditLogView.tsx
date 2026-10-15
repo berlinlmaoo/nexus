@@ -234,7 +234,7 @@ export function AuditLogView() {
     <div lang={lang} className="space-y-4">
       {logs.isError && forbidden && (
         <EmptyState icon={ScrollText} title={t("Audit access required")} tone="muted"
-          message={t("The audit log is visible to BoD, managers and owners. Ask one of them if you need to know who changed something.")} />
+          message={t("The audit log is visible to the board, managers and owners. Ask one of them if you need to know who changed something.")} />
       )}
       {logs.isError && !forbidden && (
         <EmptyState icon={ScrollText} title={t("Couldn't load the audit log")} tone="muted"

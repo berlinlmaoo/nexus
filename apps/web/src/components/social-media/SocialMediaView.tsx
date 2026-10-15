@@ -71,7 +71,7 @@ export function SocialMediaView({
           icon={Megaphone}
           tone="muted"
           title={code === 403 ? t("This report is for its project members") : t("The report didn't load")}
-          message={code === 403 ? t("Ask the Project Owner or a BoD to add you to the project.") : t("Check your connection, then try again.")}
+          message={code === 403 ? t("Ask the Project Owner or a board member to add you to the project.") : t("Check your connection, then try again.")}
           action={code === 403 ? undefined : <EmptyAction onClick={() => q.refetch()}>{t("Try again")}</EmptyAction>}
         />
       </div>
@@ -172,7 +172,7 @@ function Overview({ data, onRecord, onSetup }: { data: SocialMonthResponse; onRe
               <button type="button" onClick={onSetup} className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-semibold text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-[36px]">
                 <Target aria-hidden className="h-3.5 w-3.5" /> {t("Set this month's targets")}
               </button>
-            ) : t("No targets for this month. The Project Owner or a BoD sets them.")}
+            ) : t("No targets for this month. The Project Owner or a board member sets them.")}
           </span>
         )}
       </div>
@@ -189,7 +189,7 @@ function Overview({ data, onRecord, onSetup }: { data: SocialMonthResponse; onRe
       </section>
 
       <section aria-labelledby="sm-posts" className="rounded-xl border border-border bg-card p-4 md:p-5">
-        <h3 id="sm-posts" className="text-sm font-semibold">{t("Contents posted")}</h3>
+        <h3 id="sm-posts" className="text-sm font-semibold">{t("Posts published")}</h3>
         <ul className="mt-3 flex flex-col gap-3">
           {o.platforms.map((p) => (
             <li key={p.platformId} className="grid grid-cols-[minmax(6rem,9rem)_1fr] items-center gap-x-4 gap-y-1 sm:grid-cols-[minmax(6rem,10rem)_1fr_auto]">

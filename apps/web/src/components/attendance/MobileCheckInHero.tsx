@@ -22,8 +22,11 @@ function jktTime(d: Date) {
 function atOf(iso?: string | null) {
   return iso ? fmtTime(iso) : jktTime(new Date()).slice(0, 5);
 }
+/** "Thursday 15 Oct": the app's day format, no comma and no year (it is always today; UI tour run 16, R16-WM-5). */
 function jktDate(d: Date, locale: string) {
-  return d.toLocaleDateString(locale, { timeZone: "Asia/Jakarta", weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const weekday = d.toLocaleDateString(locale, { timeZone: "Asia/Jakarta", weekday: "long" });
+  const dm = d.toLocaleDateString(locale, { timeZone: "Asia/Jakarta", day: "numeric", month: "short" }).replace(/\.$/, "");
+  return `${weekday} ${dm}`;
 }
 
 export function MobileCheckInHero({ today, disabled, failed = false }: { today: TodayData; disabled: boolean; failed?: boolean }) {
@@ -70,7 +73,7 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
     onSuccess: (data) => {
       setOffsitePrompt(null); setOffsiteReason(""); setReflection(""); refresh();
       // Offsite: the button itself becomes "Check-out sent · waiting for approval" once today reloads.
-      if (data?.pendingApproval) { press.set(null); setMsgOk(true); setMsg(t("Offsite check-out sent — waiting for BoD approval.")); }
+      if (data?.pendingApproval) { press.set(null); setMsgOk(true); setMsg(t("Offsite check-out sent — waiting for board approval.")); }
       else { setMsg(null); press.succeed(successTitle("out", atOf(data?.record?.checkOutAt), data?.record)); }
     },
     onError: (e) => {
@@ -310,7 +313,7 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
       {offsitePrompt && (
         <div className="space-y-2 rounded-2xl border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/40 dark:bg-amber-500/10">
           <div className="text-sm font-bold text-amber-800 dark:text-amber-300">{t("You’re outside the office area")}</div>
-          <p className="text-xs text-amber-700 dark:text-amber-300">{t("±{m}m from {office}. Check out from here? A reason is required, and it waits for BoD approval first.", { m: Math.round(offsitePrompt.distanceMeters), office: offsitePrompt.officeName })}</p>
+          <p className="text-xs text-amber-700 dark:text-amber-300">{t("±{m}m from {office}. Check out from here? A reason is required, and it waits for board approval first.", { m: Math.round(offsitePrompt.distanceMeters), office: offsitePrompt.officeName })}</p>
           <textarea value={offsiteReason} onChange={(e) => setOffsiteReason(e.target.value)} rows={2} placeholder={t("Reason (e.g. content shoot or client meeting at X)")} className="w-full resize-none rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500 dark:border-amber-500/40 dark:bg-background" />
           <div className="flex gap-2">
             <button onClick={() => { setOffsitePrompt(null); setOffsiteReason(""); }} disabled={busy} className="flex-1 rounded-lg border border-border bg-white py-2 text-xs font-semibold dark:bg-background text-muted-foreground transition hover:bg-accent disabled:opacity-50">{t("Cancel")}</button>
@@ -321,10 +324,10 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
 
       {/* Pending offsite-checkout state */}
       {today?.today?.checkOutApproval === "PENDING" && !offsitePrompt && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">{t("Offsite check-out — waiting for BoD approval")}</div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">{t("Offsite check-out — waiting for board approval")}</div>
       )}
       {today?.today?.checkOutApproval === "REJECTED" && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-center text-xs font-semibold text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">{t("Your offsite check-out was rejected by the BoD.")}</div>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-center text-xs font-semibold text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">{t("Your offsite check-out was rejected by the board.")}</div>
       )}
 
       {msg && (

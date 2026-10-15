@@ -86,7 +86,7 @@ function Leaderboard() {
 
           {!board.isLoading && !board.isError && ranked.length === 0 && (
             <EmptyState icon={Trophy} title={t("No XP yet this month")}
-              message={t("XP comes from quests the BoD assigns and is kept by showing up on time. The ranking appears as soon as someone earns or loses XP.")} />
+              message={t("XP comes from quests the board assigns and is kept by showing up on time. The ranking appears as soon as someone earns or loses XP.")} />
           )}
 
           {/* Left out by rule (BoD and above): say so, rather than a ranking the viewer is silently missing from
@@ -94,7 +94,7 @@ function Leaderboard() {
           {board.data?.viewer && !board.data.viewer.ranked && board.data.viewer.reason === "MANAGEMENT" && (
             <p className="flex items-start gap-2 rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
               <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
-              {t("You're not on this ranking: the BoD is left out, so management doesn't compete with staff.")}
+              {t("You're not on this ranking: the board is left out, so management doesn't compete with staff.")}
             </p>
           )}
 

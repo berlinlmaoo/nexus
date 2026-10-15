@@ -444,7 +444,7 @@ export function OrgChart() {
   }, [full]);
 
   if (chart.isLoading) return <div className="flex justify-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>;
-  if (chart.isError || !chart.data) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">{t("The chart couldn't be loaded — it needs BoD access.")}</div>;
+  if (chart.isError || !chart.data) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">{t("The chart couldn't be loaded — it needs board access.")}</div>;
 
   const unplaced = people.filter((p) => p.unitIds.length === 0);
   const busy = moveUnit.isPending || addPerson.isPending || removePerson.isPending || setReportsTo.isPending || placingUnder;
@@ -925,7 +925,7 @@ function ChipLogo({ u }: { u: OrgUnit }) {
   return <img src={u.logoUrl} alt="" onError={() => setBroken(true)} className={cn("-ml-1.5 h-[18px] w-[18px] shrink-0 rounded-full object-contain p-px", tone === "light" ? "bg-[#0f1b2d]" : "bg-white ring-1 ring-black/5")} />;
 }
 const label = (p: OrgChartPerson) => p.name ?? p.email;
-const ROLE_SUB: Record<string, string> = { ONE_ABOVE_ALL: "One Above All", BOD: "BoD", MANAGER: "Manager", STAFF: "Staff" };
+const ROLE_SUB: Record<string, string> = { ONE_ABOVE_ALL: "One Above All", BOD: "Board", MANAGER: "Manager", STAFF: "Staff" };
 function Eyebrow({ children }: { children: React.ReactNode }) {
   return <div className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{children}</div>;
 }
@@ -971,7 +971,7 @@ function boxPeople(g: Group, kind: string): OrgChartPerson[] {
 }
 function boxTitle(g: Group, kind: string, people: OrgChartPerson[]): string {
   const n = boxPeople(g, kind).length;
-  if (kind === "bod") return `BoD · ${n}`;
+  if (kind === "bod") return `Board · ${n}`;
   if (kind === "manager") return `Manager · ${n}`;
   if (kind === "staff") return tn(n, "{n} person", "{n} people");
   const lead = people.find((p) => `rt:${p.userId}` === kind);
@@ -1621,7 +1621,7 @@ function UnitDialog({ unit, units, excluded, initial, people = [], members = 0, 
                 ))}
               </div>
               <p className="mt-1.5 text-[11px] text-muted-foreground">
-                {viaGroup ? `${t("From the BoD/Managers of {name}.", { name: byId.get(leadCard!)?.name ?? t("the card above the group") })} ` : ""}{t("This card is drawn under the person chosen, and its line is drawn from them.")}
+                {viaGroup ? `${t("From the board members/managers of {name}.", { name: byId.get(leadCard!)?.name ?? t("the card above the group") })} ` : ""}{t("This card is drawn under the person chosen, and its line is drawn from them.")}
               </p>
             </section>
           )}
@@ -1754,7 +1754,7 @@ function UnitPicker({ person, units, people, busy, onToggle, onPlaceUnder, onRel
                     </button>
                   );
                 })}
-                {leaderRows.length === 0 && <div className="px-2 py-2 text-xs text-muted-foreground">{needle ? t("Nothing matches.") : t("No BoD or Manager on any card yet.")}</div>}
+                {leaderRows.length === 0 && <div className="px-2 py-2 text-xs text-muted-foreground">{needle ? t("Nothing matches.") : t("No board member or manager on any card yet.")}</div>}
               </div>
             </section>
           )}

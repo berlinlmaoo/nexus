@@ -51,7 +51,7 @@ export function LegalMembers() {
               ? t("Legal is by invitation only. You can invite anyone of the company.")
               : power === "STAFF"
                 ? t("Legal is by invitation only. You can invite staff and remove the people you invited.")
-                : t("Legal is by invitation only. Ask the owner or a BoD member to invite someone.")}
+                : t("Legal is by invitation only. Ask the owner or a board member to invite someone.")}
           </p>
         </div>
         {power !== "NONE" && (

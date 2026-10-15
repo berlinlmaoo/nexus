@@ -93,7 +93,7 @@ function iconFor(item: VaultItem) {
 
 /** A role threshold as people say it. */
 function roleLabel(role: string | null | undefined): string {
-  return role === "BOD_PLUS" ? "BoD and above" : role === "MANAGER_PLUS" ? "Managers and above" : "Everyone";
+  return role === "BOD_PLUS" ? "Board and above" : role === "MANAGER_PLUS" ? "Managers and above" : "Everyone";
 }
 
 /** Where something can be dropped or moved to: a folder (null = the top of the vault) and its name. */
@@ -692,8 +692,8 @@ function VaultPage() {
     // refuses everyone else): no menu that only offers what would be refused.
     <span
       className="grid h-8 w-8 shrink-0 place-items-center text-muted-foreground/60"
-      title={t("Only whoever uploaded it, or BoD, can restore it")}
-      aria-label={t("Only whoever uploaded it, or BoD, can restore it")}
+      title={t("Only whoever uploaded it, or a board member, can restore it")}
+      aria-label={t("Only whoever uploaded it, or a board member, can restore it")}
       role="img"
     >
       <Lock className="h-3.5 w-3.5" aria-hidden />
@@ -1222,7 +1222,7 @@ function VaultPage() {
                 : tn(trashing?.length ?? 0, "Move {n} item to the trash?", "Move {n} items to the trash?")}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {t("Its links stop working. Whoever uploaded it, or BoD, can restore it from the trash.")}
+              {t("Its links stop working. Whoever uploaded it, or a board member, can restore it from the trash.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

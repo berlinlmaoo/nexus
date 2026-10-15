@@ -22,9 +22,9 @@ import { openGlobalSearch } from "@/lib/search-event";
    "More" glass sheet (replaces the old left slide-out sidebar on mobile). */
 const primary = [
   { title: "Home", url: "/dashboard", icon: LayoutDashboard },
-  // Chat took Tasks' place (owner, 9 Oct 2026, as in the app); My Mission stays in More. The Chat tab
-  // carries the unread chats.
-  { title: "Chat", url: "/messages", icon: MessageCircle },
+  // Messages took Tasks' place (owner, 9 Oct 2026, as in the app); My Mission stays in More. The tab carries
+  // the unread chats. Named "Messages" like the menu and the page (UI tour run 16, R16-WM-8).
+  { title: "Messages", url: "/messages", icon: MessageCircle },
   // Calendar took Inbox's place (owner, 8 Oct 2026); notifications live in More, whose button carries
   // the unread count instead.
   { title: "Calendar", url: "/calendar", icon: Calendar },

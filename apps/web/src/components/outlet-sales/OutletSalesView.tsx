@@ -104,7 +104,7 @@ export function OutletSalesView({
           icon={Store}
           tone="muted"
           title={code === 403 ? t("This outlet is for its project members") : t("The outlet didn't load")}
-          message={code === 403 ? t("Ask the Project Owner or a BoD to add you to the project.") : t("Check your connection, then try again.")}
+          message={code === 403 ? t("Ask the Project Owner or a board member to add you to the project.") : t("Check your connection, then try again.")}
           action={code === 403 ? undefined : <EmptyAction onClick={() => q.refetch()}>{t("Try again")}</EmptyAction>}
         />
       </div>
@@ -250,7 +250,7 @@ function Overview({
             ? t("Target set by {name}", { name: data.target.updatedBy.name ?? "?" })
             : t("No target for {month} yet.", { month: monthName })}
           {" "}
-          {!data.canManageTargets && !data.target && t("The Project Owner or a BoD sets it.")}
+          {!data.canManageTargets && !data.target && t("The Project Owner or a board member sets it.")}
         </p>
         {data.canManageTargets && !editing && (
           // An outlined button, not bare bold text: it has to read as something to click (UI tour run 13, W-B12).

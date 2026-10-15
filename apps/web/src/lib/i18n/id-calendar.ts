@@ -4,7 +4,7 @@ export const ID_CALENDAR: Record<string, string> = {
   "Calendar": "Kalender",
   "Couldn't load the calendar settings.": "Pengaturan kalender tidak bisa dimuat.",
   "Private projects": "Project rahasia",
-  "Staff outside these projects see their tasks as “Internal task”, without the title. BoD and Managers see everything.": "Staff di luar project ini melihat task-task-nya sebagai “Task internal”, tanpa judul. BoD dan Manager melihat semuanya.",
+  "Staff outside these projects see their tasks as “Internal task”, without the title. The board and managers see everything.": "Staff di luar project ini melihat task-task-nya sebagai “Task internal”, tanpa judul. Direksi dan Manager melihat semuanya.",
   "Projects whose name starts with {names} are private automatically.": "Project yang namanya diawali {names} otomatis rahasia.",
   "Search projects": "Cari project",
   "Private only ({n})": "Rahasia saja ({n})",

@@ -8,14 +8,14 @@ export const ID_LEGAL: Record<string, string> = {
   "Contracts, letters and invoices of every company, numbered and archived.": "Kontrak, surat, dan invoice semua perusahaan, bernomor dan terarsip.",
   "Legal sections": "Bagian Legal",
   "Legal is by invitation only": "Legal hanya untuk yang diundang",
-  "Ask the owner or a BoD member with Legal access to invite you.": "Minta owner atau anggota BoD yang punya akses Legal untuk mengundangmu.",
+  "Ask the owner or a board member with Legal access to invite you.": "Minta owner atau anggota direksi yang punya akses Legal untuk mengundangmu.",
   "Couldn't open Legal": "Legal tidak bisa dibuka",
 
   // Members
   "People with Legal access": "Orang dengan akses Legal",
   "Legal is by invitation only. You can invite anyone of the company.": "Legal hanya untuk yang diundang. Kamu bisa mengundang siapa pun di perusahaan.",
   "Legal is by invitation only. You can invite staff and remove the people you invited.": "Legal hanya untuk yang diundang. Kamu bisa mengundang staff dan mencabut akses orang yang kamu undang.",
-  "Legal is by invitation only. Ask the owner or a BoD member to invite someone.": "Legal hanya untuk yang diundang. Minta owner atau anggota BoD untuk mengundang orang.",
+  "Legal is by invitation only. Ask the owner or a board member to invite someone.": "Legal hanya untuk yang diundang. Minta owner atau anggota direksi untuk mengundang orang.",
   "Legal access removed": "Akses Legal dicabut",
   "Hide removed people": "Sembunyikan yang sudah dicabut",
   "Show removed people ({n})": "Tampilkan yang sudah dicabut ({n})",
@@ -139,7 +139,7 @@ export const ID_LEGAL: Record<string, string> = {
   "Used in the document number": "Dipakai di nomor dokumen",
 
   // Settings
-  "Only the owner or a BoD member with Legal can change these.": "Hanya owner atau anggota BoD yang punya akses Legal yang bisa mengubah ini.",
+  "Only the owner or a board member with Legal can change these.": "Hanya owner atau anggota direksi yang punya akses Legal yang bisa mengubah ini.",
   "Letterhead uploaded": "Kop diunggah",
   "Legal name (PT) not filled in": "Nama PT belum diisi",
   "Code in numbers ({CO})": "Kode di nomor ({CO})",

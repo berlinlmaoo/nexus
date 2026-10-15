@@ -149,7 +149,7 @@ export function reportRetry(count: number, e: unknown): boolean {
   return count < 1; // one quick retry on a blip, so the error state shows in ~1 s (QA R2 Manager B19)
 }
 
-export const ROLE_LABEL: Record<string, string> = { ONE_ABOVE_ALL: "One Above All", BOD: "BoD", MANAGER: "Manager", STAFF: "Staff" };
+export const ROLE_LABEL: Record<string, string> = { ONE_ABOVE_ALL: "One Above All", BOD: "Board", MANAGER: "Manager", STAFF: "Staff" };
 
 /** Search params shared by /reports and /reports/$userId. */
 export type ReportsSearch = { period?: string; tab?: "me" | "team" };
@@ -157,7 +157,7 @@ export type ReportsSearch = { period?: string; tab?: "me" | "team" };
 /** Plain-English message for a failed report request. */
 export function errorMessage(e: unknown): string {
   const code = reportErrorCode(e);
-  if (code === "REPORT_OUT_OF_SCOPE") return t("This report is outside what you can see. Managers see their direct reports; BoD sees everyone.");
+  if (code === "REPORT_OUT_OF_SCOPE") return t("This report is outside what you can see. Managers see their direct reports; the board sees everyone.");
   if (code === "REPORT_SELF_ONLY") return t("You can only see your own report.");
   const status = reportErrorStatus(e);
   if (status === 401) return t("Your session has ended. Sign in again to see reports.");

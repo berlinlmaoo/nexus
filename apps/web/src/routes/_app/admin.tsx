@@ -240,7 +240,7 @@ function Admin() {
         <PageHeader title={t("Control Room")} />
         <PageBody>
           {notAllowed ? (
-            <EmptyState icon={Shield} tone="muted" title={t("Control Room isn't available for your role")} message={t("It's for managers and the BoD: people, roles, the audit log and quests. Your own attendance, XP and requests are in Attendance and on your profile.")} action={<EmptyAction to="/dashboard">{t("Go to the dashboard")}</EmptyAction>} />
+            <EmptyState icon={Shield} tone="muted" title={t("Control Room isn't available for your role")} message={t("It's for managers and the board: people, roles, the audit log and quests. Your own attendance, XP and requests are in Attendance and on your profile.")} action={<EmptyAction to="/dashboard">{t("Go to the dashboard")}</EmptyAction>} />
           ) : (
             <LoadError error={wsm.error} what={t("the Control Room")} onRetry={() => { void wsm.refetch(); void users.refetch(); }} />
           )}
@@ -287,7 +287,7 @@ function Admin() {
         {view === "app" && canAnnounce && <AppInstalls />}
 
         {view === "users" && users.isError && (isForbidden(users.error)
-          ? <EmptyState icon={Shield} tone="muted" title={t("Only managers and the BoD can manage people")} message={t("Ask a BoD if you need to change someone's role or hours.")} />
+          ? <EmptyState icon={Shield} tone="muted" title={t("Only managers and the board can manage people")} message={t("Ask a board member if you need to change someone's role or hours.")} />
           : <LoadError error={users.error} what={t("the people list")} onRetry={() => void users.refetch()} />)}
 
         {view === "users" && !users.isError && (
@@ -295,13 +295,13 @@ function Admin() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               <Stat label={t("Total users")} value={totalUsers} active={roleFilter === "ALL"} onClick={() => setRoleFilter("ALL")} />
               <Stat label="One Above All" value={orgCount("ONE_ABOVE_ALL")} active={roleFilter === "ONE_ABOVE_ALL"} onClick={() => toggleRole("ONE_ABOVE_ALL")} />
-              <Stat label="BoD" value={orgCount("BOD")} active={roleFilter === "BOD"} onClick={() => toggleRole("BOD")} />
+              <Stat label="Board" value={orgCount("BOD")} active={roleFilter === "BOD"} onClick={() => toggleRole("BOD")} />
               <Stat label="Manager" value={orgCount("MANAGER")} active={roleFilter === "MANAGER"} onClick={() => toggleRole("MANAGER")} />
               <Stat label="Staff" value={orgCount("STAFF")} active={roleFilter === "STAFF"} onClick={() => toggleRole("STAFF")} />
             </div>
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
               <Shield className="h-3.5 w-3.5 shrink-0" />
-              <span>{t("Role hierarchy:")} <b className="text-foreground">One Above All › BoD › Manager › Staff</b>. {viewerAssignable.length === 0 ? t("Only the BoD and One Above All can change roles.") : t("You can only give roles below your own level.")}</span>
+              <span>{t("Role hierarchy:")} <b className="text-foreground">One Above All › Board › Manager › Staff</b>. {viewerAssignable.length === 0 ? t("Only the board and One Above All can change roles.") : t("You can only give roles below your own level.")}</span>
               <Link to="/settings" className="ml-auto font-semibold text-primary hover:underline">{t("Also in Settings › Members →")}</Link>
             </div>
 
@@ -737,7 +737,7 @@ function UserRow(props: UserRowProps) {
                   ? <div className="truncate text-[11px] text-muted-foreground">{t("Approver:")} <b className="text-foreground">{orgInfo.approverName}</b></div>
                   : (orgInfo.role === "STAFF" || orgInfo.role === "MANAGER")
                     ? <div className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">{t("Not placed in the Approval chart yet")}</div>
-                    : <div className="text-[11px] text-muted-foreground">{t("Approver: another BoD")}</div>
+                    : <div className="text-[11px] text-muted-foreground">{t("Approver: another board member")}</div>
               )}
               {isMember && (
                 <div className="mt-0.5 text-[11px] text-muted-foreground">
@@ -899,13 +899,13 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                 ) : (
                   // A Manager can't change anyone's role (server: BoD and up manage members), so "at or above
                   // yours" was false for every Staff they opened (QA 13 Oct 2026).
-                  <span className="text-sm text-muted-foreground">{assignable.length === 0 ? t("Only the BoD and One Above All can change roles.") : t("This person's role is at or above yours, so you can't change it here.")}</span>
+                  <span className="text-sm text-muted-foreground">{assignable.length === 0 ? t("Only the board and One Above All can change roles.") : t("This person's role is at or above yours, so you can't change it here.")}</span>
                 )}
               </Card>
 
               {orgInfo.hidden ? (
                 <Card title={t("Attendance")}>
-                  <p className="text-sm text-muted-foreground">{t("Their approver, work hours and attendance mode are visible only to the people above them in the Approval chart and to the BoD.")}</p>
+                  <p className="text-sm text-muted-foreground">{t("Their approver, work hours and attendance mode are visible only to the people above them in the Approval chart and to the board.")}</p>
                 </Card>
               ) : (<>
               <Card title={t("Attendance approver")} hint={t("This person's leave, permit and sick requests go to the person above them in the Approval chart, whatever their role.")}>
@@ -913,8 +913,8 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                     {orgInfo.approverName
                       ? <span className="text-sm font-semibold">{orgInfo.approverName}</span>
                       : (orgInfo.role === "STAFF" || orgInfo.role === "MANAGER")
-                        ? <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">{t("Not placed yet, so requests still go to every BoD")}</span>
-                        : <span className="text-sm text-muted-foreground">{t("Not placed, so requests go to the other BoD")}</span>}
+                        ? <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">{t("Not placed yet, so requests still go to every board member")}</span>
+                        : <span className="text-sm text-muted-foreground">{t("Not placed, so requests go to the other board members")}</span>}
                     <button type="button" onClick={() => { onClose(); onOpenApproval(); }} className="shrink-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-primary transition hover:bg-accent">{t("Open Approval chart →")}</button>
                   </div>
                 </Card>
@@ -1071,7 +1071,7 @@ function AccountCard({ user, memberId, Card }: { user: NexusAdminUser; memberId:
   const dirtyIdentity = name.trim() !== (user.name ?? "") || email.trim().toLowerCase() !== (user.email ?? "");
   const inputCls = "w-full rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary";
   return (
-    <Card title={t("Account")} hint={t("Photo, name, sign-in email and password. Only BoD see this card.")}>
+    <Card title={t("Account")} hint={t("Photo, name, sign-in email and password. Only board members see this card.")}>
       <div className="space-y-3">
         <label className="flex cursor-pointer items-center gap-3">
           {user.avatar ? (
@@ -1609,7 +1609,7 @@ function offboardErrorText(e: unknown, t: (en: string, vars?: Record<string, str
   switch (code) {
     case "SELF": return t("You can't do this to your own account.");
     case "RANK": return t("You can't do this to someone at or above your level.");
-    case "FORBIDDEN": return t("Only BoD and above can do this.");
+    case "FORBIDDEN": return t("Only the board and above can do this.");
     case "BAD_DATE": return t("Check the last working day: not after today, and not before they joined.");
     case "NOT_MEMBER": return t("They aren't a member of the company workspace.");
     case "ALREADY_OFFBOARDED": return t("This account is offboarded already.");
@@ -1655,7 +1655,7 @@ function OffboardUserModal({ user, onClose, onOpenApproval }: { user: NexusAdmin
     t("Removed from projects, teams and chats."),
     t("Their attendance, requests, projects, tasks and messages stay."),
     t("Their open tasks stay assigned to them."),
-    t("Anyone who had them as approver goes back to the BoD safety net."),
+    t("Anyone who had them as approver goes back to the board safety net."),
   ];
 
   return (
@@ -1687,7 +1687,7 @@ function OffboardUserModal({ user, onClose, onOpenApproval }: { user: NexusAdmin
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {result.approverEdgesCleared.map((p) => <span key={p.id} className="rounded bg-white/70 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">{p.name}</span>)}
                 </div>
-                <p className="mt-2 text-[11px] text-amber-800 dark:text-amber-300">{t("Their requests go to the BoD until you set a new approver in the Approval chart.")}</p>
+                <p className="mt-2 text-[11px] text-amber-800 dark:text-amber-300">{t("Their requests go to the board until you set a new approver in the Approval chart.")}</p>
                 <button type="button" onClick={onOpenApproval} className="mt-2 rounded-lg border border-amber-300 bg-card px-2.5 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200 dark:hover:bg-amber-900/40">{t("Open Approval chart")}</button>
               </div>
             )}
@@ -1922,14 +1922,14 @@ function AdminQuests() {
   const del = useMutation({
     mutationFn: (id: string) => nexusApi.deleteAdminQuest(id),
     onSuccess: () => { invalidate(); toast.success(tq("Quest deleted")); },
-    onError: (e: unknown) => toast.error(tq("Couldn't delete the quest"), { description: isForbidden(e) ? tq("Only managers and the BoD can manage quests") : friendlyError(e) ?? tq("Try again.") }),
+    onError: (e: unknown) => toast.error(tq("Couldn't delete the quest"), { description: isForbidden(e) ? tq("Only managers and the board can manage quests") : friendlyError(e) ?? tq("Try again.") }),
   });
   const inputCls = "rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
 
   return (
     <div className="space-y-4">
       {list.isError && (isForbidden(list.error)
-        ? <EmptyState icon={Trophy} tone="muted" title={tq("Only managers and the BoD can manage quests")} message={tq("Your own quests are on the dashboard, in the Quests card.")} />
+        ? <EmptyState icon={Trophy} tone="muted" title={tq("Only managers and the board can manage quests")} message={tq("Your own quests are on the dashboard, in the Quests card.")} />
         : <LoadError error={list.error} what={tq("the quests")} onRetry={() => void list.refetch()} />)}
       {!list.isError && (
         <>
@@ -2087,7 +2087,7 @@ function AnnouncementsAdmin() {
   return (
     <div className="space-y-5">
       {list.isError && (isForbidden(list.error)
-        ? <EmptyState icon={Megaphone} tone="muted" title={t("BoD access required")} message={t("You need the BoD role or above to manage announcements.")} />
+        ? <EmptyState icon={Megaphone} tone="muted" title={t("Board access required")} message={t("You need the Board role or above to manage announcements.")} />
         : <LoadError error={list.error} what={t("the announcements")} onRetry={() => void list.refetch()} />)}
       {!list.isError && (
         <>

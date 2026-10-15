@@ -111,7 +111,7 @@ export function XpAuditLog() {
 
           {log.isError && (
             <div className="px-4 pb-5 pt-1 text-center text-sm text-muted-foreground">
-              {tr("Couldn't load the log. It needs BoD access or higher.")}
+              {tr("Couldn't load the log. It needs board access or higher.")}
             </div>
           )}
 

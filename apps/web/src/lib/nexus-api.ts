@@ -794,7 +794,7 @@ export type NexusGamification = {
 };
 
 export type OrgRole = "ONE_ABOVE_ALL" | "BOD" | "MANAGER" | "STAFF";
-export const ORG_ROLE_LABEL: Record<string, string> = { ONE_ABOVE_ALL: "One Above All", BOD: "BoD", MANAGER: "Manager", STAFF: "Staff" };
+export const ORG_ROLE_LABEL: Record<string, string> = { ONE_ABOVE_ALL: "One Above All", BOD: "Board", MANAGER: "Manager", STAFF: "Staff" };
 export const ORG_ROLE_TONE: Record<string, string> = {
   ONE_ABOVE_ALL: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
   BOD: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",

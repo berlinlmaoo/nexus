@@ -61,7 +61,7 @@ const LeaderboardPodium = React.forwardRef<HTMLDivElement, LeaderboardPodiumProp
                 </span>
               </div>
               <div className="max-w-full truncate text-sm font-semibold">{item.userName}</div>
-              <div className="mb-2 text-sm text-muted-foreground tabular-nums">{formatCount(item.value)}</div>
+              <div className="mb-2 text-sm text-muted-foreground tabular-nums">{formatCount(item.value)} XP</div>
               <div className={cn("flex w-full items-start justify-center rounded-t-xl pt-3 text-2xl font-bold", s.bar, s.barText, s.height)}>
                 {item.label ?? rank}
               </div>
@@ -87,7 +87,7 @@ function LeaderboardTie({ rankings, caption, className }: { rankings: Leaderboar
       <p className={cn("flex items-center justify-center gap-1.5 text-center text-sm font-semibold", s.barText)}>
         <Crown aria-hidden className="h-4 w-4 shrink-0" />
         <span>{caption}</span>
-        {rankings[0] ? <span className="tabular-nums">· {formatCount(rankings[0].value)}</span> : null}
+        {rankings[0] ? <span className="tabular-nums">· {formatCount(rankings[0].value)} XP</span> : null}
       </p>
       <ul className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-3">
         {rankings.map((item) => (

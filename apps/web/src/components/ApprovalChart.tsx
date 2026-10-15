@@ -41,7 +41,7 @@ export function ApprovalChart() {
       qc.invalidateQueries({ queryKey: ["nexus", "workspace-members"] });
       const to = v.approverId ? chart.data?.people.find((p) => p.userId === v.approverId)?.name : null;
       const who = v.person.name ?? t("Someone");
-      toast.success(to ? `${who} → ${to}` : t("{name} removed from the chart. Their requests go to the BoD.", { name: who }));
+      toast.success(to ? `${who} → ${to}` : t("{name} removed from the chart. Their requests go to the board.", { name: who }));
     },
     onError: (e: unknown) => toast.error(t("Couldn't move"), { description: e instanceof ApiError ? e.message : t("Try again.") }),
   });
@@ -211,7 +211,7 @@ export function ApprovalChart() {
   }, [full]);
 
   if (chart.isLoading) return <div className="flex justify-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>;
-  if (chart.isError || !chart.data) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">{t("The chart couldn't be loaded — it needs BoD access.")}</div>;
+  if (chart.isError || !chart.data) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">{t("The chart couldn't be loaded — it needs board access.")}</div>;
 
   const roots = people.filter((p) => !p.approverId).sort((a, b) => tier(a.role) - tier(b.role) || label(a).localeCompare(label(b), "id"));
   const isSenior = (p: ApprovalChartPerson) => p.role === "BOD" || p.role === "ONE_ABOVE_ALL";
@@ -309,7 +309,7 @@ export function ApprovalChart() {
         {/* 3 · Sendirian — zona jatuh untuk MELEPAS */}
         <section {...dropProps(null)} className={cn("rounded-b-2xl px-5 py-4 transition", overId === "__none__" ? "bg-rose-50 dark:bg-rose-500/10" : "bg-muted/20")}>
           <div className="flex items-baseline justify-between gap-3">
-            <Eyebrow>{t("Not placed yet")} <span className="normal-case tracking-normal text-muted-foreground/70">· {tn(alone.length, "{n} person", "{n} people")} · {t("their requests go to every BoD")}</span></Eyebrow>
+            <Eyebrow>{t("Not placed yet")} <span className="normal-case tracking-normal text-muted-foreground/70">· {tn(alone.length, "{n} person", "{n} people")} · {t("their requests go to every board member")}</span></Eyebrow>
             {dragged && <span className="text-[11px] font-semibold text-rose-700 dark:text-rose-300">{t("Drop here to remove from the chart")}</span>}
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -382,7 +382,7 @@ const to12 = (hhmm: string, locale: string) => {
   return `${((h + 11) % 12) + 1}:${String(m ?? 0).padStart(2, "0")} ${ap}`;
 };
 const label = (p: ApprovalChartPerson) => p.name ?? p.email;
-const ROLE_SUB: Record<string, string> = { ONE_ABOVE_ALL: "One Above All", BOD: "BoD", MANAGER: "Manager", STAFF: "Staff" };
+const ROLE_SUB: Record<string, string> = { ONE_ABOVE_ALL: "One Above All", BOD: "Board", MANAGER: "Manager", STAFF: "Staff" };
 
 function initialsOf(name?: string | null) {
   if (!name) return "?";
@@ -477,7 +477,7 @@ function ApproverPicker({ person, candidates, reportsOf, currentApproverId, onPi
           <div className="text-sm font-bold">{t("Approver for {name}", { name: label(person) })}</div>
           <button onClick={onClose} aria-label={t("Close")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
-        <p className="mb-3 text-[11px] text-muted-foreground">{t("Their attendance requests go to this person only. The BoD can still override.")}</p>
+        <p className="mb-3 text-[11px] text-muted-foreground">{t("Their attendance requests go to this person only. The board can still override.")}</p>
         <div className="relative mb-2">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search names…")} className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:border-primary" />
@@ -499,7 +499,7 @@ function ApproverPicker({ person, candidates, reportsOf, currentApproverId, onPi
         </div>
         {currentApproverId && (
           <button type="button" onClick={() => onPick(null)} className="mt-2 w-full rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/15">
-            {t("Remove from the chart. Their requests go to every BoD.")}
+            {t("Remove from the chart. Their requests go to every board member.")}
           </button>
         )}
       </div>

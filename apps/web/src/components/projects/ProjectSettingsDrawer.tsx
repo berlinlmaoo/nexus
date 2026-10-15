@@ -253,7 +253,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
           {roleKnown && !canManage && (
             <p className="flex items-start gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
               <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>{t("You have {level} here. Only people with Full access (the Project Owner and the BoD) can change the project's name, photo, status, auto assign and members.", { level: accessLevelLabel(project.viewerAccessLevel ?? "EDIT", t) })}</span>
+              <span>{t("You have {level} here. Only people with Full access (the Project Owner and the board) can change the project's name, photo, status, auto assign and members.", { level: accessLevelLabel(project.viewerAccessLevel ?? "EDIT", t) })}</span>
             </p>
           )}
           {/* identity */}
@@ -408,7 +408,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
                   {duplicate.isPending ? t("Duplicating…") : t("Duplicate")}
                 </button>
               )}
-              {canManage && <button onClick={() => { if (confirm(t("Delete the project “{name}”? A manager or the BoD can restore it from Control Room → Audit for 90 days.", { name: project.name ?? "" }))) del.mutate(); }} disabled={del.isPending} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.98] disabled:opacity-50">
+              {canManage && <button onClick={() => { if (confirm(t("Delete the project “{name}”? A manager or the board can restore it from Control Room → Audit for 90 days.", { name: project.name ?? "" }))) del.mutate(); }} disabled={del.isPending} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.98] disabled:opacity-50">
                 <Trash2 className="h-4 w-4" /> {t("Delete")}
               </button>}
             </div>

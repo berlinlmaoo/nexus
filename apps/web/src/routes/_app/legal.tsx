@@ -56,7 +56,7 @@ function LegalPage() {
           <EmptyState
             icon={Lock}
             title={notInvited ? t("Legal is by invitation only") : t("Couldn't open Legal")}
-            message={notInvited ? t("Ask the owner or a BoD member with Legal access to invite you.") : (me.error as Error).message}
+            message={notInvited ? t("Ask the owner or a board member with Legal access to invite you.") : (me.error as Error).message}
           />
         </PageBody>
       </div>

@@ -63,7 +63,7 @@ export function describeUploadError(e: unknown, file: File): UploadMessage {
   if (e instanceof DOMException && e.name === "NotReadableError") return { text: "Couldn't read this file." };
   if (e instanceof ApiError) {
     switch (e.status) {
-      case 507: return { text: "The vault is full. Empty the trash or ask BoD for more space." };
+      case 507: return { text: "The vault is full. Empty the trash or ask the board for more space." };
       case 403: return { text: "You can't add files to this folder." };
       case 404: return { text: "This folder no longer exists." };
       case 413: return { text: "This file is too big to upload (max 1 GB)." };

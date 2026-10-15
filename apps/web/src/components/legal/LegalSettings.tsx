@@ -66,7 +66,7 @@ export function LegalSettings() {
   if (companies.isError) return <p className="py-6 text-sm text-destructive">{(companies.error as Error).message}</p>;
   return (
     <div className="space-y-4">
-      {!canEdit && <p className="text-sm text-muted-foreground">{t("Only the owner or a BoD member with Legal can change these.")}</p>}
+      {!canEdit && <p className="text-sm text-muted-foreground">{t("Only the owner or a board member with Legal can change these.")}</p>}
       {/* A long page (a company each with its letterhead and ~11 series): a row of its companies to jump to
           (UI tour run 13, W-B26). It stays pinned under the header and tabs while the page scrolls (run 14,
           R14-WB-7), and a company it jumps to lands below it. */}
