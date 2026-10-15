@@ -509,21 +509,14 @@ struct OutletReportSettingsView: View {
                 TextField(T("Item name"), text: label(items, item.rowId))
                     .font(NXFont.text(15))
                     .submitLabel(.done)
-                Button { moveItem(items, item.rowId, by: -1) } label: { Label(T("Move up"), systemImage: "arrow.up") }
-                    .disabled(pos == 0)
-                Button { moveItem(items, item.rowId, by: 1) } label: { Label(T("Move down"), systemImage: "arrow.down") }
-                    .disabled(pos == active.count - 1)
-                Button(role: .destructive) {
+                NXRowIconButton(title: T("Move up"), icon: "arrow.up", enabled: pos > 0) { moveItem(items, item.rowId, by: -1) }
+                NXRowIconButton(title: T("Move down"), icon: "arrow.down", enabled: pos < active.count - 1) { moveItem(items, item.rowId, by: 1) }
+                NXRowIconButton(title: T("Remove"), icon: "trash") {
                     remove(item.label, ids: [item.id],
                            archive: { setArchived(items, item.rowId, true) },
                            drop: { items.wrappedValue.removeAll { $0.rowId == item.rowId } })
-                } label: { Label(T("Remove"), systemImage: "trash") }
+                }
             }
-            .labelStyle(.iconOnly)
-            .buttonStyle(.borderless)
-            // Grey controls, as the web's (UI tour run 16, R16-B-18: purple arrows, red trash).
-            .foregroundStyle(NX.mutedFg)
-            .tint(NX.mutedFg)
             .padding(.leading, inset)
             // Only the separator under a row: a reordered row kept a full-width top line too, so
             // "Hosting Team" showed two lines (UI tour run 13 F-23 / run 14 N-29).
@@ -596,21 +589,14 @@ struct OutletReportSettingsView: View {
                 HStack(spacing: 14) {
                     TextField(T("Community name"), text: Binding(get: { c.wrappedValue.name }, set: { c.wrappedValue.name = String($0.prefix(60)) }))
                         .font(NXFont.text(15, .semibold))
-                    Button { moveCommunity(list, item.rowId, by: -1) } label: { Label(T("Move up"), systemImage: "arrow.up") }
-                        .disabled(pos == 0)
-                    Button { moveCommunity(list, item.rowId, by: 1) } label: { Label(T("Move down"), systemImage: "arrow.down") }
-                        .disabled(pos == active.count - 1)
-                    Button(role: .destructive) {
+                    NXRowIconButton(title: T("Move up"), icon: "arrow.up", enabled: pos > 0) { moveCommunity(list, item.rowId, by: -1) }
+                    NXRowIconButton(title: T("Move down"), icon: "arrow.down", enabled: pos < active.count - 1) { moveCommunity(list, item.rowId, by: 1) }
+                    NXRowIconButton(title: T("Remove"), icon: "trash") {
                         remove(item.name, ids: [item.id] + item.items.map(\.id),
                                archive: { c.wrappedValue.archived = true },
                                drop: { list.wrappedValue.removeAll { $0.rowId == item.rowId } })
-                    } label: { Label(T("Remove"), systemImage: "trash") }
+                    }
                 }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.borderless)
-                .foregroundStyle(NX.mutedFg)
-                .tint(NX.mutedFg)
-                .font(NXFont.text(15, .semibold))
                 // Inline with its label, as the web's, not a full-width row (UI tour run 16, R16-B-18).
                 HStack(spacing: 10) {
                     Text(T("How it is counted")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
@@ -688,5 +674,28 @@ struct OutletSettingsHeading: View {
             Text(helper).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).textCase(nil)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+}
+
+/// A row control in the outlet / socmed settings lists (↑, ↓, remove, archive): a grey glyph in a fixed 24 pt
+/// slot, so the header rows and item rows share one control column, and a disabled one (↑ on the first row, ↓
+/// on the last) visibly faded. Before, every control was forced grey, so a disabled arrow looked like the
+/// others, and the grey also coloured the item names (UI tour run 17, iPhone R17-I-10, R17-B-05, decision 11).
+struct NXRowIconButton: View {
+    let title: String
+    let icon: String
+    var enabled = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: 15, weight: .regular))
+                .foregroundStyle(NX.mutedFg.opacity(enabled ? 1 : 0.3))
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .disabled(!enabled)
+        .accessibilityLabel(title)
     }
 }

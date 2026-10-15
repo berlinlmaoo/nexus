@@ -474,14 +474,15 @@ struct TicketsView: View {
                 // The same chips as the narrow rows (one style, UI tour run 11 IP-1), under the subject: beside
                 // it, it left the subject "Tgl 4-8 it…" (UI tour run 13, M-9). "GIDEON replied" is the web's chip,
                 // not a bare icon after the subject (UI tour run 16, R16-M-11).
+                // Side by side only where the subject column has room, else one under the other: two fixed chips
+                // wider than the column pushed every other column ~20 pt right on that row (UI tour run 17,
+                // R17-M-03). The column itself is never widened by its chips.
                 if t.showsDecisionMarker || t.hasGideonReply {
-                    HStack(spacing: 6) {
-                        if t.showsDecisionMarker {
-                            NexusChip(text: T("Correction awaiting decision"), tone: .accent, systemImage: "calendar.badge.clock")
-                                .fixedSize()
-                        }
-                        if t.hasGideonReply { gideonMarker.fixedSize() }
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 6) { wideChips(t) }
+                        VStack(alignment: .leading, spacing: 4) { wideChips(t) }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -505,6 +506,14 @@ struct TicketsView: View {
             Text(activityLabel(t)).font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.mutedFg)
                 .lineLimit(1).frame(width: Col.activity, alignment: .trailing)
         }
+    }
+
+    @ViewBuilder private func wideChips(_ t: Complaint) -> some View {
+        if t.showsDecisionMarker {
+            NexusChip(text: T("Correction awaiting decision"), tone: .accent, systemImage: "calendar.badge.clock")
+                .fixedSize()
+        }
+        if t.hasGideonReply { gideonMarker.fixedSize() }
     }
 
     /// Narrower page: the subject with its date, then status · category · sender · replies on one quiet

@@ -135,6 +135,8 @@ enum NX {
     static let accentBg    = Color(light: 0xf1eefe, dark: 0x2c2551, lightHC: 0xe9e4fd, darkHC: 0x332a63)
     static let accentFg    = Color(light: 0x6750cf, dark: 0xbfb3ff)
     static let coral       = Color(light: 0xff7f50, dark: 0xff9d76)   // "Secure Uplink Ready" pill
+    /// Priority "High", the web's orange-500 on every surface (decision 4 of run 17).
+    static let priorityHigh = Color(light: 0xf97316, dark: 0xfb923c)
     static let cream       = Color(light: 0xfdfcfb, dark: 0x0d1017)   // login background
     static let ink         = Color(hex: "#11141b")
     static let inkGradient = LinearGradient(colors: [Color(hex: "#11141b"), Color(hex: "#3a2f7a")],
@@ -197,6 +199,8 @@ extension View {
 
 enum ChipTone {
     case neutral, accent, success, warning, danger, info, coral
+    /// Priority "High": orange #f97316 on every surface, chips, pills, bars and dots (decision 4 of run 17).
+    case high
 
     /// Text and icon colour. Like `NX.violet` / `NX.violetText`, a tone is two colours because one
     /// cannot do both jobs: the bright fills read 1.9–3.3:1 as 11 pt type on their own 16% tint in
@@ -212,6 +216,7 @@ enum ChipTone {
         case .danger: return ChipText.danger
         case .info: return ChipText.info
         case .coral: return ChipText.coral
+        case .high: return ChipText.high
         }
     }
     /// The chip's wash: the bright tone, unchanged, so every chip keeps its colour.
@@ -226,6 +231,7 @@ enum ChipTone {
         case .danger: return NX.danger
         case .info: return NX.blue
         case .coral: return NX.coral
+        case .high: return NX.priorityHigh
         }
     }
 
@@ -251,6 +257,7 @@ private enum ChipText {
     static let danger  = Color(light: 0xb91c1c, dark: 0xf87171)
     static let info    = Color(light: 0x0369a1, dark: 0x38a3ff)
     static let coral   = Color(light: 0xb13c10, dark: 0xff9d76)
+    static let high    = Color(light: 0xc2410c, dark: 0xfb923c)
 }
 
 struct NexusChip: View {
@@ -303,5 +310,91 @@ struct NexusPrimaryButton: ButtonStyle {
             .opacity(!isEnabled ? 0.4 : configuration.isPressed ? 0.85 : 1)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
+/// Mac: a pushed screen's back control as a plain chevron in the bar, like the rest of the Mac's flat toolbar,
+/// not the system's round glass bubble (UI tour run 17, R17-M-06: form builder, Legal document). Elsewhere the
+/// system back button stays as it is.
+struct MacPlainBackButton: ViewModifier {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+
+    func body(content: Content) -> some View {
+        #if targetEnvironment(macCatalyst)
+        if #available(iOS 26.0, *), isPresented {
+            content
+                .navigationBarBackButtonHidden(true)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button { dismiss() } label: {
+                            Image(systemName: "chevron.left").font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(NX.foreground)
+                                .frame(width: 32, height: 32).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .keyboardShortcut("[", modifiers: .command)
+                        .accessibilityLabel(T("Back"))
+                    }
+                    .sharedBackgroundVisibility(.hidden)
+                }
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
+    }
+}
+
+extension ToolbarContent {
+    /// Mac: the item without the shared glass bubble, as the Mac's flat toolbar elsewhere (R17-M-06).
+    @ToolbarContentBuilder func nxPlainOnMac() -> some ToolbarContent {
+        #if targetEnvironment(macCatalyst)
+        if #available(iOS 26.0, *) { self.sharedBackgroundVisibility(.hidden) } else { self }
+        #else
+        self
+        #endif
+    }
+}
+
+// MARK: - Sticky headers inside a page's scroll
+
+private struct PageScrollTopInsetKey: EnvironmentKey { static let defaultValue: CGFloat = 0 }
+extension EnvironmentValues {
+    /// A page scroll's top content inset: where its visible area starts under the pinned header and bars.
+    var pageScrollTopInset: CGFloat {
+        get { self[PageScrollTopInsetKey.self] }
+        set { self[PageScrollTopInsetKey.self] = newValue }
+    }
+}
+
+/// Reads a vertical scroll view's top content inset (iOS 18 scroll geometry; 0 before that).
+struct PageTopInsetReader: ViewModifier {
+    @Binding var inset: CGFloat
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: CGFloat.self) { $0.contentInsets.top } action: { _, top in inset = top }
+        } else {
+            content
+        }
+    }
+}
+
+/// A header that stays under the page's top edge while the rows below it scroll by, then leaves with them:
+/// it only moves down, at most `limit` (the rows' height). iOS 18+, where the page's inset is known
+/// (`pageScrollTopInset`); the attendance board's day row and the Overview's "Who's working on what" head.
+struct StickyInPageScroll: ViewModifier {
+    let limit: CGFloat
+    @Environment(\.pageScrollTopInset) private var top
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.visualEffect { view, proxy in
+                let y = proxy.frame(in: .scrollView(axis: .vertical)).minY
+                return view.offset(y: min(max(0, top - y), max(0, limit)))
+            }
+        } else {
+            content
+        }
     }
 }

@@ -449,16 +449,17 @@ struct ThreadsView: View {
                 HStack(spacing: 16) {
                     Button { Task { await like(p) } } label: {
                         let on = p.likedByMe == true
-                        Label(p.likes > 0 ? "\(p.likes)" : "", systemImage: on ? "heart.fill" : "heart")
-                            .font(NXFont.text(13, .medium))
+                        // Icon and count in one centred row: a Label with an empty title sat ~3 pt lower than one
+                        // with a count, so a row's heart and bubble did not line up (UI tour run 17, iPhone R17-I-19).
+                        ThreadActionLabel(count: p.likes, icon: on ? "heart.fill" : "heart")
                             .foregroundStyle(on ? NX.danger : NX.mutedFg)
                             .contentTransition(.numericText())
                             .frame(minHeight: 32).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     Button { openPost = p } label: {
-                        Label(p.comments > 0 ? "\(p.comments)" : "", systemImage: "message")
-                            .font(NXFont.text(13, .medium)).foregroundStyle(NX.mutedFg)
+                        ThreadActionLabel(count: p.comments, icon: "message")
+                            .foregroundStyle(NX.mutedFg)
                             .frame(minHeight: 32).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -756,4 +757,16 @@ func mentionText(_ s: String) -> Text {
         }
     }
     return out
+}
+
+/// A post's like / comment button face: the icon in a fixed box, then the count when there is one.
+private struct ThreadActionLabel: View {
+    let count: Int
+    let icon: String
+    var body: some View {
+        HStack(alignment: .center, spacing: 5) {
+            Image(systemName: icon).font(.system(size: 14, weight: .medium)).frame(width: 18, height: 18)
+            if count > 0 { Text("\(count)").font(NXFont.text(13, .medium)).monospacedDigit() }
+        }
+    }
 }

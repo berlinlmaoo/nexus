@@ -31,6 +31,8 @@ struct ProjectDetailView: View {
     /// the tools move under the tabs (UI tour run 13, I-18 / M-7: "verview", "ategori", "Cal" cut).
     @State private var barWidth: CGFloat = 0
     @State private var toolsWidth: CGFloat = 0
+    /// The module tabs' width (wide bar), to tell whether they fit at the start of the tools row.
+    @State private var modulesWidth: CGFloat = 0
     /// Automations and Ask GIDEON say their names on every project view (web; UI tour run 16, R16-B-06).
     @State private var toolLabels = true
     /// A filter opened from a count on the Overview (owner, 11 Oct 2026): open top-level tasks only,
@@ -82,6 +84,10 @@ struct ProjectDetailView: View {
     @State private var boardAlert: BoardAlert?
     @State private var alertText = ""
     @State private var filterView: ProjectViewFull?
+    /// iPad / Mac board: its width, the linked lanes opened from their rail, and whether more lies right.
+    @State private var boardViewport: CGFloat = 0
+    @State private var expandedLinked: Set<String> = []
+    @State private var boardMore = false
     /// Can view / Can comment: a filter / sort kept on this screen only, per view id (not saved).
     @State private var screenConfigs: [String: ProjectViewConfig] = [:]
     /// iPad / Mac: the task opens as a centred sheet over the board (web popup; owner rejected a side
@@ -604,6 +610,32 @@ struct ProjectDetailView: View {
     }
 
     private var projectHeader: some View {
+        // iPad / Mac: the name takes a second line before the buttons lose their words; on one line "ZZ QA
+        // Social Media Report" left room for icons only, beside the outlet's labelled pair (UI tour run 17,
+        // iPad R17-I-14, decision 15). Faces go first, then the one-line name, then the words.
+        Group {
+            if wide, let d = detail {
+                let members = ProjectMemberStack(members: d.members ?? []) { if !cover.isCovered { showSettings = true } }
+                    .padding(.trailing, 4)
+                ViewThatFits(in: .horizontal) {
+                    headerRow(titleCap: nil) { HStack(spacing: 10) { members; headerActions(labelled: true) } }
+                    headerRow(titleCap: nil) { headerActions(labelled: true) }
+                    headerRow(titleCap: 300) { headerActions(labelled: true) }
+                    headerRow(titleCap: nil) { HStack(spacing: 10) { members; headerActions(labelled: false) } }
+                }
+            } else {
+                headerRow(titleCap: nil) {
+                    if detail != nil { headerActions(labelled: false) } else if !wideBar { addButton }
+                }
+            }
+        }
+        .padding(.leading, isPresented ? 6 : (wide ? 24 : 14))
+        .padding(.trailing, wide ? 24 : 14)
+        .padding(.top, wide ? 12 : 4).padding(.bottom, 4)
+    }
+
+    /// The header's row: back, mark, name, then `actions`. `titleCap`: the name wraps to two lines inside it.
+    private func headerRow<Actions: View>(titleCap: CGFloat?, @ViewBuilder actions: () -> Actions) -> some View {
         HStack(spacing: 10) {
             // ≡ while the iPad / Mac sidebar is collapsed: "≡ ✅ Tasks Tracker" (Notion, owner 14 Oct 2026).
             SidebarReopenButton()
@@ -620,34 +652,16 @@ struct ProjectDetailView: View {
             ProjectMark(icon: detail?.icon, color: nil, size: wide ? 34 : 28, projectId: projectId)
             // Two lines on a phone: beside the two buttons "ZZ QA Manager Out…" was cut (UI tour run 15, R15-I-06).
             Text(displayName).font(NXFont.display(wide ? 26 : 20, wide ? .semibold : .bold)).foregroundStyle(NX.foreground)
-                .lineLimit(wide ? 1 : 2).fixedSize(horizontal: false, vertical: true)
+                .lineLimit(wide && titleCap == nil ? 1 : 2).fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: titleCap, alignment: .leading)
                 // The name before the buttons: a portrait iPad cut it to "Finance P…" (UI tour run 5).
                 .layoutPriority(1)
             if let chip = detail?.readOnlyLevelChip { ProjectLevelChip(text: chip) }
             Spacer(minLength: 6)
-            if let d = detail {
-                // iPad / Mac (web header): the members' faces, then Ask GIDEON and Project settings.
-                if wide {
-                    // Words while they fit on one line, icons when they don't: a portrait iPad wrapped
-                    // "Ask GIDEON" onto two lines and cut "Project sett…" (UI tour run 13, I-10). The faces give
-                    // way before the words do (UI tour run 16, R16-I-15: icons only on a 13" iPad).
-                    let members = ProjectMemberStack(members: d.members ?? []) { if !cover.isCovered { showSettings = true } }
-                        .padding(.trailing, 4)
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 10) { members; headerActions(labelled: true) }
-                        headerActions(labelled: true)
-                        HStack(spacing: 10) { members; headerActions(labelled: false) }
-                    }
-                } else {
-                    headerActions(labelled: false)
-                }
-            } else if !wideBar {
-                addButton
-            }
+            // Words while they fit on one line, icons when they don't: a portrait iPad wrapped "Ask GIDEON" onto
+            // two lines and cut "Project sett…" (UI tour run 13, I-10).
+            actions()
         }
-        .padding(.leading, isPresented ? 6 : (wide ? 24 : 14))
-        .padding(.trailing, wide ? 24 : 14)
-        .padding(.top, wide ? 12 : 4).padding(.bottom, 4)
     }
 
     /// Ask GIDEON, Project settings and (outside the wide tab row) the add button.
@@ -773,8 +787,10 @@ struct ProjectDetailView: View {
             // The inset sits OUTSIDE the scroll view, so a scrolled row never cuts its first tab against the
             // screen edge (UI tour run 11: "rview", "er kategori").
             .padding(.leading, wide ? 18 : 8)
-            if tabsOverflow { tabOverflowMenu(chipItems) }
-            if let v = toolView {
+            // Phone: one "···" menu with the views AND "Filter and sort…", not "···" and a bare "≡" side by side
+            // after the strip's "›" (UI tour run 17, iPhone R17-I-11). Wider screens keep the two.
+            if tabsOverflow { tabOverflowMenu(chipItems, filterOn: wide ? nil : toolView) }
+            if let v = toolView, wide || !tabsOverflow {
                 let filtered = configOf(v).isFiltered
                 Button { filterView = v } label: {
                     Image(systemName: filtered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease")
@@ -844,16 +860,23 @@ struct ProjectDetailView: View {
     /// The web's two rows (UI tour run 16, R16-B-06, web after run 16): the tabs, "…" and Add task on the
     /// first; the view tools on a tight second row on the right, Automations and Ask GIDEON named, on every
     /// view. The tabs keep the first row's width to themselves, so none hides behind the tools.
+    /// Since run 17 (web): the module tabs (Spreadsheet, Pages, Forms, Chat) open the tools row on the left,
+    /// so the first row holds only Overview … Timeline, "+" and Add task.
     @ViewBuilder private var wideTabBar: some View {
-        VStack(alignment: .trailing, spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 wideTabs
                 if tabsOverflow { tabOverflowMenu(wideMenuItems) }
                 wideAddButton.fixedSize()
             }
             .padding(.trailing, 24)
-            measuredTools
+            HStack(spacing: 8) {
+                if modulesInToolsRow { moduleTabs }
+                Spacer(minLength: 8)
+                measuredTools
+            }
         }
+        .background(alignment: .topLeading) { moduleTabsMeasure }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0; fitToolLabels() }
         .onChange(of: tabsWidth) { _, _ in fitToolLabels() }
         .onChange(of: toolsWidth) { _, _ in fitToolLabels() }
@@ -882,6 +905,9 @@ struct ProjectDetailView: View {
                         wideViewTab(.tab(.overview)).id(ViewTabItem.tab(.overview).id).nxTabFrame(ViewTabItem.tab(.overview).id)
                     }
                     ForEach(viewTabItems) { item in wideViewTab(item).id(item.id).nxTabFrame(item.id) }
+                    // Where the tools row has no room for them (a portrait iPad), the modules stay after the
+                    // views, as before run 17, rather than adding a third row.
+                    let rowModules = modulesInToolsRow ? [] : Self.moduleTabOrder.filter { visibleTabs.contains($0) }
                     if canEdit {
                         Button { alertText = ""; boardAlert = .newView(layout: layoutOf(tab) ?? "board") } label: {
                             Image(systemName: "plus").font(.system(size: 14, weight: .regular)).foregroundStyle(NX.mutedFg)
@@ -893,11 +919,9 @@ struct ProjectDetailView: View {
                         .accessibilityLabel(T("New view"))
                         .nxTabFrame("new-view")
                     }
-                    let modules = Self.moduleTabOrder.filter { visibleTabs.contains($0) }
-                    if !modules.isEmpty {
+                    if !rowModules.isEmpty {
                         ProjectTabDivider()
-                        ForEach(modules) { t in
-                            // Named like the views (UI tour run 16, R16-B-06: four bare icons after "+" on the Mac).
+                        ForEach(rowModules) { t in
                             ProjectTabChip(title: t.label, icon: t.macIcon, on: tab == t) { pickTab(t) }
                                 .id(ViewTabItem.tab(t).id)
                                 .nxTabFrame(ViewTabItem.tab(t).id)
@@ -920,19 +944,60 @@ struct ProjectDetailView: View {
         }
     }
 
-    /// Every tab of the wide row in its order: Overview, the views, then the module icons.
+    /// Every tab of the wide first row in its order: Overview and the views.
     private var wideMenuItems: [ViewTabItem] {
         var out: [ViewTabItem] = []
         if visibleTabs.contains(.overview) { out.append(.tab(.overview)) }
         out += viewTabItems
-        out += Self.moduleTabOrder.filter { visibleTabs.contains($0) }.map { ViewTabItem.tab($0) }
+        if !modulesInToolsRow { out += Self.moduleTabOrder.filter { visibleTabs.contains($0) }.map { ViewTabItem.tab($0) } }
         return out
+    }
+
+    /// The module tabs fit at the start of the tools row beside the tools (measured), else they stay in the
+    /// first row.
+    private var modulesInToolsRow: Bool {
+        barWidth == 0 || modulesWidth == 0 || modulesWidth + toolsWidth + 18 + 8 + 24 <= barWidth
+    }
+
+    /// The module tabs at the start of the tools row, named like the views (UI tour run 16, R16-B-06; web
+    /// after run 17: Spreadsheet, Pages, Forms and Chat left of the tools).
+    @ViewBuilder private var moduleTabs: some View {
+        let modules = Self.moduleTabOrder.filter { visibleTabs.contains($0) }
+        if !modules.isEmpty {
+            HStack(spacing: 2) {
+                ForEach(modules) { t in
+                    ProjectTabChip(title: t.label, icon: t.macIcon, on: tab == t) { pickTab(t) }
+                }
+            }
+            .fixedSize()
+            .padding(.leading, 18)
+        }
+    }
+
+    /// The module chips' own width, measured off screen, for `modulesInToolsRow`.
+    private var moduleTabsMeasure: some View {
+        HStack(spacing: 2) {
+            ForEach(Self.moduleTabOrder.filter { visibleTabs.contains($0) }) { t in
+                ProjectTabChip(title: t.label, icon: t.macIcon, on: false) {}
+            }
+        }
+        .fixedSize()
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { modulesWidth = $0 }
+        .hidden()
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
     }
 
     /// "…" at the end of a tab row that does not fit (Notion): every tab by its full name, the one on
     /// screen ticked. Picking one also scrolls the row to it.
-    private func tabOverflowMenu(_ items: [ViewTabItem]) -> some View {
+    private func tabOverflowMenu(_ items: [ViewTabItem], filterOn: ProjectViewFull? = nil) -> some View {
         Menu {
+            if let v = filterOn {
+                Button { filterView = v } label: {
+                    Label(T("Filter and sort…"), systemImage: configOf(v).isFiltered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease")
+                }
+                Divider()
+            }
             ForEach(items) { item in
                 switch item {
                 case .tab(let t):
@@ -1002,7 +1067,9 @@ struct ProjectDetailView: View {
                 ProjectToolIcon(icon: "bolt", label: T("Automations"), active: tab == .automations, labelled: toolLabels) { tab = .automations }
             }
             if detail != nil {
-                ProjectToolIcon(icon: "sparkles", label: T("Ask GIDEON"), labelled: toolLabels) { if !cover.isCovered { gideonOpen = true } }
+                // The web's label for this tool; the header button keeps "Ask GIDEON" (UI tour run 17, R17-B-01,
+                // decision 1).
+                ProjectToolIcon(icon: "sparkles", label: T("AI Autofill"), labelled: toolLabels) { if !cover.isCovered { gideonOpen = true } }
             }
             if searchApplies && !lanes.isEmpty {
                 ProjectToolbarSearch(query: $query, open: $searchOpen, focused: $searchFocused,
@@ -1155,8 +1222,9 @@ struct ProjectDetailView: View {
                 case .calendar: CalendarTab(tasks: lanesThrough(calendarView).flatMap { $0.tasks ?? [] }, onOpen: { open($0) },
                                             onCreate: { date in if canCreate { prefillDue = date; createLaneId = nil; showCreate = true } },
                                             canCreate: canCreate,
-                                            dateFieldId: plotBy, plotChoices: plotChoices, onPlotBy: { choosePlot($0) })
-                case .timeline: TimelineTab(lanes: lanesThrough(timelineView), onOpen: { open($0) })
+                                            dateFieldId: plotBy, plotChoices: plotChoices, onPlotBy: { choosePlot($0) },
+                                            dateFieldIds: dateFields.map(\.id))
+                case .timeline: TimelineTab(lanes: lanesThrough(timelineView), onOpen: { open($0) }, dateFieldIds: dateFields.map(\.id))
                 default:        EmptyView()
                 }
             }
@@ -1319,8 +1387,30 @@ struct ProjectDetailView: View {
                         // and "Add status", as on the web (R14-WB-5; UI tour run 15, Q-IA3 / Q-M5: the linked
                         // lane came first and pushed To Do aside). Grouped by section only — a board grouped
                         // by another property has nowhere to put them.
+                        // iPad / Mac: a linked lane that would not fit whole is a narrow rail (count, its name
+                        // upright, "Linked"); a click opens it, its fold button folds it again (web R17-WD-1;
+                        // UI tour run 17, R17-M-08 / iPad R17-I-05).
                         if !grouped {
-                            ForEach(linkedLanes(detail)) { lane in linkedColumn(lane, groupRow: statusStyle) }
+                            ForEach(linkedLanes(detail)) { lane in
+                                if linkedAsRail(lane.id, shownCount: shown.count) {
+                                    LinkedLaneRail(lane: lane) { withAnimation(.snappy) { _ = expandedLinked.insert(lane.id) } }
+                                } else {
+                                    linkedColumn(lane, groupRow: statusStyle)
+                                        .overlay(alignment: .topTrailing) {
+                                            if wide && !fitsWithoutRails(shownCount: shown.count) {
+                                                Button { withAnimation(.snappy) { _ = expandedLinked.remove(lane.id) } } label: {
+                                                    Image(systemName: "chevron.right.2").font(.system(size: 11, weight: .semibold))
+                                                        .foregroundStyle(NX.mutedFg)
+                                                        .frame(width: 28, height: 28).contentShape(Rectangle())
+                                                }
+                                                .buttonStyle(.plain)
+                                                .help(T("Fold"))
+                                                .accessibilityLabel(T("Fold"))
+                                                .padding(.top, 6).padding(.trailing, 6)
+                                            }
+                                        }
+                                }
+                            }
                         }
                     }
                     .padding(.vertical, 14)
@@ -1334,13 +1424,26 @@ struct ProjectDetailView: View {
                 // scroll's own (not padding inside it), so the snapped column keeps its 14 pt inset.
                 .scrollTargetBehavior(.viewAligned)
                 .contentMargins(.leading, 14, for: .scrollContent)
-                // A wider end margin on iPad / Mac, so "Add status" never sits against the window's edge
-                // (UI tour run 16, R16-M-16).
-                .contentMargins(.trailing, wide ? 32 : 14, for: .scrollContent)
-                // The column peeking in at the edge fades out, so a card cut mid-word reads as "more this way"
-                // (UI tour run 15, R15-I-11 / Q-IA21 / Q-M12). Wider on iPad / Mac, where 40 pt over a 280 pt
-                // column did not read as a fade at all (run 16, R16-I-13).
-                .nxEdgeFade(wide ? 80 : 48)
+                // iPad / Mac: the columns are sized so whole columns fill the board (`wideLaneWidth`), so a
+                // resting board never cuts one at its edge and "Add status" never peeks under a fade (UI tour
+                // run 17, R17-M-08 / iPad R17-I-05); the end margin lets the last resting place be a column's
+                // start. More columns are cued by the "›" at the top right.
+                .contentMargins(.trailing, wide ? wideTrailingRoom(detail, shown: shown, statusStyle: statusStyle, grouped: grouped) : 14,
+                                for: .scrollContent)
+                // Phone: the column peeking in at the edge fades out, so a card cut mid-word reads as "more this
+                // way" (UI tour run 15, R15-I-11 / Q-IA21 / Q-M12).
+                .nxEdgeFade(wide ? 0 : 48)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { boardViewport = $0 }
+                .overlay(alignment: .trailing) {
+                    // In the 12 pt gap the whole columns leave at the board's right edge.
+                    if wide && boardMore {
+                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(NX.mutedFg)
+                            .frame(width: 12, height: 28)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .modifier(HorizontalMoreTracker(more: $boardMore))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 // Columns scrolled off to the left end at the board's edge: on the Mac they showed through
                 // the sidebar's material as blurred ghost cards (UI tour run 14, P-M30).
@@ -1351,6 +1454,64 @@ struct ProjectDetailView: View {
                            actionTitle: T("Project settings"), actionIcon: "gearshape") { showSettings = true }
             }
         }
+    }
+
+    // MARK: wide board: whole columns, linked rails (UI tour run 17, R17-M-08 / iPad R17-I-05, web R17-WD-1)
+
+    private static let wideGap: CGFloat = 12
+    private static let addStatusW: CGFloat = 120
+    private static let railW: CGFloat = 44
+
+    /// The room for columns: the board less its 14 pt leading margin and one 12 pt gap at the right edge.
+    private var wideAvail: CGFloat { boardViewport - 14 - Self.wideGap }
+
+    /// iPad / Mac: as many columns of at least 260 pt as fit whole, sharing the room exactly, so a board at
+    /// rest never cuts a column at its right edge. nil on a phone or before the board is measured.
+    private var wideLaneWidth: CGFloat? {
+        guard wide, boardViewport > 0 else { return nil }
+        let k = max(1, Int((wideAvail + Self.wideGap) / (260 + Self.wideGap)))
+        return (wideAvail - Self.wideGap * CGFloat(k - 1)) / CGFloat(k)
+    }
+
+    /// The board's columns after the project's own lanes: "Add status", then the linked lanes.
+    private func boardTail(_ detail: ProjectDetail) -> (addStatus: Bool, linked: [ProjectDetail.Lane]) {
+        let shown = displayLanes("board")
+        let statusStyle = StatusOptions.inUse(lanes) && shown.allSatisfy { !$0.id.hasPrefix("grp:") }
+        let grouped = shown.contains { $0.id.hasPrefix("grp:") }
+        return (statusStyle && detail.canManageProject, grouped ? [] : linkedLanes(detail))
+    }
+
+    /// Every column fits on the board at once with the linked lanes open: then no rails.
+    private func fitsWithoutRails(shownCount: Int) -> Bool {
+        guard let w = wideLaneWidth, let d = detail else { return true }
+        let tail = boardTail(d)
+        var widths = Array(repeating: w, count: shownCount)
+        if tail.addStatus { widths.append(Self.addStatusW) }
+        widths += Array(repeating: w, count: tail.linked.count)
+        let total = widths.reduce(0, +) + Self.wideGap * CGFloat(max(0, widths.count - 1))
+        return total <= wideAvail + 0.5
+    }
+
+    private func linkedAsRail(_ id: String, shownCount: Int) -> Bool {
+        wide && boardViewport > 0 && !expandedLinked.contains(id) && !fitsWithoutRails(shownCount: shownCount)
+    }
+
+    /// The end margin that makes the last resting place a column's start, so the board's end shows whole
+    /// columns too.
+    private func wideTrailingRoom(_ detail: ProjectDetail, shown: [ProjectDetail.Lane], statusStyle: Bool, grouped: Bool) -> CGFloat {
+        guard let w = wideLaneWidth else { return 32 }
+        var widths = Array(repeating: w, count: shown.count)
+        if statusStyle && detail.canManageProject { widths.append(Self.addStatusW) }
+        if !grouped {
+            for lane in linkedLanes(detail) { widths.append(linkedAsRail(lane.id, shownCount: shown.count) ? Self.railW : w) }
+        }
+        var starts: [CGFloat] = []
+        var x: CGFloat = 0
+        for v in widths { starts.append(x); x += v + Self.wideGap }
+        let content = x - Self.wideGap
+        let naturalMax = 14 + content + Self.wideGap - boardViewport
+        guard naturalMax > 0, let next = starts.first(where: { $0 >= naturalMax - 0.5 }) else { return Self.wideGap }
+        return Self.wideGap + (next - naturalMax)
     }
 
     /// The tasks other projects linked into this one, one lane per source project, unfinished first (web
@@ -1388,7 +1549,8 @@ struct ProjectDetailView: View {
             canEdit: false,
             linked: true,
             groupRow: groupRow,
-            fieldIds: projectFieldIds
+            fieldIds: projectFieldIds,
+            width: wideLaneWidth
         )
     }
 
@@ -1412,7 +1574,8 @@ struct ProjectDetailView: View {
             onSetStatus: sectionStatus,
             canAdd: addable && canEdit,
             canEdit: canEdit,
-            fieldIds: projectFieldIds
+            fieldIds: projectFieldIds,
+            width: wideLaneWidth
         )
     }
 
@@ -1512,7 +1675,10 @@ struct ProjectDetailView: View {
             Label(T("Add status"), systemImage: "plus")
                 .font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
                 .lineLimit(1).fixedSize()
-                .frame(minWidth: 140, minHeight: 44)
+                // Its own width and a little air, not a 140 pt column: the empty gap it left pushed the linked
+                // lane past a portrait iPad's edge (UI tour run 17, iPad R17-I-05 / R17-M-08).
+                .padding(.horizontal, 8)
+                .frame(minWidth: wide ? Self.addStatusW : 100, minHeight: 44)
                 .contentShape(Rectangle())
         }
         .padding(.top, 18)
@@ -1940,6 +2106,8 @@ struct LaneColumn: View {
     var groupRow = false
     /// The project's own custom fields, for the cards (BoardCard.fieldIds).
     var fieldIds: Set<String>? = nil
+    /// iPad / Mac: the board's whole-column width (`ProjectDetailView.wideLaneWidth`); nil = the default.
+    var width: CGFloat? = nil
     @State private var composing = false
     @Environment(\.horizontalSizeClass) private var hSize
     /// True while a card is hovering over this column, so the target is obvious before you let go.
@@ -2018,7 +2186,7 @@ struct LaneColumn: View {
         }
         // An empty column is narrower on a phone, so the next one shows its whole header ("On Progress 12")
         // instead of a count cut to "1" (UI tour run 16, R16-I-05).
-        .frame(width: hSize == .compact && (lane.tasks ?? []).isEmpty && !composing ? 200 : 280)
+        .frame(width: width ?? (hSize == .compact && (lane.tasks ?? []).isEmpty && !composing ? 200 : 280))
         .frame(maxHeight: .infinity, alignment: .top)   // the column fills the board height so its scroll is bounded
     }
 
@@ -2301,5 +2469,55 @@ struct BoardCard: View {
     private var isOverdue: Bool {
         guard !task.isDone, let d = ProjDate.parse(task.dueDate) else { return false }
         return ProjDate.cal.startOfDay(for: d) < ProjDate.cal.startOfDay(for: Date())
+    }
+}
+
+/// A linked lane folded to a narrow rail on an iPad / Mac board (web R17-WD-1): its count, the source project's
+/// name upright, "Linked". A click opens the lane.
+private struct LinkedLaneRail: View {
+    let lane: ProjectDetail.Lane
+    let open: () -> Void
+
+    var body: some View {
+        Button(action: open) {
+            VStack(spacing: 10) {
+                Text("\((lane.tasks ?? []).count)").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg).monospacedDigit()
+                Text(lane.name).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                    .lineLimit(1).fixedSize()
+                    .rotationEffect(.degrees(90))
+                    .frame(width: 20, height: 160)
+                    .clipped()
+                Text(T("Linked")).font(NXFont.text(10, .medium)).foregroundStyle(NX.mutedFg)
+                    .lineLimit(1).fixedSize()
+                    .rotationEffect(.degrees(90))
+                    .frame(width: 20, height: 50)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 12)
+            .frame(width: 44)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(.highlight)
+        .help(lane.name)
+        .accessibilityLabel("\(lane.name), \(T("Linked")), \((lane.tasks ?? []).count)")
+        .accessibilityHint(T("Show this lane"))
+    }
+}
+
+/// Whether a horizontal scroll view has content right of its visible end (iOS 18 scroll geometry; false before).
+struct HorizontalMoreTracker: ViewModifier {
+    @Binding var more: Bool
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: Bool.self) { g in
+                g.contentOffset.x < g.contentSize.width - g.containerSize.width - 1
+            } action: { _, m in more = m }
+        } else {
+            content
+        }
     }
 }

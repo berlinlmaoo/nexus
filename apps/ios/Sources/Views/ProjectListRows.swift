@@ -74,6 +74,9 @@ struct ListPropLine: View {
     var hidePriority = false
     /// The assignees' avatars at the end of the line; off where the row draws them beside the title.
     var showPeople = true
+    /// Columns as wide as the List's widest value in each (ListSlotWidths), not the fixed column widths.
+    var measured = false
+    @Environment(ListSlotWidths.self) private var slotWidths: ListSlotWidths?
 
     /// The custom values a row shows (web: up to four), with every date apart from start and due folded
     /// out when it repeats one of them or another date (UI tour run 9, I7: "24 May 24 May ⏱ 26 May").
@@ -143,7 +146,18 @@ struct ListPropLine: View {
     private func columns(_ layout: ListColumns.Layout) -> some View {
         let repeated = repeatedDateFields(layout)
         let dueSaid = dueSaidByField(layout)
-        return HStack(spacing: 12) {
+        if measured, let slotWidths {
+            return AnyView(HStack(spacing: 10) {
+                ForEach(layout.fields, id: \.id) { field in
+                    MeasuredSlot(key: field.id, widths: slotWidths) { if !repeated.contains(field.id) { fieldSlot(field.id) } }
+                }
+                if layout.due { MeasuredSlot(key: "due", widths: slotWidths) { if !dueSaid { dueSlot } } }
+                if layout.priority { MeasuredSlot(key: "priority", widths: slotWidths) { prioritySlot } }
+                if layout.status { MeasuredSlot(key: "status", widths: slotWidths) { statusSlot } }
+            }
+            .fixedSize())
+        }
+        return AnyView(HStack(spacing: 12) {
             ForEach(layout.fields, id: \.id) { field in
                 ListSlot(width: field.width) { if !repeated.contains(field.id) { fieldSlot(field.id) } }
             }
@@ -151,7 +165,7 @@ struct ListPropLine: View {
             if layout.priority { ListSlot(width: ListColumns.priorityW) { prioritySlot } }
             if layout.status { ListSlot(width: ListColumns.statusW) { statusSlot } }
             if layout.people { ListSlot(width: ListColumns.peopleW, alignment: .trailing) { people } }
-        }
+        })
     }
 
     /// Date columns that would repeat a day this row already shows (the due date, or an earlier date
@@ -258,6 +272,28 @@ struct ListPropLine: View {
 }
 
 /// One fixed-width column of a wide List row. The clear base keeps the slot when its content is empty.
+/// The widest value seen in each column of one List (two-line iPad / Mac rows), so every row's columns line up.
+@Observable final class ListSlotWidths {
+    var widths: [String: CGFloat] = [:]
+    func report(_ key: String, _ width: CGFloat) {
+        if width > (widths[key] ?? 0) + 0.5 { widths[key] = ceil(width) }
+    }
+}
+
+/// A value in its column: as wide as the column's widest value (blank when the row has none).
+private struct MeasuredSlot<Content: View>: View {
+    let key: String
+    let widths: ListSlotWidths
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        content
+            .fixedSize()
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { widths.report(key, $0) }
+            .frame(width: widths.widths[key], alignment: .leading)
+    }
+}
+
 private struct ListSlot<Content: View>: View {
     let width: CGFloat
     var alignment: Alignment = .leading
@@ -352,7 +388,19 @@ struct ListTaskRow: View {
                     titleLine.frame(maxWidth: .infinity, alignment: .leading)
                     line.people
                 }
-                line
+                // iPad / Mac: the values in the List's columns under the title, each column as wide as its
+                // widest value, so they line up down the List; a row with no date keeps that column blank
+                // instead of sliding the amount, Kategori and status left (UI tour run 17, R17-B-03, the kept
+                // B-08 "aligned meta columns"). Too wide for the row: the values wrap as on a phone.
+                if wide {
+                    ViewThatFits(in: .horizontal) {
+                        ListPropLine(task: task, status: status, columnLayout: columnLayout, hidePriority: hidePriority,
+                                     showPeople: false, measured: true)
+                        line
+                    }
+                } else {
+                    line
+                }
             }
         }
     }

@@ -171,7 +171,7 @@ const MIN_LAST_STEP = Number(process.env.TOUR_MIN_LAST_STEP) || 0.15;
 async function capture(page, dir, id) {
   const shot = (n) => page.screenshot({ path: path.join(dir, n === 1 ? `${id}.png` : `${id}-${n}.png`) });
   for (const f of fs.readdirSync(dir)) if (f.startsWith(`${id}-`) && /^-\d+\.png$/.test(f.slice(id.length))) fs.rmSync(path.join(dir, f));
-  const step = () => page.evaluate(() => {
+  const step = () => page.evaluate((MIN_LAST_STEP_IN) => {
     const vw = innerWidth, vh = innerHeight;
     const doc = document.scrollingElement || document.documentElement;
     const all = [...document.body.querySelectorAll("*")];
@@ -203,8 +203,11 @@ async function capture(page, dir, id) {
       return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.display !== "none";
     });
     const overlay = overlays[overlays.length - 1] ?? null;
-    // How far the furthest-moving scroller went, as a fraction of its own height.
+    // How far the furthest-moving scroller went, as a fraction of its own height; `snapped`: a scroller came
+    // to rest on its last snap point short of its end, which is then the last page.
     let moved = 0;
+    let snapped = false;
+    let more = false;   // a scroller that still has a page to go after this step
     for (const [s, bottom] of end) {
       if (overlay && (s === doc || !overlay.contains(s))) continue;
       const height = s === doc ? vh : s.clientHeight;
@@ -219,23 +222,52 @@ async function capture(page, dir, id) {
       const limit = Math.max(0, Math.ceil(bottom + 16 - height));
       const before = s.scrollTop;
       if (before >= limit) continue;
-      s.scrollTop = Math.min(limit, before + Math.round(height * 0.85));
+      let target = Math.min(limit, before + Math.round(height * 0.85));
+      let snappedHere = false;
+      // The last step: pinned at the scroller's end the browser cannot snap, so the page started on a half
+      // row (run 17, R17-WB-1: wm tickets-2, wd/wm outlet-day-2, wm socmed-day-2, wd project-overview-2).
+      // Rest on the last snap point (the web's [data-snap-row], [data-snap-rows] > *, [data-snap-top], less
+      // scroll-padding-top) at or above the end instead, but only when nothing is lost: what that page no
+      // longer reaches at the bottom must already be on the page before, and the step must still be worth a
+      // page (MIN_LAST_STEP). Otherwise the end, as before.
+      if (target === limit) {
+        const padEl = s === doc ? document.documentElement : s;
+        const pad = parseFloat(getComputedStyle(padEl).scrollPaddingTop) || 0;
+        const top0 = s === doc ? 0 : s.getBoundingClientRect().top;
+        let snap = -1;
+        for (const el of s.querySelectorAll("[data-snap-row], [data-snap-rows] > *, [data-snap-top]")) {
+          const r = el.getBoundingClientRect();
+          if (!r.height) continue;
+          const at = Math.floor((s === doc ? r.top + scrollY : r.top - top0 + s.scrollTop) - pad);
+          if (at <= limit && at > before && at > snap) snap = at;
+        }
+        const seen = before + height;
+        // Nothing lost: the snapped page still reaches the content's end, or the page before already showed it.
+        const keepsEnd = snap + height >= bottom - 1 || bottom <= seen + 1;
+        if (snap >= 0 && keepsEnd && (snap - before) / height >= MIN_LAST_STEP_IN) {
+          target = snap;
+          snapped = snappedHere = true;
+        }
+      }
+      if (target < limit && !snappedHere) more = true;
+      s.scrollTop = target;
       if (s.scrollTop > before + 1) moved = Math.max(moved, (s.scrollTop - before) / height);
     }
-    return moved;
-  }).catch(() => 0);
+    return { moved, snapped: snapped && !more };
+  }, MIN_LAST_STEP).catch(() => ({ moved: 0, snapped: false }));
   await shot(1);
   let pages = 1;
   // A step that moved less than half a viewport shows mostly the previous page again (UI tour run 13, W-M24:
   // dashboard-3 and projects-2 were 50-77 px further down), so the paging ends there; but when it still
   // reached a real part of the page (MIN_LAST_STEP), that end is shot once as the last page.
   while (pages < MAX_PAGES) {
-    const moved = await step();
+    const { moved, snapped } = await step();
     if (moved < MIN_LAST_STEP) break;
     await page.waitForTimeout(700);
     pages += 1;
     await shot(pages);
-    if (moved < MIN_PAGE_STEP) break;
+    // A page resting on its last snap point shows everything not yet seen: it is the last one.
+    if (moved < MIN_PAGE_STEP || snapped) break;
   }
   return { pages };
 }

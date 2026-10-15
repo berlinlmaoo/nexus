@@ -123,6 +123,9 @@ private struct OverviewStats {
     var next7 = 0
     var noDue = 0
     var unassigned = 0
+    /// The Unassigned row's other two counts: overdue, and done this month, by nobody (decision 3 of run 17).
+    var unassignedOverdue = 0
+    var unassignedDoneMonth = 0
     var completed: [BoardTask] = []
     var people: [OverviewPerson] = []
     var sections: [OverviewSection] = []
@@ -179,7 +182,10 @@ private struct OverviewStats {
                 completed.append(task)
                 if let at = ProjDate.parse(task.completedAt) {
                     if at >= weekAgo { doneLast7 += 1 }
-                    if at >= monthStart { for id in ids { person(id, task); people[id]?.doneMonth += 1 } }
+                    if at >= monthStart {
+                        for id in ids { person(id, task); people[id]?.doneMonth += 1 }
+                        if ids.isEmpty { unassignedDoneMonth += 1 }
+                    }
                 }
                 continue
             }
@@ -193,7 +199,10 @@ private struct OverviewStats {
                     if d <= 13 { upcoming.append(task) }
                 }
             } else { noDue += 1 }
-            if ids.isEmpty { unassigned += 1 }
+            if ids.isEmpty {
+                unassigned += 1
+                if let d, d < 0 { unassignedOverdue += 1 }
+            }
             for id in ids {
                 person(id, task)
                 people[id]?.open += 1
@@ -247,6 +256,7 @@ struct OverviewTab: View {
     let onOpenMember: (ProfileTarget) -> Void
 
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @State private var pageTopInset: CGFloat = 0
 
     var body: some View {
         let stats = OverviewStats(detail)
@@ -280,6 +290,9 @@ struct OverviewTab: View {
             .frame(maxWidth: .infinity)
             .padding(16)
         }
+        // Where the page's visible top is, for the team card's pinned head (StickyInPageScroll).
+        .modifier(PageTopInsetReader(inset: $pageTopInset))
+        .environment(\.pageScrollTopInset, pageTopInset)
     }
 
     @ViewBuilder private func main(_ s: OverviewStats, updates: Bool = false) -> some View {
@@ -325,21 +338,38 @@ private struct OverviewCard<Content: View, Action: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                Image(systemName: icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
-                    .accessibilityHidden(true)
-                Text(title).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 8)
-                action()
-            }
-            .padding(.horizontal, 16).frame(minHeight: 48)
+            OverviewCardTitle(title: title, icon: icon) { action() }
             Divider().overlay(NX.border)
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .nexusCard(padding: 0, radius: 18)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+/// An overview card's title row: icon, title, an optional action on the right.
+private struct OverviewCardTitle<Action: View>: View {
+    let title: String
+    let icon: String
+    @ViewBuilder var action: () -> Action
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                .accessibilityHidden(true)
+            Text(title).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 8)
+            action()
+        }
+        .padding(.horizontal, 16).frame(minHeight: 48)
+    }
+}
+
+extension OverviewCardTitle where Action == EmptyView {
+    init(title: String, icon: String) {
+        self.init(title: title, icon: icon, action: { EmptyView() })
     }
 }
 
@@ -385,7 +415,7 @@ private enum OverviewStyle {
     static func priorityBar(_ key: String) -> Color {
         switch key {
         case "URGENT": return rose
-        case "HIGH": return NX.danger
+        case "HIGH": return NX.priorityHigh
         case "MEDIUM": return sky
         case "LOW": return NX.mutedFg.opacity(0.4)
         default: return NX.mutedFg.opacity(0.25)
@@ -643,12 +673,26 @@ private struct OverviewDeadlinesCard: View {
                         .font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground)
                         .fixedSize(horizontal: false, vertical: true)
                     if stats.noDue > 0 {
-                        Text(OverviewMath.plural(stats.noDue, "1 open task has no due date. Give it one so it shows up here.", "%d open tasks have no due date. Give them one so they show up here."))
-                            .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                            .fixedSize(horizontal: false, vertical: true)
+                        let hint = OverviewMath.plural(stats.noDue, "1 open task has no due date. Give it one so it shows up here.", "%d open tasks have no due date. Give them one so they show up here.")
+                        // "Show them" bold and inline at the end of the sentence, as on the web: a link on a
+                        // line of its own read as a separate control (UI tour run 17, R17-B-02, decision 2).
                         if let onDrill {
-                            OverviewLinkButton(title: T("Show them")) { onDrill(OverviewDrill(due: OverviewDrill.Due.none, title: T("No due date"))) }
-                                .padding(.leading, -8)
+                            Button { onDrill(OverviewDrill(due: OverviewDrill.Due.none, title: T("No due date"))) } label: {
+                                (Text(hint + " ").foregroundColor(NX.mutedFg)
+                                 + Text(T("Show them")).fontWeight(.semibold).foregroundColor(NX.foreground))
+                                    .font(NXFont.text(13))
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .hoverEffect(.highlight)
+                            .accessibilityLabel(hint)
+                            .accessibilityHint(T("Show them"))
+                        } else {
+                            Text(hint).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
@@ -709,17 +753,31 @@ private struct OverviewTeamCard: View {
     @State private var all = false
     private let limit = 8
 
+    /// The rows' height under the head: how far the pinned head may travel.
+    @State private var rowsHeight: CGFloat = 0
+
     var body: some View {
-        OverviewCard(title: T("Who's working on what"), icon: "person.2") {
-            if stats.people.isEmpty {
+        if stats.people.isEmpty {
+            OverviewCard(title: T("Who's working on what"), icon: "person.2") {
                 Text(T("No members or assignees yet. Add people to the project, then assign tasks to see the workload here."))
                     .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(16)
-            } else {
-                let maxOpen = max(1, max(stats.people.map(\.open).max() ?? 0, stats.unassigned))
+            }
+        } else {
+            let maxOpen = max(1, max(stats.people.map(\.open).max() ?? 0, stats.unassigned))
+            // The card's title and the Person / Open / Overdue / Done this month labels stay pinned under the
+            // page's top while the rows scroll by, as the web's card does since run 17.
+            VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 0) {
+                    OverviewCardTitle(title: T("Who's working on what"), icon: "person.2")
+                    Divider().overlay(NX.border)
                     header
+                }
+                .background(NX.card)
+                .modifier(StickyInPageScroll(limit: rowsHeight - 40))
+                .zIndex(1)
+                VStack(alignment: .leading, spacing: 0) {
                     ForEach(all ? stats.people : Array(stats.people.prefix(limit))) { p in
                         row(p, maxOpen: maxOpen)
                     }
@@ -732,7 +790,11 @@ private struct OverviewTeamCard: View {
                     }
                 }
                 .padding(.bottom, 4)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowsHeight = $0 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .nexusCard(padding: 0, radius: 18)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
     }
 
@@ -755,10 +817,6 @@ private struct OverviewTeamCard: View {
         .font(NXFont.text(11, .medium)).foregroundStyle(NX.mutedFg).lineLimit(1).minimumScaleFactor(0.85)
         .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
         .accessibilityHidden(true)
-    }
-
-    private var dash: some View {
-        Text("—").font(NXFont.text(14)).foregroundStyle(NX.mutedFg.opacity(0.6)).accessibilityHidden(true)
     }
 
     private func num(_ n: Int, late: Bool = false) -> some View {
@@ -826,9 +884,9 @@ private struct OverviewTeamCard: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                // Overdue and done are counted per person; for nobody they read as a quiet dash, so the row
-                // fills its three columns like the others (UI tour run 15, R15-I-14 / Q-IA19 / Q-M10).
-                numbers(num(stats.unassigned), dash, dash)
+                // Every cell a number, zero as "0", as on the web: the Unassigned row's real overdue and done
+                // counts, never "—" (UI tour run 17, decision 3).
+                numbers(num(stats.unassigned), num(stats.unassignedOverdue, late: true), num(stats.unassignedDoneMonth))
             }
             .padding(.horizontal, 16).padding(.vertical, 8)
             .contentShape(Rectangle())
@@ -836,7 +894,7 @@ private struct OverviewTeamCard: View {
         .buttonStyle(.plain)
         .allowsHitTesting(onDrill != nil)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(T("Unassigned")). \(T("Open")) \(stats.unassigned)")
+        .accessibilityLabel("\(T("Unassigned")). \(T("Open")) \(stats.unassigned), \(T("Overdue")) \(stats.unassignedOverdue), \(T("Done this month")) \(stats.unassignedDoneMonth)")
         .accessibilityAddTraits(.isButton)
     }
 }

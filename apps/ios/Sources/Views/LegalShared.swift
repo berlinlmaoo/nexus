@@ -717,3 +717,35 @@ struct LegalLinkPickerSheet: View {
     }
 }
 
+
+/// "PATS · Amends PATS/PKS-UNIV/THE-Z/2026/001" on a request card: on one line where it fits, else the number
+/// on a line of its own, else the number folded in the middle as on the web ("PATS/PKS-UNIV/…/2026/001").
+/// Never broken inside the number: longer than its line, a word-joined number still broke at its last "/"
+/// (UI tour run 17, iPad R17-I-08).
+struct LegalAmendsLine: View {
+    let company: String?
+    let amends: String?
+
+    var body: some View {
+        if let amends {
+            ViewThatFits(in: .horizontal) {
+                Text([company, String(format: T("Amends %@"), amends)].compactMap { $0 }.joined(separator: " · "))
+                    .lineLimit(1).fixedSize()
+                VStack(alignment: .leading, spacing: 2) {
+                    if let company { Text(company).lineLimit(1) }
+                    Text(String(format: T("Amends %@"), amends)).lineLimit(1).fixedSize()
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    if let company { Text(company).lineLimit(1) }
+                    Text(String(format: T("Amends %@"), LegalLabels.shortNumber(amends))).lineLimit(1).fixedSize()
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    if let company { Text(company).lineLimit(1) }
+                    Text(String(format: T("Amends %@"), LegalLabels.shortNumber(amends))).lineLimit(1).truncationMode(.middle)
+                }
+            }
+        } else if let company {
+            Text(company)
+        }
+    }
+}

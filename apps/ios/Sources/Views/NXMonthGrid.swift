@@ -70,6 +70,10 @@ extension View {
     /// The bordered card a month grid sits in.
     func nxMonthGridCard() -> some View {
         self
+            // No focus platter: with a keyboard attached the first day button drew a rounded highlight inside its
+            // square cell, the "rounded grey fill" of the out-of-month days (UI tour run 17, iPhone R17-I-18,
+            // decision 12). The navy outline is the picked day's mark.
+            .focusEffectDisabled()
             .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))

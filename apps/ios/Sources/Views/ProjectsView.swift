@@ -1154,8 +1154,16 @@ struct CreateProjectSheet: View {
     @State private var memberLevel: ProjectAccessLevel = .edit
     @State private var busy = false
     @State private var err: String?
+    /// The template gallery's own height (iOS 18 scroll geometry), so the sheet hugs it.
+    @State private var galleryHeight: CGFloat = 0
 
     private var kind: ProjectKind? { pick?.kind }
+    /// The gallery's sheet hugs its cards (title bar ~ 60 pt above them), at most 760 pt: capped at 760 it
+    /// left ~450 pt of empty sheet under three cards (UI tour run 17, R17-B-08). The form keeps the cap.
+    private var sheetHeight: CGFloat {
+        guard pick == nil, galleryHeight > 0 else { return 760 }
+        return min(760, galleryHeight + 72)
+    }
 
     var body: some View {
         NavigationStack {
@@ -1224,16 +1232,17 @@ struct CreateProjectSheet: View {
                 }
                 } else {
                     TemplateGallery { choose($0) }
+                        .modifier(ContentHeightReader(height: $galleryHeight))
                 }
             }
             .navigationTitle(T("Create a new project"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } }.nxPlainOnMac() }
         }
         // Page wide on an iPad / Mac, so the gallery has room for three cards across like the web (UI tour run
         // 13 M-8, run 14 P-M18), but not full height: that left ~1250 pt empty under the cards (UI tour run 15,
         // Q-IA34). Capped, not fitted (run 16, R16-B-02).
-        .modifier(PageWideFittedSheet())
+        .modifier(PageWideFittedSheet(maxHeight: sheetHeight))
     }
 
     private func field<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
@@ -1568,5 +1577,19 @@ struct PageWideCappedSizing: PresentationSizing {
     func proposedSize(for root: PresentationSizingRoot, context: PresentationSizingContext) -> ProposedViewSize {
         let page = PagePresentationSizing.page.proposedSize(for: root, context: context)
         return ProposedViewSize(width: page.width, height: min(page.height ?? maxHeight, maxHeight))
+    }
+}
+
+/// A scroll view's content height (iOS 18 scroll geometry; unchanged before that).
+struct ContentHeightReader: ViewModifier {
+    @Binding var height: CGFloat
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, h in
+                if abs(h - height) > 1 { height = h }
+            }
+        } else {
+            content
+        }
     }
 }

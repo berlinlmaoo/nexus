@@ -486,9 +486,10 @@ struct SubmissionsView: View {
             if hSize == .regular {
                 let n = CGFloat(max(1, visibleColumns.count))
                 let fair = (width - 2 * gutter - 12 * (n - 1)) / n
-                // From 200 pt: a portrait 13" iPad shares ~235 pt per lane, so all four lanes fit side by side
-                // instead of a cut In Progress and an unseen Done (UI tour run 16, R16-I-05 iPad).
-                if fair >= 200 { return fair }
+                // From 150 pt: beside the open sidebar a portrait 13" iPad has ~710 pt, ~160 pt a lane, so all
+                // four fit side by side. The 200 pt floor of run 16 was never reached there, and In Progress was
+                // still cut with Done off screen (UI tour run 17, iPad R17-I-04).
+                if fair >= 150 { return fair }
                 // Too narrow to share: an empty lane is narrow, as on the web (w-48), so the lanes with cards
                 // stay on screen (UI tour run 15, Q-IA1: "New" with the only 4 cards sat past a cut "Done").
                 return items.isEmpty ? 200 : 300

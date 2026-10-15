@@ -68,11 +68,11 @@ struct OutletCalendarView: View {
                         // Two lines for the name: one line cut every event to "ZZ QA cu…" on an iPad (run 14, P-I28).
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
                             Circle().fill(e.status.tone.fg).frame(width: 6, height: 6)
-                            // The whole name: three lines still cut "ZZ QA / custom / report ni…" in a portrait
-                            // iPad's cell (UI tour run 15, Q-IB18; run 16, R16-I-16), so four, a size smaller there.
+                            // One line and "…", as the web's chip: a chip must not grow its cell (UI tour run 17, iPad
+                            // R17-I-11; decision 14 is for names in rows, not chips in a calendar cell). The day
+                            // panel names the event in full.
                             Text(e.name).font(NXFont.text(11, .semibold)).foregroundStyle(NX.foreground)
-                                .lineLimit(4).minimumScaleFactor(0.85).multilineTextAlignment(.leading)
-                                .fixedSize(horizontal: false, vertical: true)
+                                .lineLimit(1).truncationMode(.tail)
                         }
                         .padding(.horizontal, 5).padding(.vertical, 2)
                         .frame(maxWidth: .infinity, alignment: .leading)

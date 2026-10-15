@@ -37,6 +37,11 @@ struct MemberProfileView: View {
     /// Workspace facts: org role, email, join date. Nil for a peer who shares a workspace with the
     /// viewer but not the one `/api/workspaces/members` answers for — the header still draws.
     @State private var member: WorkspaceRoster.Member?
+    /// The attendance strip's room and the day at its leading edge (whole days only).
+    @State private var stripRoom: CGFloat = 0
+    @State private var stripLead: String?
+    /// PROJECTS lists eight until asked for all.
+    @State private var allProjects = false
     @State private var standing: LeaderboardRow?
     /// Self only. `/api/gamification/me` is the sole source of a streak and of the level floors the
     /// progress bar needs; there is no peer equivalent for either.
@@ -494,15 +499,26 @@ struct MemberProfileView: View {
         let days = r.days ?? []
         return VStack(alignment: .leading, spacing: 10) {
             SectionLabel(T("Attendance board"))
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
-                        ForEach(days) { day in dayCell(day, r) .id(day.date) }
-                    }
-                    .padding(.vertical, 2)
+            // Whole days only: the strip is as wide as the days that fit and rests on a day's edge, opening with
+            // today in it; it cut TUE 20 at the card's edge (UI tour run 17, iPhone R17-I-13).
+            let fit = max(1, Int((stripRoom + 4) / 34))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(days) { day in dayCell(day, r).id(day.date) }
                 }
-                .onAppear {
-                    if let today = days.first(where: { $0.isToday == true }) { proxy.scrollTo(today.date, anchor: .center) }
+                .padding(.vertical, 2)
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.viewAligned)
+            .scrollPosition(id: $stripLead, anchor: .leading)
+            .frame(width: stripRoom > 0 && days.count > fit ? CGFloat(fit) * 34 - 4 : nil, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { w in
+                stripRoom = w
+                if let i = days.firstIndex(where: { $0.isToday == true }) {
+                    let f = max(1, Int((w + 4) / 34))
+                    let lead = min(max(0, i - f / 2), max(0, days.count - f))
+                    stripLead = days[lead].date
                 }
             }
             // The tiles are coloured by the day's status (red = absent); the small dot on a tile is the XP
@@ -533,7 +549,15 @@ struct MemberProfileView: View {
                 Text(T(day.weekday ?? "").uppercased()).font(NXFont.text(8, .semibold)).foregroundStyle(NX.mutedFg)
                 Text("\(day.day ?? 0)").font(NXFont.text(10, .bold)).foregroundStyle(day.isToday == true ? NX.violetText : NX.mutedFg)
                 ZStack(alignment: .topTrailing) {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous).fill(tone.color)
+                    // A day still to come: a dashed outline, not a near-white tile at 40% (UI tour run 17, iPhone
+                    // R17-I-13: days 16-20 were all but invisible).
+                    RoundedRectangle(cornerRadius: 7, style: .continuous).fill(future ? Color.clear : tone.color)
+                        .overlay {
+                            if future {
+                                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                    .strokeBorder(NX.mutedFg.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+                            }
+                        }
                         .frame(width: 24, height: 24)
                         .overlay {
                             if day.isToday == true {
@@ -544,7 +568,6 @@ struct MemberProfileView: View {
                         Circle().fill(NX.danger).frame(width: 7, height: 7).offset(x: 2, y: -2)
                     }
                 }
-                .opacity(future ? 0.4 : 1)
             }
             .frame(width: 30)
         }
@@ -667,7 +690,9 @@ struct MemberProfileView: View {
                 Text(isMe ? T("No projects yet.") : T("No project you can both see."))
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             } else {
-                ForEach(projects) { project in
+                // The first eight, then "Show all n", as Employment start date: every project ran ~100 rows over
+                // three screens (UI tour run 17, iPhone R17-I-14).
+                ForEach(allProjects ? projects : Array(projects.prefix(8))) { project in
                     // The project's own mark (photo or the grey page), not a colour dot; the status only when it
                     // is something other than Active, so it isn't repeated on every row (UI tour run 7).
                     HStack(spacing: 10) {
@@ -678,6 +703,14 @@ struct MemberProfileView: View {
                             Text(project.statusLabel).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                         }
                     }
+                }
+                if projects.count > 8 {
+                    Button { withAnimation(.snappy) { allProjects.toggle() } } label: {
+                        Text(allProjects ? T("Show fewer") : String(format: T("Show all %d"), projects.count))
+                            .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
+                            .frame(minHeight: 36).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }

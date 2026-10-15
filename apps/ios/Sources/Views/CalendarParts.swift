@@ -447,7 +447,7 @@ struct CalPriorityChip: View {
         if priority == "URGENT" {
             CalChip(text: T("Urgent").uppercased(), tone: .danger)
         } else if priority == "HIGH" {
-            CalChip(text: T("High").uppercased(), tone: .warning)
+            CalChip(text: T("High").uppercased(), tone: .high)
         }
     }
 }
@@ -2075,7 +2075,9 @@ struct CalPeopleWeek: View {
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if urgent {
-                    Image(systemName: "flag.fill").font(NXFont.text(CalType.size(9), .bold)).foregroundStyle(CalTone.overdue)
+                    // Urgent red, High orange (decision 4 of run 17).
+                    Image(systemName: "flag.fill").font(NXFont.text(CalType.size(9), .bold))
+                        .foregroundStyle(item.priority == "URGENT" ? CalTone.overdue : NX.priorityHigh)
                         .padding(.top, 2)
                         .accessibilityLabel(item.priority == "URGENT" ? T("Urgent") : T("High"))
                 }
