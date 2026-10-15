@@ -1696,7 +1696,8 @@ struct StreakBoardCard: View {
         // missed by a few points and opened mid-period with a cut column at each edge (UI tour run 15, Q-IB21).
         // 16 pt since run 16 (R16-M-14): a default Mac window missed the whole 28 Sep – 27 Oct period by three
         // days at 18.
-        let least: CGFloat = hSize == .regular ? 16 : cell
+        // 14 pt since run 17 (R17-M-05): the whole 28 Sep - 27 Oct must fit a default Mac window, as on the web.
+        let least: CGFloat = hSize == .regular ? 14 : cell
         return min(40, max(least, ((stripWidth - gap * (n - 1)) / n).rounded(.down)))
     }
     private let gap: CGFloat = 3
@@ -1713,7 +1714,21 @@ struct StreakBoardCard: View {
     /// name to about ten characters); more on an iPad or Mac, where the board has room.
     /// 190 on iPad / Mac: full names, as the web's board, where 150 turned them into "Irvandes Hasri Ilham M."
     /// (UI tour run 16, R16-B-24).
-    private var nameW: CGFloat { hSize == .regular ? 190 : 104 }
+    /// Since run 17 (R17-M-05): narrower, 150 pt (names shorten to initials, `nameVariants`), only when the full
+    /// 190 pt would keep the whole period from fitting at the 14 pt day minimum; the period first, as on the web.
+    private var nameW: CGFloat {
+        guard hSize == .regular else { return 104 }
+        guard gridWidth > 0, periodDays.count > 1 else { return 190 }
+        let n = CGFloat(periodDays.count)
+        let needed = n * 14 + (n - 1) * gap
+        let pills: CGFloat = webTools && !deductions.isEmpty ? Self.pillsW + lane : 0
+        let others = scoreW + 2 * lane + pills
+        return gridWidth - others - 190 >= needed ? 190 : 150
+    }
+    /// The board's whole width (names, days, score, pills), for `nameW`.
+    @State private var gridWidth: CGFloat = 0
+    /// The per-person pills column: "4/10 days off" and "−590 XP" side by side.
+    private static let pillsW: CGFloat = 140
 
     // ProjDate's shared Calendar and DateFormatter cache instead of fresh ones. These are read from
     // `body`, and constructing a DateFormatter there is about the most expensive thing you can do:
@@ -1958,6 +1973,8 @@ struct StreakBoardCard: View {
                 logList
             } else {
                 grid
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0 }
             }
             if let cachedFrom { OfflineNotice(savedAt: cachedFrom) }
         }
@@ -2234,7 +2251,7 @@ struct StreakBoardCard: View {
             // The web board's per-person pills, "0/4 days off" and "−590 XP" (managers, iPad / Mac; Q-IB8).
             if webTools && !deductions.isEmpty {
                 VStack(alignment: .leading, spacing: gap) {
-                    Color.clear.frame(width: 150, height: headerH)
+                    Color.clear.frame(width: Self.pillsW, height: headerH)
                     ForEach(shownMembers) { m in
                         HStack(spacing: 4) {
                             if let d = deductions[m.id] {
@@ -2247,7 +2264,7 @@ struct StreakBoardCard: View {
                                 }
                             }
                         }
-                        .frame(width: 150, height: cell, alignment: .leading)
+                        .frame(width: Self.pillsW, height: cell, alignment: .leading)
                     }
                 }
             }

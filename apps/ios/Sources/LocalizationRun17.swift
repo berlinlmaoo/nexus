@@ -15,5 +15,8 @@ extension AppLanguage {
         "Pick the type of a new question.": "Pilih jenis pertanyaan baru.",
         "Reorder the questions.": "Ubah urutan pertanyaan.",
         "See the form exactly as people see it.": "Lihat formulir persis seperti yang dilihat orang.",
+        // Board: a linked lane folded to a rail and opened again (R17-M-08)
+        "Fold": "Lipat",
+        "Show this lane": "Tampilkan lajur ini",
     ]
 }
