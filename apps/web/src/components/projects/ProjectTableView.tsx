@@ -26,7 +26,7 @@ import {
 import { CustomFieldInput } from "@/components/tasks/TaskDetailPanel";
 import { FieldEditor } from "@/components/projects/ProjectCustomFieldsManager";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn, glueDash } from "@/lib/utils";
 import { Avatar, useUserLookup } from "@/components/Avatar";
 import { useTaskBulk } from "@/components/tasks/task-bulk";
 import { toast } from "sonner";
@@ -348,9 +348,11 @@ function NameCell({ task, handle, onRename, onOpen }: { task: NexusTask; handle?
           type="button"
           onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey) return; setEditing(true); }}
           title={task.title}
-          className={cn("line-clamp-2 min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm font-medium leading-snug [overflow-wrap:anywhere] hover:border-border", done && "text-muted-foreground line-through")}
+          // Breaks between words only (break-words splits a word only when it alone is wider than the cell), and a
+          // spaced dash stays with the word before it (UI tour run 16, R16-WM-1: "Gaji Clippers / –…").
+          className={cn("line-clamp-2 min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm font-medium leading-snug break-words hover:border-border", done && "text-muted-foreground line-through")}
         >
-          {title}
+          {glueDash(title)}
         </button>
       )}
       {filteredOut && <FilterHint />}

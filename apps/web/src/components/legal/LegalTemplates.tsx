@@ -19,6 +19,7 @@ import {
 } from "@/lib/legal-api";
 import { docTypeLabel, fieldTypeLabel, formatBytes, SCALAR_FIELD_TYPES } from "@/components/legal/legal-labels";
 import { useLang } from "@/lib/lang";
+import { glueDash } from "@/lib/utils";
 
 const NONE = "__none";
 
@@ -66,7 +67,7 @@ export function LegalTemplates() {
                 <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="line-clamp-2 min-w-0 text-sm font-medium">{tpl.name}</span>
+                    <span className="line-clamp-2 min-w-0 text-sm font-medium">{glueDash(tpl.name)}</span>
                     {tpl.archived && <Badge variant="outline">{t("Archived")}</Badge>}
                   </div>
                   <div className="truncate text-xs text-muted-foreground">

@@ -9,7 +9,7 @@ import { COLOR_PRESETS } from "@/lib/project-views";
 import { orderedOptions, usesStatusOptions } from "@/lib/status-options";
 import { optionColorKey } from "@/components/tasks/StatusPicker";
 import { useLang } from "@/lib/lang";
-import { cn } from "@/lib/utils";
+import { cn, glueDash } from "@/lib/utils";
 import { useProjectCanEdit } from "@/components/projects/project-access";
 
 /**
@@ -559,7 +559,8 @@ function RecentlyDoneCard({ completed, memberById, onOpenTask }: { completed: Ne
                 <button type="button" onClick={() => onOpenTask(task)} className="flex w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none">
                   <span aria-hidden className={cn("grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full", STATUS.doneFill)}><svg viewBox="0 0 12 12" className="h-2.5 w-2.5"><path d="M2.5 6.2 5 8.5l4.5-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm">{task.title}</span>
+                    {/* Two lines before "…", like List and Table (UI tour run 16, R16-WB-8). */}
+                    <span className="line-clamp-2 text-sm">{glueDash(task.title ?? "")}</span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {[by?.name ? t("by {name}", { name: by.name }) : null, ago(task.completedAt ?? task.updatedAt)].filter(Boolean).join(" · ")}
                     </span>

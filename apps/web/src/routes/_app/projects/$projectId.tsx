@@ -74,7 +74,7 @@ import {
   type ViewLayout,
 } from "@/lib/project-views";
 import { t as tt, useLang } from "@/lib/lang";
-import { cn } from "@/lib/utils";
+import { cn, glueDash } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { priorityTone } from "@/lib/calendar/tone";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -1696,7 +1696,8 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
       </span>
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
         {task.parentId && <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label={t("Subtask")} />}
-        <span className={cn("truncate text-sm", done && "text-muted-foreground line-through")}>{task.title}</span>
+        {/* Two lines before "…", on a phone and on a desktop (UI tour run 16, R16-WD-7, R16-WM-11). */}
+        <span className={cn("line-clamp-2 text-sm", done && "text-muted-foreground line-through")}>{glueDash(task.title ?? "")}</span>
         {task.parentId && task.parent?.title && <span className="hidden truncate text-xs text-muted-foreground md:inline">· {task.parent.title}</span>}
         <QuestChip task={task} />
         {filteredOut && <FilterHint />}
@@ -2189,8 +2190,22 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   // Progress are hidden; the bar's tooltip and the task itself still say both). Audit 12 Oct 2026.
   const compact = useIsMobile();
   const leftW = compact ? Math.round(Math.min(200, Math.max(120, ((typeof window !== "undefined" ? window.innerWidth : 390) - 32) * 0.4))) : GANTT_LEFT_W;
+  // A task with neither of the view's dates but with a date field the List shows (a request's usage date) is a
+  // one-day marker on that day, as a due-only task is, instead of "No date" beside a date the List and Board
+  // show (UI tour run 16, R16-WB-2). Read-only: a drag would write the view's own dates.
+  const markerKeys = defs.filter((d) => d.kind === "date" && d.key.startsWith("cf:") && !d.hidden).map((d) => d.key);
+  const markerOf = (task: NexusTask): { start: Date; end: Date } | null => {
+    for (const k of markerKeys) {
+      const d = parseDate(taskValues(task, k)[0]);
+      if (d) { const s = startOfDay(d); return { start: s, end: s }; }
+    }
+    return null;
+  };
   const groups = taskGroups.map((g) => {
-    const tasks = g.tasks.map((task) => ({ task, win: taskWindow(task, cfg.startProp, cfg.endProp) }));
+    const tasks = g.tasks.map((task) => {
+      const own = taskWindow(task, cfg.startProp, cfg.endProp);
+      return { task, win: own ?? markerOf(task), marker: !own };
+    });
     // The view's own sort wins; without one, bars run by start date.
     if (!cfg.sort.length) tasks.sort((a, b) => (a.win ? a.win.start.getTime() : 8.64e15) - (b.win ? b.win.start.getTime() : 8.64e15));
     return { list: { id: g.key, name: groupLabelIsBuiltin(groupBy, g.key, defs) ? t(g.label) : g.label }, tasks };
@@ -2402,8 +2417,15 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                       {gStart && <span className="absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-[11px] font-bold text-muted-foreground" style={{ left: xOf(gStart) + 6 }}>{g.list.name}</span>}
                     </div>
                   </div>}
+                  {/* An empty group says so, as an empty Board column does (UI tour run 16, R16-WB-3). */}
+                  {!isCollapsed && !single && g.tasks.length === 0 && (
+                    <div className="flex snap-start border-b border-border/50">
+                      <div className="sticky left-0 z-10 shrink-0 border-r border-border bg-card px-3 py-2.5 pl-9 text-sm text-muted-foreground" style={{ width: leftW }}>{t("No tasks")}</div>
+                      <div style={{ width: timelineW }} />
+                    </div>
+                  )}
                   {/* TASK ROWS */}
-                  {!isCollapsed && <Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.task.id} render={({ task, win: saved }) => {
+                  {!isCollapsed && <Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.task.id} render={({ task, win: saved, marker }) => {
                     const pct = tlProgress(task);
                     const win = saved ? liveWin(task.id, saved) : null;
                     const dur = win ? daysBetween(win.start, win.end) + 1 : 0;
@@ -2416,7 +2438,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                     const cp = bulk.bindCard(task, () => onOpen(task));
                     const selected = bulk.isSelected(task.id);
                     const dragging = drag?.id === task.id && drag.moved;
-                    const canMove = (startW || endW) && !task.id.startsWith("draft-");
+                    const canMove = (startW || endW) && !marker && !task.id.startsWith("draft-");
                     return (
                       <div key={task.id} className={cn("flex snap-start border-b border-border/50 hover:bg-accent/20", selected && "bg-primary/10 ring-1 ring-inset ring-primary")}>
                         <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-card" style={{ width: leftW }}>
@@ -2515,8 +2537,10 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
           </div>
         </div>
         {/* The box's bottom edge fades while rows continue below it; at full scroll it sits over this empty
-            band, so the last row is never dimmed (UI tour run 15, R15-WM-5: rows were cut hard at the edge). */}
-        <div aria-hidden className="pointer-events-none sticky bottom-0 left-0 z-[8] h-6 w-full bg-gradient-to-t from-card to-transparent" />
+            band, so the last row is never dimmed (UI tour run 15, R15-WM-5: rows were cut hard at the edge). Taller and
+            solid at the edge, and above the frozen name column (z-10), which it used to slide under, so a cut row
+            there showed hard (UI tour run 16, R16-WD-10, R16-WM-3). */}
+        <div aria-hidden className="pointer-events-none sticky bottom-0 left-0 z-[15] h-10 w-full bg-gradient-to-t from-card from-35% to-transparent" />
       </div>
 
       {/* Context menu / multi-select handled by the shared TaskBulkProvider (right-click / long-press). */}
