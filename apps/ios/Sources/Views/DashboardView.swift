@@ -64,6 +64,8 @@ struct DashboardView: View {
     @State private var viewer = Viewer.shared
     /// The whole Inbox, pushed from the bell panel's "Open Inbox" (owner, 9 Oct 2026).
     @State private var showInbox = false
+    /// iPad / Mac: the GIDEON chat, opened from the search row's GIDEON button.
+    @State private var showGideon = false
     /// A morph modal holds one column of content, so its width is set by reading comfort rather
     /// than by the screen. Uncapped it spanned a full iPad in landscape - a quests panel with one
     /// line in it stretched a metre wide. Never binds on a phone, which is narrower than this.
@@ -195,16 +197,16 @@ struct DashboardView: View {
             // iPad / Mac: the button sits 28 pt above the window's bottom edge (52 + 28 = 80 pt), and with
             // no margin it covered the agenda's last day ("Sun 25", UI tour run 11 PD-19). 92 pt lets every
             // card scroll clear of it. The phone's 72 is unchanged.
-            // iPad / Mac: the page runs to the window's bottom edge and the cards dissolve over its last 96 pt,
-            // where the floating GIDEON button sits (28–80 pt up); the scroll ends 108 pt up, so the last card
-            // can always rest whole above the fade. A 92 pt band kept empty for the button cut the cards hard
-            // above an empty strip (UI tour run 16, R16-I-10 / R16-M-05; runs 12–15, PD3 / Q-IA9 / Q-M7).
-            .contentMargins(.bottom, hSize == .regular ? 108 : 72, for: .scrollContent)
+            // iPad / Mac: the page runs to the window's bottom edge and the cards dissolve over its last 40 pt;
+            // the scroll ends 56 pt up, so the last card can always rest whole above the fade. Nothing floats
+            // here any more: the GIDEON button is in the search row (UI tour run 17, iPad R17-I-01 / R17-M-01).
+            // A band kept empty for the button cut the cards hard above an empty strip (run 16, R16-I-10).
+            .contentMargins(.bottom, hSize == .regular ? 56 : 72, for: .scrollContent)
             .mask {
                 VStack(spacing: 0) {
                     Rectangle()
                     if hSize == .regular {
-                        LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: 96)
+                        LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: 40)
                     }
                 }
                 .ignoresSafeArea()
@@ -227,6 +229,7 @@ struct DashboardView: View {
                 }
             }
             .navigationDestination(isPresented: $showInbox) { InboxView(providesOwnStack: false) }
+            .sheet(isPresented: $showGideon) { GideonPanel().environment(auth).environment(router) }
             .sheet(item: $openSubmission) { SubmissionDetailSheet(submissionId: $0.id, preview: $0.preview).environment(auth).environment(router) }
             .coordinateSpace(.named(morphSpace))
             .onChange(of: morphTarget) { _, t in
@@ -557,6 +560,21 @@ struct DashboardView: View {
                 .overlay(Capsule().strokeBorder(NX.border, lineWidth: 1))
             }
             .buttonStyle(.plain)
+
+            // iPad / Mac: GIDEON beside the search field, as on the web's sidebar search; the phone keeps its
+            // floating button (owner rule: the iPhone Home layout stays as it is).
+            if hSize == .regular {
+                Button { Haptics.tap(); showGideon = true } label: {
+                    Circle().fill(NX.card).frame(width: 48, height: 48).overlay(Circle().strokeBorder(NX.border))
+                        .overlay(
+                            Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
+                                .frame(width: 22, height: 22).foregroundStyle(NX.foreground)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("GIDEON")
+                .help("GIDEON")
+            }
 
             Button { Haptics.tap(); toggleBell(true) } label: {
                 ZStack(alignment: .topTrailing) {
