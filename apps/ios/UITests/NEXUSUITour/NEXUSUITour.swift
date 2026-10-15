@@ -57,6 +57,12 @@ final class NEXUSUITour: XCTestCase {
         let appTaps: [String]?
         /// The same for the web in Safari.
         let webTaps: [String]?
+        /// The app tour's page cap for this screen, over TOUR_MAX_PAGES (run 17, R17-I-06 / T-2: the
+        /// leaderboard's ranks 8-43 and the Mac Legal settings' last company never got a page).
+        let pages: Int?
+        /// How many sideways shots (half a view each) a board or table gets; 1 by default (run 17, T-2: the
+        /// iPad Table never reached its Priority / Status columns).
+        let sideways: Int?
     }
 
     private struct Outcome: Encodable {
@@ -187,7 +193,8 @@ final class NEXUSUITour: XCTestCase {
                 dismissSystemAlerts()
                 windowBehind = false
                 let first = snap(screen.id)
-                let more = snapMorePages(screen.id, prefix: "tour-", first: first, in: app, web: false)
+                let more = snapMorePages(screen.id, prefix: "tour-", first: first, in: app, web: false,
+                                         pages: screen.pages, sideways: screen.sideways)
                 let ok = status == "ready:\(screen.id)"
                 var line = ok ? (settled ? "ok" : "ok, spinner still visible after 25 s") : status
                 if windowBehind { line += "; NEXUS window was not frontmost for a shot (another window may show)" }
@@ -788,8 +795,9 @@ final class NEXUSUITour: XCTestCase {
     /// for columns clipped on the right. Returns the number of extra shots.
     @MainActor
     private func snapMorePages(_ id: String, prefix: String, first: XCUIScreenshot,
-                               in root: XCUIApplication, web: Bool) -> Int {
-        let maxPages = Int(env["TOUR_MAX_PAGES"] ?? "") ?? 6
+                               in root: XCUIApplication, web: Bool, pages: Int? = nil, sideways: Int? = nil) -> Int {
+        let globalMax = Int(env["TOUR_MAX_PAGES"] ?? "") ?? 6
+        let maxPages = max(globalMax, pages ?? 0)
         guard maxPages > 1, let target = scrollTarget(in: root, web: web) else { return 0 }
         var page = 1
         var last = first.pngRepresentation
@@ -816,15 +824,28 @@ final class NEXUSUITour: XCTestCase {
             if back.exists && back.isHittable { self.press(back); self.pause(1.0) }
             return true
         }
-        // Not the Dashboard: it ends in "board" but has no columns to swipe to.
-        if (id.hasSuffix("board") && id != "dashboard") || id.hasSuffix("table") || id.hasSuffix("timeline") {
-            drag(target, dx: -0.5, dy: 0)
-            let shot = takeShot(root)
-            if navigatedAway() { return page - 1 }
-            if shot.pngRepresentation != last {
+        // Only the project board and table have columns to swipe to: not the Dashboard or the Leaderboard,
+        // which merely end in "board" (run 17, R17-I-06: the leaderboard's swipe opened a profile, so ranks
+        // 8-43 were never shot). Not the Timeline: its sideways shot only moved the date strip on (the same
+        // rows, no bars, the today line gone) on every platform in runs 15-17 (run 17, iPhone R17-I-01); its
+        // tasks outside the range are named in its own hint.
+        if id.hasSuffix("-board") || id.hasSuffix("-table") {
+            var swiped = 0
+            var seen = last
+            while swiped < max(1, sideways ?? 1) && page < maxPages {
+                drag(target, dx: -0.5, dy: 0)
+                swiped += 1
+                let shot = takeShot(root)
+                if navigatedAway() { return page - 1 }
+                let data = shot.pngRepresentation
+                if data == seen { break }
                 page += 1
                 attachShot(shot, "\(prefix)\(id)-\(page)")
-                drag(target, dx: 0.5, dy: 0)   // back, so the pages below start from the left edge
+                seen = data
+            }
+            if seen != last {
+                // Back, so the pages below start from the left edge.
+                for _ in 0..<swiped { drag(target, dx: 0.5, dy: 0) }
                 last = takeShot(root).pngRepresentation
             }
         }
@@ -853,8 +874,14 @@ final class NEXUSUITour: XCTestCase {
             // about 90% of its content rows are already on the page before. Run 16 (R16-I-04): the run 15
             // check measured a scroll SHIFT, and blank rows matched at any shift, so real pages read as "not
             // moved" and were lost (project overview 4 → 1, leaderboard 5 → 2).
-            let fresh = newContent(from: last, to: data, in: target.visible, window: root.windows.firstMatch.frame)
-            if let fresh, fresh.new < minNewContent, fresh.inPlace >= minInPlace {
+            let window = root.windows.firstMatch.frame
+            let fresh = newContent(from: last, to: data, in: target.compare, window: window)
+            // Run 17 (iPhone R17-I-01, T-1): a page that only MOVED kept passing the check above (the GIDEON
+            // empty state 240 pt higher, nothing new). `shiftedNew` explains the new page as the page before
+            // moved up by the drag (or less, at the end of the scroll) and counts what that leaves unexplained.
+            let moved = shiftedNew(from: last, to: data, in: target.compare, window: window)
+            let repeatsBefore = fresh.map { $0.new < minNewContent && $0.inPlace >= minInPlace } ?? false
+            if repeatsBefore || (moved.map { $0 < minShiftedNew } ?? false) {
                 #if targetEnvironment(macCatalyst)
                 if fresh.new < 0.02 && !scrolled && !flipped {
                     flipped = true
@@ -887,6 +914,13 @@ final class NEXUSUITour: XCTestCase {
     ///   on the page before. That timeline page scores 0.25; true repeats 0.91–1.00 (iPad settings-2 0.09 /
     ///   0.91, Mac overview-4 0.00 / 1.00). No real page with new rows under 0.20 stays above 0.82 in place.
     private var minNewContent: CGFloat { CGFloat(Double(env["TOUR_MIN_NEW_CONTENT"] ?? "") ?? 0.08) }
+    /// A page is dropped too when less than this share of the rect's height holds content the page before
+    /// cannot explain once it is shifted by the scroll (`shiftedNew`). Measured offline on every consecutive
+    /// pair of runs 15-17 (436 pages, rects from the tour logs): repeats 0.00-0.05 (run 17 iPhone gideon-2
+    /// 0.00, iPad outlet-day-2 0.01 and project-overview-3 0.04, run 15 Mac overview-4 0.01); the lowest page
+    /// with real new rows 0.07 (run 17 iPad socmed-settings-2), then 0.08-0.10 (iPad dashboard-3, outlet-
+    /// settings-2, form-builder-2; iPhone project-table-6, form-builder-3).
+    private var minShiftedNew: CGFloat { CGFloat(Double(env["TOUR_MIN_SHIFTED_NEW"] ?? "") ?? 0.06) }
     private var minInPlace: CGFloat { CGFloat(Double(env["TOUR_MIN_IN_PLACE"] ?? "") ?? 0.85) }
 
     /// The share of the new picture's content rows inside `rect` (screen points) that the old picture does
@@ -918,6 +952,101 @@ final class NEXUSUITour: XCTestCase {
             inPlace = min(inPlace, CGFloat(near) / CGFloat(sampled.count))
         }
         return fresh.map { ($0, inPlace) }
+    }
+
+    /// The share of `rect`'s height (pixel rows) on the new picture holding content that the old picture,
+    /// shifted up by the scroll, does not explain. One hash per pixel row across the WHOLE rect (96 blocks,
+    /// 16 levels; blank rows skipped), so a look-alike row in one strip cannot pass for the row that is there.
+    /// The shift is first looked for near the drag's own distance (85-110% of `pageStep`, at least half the
+    /// overlapping rows equal); failing that (the end of the scroll), the shift whose rows match best. A row
+    /// is explained when the old picture holds it at that shift, or in the same place (a sticky header).
+    /// nil when the pictures cannot be read; then the page counts as new.
+    private func shiftedNew(from old: Data, to new: Data, in rect: CGRect, window: CGRect) -> CGFloat? {
+        guard let a = wideRows(old, rect: rect, window: window), let b = wideRows(new, rect: rect, window: window),
+              a.count == b.count, b.count > 20 else { return nil }
+        let height = b.count
+        let step = Int(CGFloat(height) * pageStep)
+        func score(_ d: Int) -> (match: Int, compared: Int) {
+            var match = 0, compared = 0
+            var y = 0
+            while y + d < height {
+                if let h = b[y], let g = a[y + d] { compared += 1; if h == g { match += 1 } }
+                y += 1
+            }
+            return (match, compared)
+        }
+        var shift = 0
+        var bestMatch = -1
+        var fullStep = false
+        let lo = max(1, step * 85 / 100), hi = min(height - 1, step * 110 / 100)
+        if lo <= hi {
+            for d in lo...hi {
+                let s = score(d)
+                if s.match > bestMatch {
+                    bestMatch = s.match; shift = d
+                    fullStep = s.compared > 0 && Double(s.match) / Double(s.compared) >= 0.5
+                }
+            }
+        }
+        if !fullStep {
+            shift = 0
+            var bestRatio = -1.0
+            for d in 0..<min(height, max(step, 1)) {
+                let s = score(d)
+                guard s.compared >= 10 else { continue }
+                let ratio = Double(s.match) / Double(s.compared)
+                if ratio > bestRatio + 0.02 { bestRatio = ratio; shift = d }
+            }
+        }
+        var unexplained = 0
+        for y in 0..<height {
+            guard let h = b[y] else { continue }
+            if y >= height - shift { unexplained += 1; continue }
+            if a[y + shift] != h && a[y] != h { unexplained += 1 }
+        }
+        return CGFloat(unexplained) / CGFloat(height)
+    }
+
+    /// One hash per pixel row of `rect` across its whole width (see `shiftedNew`); nil for a blank row.
+    private func wideRows(_ png: Data, rect: CGRect, window: CGRect) -> [UInt64?]? {
+        guard let image = UIImage(data: png)?.cgImage else { return nil }
+        let width = image.width, height = image.height
+        let bytesPerRow = width * 4
+        var pixels = [UInt8](repeating: 0, count: bytesPerRow * height)
+        let drawn: Bool = pixels.withUnsafeMutableBytes { buffer in
+            guard let ctx = CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: bytesPerRow, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn, window.width > 0 else { return nil }
+        let scale = CGFloat(width) / window.width
+        let local = rect.offsetBy(dx: -window.minX, dy: -window.minY)
+        let x0 = max(0, Int(local.minX * scale)), x1 = min(width, Int(local.maxX * scale))
+        let y0 = max(0, Int(local.minY * scale)), y1 = min(height, Int(local.maxY * scale))
+        let blocks = 96
+        let blockWidth = (x1 - x0) / blocks
+        guard blockWidth > 0, y1 - y0 > 8 else { return nil }
+        var out: [UInt64?] = []
+        out.reserveCapacity(y1 - y0)
+        for y in y0..<y1 {
+            var hash: UInt64 = 0xcbf29ce484222325
+            var low = Int.max, high = Int.min
+            for block in 0..<blocks {
+                let start = x0 + block * blockWidth
+                var sum = 0
+                for x in start..<(start + blockWidth) {
+                    let i = y * bytesPerRow + x * 4
+                    sum += Int(pixels[i]) + Int(pixels[i + 1]) + Int(pixels[i + 2])
+                }
+                let level = (sum / (blockWidth * 3)) >> 4
+                low = min(low, level); high = max(high, level)
+                hash = (hash ^ UInt64(level)) &* 0x100000001b3
+            }
+            out.append(low == high ? nil : hash)
+        }
+        return out
     }
 
     /// For each of 4 vertical strips of `rect`, one hash per pixel row (every `every` rows) in a PNG
@@ -973,6 +1102,10 @@ final class NEXUSUITour: XCTestCase {
     private struct ScrollTarget {
         let element: XCUIElement
         let visible: CGRect
+        /// What the page checks compare: `visible`, except for a sheet or pane that starts right of the
+        /// window's edge on iPad / Mac. It lies OVER the sidebar, so all of it is on screen; cut at the
+        /// sidebar, the outlet settings sheet lost its labels and its pages compared as icons only (run 17).
+        let compare: CGRect
     }
 
     /// The page in Safari; in the app the scroll view, collection view or table with the most area
@@ -991,11 +1124,26 @@ final class NEXUSUITour: XCTestCase {
         if web {
             let page = root.webViews.firstMatch
             guard page.exists else { return nil }
-            return ScrollTarget(element: page, visible: page.frame.intersection(window))
+            let shown = page.frame.intersection(window)
+            return ScrollTarget(element: page, visible: shown, compare: shown)
         }
         let sidebar = sidebarFrame(in: root, window: window)
         if let sidebar, sidebar.maxX < window.maxX - 80 {
             window = CGRect(x: sidebar.maxX, y: window.minY, width: window.maxX - sidebar.maxX, height: window.height)
+        }
+        // iPhone: the floating tab bar hides the bottom of the page. Left in the rect, what sat under it on
+        // page N counted as seen, the next page started below it and it was never shot (run 17, iPhone
+        // R17-I-06: the Active sessions header, the Home tile labels). The rect ends above the bar.
+        var tabTop = screen.maxY
+        let tabBar = root.tabBars.firstMatch
+        // Not under a sheet: there the bar is covered and the sheet's own scroll view runs to the bottom.
+        if tabBar.exists && tabBar.isHittable {
+            let bar = tabBar.frame
+            if !bar.isEmpty, bar.minY > screen.midY, bar.width > screen.width * 0.5 { tabTop = bar.minY }
+        }
+        func clipTabBar(_ r: CGRect) -> CGRect {
+            guard r.maxY > tabTop, r.minY < tabTop - 80 else { return r }
+            return CGRect(x: r.minX, y: r.minY, width: r.width, height: tabTop - r.minY)
         }
         var best: ScrollTarget?
         var bestArea: CGFloat = 0
@@ -1016,7 +1164,13 @@ final class NEXUSUITour: XCTestCase {
                 // the Mac Legal document got one page, because the drags scrolled the page behind them).
                 let covered = !element.isHittable
                 let area = visible.width * visible.height * (isViewport ? 1 : 0.5) * (covered ? 0.2 : 1)
-                if area > bestArea { best = ScrollTarget(element: element, visible: visible); bestArea = area }
+                if area > bestArea {
+                    let overSidebar = sidebar != nil && element.frame.minX >= screen.minX + 8
+                    let whole = element.frame.intersection(screen)
+                    best = ScrollTarget(element: element, visible: clipTabBar(visible),
+                                        compare: clipTabBar(overSidebar && !whole.isNull ? whole : visible))
+                    bestArea = area
+                }
             }
         }
         return best
