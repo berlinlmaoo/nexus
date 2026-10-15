@@ -62,6 +62,7 @@ import { ID_NUMFMT } from "@/lib/i18n/id-numfmt";
 import { ID_R15WEB } from "@/lib/i18n/id-r15web";
 import { ID_R16WEB } from "@/lib/i18n/id-r16web";
 import { ID_R17WEB } from "@/lib/i18n/id-r17web";
+import { ID_R18WEB } from "@/lib/i18n/id-r18web";
 
 /**
  * Interface language, English or Indonesian (owner, 5 Oct 2026: "make sure there is English and
@@ -77,7 +78,7 @@ export type Lang = "id" | "en";
 const KEY = "nexus-lang";
 const listeners = new Set<() => void>();
 
-const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDAR, ...ID_CALENDAR_PAGE, ...ID_CALENDAR_EXTRA, ...ID_CHAT, ...ID_AUDIT, ...ID_OFFBOARD, ...ID_FORMER, ...ID_PROJECTS, ...ID_TEMPLATES, ...ID_PROFILE, ...ID_VAULT, ...ID_NAV, ...ID_PIPELINE, ...ID_AUTOMATIONS, ...ID_FOLDERS, ...ID_OUTLET, ...ID_SOCIAL, ...ID_PROJECT_OVERVIEW, ...ID_SHEETS, ...ID_SHEETS_MENUS, ...ID_SHEETS_PANELS, ...ID_SHEETS_CHART, ...ID_SHEETS_DATA, ...ID_SHEETS_TOOLBAR, ...ID_SHEETS_GRID, ...ID_SHEETS_PIVOT, ...ID_SHEETS_FORMATS, ...ID_VIEWS, ...ID_EDITOR, ...ID_GIDEON, ...ID_GIDEON_AI, ...ID_CATEGORIES, ...ID_COPY, ...ID_I18N_ADMIN, ...ID_I18N_SHELL, ...ID_I18N_ATTENDANCE, ...ID_I18N_WORK, ...ID_FORMS, ...ID_I18N_PROJECTS_EXTRA, ...ID_SESSIONS, ...ID_FIX_PAGES, ...ID_UISWEEP, ...ID_TASK_VIEWS, ...ID_QAFIX_WORK, ...ID_QAFIX_KBD, ...ID_QAFIX_PERM, ...ID_LEGAL, ...ID_LEGAL_REQUESTS, ...ID_R7WEB, ...ID_R10WEB, ...ID_R11WEB, ...ID_R12WEB, ...ID_R13WEB, ...ID_R14WEB_A, ...ID_R14WEB_B, ...ID_R14WEB_C, ...ID_R14WEB_D, ...ID_NUMFMT, ...ID_R15WEB, ...ID_R16WEB, ...ID_R17WEB };
+const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDAR, ...ID_CALENDAR_PAGE, ...ID_CALENDAR_EXTRA, ...ID_CHAT, ...ID_AUDIT, ...ID_OFFBOARD, ...ID_FORMER, ...ID_PROJECTS, ...ID_TEMPLATES, ...ID_PROFILE, ...ID_VAULT, ...ID_NAV, ...ID_PIPELINE, ...ID_AUTOMATIONS, ...ID_FOLDERS, ...ID_OUTLET, ...ID_SOCIAL, ...ID_PROJECT_OVERVIEW, ...ID_SHEETS, ...ID_SHEETS_MENUS, ...ID_SHEETS_PANELS, ...ID_SHEETS_CHART, ...ID_SHEETS_DATA, ...ID_SHEETS_TOOLBAR, ...ID_SHEETS_GRID, ...ID_SHEETS_PIVOT, ...ID_SHEETS_FORMATS, ...ID_VIEWS, ...ID_EDITOR, ...ID_GIDEON, ...ID_GIDEON_AI, ...ID_CATEGORIES, ...ID_COPY, ...ID_I18N_ADMIN, ...ID_I18N_SHELL, ...ID_I18N_ATTENDANCE, ...ID_I18N_WORK, ...ID_FORMS, ...ID_I18N_PROJECTS_EXTRA, ...ID_SESSIONS, ...ID_FIX_PAGES, ...ID_UISWEEP, ...ID_TASK_VIEWS, ...ID_QAFIX_WORK, ...ID_QAFIX_KBD, ...ID_QAFIX_PERM, ...ID_LEGAL, ...ID_LEGAL_REQUESTS, ...ID_R7WEB, ...ID_R10WEB, ...ID_R11WEB, ...ID_R12WEB, ...ID_R13WEB, ...ID_R14WEB_A, ...ID_R14WEB_B, ...ID_R14WEB_C, ...ID_R14WEB_D, ...ID_NUMFMT, ...ID_R15WEB, ...ID_R16WEB, ...ID_R17WEB, ...ID_R18WEB };
 
 function read(): Lang {
   try {
@@ -123,9 +124,16 @@ function fill(s: string, vars?: Record<string, string | number>): string {
   return s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
 }
 
-/** Translate an English source text into the current language, then fill `{placeholders}`. */
+/**
+ * Translate an English source text into the current language, then fill `{placeholders}`. A key may carry a
+ * context before "\u0004" (the gettext convention), for one English text that needs two Indonesian ones:
+ * "self\u0004Sign out" reads "Sign out" in English and "Keluar" in Indonesian, while the sessions list's
+ * "Sign out" (another device) stays "Keluarkan" (UI tour run 18, decision 1).
+ */
 export function t(en: string, vars?: Record<string, string | number>, lang: Lang = current): string {
-  return fill(lang === "id" ? (ID[en] ?? en) : en, vars);
+  const text = lang === "id" ? (ID[en] ?? en) : en;
+  const cut = text.indexOf("\u0004");
+  return fill(cut >= 0 ? text.slice(cut + 1) : text, vars);
 }
 
 /**

@@ -19,6 +19,7 @@ import { globalModShortcut, isEditableTarget, modalOpen } from "@/lib/keyboard";
 import { ShortcutsHelp, OPEN_SHORTCUTS_EVENT } from "@/components/ShortcutsHelp";
 import { OPEN_SEARCH_EVENT } from "@/lib/search-event";
 import { useModalFocusTrap } from "@/hooks/use-modal-focus-trap";
+import { SnapTail } from "@/components/SnapTail";
 
 const SearchModal = lazy(() => import("@/components/SearchModal").then((m) => ({ default: m.SearchModal })));
 
@@ -145,6 +146,8 @@ function AppLayout() {
             <div aria-hidden data-snap-top="" className="h-px -mb-px" />
             <Outlet />
           </div>
+          {/* At full scroll the page starts on a whole row or card, not mid-card (UI tour run 18, R18-WB-1). */}
+          <SnapTail scroller="document" />
           {/* Room for the phone's floating tab bar: its height plus its gap above the safe area, so the last
               thing on every scrolling page clears the bar at full scroll (UI tour run 13, W-M1). An element of
               its own, not padding on the page wrapper, so anything that measures where the content ends

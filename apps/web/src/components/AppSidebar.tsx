@@ -257,8 +257,8 @@ export function AppSidebar() {
           <button
             onClick={handleLogout}
             disabled={loggingOut}
-            aria-label={t("Log out")}
-            title={t("Log out")}
+            aria-label={t("self\u0004Sign out")}
+            title={t("self\u0004Sign out")}
             className="ml-auto grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring disabled:opacity-50 group-data-[collapsible=icon]:hidden"
           >
             {loggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}

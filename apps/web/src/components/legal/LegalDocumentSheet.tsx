@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CheckCircle2, CornerDownRight, Download, FileDown, FilePlus2, FileSignature, GitBranch, Loader2, Lock, Maximize2, RefreshCw, RotateCcw, Upload } from "lucide-react";
@@ -20,6 +20,7 @@ import { LegalDiffView } from "@/components/legal/LegalDiffView";
 import { LegalLinkPicker } from "@/components/legal/LegalLinkPicker";
 import { docTypeLabel, fmtDay, formatBytes, statusClass, statusLabel, versionKindLabel } from "@/components/legal/legal-labels";
 import { fmtDate } from "@/lib/nexus-api";
+import { SnapTail } from "@/components/SnapTail";
 import { LEGAL_STATUSES, legalDocsApi, legalVersionsApi, type LegalDocument, type LegalDocumentVersion, type LegalStatus } from "@/lib/legal-api";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
@@ -98,21 +99,41 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
   };
   // Voiding gives the number back only when the document holds one and was never signed.
   const releasesNumber = !!doc && doc.hasNumber && !doc.signedAt;
+  // The overview's blocks (preview, fields, link, versions) snap under the pinned number/title header, and the
+  // end of the drawer is a snap point too (SnapTail), so a scrolled drawer starts on a whole block, not in the
+  // middle of the PDF preview (UI tour run 18, R18-WB-1: legal-document-2). Pinned, the header ends its own
+  // height below the drawer's top (-1.5rem against the drawer's 1.5rem padding); a block rests 1rem under it.
+  const [headH, setHeadH] = useState(0);
+  const headRo = useRef<ResizeObserver | null>(null);
+  const headRef = useCallback((el: HTMLDivElement | null) => {
+    headRo.current?.disconnect();
+    headRo.current = null;
+    if (!el) return;
+    const read = () => setHeadH(Math.round(el.getBoundingClientRect().height));
+    read();
+    if (typeof ResizeObserver === "undefined") return;
+    headRo.current = new ResizeObserver(read);
+    headRo.current.observe(el);
+  }, []);
+  const snapping = !!doc && view === "overview" && headH > 0;
 
   return (
     <Sheet open={!!documentId} onOpenChange={(o) => !o && onClose()}>
       {/* Opens with the drawer itself focused, not its close button: a ring on the X before anyone used the
           keyboard read as an error, and was cut at the corner (UI tour run 13, W-B17). */}
-      <SheetContent lang={lang} className="w-full overflow-y-auto outline-none sm:max-w-3xl" onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus(); }}>
+      <SheetContent lang={lang} className={cn("w-full overflow-y-auto outline-none sm:max-w-3xl", snapping && "[scroll-snap-type:y_proximity]")}
+        style={snapping ? { scrollPaddingTop: headH + 16 } : undefined} onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus(); }}>
         {!doc ? (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
             {q.isError ? <span className="text-destructive">{(q.error as Error).message}</span> : <><Loader2 className="h-4 w-4 animate-spin" /> {t("Loading…")}</>}
           </div>
         ) : (
           <div className="space-y-5">
+            {/* The drawer's top is a snap point, so it opens at its top, not snapped to the first block. */}
+            <div aria-hidden data-snap-top="" className="pointer-events-none absolute left-0 top-0 h-px w-px" />
             {/* Number, title and status stay in view while the drawer scrolls (UI tour run 13, W-D12); left-aligned
                 on a phone too (W-M22: it was centred there). */}
-            <div className="sticky -top-6 z-10 -mx-6 -mt-6 space-y-3 border-b border-border bg-background px-6 pb-3 pt-6">
+            <div ref={headRef} className="sticky -top-6 z-10 -mx-6 -mt-6 space-y-3 border-b border-border bg-background px-6 pb-3 pt-6">
             <SheetHeader className="text-left">
               <div className={cn("font-mono text-xs text-muted-foreground", doc.numberReleased && "line-through")}>{doc.number || t("No number")}</div>
               <SheetTitle className="pr-6">{doc.title}</SheetTitle>
@@ -168,7 +189,7 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
 
             {view === "overview" && <>
             {shownVersion?.hasPdf && (
-              <div className="space-y-1.5">
+              <div data-snap-row className="space-y-1.5">
                 <iframe title={doc.title} src={legalDocsApi.fileUrl(doc.id, shownVersion.version, "pdf", true)} className="h-[60vh] w-full rounded-md border border-border bg-muted" />
                 {/* The preview is a sheet's width: too small to read on a phone (UI tour run 14, R14-WM-22). The
                     browser's own viewer, full screen, can be zoomed. */}
@@ -179,7 +200,7 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
               </div>
             )}
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div data-snap-row className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="ld-title">{t("Title")}</Label>
                 {/* Wraps instead of cutting a long title mid-word or mid-extension ("…University.d", UI tour run 13,
@@ -199,7 +220,7 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
             </div>
             <Button disabled={!dirty || !draft.title.trim() || update.isPending} onClick={() => update.mutate(draft)}>{t("Save")}</Button>
 
-            <div className="space-y-1.5">
+            <div data-snap-row className="space-y-1.5">
               <Label>{t("Belongs to")}</Label>
               <LegalLinkPicker
                 value={doc.deal ? { kind: "deal", id: doc.deal.id, label: `${doc.deal.code} · ${doc.deal.name}` } : doc.project ? { kind: "project", id: doc.project.id, label: doc.project.name } : null}
@@ -208,7 +229,7 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
               />
             </div>
 
-            <div className="space-y-2 border-t border-border pt-4">
+            <div data-snap-row className="space-y-2 border-t border-border pt-4">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold">{t("Versions")}</h3>
                 {locked ? (
@@ -254,6 +275,7 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
             </>}
           </div>
         )}
+        {snapping && <SnapTail scroller="parent" />}
         {doc && (
           <AlertDialog open={confirmVoid} onOpenChange={setConfirmVoid}>
             <AlertDialogContent lang={lang}>

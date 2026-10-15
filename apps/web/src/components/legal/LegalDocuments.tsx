@@ -323,9 +323,11 @@ function DocCard({ d, lang, onOpen, onShowChain }: { d: ArchiveDoc; lang: "id" |
     <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }}
       className="block w-full cursor-pointer px-4 py-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
       <div className="flex items-start gap-2">
-        <div className="flex min-w-0 flex-1 items-center font-mono text-xs text-muted-foreground">
-          {d.parent && <CornerDownRight className="mr-1 h-3 w-3 shrink-0" aria-hidden />}
-          {d.number ? <DocNumber number={d.number} className={cn(d.numberReleased && "line-through")} /> : <span className="truncate">{t("No number")}</span>}
+        {/* The whole number, wrapped only after a "/" onto a second line like "Number reused by" below, not
+            cut inside a part or the year (UI tour run 18, R18-WM-3: "…/OKT/20…/002/ADD-1"). */}
+        <div className="flex min-w-0 flex-1 items-start pt-px font-mono text-xs leading-snug text-muted-foreground">
+          {d.parent && <CornerDownRight className="mr-1 mt-px h-3 w-3 shrink-0" aria-hidden />}
+          {d.number ? <UnbrokenNumber number={d.number} className={cn("min-w-0", d.numberReleased && "line-through")} /> : <span className="truncate">{t("No number")}</span>}
         </div>
         <StatusChip status={d.status} />
       </div>
@@ -336,12 +338,12 @@ function DocCard({ d, lang, onOpen, onShowChain }: { d: ArchiveDoc; lang: "id" |
       <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
         <DocKind d={d} />
       </div>
-      {/* The label on one line, the number on the next, cut in the middle like on the desktop (UI tour run 13,
-          W-M7: it ran on as text and broke at a hyphen). */}
+      {/* The label on one line, the number on the next (UI tour run 13, W-M7: it ran on as text and broke at a
+          hyphen), whole and wrapped only after a "/" like the number above (R18-WM-3). */}
       {d.status === "VOID" && d.numberReusedBy && (
         <div className="mt-0.5 min-w-0 text-xs text-muted-foreground">
           <div>{t("Number reused by")}</div>
-          <DocNumber number={d.numberReusedBy.number} className="font-mono" />
+          <UnbrokenNumber number={d.numberReusedBy.number} className="font-mono" />
         </div>
       )}
       {(d.addendaCount > 0 || d.parent) && onShowChain && (
@@ -388,12 +390,29 @@ function FilterSelect({ value, onChange, all, options, block }: { value?: string
 /**
  * A document number cut in the middle, never at its end: the last two parts ("/2026/003", "/002/ADD-1") stay
  * whole, so numbers that share a long start stay told apart (UI tour run 13, W-D5: three rows all read
- * "PKS/PATS-UNIV/YOGYAKART…"). The full number is on hover.
+ * "PKS/PATS-UNIV/YOGYAKART…"). The full number is on hover. Whole parts only (UI tour run 18, R18-WM-3): the
+ * cut drops middle parts at their "/" ("PKS/PATS-UNIV/…/2026/003"), never half a part or the year.
  *
  * The cut is counted in characters, not left to CSS: a truncated head span next to the tail left the unused
  * part of a character cell between "…" and the tail ("…  /2027/001", UI tour run 14, R14-WB-6). The number
  * is set in a monospace face, so the width of one character is the measured width over its length.
  */
+/**
+ * `number` in at most `fit` characters, cut only at "/": the first parts that fit, "…", then the last two parts
+ * whole ("PKS/PATS-UNIV/…/2026/003", or "…/2026/003"). Unchanged when it has no middle part to drop or not even
+ * "…" and the last two parts fit (the box then truncates it at its end).
+ */
+function elideAtSlash(number: string, fit: number): string {
+  const parts = number.split("/");
+  if (number.length <= fit || parts.length < 4) return number;
+  const tail = `/${parts.slice(-2).join("/")}`;
+  for (let k = parts.length - 3; k >= 1; k--) {
+    const text = `${parts.slice(0, k).join("/")}/…${tail}`;
+    if (text.length <= fit) return text;
+  }
+  return 1 + tail.length <= fit ? `…${tail}` : number;
+}
+
 function DocNumber({ number, className }: { number: string; className?: string }) {
   const box = useRef<HTMLSpanElement>(null);
   const probe = useRef<HTMLSpanElement>(null);
@@ -413,13 +432,7 @@ function DocNumber({ number, className }: { number: string; className?: string }
     ro.observe(el);
     return () => ro.disconnect();
   }, [number]);
-  const cut = number.split("/");
-  const tail = cut.length > 2 ? `/${cut.slice(-2).join("/")}` : "";
-  let text = number;
-  if (fit !== null) {
-    const headRoom = fit - tail.length - 1; // one cell for "…"
-    text = tail && headRoom >= 1 ? `${number.slice(0, headRoom)}…${tail}` : number;
-  }
+  const text = fit === null ? number : elideAtSlash(number, fit);
   return (
     <span ref={box} className="relative block min-w-0 flex-1 overflow-hidden" title={number}>
       {/* The full number, out of sight, measures one character. */}

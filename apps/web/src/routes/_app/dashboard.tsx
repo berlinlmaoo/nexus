@@ -46,6 +46,7 @@ import { LEVELS, levelForXp, levelLabel } from "@/lib/levels";
 import { TierBadge } from "@/components/gamification/TierBadge";
 import { Reveal, AnimatedBar, CountUp } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { monthGrid, sameMonth, shiftMonth } from "@/lib/calendar/core";
 import { thumbUrl } from "@/lib/thumb";
 import { formatCount } from "@/lib/number-format";
@@ -92,6 +93,7 @@ function Dashboard() {
   const live = dashboard.data;
   const data: NexusDashboardResponse = live ?? emptyDashboard;
   const userName = profile.data?.user?.name ?? "";
+  const phone = useIsMobile();
 
   return (
     <div className="w-full px-5 py-6 md:px-8 md:py-8 2xl:px-10">
@@ -102,7 +104,10 @@ function Dashboard() {
       <div className="mt-7 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px] 2xl:gap-8">
         {/* main: stats, XP rules. No "Your Quests" card: the owner dropped it; quests are
             listed and claimed inside the Quest stat card. */}
-        <div className="space-y-6">
+        {/* Phone (one column): every card is a snap point, and the page's end is one too (SnapTail), so a scrolled
+            Home starts on a whole card, not on the half-cut first line of the schedule (UI tour run 18,
+            R18-WB-1, dashboard-3). Not from md: the computer layout keeps scrolling freely. */}
+        <div data-snap-rows={phone ? "" : undefined} className="space-y-6">
           <StatRow data={data} />
           <Reveal delay={0.1}><XpRulesCard /></Reveal>
           {/* The calendar and schedule sit under XP rules on every width, as on the desktop (QA S-26 put
@@ -115,7 +120,7 @@ function Dashboard() {
         </div>
 
         {/* right rail */}
-        <aside className="space-y-6">
+        <aside data-snap-rows={phone ? "" : undefined} className="space-y-6">
           <Reveal delay={0.05}><ProfileCard avatarUrl={profile.data?.user?.avatar} /></Reveal>
           <Reveal delay={0.1}><MessagesCard /></Reveal>
           <Reveal delay={0.15}><LeaderboardCard /></Reveal>

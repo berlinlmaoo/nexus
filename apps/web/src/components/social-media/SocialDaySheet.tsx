@@ -15,6 +15,7 @@ import {
   type SocialTargetsWrite,
 } from "@/lib/social-media-api";
 import { EngagementInfo, num, socialErrorText, viewsLabel } from "./social-ui";
+import { SnapTail } from "@/components/SnapTail";
 
 const METRIC_LABEL: Record<SocialMetric, string> = {
   views: "Views",
@@ -146,7 +147,10 @@ export function SocialDaySheet({
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+        {/* The platform cards and the notes snap under the sheet's header, and the end of the list is a snap point
+            too (SnapTail), so a scrolled sheet starts on a whole card, not at a card's inputs without their
+            labels (UI tour run 18, R18-WB-1: socmed-day-2). */}
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 [scroll-padding-top:1rem] [scroll-snap-type:y_proximity]">
           {!draft ? (
             <div className="space-y-3" aria-busy="true">{[0, 1].map((i) => <div key={i} className="h-40 animate-pulse rounded-xl bg-muted" />)}</div>
           ) : (
@@ -156,7 +160,7 @@ export function SocialDaySheet({
                 const eng = engagementOf({ likes: digitsOf(f.likes), comments: digitsOf(f.comments), shares: digitsOf(f.shares) });
                 const info = day?.platforms[p.id];
                 return (
-                  <section key={p.id} aria-labelledby={`sm-p-${p.id}`} className="rounded-xl border border-border bg-card p-4">
+                  <section key={p.id} data-snap-row aria-labelledby={`sm-p-${p.id}`} className="rounded-xl border border-border bg-card p-4">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                       <h3 id={`sm-p-${p.id}`} className="text-sm font-semibold">{p.name}{p.archived && <span className="font-normal text-muted-foreground"> · {t("archived")}</span>}</h3>
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -197,7 +201,7 @@ export function SocialDaySheet({
                 );
               })}
 
-              <section className="grid gap-3 rounded-xl border border-border bg-card p-4">
+              <section data-snap-row className="grid gap-3 rounded-xl border border-border bg-card p-4">
                 <label className="text-sm font-semibold">
                   {t("What worked")}
                   <textarea value={draft.worked} disabled={!editable} maxLength={2000} onChange={(e) => setDraft({ ...draft, worked: e.target.value })} placeholder={editable ? t("e.g. the 7 pm reel, a trending sound") : ""} className={cn(area, "mt-1 font-normal")} />
@@ -225,6 +229,7 @@ export function SocialDaySheet({
               )}
             </div>
           )}
+          <SnapTail scroller="parent" />
         </div>
 
         {editable && (

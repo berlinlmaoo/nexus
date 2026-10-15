@@ -101,9 +101,10 @@ const PHOTO_EXT = /\.(jpe?g|png|gif|webp|heic|heif|avif|bmp)$/i;
 /** Width of the attendance board's right-edge fade on a phone (w-10); landing keeps today clear of it. */
 const BOARD_FADE = 40;
 /** The board's header cells follow --board-head-shift (set while the page scrolls, see pageHeaderBottom). */
-// The head cells also carry an 8px band of the card's colour upwards (a shadow): when the head is pushed under the
-// page header, a few pixels between the two showed the pill tops of the row above (UI tour run 17, R17-WB-1,
-// attendance-3). At the box's own top the band lies outside the scroll box and is clipped.
+// The head cells also carry a band of the card's colour upwards (an 8px shadow, and a 24px ::before since run 18):
+// when the head is pushed under the page header, a few pixels between the two showed the pill tops of the row
+// above (UI tour run 17, R17-WB-1 and run 18, R18-WD-1, attendance-3). At the box's own top the band lies outside
+// the scroll box and is clipped.
 const HEAD_SHIFT: CSSProperties = { transform: "translateY(var(--board-head-shift, 0px))" };
 /** Phone board names break between words only: a one-word name is cut with "…" on one line, not split
  *  mid-word ("Abimanyug / m", UI tour run 16, R16-WM-2); a name with spaces takes two lines. */
@@ -424,8 +425,15 @@ function Attendance() {
       // From md up the header draws a 1rem fade band under itself once the page has scrolled; the pinned head
       // sits below that band, or the band covered the weekday letters' top half (UI tour run 17, R17-WD-2).
       const band = window.matchMedia("(min-width: 768px)").matches ? 16 : 0;
-      const shift = Math.min(room, Math.max(0, pageHeaderBottom + band - box.getBoundingClientRect().top));
-      box.style.setProperty("--board-head-shift", `${Math.round(shift)}px`);
+      // Measured from a head cell where it sits without the shift, not from the box's top: the cells rest a little
+      // below the box's top, and that offset left a 2px gap between the band and the pinned head where the pills
+      // of the row above showed (UI tour run 18, R18-WD-1, and the phone's R18-WB-1 attendance-3).
+      const cell = head?.querySelector<HTMLElement>("th");
+      const applied = parseFloat(box.style.getPropertyValue("--board-head-shift")) || 0;
+      const headTop = cell ? cell.getBoundingClientRect().top - applied : box.getBoundingClientRect().top;
+      const shift = Math.min(room, Math.max(0, pageHeaderBottom + band - headTop));
+      // Rounded down: the head tucks a sub-pixel under the band rather than leaving a seam above it.
+      box.style.setProperty("--board-head-shift", `${Math.floor(shift)}px`);
       // Rows snap whole under the (possibly shifted) day header, not half under it (UI tour run 15, R15-WB-1).
       box.style.setProperty("--board-snap-top", `${Math.round(shift + headH)}px`);
     };
@@ -474,7 +482,9 @@ function Attendance() {
 
       <div className="p-4 md:p-8 space-y-5">
         {/* Mobile: new map-centric check-in hero. Desktop: keep the dashboard card. */}
-        <div className="md:hidden">
+        {/* The check-in card, each summary card and the board card are snap points, so a scrolled page starts on a
+            whole card, not on the last line of the status card (UI tour run 18, R18-WB-1, attendance-2). */}
+        <div data-snap-row className="md:hidden">
           <MobileCheckInHero today={today.data ?? null} failed={today.isError} disabled={today.isError || today.isLoading || (Boolean(today.data?.todayRequest) && !today.data?.pendingCheckout)} />
         </div>
         <div className="hidden md:block">
@@ -498,7 +508,7 @@ function Attendance() {
         {/* Columns follow the space the cards actually get (a container query), not the window: at 1024 with
             the sidebar open four columns left ~160px each and every title was cut ("Rea…", "4 a…"), QA 13 Oct 2026. */}
         <div className="@container">
-        <section className="grid gap-4 @lg:grid-cols-2 @5xl:grid-cols-4">
+        <section data-snap-rows className="grid gap-4 @lg:grid-cols-2 @5xl:grid-cols-4">
           <FunMetric
             icon={<Coffee className="h-5 w-5" />}
             label={tr("Today’s status")}
@@ -541,7 +551,7 @@ function Attendance() {
         </section>
         </div>
 
-        <div className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
+        <div data-snap-row className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
             <div>
               <h2 className="text-lg font-semibold tracking-tight">{viewMode === "grid" ? (canSeeBoard ? tr("Attendance board") : tr("Your attendance history")) : (canSeeBoard ? tr("Attendance log") : tr("Your attendance history"))}</h2>
@@ -652,9 +662,9 @@ function Attendance() {
             <table className="w-full min-w-max text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr>
-                  <th data-member-col style={HEAD_SHIFT} className="sticky left-0 top-0 z-30 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] bg-muted px-2 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_var(--border),0_-8px_0_0_var(--card)] sm:w-[20rem] sm:min-w-[20rem] sm:max-w-[20rem] sm:px-4">{tr("Member")}</th>
+                  <th data-member-col style={HEAD_SHIFT} className="sticky left-0 top-0 z-30 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] bg-muted px-2 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_var(--border),0_-8px_0_0_var(--card)] before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-6 before:bg-card before:content-[''] sm:w-[20rem] sm:min-w-[20rem] sm:max-w-[20rem] sm:px-4">{tr("Member")}</th>
                   {periodDays.map((pd) => (
-                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} style={HEAD_SHIFT} className={cn("sticky top-0 z-20 snap-start bg-muted px-1 py-1.5 font-medium text-[10px] shadow-[0_-8px_0_0_var(--card)] lg:px-0 lg:text-xs leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
+                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} style={HEAD_SHIFT} className={cn("sticky top-0 z-20 snap-start bg-muted px-1 py-1.5 font-medium text-[10px] shadow-[0_-8px_0_0_var(--card)] before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-6 before:bg-card before:content-[''] lg:px-0 lg:text-xs leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
                       {/* From lg, where the whole period fits, the weekday is one letter over the date at a readable
                           size; "MON" had to shrink to a few pixels to fit 30 columns (UI tour run 16, R16-WD-3). */}
                       <span className={cn("block text-[9px] uppercase lg:hidden", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" })}</span>
@@ -664,7 +674,7 @@ function Attendance() {
                         : pd.day}
                     </th>
                   ))}
-                  <th style={HEAD_SHIFT} className="sticky top-0 z-20 bg-muted text-right px-4 py-2 font-medium text-xs text-muted-foreground uppercase shadow-[0_-8px_0_0_var(--card)]">{tr("Score")}</th>
+                  <th style={HEAD_SHIFT} className="sticky top-0 z-20 bg-muted text-right px-4 py-2 font-medium text-xs text-muted-foreground uppercase shadow-[0_-8px_0_0_var(--card)] before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-6 before:bg-card before:content-['']">{tr("Score")}</th>
                 </tr>
               </thead>
               <tbody>

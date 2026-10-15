@@ -11,7 +11,7 @@ const Switch = React.forwardRef<
   // Calendar the ring token is its accent); unlike a box-shadow ring it also shows in forced colours.
   <SwitchPrimitives.Root
     className={cn(
-      "tap-area peer inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent shadow-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-control-border",
+      "tap-area peer inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent shadow-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-switch-on data-[state=unchecked]:bg-control-border",
       className,
     )}
     {...props}

@@ -26,6 +26,7 @@ import { PeopleWeek } from "./PeopleWeek";
 import { FilterPanel } from "./FilterPanel";
 import { TaskPreview } from "./TaskPreview";
 import { Segmented, type SegmentedOption } from "./Segmented";
+import { SnapTail } from "@/components/SnapTail";
 
 // The full task panel is big and only opens on ?task= for a task the viewer can edit: load it on demand,
 // and warm it up when the pointer or the keyboard reaches a task row.
@@ -709,6 +710,8 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
               Show all) instead of snapping to the first card under it (UI tour run 16, R16-WD-R3). */}
           <div aria-hidden data-snap-top="" className="h-px -mb-px" />
           {panel}
+          {/* Scrolled to its end, the panel starts on a whole card or group (UI tour run 18, R18-WB-1). */}
+          <SnapTail scroller="parent" />
         </aside>
       </div>
     ) : (

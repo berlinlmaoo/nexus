@@ -516,7 +516,7 @@ function NewChat({ onClose, onCreated, meId }: { onClose: () => void; onCreated:
             <span className="block text-sm font-semibold">{t("Make it a group")}</span>
             <span className="block text-xs text-muted-foreground">{selected.length > 1 ? t("Two or more people always make a group.") : t("Start a group with just one other person, and add more later.")}</span>
           </span>
-          <input type="checkbox" role="switch" checked={isGroup} disabled={selected.length > 1} onChange={(e) => setGroupMode(e.target.checked)} className="h-4 w-4 shrink-0 dark:accent-[var(--primary)]" />
+          <input type="checkbox" role="switch" checked={isGroup} disabled={selected.length > 1} onChange={(e) => setGroupMode(e.target.checked)} className="h-4 w-4 shrink-0 accent-switch-on" />
         </label>
         {isGroup && <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder={t("Group name (optional)")} className="mt-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />}
         <div className="mt-3 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-border p-1">
