@@ -374,6 +374,9 @@ private struct LegalDocumentOverview: View {
         VStack(alignment: .leading, spacing: 8) {
             previewBox(v)
             if let pdf {
+                // The counter under the preview, beside "Open full screen": laid over the PDF it sat on top of
+                // the next page's text (UI tour run 16, R16-I-26 iPad).
+                HStack(spacing: 12) {
                 Button { fullScreen = true } label: {
                     Label(T("Open full screen"), systemImage: "arrow.up.left.and.arrow.down.right")
                         .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
@@ -382,6 +385,9 @@ private struct LegalDocumentOverview: View {
                 .buttonStyle(.plain)
                 .hoverEffect(.highlight)
                 .fullScreenCover(isPresented: $fullScreen) { LegalPDFFullScreen(file: pdf, title: doc.title) }
+                Spacer(minLength: 0)
+                LegalPageCounter(page: pdfPage, count: pdfPages)
+                }
             }
         }
     }
@@ -390,7 +396,6 @@ private struct LegalDocumentOverview: View {
         ZStack {
             if let pdf {
                 LegalPDFView(file: pdf, page: $pdfPage, pageCount: $pdfPages)
-                    .overlay(alignment: .bottom) { LegalPageCounter(page: pdfPage, count: pdfPages).padding(.bottom, 10) }
             } else if pdfFailed {
                 Text(T("Couldn't open this file.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
@@ -415,12 +420,10 @@ private struct LegalDocumentOverview: View {
     private var detailsCard: some View {
         NXCard(padding: 16) {
             VStack(alignment: .leading, spacing: 14) {
-                if wide {
-                    HStack(alignment: .top, spacing: 12) { titleField; counterpartyField }
-                } else {
-                    titleField
-                    counterpartyField
-                }
+                // The title takes the card's whole width on every size: beside Counterparty a file name such as
+                // "[TEST] seq 03_SPK_City_Head…" wrapped at its first space (UI tour run 16, R16-I-26 iPad).
+                titleField
+                counterpartyField
                 LegalFormRow(label: T("Notes")) {
                     TextEditor(text: $notes)
                         .font(NXFont.text(14)).scrollContentBackground(.hidden)
@@ -475,7 +478,7 @@ private struct LegalDocumentOverview: View {
                     Label(T("Signed: locked"), systemImage: "lock").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 } else if doc.status != "VOID" {
                     Button { route = .pick(LegalFileTypes.documents, tag: "version") } label: {
-                        Label(T("Upload new version"), systemImage: "arrow.up.doc")
+                        Label(T("Upload new version"), systemImage: "tray.and.arrow.up")
                     }
                     .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
                     .accessibilityHint(T("The file edited in Word, or a scan"))

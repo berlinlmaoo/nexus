@@ -134,8 +134,11 @@ struct LegalDocumentsPane: View {
     /// on an iPad in portrait beside the sidebar they overflowed, pushed the whole page off both edges and
     /// squeezed Title out (UI tour run 10, IPD-1). Narrower than `tableWidth` reads the phone's cards.
     @State private var width: CGFloat = 0
-    private static let tableWidth: CGFloat = 880
+    /// The web's table from 680 pt, so a portrait iPad gets it too, without the Counterparty column below
+    /// 860 pt (UI tour run 16, R16-I-27 iPad: a card list where the web has a table).
+    private static let tableWidth: CGFloat = 680
     private var table: Bool { wide && width - 2 * gutter >= Self.tableWidth }
+    private var showCounterparty: Bool { width - 2 * gutter >= 860 }
 
     var body: some View {
         ScrollView {
@@ -198,14 +201,23 @@ struct LegalDocumentsPane: View {
         .frame(minWidth: 220)
     }
 
+    // Both icons in one 16 pt box, so the two labels share a baseline: the taller glyph lifted "New
+    // document" ~5 pt above "Upload document" (UI tour run 16, R16-I-20). Upload is the web's tray (R16-B-16).
     private var uploadButton: some View {
-        Button { sheet = .upload } label: { Label(T("Upload document"), systemImage: "square.and.arrow.up") }
+        Button { sheet = .upload } label: { actionLabel(T("Upload document"), icon: "tray.and.arrow.up") }
             .buttonStyle(.nxBordered)
     }
 
     private var newButton: some View {
-        Button { sheet = .new } label: { Label(T("New document"), systemImage: "doc.badge.plus") }
+        Button { sheet = .new } label: { actionLabel(T("New document"), icon: "doc.badge.plus") }
             .buttonStyle(.nxPrimary)
+    }
+
+    private func actionLabel(_ title: String, icon: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).font(.system(size: 13, weight: .medium)).frame(width: 16, height: 16)
+            Text(title).lineLimit(1)
+        }
     }
 
     // The filters wrap onto a second line instead of scrolling under an edge fade: every pill stays
@@ -311,7 +323,7 @@ struct LegalDocumentsPane: View {
                             }
                             .buttonStyle(.plain)
                             .hoverEffect(.highlight)
-                            .padding(.leading, table ? 14 + 300 + 12 : 14)
+                            .padding(.leading, table ? 14 + Self.numberW + 12 : 14)
                             .padding(.bottom, 6)
                         }
                     }
@@ -331,10 +343,10 @@ struct LegalDocumentsPane: View {
 
     private var wideHeader: some View {
         HStack(spacing: 12) {
-            Text(T("Number")).frame(width: 300, alignment: .leading)
+            Text(T("Number")).frame(width: Self.numberW, alignment: .leading)
             Text(T("Title")).frame(maxWidth: .infinity, alignment: .leading)
-            Text(T("Counterparty")).frame(width: 160, alignment: .leading)
-            Text(T("Company")).frame(width: 90, alignment: .leading)
+            if showCounterparty { Text(T("Counterparty")).frame(width: Self.counterpartyW, alignment: .leading) }
+            Text(T("Company")).frame(width: Self.companyW, alignment: .leading)
             Text(T("Date")).frame(width: 90, alignment: .leading)
             Text(T("Status")).frame(width: 80, alignment: .leading)
         }
@@ -342,6 +354,12 @@ struct LegalDocumentsPane: View {
         .padding(.horizontal, 14).padding(.vertical, 9)
         .background(NX.muted.opacity(0.5))
     }
+
+    /// The archive table's columns (UI tour run 16, R16-M-01 / R16-M-13): a folded number, a narrower
+    /// Counterparty (mostly "—"), a Company wide enough for "The Z Networks" on one line; Title takes the rest.
+    private static let numberW: CGFloat = 210
+    private static let counterpartyW: CGFloat = 130
+    private static let companyW: CGFloat = 120
 
     private func subtitle(_ d: LegalDocumentSummary) -> String {
         // An addendum says "Addendum to …" on its own line below, so the type isn't repeated (run 14, N-26).
@@ -361,8 +379,9 @@ struct LegalDocumentsPane: View {
     private func numberLine(_ label: String, _ number: String) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(label).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
-            Text(number).font(.system(size: 11, design: .monospaced)).foregroundStyle(NX.mutedFg)
-                .lineLimit(1).minimumScaleFactor(0.6)
+            // Folded in the middle rather than shrunk to an unreadable ~6 pt (UI tour run 16, R16-M-01).
+            Text(LegalLabels.shortNumber(number)).font(.system(size: 11, design: .monospaced)).foregroundStyle(NX.mutedFg)
+                .lineLimit(1).minimumScaleFactor(0.85)
         }
         .accessibilityElement(children: .combine)
         .help(number)
@@ -385,13 +404,15 @@ struct LegalDocumentsPane: View {
             // An addendum is marked "↳" under its parent, as on the web (UI tour run 15, Q-IB30).
             HStack(spacing: 4) {
                 if d.parent != nil { Text("↳").font(NXFont.text(13)).foregroundStyle(NX.mutedFg).accessibilityLabel(T("Addendum")) }
-                Text(d.number.isEmpty ? "—" : d.number).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.foreground)
-                    .strikethrough(d.numberReleased).lineLimit(1).minimumScaleFactor(0.7)
+                // The middle of a long number folds ("PKS/PATS-UNIV/…/2026/005"), as the web's, so Title gets
+                // the width (UI tour run 16, R16-M-01); the whole number on hover.
+                Text(d.number.isEmpty ? "—" : LegalLabels.shortNumber(d.number)).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.foreground)
+                    .strikethrough(d.numberReleased).lineLimit(1).minimumScaleFactor(0.85)
             }
-            .frame(width: 300, alignment: .leading)
+            .frame(width: Self.numberW, alignment: .leading)
             .help(d.number)
             VStack(alignment: .leading, spacing: 2) {
-                Text(d.title).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(2)
+                Text(LegalLabels.unbroken(d.title)).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(2)
                     .multilineTextAlignment(.leading)
                 let sub = subtitle(d)
                 if !sub.isEmpty { Text(sub).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2) }
@@ -399,9 +420,11 @@ struct LegalDocumentsPane: View {
                 reusedLine(d)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Text(d.counterparty.isEmpty ? "—" : d.counterparty).font(NXFont.text(13)).foregroundStyle(NX.foreground)
-                .lineLimit(2).frame(width: 160, alignment: .leading)
-            Text(d.company?.name ?? "—").font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(2).frame(width: 90, alignment: .leading)
+            if showCounterparty {
+                Text(d.counterparty.isEmpty ? "—" : d.counterparty).font(NXFont.text(13)).foregroundStyle(NX.foreground)
+                    .lineLimit(2).frame(width: Self.counterpartyW, alignment: .leading)
+            }
+            Text(d.company?.name ?? "—").font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(2).frame(width: Self.companyW, alignment: .leading)
             Text(LegalLabels.shortDay(d.docDate)).font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(1).frame(width: 90, alignment: .leading)
             LegalStatusChip(status: d.status).frame(width: 80, alignment: .leading)
         }
@@ -418,7 +441,7 @@ struct LegalDocumentsPane: View {
                 Spacer(minLength: 4)
                 LegalStatusChip(status: d.status)
             }
-            Text(d.title).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(2).multilineTextAlignment(.leading)
+            Text(LegalLabels.unbroken(d.title)).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(2).multilineTextAlignment(.leading)
             Text([d.counterparty.isEmpty ? nil : d.counterparty, d.company?.name, LegalLabels.shortDay(d.docDate)].compactMap { $0 }.joined(separator: " · "))
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
             let sub = subtitle(d)

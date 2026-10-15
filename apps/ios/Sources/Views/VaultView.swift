@@ -207,10 +207,10 @@ struct VaultView: View {
                 .buttonStyle(.nxBordered)
                 // A click uploads files, as the web's button; the arrow beside it offers Photos too.
                 Menu {
-                    Button { sheet = .importer } label: { Label(T("Upload file"), systemImage: "arrow.up.doc") }
+                    Button { sheet = .importer } label: { Label(T("Upload file"), systemImage: "tray.and.arrow.up") }
                     Button { showPhotos = true } label: { Label(T("Upload from Photos"), systemImage: "photo.on.rectangle") }
                 } label: {
-                    Label(T("Upload"), systemImage: "square.and.arrow.up")
+                    Label(T("Upload"), systemImage: "tray.and.arrow.up")
                 } primaryAction: {
                     sheet = .importer
                 }
@@ -243,10 +243,10 @@ struct VaultView: View {
                     }
                     .buttonStyle(.nxBordered)
                     Menu {
-                        Button { sheet = .importer } label: { Label(T("Upload file"), systemImage: "arrow.up.doc") }
+                        Button { sheet = .importer } label: { Label(T("Upload file"), systemImage: "tray.and.arrow.up") }
                         Button { showPhotos = true } label: { Label(T("Upload from Photos"), systemImage: "photo.on.rectangle") }
                     } label: {
-                        Label(T("Upload"), systemImage: "square.and.arrow.up")
+                        Label(T("Upload"), systemImage: "tray.and.arrow.up")
                     } primaryAction: {
                         sheet = .importer
                     }
@@ -424,7 +424,7 @@ struct VaultView: View {
                     Label(T("New folder"), systemImage: "folder.badge.plus")
                 }
                 Button { sheet = .importer } label: {
-                    Label(T("Upload file"), systemImage: "arrow.up.doc")
+                    Label(T("Upload file"), systemImage: "tray.and.arrow.up")
                 }
                 Button { showPhotos = true } label: {
                     Label(T("Upload from Photos"), systemImage: "photo.on.rectangle")
