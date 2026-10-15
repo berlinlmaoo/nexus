@@ -146,8 +146,10 @@ struct NXHorizontalEdgeFade: ViewModifier {
     @ViewBuilder private func tracked(_ content: Content) -> some View {
         if #available(iOS 18.0, *) {
             content.onScrollGeometryChange(for: [Bool].self) { g in
-                let start = -g.contentInsets.leading
-                let end = g.contentSize.width + g.contentInsets.trailing - g.containerSize.width
+                // The content's own ends, not the margins after them: with only an empty end margin left to
+                // scroll, the last column is whole and the fade only blurred it (UI tour run 17, iPad R17-I-05).
+                let start: CGFloat = 0
+                let end = g.contentSize.width - g.containerSize.width
                 return [g.contentOffset.x > start + 1, g.contentOffset.x < end - 1]
             } action: { _, edges in
                 leading = edges[0]

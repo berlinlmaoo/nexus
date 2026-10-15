@@ -73,11 +73,13 @@ struct TableColumns: Equatable {
             return TableColumns(name: minName + 2 * share, widths: mins.map { $0 + share })
         }
         if compact {
-            // A phone never fits the table: size the name so the screen's edge falls through the MIDDLE of
-            // a column (Notion's peek), never on a column's edge, where "Due date" read as the last column
-            // (UI tour run 9, I5). The edge fades there.
-            let name = max(170, min(260, width - minCol * 1.5))
-            return TableColumns(name: name, widths: mins)
+            // A phone never fits the table: Name and ONE whole column beside it, every column as wide as that
+            // room, so each swipe lands on a whole column and the screen's edge never cuts one. A peeking money
+            // column read "Rp 3", "Rp 6.8" or a bare "Rp" (UI tour run 17, iPhone R17-I-02; decision 17). More
+            // columns are cued by the "›" in the header and the scroll bar, not by a cut column.
+            let name = max(160, min(220, width - 150))
+            let column = max(minCol, width - name)
+            return TableColumns(name: width - column, widths: mins.map { _ in column })
         }
         // Wider than the window on an iPad / Mac: Name keeps its minimum (it took half the window before,
         // UI tour run 14, P-I12 / P-M9) and the columns that fit beside it share the rest, so the window's
@@ -86,9 +88,10 @@ struct TableColumns: Equatable {
         var k = 0
         while k < mins.count && used + mins[k] <= width { used += mins[k]; k += 1 }
         guard k > 0 else { return TableColumns(name: max(minName, width - minCol), widths: mins) }
-        // The next column peeks in by 48 pt under the edge fade, so it is plain that more columns follow;
-        // ending exactly on a boundary made "Request by" look like the last column (UI tour run 15, Q-M15).
-        let peek: CGFloat = k < mins.count ? 48 : 0
+        // The columns that fit share the room, so the window's edge falls on a column boundary: a column peeking
+        // in under the edge fade left a sliver of cut letters (UI tour run 17, R17-B-09). That more columns
+        // follow is said by the "›" in the header (run 15, Q-M15: "Request by" looked like the last column).
+        let peek: CGFloat = 0
         let extra = max(0, width - used - peek)
         let nameExtra = min(extra, 80)
         let each = (extra - nameExtra) / CGFloat(k)
@@ -207,15 +210,15 @@ struct ProjectTableTab: View {
         .modifier(HorizontalOffsetTracker(offsetX: $stickyX))
         .background(NX.card)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        // More columns to the right: the edge fades instead of cutting a label clean (UI tour run 9, I5).
-        .overlay(alignment: .trailing) {
+        // More columns to the right: a "›" in the header row (UI tour run 9, I5; run 17, R17-I-02 / R17-B-09).
+        .overlay(alignment: .topTrailing) {
+            // Whole columns only, so the cue for more is a "›" in the header row.
             if cols.total + cols.trailingRoom(visibleWidth: visibleWidth) - visibleWidth > stickyX + 1 {
-                // Wide enough to read as "more this way": 28 pt looked like a hard cut ("Due", "26 Ma",
-                // UI tour run 14, N-15). On a phone the whole peeking column sits under it, so its money
-                // reads as faded, not as a bare "Rp" (UI tour run 16, R16-I-07).
-                LinearGradient(colors: [NX.card.opacity(0), NX.card.opacity(compact ? 0.92 : 1)], startPoint: .leading, endPoint: .trailing)
-                    .frame(width: compact ? 84 : 52)
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.mutedFg)
+                    .frame(width: 22, height: 40)
+                    .background(NX.card.opacity(0.9))
                     .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
         }
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))

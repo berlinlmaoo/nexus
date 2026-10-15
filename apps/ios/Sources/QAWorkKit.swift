@@ -22,13 +22,14 @@ enum UntitledText {
         let v = (name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return isBlank(v) || v == "Untitled project" ? T("Untitled project") : v
     }
-    /// A title as wrapped text: a spaced dash stays with the word before it (a no-break space in front),
-    /// so no line ends "Gaji Clippers" over "–Cymenggs" or ends in "–…" (UI tour run 16, R16-B-11,
-    /// decision 12; the web does the same).
+    /// A title as wrapped text: a spaced dash sticks to the word AFTER it (a word joiner and a no-break space
+    /// behind it), as the web does since run 17. A line may start with "– Cymenggs" but never ends on a dash,
+    /// so a two-line clamp never reads "Clippers –…" (it replaces the run 16 "dash with the word before" rule,
+    /// R16-B-11 / iPad R17-I-12).
     static func wrapped(_ title: String) -> String {
-        title.replacingOccurrences(of: " – ", with: "\u{00A0}– ")
-            .replacingOccurrences(of: " — ", with: "\u{00A0}— ")
-            .replacingOccurrences(of: " - ", with: "\u{00A0}- ")
+        title.replacingOccurrences(of: " – ", with: " –\u{2060}\u{00A0}")
+            .replacingOccurrences(of: " — ", with: " —\u{2060}\u{00A0}")
+            .replacingOccurrences(of: " - ", with: " -\u{2060}\u{00A0}")
     }
     /// Anything else (a page, an event): "Untitled" / "Tanpa judul".
     static func any(_ title: String?) -> String {

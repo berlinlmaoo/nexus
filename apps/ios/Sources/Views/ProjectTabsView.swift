@@ -72,7 +72,7 @@ func humanizeEnum(_ raw: String) -> String {
 }
 
 func prioTone(_ p: String) -> ChipTone {
-    switch p.uppercased() { case "URGENT": return .danger; case "HIGH": return .danger; case "MEDIUM": return .info; default: return .neutral }
+    switch p.uppercased() { case "URGENT": return .danger; case "HIGH": return .high; case "MEDIUM": return .info; default: return .neutral }
 }
 
 /// A task's priority as a compact pill (owner, 10 Oct 2026: the NexusChip was too big beside the card
@@ -224,6 +224,8 @@ struct ListTab: View {
 
     @Environment(\.horizontalSizeClass) private var hSize
     @State private var collapsed: Set<String> = []
+    /// iPad / Mac two-line rows: each value column as wide as its widest value, shared by every row.
+    @State private var slotWidths = ListSlotWidths()
 
     var body: some View {
         // Computed once per render: every row of the List draws the same columns.
@@ -237,6 +239,11 @@ struct ListTab: View {
             .padding(.horizontal, hSize == .regular ? 32 : 14)
             .padding(.vertical, 12)
         }
+        // Rows come to rest whole at the top, as the Table's (decision 16 of run 17): a scrolled List started
+        // with a row's orphan meta line, "Rp 1.260.000 SBU 14 May" cut mid-glyph (iPhone R17-I-07). Each group's
+        // header and rows are the resting places (group(_:columns:)).
+        .scrollTargetBehavior(.viewAligned(limitBehavior: .never))
+        .environment(slotWidths)
     }
 
     /// Grouped by status (or priority), the group header already says it: the row leaves that chip out
@@ -279,6 +286,7 @@ struct ListTab: View {
                 }
             }
         }
+        .scrollTargetLayout()
         .contentShape(Rectangle())
         // A whole group takes a drop (web: drag a row's grip onto another group).
         .dropDestination(for: String.self) { ids, _ in
@@ -328,6 +336,8 @@ struct ListTab: View {
 struct TimelineTab: View {
     let lanes: [ProjectDetail.Lane]   // merged (incl. subtasks)
     let onOpen: (String) -> Void
+    /// The project's DATE fields in field order: where an undated task's marker comes from (decision 5).
+    var dateFieldIds: [String] = []
 
     @Environment(\.horizontalSizeClass) private var hSize
     @State private var collapsed: Set<String> = []
@@ -339,7 +349,7 @@ struct TimelineTab: View {
 
     /// Taller with Duration / Progress, so a long name wraps to three lines instead of being cut (UI tour run
     /// 15, Q-M17).
-    private var rowH: CGFloat { showMeta ? 60 : 48 }
+    private var rowH: CGFloat { 60 }
     private let monthH: CGFloat = 32
     private let dayH: CGFloat = 42
     /// Narrower Duration / Progress on a portrait iPad, so the chart still shows ten days or more (Q-IA27).
@@ -389,10 +399,14 @@ struct TimelineTab: View {
     /// A task with neither date but a value in a date field (a request's usage date, which List and Board
     /// show) is a one-day marker on that day, not "No date" (web R16-WB-2; UI tour run 16, decision 9).
     /// Date fields that hold names ("Request by") never parse as a date, so they are passed over.
+    /// The fields in the project's order, as the web and the Calendar's fallback (UI tour run 17, decision 5).
     private func marker(_ t: BoardTask) -> Win? {
-        for v in t.customFieldValues ?? [] where (v.customField?.type ?? "").uppercased() == "DATE" {
-            guard let raw = v.value?.trimmingCharacters(in: CharacterSet(charactersIn: "\" ")), !raw.isEmpty,
-                  let d = ProjDate.parse(raw) ?? ProjDate.fmt("yyyy-MM-dd").date(from: String(raw.prefix(10))) else { continue }
+        let values = t.customFieldValues ?? []
+        let ordered = dateFieldIds.isEmpty
+            ? values.filter { ($0.customField?.type ?? "").uppercased() == "DATE" }
+            : dateFieldIds.compactMap { id in values.first { $0.customFieldId == id } }
+        for v in ordered {
+            guard let d = TaskDates.parse(v.value) else { continue }
             let day = sod(d)
             return Win(start: day, end: day)
         }
@@ -604,14 +618,20 @@ struct TimelineTab: View {
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
     }
 
-    /// The month of the first day in view, while that month's own label has scrolled off to the left.
-    private func visibleMonth(_ ax: Axis) -> String? {
+    /// The month of the first day in view, while that month's own label has scrolled off to the left, and the
+    /// room it has before the next month's label. The sticky label stays inside that room (full name, else the
+    /// short one, else none), so it hands over to the next month instead of lying on it: "September 2026" sat
+    /// on "October 2026" and left a stray "26" (UI tour run 17, R17-M-02).
+    private func visibleMonth(_ ax: Axis) -> (label: String, room: CGFloat)? {
         guard !ax.days.isEmpty else { return nil }
         let i = min(ax.days.count - 1, max(0, Int((offsetX + 1) / dayW)))
         let first = ax.days[i]
         guard let monthStart = ax.days.firstIndex(where: { cal.isDate($0, equalTo: first, toGranularity: .month) }),
               CGFloat(monthStart) * dayW < offsetX - 1 else { return nil }
-        return ProjLocaleDate.fmt("MMMM yyyy").string(from: first)
+        let next = ax.days[i...].firstIndex { !cal.isDate($0, equalTo: first, toGranularity: .month) } ?? ax.days.count
+        let room = CGFloat(next) * dayW - offsetX
+        guard room >= 24 else { return nil }
+        return (ProjLocaleDate.fmt("MMMM yyyy").string(from: first), room)
     }
 
     // MARK: left: Name | Duration | Progress
@@ -722,9 +742,12 @@ struct TimelineTab: View {
                     VStack(alignment: .leading, spacing: 1) {
                         // With Duration / Progress beside it (no dates line under the name) a long name takes
                         // two lines before an ellipsis ("reimburse transport t…", UI tour run 14, P-M13).
-                        Text(t.title).font(NXFont.text(showMeta ? 13 : 15, .medium))
+                        // Two lines then "…" on every width, the dash kept with the word before it (decision 14 of
+                        // run 17): one line on a phone cut nearly every name ("reimburse transport…", iPhone
+                        // R17-I-08), and "Gaji Clippers / –Cymenggs" broke before its dash (iPad R17-I-12).
+                        Text(UntitledText.wrapped(t.title)).font(NXFont.text(showMeta ? 13 : 14, .medium))
                             .foregroundStyle(t.isDone ? NX.mutedFg : NX.foreground)
-                            .strikethrough(t.isDone).lineLimit(showMeta ? 3 : 1)
+                            .strikethrough(t.isDone).lineLimit(2)
                         // The phone has no Duration column: the dates under the name, so a row whose bar
                         // is out of view still says when it is (UI tour run 13, F-09).
                         if !showMeta {
@@ -753,8 +776,14 @@ struct TimelineTab: View {
 
     /// nil = no bar, no progress: "—" (web).
     private func progressCell(_ pct: Int?, tint: Color, track: Color = NX.muted) -> some View {
-        HStack(spacing: 8) {
-            if let pct {
+        // The bar only where it has room to read as one: on a portrait iPad's narrow column it was a ~12 pt stub
+        // that looked like a dot (UI tour run 17, iPad R17-I-12); the percentage alone then.
+        let barRoom = progressW - 24 - 8 - 40
+        return HStack(spacing: 8) {
+            if let pct, barRoom < 28 {
+                Text("\(pct)%").font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).monospacedDigit()
+                Spacer(minLength: 0)
+            } else if let pct {
                 Capsule().fill(track)
                     .frame(height: 6)
                     .overlay(alignment: .leading) {
@@ -1052,7 +1081,7 @@ private struct TimelineOffsetTracker: ViewModifier {
 @available(iOS 18.0, *)
 private struct TimelineAxisHeader<Content: View>: View {
     let offsetX: CGFloat
-    let monthLabel: String?
+    let monthLabel: (label: String, room: CGFloat)?
     let monthH: CGFloat
     @ViewBuilder let content: Content
     @State private var position = ScrollPosition(edge: .leading)
@@ -1064,11 +1093,18 @@ private struct TimelineAxisHeader<Content: View>: View {
             .onChange(of: offsetX, initial: true) { _, x in position.scrollTo(x: x) }
             .overlay(alignment: .topLeading) {
                 if let monthLabel {
-                    Text(monthLabel).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground.opacity(0.75)).lineLimit(1)
-                        .padding(.horizontal, 8)
-                        .frame(height: monthH - 1)
-                        .background(NX.card)
-                        .allowsHitTesting(false)
+                    ViewThatFits(in: .horizontal) {
+                        Text(monthLabel.label).fixedSize()
+                        Text(String(monthLabel.label.prefix(3))).fixedSize()
+                        Color.clear.frame(width: 0)
+                    }
+                    .font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground.opacity(0.75)).lineLimit(1)
+                    .padding(.horizontal, 8)
+                    .frame(maxWidth: monthLabel.room, alignment: .leading)
+                    .frame(height: monthH - 1)
+                    .background(NX.card)
+                    .clipped()
+                    .allowsHitTesting(false)
                 }
             }
     }
@@ -1093,6 +1129,8 @@ struct CalendarTab: View {
     /// Empty = the project has no DATE field, so there is nothing to choose and no menu.
     var plotChoices: [CalendarPlotChoice] = []
     var onPlotBy: ((String?) -> Void)? = nil
+    /// The project's DATE fields in field order: the last part of the fallback order (decision 5).
+    var dateFieldIds: [String] = []
     @Environment(\.horizontalSizeClass) private var hSize
     @State private var monthOffset = 0
     @State private var selected: Int?
@@ -1123,12 +1161,25 @@ struct CalendarTab: View {
     }
 
     /// The day a task lands on: its due date, or the picked DATE field's value ("2026-10-12" or ISO).
+    ///
+    /// A task without that date lands on the first date it does have, in the order the Timeline uses: due, start,
+    /// then the project's DATE fields in field order (never a CREATED field such as "Request by"). So the Calendar
+    /// and the Timeline agree on which tasks are dated, and "n tasks have no date" counts only tasks with no date
+    /// at all (UI tour run 17, web R17-WB-2, decision 5).
     private func plotDate(_ t: BoardTask) -> Date? {
+        if let own = ownDate(t) { return own }
+        if dateFieldId != nil, let d = ProjDate.parse(t.dueDate) { return d }
+        if let d = ProjDate.parse(t.startDate) { return d }
+        for id in dateFieldIds where id != dateFieldId {
+            if let d = TaskDates.parse(t.customFieldValues?.first(where: { $0.customFieldId == id })?.value) { return d }
+        }
+        return nil
+    }
+
+    /// The view's own date: the due date, or the picked DATE field's value ("2026-10-12" or ISO).
+    private func ownDate(_ t: BoardTask) -> Date? {
         guard let fid = dateFieldId else { return ProjDate.parse(t.dueDate) }
-        guard let raw = t.customFieldValues?.first(where: { $0.customFieldId == fid })?.value,
-              !raw.isEmpty else { return nil }
-        let v = raw.trimmingCharacters(in: CharacterSet(charactersIn: "\" "))
-        return ProjDate.parse(v) ?? ProjDate.fmt("yyyy-MM-dd").date(from: String(v.prefix(10)))
+        return TaskDates.parse(t.customFieldValues?.first(where: { $0.customFieldId == fid })?.value)
     }
 
     private var plotName: String {
@@ -1315,6 +1366,9 @@ struct CalendarTab: View {
                     Text("\(T("Plot by")): \(plotName)").font(NXFont.text(13)).lineLimit(1)
                     Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
                 }
+                // Its whole label: a menu label is laid out small and was cut to "Plot by: Due…" beside empty
+                // room (UI tour run 17, iPhone R17-I-09).
+                .fixedSize()
                 .foregroundStyle(NX.mutedFg)
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
@@ -1637,7 +1691,7 @@ struct CreateTaskSheet: View {
         }
     }
     private func prioColor(_ p: String) -> Color {
-        switch p { case "URGENT": return NX.danger; case "HIGH": return NX.danger; case "MEDIUM": return NX.blue; case "LOW": return NX.violet; default: return NX.mutedFg }
+        switch p { case "URGENT": return NX.danger; case "HIGH": return NX.priorityHigh; case "MEDIUM": return NX.blue; case "LOW": return NX.violet; default: return NX.mutedFg }
     }
 
     // MARK: custom field rendering (port of web TaskComposer)
@@ -1769,5 +1823,15 @@ struct ProjectChatTab: View {
             } catch APIError.unauthorized { auth.logout() } catch { room = nil }
             loading = false
         }
+    }
+}
+
+/// A DATE custom field's stored value as a date: ISO, or a bare "2026-10-12", possibly quoted.
+enum TaskDates {
+    static func parse(_ raw: String?) -> Date? {
+        guard let raw else { return nil }
+        let v = raw.trimmingCharacters(in: CharacterSet(charactersIn: "\" "))
+        guard !v.isEmpty else { return nil }
+        return ProjDate.parse(v) ?? ProjDate.fmt("yyyy-MM-dd").date(from: String(v.prefix(10)))
     }
 }
