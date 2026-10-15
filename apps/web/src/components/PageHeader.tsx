@@ -50,10 +50,13 @@ export function PageHeader({
     return () => ro.disconnect();
   }, []);
 
+  // Phone only: the pinned bar's surface. z-40 like the desktop header: page content uses z-30 for its own
+  // sticky heads and edge fades, and at an equal z-index the later element (the content) paints over the header
+  // (UI tour run 17, R17-WM-1: the attendance board's fade cut the title "Attendance" in half).
   // Phone only: the pinned bar's surface. An opaque colour also carries into Safari's status-bar area (it
   // takes the colour of a sticky bar at the top edge), with a band of the same colour above the bar and
   // padding for the top safe area, so whatever Safari draws above the page's top edge is header, not content.
-  const pinnedBar = "max-md:sticky max-md:top-0 max-md:z-30 max-md:bg-background max-md:pt-[env(safe-area-inset-top)] max-md:before:pointer-events-none max-md:before:absolute max-md:before:inset-x-0 max-md:before:bottom-full max-md:before:h-24 max-md:before:bg-background max-md:before:content-['']";
+  const pinnedBar = "max-md:sticky max-md:top-0 max-md:z-40 max-md:bg-background max-md:pt-[env(safe-area-inset-top)] max-md:before:pointer-events-none max-md:before:absolute max-md:before:inset-x-0 max-md:before:bottom-full max-md:before:h-24 max-md:before:bg-background max-md:before:content-['']";
   // Without tabs the bar is the header's last pinned part. It draws its dividing line once the page has
   // scrolled (content then runs under it); at rest the subtitle and actions sit under it, and a line between
   // the title and its own subtitle would cut the header in two.
@@ -131,7 +134,7 @@ export function PageHeader({
           // padding of whatever sits right above the strip: at 0.75rem it painted over the bottom of the project
           // icon and buttons, a two-line project name and a two-line page subtitle (UI tour run 14, R14-WM-1,
           // R14-WM-2, R14-WM-5).
-          className={cn("relative overflow-x-auto px-4 md:px-8 max-md:sticky max-md:top-[var(--page-header-bar-h)] max-md:z-30 max-md:border-b max-md:border-border max-md:bg-background max-md:shadow-[0_-2px_0_0_var(--page-header-bg,var(--background))]", className)}
+          className={cn("relative overflow-x-auto px-4 md:px-8 max-md:sticky max-md:top-[var(--page-header-bar-h)] max-md:z-40 max-md:border-b max-md:border-border max-md:bg-background max-md:shadow-[0_-2px_0_0_var(--page-header-bg,var(--background))]", className)}
         >
           {tabs}
         </div>

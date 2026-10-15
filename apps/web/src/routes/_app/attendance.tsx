@@ -632,7 +632,10 @@ function Attendance() {
           // Phone: a swipe sideways stops on whole columns, a day starting right at the pinned member column
           // (scroll-snap with the column's width as padding), and the right edge fades while more days lie
           // that way (UI tour run 12, WM4: "Wed 14" was cut there with nothing saying so).
-          <div className="relative">
+          // `isolate`: the board's own layers (pinned head z-30, edge fades z-30, the arrow z-40) stack inside this
+          // box only. Without it the bottom fade painted over the phone's pinned page title when a section below
+          // the board snapped right under the header (UI tour run 17, R17-WM-1).
+          <div className="relative isolate">
           <div ref={boardScrollRef} onScroll={setBoardEdge} className="isolate max-h-[calc(100dvh-11rem)] overflow-auto overscroll-contain [scroll-padding-top:var(--board-snap-top,0px)] [scroll-snap-type:y_proximity] max-sm:[scroll-padding-left:7.5rem] max-sm:[scroll-snap-type:both_proximity]">
             {/* `min-w-max`: with a plain `w-full` the 31 day columns and the member column were
                 squeezed into the phone's width, so the name, the pills and the dots all landed on
