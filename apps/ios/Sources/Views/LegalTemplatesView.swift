@@ -22,14 +22,16 @@ struct LegalTemplatesPane: View {
             VStack(alignment: .leading, spacing: 14) {
                 LegalSectionHeader(title: T("Templates"),
                                    subtitle: T("Word files with {{PLACEHOLDERS}}. The form for a new document is made from them.")) {
-                    Button { uploading = true } label: { Label(T("Upload template"), systemImage: "arrow.up.doc") }
+                    // iPad / Mac: "Show archived" beside Upload, as on the web (UI tour run 15, Q-IB24); the
+                    // upload arrow, not a document glyph.
+                    if hSize == .regular {
+                        LegalToggle(label: T("Show archived"), isOn: $showArchived).fixedSize()
+                    }
+                    Button { uploading = true } label: { Label(T("Upload template"), systemImage: "square.and.arrow.up") }
                         .buttonStyle(.nxPrimary)
                 }
-                // The switch beside its label on an iPad / Mac, at the list's right edge on a phone: in a
-                // 320 pt box it floated mid-row on the Mac and short of the edge on the phone (F-29 / M-23).
-                if hSize == .regular {
-                    LegalToggle(label: T("Show archived"), isOn: $showArchived).fixedSize()
-                } else {
+                // On a phone the switch sits at the list's right edge (F-29 / M-23).
+                if hSize != .regular {
                     LegalToggle(label: T("Show archived"), isOn: $showArchived)
                 }
                 list
@@ -81,12 +83,18 @@ struct LegalTemplatesPane: View {
                         .multilineTextAlignment(.leading)
                     if tpl.archived { NexusChip(text: T("Archived")) }
                 }
-                // Version and field count first (F-29); two lines, so the type and the company are read in
-                // full beside the date column instead of "Any c…" / "(PKS)…" (run 14, N-24).
-                Text(["v\(tpl.currentVersion)", String(format: T("%d fields"), tpl.fields.count),
-                      LegalLabels.docType(tpl.docType), tpl.company?.name ?? T("Any company")].joined(separator: " · "))
-                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                // The web's order: type · company · version · fields (UI tour run 15, Q-IB24). One line where it
+                // fits, else two lines split at a separator, never with a "·" at a line's edge (R15-I-23).
+                let kind = [LegalLabels.docType(tpl.docType), tpl.company?.name ?? T("Any company")].joined(separator: " · ")
+                let size = ["v\(tpl.currentVersion)", String(format: T("%d fields"), tpl.fields.count)].joined(separator: " · ")
+                ViewThatFits(in: .horizontal) {
+                    Text("\(kind) · \(size)").lineLimit(1)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(kind).fixedSize(horizontal: false, vertical: true)
+                        Text(size).lineLimit(1)
+                    }
+                }
+                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }
             Spacer(minLength: 4)
             Text(LegalLabels.date(tpl.updatedAt)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)

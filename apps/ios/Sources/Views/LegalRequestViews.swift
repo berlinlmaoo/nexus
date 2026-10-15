@@ -46,10 +46,16 @@ enum LegalRequestLabels {
 struct LegalChip: View {
     let text: String
     let tone: ChipTone
+    /// A glyph before the words (the web's ⊘ on "Rejected"; UI tour run 15, Q-IB23).
+    var icon: String? = nil
     var body: some View {
-        Text(text).font(NXFont.text(11, .bold))
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .foregroundStyle(tone.fg).background(tone.bg, in: Capsule())
+        HStack(spacing: 4) {
+            if let icon { Image(systemName: icon).font(.system(size: 10, weight: .bold)) }
+            Text(text)
+        }
+        .font(NXFont.text(11, .bold))
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .foregroundStyle(tone.fg).background(tone.bg, in: Capsule())
     }
 }
 
@@ -393,7 +399,9 @@ struct MyLegalRequestsStrip: View {
             }
             Text([r.company?.name, r.isAddendum && !r.parentNumberText.isEmpty ? String(format: T("Amends %@"), r.parentNumberText) : nil]
                     .compactMap { $0 }.joined(separator: " · "))
-                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                // Wrapped, not cut: "PATS · Amends PATS/PKS-…" hid the number (UI tour run 15, Q-IB23).
+                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                .fixedSize(horizontal: false, vertical: true)
             // When it was sent, then the deadline and the number, as the web card's meta line (UI tour
             // run 12, IP3: the app left "Sent 14 Oct" out).
             FlowLayout(spacing: 10) {
@@ -755,7 +763,7 @@ struct LegalRequestsPane: View {
                         HStack {
                             Text(r.templateName.isEmpty ? LegalLabels.docType(r.docType) : r.templateName).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
                             Spacer(minLength: 4)
-                            if r.rejected { LegalChip(text: T("Rejected"), tone: .danger) } else { Text(LegalRequestLabels.column(r.column)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+                            if r.rejected { LegalChip(text: T("Rejected"), tone: .danger, icon: "nosign") } else { Text(LegalRequestLabels.column(r.column)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
                         }
                         Text([r.requester?.name, r.company?.name, r.pic.map { "PIC · \($0.name)" }].compactMap { $0 }.joined(separator: " · "))
                             .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
@@ -821,11 +829,13 @@ struct LegalRequestCard: View {
                 Text(nxUnbreakableParentheses(r.templateName.isEmpty ? LegalLabels.docType(r.docType) : r.templateName))
                     .font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(2).multilineTextAlignment(.leading)
                 Spacer(minLength: 4)
-                if r.rejected { LegalChip(text: T("Rejected"), tone: .danger) }
+                if r.rejected { LegalChip(text: T("Rejected"), tone: .danger, icon: "nosign") }
             }
             Text([r.company?.name, r.isAddendum && !r.parentNumberText.isEmpty ? String(format: T("Amends %@"), r.parentNumberText) : nil]
                     .compactMap { $0 }.joined(separator: " · "))
-                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                // Wrapped, not cut: "PATS · Amends PATS/PKS-…" hid the number (UI tour run 15, Q-IB23).
+                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                .fixedSize(horizontal: false, vertical: true)
             // A narrow board column (iPad portrait) cut "PIC · Q…" and "Sig…" and wrapped the date (UI tour
             // run 10, IPD-3): the date and the count keep their width, the PIC has its own line, and the
             // document's number truncates in the middle beside a status chip that is never squeezed.
@@ -936,7 +946,7 @@ struct LegalRequestDetailView: View {
         Text(String(format: T("%@ asked on %@"), r.requester?.name ?? "—", LegalLabels.date(r.createdAt)) + " · " + (r.company?.name ?? ""))
             .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
         HStack(spacing: 8) {
-            if r.rejected { LegalChip(text: T("Rejected"), tone: .danger) } else { LegalChip(text: LegalRequestLabels.column(r.column), tone: .neutral) }
+            if r.rejected { LegalChip(text: T("Rejected"), tone: .danger, icon: "nosign") } else { LegalChip(text: LegalRequestLabels.column(r.column), tone: .neutral) }
             LegalChip(text: LegalRequestLabels.stage(r.stage), tone: LegalRequestLabels.stageTone(r.stage))
             if let doc = r.document {
                 Button { openDoc = LegalOpenID(id: doc.id) } label: {

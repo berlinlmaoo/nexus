@@ -699,14 +699,15 @@ struct APIClient {
         let list = try await run(makeRequest("/api/projects"), decode: [Project].self, cache: "projects")
         // Every mark that knows a project's id draws the icon from here (ProjectIconStore).
         let pairs = list.map { ($0.id, $0.icon) }
-        await MainActor.run { ProjectIconStore.shared.record(pairs) }
+        let kinds = list.map { ($0.id, $0.type) }
+        await MainActor.run { ProjectIconStore.shared.record(pairs); ProjectIconStore.shared.recordTypes(kinds) }
         return list
     }
 
     func project(_ id: String) async throws -> ProjectDetail {
         let d = try await run(makeRequest("/api/projects/\(id)"), decode: ProjectDetail.self, cache: "project-\(id)")
-        let icon = d.icon
-        await MainActor.run { ProjectIconStore.shared.set(id, icon) }
+        let icon = d.icon, kind = d.type
+        await MainActor.run { ProjectIconStore.shared.set(id, icon); ProjectIconStore.shared.recordTypes([(id, kind)]) }
         return d
     }
 

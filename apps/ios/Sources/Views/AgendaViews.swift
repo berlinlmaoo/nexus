@@ -258,7 +258,7 @@ struct AgendaScaffold<Content: View>: View {
             } else if isEmpty, let emptyTitle {
                 ScrollView {
                     EmptyState(icon: emptyIcon, title: emptyTitle, subtitle: emptyText,
-                               actionTitle: emptyActionTitle, actionIcon: nil, action: emptyAction)
+                               actionTitle: emptyActionTitle, actionIcon: nil, action: emptyAction, prominent: true)
                         .frame(maxWidth: .infinity)
                         .padding(.horizontal, NXSidebarPage.gutter(pageRoot))
                         .padding(.top, 48)

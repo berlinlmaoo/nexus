@@ -335,7 +335,10 @@ struct BuilderField: Identifiable, Equatable, Sendable {
 
     /// The empty number box: "0", "Rp 0", "US$0,00", "0%" — zero in the answer's format.
     func numberPlaceholder(_ style: CustomFieldNumber.Style) -> String {
-        CustomFieldNumber.format(0, style: style)
+        // A Rupiah answer is the web's "Rp" prefix with an empty box, no grey "0" (R14-WB-1; UI tour run 15,
+        // Q-IA31 / Q-M18: the app drew "Rp 0").
+        if style.numberFormat == "IDR" { return "Rp" }
+        return CustomFieldNumber.format(0, style: style)
     }
 
     /// The web's `withKind`: turns the question into another kind, keeping what still applies.

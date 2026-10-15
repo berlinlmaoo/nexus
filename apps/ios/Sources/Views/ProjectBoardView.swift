@@ -598,7 +598,9 @@ struct ProjectDetailView: View {
                 .accessibilityLabel(T("Back"))
             }
             ProjectMark(icon: detail?.icon, color: nil, size: wide ? 34 : 28, projectId: projectId)
-            Text(displayName).font(NXFont.display(wide ? 26 : 20, wide ? .semibold : .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+            // Two lines on a phone: beside the two buttons "ZZ QA Manager Out…" was cut (UI tour run 15, R15-I-06).
+            Text(displayName).font(NXFont.display(wide ? 26 : 20, wide ? .semibold : .bold)).foregroundStyle(NX.foreground)
+                .lineLimit(wide ? 1 : 2).fixedSize(horizontal: false, vertical: true)
                 // The name before the buttons: a portrait iPad cut it to "Finance P…" (UI tour run 5).
                 .layoutPriority(1)
             if let chip = detail?.readOnlyLevelChip { ProjectLevelChip(text: chip) }
@@ -1275,15 +1277,17 @@ struct ProjectDetailView: View {
                 // vertically (see LaneColumn), so the board never pans in two directions at once.
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 12) {
-                        // Tasks other projects linked in: read-only lanes first, as on the web (grouped by
-                        // section only — a board grouped by another property has nowhere to put them).
-                        if !grouped {
-                            ForEach(linkedLanes(detail)) { lane in linkedColumn(lane, groupRow: statusStyle) }
-                        }
                         ForEach(Array(shown.enumerated()), id: \.element.id) { i, lane in
                             laneColumn(lane, at: i, in: shown, statusStyle: statusStyle, grouped: grouped)
                         }
                         if statusStyle && detail.canManageProject { addStatusColumn }
+                        // Tasks other projects linked in: read-only lanes AFTER this project's own columns
+                        // and "Add status", as on the web (R14-WB-5; UI tour run 15, Q-IA3 / Q-M5: the linked
+                        // lane came first and pushed To Do aside). Grouped by section only — a board grouped
+                        // by another property has nowhere to put them.
+                        if !grouped {
+                            ForEach(linkedLanes(detail)) { lane in linkedColumn(lane, groupRow: statusStyle) }
+                        }
                     }
                     .padding(.vertical, 14)
                     // Each column is a resting place (below).
@@ -1296,6 +1300,9 @@ struct ProjectDetailView: View {
                 // scroll's own (not padding inside it), so the snapped column keeps its 14 pt inset.
                 .scrollTargetBehavior(.viewAligned)
                 .contentMargins(.horizontal, 14, for: .scrollContent)
+                // The column peeking in at the edge fades out, so a header count cut to "On Progress 1"
+                // or a card cut mid-word reads as "more this way" (UI tour run 15, R15-I-11 / Q-IA21 / Q-M12).
+                .nxEdgeFade(40)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 // Columns scrolled off to the left end at the board's edge: on the Mac they showed through
                 // the sidebar's material as blurred ghost cards (UI tour run 14, P-M30).
@@ -1463,9 +1470,11 @@ struct ProjectDetailView: View {
                 }
             }
         } label: {
-            Label(T("Status"), systemImage: "plus")
+            // The web's wording (UI tour run 15, Q-IA21: "+ Status").
+            Label(T("Add status"), systemImage: "plus")
                 .font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
-                .frame(width: 140, height: 44)
+                .lineLimit(1).fixedSize()
+                .frame(minWidth: 140, minHeight: 44)
                 .contentShape(Rectangle())
         }
         .padding(.top, 18)
@@ -1886,7 +1895,7 @@ struct LaneColumn: View {
     var canEdit = true
     /// Tasks another project linked into this one (server taskLists[].taskProjects): a read-only lane
     /// named after the source project, with a "Linked" tag and a dashed outline — the web board's
-    /// linked lanes, drawn first (UI tour run 5).
+    /// linked lanes, drawn after the project's own (UI tour run 15).
     var linked = false
     /// Draw the group-label row even when this column is not a status column, so a linked lane lines up
     /// with status columns beside it.
@@ -1932,15 +1941,23 @@ struct LaneColumn: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 8) {
                         ForEach(orderedTasks) { task in card(task) }
-                        // A column that takes cards already says what to do ("+ New task"), as on web;
-                        // a centred "No tasks" there peeked in as a cut-off "No" at the screen edge
-                        // (UI tour run 7). Only a column that can't take a card says it is empty.
-                        if (lane.tasks ?? []).isEmpty && !composing && !canAdd {
+                        // An empty column says so under "New task", left-aligned so a peeking column never shows
+                        // a cut-off "No" (UI tour run 7); without the line an empty To Do read as unloaded
+                        // (UI tour run 15, R15-I-10 / R15-WB-8).
+                        if (lane.tasks ?? []).isEmpty && !composing {
                             Text(T("No tasks")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg.opacity(0.7))
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8).padding(.vertical, 18)
                         }
                     }
                     .padding(.bottom, 8)
+                }
+                // Cards fade out at the column's bottom edge instead of being sliced through (UI tour run 15,
+                // Q-M12).
+                .mask {
+                    VStack(spacing: 0) {
+                        Rectangle()
+                        LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: 18)
+                    }
                 }
             }
             .padding(10)
@@ -2167,13 +2184,16 @@ struct BoardCard: View {
                     .font(.system(size: 16)).foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.5))
                 Text(task.title).font(NXFont.text(14, .bold))
                     .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
-                    .strikethrough(task.isDone).lineLimit(3)
+                    // The whole title, as on the web card: three lines cut "FLSHA (TETRA COFFEE AND EATERY
+                    // PEKANB…" (UI tour run 15, Q-M11).
+                    .strikethrough(task.isDone)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
                 if let p = task.priority, p.uppercased() != "NONE" {
                     PriorityPill(priority: p)
                 }
             }
-            CFChipRow(values: task.customFieldValues, only: fieldIds)
+            CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText)
             HStack(spacing: 8) {
                 // No "No due" placeholder on every card (Notion shows nothing when there is no date).
                 if let due = dueText {

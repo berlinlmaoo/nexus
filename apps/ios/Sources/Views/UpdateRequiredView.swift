@@ -156,7 +156,7 @@ enum GraceWording {
         let f = DateFormatter()
         f.timeZone = TimeZone(identifier: "Asia/Jakarta")
         f.locale = Locale(identifier: AppLanguage.shared.lang == .id ? "id_ID" : "en_GB")
-        f.dateFormat = "EEEE d MMMM, HH:mm"
+        f.dateFormat = "EEEE d MMMM HH:mm"
         return f.string(from: date) + " WIB"
     }
 

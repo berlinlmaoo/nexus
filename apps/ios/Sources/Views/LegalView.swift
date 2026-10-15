@@ -199,7 +199,7 @@ struct LegalDocumentsPane: View {
     }
 
     private var uploadButton: some View {
-        Button { sheet = .upload } label: { Label(T("Upload document"), systemImage: "arrow.up.doc") }
+        Button { sheet = .upload } label: { Label(T("Upload document"), systemImage: "square.and.arrow.up") }
             .buttonStyle(.nxBordered)
     }
 
@@ -382,9 +382,14 @@ struct LegalDocumentsPane: View {
             // prefix and the sequence both stay readable, with the full number on hover (UI tour run 11, MC-2).
             // The whole number in a wider column (run 14, P-M16: "SPK/CH/PATS-UNI…TA/JAN/2027/001" with a 180 pt
             // Company column for "PATS"); a number longer still shrinks a little rather than being cut.
-            Text(d.number.isEmpty ? "—" : d.number).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.foreground)
-                .strikethrough(d.numberReleased).lineLimit(1).minimumScaleFactor(0.7).frame(width: 300, alignment: .leading)
-                .help(d.number)
+            // An addendum is marked "↳" under its parent, as on the web (UI tour run 15, Q-IB30).
+            HStack(spacing: 4) {
+                if d.parent != nil { Text("↳").font(NXFont.text(13)).foregroundStyle(NX.mutedFg).accessibilityLabel(T("Addendum")) }
+                Text(d.number.isEmpty ? "—" : d.number).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.foreground)
+                    .strikethrough(d.numberReleased).lineLimit(1).minimumScaleFactor(0.7)
+            }
+            .frame(width: 300, alignment: .leading)
+            .help(d.number)
             VStack(alignment: .leading, spacing: 2) {
                 Text(d.title).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -407,6 +412,7 @@ struct LegalDocumentsPane: View {
     private func phoneRow(_ d: LegalDocumentSummary) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 8) {
+                if d.parent != nil { Text("↳").font(NXFont.text(13)).foregroundStyle(NX.mutedFg).accessibilityLabel(T("Addendum")) }
                 Text(d.number.isEmpty ? T("No number") : d.number).font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(NX.mutedFg).strikethrough(d.numberReleased).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer(minLength: 4)

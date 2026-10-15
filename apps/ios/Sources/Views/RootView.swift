@@ -109,6 +109,9 @@ struct RootView: View {
                                 }
                             }
                     }
+                    // Page sized on iPad / Mac: the form sheet was half the screen and its pinned Send bar cut
+                    // "Needed by" mid-line, with Related project and Attachments out of sight (run 15, Q-IB5).
+                    .tallSheet()
                     // Passed explicitly: a sheet on Mac Catalyst does not always inherit the environment.
                     .environment(auth).environment(router)
                 }

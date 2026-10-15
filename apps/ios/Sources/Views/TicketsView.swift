@@ -518,7 +518,13 @@ struct TicketsView: View {
             HStack(spacing: 10) {
                 NexusChip(text: t.statusLabel, tone: t.tone)
                 if let c = t.category, !c.isEmpty { Text(ticketCategoryName(c)) }
-                if isBod, let n = t.reporter?.name, !n.isEmpty { Text(String(format: T("from %@"), n)).lineLimit(1) }
+                // With the person's face, as the web's From column (UI tour run 15, Q-IB22).
+                if isBod, let r = t.reporter, let n = r.name, !n.isEmpty {
+                    HStack(spacing: 5) {
+                        AvatarView(url: r.avatar, initial: String(n.prefix(1)).uppercased(), size: 16)
+                        Text(String(format: T("from %@"), n)).lineLimit(1)
+                    }
+                }
                 if let m = t.messageCount { Label("\(m)", systemImage: "bubble.left") }
             }
             .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
@@ -529,7 +535,7 @@ struct TicketsView: View {
     /// The date the list is SORTED by (last message), with the time, as the web's Last activity.
     private func activityLabel(_ t: Complaint) -> String {
         guard let d = ProjDate.parse(t.lastMessageAt ?? t.createdAt) else { return "" }
-        return ProjDate.fmt("d MMM, HH:mm").string(from: d)
+        return ProjDate.fmt("d MMM HH:mm").string(from: d)
     }
 
     private var filterBar: some View {

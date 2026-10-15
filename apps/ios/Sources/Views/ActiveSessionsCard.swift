@@ -19,13 +19,15 @@ struct UserSessionRow: Decodable, Identifiable, Equatable {
 enum DeviceLabel {
     enum Kind { case phone, tablet, desktop, unknown }
 
-    case app(ios: Bool, version: String?, build: String?, kind: Kind)
+    /// `os` is which Apple system the iOS-family app runs on ("macOS", "iPadOS", "iOS"), from its
+    /// User-Agent; nil when the UA does not say (the web's appleAppOs).
+    case app(ios: Bool, version: String?, build: String?, kind: Kind, os: String? = nil)
     case browser(name: String?, os: String?, kind: Kind)
     case unknown
 
     var kind: Kind {
         switch self {
-        case .app(_, _, _, let k): return k
+        case .app(_, _, _, let k, _): return k
         case .browser(_, _, let k): return k
         case .unknown: return .unknown
         }
@@ -42,17 +44,31 @@ enum DeviceLabel {
         return (0..<m.numberOfRanges).map { i in Range(m.range(at: i), in: s).map { String(s[$0]) } }
     }
 
+    /// The `(iPad; …)` / `(iPhone; …)` / `(Macintosh; …)` part of the app's own User-Agent.
+    private static func appleAppOs(_ ua: String) -> String? {
+        guard let g = groups(ua, #"^NEXUS/\d+[^(]*\(([^)]*)\)"#), g.count >= 2, let inside = g[1] else { return nil }
+        return has(inside, "iPad") ? "iPadOS" : has(inside, "iPhone|iPod") ? "iOS" : has(inside, "Macintosh|Mac OS X") ? "macOS" : nil
+    }
+
+    private static func kind(ofAppleOs os: String) -> Kind {
+        os == "macOS" ? .desktop : os == "iPadOS" ? .tablet : .phone
+    }
+
     static func describe(userAgent: String?, client: String?) -> DeviceLabel {
         let ua = userAgent ?? ""
         let tag = (client ?? "").trimmingCharacters(in: .whitespaces)
         if let g = groups(tag, #"^(ios|android)/(\d+(?:\.\d+){0,2})(?:[^/\s]*)(?:/([^/\s]+))?"#, caseless: true), g.count >= 4 {
             let ios = g[1]?.lowercased() == "ios"
-            let kind: Kind = has(ua, "iPad|Tablet", caseless: true) ? .tablet
+            let os = ios ? appleAppOs(ua) : nil
+            let kind: Kind = os.map(kind(ofAppleOs:)) ?? (has(ua, "iPad|Tablet", caseless: true) ? .tablet
                 : ios && has(ua, "Macintosh|Mac OS X", caseless: true) && !has(ua, "iPhone", caseless: true) ? .desktop
-                : .phone
-            return .app(ios: ios, version: g[2], build: g[3], kind: kind)
+                : .phone)
+            return .app(ios: ios, version: g[2], build: g[3], kind: kind, os: os)
         }
-        if let g = groups(ua, #"^NEXUS/(\d+)\b"#), g.count >= 2 { return .app(ios: true, version: nil, build: g[1], kind: .phone) }
+        if let g = groups(ua, #"^NEXUS/(\d+)\b"#), g.count >= 2 {
+            let os = appleAppOs(ua)
+            return .app(ios: true, version: nil, build: g[1], kind: os.map(kind(ofAppleOs:)) ?? .phone, os: os)
+        }
         if has(ua, "^okhttp/", caseless: true) { return .app(ios: false, version: nil, build: nil, kind: .phone) }
         if ua.isEmpty { return .unknown }
 
@@ -83,9 +99,13 @@ enum DeviceLabel {
 
     var name: String {
         switch self {
-        case .app(let ios, let version, let build, _):
-            // The Mac app is the iOS build under Mac Catalyst; its User-Agent says Macintosh (APIClient.userAgent).
-            let app = !ios ? T("NEXUS app for Android") : kind == .desktop ? T("NEXUS app for macOS") : T("NEXUS app for iOS")
+        case .app(let ios, let version, let build, _, let os):
+            // The Mac app is the iOS build under Mac Catalyst; its User-Agent says Macintosh, an iPad says iPad
+            // (APIClient.userAgent). The same names as the web: the iPad called itself "iOS" (run 15, Q-IB2).
+            let app = !ios ? T("NEXUS app for Android")
+                : os == "macOS" || (os == nil && kind == .desktop) ? T("NEXUS app for macOS")
+                : os == "iPadOS" ? T("NEXUS app for iPadOS")
+                : T("NEXUS app for iOS")
             if let version { return build.map { "\(app) \(version) (\($0))" } ?? "\(app) \(version)" }
             return build.map { "\(app) (" + T("build {n}").replacingOccurrences(of: "{n}", with: $0) + ")" } ?? app
         case .browser(let name, let os, _):
@@ -106,31 +126,64 @@ enum DeviceLabel {
     }
 }
 
+/// Sessions that name the same device, as one row (the web's groupSessions).
+private struct SessionGroup: Identifiable {
+    let id: String
+    let name: String
+    let device: DeviceLabel
+    var sessions: [UserSessionRow]
+    let unknown: Bool
+}
+
 struct ActiveSessionsCard: View {
     @Environment(AuthStore.self) private var auth
     @State private var rows: [UserSessionRow] = []
     @State private var loading = true
     @State private var loadFailed = false
     @State private var busyId: String?
+    @State private var busyGroup: String?
     @State private var busyOthers = false
     @State private var failed = false
     @State private var confirmOne: UserSessionRow?
+    @State private var confirmGroup: SessionGroup?
     @State private var confirmOthers = false
-
-    @State private var showAll = false
+    @State private var expanded: Set<String> = []
 
     private var others: Int { rows.filter { $0.current != true }.count }
 
-    /// This device first, then the most recently active. Only the 5 latest are drawn until "Show all"
-    /// (UI tour run 11, MC-16: a Mac account listed 40+ rows and pushed the rest of Security off the page).
-    private static let collapsedCount = 5
-    private var ordered: [UserSessionRow] {
-        rows.sorted { a, b in
-            if (a.current == true) != (b.current == true) { return a.current == true }
-            return (a.lastActiveAt ?? a.createdAt ?? "") > (b.lastActiveAt ?? b.createdAt ?? "")
+    private static func lastActive(_ s: UserSessionRow) -> String { s.lastActiveAt ?? s.createdAt ?? "" }
+
+    /// Grouped by the device they name, as on the web (UI tour run 15, R15-I-02 / Q-IB3: a flat list of 165
+    /// rows with "NEXUS app for iOS 0.1.7 (14)" twice). This device first; then one row per device name,
+    /// newest activity first, "Unknown device" last. A group of one is a plain session row; a larger group
+    /// shows its count, its latest activity, "Sign out all", and expands to the single sessions.
+    private var groups: [SessionGroup] {
+        var current: [SessionGroup] = []
+        var byName: [String: SessionGroup] = [:]
+        var order: [String] = []
+        for s in rows {
+            let device = DeviceLabel.describe(userAgent: s.userAgent, client: s.client)
+            let name = device.name
+            if s.current == true {
+                current.append(SessionGroup(id: "current:\(s.id)", name: name, device: device, sessions: [s], unknown: false))
+                continue
+            }
+            if byName[name] == nil {
+                let unknown: Bool
+                switch device { case .app, .browser: unknown = false; case .unknown: unknown = true }
+                byName[name] = SessionGroup(id: "name:\(name)", name: name, device: device, sessions: [], unknown: unknown)
+                order.append(name)
+            }
+            byName[name]?.sessions.append(s)
         }
+        var rest = order.compactMap { byName[$0] }
+        for i in rest.indices { rest[i].sessions.sort { Self.lastActive($0) > Self.lastActive($1) } }
+        rest.sort { a, b in
+            if a.unknown != b.unknown { return !a.unknown }
+            return Self.lastActive(a.sessions[0]) > Self.lastActive(b.sessions[0])
+        }
+        return current + rest
     }
-    private var shown: [UserSessionRow] { showAll ? ordered : Array(ordered.prefix(Self.collapsedCount)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -159,51 +212,52 @@ struct ActiveSessionsCard: View {
                 EmptyState(icon: "iphone", title: T("No active sessions."),
                            subtitle: T("Every device you sign in on shows up here."), compact: true)
             } else {
-                let list = shown
+                let list = groups
                 VStack(spacing: 0) {
-                    ForEach(list) { s in
-                        row(s)
-                        if s.id != list.last?.id { Divider() }
+                    ForEach(list) { g in
+                        if g.sessions.count == 1 {
+                            row(g.sessions[0], name: g.name, device: g.device)
+                        } else {
+                            groupRow(g)
+                        }
+                        if g.id != list.last?.id { Divider() }
                     }
                 }
                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NX.mutedFg.opacity(0.2)))
-                if rows.count > Self.collapsedCount {
-                    Button {
-                        withAnimation(.snappy(duration: 0.2)) { showAll.toggle() }
-                    } label: {
-                        Text(showAll ? T("Show less") : String(format: T("Show all %d"), rows.count))
-                            .font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
-                            .frame(minHeight: 32)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
             }
             if failed {
-                Text(T("Couldn't log that out. Try again.")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+                Text(T("Couldn't sign that out. Try again.")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
             }
         }
         .nexusCard()
         .task { await load() }
-        .alert(T("Log out this device?"), isPresented: Binding(get: { confirmOne != nil }, set: { if !$0 { confirmOne = nil } }), presenting: confirmOne) { s in
-            Button(T("Log out"), role: .destructive) { Task { await revoke(s) } }
+        .alert(T("Sign out this device?"), isPresented: Binding(get: { confirmOne != nil }, set: { if !$0 { confirmOne = nil } }), presenting: confirmOne) { s in
+            Button(T("Sign out"), role: .destructive) { Task { await revoke(s) } }
             Button(T("Cancel"), role: .cancel) {}
         } message: { s in
-            Text(T("Log out “{name}”? That device will need to sign in again.")
+            Text(T("Sign out “{name}”? That device will need to sign in again.")
                 .replacingOccurrences(of: "{name}", with: DeviceLabel.describe(userAgent: s.userAgent, client: s.client).name))
         }
-        .alert(T("Log out other sessions"), isPresented: $confirmOthers) {
-            Button(T("Log out"), role: .destructive) { Task { await revokeOthers() } }
+        .alert(T("Sign out all"), isPresented: Binding(get: { confirmGroup != nil }, set: { if !$0 { confirmGroup = nil } }), presenting: confirmGroup) { g in
+            Button(T("Sign out all"), role: .destructive) { Task { await revokeGroup(g) } }
+            Button(T("Cancel"), role: .cancel) {}
+        } message: { g in
+            Text(T("Sign out all {n} sessions of “{name}”? Those devices will need to sign in again.")
+                .replacingOccurrences(of: "{n}", with: AppNumber.int(g.sessions.count))
+                .replacingOccurrences(of: "{name}", with: g.name))
+        }
+        .alert(T("Sign out other sessions"), isPresented: $confirmOthers) {
+            Button(T("Sign out"), role: .destructive) { Task { await revokeOthers() } }
             Button(T("Cancel"), role: .cancel) {}
         } message: {
-            Text(T("Log out of every other device? They will need to sign in again. This device stays signed in."))
+            Text(T("Sign out of every other device? They will need to sign in again. This device stays signed in."))
         }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(T("Active sessions")).font(NXFont.text(15, .bold))
-            Text(T("Devices signed in to your account. Log out any you don't recognise."))
+            Text(T("Devices signed in to your account. Sign out any you don't recognise."))
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -211,24 +265,58 @@ struct ActiveSessionsCard: View {
 
     @ViewBuilder private var othersButton: some View {
         if others > 0 {
+            // A neutral bordered button, as on the web; red text on the accent pill mixed two meanings
+            // (UI tour run 15, R15-I-04 / Q-IB29).
             Button { confirmOthers = true } label: {
                 HStack(spacing: 5) {
                     if busyOthers { ProgressView().controlSize(.mini) } else { Image(systemName: "rectangle.portrait.and.arrow.right") }
-                    Text(T("Log out other sessions")).lineLimit(1)
+                    Text(T("Sign out other sessions")).lineLimit(1)
                 }
-                .font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+                .font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
                 .fixedSize()
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                .contentShape(Rectangle())
             }
-            .buttonStyle(.bordered).disabled(busyOthers)
+            .buttonStyle(.plain).hoverEffect(.highlight).disabled(busyOthers)
         }
+    }
+
+    /// The small neutral bordered "Sign out" / "Sign out all" of a row.
+    private func rowButton(_ title: String, busy: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if busy { ProgressView().controlSize(.mini) }
+                Text(title)
+            }
+            .font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground).lineLimit(1).fixedSize()
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).hoverEffect(.highlight).disabled(busy)
     }
 
     /// One fact of a row's meta line with its spaces made non-breaking, so the line wraps only between
     /// facts (at " · "), never inside "Signed in 15 Oct" (UI tour run 14, N-41 / P-I9).
     private static func unbroken(_ s: String) -> String { s.replacingOccurrences(of: " ", with: "\u{00A0}") }
 
-    private func row(_ s: UserSessionRow) -> some View {
-        let device = DeviceLabel.describe(userAgent: s.userAgent, client: s.client)
+    private func icon(_ device: DeviceLabel, current: Bool) -> some View {
+        Image(systemName: device.symbol)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(current ? NX.violet : NX.mutedFg)
+            .frame(width: 34, height: 34)
+            .background((current ? NX.violet : NX.mutedFg).opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+    }
+
+    /// A device name that wraps only between words, never between a version and its build:
+    /// "0.1.7 (14)" stays together (run 14, R14-WM-24).
+    private static func nameText(_ name: String) -> String {
+        name.replacingOccurrences(of: " (", with: "\u{00A0}(")
+    }
+
+    /// One session. `nested`: a session inside an expanded group, without its own icon and name.
+    private func row(_ s: UserSessionRow, name: String, device: DeviceLabel, nested: Bool = false) -> some View {
         let isCurrent = s.current == true
         let meta = [
             s.ipAddress.flatMap { $0.isEmpty ? nil : $0 },
@@ -236,34 +324,81 @@ struct ActiveSessionsCard: View {
             T("Signed in {date}").replacingOccurrences(of: "{date}", with: Self.startedLabel(s.createdAt)),
         ].compactMap { $0 }.map(Self.unbroken).joined(separator: " · ")
         return HStack(spacing: 10) {
-            Image(systemName: device.symbol)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(isCurrent ? NX.violet : NX.mutedFg)
-                .frame(width: 34, height: 34)
-                .background((isCurrent ? NX.violet : NX.mutedFg).opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            if !nested { icon(device, current: isCurrent) }
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(device.name).font(NXFont.text(13, .semibold)).lineLimit(1)
-                    if isCurrent {
-                        Text(T("This device")).font(NXFont.text(10, .bold)).foregroundStyle(NX.success)
-                            .padding(.horizontal, 7).padding(.vertical, 2)
-                            .background(NX.success.opacity(0.15), in: Capsule())
+                if !nested {
+                    HStack(spacing: 6) {
+                        Text(Self.nameText(name)).font(NXFont.text(13, .semibold)).lineLimit(2)
+                        if isCurrent {
+                            Text(T("This device")).font(NXFont.text(10, .bold)).foregroundStyle(NX.success)
+                                .padding(.horizontal, 7).padding(.vertical, 2)
+                                .background(NX.success.opacity(0.15), in: Capsule())
+                                .fixedSize()
+                        }
                     }
                 }
                 Text(meta).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit().lineLimit(2)
             }
             Spacer(minLength: 0)
             if !isCurrent {
-                Button { confirmOne = s } label: {
-                    HStack(spacing: 4) {
-                        if busyId == s.id { ProgressView().controlSize(.mini) }
-                        Text(T("Log out"))
-                    }.font(NXFont.text(12, .semibold)).lineLimit(1).fixedSize()
-                }
-                .buttonStyle(.bordered).disabled(busyId == s.id)
+                rowButton(T("Sign out"), busy: busyId == s.id) { confirmOne = s }
             }
         }
         .padding(10)
+        .padding(.leading, nested ? 34 : 0)
+    }
+
+    private func groupRow(_ g: SessionGroup) -> some View {
+        let open = expanded.contains(g.id)
+        return VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 10) {
+                icon(g.device, current: false)
+                VStack(alignment: .leading, spacing: 3) {
+                    // The count chip on its own line under the name, the same for every group
+                    // (run 15, R15-WM-9: one group put it inline, the others under the name).
+                    Text(Self.nameText(g.name)).font(NXFont.text(13, .semibold)).lineLimit(2)
+                    HStack(spacing: 6) {
+                        Text(T("{n} sessions").replacingOccurrences(of: "{n}", with: AppNumber.int(g.sessions.count)))
+                            .font(NXFont.text(10, .bold)).foregroundStyle(NX.mutedFg).monospacedDigit()
+                            .padding(.horizontal, 7).padding(.vertical, 2)
+                            .background(NX.muted, in: Capsule())
+                            .fixedSize()
+                        if let active = Self.activeLabel(g.sessions[0].lastActiveAt) {
+                            Text(Self.unbroken(active)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                        }
+                    }
+                    Button {
+                        withAnimation(.snappy(duration: 0.2)) {
+                            if open { expanded.remove(g.id) } else { expanded.insert(g.id) }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold))
+                                .rotationEffect(.degrees(open ? 180 : 0))
+                            Text(open ? T("Hide sessions") : T("Show all {n}").replacingOccurrences(of: "{n}", with: AppNumber.int(g.sessions.count)))
+                        }
+                        .font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+                        .frame(minHeight: 28)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(open ? .isSelected : [])
+                }
+                Spacer(minLength: 0)
+                rowButton(T("Sign out all"), busy: busyGroup == g.id) { confirmGroup = g }
+            }
+            .padding(10)
+            if open {
+                Divider()
+                VStack(spacing: 0) {
+                    ForEach(g.sessions) { s in
+                        row(s, name: g.name, device: g.device, nested: true)
+                        if s.id != g.sessions.last?.id { Divider().padding(.leading, 44) }
+                    }
+                }
+                .background(NX.muted.opacity(0.3))
+            }
+        }
     }
 
     // MARK: actions
@@ -288,6 +423,22 @@ struct ActiveSessionsCard: View {
             let wasMine = try await APIClient.shared.revokeSession(s.id)
             if wasMine { auth.logout(); return }
             rows.removeAll { $0.id == s.id }
+            await load()
+        } catch APIError.unauthorized {
+            auth.logout()
+        } catch {
+            failed = true
+        }
+    }
+
+    private func revokeGroup(_ g: SessionGroup) async {
+        guard busyGroup == nil else { return }
+        busyGroup = g.id; failed = false; defer { busyGroup = nil }
+        do {
+            for s in g.sessions {
+                _ = try await APIClient.shared.revokeSession(s.id)
+                rows.removeAll { $0.id == s.id }
+            }
             await load()
         } catch APIError.unauthorized {
             auth.logout()

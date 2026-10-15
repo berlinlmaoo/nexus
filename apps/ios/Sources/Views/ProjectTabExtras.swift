@@ -60,8 +60,10 @@ struct TableColumns: Equatable {
     }
 
     static func fit(width: CGFloat, fieldNames: [String], compact: Bool) -> TableColumns {
-        let minName: CGFloat = compact ? 200 : 260
-        let minCol: CGFloat = compact ? 120 : 150
+        // Name wraps to two lines, so it needs less width; on a 13" iPad beside the sidebar three columns now
+        // fit next to it and Harga shows on the first screen, as on the web (UI tour run 15, Q-IA5 / Q-M14).
+        let minName: CGFloat = compact ? 200 : 220
+        let minCol: CGFloat = compact ? 120 : 140
         let fieldMins = fieldNames.map { min(compact ? 220 : 280, max(minCol, headerWidth($0))) }
         let mins = [minCol, minCol] + fieldMins + [minCol, minCol]
         let minTotal = minName + mins.reduce(0, +) + 40
@@ -84,7 +86,10 @@ struct TableColumns: Equatable {
         var k = 0
         while k < mins.count && used + mins[k] <= width { used += mins[k]; k += 1 }
         guard k > 0 else { return TableColumns(name: max(minName, width - minCol), widths: mins) }
-        let extra = width - used
+        // The next column peeks in by 48 pt under the edge fade, so it is plain that more columns follow;
+        // ending exactly on a boundary made "Request by" look like the last column (UI tour run 15, Q-M15).
+        let peek: CGFloat = k < mins.count ? 48 : 0
+        let extra = max(0, width - used - peek)
         let nameExtra = min(extra, 80)
         let each = (extra - nameExtra) / CGFloat(k)
         var widths = mins
@@ -508,11 +513,14 @@ struct ProjectTableRow: View {
                 if task.isSubtask {
                     Image(systemName: "arrow.turn.down.right").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
                 }
+                // Two lines before an ellipsis, as the web's Table (R14-WB-12): one line cut "reimburse transport
+                // take content pe…" while the row had room for the rest (UI tour run 15, Q-IA25 / Q-M14).
                 Text(task.title)
-                    .font(NXFont.text(16, .medium))
+                    .font(NXFont.text(15, .medium))
                     .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
                     .strikethrough(task.isDone)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
                 if task.hasQuest { QuestXPChip(xp: task.questXP) }
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.right").font(.system(size: 12, weight: .medium)).foregroundStyle(NX.mutedFg.opacity(0.6))

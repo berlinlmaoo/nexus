@@ -252,9 +252,16 @@ struct SubmissionsView: View {
             known.insert(sub.columnKey)
             let status = sub.procStatus?.trimmingCharacters(in: .whitespaces) ?? ""
             extra.append(sub.column ?? SubmissionColumn(key: sub.columnKey, name: status.isEmpty ? T("New") : status, color: nil,
-                                                        group: "in_progress", taskStatus: nil, projectIds: nil))
+                                                        group: sub.columnKey == "new" ? "todo" : "in_progress", taskStatus: nil, projectIds: nil))
         }
-        return base + extra
+        // Each extra column joins its own group (stable within a group), as on the web: appended after Done,
+        // "New" with the only cards sat past the right edge (UI tour run 15, Q-IA1 / Q-M4).
+        let rank: (SubmissionColumn) -> Int = { c in
+            switch c.statusGroup { case .todo: return 0; case .inProgress: return 1; case .complete: return 2 }
+        }
+        return (base + extra).enumerated()
+            .sorted { a, b in rank(a.element) != rank(b.element) ? rank(a.element) < rank(b.element) : a.offset < b.offset }
+            .map(\.element)
     }
 
     /// The columns of the filtered requests' projects (empty ones too, as on their board).
@@ -446,13 +453,19 @@ struct SubmissionsView: View {
                                 .hoverEffect(.highlight)
                         }
                         if items.isEmpty {
-                            // Short, and says what the lane holds (run 14, P-I35 / P-M28: "Nothing here yet" said
-                            // nothing); the same four lines in every column were cut mid-sentence in the peeking
-                            // one (UI tour run 13, F-35).
-                            Text(emptyText(col))
-                                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                                .multilineTextAlignment(.center)
-                                .fixedSize(horizontal: false, vertical: true)
+                            // The web's reason per group, and the first empty To-do lane links to the forms,
+                            // the way a request gets here (UI tour run 15, Q-IA4 / Q-M4).
+                            VStack(spacing: 8) {
+                                Text(emptyText(col))
+                                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                                    .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                if col.key == firstEmptyTodo {
+                                    Button(T("Open forms")) { router.go(.forms) }
+                                        .font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+                                        .buttonStyle(.plain)
+                                }
+                            }
                             .frame(maxWidth: .infinity).padding(.horizontal, 6).padding(.vertical, 22)
                         }
                     }
@@ -474,7 +487,9 @@ struct SubmissionsView: View {
                 let n = CGFloat(max(1, visibleColumns.count))
                 let fair = (width - 2 * gutter - 12 * (n - 1)) / n
                 if fair >= 260 { return fair }
-                return 300
+                // Too narrow to share: an empty lane is narrow, as on the web (w-48), so the lanes with cards
+                // stay on screen (UI tour run 15, Q-IA1: "New" with the only 4 cards sat past a cut "Done").
+                return items.isEmpty ? 200 : 300
             }
             // Two empty columns used to fill a phone exactly, so the third sat just off screen with no hint
             // of it (UI tour run 9, I8): an empty one is now narrow enough that the next always peeks in.
@@ -484,10 +499,16 @@ struct SubmissionsView: View {
 
     private func emptyText(_ col: SubmissionColumn) -> String {
         switch col.statusGroup {
-        case .todo: return T("No request waiting for the team")
-        case .complete: return T("Nothing finished yet")
-        default: return T("Nothing being worked on")
+        case .todo: return T("New requests wait here until the team picks them up.")
+        case .complete: return T("Finished requests end up here.")
+        default: return T("Requests the team is working on move here.")
         }
+    }
+
+    /// The first To-do lane without cards: the one that links to the forms.
+    private var firstEmptyTodo: String? {
+        let cards = shown
+        return visibleColumns.first { c in c.statusGroup == .todo && !cards.contains { $0.columnKey == c.key } }?.key
     }
 
     private func card(_ s: MySubmission) -> some View {

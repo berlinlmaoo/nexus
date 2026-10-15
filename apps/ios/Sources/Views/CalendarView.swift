@@ -428,6 +428,8 @@ struct CalendarView: View {
         ZStack {
             NX.background.ignoresSafeArea()
             content
+                // The scrolled month never runs under the status bar (UI tour run 15, Q-IA10).
+                .modifier(StatusBarScrollEdge())
                 .background {
                     GeometryReader { g in
                         Color.clear
@@ -1499,8 +1501,15 @@ struct CalendarView: View {
     private func dayHeading(tree: CalDayTree, rel: Int, holiday: String?) -> some View {
         // The two-pane rail (iPad, Mac) is narrow: "Wednesday, 14…" was cut there (UI tour run 11, MC-3), so it
         // writes the short "Wed, 14 Oct"; the phone has the width for the whole date.
-        let date = Text(twoPane ? AppDateLocale.formatter("EEE d MMM", timeZone: TimeZone(identifier: "UTC")).string(from: CalDays.date(selected))
-                                : AppDateLocale.weekdayDate(CalDays.date(selected), timeZone: TimeZone(identifier: "UTC"))).font(NXFont.display(CalType.size(twoPane ? 19 : 17), .bold)).foregroundStyle(NX.foreground)
+        // The whole "Thursday 15 Oct" wherever it fits, as the web (UI tour run 15, Q-M8); the short form only
+        // where the rail is too narrow for it.
+        let full = AppDateLocale.weekdayDate(CalDays.date(selected), timeZone: TimeZone(identifier: "UTC"))
+        let short = AppDateLocale.formatter("EEE d MMM", timeZone: TimeZone(identifier: "UTC")).string(from: CalDays.date(selected))
+        let date = ViewThatFits(in: .horizontal) {
+            Text(full).lineLimit(1).fixedSize()
+            Text(twoPane ? short : full)
+        }
+        .font(NXFont.display(CalType.size(twoPane ? 19 : 17), .bold)).foregroundStyle(NX.foreground)
         let tag: String? = rel == 0 ? T("Today") : rel == 1 ? T("Tomorrow") : rel == -1 ? T("Yesterday") : nil
         return VStack(alignment: .leading, spacing: 3) {
             if typeSize.isAccessibilitySize {

@@ -37,7 +37,7 @@ enum AutoTime {
         let f = DateFormatter()
         f.locale = locale
         f.timeZone = ProjDate.cal.timeZone
-        f.dateFormat = seconds ? "d MMM, HH:mm:ss" : "EEE d MMM, HH:mm"
+        f.dateFormat = seconds ? "d MMM HH:mm:ss" : "EEE d MMM HH:mm"
         return f.string(from: d) + " WIB"
     }
 }

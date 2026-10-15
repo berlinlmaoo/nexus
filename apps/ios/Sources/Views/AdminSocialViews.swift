@@ -141,6 +141,9 @@ struct EmptyState: View {
     var actionIcon: String? = "plus"
     var action: (() -> Void)? = nil
     var compact: Bool = false
+    /// The action as the web's filled primary button (near-black), where the web draws it so: Room
+    /// Booking's "New booking" (UI tour run 15, Q-IA15 / Q-M22).
+    var prominent: Bool = false
 
     /// The web's calm empty state after the UI sweep: one muted icon in a soft circle, the title, why it
     /// is empty and where things come from, and the next step as a quiet button. No illustration stack.
@@ -161,10 +164,10 @@ struct EmptyState: View {
             if let actionTitle, let action {
                 Button { action() } label: {
                     Group { if let actionIcon { Label(actionTitle, systemImage: actionIcon) } else { Text(actionTitle) } }
-                        .font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                        .font(NXFont.text(13, .semibold)).foregroundStyle(prominent ? NX.background : NX.foreground)
                         .padding(.horizontal, 14).padding(.vertical, 8)
-                        .background(NX.card, in: Capsule())
-                        .overlay(Capsule().strokeBorder(NX.border))
+                        .background(prominent ? NX.onyx : NX.card, in: Capsule())
+                        .overlay(Capsule().strokeBorder(prominent ? Color.clear : NX.border))
                         // The pill stays compact; the place a finger can hit is the full 44 pt.
                         .frame(minHeight: 44).contentShape(Rectangle())
                 }

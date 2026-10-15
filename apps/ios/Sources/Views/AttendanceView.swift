@@ -460,7 +460,7 @@ struct AttendanceView: View {
                 FunMetricCard(icon: "sparkles", label: T("Days off"), value: Self.quotaValue(today?.dayOffUsedThisMonth, today?.dayOffQuota),
                               helper: dayOffHelper, tint: NX.warning)
                 FunMetricCard(icon: "calendar", label: T("Public holidays"), value: Self.quotaValue(today?.redDateUsedThisMonth, today?.redDateQuota),
-                              helper: T("This month's public-holiday allowance"), tint: Color(hex: "#fb7185"))
+                              helper: T("This month's public\u{2011}holiday allowance"), tint: Color(hex: "#fb7185"))
             }
         }
     }
@@ -1122,6 +1122,17 @@ struct AttendanceView: View {
         #if targetEnvironment(macCatalyst)
         return T("Check in on your phone")
         #else
+        // Ready only once it is known where the person is: "Ready to check in" beside "Finding you…"
+        // contradicted itself (UI tour run 15, Q-IB7).
+        if locationFree { return T("Ready to check in") }
+        if locationOff { return T("Location is off") }
+        if nearby == nil {
+            switch locateProblem {
+            case .noFix: return T("Location not found")
+            case .noOffices: return T("No office set up")
+            case nil: return T("Finding your location…")
+            }
+        }
         return T("Ready to check in")
         #endif
     }
@@ -1621,6 +1632,13 @@ struct StreakBoardCard: View {
     /// plus a `localizedCaseInsensitiveCompare` sort (ICU collation, the slowest comparator Foundation
     /// has) — and `body` reads it three times: the empty check, the name column and the cell grid.
     @State private var members: [Member] = []
+    /// The board's name filter (the web board's Search; UI tour run 15, Q-IB8).
+    @State private var query = ""
+    private var shownMembers: [Member] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return members }
+        return members.filter { $0.name.localizedCaseInsensitiveContains(q) }
+    }
     @State private var cachedFrom: Date?
     @State private var loading = true
     @State private var selectedRow: AttendanceRow?   // BoD taps a cell → record actions (delete / clear check-out)
@@ -1640,7 +1658,10 @@ struct StreakBoardCard: View {
     private var cellW: CGFloat {
         guard stripWidth > 0, periodDays.count > 1 else { return cell }
         let n = CGFloat(periodDays.count)
-        return min(40, max(cell, ((stripWidth - gap * (n - 1)) / n).rounded(.down)))
+        // iPad / Mac: a day may narrow to 20 pt so the whole period fits, as on the web; at 24 pt a 13" iPad
+        // missed by a few points and opened mid-period with a cut column at each edge (UI tour run 15, Q-IB21).
+        let least: CGFloat = hSize == .regular ? 20 : cell
+        return min(40, max(least, ((stripWidth - gap * (n - 1)) / n).rounded(.down)))
     }
     private let gap: CGFloat = 3
     @Environment(\.horizontalSizeClass) private var hSize
@@ -1822,7 +1843,7 @@ struct StreakBoardCard: View {
                     }
                     .accessibilityLabel(T("Open the full board"))
                     .fullScreenCover(isPresented: $showFull) {
-                        FullBoard(members: members, periodDays: periodDays, monthLabel: "\(monthLabel.capitalized) · \(periodLabel)", todayKey: todayKey,
+                        FullBoard(members: shownMembers, periodDays: periodDays, monthLabel: "\(monthLabel.capitalized) · \(periodLabel)", todayKey: todayKey,
                                   outsideKey: outsideKey, canManage: canManage, legend: AnyView(legend),
                                   refresh: { await liveRefresh() }) { await load() }
                     }
@@ -1843,6 +1864,7 @@ struct StreakBoardCard: View {
                 }
             }
             legend
+            if wide && members.count > 8 { searchField }
             // The spinner only while there is nothing to show yet. A reload (the permissions landing
             // after the first paint, an attendance change, the minute's refresh) keeps the grid: tearing
             // it down rebuilt the scroll view at the 28th, after it had already been brought to today —
@@ -1949,10 +1971,28 @@ struct StreakBoardCard: View {
             ForEach([AttTone.present, .leave, .sick, .dayoff, .absent], id: \.label) { t in
                 HStack(spacing: 4) {
                     RoundedRectangle(cornerRadius: 3).fill(t.color).frame(width: 11, height: 11)
-                    Text(t.label).font(NXFont.text(9, .medium)).foregroundStyle(NX.mutedFg)
+                    // The legend names the kind, plural like the web's ("Days off"); a cell says "Day off".
+                    Text(t == .dayoff ? T("Days off") : t.label).font(NXFont.text(9, .medium)).foregroundStyle(NX.mutedFg)
                 }
             }
         }
+    }
+
+    /// The web board's name search, for a board of the whole team (UI tour run 15, Q-IB8).
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(NX.mutedFg)
+            TextField(T("Search…"), text: $query)
+                .font(NXFont.text(14)).textFieldStyle(.plain)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+            if !query.isEmpty {
+                Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg) }
+                    .buttonStyle(.plain).accessibilityLabel(T("Clear"))
+            }
+        }
+        .padding(.horizontal, 10).frame(minHeight: 36)
+        .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
     }
 
     /// Date row: weekday over day number.
@@ -2031,7 +2071,7 @@ struct StreakBoardCard: View {
 
     private var nameColumn: some View {
         VStack(alignment: .leading, spacing: gap) {
-            ForEach(members) { m in
+            ForEach(shownMembers) { m in
                 Self.nameLabel(m).frame(width: nameW, height: cell, alignment: .leading)
             }
         }
@@ -2075,7 +2115,7 @@ struct StreakBoardCard: View {
 
     private var scoreColumn: some View {
         VStack(alignment: .trailing, spacing: gap) {
-            ForEach(members) { m in
+            ForEach(shownMembers) { m in
                 Self.scoreText(worked: m.workedDays, target: Self.scoreTarget(m, periodDays: periodDays.count))
                     .font(NXFont.text(10, .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
                     .lineLimit(1).minimumScaleFactor(0.7)
@@ -2090,7 +2130,7 @@ struct StreakBoardCard: View {
         let nowKey = ProjDate.fmt("yyyy-MM-dd").string(from: Date())
         let liveKey = outsideKey
         return VStack(alignment: .leading, spacing: gap) {
-            ForEach(members) { m in
+            ForEach(shownMembers) { m in
                 HStack(spacing: gap) {
                     ForEach(periodDays) { pd in
                         let fill = RoundedRectangle(cornerRadius: 5, style: .continuous).fill((m.cells[pd.key] ?? .none).color).frame(width: cellW, height: cell)

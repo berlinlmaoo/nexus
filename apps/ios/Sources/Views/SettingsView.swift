@@ -37,8 +37,10 @@ struct SettingsView: View {
     /// Only for the "update available" / "update by <date>" row; NexusApp fetches the policy.
     @State private var versionGate = AppVersionGate.shared
     /// The web's Settings tabs (UI sweep, 12 Oct 2026): Profile, Members, Notifications, Security,
-    /// Appearance, Claude (MCP). Remembered on this device.
-    @AppStorage("nexus.settings.tab") private var tab: SettingsTab = .profile
+    /// Appearance, Claude (MCP). Always opens on Profile, like the web's /settings: the tab used to be
+    /// remembered on the device, so a visit to Security made every later Settings open there with Profile
+    /// scrolled out of the strip (UI tour run 15, R15-I-01 / Q-IB1).
+    @State private var tab: SettingsTab = .profile
 
     private var initial: String { String((name.isEmpty ? email : name).first ?? "?").uppercased() }
 

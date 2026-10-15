@@ -124,16 +124,18 @@ struct LeaderboardView: View {
                     }
 
                     if ranked.count >= 1 {
-                        Podium(rows: Array(ranked.prefix(3)), labels: Array(ranks.prefix(3))) { row in
-                            openProfile = ProfileTarget(userId: row.userId, name: row.name, avatar: row.avatar)
-                        }
-                        // More people share 1st than the podium has steps: three equal "1" blocks read as
-                        // the whole story, so say how many are tied (UI tour run 11, PD-17).
+                        // More people share 1st than the podium has steps: one gold band with everyone tied
+                        // and "7-way tie for 1st · 1.000" on it, as on the web. Three "1" blocks left four of
+                        // the seven out (UI tour run 15, Q-IB6).
                         let tiedFirst = ranks.filter { $0 == 1 }.count
                         if tiedFirst > 3 {
-                            Text(String(format: T("%d-way tie for 1st"), tiedFirst))
-                                .font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
-                                .frame(maxWidth: .infinity)
+                            TieRibbon(rows: Array(ranked.prefix(tiedFirst)), caption: String(format: T("%d-way tie for 1st"), tiedFirst)) { row in
+                                openProfile = ProfileTarget(userId: row.userId, name: row.name, avatar: row.avatar)
+                            }
+                        } else {
+                            Podium(rows: Array(ranked.prefix(3)), labels: Array(ranks.prefix(3))) { row in
+                                openProfile = ProfileTarget(userId: row.userId, name: row.name, avatar: row.avatar)
+                            }
                         }
                     }
 
@@ -247,6 +249,50 @@ struct Podium: View {
     /// The shared rank for a podium place (1-based), else the place itself.
     private func label(_ place: Int) -> Int {
         place - 1 < labels.count ? labels[place - 1] : place
+    }
+}
+
+/// Everyone who shares 1st on one gold band, in the list's order (the web's LeaderboardTie). Names wrap to
+/// two lines rather than truncate (run 15, R15-WB-6).
+struct TieRibbon: View {
+    let rows: [LeaderboardRow]
+    let caption: String
+    let onOpen: (LeaderboardRow) -> Void
+    @Environment(\.colorScheme) private var scheme
+
+    private var band: Color { scheme == .dark ? Color(hex: "#fbbf24").opacity(0.25) : Color(hex: "#fcd34d") }
+    private var ink: Color { scheme == .dark ? Color(hex: "#fde68a") : Color(hex: "#78350f") }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 6) {
+                Image(systemName: "crown.fill").font(.system(size: 14))
+                Text(caption)
+                if let top = rows.first { Text("· \(AppNumber.int(top.totalXp))").monospacedDigit() }
+            }
+            .font(NXFont.text(14, .semibold)).foregroundStyle(ink)
+            .multilineTextAlignment(.center)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 84, maximum: 96), spacing: 12, alignment: .top)], alignment: .center, spacing: 12) {
+                ForEach(rows) { row in
+                    Button { onOpen(row) } label: {
+                        VStack(spacing: 5) {
+                            AvatarView(url: row.avatar, initial: row.initial, size: 44)
+                                .overlay(Circle().strokeBorder(Color(hex: "#f59e0b"), lineWidth: 2))
+                            Text(row.name ?? "—").font(NXFont.text(12, .semibold)).foregroundStyle(ink)
+                                .multilineTextAlignment(.center).lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity)
+        .background(band, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .contain)
     }
 }
 

@@ -267,7 +267,9 @@ struct ThreadsView: View {
                 .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
-                .frame(maxWidth: isRoot ? 900 : .infinity)   // wider on a Mac window (M-26: 720 left a quarter empty)
+                // The page's full width, so the feed ends on the same right edge as its header and every other
+                // page (UI tour run 15, Q-M21: a 900 pt cap stopped it ~85 px short on the Mac).
+                .frame(maxWidth: .infinity)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, NXSidebarPage.gutter(isRoot))
                 .padding(.vertical, isRoot ? 24 : 16)
@@ -455,7 +457,7 @@ struct ThreadsView: View {
                     }
                     .buttonStyle(.plain)
                     Button { openPost = p } label: {
-                        Label(p.comments > 0 ? "\(p.comments)" : "", systemImage: "bubble.left")
+                        Label(p.comments > 0 ? "\(p.comments)" : "", systemImage: "message")
                             .font(NXFont.text(13, .medium)).foregroundStyle(NX.mutedFg)
                             .frame(minHeight: 32).contentShape(Rectangle())
                     }

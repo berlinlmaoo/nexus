@@ -214,8 +214,16 @@ struct ListPropLine: View {
         return layout {
             let chips = customChips
             ForEach(chips.filter { !$0.isDate && !$0.isPerson }) { chip in customValue(chip) }
+            // Two dates at most, then "+N", as the web row (R14 rule; UI tour run 15, Q-IA24: three dates).
+            let dates = chips.filter(\.isDate)
+            let room = max(0, 2 - (startDay != nil || dueDay != nil ? 1 : 0))
             dateRange
-            ForEach(chips.filter(\.isDate)) { chip in customValue(chip) }
+            ForEach(Array(dates.prefix(room))) { chip in customValue(chip) }
+            if dates.count > room {
+                Text("+\(dates.count - room)").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                    .lineLimit(1).fixedSize()
+                    .accessibilityLabel(String(format: T("%d more dates"), dates.count - room))
+            }
             if !hidePriority, let p = task.priority, p.uppercased() != "NONE" { PriorityPill(priority: p) }
             if let status { StatusPill(name: status.name, colorKey: status.colorKey, size: 11).fixedSize() }
             // People last, always: a person field ("ryan ceo pats") sat after the amount on some rows while
@@ -365,7 +373,9 @@ struct ListTaskRow: View {
                 .font(NXFont.text(15))
                 .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
                 .strikethrough(task.isDone)
-                .lineLimit(wide ? 1 : 2)
+                // Two lines on a wide row too: one line cut "FEE HOSTING PR NAZH…" beside empty slots
+                // (UI tour run 15, Q-M13).
+                .lineLimit(2)
                 .multilineTextAlignment(.leading)
             if task.isSubtask, wide, let parent = task.parent?.title, !parent.isEmpty {
                 Text("· \(parent)").font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)

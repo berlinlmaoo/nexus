@@ -103,13 +103,14 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .threads:      return "at"
         case .submissions:  return "doc.text"
         case .teamCalendar: return "calendar"
-        case .roomBooking:  return "door.left.hand.open"
+        // The web's glyphs: calendar-clock and clipboard-check (UI tour run 15, Q-IA7).
+        case .roomBooking:  return "calendar.badge.clock"
         case .leaderboard:  return "trophy"
         case .reports:      return "chart.bar"
         case .docs:         return "book"
         case .forms:        return "list.bullet.rectangle"
         case .vault:        return "externaldrive"
-        case .attendance:   return "clock.badge.checkmark"
+        case .attendance:   return "list.clipboard"
         case .tickets:      return "ticket"
         case .teams:        return "person.3"
         case .settings:     return "gearshape"
@@ -238,10 +239,11 @@ struct NXCardGrid<Content: View>: View {
     private var columns: [GridItem] {
         #if targetEnvironment(macCatalyst)
         // A Mac window has no cap any more: as many ~380pt columns as fit.
-        return [GridItem(.adaptive(minimum: 380), spacing: spacing)]
+        return [GridItem(.adaptive(minimum: 380), spacing: spacing, alignment: .top)]
         #else
+        // Top-aligned: centred, a shorter card sat ~25 pt lower than its neighbour (UI tour run 15, Q-IA16).
         return hSize == .regular
-            ? [GridItem(.flexible(), spacing: spacing), GridItem(.flexible(), spacing: spacing)]
+            ? [GridItem(.flexible(), spacing: spacing, alignment: .top), GridItem(.flexible(), spacing: spacing, alignment: .top)]
             : [GridItem(.flexible())]
         #endif
     }
@@ -534,6 +536,16 @@ struct SidebarRoot: View {
                 onShortcuts: { if !cover.isCovered { rootSheet = .shortcuts } }
             )
             .background(.bar)
+            // The list fades into the footer, so a row passing under it reads as "more below" instead of
+            // a clipped icon (UI tour run 15, Q-M19 / P-M6).
+            .background(alignment: .top) {
+                Rectangle().fill(.bar)
+                    .mask(LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom))
+                    .frame(height: 24)
+                    .offset(y: -24)
+                    .allowsHitTesting(false)
+            }
+            .overlay(alignment: .top) { Rectangle().fill(NX.border).frame(height: 0.5) }
         }
     }
 
@@ -787,11 +799,19 @@ struct SidebarRoot: View {
     }
 
     /// One nav row: outline glyph, the web's name, and its live count when there is one.
+    /// A project is open that has no row of its own in the sidebar (not pinned): Projects reads as the
+    /// current place, as on the web (UI tour run 15, Q-IB9: outlet and socmed pages had nothing selected).
+    private var openProjectWithoutRow: Bool {
+        guard case .project(let ref) = selection else { return false }
+        return !shortcuts.pinned.contains { $0.id == ref.id }
+    }
+
     @ViewBuilder private func navRow(_ screen: NXScreen) -> some View {
-        let selected = selection == .screen(screen)
+        let standIn = screen == .projects && openProjectWithoutRow
+        let selected = selection == .screen(screen) || standIn
         // On the Mac the selection is a quiet grey (SidebarSelection), so the row keeps dark text; elsewhere
         // the system fill is strong and the glyph turns white on it.
-        let onFill = selected && !SidebarSelection.isQuiet
+        let onFill = selection == .screen(screen) && !SidebarSelection.isQuiet
         let glyph: Color = onFill ? Color.white : (selected ? NX.foreground : NX.mutedFg)
         Label {
             HStack(spacing: 6) {
@@ -823,6 +843,8 @@ struct SidebarRoot: View {
         }
         .tag(NXSelection.screen(screen))
         .modifier(MacSidebarRowInsets())
+        // Not the List's own selection (that is the open project): the quiet muted pill the web draws.
+        .listRowBackground(standIn ? AnyView(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NX.muted).padding(.horizontal, 10)) : nil)
     }
 
     private func badgeCount(_ screen: NXScreen) -> Int {
@@ -943,7 +965,9 @@ struct SidebarCountBadge: View {
     var onSelection = false
 
     var body: some View {
-        Text(count > 9 ? "9+" : "\(count)")
+        // The real count up to "99+", like the web sidebar and the bell (UI tour run 15, Q-IB17 / Q-M3: "9+"
+        // beside a page that said 47).
+        Text(count > 99 ? "99+" : AppNumber.int(count))
             .font(NXFont.text(11, .bold)).monospacedDigit()
             .foregroundStyle(warning ? Color.white : (onSelection ? Color.white : NX.foreground))
             .padding(.horizontal, 6).padding(.vertical, 1)

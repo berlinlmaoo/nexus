@@ -686,7 +686,8 @@ struct OutletMeter: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule().fill(NX.muted)
-                Capsule().fill((pct ?? 0) >= 100 ? NX.success : NX.violet).frame(width: geo.size.width * value)
+                // The web's neutral fill (UI tour run 15, Q-IB11: purple bars), green once the target is reached.
+                Capsule().fill((pct ?? 0) >= 100 ? NX.success : NX.foreground.opacity(0.55)).frame(width: geo.size.width * value)
             }
         }
         .frame(height: height)
@@ -1105,11 +1106,20 @@ struct OutletEventCard: View {
             row(T("Date"), Text(OutletFormat.dayLong(event.date, thisYear: thisYear)))
             row(form.label("sales", "Sales"), Text(OutletFormat.vsTarget(event.sales, event.salesTarget, event.salesPct, money: true)), number: true)
             row(form.label("pax", "Pax"), Text(OutletFormat.vsTarget(event.pax, event.paxTarget, event.paxPct, money: false)), number: true)
-            total("rsvp", event.rsvpTotal)
-            total("hosting", event.hostingTotal)
-            communities
-            story("success")
-            story("fail")
+            if event.status == .reported || event.rsvpTotal != nil || event.hostingTotal != nil {
+                total("rsvp", event.rsvpTotal)
+                total("hosting", event.hostingTotal)
+                communities
+                story("success")
+                story("fail")
+            } else {
+                // A night with nothing reported says so once, instead of ~20 rows of "—" and "Not filled"
+                // (UI tour run 15, Q-IB20).
+                Text(future ? T("Reports open on the night itself") : T("No report yet. Fill report to add the figures."))
+                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 10)
+            }
             if let footer {
                 Divider().overlay(NX.border).padding(.top, 6)
                 Text(footer).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).padding(.top, 8)

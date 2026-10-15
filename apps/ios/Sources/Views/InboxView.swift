@@ -277,15 +277,11 @@ struct NotificationRow: View {
         HStack(alignment: .top, spacing: 12) {
             mark.accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
-                Text(Self.keepSeparators(notification.title ?? notification.typeLabel)).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
+                Text(Self.keepNames(Self.keepSeparators(notification.title ?? notification.typeLabel), names: (notification.actor?.name.map { [$0] } ?? []) + roster.compactMap(\.name))).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
                 Text(Self.keepSeparators(notification.message ?? T("New notification"))).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(2)
                 Text(metaText).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }
             Spacer(minLength: 4)
-            if !notification.isRead {
-                // Near-black like the web's unread dot (it was violet).
-                Circle().fill(NX.foreground).frame(width: 8, height: 8).padding(.top, 6)
-            }
             if let onMarkRead, !notification.isRead {
                 Button(action: onMarkRead) {
                     Image(systemName: "checkmark").font(.system(size: 13, weight: .medium))
@@ -311,6 +307,11 @@ struct NotificationRow: View {
             } else if notification.tapTarget != nil {
                 Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold))
                     .foregroundStyle(NX.mutedFg).padding(.top, 4)
+            }
+            // After the ✓ / 🗑 buttons, as on the web (UI tour run 15, Q-IA13 / Q-M24). Near-black like the
+            // web's unread dot (it was violet).
+            if !notification.isRead {
+                Circle().fill(NX.foreground).frame(width: 8, height: 8).padding(.top, 6)
             }
         }
         .padding(14)
@@ -367,6 +368,17 @@ struct NotificationRow: View {
             }
         }
         .frame(width: size, height: size)
+    }
+
+    /// The actor's name never breaks across lines: "New legal request from QA ⏎ Dev 6" (UI tour run 15, R15-I-07).
+    static func keepNames(_ s: String, names: [String]) -> String {
+        var out = s
+        // Longest first, so "Ana Putri" is kept whole before "Ana" could split it.
+        for name in Set(names.map { $0.trimmingCharacters(in: .whitespaces) }).sorted(by: { $0.count > $1.count })
+        where name.contains(" ") && out.contains(name) {
+            out = out.replacingOccurrences(of: name, with: name.replacingOccurrences(of: " ", with: "\u{00A0}"))
+        }
+        return out
     }
 
     /// " · " joined to the word before it, so a wrapped line never starts with "· PATS" (F-32), and a

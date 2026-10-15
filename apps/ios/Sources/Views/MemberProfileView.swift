@@ -847,7 +847,9 @@ private struct RecordXpCard: View {
                 SectionLabel(T("XP log"))
                 Spacer()
                 if let t = record.summary?.xp {
-                    Text("+\(t.gained ?? 0) · \(t.lost ?? 0)").font(NXFont.text(11, .bold)).foregroundStyle(NX.mutedFg)
+                    // Said with its unit, not "+0 · 0" (UI tour run 15, R15-I-21).
+                    Text(String(format: T("+%@ XP gained · %@ XP lost"), AppNumber.int(t.gained ?? 0), AppNumber.int(t.lost ?? 0)))
+                        .font(NXFont.text(11, .bold)).foregroundStyle(NX.mutedFg)
                 }
             }
             let current = record.xp?.entries ?? []

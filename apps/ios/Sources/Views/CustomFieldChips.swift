@@ -167,13 +167,36 @@ struct CFChipRow: View {
     /// project's fields too ("PATS Foundation" from SBU's own Category), which the web never draws — its
     /// card shows the viewing project's properties only (UI tour run 10, IP-3). nil = show every value.
     var only: Set<String>? = nil
+    /// The card's due day as it is drawn ("26 May"), when it has one: a date field saying the same day is
+    /// left out, and the card shows two dates at most, then "+N", as the web card (UI tour run 15, Q-M11 /
+    /// R15-I-13: "26 May 31 May ⏱ 26 May", "15 May 15 May"). nil = every date, as before.
+    var capDates = false
+    var due: String? = nil
     var body: some View {
-        let chips = (values ?? []).filter { only?.contains($0.customFieldId) ?? true }.compactMap(customFieldChip)
-        if !chips.isEmpty {
+        let all = (values ?? []).filter { only?.contains($0.customFieldId) ?? true }.compactMap(customFieldChip)
+        let (chips, hidden) = capDates ? Self.capped(all, due: due) : (all, 0)
+        if !chips.isEmpty || hidden > 0 {
             FlowLayout(spacing: 5) {
                 ForEach(chips) { CFChipView(chip: $0) }
+                if hidden > 0 {
+                    Text("+\(hidden)").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                        .accessibilityLabel(String(format: T("%d more dates"), hidden))
+                }
             }
         }
+    }
+
+    private static func capped(_ chips: [CFChip], due: String?) -> ([CFChip], Int) {
+        var seen = Set([due].compactMap { $0 })
+        var room = due == nil ? 2 : 1
+        var hidden = 0
+        var out: [CFChip] = []
+        for c in chips {
+            guard c.isDate else { out.append(c); continue }
+            guard seen.insert(c.label).inserted else { continue }
+            if room > 0 { out.append(c); room -= 1 } else { hidden += 1 }
+        }
+        return (out, hidden)
     }
 }
 
@@ -191,13 +214,27 @@ struct FlowLayout: Layout {
         }
         return CGSize(width: proposal.width ?? x, height: y + rowH)
     }
+    /// Each line's items are centred on the line, so a plain "Rp 350.000" sits level with the taller chips
+    /// beside it instead of riding above their middle (UI tour run 15, R15-I-12 / Q-IA24).
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX, y = bounds.minY, rowH: CGFloat = 0
-        for v in subviews {
+        var lines: [[(index: Int, size: CGSize)]] = [[]]
+        var x = bounds.minX
+        for (i, v) in subviews.enumerated() {
             let s = v.sizeThatFits(.unspecified)
-            if x > bounds.minX && x + s.width > bounds.maxX { x = bounds.minX; y += rowH + spacing; rowH = 0 }
-            v.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(s))
-            x += s.width + spacing; rowH = max(rowH, s.height)
+            if x > bounds.minX && x + s.width > bounds.maxX { lines.append([]); x = bounds.minX }
+            lines[lines.count - 1].append((i, s))
+            x += s.width + spacing
+        }
+        var y = bounds.minY
+        for line in lines where !line.isEmpty {
+            let rowH = line.map(\.size.height).max() ?? 0
+            var lx = bounds.minX
+            for item in line {
+                subviews[item.index].place(at: CGPoint(x: lx, y: y + (rowH - item.size.height) / 2),
+                                           proposal: ProposedViewSize(item.size))
+                lx += item.size.width + spacing
+            }
+            y += rowH + spacing
         }
     }
 }

@@ -40,10 +40,11 @@ struct OutletCalendarView: View {
         VStack(spacing: 0) {
             LazyVGrid(columns: columns, spacing: 0) {
                 ForEach(Array(OutletFormat.weekHeader.enumerated()), id: \.offset) { _, name in
-                    Text(name).font(NXFont.text(wide ? 12 : 11, .semibold)).foregroundStyle(NX.mutedFg)
+                    // "MON", left-aligned like the day numbers, one style for every month grid (UI tour run 15).
+                    Text(name.uppercased()).font(NXFont.text(wide ? 12 : 11, .semibold)).foregroundStyle(NX.mutedFg)
                         .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: wide ? .leading : .center)
-                        .padding(.leading, wide ? 8 : 0)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, wide ? 8 : 5)
                         .padding(.vertical, 8)
                 }
             }
@@ -72,7 +73,7 @@ struct OutletCalendarView: View {
             // A day of the next or previous month switches to that month (web does the same).
             if !inMonth { Task { await store.show(month: String(d.prefix(7))) } }
         } label: {
-            VStack(alignment: wide ? .leading : .center, spacing: 3) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text("\(number)")
                     .font(NXFont.text(wide ? 14 : 13, isToday || selected ? .bold : .medium))
                     .foregroundStyle(isToday ? Color.white : (inMonth ? NX.foreground : NX.mutedFg.opacity(0.6)))
@@ -83,8 +84,9 @@ struct OutletCalendarView: View {
                         // Two lines for the name: one line cut every event to "ZZ QA cu…" on an iPad (run 14, P-I28).
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
                             Circle().fill(e.status.tone.fg).frame(width: 6, height: 6)
+                            // Up to three lines: two still cut "ZZ QA / custom r…" (UI tour run 15, Q-IB18).
                             Text(e.name).font(NXFont.text(11, .semibold)).foregroundStyle(NX.foreground)
-                                .lineLimit(2).multilineTextAlignment(.leading)
+                                .lineLimit(3).multilineTextAlignment(.leading)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(.horizontal, 5).padding(.vertical, 2)
@@ -106,7 +108,7 @@ struct OutletCalendarView: View {
                 Spacer(minLength: 0)
             }
             .padding(wide ? 6 : 3)
-            .frame(maxWidth: .infinity, minHeight: wide ? 104 : 56, alignment: wide ? .topLeading : .top)
+            .frame(maxWidth: .infinity, minHeight: wide ? 104 : 56, alignment: .topLeading)
             .overlay(alignment: .topTrailing) {
                 if ownTarget {
                     Image(systemName: "target").font(.system(size: wide ? 11 : 9, weight: .semibold))

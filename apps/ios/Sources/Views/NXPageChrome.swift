@@ -102,12 +102,14 @@ private struct NXButtonBody: View {
                 }
             }
             .contentShape(Rectangle())
-            .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : 0.5)
+            // A disabled primary draws its own muted state (below); dimming its white label on top of a
+            // half-strength fill left white on light grey, hard to read (UI tour run 15, Q-M10 / P-M23).
+            .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : (kind == .primary ? 1 : 0.5))
     }
 
     private var foreground: Color {
         switch kind {
-        case .primary: return NX.background
+        case .primary: return isEnabled ? NX.background : NX.mutedFg
         case .destructive: return .white
         case .bordered, .ghost: return NX.foreground
         }
@@ -115,7 +117,7 @@ private struct NXButtonBody: View {
 
     private func background(pressed: Bool) -> Color {
         switch kind {
-        case .primary: return NX.onyx.opacity(pressed ? 0.9 : 1)
+        case .primary: return isEnabled ? NX.onyx.opacity(pressed ? 0.9 : 1) : NX.muted
         case .destructive: return NX.danger.opacity(pressed ? 0.9 : 1)
         case .bordered: return pressed ? NX.muted : NX.card
         case .ghost: return pressed ? NX.muted : .clear

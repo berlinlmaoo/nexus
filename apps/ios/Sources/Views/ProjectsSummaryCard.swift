@@ -24,26 +24,20 @@ struct ProjectsSummaryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles").font(.system(size: 12, weight: .semibold))
-                Text(String(format: T(total == 1 ? "%d of %d project" : "%d of %d projects"), shown, total))
-                    .font(NXFont.text(13, .semibold))
-            }
-            .foregroundStyle(NX.foreground)
-            .padding(.horizontal, 12).padding(.vertical, 6)
-            .background(NX.muted, in: Capsule())
-            // The web's line under the count on a wide screen (it is hidden on the phone there too; UI tour
-            // run 14, P-I19).
+            // A wide window: the count and its line on the left, three compact tiles on the right, as the
+            // web (UI tour run 15, Q-M23: the tiles filled a full-width row of their own).
             if hSize == .regular {
-                Text(T("Open a project to see its board, pages, calendar and timeline."))
-                    .font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            HStack(spacing: 8) {
-                stat(icon: "target", value: progressText, label: T("Average progress"))
-                stat(icon: "checkmark.circle", value: doneText, label: T("Tasks done"))
-                stat(icon: "person.2", value: members, label: T("Members"))
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 16) {
+                        countBlock.frame(maxWidth: .infinity, alignment: .leading)
+                        stats.frame(width: 440)
+                    }
+                    .frame(minWidth: 880)
+                    VStack(alignment: .leading, spacing: 14) { countBlock; stats }
+                }
+            } else {
+                countBlock
+                stats
             }
 
             Rectangle().fill(NX.border).frame(height: 1)
@@ -61,6 +55,34 @@ struct ProjectsSummaryCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(NX.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(NX.border))
+    }
+
+    private var countBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles").font(.system(size: 12, weight: .semibold))
+                Text(String(format: T(total == 1 ? "%d of %d project" : "%d of %d projects"), shown, total))
+                    .font(NXFont.text(13, .semibold))
+            }
+            .foregroundStyle(NX.foreground)
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .background(NX.muted, in: Capsule())
+            // The web's line under the count on a wide screen (it is hidden on the phone there too; UI tour
+            // run 14, P-I19).
+            if hSize == .regular {
+                Text(T("Open a project to see its board, pages, calendar and timeline."))
+                    .font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var stats: some View {
+        HStack(spacing: 8) {
+            stat(icon: "target", value: progressText, label: T("Average progress"))
+            stat(icon: "checkmark.circle", value: doneText, label: T("Tasks done"))
+            stat(icon: "person.2", value: members, label: T("Members"))
+        }
     }
 
     private func stat(icon: String, value: String, label: String) -> some View {

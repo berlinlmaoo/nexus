@@ -68,9 +68,12 @@ private struct NXUnderlineTab<ID: Hashable>: View {
                     }
                     Text(item.label).font(NXFont.text(14, on ? .semibold : .medium)).lineLimit(1)
                     if let count = item.count {
-                        Text("\(count)")
-                            .font(NXFont.text(12, .semibold)).monospacedDigit()
+                        // A grey count pill, as the web's tabs (UI tour run 15, Q-M24), dotted ("1.234").
+                        Text(AppNumber.int(count))
+                            .font(NXFont.text(11, .semibold)).monospacedDigit()
                             .foregroundStyle(countColor(count))
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .background(NX.muted, in: Capsule())
                     }
                 }
                 .foregroundStyle(on ? NX.foreground : NX.mutedFg)

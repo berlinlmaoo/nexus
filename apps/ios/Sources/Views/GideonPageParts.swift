@@ -155,8 +155,13 @@ struct GideonEmptyPrompt: View {
                 .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
                 .padding(.bottom, 12)
                 .accessibilityHidden(true)
-            Text(headline)
-                .font(NXFont.text(wide ? 26 : 18, .bold))
+            // One line where it fits, a size down before it wraps: the iPad's 377 pt pane broke "What can
+            // GIDEON do / for you?" in two (UI tour run 15, Q-IA12).
+            ViewThatFits(in: .horizontal) {
+                Text(headline).font(NXFont.text(wide ? 26 : 18, .bold)).lineLimit(1).fixedSize()
+                Text(headline).font(NXFont.text(wide ? 21 : 17, .bold)).lineLimit(1).fixedSize()
+                Text(headline).font(NXFont.text(wide ? 21 : 17, .bold))
+            }
                 .foregroundStyle(NX.foreground)
                 .multilineTextAlignment(.center)
             Text(T("It searches and reads your projects, tasks, docs and chats with your access only, and shows what it read."))
@@ -169,8 +174,12 @@ struct GideonEmptyPrompt: View {
             VStack(spacing: 6) {
                 ForEach(Self.suggestions(for: page), id: \.self) { s in
                     Button { onAsk(s) } label: {
-                        Text(s)
-                            .font(NXFont.text(14, .medium))
+                        // One line where a size down makes it fit ("…Cite / the sources.", Q-IA12).
+                        ViewThatFits(in: .horizontal) {
+                            Text(s).font(NXFont.text(14, .medium)).lineLimit(1).fixedSize()
+                            Text(s).font(NXFont.text(12.5, .medium)).lineLimit(1).fixedSize()
+                            Text(s).font(NXFont.text(14, .medium))
+                        }
                             .foregroundStyle(NX.foreground)
                             .multilineTextAlignment(.leading)
                             .frame(maxWidth: .infinity, alignment: .leading)

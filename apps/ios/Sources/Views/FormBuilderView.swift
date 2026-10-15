@@ -527,16 +527,22 @@ struct FormBuilderView: View {
 
     /// Regular width: the canvas and a fixed settings panel side by side (each scrolls on its own, one
     /// axis). Compact: the canvas only; a question's settings are pushed.
+    /// The questions tab's width, for the side panel's.
+    @State private var questionsWidth: CGFloat = 0
+
     @ViewBuilder private var questionsTab: some View {
         if regular {
+            // The panel gives way on a narrow window (portrait iPad): at 340 the form column kept ~420 pt and
+            // wrapped its title and banner (UI tour run 15, Q-IA33).
             HStack(spacing: 0) {
                 canvas
                 Rectangle().fill(NX.border).frame(width: 1)
                 panel
-                    .frame(width: 340)
+                    .frame(width: questionsWidth > 0 && questionsWidth < 900 ? 280 : 340)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .background(NX.background)
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { questionsWidth = $0 }
         } else {
             canvas
         }
