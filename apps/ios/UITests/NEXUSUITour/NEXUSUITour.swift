@@ -853,6 +853,22 @@ final class NEXUSUITour: XCTestCase {
         var flipped = false
         var scrolled = false
         #endif
+        // Run 18 (iPhone R18-I-01, iPad T-2): the List's pages went back UP and two were byte-identical, so the
+        // Done rows were never shot. Pages now only go down: a page whose rows were ALL on an earlier page (fine
+        // pixel rows, so look-alike rows with other words still count as new) ends the paging, as does an earlier
+        // page's exact picture. And a page the pages around it show whole is replaced by the next one (the
+        // short end of a scroll): each page is attached one step late for that.
+        let window0 = root.windows.firstMatch.frame
+        var seenRows = Set(fineRows(last, in: target.compare, window: window0).compactMap { $0 })
+        var savedShots: [Data] = [last]
+        var keptRows: [UInt64?] = fineRows(last, in: target.compare, window: window0)
+        var pending: (shot: XCUIScreenshot, rows: [UInt64?])?
+        func flush() {
+            guard let p = pending else { return }
+            attachShot(p.shot, "\(prefix)\(id)-\(page)")
+            pending = nil
+        }
+        // `page` counts the pending page too, so the cap holds.
         while page < maxPages {
             drag(target, dx: 0, dy: -pageStep)
             if navigatedAway() { break }
@@ -895,11 +911,80 @@ final class NEXUSUITour: XCTestCase {
             #if targetEnvironment(macCatalyst)
             scrolled = true
             #endif
+            if savedShots.contains(data) { break }
+            let rows = fineRows(data, in: target.compare, window: window)
+            let content = rows.compactMap { $0 }
+            if !content.isEmpty {
+                let unseen = content.filter { !seenRows.contains($0) }.count
+                // Measured offline on runs 16-18 (every vertical page): repeats 0.000 (run 17 iPhone gideon-2,
+                // run 18 iPhone / iPad project-list-5); the lowest real page 0.029 (run 17 iPhone legal-settings-6,
+                // whose series rows look like PATS's).
+                if CGFloat(unseen) / CGFloat(content.count) < minUnseen { break }
+            }
             last = data
-            page += 1
-            attachShot(shot, "\(prefix)\(id)-\(page)")
+            savedShots.append(data)
+            if let p = pending {
+                // The page before this one adds nothing that the page before it and this one do not show
+                // (>= 98% of its rows): it goes, this one takes its place. Runs 16-18 offline: run 16 iPhone
+                // tickets-2 and iPad projects-4, project-table-4 and project-timeline-5, each shown whole by its
+                // neighbours; no other page.
+                let kept = Set(keptRows.compactMap { $0 }), next = Set(content)
+                let own = p.rows.compactMap { $0 }
+                let shown = own.filter { kept.contains($0) || next.contains($0) }.count
+                if own.isEmpty || CGFloat(shown) / CGFloat(own.count) < minCovered {
+                    flush()
+                    keptRows = p.rows
+                    page += 1
+                }
+            } else {
+                page += 1
+            }
+            content.forEach { seenRows.insert($0) }
+            pending = (shot, rows)
         }
+        flush()
         return page - 1
+    }
+
+    /// A page is a repeat when less than this share of its content rows (`fineRows`) is on no earlier page.
+    private var minUnseen: CGFloat { CGFloat(Double(env["TOUR_MIN_UNSEEN"] ?? "") ?? 0.01) }
+    /// A page shown by the pages around it to at least this share of its rows is replaced by the next page.
+    private var minCovered: CGFloat { CGFloat(Double(env["TOUR_MIN_COVERED"] ?? "") ?? 0.98) }
+
+    /// One hash per pixel row of `rect` at full resolution (grey, 8 levels), the right 10 pt (the scroll bar)
+    /// left out; nil for a blank row. Unlike `wideRows`, two rows with different words never share a hash, so
+    /// "on an earlier page" means the very same row.
+    private func fineRows(_ png: Data, in rect: CGRect, window: CGRect) -> [UInt64?] {
+        guard let image = UIImage(data: png)?.cgImage, window.width > 0 else { return [] }
+        let width = image.width, height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        let drawn: Bool = pixels.withUnsafeMutableBytes { buffer in
+            guard let ctx = CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: width, space: CGColorSpaceCreateDeviceGray(),
+                                      bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return false }
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return [] }
+        let scale = CGFloat(width) / window.width
+        let local = rect.offsetBy(dx: -window.minX, dy: -window.minY)
+        let x0 = max(0, Int(local.minX * scale)), x1 = min(width, Int((local.maxX - 10) * scale))
+        let y0 = max(0, Int(local.minY * scale)), y1 = min(height, Int(local.maxY * scale))
+        guard x1 > x0 + 8, y1 > y0 else { return [] }
+        return pixels.withUnsafeBufferPointer { px in
+            (y0..<y1).map { y -> UInt64? in
+                var hash: UInt64 = 0xcbf29ce484222325
+                let row = y * width
+                let first = px[row + x0] >> 5
+                var flat = true
+                for x in x0..<x1 {
+                    let v = px[row + x] >> 5
+                    if v != first { flat = false }
+                    hash = (hash ^ UInt64(v)) &* 0x100000001b3
+                }
+                return flat ? nil : hash
+            }
+        }
     }
 
     /// How far each page drag scrolls, as a fraction of the visible scroll area. 0.7 leaves about 30% of
