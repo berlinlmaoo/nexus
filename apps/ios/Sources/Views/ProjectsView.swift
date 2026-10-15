@@ -181,7 +181,9 @@ struct ProjectsView: View {
                     // Folders with them, or the cached first paint is the flat list.
                     if let f = ResponseCache.decoded("project-folders", as: [ProjectFolder].self) {
                         folders = f.value
-                        collapsed = Set(f.value.map(\.id))
+                        // Every folder starts closed, "No folder" included: setting only the folder ids
+                        // dropped its key and it opened again (UI tour run 16, R16-B-05).
+                        collapsed = Set(f.value.map(\.id)).union([UnfiledDropZone.collapseKey])
                         didCollapseInitially = true
                     }
                     projects = hit.value
@@ -341,7 +343,7 @@ struct ProjectsView: View {
             }
         }
         if !didCollapseInitially {
-            collapsed = Set(folders.map(\.id))
+            collapsed = Set(folders.map(\.id)).union([UnfiledDropZone.collapseKey])
             didCollapseInitially = true
         }
         loading = false
@@ -1336,20 +1338,32 @@ struct ProjectCard: View {
         return min(1, Double(tally.done) / Double(tally.total))
     }
 
+    @Environment(\.horizontalSizeClass) private var hSize
+    /// Cards side by side (iPad / Mac): the name and description keep two lines each, so every card of a row
+    /// is one height (UI tour run 16, R16-I-12: a card ended ~50 pt above its neighbour).
+    private var rowed: Bool { hSize == .regular }
+    private var blurb: String? {
+        guard let d = project.description?.trimmingCharacters(in: .whitespacesAndNewlines), !d.isEmpty else { return nil }
+        return d
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // header row
-            HStack(alignment: .top, spacing: 12) {
+            // header row: the name centred on the mark when it stands alone, so a one-line name leaves no
+            // empty band under it (UI tour run 16, R16-I-21).
+            HStack(alignment: rowed || blurb != nil ? .top : .center, spacing: 12) {
                 ProjectMark(icon: project.icon, color: project.color, size: 44, projectId: project.id)
 
                 VStack(alignment: .leading, spacing: 3) {
                     // Two lines before an ellipsis: the status chip beside it cut names to "PATS: INDONESI…"
                     // (UI tour run 14, P-I19).
-                    Text(project.name).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground).lineLimit(2)
+                    Text(project.name).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                        .lineLimit(2, reservesSpace: rowed)
                         .fixedSize(horizontal: false, vertical: true)
                     // Nothing when there is no description, like web (UI tour run 7: "No description yet." on every card).
-                    if let d = project.description?.trimmingCharacters(in: .whitespacesAndNewlines), !d.isEmpty {
-                        Text(d).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                    if blurb != nil || rowed {
+                        Text(blurb ?? "").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(2, reservesSpace: rowed)
+                            .accessibilityHidden(blurb == nil)
                     }
                 }
                 Spacer(minLength: 4)

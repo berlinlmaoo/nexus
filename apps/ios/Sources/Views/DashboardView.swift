@@ -195,24 +195,21 @@ struct DashboardView: View {
             // iPad / Mac: the button sits 28 pt above the window's bottom edge (52 + 28 = 80 pt), and with
             // no margin it covered the agenda's last day ("Sun 25", UI tour run 11 PD-19). 92 pt lets every
             // card scroll clear of it. The phone's 72 is unchanged.
-            .contentMargins(.bottom, hSize == .regular ? 16 : 72, for: .scrollContent)
-            // iPad / Mac: the cards fade out at the scroll's bottom edge rather than being sliced through
-            // above the band kept for the GIDEON button (UI tour run 15, Q-IA9 / Q-M7).
+            // iPad / Mac: the page runs to the window's bottom edge and the cards dissolve over its last 96 pt,
+            // where the floating GIDEON button sits (28–80 pt up); the scroll ends 108 pt up, so the last card
+            // can always rest whole above the fade. A 92 pt band kept empty for the button cut the cards hard
+            // above an empty strip (UI tour run 16, R16-I-10 / R16-M-05; runs 12–15, PD3 / Q-IA9 / Q-M7).
+            .contentMargins(.bottom, hSize == .regular ? 108 : 72, for: .scrollContent)
             .mask {
                 VStack(spacing: 0) {
                     Rectangle()
                     if hSize == .regular {
-                        LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: 28)
+                        LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: 96)
                     }
                 }
                 .ignoresSafeArea()
             }
             .modifier(StatusBarScrollEdge())
-            // iPad / Mac: the scroll area ends above the floating GIDEON button (52 pt, 28 pt above the window's
-            // bottom edge), so no card scrolls under it, on the first screen or further down (UI tour runs 12
-            // and 13, PD3 / I-4 / I-17: it covered the agenda's last day and month). The band below is the
-            // page's own background. The phone's Home is unchanged.
-            .padding(.bottom, hSize == .regular ? 92 : 0)
             .background(NX.background.ignoresSafeArea())
             .overlay { statModal }
             .overlay { levelModal }

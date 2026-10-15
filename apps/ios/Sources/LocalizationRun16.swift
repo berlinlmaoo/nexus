@@ -11,5 +11,7 @@ extension AppLanguage {
         "%@/%@ used · %@ left": "%@/%@ terpakai · sisa %@",
         // Prorated allowance footnote, the web's words (R16-I-14)
         "From {date}: {days} days, {working} working days ({days} − {quota} days off, the {full}-day allowance prorated).": "Sejak {date}: {days} hari, {working} hari kerja ({days} − {quota} day off, jatah {full} hari dihitung proporsional).",
+        // Projects summary: the web's hint (R16-B-15)
+        "Select a project to open it.": "Pilih proyek untuk membukanya.",
     ]
 }

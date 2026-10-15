@@ -28,11 +28,13 @@ struct ProjectsSummaryCard: View {
             // web (UI tour run 15, Q-M23: the tiles filled a full-width row of their own).
             if hSize == .regular {
                 ViewThatFits(in: .horizontal) {
+                    // From 760 pt: a portrait 13" iPad beside the sidebar has ~940 pt here and still stacked the
+                    // tiles under the count at 880 (UI tour run 16, R16-B-15).
                     HStack(alignment: .top, spacing: 16) {
                         countBlock.frame(maxWidth: .infinity, alignment: .leading)
-                        stats.frame(width: 440)
+                        stats.frame(width: 400)
                     }
-                    .frame(minWidth: 880)
+                    .frame(minWidth: 760)
                     VStack(alignment: .leading, spacing: 14) { countBlock; stats }
                 }
             } else {
@@ -49,6 +51,11 @@ struct ProjectsSummaryCard: View {
                 pill(selection: $statusFilter, options: statusOptions, accessibility: T("Filters"))
                 pill(selection: $sortMode, options: sortOptions, accessibility: T("Sort by"))
                 Spacer(minLength: 0)
+                // The web's hint at the end of the Filters row (UI tour run 16, R16-B-15).
+                if hSize == .regular {
+                    Text(T("Select a project to open it.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        .lineLimit(1)
+                }
             }
         }
         .padding(16)

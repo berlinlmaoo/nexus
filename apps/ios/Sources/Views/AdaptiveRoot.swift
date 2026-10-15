@@ -528,7 +528,14 @@ struct SidebarRoot: View {
         // System and the page lost a quarter of the window (UI tour run 4). A pointer needs no 44 pt
         // rows; the iPad keeps them.
         .environment(\.defaultMinListRowHeight, 30)
+        // Tighter gaps between the groups, so a 900 pt window shows the whole nav down to Control Room above
+        // the account footer instead of half of it (UI tour run 16, R16-M-06).
+        .environment(\.defaultMinListHeaderHeight, 24)
+        .listSectionSpacing(.compact)
         #endif
+        // The list's end clears the fade above the footer, so its last row ("Pin a project to keep it here.")
+        // is never left half under it (UI tour run 16, R16-I-14 iPad).
+        .contentMargins(.bottom, 24, for: .scrollContent)
         // The nav can be taller than the window (a Mac window ~1250 pt tall ends at Tickets under the
         // account footer, with Settings and Control Room below it): the scroll indicator shows there is
         // more, and it flashes when the sidebar appears (UI tour run 14, P-M6). It was hidden.

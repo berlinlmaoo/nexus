@@ -430,10 +430,10 @@ struct SocialOverviewView: View {
                     }
                 }
             } else {
-                // Two lines reserved on every card, so the figures below line up across the row whether or not
-                // the line wraps ("(incl. day targets)", UI tour run 15, Q-IB10).
+                // One line on every card, as the web's, stepping the size down rather than wrapping "(incl. day
+                // targets)" (UI tour run 16, R16-B-20); the figures below line up across the row.
                 Text(monthTargetLine(p)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                    .lineLimit(2, reservesSpace: true)
+                    .lineLimit(1).minimumScaleFactor(0.75)
             }
             if let trend = p.trend, trend.count > 1, trend.contains(where: { $0 > 0 }) {
                 SocialSparkline(values: trend)
@@ -441,13 +441,30 @@ struct SocialOverviewView: View {
                     .accessibilityLabel(String(format: T("%@ engagement per day"), p.name))
             }
             Divider().overlay(NX.border)
-            HStack(alignment: .top) {
-                stat(SocialMetric.views.label, p.views)
-                stat(T("Likes"), p.likes)
-                stat(SocialMetric.comments.label, p.comments)
-                stat(SocialMetric.shares.label, p.shares)
+            // Four across while every figure fits on one line, else two by two: in the narrow three-across
+            // cards of a portrait iPad "41.000" broke into "41.00 / 0" and read as a decimal (UI tour run 16,
+            // R16-I-04).
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 10) { stats(p) }
+                Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
+                    GridRow {
+                        stat(SocialMetric.views.label, p.views)
+                        stat(T("Likes"), p.likes)
+                    }
+                    GridRow {
+                        stat(SocialMetric.comments.label, p.comments)
+                        stat(SocialMetric.shares.label, p.shares)
+                    }
+                }
             }
         }
+    }
+
+    @ViewBuilder private func stats(_ p: SocialPlatformOverview) -> some View {
+        stat(SocialMetric.views.label, p.views)
+        stat(T("Likes"), p.likes)
+        stat(SocialMetric.comments.label, p.comments)
+        stat(SocialMetric.shares.label, p.shares)
     }
 
     /// The overview's month target is the sum of every day's target. When a day has its own target that sum
@@ -464,8 +481,10 @@ struct SocialOverviewView: View {
 
     private func stat(_ label: String, _ value: Double?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            // Whole words and whole numbers: neither is ever cut or wrapped (R16-I-04: "Com…", "125.0 / 00").
+            Text(label).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1).fixedSize()
             Text(SocialFormat.count(value)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).monospacedDigit()
+                .lineLimit(1).fixedSize()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -504,13 +523,14 @@ struct SocialPctChip: View {
     var size: CGFloat = 13
     var body: some View {
         Text("\(pct)%").font(NXFont.text(size, .bold)).monospacedDigit()
-            .foregroundStyle(pct >= 100 ? NX.success : NX.violetText)
+            // Grey like the web's chip; green once the target is met (UI tour run 16, R16-B-20).
+            .foregroundStyle(pct >= 100 ? NX.success : NX.foreground)
             .padding(.horizontal, 8).padding(.vertical, 3)
-            .background((pct >= 100 ? NX.success : NX.violet).opacity(0.12), in: Capsule())
+            .background(pct >= 100 ? NX.success.opacity(0.12) : NX.muted, in: Capsule())
     }
 }
 
-/// The month's engagement per day, quiet: one line in the brand colour over a faint area.
+/// The month's engagement per day, quiet: one dark line over a faint area, as the web (R16-B-20).
 struct SocialSparkline: View {
     let values: [Double]
     var body: some View {
@@ -527,13 +547,13 @@ struct SocialSparkline: View {
                     p.addLine(to: CGPoint(x: g.size.width, y: g.size.height))
                     p.closeSubpath()
                 }
-                .fill(NX.violet.opacity(0.08))
+                .fill(NX.foreground.opacity(0.06))
                 Path { p in
                     for i in values.indices { if i == 0 { p.move(to: pt(i)) } else { p.addLine(to: pt(i)) } }
                 }
-                .stroke(NX.violet, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                .stroke(NX.foreground, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                 if let last = values.indices.last {
-                    Circle().fill(NX.violet).frame(width: 7, height: 7)
+                    Circle().fill(NX.foreground).frame(width: 7, height: 7)
                         .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
                         .position(pt(last))
                 }
