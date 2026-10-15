@@ -627,13 +627,16 @@ struct ProjectDetailView: View {
             Spacer(minLength: 6)
             if let d = detail {
                 // iPad / Mac (web header): the members' faces, then Ask GIDEON and Project settings.
-                if wide { ProjectMemberStack(members: d.members ?? []) { if !cover.isCovered { showSettings = true } }.padding(.trailing, 4) }
                 if wide {
                     // Words while they fit on one line, icons when they don't: a portrait iPad wrapped
-                    // "Ask GIDEON" onto two lines and cut "Project sett…" (UI tour run 13, I-10).
+                    // "Ask GIDEON" onto two lines and cut "Project sett…" (UI tour run 13, I-10). The faces give
+                    // way before the words do (UI tour run 16, R16-I-15: icons only on a 13" iPad).
+                    let members = ProjectMemberStack(members: d.members ?? []) { if !cover.isCovered { showSettings = true } }
+                        .padding(.trailing, 4)
                     ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 10) { members; headerActions(labelled: true) }
                         headerActions(labelled: true)
-                        headerActions(labelled: false)
+                        HStack(spacing: 10) { members; headerActions(labelled: false) }
                     }
                 } else {
                     headerActions(labelled: false)

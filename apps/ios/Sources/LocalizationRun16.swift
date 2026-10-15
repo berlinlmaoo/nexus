@@ -26,5 +26,9 @@ extension AppLanguage {
         "Device name (e.g. MacBook Pro)": "Nama perangkat (mis. MacBook Pro)",
         "Add passkey": "Tambah passkey",
         "Your passkeys": "Passkey kamu",
+        // Outlet report settings: the web drawer's buttons (R16-M-15)
+        "Save settings": "Simpan setelan",
+        // Social media day sheet: the web's button (R16-B-19)
+        "Save day": "Simpan hari",
     ]
 }

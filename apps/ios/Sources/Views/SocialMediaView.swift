@@ -173,7 +173,10 @@ struct SocialMediaTab: View {
                 }
                 // On this inner view, not next to the day sheet below: two .sheet modifiers on one view
                 // leave one of them dead.
-                .sheet(isPresented: $store.settingsOpen) { SocialSettingsSheet(store: store).tallSheet() }
+                .sheet(isPresented: $store.settingsOpen) {
+                    // At most 720 pt tall: page height left ~700 pt empty under the platforms (UI tour run 16, R16-I-29).
+                    SocialSettingsSheet(store: store).modifier(PageWideFittedSheet(maxHeight: 720))
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -681,6 +684,8 @@ struct SocialDaySheet: View {
     @State private var error: String?
     @State private var targetDraft: [String: (String, String)] = [:]
     @State private var editingTargets = false
+    @Environment(\.horizontalSizeClass) private var hSize
+    private var wide: Bool { hSize == .regular }
 
     private var future: Bool { date > store.today }
     private var editable: Bool { store.canRecord && !future }
@@ -716,13 +721,37 @@ struct SocialDaySheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(editable ? T("Cancel") : T("Close")) { if dirty { confirmDiscard = true } else { dismiss() } }
                 }
-                if editable {
+                if editable && !wide {
                     ToolbarItem(placement: .confirmationAction) {
                         Button { Task { await save() } } label: {
                             if saving { ProgressView() } else { Text(T("Save")).fontWeight(.semibold) }
                         }
                         .disabled(!dirty || saving)
                     }
+                }
+            }
+        }
+        // iPad / Mac: the web's "Save day" button under the form, the fields fading into its bar, so the last
+        // platform's footer reads as "more below" instead of cut (UI tour run 16, R16-B-19 / R16-I-24).
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if wide && editable && ready {
+                HStack {
+                    Spacer(minLength: 0)
+                    Button { Task { await save() } } label: {
+                        HStack(spacing: 6) {
+                            if saving { ProgressView().controlSize(.small) }
+                            Text(T("Save day"))
+                        }
+                    }
+                    .buttonStyle(.nxPrimary)
+                    .disabled(!dirty || saving)
+                }
+                .padding(.horizontal, 20).padding(.vertical, 12)
+                .background(NX.background)
+                .overlay(alignment: .top) { Rectangle().fill(NX.border).frame(height: 1) }
+                .background(alignment: .top) {
+                    LinearGradient(colors: [NX.background.opacity(0), NX.background], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 24).offset(y: -24).allowsHitTesting(false)
                 }
             }
         }
@@ -811,30 +840,58 @@ struct SocialDaySheet: View {
         let eng = SocialFormat.engagement(likes: OutletFormat.parse(f[.likes] ?? ""), comments: OutletFormat.parse(f[.comments] ?? ""),
                                           shares: OutletFormat.parse(f[.shares] ?? ""))
         let info = day?.platforms[p.id]
+        let engagementText = SocialFormat.count(eng.map(Double.init))
+            + (info?.engagementTarget.map { " / \(SocialFormat.count($0))" } ?? "")
         return Section {
-            ForEach(SocialMetric.allCases) { m in
+            if wide {
+                // iPad / Mac: the web's three-column field grid per platform, Engagement in the header
+                // (UI tour run 16, R16-B-19: one long single-column list ~3 screens tall on a Mac).
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: 3),
+                          alignment: .leading, spacing: 12) {
+                    ForEach(SocialMetric.allCases) { m in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(m.label).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                            TextField("—", text: figureBinding(p.id, m))
+                                .keyboardType(.numberPad)
+                                .monospacedDigit()
+                                .padding(.horizontal, 10).frame(minHeight: 36)
+                                .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                                .disabled(!editable)
+                                .accessibilityLabel("\(p.name) \(m.label)")
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            } else {
+                ForEach(SocialMetric.allCases) { m in
+                    HStack {
+                        Text(m.label).foregroundStyle(NX.foreground)
+                        Spacer(minLength: 12)
+                        TextField("—", text: figureBinding(p.id, m))
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .monospacedDigit()
+                            .frame(maxWidth: 160)
+                            .disabled(!editable)
+                            .accessibilityLabel("\(p.name) \(m.label)")
+                    }
+                }
                 HStack {
-                    Text(m.label).foregroundStyle(NX.foreground)
-                    Spacer(minLength: 12)
-                    TextField("—", text: figureBinding(p.id, m))
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .monospacedDigit()
-                        .frame(maxWidth: 160)
-                        .disabled(!editable)
-                        .accessibilityLabel("\(p.name) \(m.label)")
+                    Text(T("Engagement")).font(NXFont.text(14, .semibold))
+                    SocialEngagementInfoButton()
+                    Spacer()
+                    Text(engagementText).font(NXFont.text(14, .semibold)).monospacedDigit()
                 }
             }
-            HStack {
-                Text(T("Engagement")).font(NXFont.text(14, .semibold))
-                SocialEngagementInfoButton()
-                Spacer()
-                Text(SocialFormat.count(eng.map(Double.init))
-                     + (info?.engagementTarget.map { " / \(SocialFormat.count($0))" } ?? ""))
-                    .font(NXFont.text(14, .semibold)).monospacedDigit()
-            }
         } header: {
-            Text(p.isArchived ? "\(p.name) · \(T("archived"))" : p.name)
+            HStack {
+                Text(p.isArchived ? "\(p.name) · \(T("archived"))" : p.name)
+                if wide {
+                    Spacer(minLength: 8)
+                    Text("\(T("Engagement")) \(engagementText)").monospacedDigit().textCase(nil)
+                }
+            }
         } footer: {
             // Every platform says where its day target stands, YouTube without one too; the bottom padding
             // keeps "Month's target ÷ days" off the next platform's header (run 14, P-I31 / P-M22).
@@ -1104,23 +1161,26 @@ struct SocialSettingsSheet: View {
             }
 
             Section {
-                ForEach(active) { p in
-                    HStack {
+                // ↑ ↓ and archive on every row, as the outlet's Report settings and the web: no drag handles
+                // (UI tour run 16, R16-I-22, decision 7).
+                ForEach(Array(active.enumerated()), id: \.element.id) { pos, p in
+                    HStack(spacing: 14) {
                         TextField(T("Platform name"), text: nameBinding(p.id))
+                        Button { movePlatform(p.id, by: -1) } label: { Label(T("Move up"), systemImage: "arrow.up") }
+                            .disabled(pos == 0)
+                        Button { movePlatform(p.id, by: 1) } label: { Label(T("Move down"), systemImage: "arrow.down") }
+                            .disabled(pos == active.count - 1)
                         Button {
                             if !p.platformId.isEmpty && (usage[p.platformId] ?? 0) > 0 { pendingArchive = p }
                             else if p.platformId.isEmpty { rows.removeAll { $0.id == p.id } }
                             else { setArchived(p.id, true) }
-                        } label: { Image(systemName: "archivebox") }
-                        .buttonStyle(.borderless)
+                        } label: { Label(String(format: T("Archive %@"), p.name), systemImage: "archivebox") }
                         .disabled(active.count <= 1)
-                        .accessibilityLabel(String(format: T("Archive %@"), p.name))
                     }
-                }
-                .onMove { from, to in
-                    var a = active
-                    a.move(fromOffsets: from, toOffset: to)
-                    rows = a + archived
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(NX.mutedFg)
+                    .tint(NX.mutedFg)
                 }
                 HStack {
                     Image(systemName: "plus").foregroundStyle(NX.mutedFg)
@@ -1157,8 +1217,15 @@ struct SocialSettingsSheet: View {
         .contentMargins(.top, 8, for: .scrollContent)
         // The sheet goes on below its edge (Platforms, Add platform): the indicator shows once.
         .scrollIndicatorsFlash(onAppear: true)
-        .environment(\.editMode, .constant(.active))
         .scrollDismissesKeyboard(.interactively)
+    }
+
+    /// One step up or down among the active platforms (archived ones stay at the end).
+    private func movePlatform(_ id: String, by step: Int) {
+        var a = active
+        guard let i = a.firstIndex(where: { $0.id == id }), a.indices.contains(i + step) else { return }
+        a.swapAt(i, i + step)
+        rows = a + archived
     }
 
     private func add() {

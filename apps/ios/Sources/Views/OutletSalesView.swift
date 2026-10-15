@@ -416,7 +416,11 @@ struct OutletSalesTab: View {
                 }
                 // Report settings (owner, 14 Oct 2026). On this inner view, not next to the event sheet
                 // below: two .sheet modifiers on one view leave one of them dead.
-                .sheet(isPresented: $store.settingsOpen) { OutletReportSettingsView(store: store).tallSheet() }
+                .sheet(isPresented: $store.settingsOpen) {
+                    // Page wide, at most 1000 pt tall: page height left ~250 pt empty under the last card on an
+                    // iPad (UI tour run 16, R16-I-29).
+                    OutletReportSettingsView(store: store).modifier(PageWideFittedSheet(maxHeight: 1000))
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -495,8 +499,15 @@ struct OutletHeader: View {
         if hSize == .regular {
             // Words while they fit on one line, icons when they don't: a portrait iPad wrapped "Report
             // settings" and "Copy form link" onto two lines (UI tour run 13, I-10).
+            // Then the labelled buttons on a row of their own under the month, before icons alone: a 13" iPad
+            // beside the sidebar showed three bare icons where the web and the Mac name them (UI tour run 16,
+            // R16-I-15).
             ViewThatFits(in: .horizontal) {
                 row(labelled: true)
+                VStack(alignment: .leading, spacing: 10) {
+                    OutletMonthSwitcher(store: store, large: true)
+                    HStack(spacing: 10) { actions(labelled: true); Spacer(minLength: 0) }
+                }
                 row(labelled: false)
             }
         } else {
@@ -509,6 +520,11 @@ struct OutletHeader: View {
         return HStack(spacing: wide ? 10 : 6) {
             OutletMonthSwitcher(store: store, large: wide)
             Spacer(minLength: 4)
+            actions(labelled: labelled)
+        }
+    }
+
+    @ViewBuilder private func actions(labelled: Bool) -> some View {
             if store.canManageSettings {
                 Button { store.settingsOpen = true } label: {
                     HStack(spacing: 6) {
@@ -558,7 +574,6 @@ struct OutletHeader: View {
             .buttonStyle(.plain)
             .hoverEffect(.highlight)
             .accessibilityLabel(T("Add event"))
-        }
     }
 }
 
