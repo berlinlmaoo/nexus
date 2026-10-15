@@ -22,5 +22,9 @@ extension AppLanguage {
         "Export": "Ekspor",
         // Home leaderboard widget (R16-B-14)
         "Rank %d": "Peringkat %d",
+        // Settings → Passkeys: the web's form and list (R16-B-23)
+        "Device name (e.g. MacBook Pro)": "Nama perangkat (mis. MacBook Pro)",
+        "Add passkey": "Tambah passkey",
+        "Your passkeys": "Passkey kamu",
     ]
 }

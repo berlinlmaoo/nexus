@@ -75,8 +75,9 @@ struct NXPageTabsRow<ID: Hashable>: View {
     var accessibilityName: String = ""
 
     var body: some View {
-        NXUnderlineTabs(items: items, selection: $selection, accessibilityName: accessibilityName)
-            // NXUnderlineTabs pads 12 and each tab 10: 10 more puts the first label under the title (32).
+        // NXUnderlineTabs pads 12 and each tab 10: 10 more puts the first label under the title (32). The
+        // hairline starts there too, with the page's content, not 22 pt left of it (UI tour run 16, R16-I-31).
+        NXUnderlineTabs(items: items, selection: $selection, accessibilityName: accessibilityName, dividerLeading: 22)
             .padding(.leading, 10)
             .background(NX.background)
     }

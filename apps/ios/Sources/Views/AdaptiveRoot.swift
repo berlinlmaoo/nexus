@@ -826,14 +826,15 @@ struct SidebarRoot: View {
     @ViewBuilder private func navRow(_ screen: NXScreen) -> some View {
         let standIn = screen == .projects && openProjectWithoutRow
         let selected = selection == .screen(screen) || standIn
-        // On the Mac the selection is a quiet grey (SidebarSelection), so the row keeps dark text; elsewhere
-        // the system fill is strong and the glyph turns white on it.
-        let onFill = selection == .screen(screen) && !SidebarSelection.isQuiet
-        let glyph: Color = onFill ? Color.white : (selected ? NX.foreground : NX.mutedFg)
+        // The web's selected row on every platform: a lavender pill (SidebarSelection) with the name and the
+        // glyph in the accent. The iPad's white glyph on the system's grey pill all but vanished (UI tour run
+        // 16, R16-B-26).
+        let onFill = false
+        let glyph: Color = selected ? NX.violetText : NX.mutedFg
         Label {
             HStack(spacing: 6) {
-                Text(screen.sidebarTitle).font(NXFont.text(15)).lineLimit(1)
-                    .modifier(SidebarSelection.TextColor())
+                Text(screen.sidebarTitle).font(NXFont.text(15, selected ? .medium : .regular)).lineLimit(1)
+                    .foregroundStyle(selected ? NX.violetText : NX.foreground)
                 Spacer(minLength: 4)
                 let n = badgeCount(screen)
                 if n > 0 { SidebarCountBadge(count: n, warning: screen == .attendance, onSelection: onFill) }
@@ -861,7 +862,7 @@ struct SidebarRoot: View {
         .tag(NXSelection.screen(screen))
         .modifier(MacSidebarRowInsets())
         // Not the List's own selection (that is the open project): the quiet muted pill the web draws.
-        .listRowBackground(standIn ? AnyView(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NX.muted).padding(.horizontal, 10)) : nil)
+        .listRowBackground(standIn ? AnyView(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(SidebarSelection.fill).padding(.horizontal, 10)) : nil)
     }
 
     private func badgeCount(_ screen: NXScreen) -> Int {
@@ -932,17 +933,14 @@ enum SidebarRootSheet: String, Identifiable {
 /// list's tint, so a grey tint gives a grey fill; the rows then keep their own dark text instead of the
 /// white the system puts on a strong fill. The iPad keeps the system's own behaviour.
 enum SidebarSelection {
-    #if targetEnvironment(macCatalyst)
+    /// The selection is the soft accent pill on every platform now (web; UI tour run 16, R16-B-26).
     static let isQuiet = true
-    #else
-    static let isQuiet = false
-    #endif
-    /// Notion's selected-row grey on the sidebar's background.
-    static let fill = Color(light: 0xdcdbd8, dark: 0x3c3c3e)
+    /// The web sidebar's selected-row lavender (`bg-accent`).
+    static var fill: Color { NX.accentBg }
 
     struct Tint: ViewModifier {
         func body(content: Content) -> some View {
-            if SidebarSelection.isQuiet { content.tint(SidebarSelection.fill) } else { content }
+            content.tint(SidebarSelection.fill)
         }
     }
 

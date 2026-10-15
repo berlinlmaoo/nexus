@@ -418,9 +418,11 @@ struct TicketsView: View {
     /// Fixed columns; Subject takes the rest. Narrower than they were: on the Mac the subject column was
     /// left ~130 pt and every subject read "Day Off terpot…" (UI tour run 5).
     private enum Col {
-        static let from: CGFloat = 160
+        // From wide enough for "Mohamad Okta Firdaus" on one line; Status hugs its chip, so no band of
+        // empty width sits between Status and Replies (UI tour run 16, R16-M-11).
+        static let from: CGFloat = 200
         static let category: CGFloat = 112
-        static let status: CGFloat = 132
+        static let status: CGFloat = 112
         static let replies: CGFloat = 56
         static let activity: CGFloat = 112
     }
@@ -468,18 +470,18 @@ struct TicketsView: View {
                     Text(t.title).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(2)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
-                    if t.hasGideonReply {
-                        Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
-                            .frame(width: 11, height: 11).foregroundStyle(NX.mutedFg)
-                            .frame(width: 20, height: 20).background(NX.muted, in: Circle())
-                            .accessibilityLabel(T("GIDEON replied"))
-                    }
                 }
-                // The same chip as the narrow rows (one style, UI tour run 11 IP-1), under the subject: beside
-                // it, it left the subject "Tgl 4-8 it…" (UI tour run 13, M-9).
-                if t.showsDecisionMarker {
-                    NexusChip(text: T("Correction awaiting decision"), tone: .accent, systemImage: "calendar.badge.clock")
-                        .fixedSize()
+                // The same chips as the narrow rows (one style, UI tour run 11 IP-1), under the subject: beside
+                // it, it left the subject "Tgl 4-8 it…" (UI tour run 13, M-9). "GIDEON replied" is the web's chip,
+                // not a bare icon after the subject (UI tour run 16, R16-M-11).
+                if t.showsDecisionMarker || t.hasGideonReply {
+                    HStack(spacing: 6) {
+                        if t.showsDecisionMarker {
+                            NexusChip(text: T("Correction awaiting decision"), tone: .accent, systemImage: "calendar.badge.clock")
+                                .fixedSize()
+                        }
+                        if t.hasGideonReply { gideonMarker.fixedSize() }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

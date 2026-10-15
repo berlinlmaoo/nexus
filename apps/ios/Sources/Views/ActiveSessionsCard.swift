@@ -185,19 +185,30 @@ struct ActiveSessionsCard: View {
         return current + rest
     }
 
+    @Environment(\.horizontalSizeClass) private var hSize
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             // The button beside the title while it fits on one line, under it otherwise: on a phone
             // "Sign out other sessions" wrapped into a two-line pill (UI tour run 14, N-41).
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 10) {
-                    header
-                    Spacer(minLength: 0)
+            // iPad / Mac: always top-right, with the subtitle wrapping beside it, as on the web and the Mac
+            // (UI tour run 16, R16-I-22 iPad: the one-line subtitle never "fitted", so the button dropped below).
+            if hSize == .regular {
+                HStack(alignment: .top, spacing: 12) {
+                    header.frame(maxWidth: .infinity, alignment: .leading)
                     othersButton
                 }
-                VStack(alignment: .leading, spacing: 10) {
-                    header
-                    othersButton
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 10) {
+                        header
+                        Spacer(minLength: 0)
+                        othersButton
+                    }
+                    VStack(alignment: .leading, spacing: 10) {
+                        header
+                        othersButton
+                    }
                 }
             }
 

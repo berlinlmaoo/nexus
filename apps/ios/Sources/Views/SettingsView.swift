@@ -396,7 +396,8 @@ struct SettingsView: View {
                         }
                         Spacer(minLength: 0)
                     }
-                    .padding(.horizontal, 12)
+                    // Room above and below when the sentence wraps to two lines (UI tour run 16, R16-I-20 iPad).
+                    .padding(.horizontal, 12).padding(.vertical, 9)
                     .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
                     .background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))

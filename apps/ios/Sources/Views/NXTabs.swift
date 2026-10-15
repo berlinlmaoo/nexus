@@ -20,6 +20,8 @@ struct NXUnderlineTabs<ID: Hashable>: View {
     let items: [NXTabItem<ID>]
     @Binding var selection: ID
     var accessibilityName: String = ""
+    /// Where the bottom hairline starts, from the row's leading edge (0 = the full width).
+    var dividerLeading: CGFloat = 0
     @State private var contentWidth: CGFloat = 0
 
     var body: some View {
@@ -48,7 +50,9 @@ struct NXUnderlineTabs<ID: Hashable>: View {
         // the trailing one ran into the screen edge, a hard "Compani…" behind a faint fade (UI tour run 12,
         // IP11: Legal and Settings).
         .padding(.horizontal, 12)
-        .overlay(alignment: .bottom) { Rectangle().fill(NX.border).frame(height: 1).allowsHitTesting(false) }
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(NX.border).frame(height: 1).padding(.leading, dividerLeading).allowsHitTesting(false)
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityName)
     }
