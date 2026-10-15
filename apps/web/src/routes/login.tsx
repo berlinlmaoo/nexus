@@ -101,7 +101,7 @@ function LoginPage() {
     } catch (err) {
       if (err instanceof ApiError && err.status === 401 && (err.payload as { error?: string } | null)?.error === "AccountDeactivated") {
         // Offboarded (left the company): the right password, refused on purpose. Say so, not "wrong password".
-        setError(lang.t("This account has been deactivated. Ask your BoD if you think this is a mistake."));
+        setError(lang.t("This account has been deactivated. Ask the board if you think this is a mistake."));
       } else if (err instanceof ApiError && err.status === 401) {
         setError(lang.t("Wrong email or password. Check them and try again."));
       } else if (err instanceof ApiError && err.status === 403) {

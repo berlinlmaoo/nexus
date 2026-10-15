@@ -511,8 +511,10 @@
  *      Safari (which ignores backdrop-filter:url) — set inline in the component;
  *   2. this .glass-bar layer paints the multi-inset "thick glass" edge recipe
  *      (lifted from the reference) + a faint tint for text legibility. */
+/* The tint is dense enough that text and a red button under the bar no longer show through it (UI tour run 16,
+   R16-WM-6: "QA Dev 3" and "Delete account" ghosted through the bar). */
 .glass-bar {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.28) 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(255, 255, 255, 0.74) 100%);
   box-shadow:
     0 16px 40px -14px rgba(15, 23, 42, 0.26),
     0 2px 6px -3px rgba(15, 23, 42, 0.1),
@@ -521,7 +523,7 @@
     inset 0 0 0 1px rgba(255, 255, 255, 0.45);
 }
 .dark .glass-bar {
-  background: linear-gradient(180deg, rgba(72, 74, 86, 0.5) 0%, rgba(30, 32, 40, 0.32) 100%);
+  background: linear-gradient(180deg, rgba(56, 58, 68, 0.86) 0%, rgba(30, 32, 40, 0.78) 100%);
   box-shadow:
     0 16px 40px -14px rgba(0, 0, 0, 0.6),
     inset 0 1px 1px rgba(255, 255, 255, 0.22),
@@ -612,14 +614,25 @@
 
 /* Row snapping for long pages (UI tour run 15, R15-WB-1 / R15-WD-1): a page that holds a list marked
    `data-snap-rows` snaps the document so the row at the top sits whole under the pinned page header
-   (PageHeader publishes its height as --page-sticky-top) instead of half-cut by it. Proximity only, so
+   (PageHeader publishes its height as --page-sticky-top; a page with a pinned bar of its own under the header
+   adds that bar as --page-snap-extra) instead of half-cut by it. Proximity only, so
    free scrolling still ends anywhere between far-apart rows; the gap clears the header's 1rem fade. */
-html:has([data-snap-rows], [data-snap-row]) {
+/* Only rows of the page itself: a row inside a drawer or dialog (the outlet report in its sheet) must not turn
+   the page under it into a snap container. */
+html:has([data-snap-rows]:not([role="dialog"] *), [data-snap-row]:not([role="dialog"] *)) {
   scroll-snap-type: y proximity;
-  scroll-padding-top: calc(var(--page-sticky-top, 0px) + 1rem);
+  /* Phone: no fade under the pinned header, so a row stops right under it; a 1rem gap there showed the tail
+     of the row before (UI tour run 16, R16-WB-1: avatar and meta-line slivers under the tab strip). */
+  scroll-padding-top: calc(var(--page-sticky-top, 0px) + var(--page-snap-extra, 0px));
+}
+@media (min-width: 768px) {
+  html:has([data-snap-rows]:not([role="dialog"] *), [data-snap-row]:not([role="dialog"] *)) {
+    scroll-padding-top: calc(var(--page-sticky-top, 0px) + var(--page-snap-extra, 0px) + 1rem);
+  }
 }
 [data-snap-rows] > *,
-[data-snap-row] {
+[data-snap-row],
+[data-snap-top] {
   scroll-snap-align: start;
 }
 /* A scroll box of its own (a table, a side panel) snaps its rows under its own sticky head. */

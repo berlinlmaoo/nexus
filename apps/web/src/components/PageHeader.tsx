@@ -142,7 +142,10 @@ export function PageHeader({
       <div
         aria-hidden
         className={cn("pointer-events-none absolute inset-x-0 top-full hidden h-4 transition-opacity duration-150 md:block", scrolled ? "opacity-100" : "opacity-0")}
-        style={{ background: "linear-gradient(to bottom, var(--page-header-bg, var(--background)), transparent)" }}
+        // Solid for most of its height: a row snapped 1rem under the header leaves only the tail of the row
+        // before in this band, and a plain fade let an avatar or a strikethrough sliver show through it
+        // (UI tour run 16, R16-WB-1).
+        style={{ background: "linear-gradient(to bottom, var(--page-header-bg, var(--background)) 0%, var(--page-header-bg, var(--background)) 65%, transparent)" }}
       />
     </div>
   );

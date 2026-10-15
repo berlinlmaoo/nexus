@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
       const context = await getAttendanceWorkspaceContext(session.user.id)
       if (!context.workspace) return NextResponse.json({ error: "No workspace" }, { status: 404 })
-      if (!context.canManageAttendance) return NextResponse.json({ error: "Cuma BoD yang bisa jalanin reward periode" }, { status: 403 })
+      if (!context.canManageAttendance) return NextResponse.json({ error: "Cuma direksi yang bisa jalanin reward periode" }, { status: 403 })
       workspaceId = context.workspace.id
       actorId = session.user.id
     }

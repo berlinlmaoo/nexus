@@ -59,7 +59,9 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
   }, [activeKey, tabs.length]);
   // Tabs that don't fit scroll sideways. The cut edge gets an arrow on a solid fade (UI tour run 11, WD-13/WM-15):
   // a see-through mask alone left a half-visible ghost icon there, which read as a broken button.
-  const [edges, setEdges] = useState({ left: false, right: false });
+  // `more`: how many tabs lie past the right arrow. From md the arrow says it ("3 ›"): a bare arrow after "+",
+  // past the gap of a hidden tab, read as a stray glyph with every tab in view (UI tour run 16, R16-WD-5).
+  const [edges, setEdges] = useState({ left: false, right: false, more: 0 });
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
@@ -67,7 +69,9 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
       const left = el.scrollLeft > 2, right = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
       // A tab cut by an arrow is hidden whole, never left as a glyph fragment beside it (UI tour run 12, WM1).
       hidePartialTabs(el, "[role='tab'], [data-tab-extra]", { left, right }, EDGE_W);
-      setEdges((e) => (e.left === left && e.right === right ? e : { left, right }));
+      const edgeX = el.getBoundingClientRect().right - (right ? EDGE_W : 0);
+      const more = right ? [...el.querySelectorAll<HTMLElement>("[role='tab']")].filter((x) => x.getBoundingClientRect().right > edgeX + 0.5).length : 0;
+      setEdges((e) => (e.left === left && e.right === right && e.more === more ? e : { left, right, more }));
     };
     read();
     el.addEventListener("scroll", read, { passive: true });
@@ -92,7 +96,7 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
       <button type="button" tabIndex={-1} aria-label={t("Show earlier tabs")} onClick={() => nudge(-1)} className={cn(edgeBtn, "left-0 justify-start bg-gradient-to-r from-card from-60% to-transparent")}><ChevronLeft className="h-4 w-4" /></button>
     )}
     {edges.right && (
-      <button type="button" tabIndex={-1} aria-label={t("Show more tabs")} onClick={() => nudge(1)} className={cn(edgeBtn, "right-0 justify-end bg-gradient-to-l from-card from-60% to-transparent")}><ChevronRight className="h-4 w-4" /></button>
+      <button type="button" tabIndex={-1} aria-label={t("Show more tabs")} onClick={() => nudge(1)} className={cn(edgeBtn, "right-0 justify-end bg-gradient-to-l from-card from-60% to-transparent")}>{edges.more > 0 && <span className="hidden text-[11px] font-semibold tabular-nums md:inline">{edges.more}</span>}<ChevronRight className="h-4 w-4" /></button>
     )}
     <div ref={scroller} role="tablist" aria-label={t("Views")} className="relative flex min-w-0 flex-1 snap-x snap-proximity items-center gap-0.5 overflow-x-auto [scroll-padding-inline:36px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {tabs.map((tab) => {

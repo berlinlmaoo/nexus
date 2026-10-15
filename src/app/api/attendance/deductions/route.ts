@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
     const ctx = await getAttendanceWorkspaceContext(session.user.id)
     if (!ctx.workspace) return NextResponse.json({ error: "No workspace membership found" }, { status: 404 })
     if (!ctx.canManageAttendance) {
-      return NextResponse.json({ error: "Hanya BoD ke atas yang bisa lihat potongan orang lain." }, { status: 403 })
+      return NextResponse.json({ error: "Hanya direksi ke atas yang bisa lihat potongan orang lain." }, { status: 403 })
     }
     const workspaceId = ctx.workspace.id
 

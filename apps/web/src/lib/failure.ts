@@ -25,7 +25,7 @@ export function failureText(e: unknown): string {
       if (code === "NEEDS_EDIT_ACCESS") return t("You can view this project but not change it. Ask its Project Owner for Can edit access.");
       if (code === "NEEDS_COMMENT_ACCESS") return t("You can view this project but not comment. Ask its Project Owner for Can comment access.");
       if (code === "NEEDS_FULL_ACCESS") return t("Only people with Full access to the project can do this.");
-      return t("Your role can't do this. Ask a BoD if you need it.");
+      return t("Your role can't do this. Ask a board member if you need it.");
     }
     if (e.status === 404) return t("It no longer exists. Refresh the page.");
     if (e.status === 429) return e.message; // already translated by apiFetch

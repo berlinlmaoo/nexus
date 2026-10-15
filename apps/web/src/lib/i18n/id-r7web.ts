@@ -12,5 +12,5 @@ export const ID_R7WEB: Record<string, string> = {
   "{duration} away from the office · {left} left · automatic check-out at {time}.": "Sudah {duration} di luar kantor · sisa {left} · check-out otomatis {time}.",
   "{duration} away from the office. Request a permission if you're working outside.": "Sudah {duration} di luar kantor. Ajukan izin kalau ada kegiatan di luar.",
   "You've been away from the office since {time}, so you were checked out off-site. Waiting for your manager to approve.": "Kamu di luar kantor sejak {time}, jadi di-check-out offsite. Menunggu persetujuan atasanmu.",
-  "You've been away from the office since {time}, so you were checked out off-site. Waiting for the BoD to approve.": "Kamu di luar kantor sejak {time}, jadi di-check-out offsite. Menunggu persetujuan BoD.",
+  "You've been away from the office since {time}, so you were checked out off-site. Waiting for the board to approve.": "Kamu di luar kantor sejak {time}, jadi di-check-out offsite. Menunggu persetujuan direksi.",
 };

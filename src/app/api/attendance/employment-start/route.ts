@@ -19,7 +19,7 @@ async function gate() {
   const ctx = await getAttendanceWorkspaceContext(session.user.id)
   if (!ctx.workspace) return { error: NextResponse.json({ error: "No workspace membership found" }, { status: 404 }) }
   if (!ctx.canManageAttendance) {
-    return { error: NextResponse.json({ error: "Hanya BoD ke atas yang bisa set tanggal mulai kerja." }, { status: 403 }) }
+    return { error: NextResponse.json({ error: "Hanya direksi ke atas yang bisa set tanggal mulai kerja." }, { status: 403 }) }
   }
   return { session, workspaceId: ctx.workspace.id }
 }

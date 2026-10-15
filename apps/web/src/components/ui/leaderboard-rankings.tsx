@@ -22,8 +22,9 @@ export interface LeaderboardRankingItem {
 
 
 function formatValue(value: number) {
-  // The full XP number, "1.100" in both languages (UI tour run 13) — no "k" abbreviation.
-  return formatCount(value)
+  // The full XP number, "1.100" in both languages (UI tour run 13) — no "k" abbreviation — with its unit, as
+  // Home writes it ("1.000 XP", "−142 XP"; UI tour run 16, R16-WB-6).
+  return `${formatCount(value)} XP`
 }
 
 const CROWN_COLOR: Record<number, string> = {
@@ -83,7 +84,8 @@ const LeaderboardRankings = React.forwardRef<HTMLDivElement, LeaderboardRankings
                     <AvatarFace name={item.userName} avatar={item.avatarUrl} seed={item.userName || item.userId} size={40} decorative className="ring-0" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold leading-tight">{item.userName}</div>
+                    {/* Two lines before "…", like the tie ribbon (UI tour run 16, R16-WM-10). */}
+                    <div className="line-clamp-2 font-semibold leading-tight">{item.userName}</div>
                     {item.byline && <div className="truncate text-sm text-muted-foreground">{item.byline}</div>}
                   </div>
                   <span className="shrink-0 text-base font-bold tabular-nums">{formatValue(item.value)}</span>

@@ -150,8 +150,11 @@ export function OutletCalendar({
         ]}
       />
 
-      <section ref={panelRef} data-snap-row aria-labelledby="os-day" className="scroll-mt-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      {/* The day's heading is the snap point, not the whole panel: a panel taller than the screen let the page
+          stop anywhere inside it, on the Day target card with the heading scrolled away (UI tour run 16,
+          R16-WD-2). The report rows below are snap points of their own (outlet-ui Row). */}
+      <section ref={panelRef} aria-labelledby="os-day" className="scroll-mt-4">
+        <div data-snap-row className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 id="os-day" className="text-base font-semibold">{dayLong(day, locale, data.today.slice(0, 4))}</h3>
           <button
             type="button"

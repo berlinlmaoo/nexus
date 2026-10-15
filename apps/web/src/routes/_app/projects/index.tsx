@@ -563,7 +563,7 @@ function ProjectsPage() {
 
               {!workspaceOptions.length && (
                 <p className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground dark:text-warning">
-                  {tr("You're not in a workspace yet, so you can't create a project. Ask a BoD or Manager to add you.")}
+                  {tr("You're not in a workspace yet, so you can't create a project. Ask a board member or manager to add you.")}
                 </p>
               )}
               {createProject.isError && (

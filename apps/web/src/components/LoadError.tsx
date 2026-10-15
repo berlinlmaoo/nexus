@@ -81,7 +81,7 @@ export function LoadError({
       : kind === "notFound"
         ? { icon: FileQuestion, title: notFoundTitle ?? t("Not found"), message: notFoundMessage ?? t("It may have been deleted, or the link is wrong.") }
         : kind === "forbidden"
-          ? { icon: Lock, title: forbiddenTitle ?? t("You don't have access"), message: forbiddenMessage ?? t("Your role can't open this. Ask a BoD if you need it.") }
+          ? { icon: Lock, title: forbiddenTitle ?? t("You don't have access"), message: forbiddenMessage ?? t("Your role can't open this. Ask a board member if you need it.") }
           : { icon: ServerCrash, title: what ? t("Couldn't load {what}", { what }) : t("Couldn't load this"), message: t("Something went wrong on our side. Try again in a moment.") };
   return <EmptyState {...props} tone="muted" compact={compact} className={className} action={acts} />;
 }

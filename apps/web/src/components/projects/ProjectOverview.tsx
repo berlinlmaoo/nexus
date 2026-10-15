@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowUpRight, CalendarClock, CheckCircle2, FileText, ListChecks, Loader2, Pencil, Plus, Sparkles, Users } from "lucide-react";
 import { Avatar, AvatarFace, AvatarStack } from "@/components/Avatar";
@@ -9,7 +9,7 @@ import { COLOR_PRESETS } from "@/lib/project-views";
 import { orderedOptions, usesStatusOptions } from "@/lib/status-options";
 import { optionColorKey } from "@/components/tasks/StatusPicker";
 import { useLang } from "@/lib/lang";
-import { cn } from "@/lib/utils";
+import { cn, glueDash } from "@/lib/utils";
 import { useProjectCanEdit } from "@/components/projects/project-access";
 
 /**
@@ -87,6 +87,47 @@ function Section({ title, icon, action, children, className, id }: { title: stri
 }
 
 const linkBtn = "inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]";
+
+/**
+ * The Overview's two columns on a wide screen (UI tour run 16, R16-WB-1: the page snaps to one column's cards, so
+ * the other column was left with a card cut mid-way under the header). The shorter column sticks under the header
+ * when it fits the screen, so only the long one scrolls and snaps; its own cards are then no snap points. When it
+ * does not fit, it scrolls too, with a soft fade at its top under the header, so a card there is never hard-cut.
+ * At rest that fade sits in the page padding above the column (-mt-8), so it never dims the first card.
+ */
+function useColumnPin() {
+  const leftRef = useRef<HTMLDivElement>(null);
+  const rightRef = useRef<HTMLDivElement>(null);
+  const [state, setState] = useState<{ side: "left" | "right" | null; fits: boolean }>({ side: null, fits: false });
+  useEffect(() => {
+    const l = leftRef.current, r = rightRef.current;
+    if (!l || !r || typeof ResizeObserver === "undefined") return;
+    const wide = window.matchMedia("(min-width: 1024px)");
+    const read = () => {
+      if (!wide.matches) { setState((s) => (s.side === null ? s : { side: null, fits: false })); return; }
+      const lh = l.offsetHeight, rh = r.offsetHeight;
+      if (Math.abs(lh - rh) < 8) { setState((s) => (s.side === null ? s : { side: null, fits: false })); return; }
+      const side = lh < rh ? "left" : "right";
+      const top = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--page-sticky-top")) || 0;
+      const fits = Math.min(lh, rh) <= window.innerHeight - top - 32;
+      setState((s) => (s.side === side && s.fits === fits ? s : { side, fits }));
+    };
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(l);
+    ro.observe(r);
+    wide.addEventListener("change", read);
+    window.addEventListener("resize", read);
+    return () => { ro.disconnect(); wide.removeEventListener("change", read); window.removeEventListener("resize", read); };
+  }, []);
+  const classOf = (side: "left" | "right") => {
+    if (state.side !== side) return "";
+    return state.fits
+      ? "lg:sticky lg:top-[calc(var(--page-sticky-top,0px)+1rem)] lg:[&_[data-snap-row]]:[scroll-snap-align:none]"
+      : "lg:before:pointer-events-none lg:before:sticky lg:before:top-[var(--page-sticky-top,0px)] lg:before:z-10 lg:before:-mt-8 lg:before:block lg:before:h-8 lg:before:bg-gradient-to-b lg:before:from-card lg:before:to-transparent lg:before:content-['']";
+  };
+  return { leftRef, rightRef, classOf };
+}
 
 export function ProjectOverview({
   project,
@@ -204,6 +245,8 @@ export function ProjectOverview({
     return map;
   }, [project.members, tasks]);
 
+  const cols = useColumnPin();
+
   const dueLabel = (task: NexusTask) => {
     const d = dueIn(task, today);
     if (d === null) return "";
@@ -242,7 +285,7 @@ export function ProjectOverview({
 
   return (
     <div className="mx-auto grid max-w-6xl gap-4 p-4 md:gap-6 md:p-8 lg:grid-cols-12">
-      <div className="min-w-0 space-y-4 md:space-y-6 lg:col-span-8">
+      <div ref={cols.leftRef} className={cn("min-w-0 space-y-4 md:space-y-6 lg:col-span-8 lg:self-start", cols.classOf("left"))}>
         {/* Progress: the stacked status bar is the progress visual; the counters open the board filtered. */}
         <section aria-labelledby="ov-progress" className={cn(CARD, "overflow-hidden")}>
           <div className="p-4 md:p-5">
@@ -306,7 +349,7 @@ export function ProjectOverview({
         <StatusUpdatesCard projectId={project.id} />
       </div>
 
-      <div className="min-w-0 space-y-4 md:space-y-6 lg:col-span-4">
+      <div ref={cols.rightRef} className={cn("min-w-0 space-y-4 md:space-y-6 lg:col-span-4 lg:self-start", cols.classOf("right"))}>
         <BriefCard project={project} onEdit={onEditBrief} />
 
         <Section id="ov-priority" title={t("Open tasks by priority")} icon={<AlertTriangle className="h-4 w-4" />}>
@@ -426,9 +469,9 @@ function TeamCard({ people, memberById, unassigned, onDrill }: { people: Map<str
   const max = Math.max(1, ...rows.map((r) => r.open), unassigned);
   const LIMIT = 8;
   const shown = all ? rows : rows.slice(0, LIMIT);
-  const grid = "grid grid-cols-[minmax(0,1fr)_3rem_3.5rem_4.5rem] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_4rem_4rem_6rem]";
-  // Phone: "Done (Oct)" on one line; "Done this month" wrapped to two in the narrow column (UI tour run 14, WM-26).
-  const monthShort = new Intl.DateTimeFormat(locale, { month: "short" }).format(new Date()).replace(/\.$/, "").replace(/^Sept$/, "Sep");
+  const grid = "grid grid-cols-[minmax(0,1fr)_2.75rem_3.25rem_5.75rem] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_4rem_4rem_6rem]";
+  // "Done this month" on every width, as in the apps (UI tour run 16 lead decision; it replaced the phone's
+  // "Done (Oct)"). Its column is wide enough on a phone for the label on one line (UI tour run 14, WM-26).
   const num = (n: number, bad?: boolean) => <span className={cn("text-right text-sm tabular-nums", n === 0 ? "text-muted-foreground/60" : bad ? cn("font-semibold", STATUS.overdueText) : "font-semibold")}>{n}</span>;
   return (
     <Section id="ov-team" title={t("Who's working on what")} icon={<Users className="h-4 w-4" />}>
@@ -440,10 +483,7 @@ function TeamCard({ people, memberById, unassigned, onDrill }: { people: Map<str
             <span>{t("Person")}</span>
             <span className="text-right">{t("Open")}</span>
             <span className="text-right">{t("Overdue")}</span>
-            <span className="whitespace-nowrap text-right" title={t("Done this month")}>
-              <span className="sm:hidden">{t("Done ({month})", { month: monthShort })}</span>
-              <span className="max-sm:hidden">{t("Done this month")}</span>
-            </span>
+            <span className="whitespace-nowrap text-right">{t("Done this month")}</span>
           </div>
           <ul>
             {shown.map((r) => (
@@ -562,7 +602,8 @@ function RecentlyDoneCard({ completed, memberById, onOpenTask }: { completed: Ne
                 <button type="button" onClick={() => onOpenTask(task)} className="flex w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none">
                   <span aria-hidden className={cn("grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full", STATUS.doneFill)}><svg viewBox="0 0 12 12" className="h-2.5 w-2.5"><path d="M2.5 6.2 5 8.5l4.5-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm">{task.title}</span>
+                    {/* Two lines before "…", like List and Table (UI tour run 16, R16-WB-8). */}
+                    <span className="line-clamp-2 text-sm">{glueDash(task.title ?? "")}</span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {[by?.name ? t("by {name}", { name: by.name }) : null, ago(task.completedAt ?? task.updatedAt)].filter(Boolean).join(" · ")}
                     </span>

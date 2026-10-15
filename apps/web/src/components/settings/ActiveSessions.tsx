@@ -213,7 +213,7 @@ export function ActiveSessions() {
       {!sessions.isLoading && !sessions.isError && rows.length === 0 && <p className="text-sm text-muted-foreground">{t("No active sessions.")}</p>}
 
       {rows.length > 0 && (
-        <ul className="divide-y divide-border rounded-lg border border-border">
+        <ul data-snap-rows className="divide-y divide-border rounded-lg border border-border">
           {groups.map((g) => {
             const first = g.sessions[0];
             if (g.sessions.length === 1) return sessionRow(first, g.name, g.device);

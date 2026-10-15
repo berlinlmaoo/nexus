@@ -31,7 +31,7 @@ async function gate(req: NextRequest) {
   if (!session?.user?.id) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
   const ctx = await getAttendanceWorkspaceContext(session.user.id)
   if (!ctx.workspace) return { error: NextResponse.json({ error: "No workspace membership found" }, { status: 404 }) }
-  if (!ctx.canManageAttendance) return { error: NextResponse.json({ error: "Hanya BoD ke atas yang bisa atur day-off." }, { status: 403 }) }
+  if (!ctx.canManageAttendance) return { error: NextResponse.json({ error: "Hanya direksi ke atas yang bisa atur day-off." }, { status: 403 }) }
   return { session, workspaceId: ctx.workspace.id }
 }
 
@@ -194,7 +194,7 @@ export async function POST(req: NextRequest) {
         status: "APPROVED",
         startDate: day,
         endDate: day,
-        reason: reason || "Day-off diatur oleh BoD (Control Room)",
+        reason: reason || "Day-off diatur oleh direksi (Control Room)",
         reviewNote: "Diatur via Control Room",
         approvalSource: "ADMIN",
         reviewedAt: new Date(),

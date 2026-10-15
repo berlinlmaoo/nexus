@@ -137,6 +137,12 @@ function AppLayout() {
             project page out to ~720px, audit 12 Oct 2026). `clip`, not `hidden`: no scroll box, so sticky headers keep working. */}
         <SidebarInset className="min-w-0 overflow-x-clip">
           <div>
+            {/* A snap point at the very top of every page (UI tour run 16, R16-WD-R1…R3, R16-WM-R1…R4): a page
+                with snapping rows (styles.css, data-snap-rows) became a snap container once its rows loaded, and
+                the browser then snapped to the nearest row, so the page opened scrolled past its header,
+                toolbar and first group. With this point at scrollTop 0 the page stays at its top on load and
+                after layout changes, and the rows still snap once the person scrolls. */}
+            <div aria-hidden data-snap-top="" className="h-px -mb-px" />
             <Outlet />
           </div>
           {/* Room for the phone's floating tab bar: its height plus its gap above the safe area, so the last

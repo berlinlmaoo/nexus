@@ -121,7 +121,7 @@ function PrivateProjects({ data, save }: { data: Payload; save: Save }) {
         <div className="min-w-0">
           <h2 className="font-display text-base font-bold tracking-tight">{t("Private projects")}</h2>
           <p className="mt-1 max-w-prose text-xs text-muted-foreground">
-            {t("Staff outside these projects see their tasks as “Internal task”, without the title. BoD and Managers see everything.")}
+            {t("Staff outside these projects see their tasks as “Internal task”, without the title. The board and managers see everything.")}
             {prefixes.length > 0 && <> {t("Projects whose name starts with {names} are private automatically.", { names: prefixNames })}</>}
           </p>
         </div>

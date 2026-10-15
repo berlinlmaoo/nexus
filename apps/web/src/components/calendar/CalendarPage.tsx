@@ -661,9 +661,9 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
   if (failed) {
     body = <div className="p-4 md:px-8 md:py-6"><EmptyState icon={AlertTriangle} tone="muted" title={t("The calendar could not be loaded")} message={t("Check the connection and try again.")} action={<EmptyAction onClick={() => { void structureQ.refetch(); void itemsQ.refetch(); }}>{t("Try again")}</EmptyAction>} /></div>;
   } else if (access === "none") {
-    body = <div className="p-4 md:px-8 md:py-6"><EmptyState icon={Lock} title={t("This calendar is for members of the company")} message={t("You are in a personal workspace. Ask a BoD or Manager to add you to the company's workspace; the Calendar then shows the tasks of everyone there.")} action={<EmptyAction to="/my-tasks">{t("Open My Tasks")}</EmptyAction>} /></div>;
+    body = <div className="p-4 md:px-8 md:py-6"><EmptyState icon={Lock} title={t("This calendar is for members of the company")} message={t("You are in a personal workspace. Ask a board member or manager to add you to the company's workspace; the Calendar then shows the tasks of everyone there.")} action={<EmptyAction to="/my-tasks">{t("Open My Tasks")}</EmptyAction>} /></div>;
   } else if (access === "off") {
-    body = <div className="p-4 md:px-8 md:py-6"><EmptyState icon={CalendarDays} title={t("The Calendar is on its way")} message={t("It opens for BoD and Managers first, then for everyone. Your own tasks are still in My Tasks.")} action={<EmptyAction to="/my-tasks">{t("Open My Tasks")}</EmptyAction>} /></div>;
+    body = <div className="p-4 md:px-8 md:py-6"><EmptyState icon={CalendarDays} title={t("The Calendar is on its way")} message={t("It opens for the board and managers first, then for everyone. Your own tasks are still in My Tasks.")} action={<EmptyAction to="/my-tasks">{t("Open My Tasks")}</EmptyAction>} /></div>;
   } else if (firstLoad) {
     body = <SkeletonCalendar compact={lay.gridCompact} />;
   } else {
@@ -705,6 +705,9 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
           {truncated}
         </div>
         <aside data-cal-region="panel" className={cn("shrink-0 overflow-y-auto border-l border-border bg-card/40 [scroll-padding-top:var(--cal-sticky-room,0px)] [scroll-snap-type:y_proximity]", lay.wideAside ? "w-105" : "w-95")}>
+          {/* The panel's own top is a snap point, so it opens at its first section header ("OVERDUE · 53",
+              Show all) instead of snapping to the first card under it (UI tour run 16, R16-WD-R3). */}
+          <div aria-hidden data-snap-top="" className="h-px -mb-px" />
           {panel}
         </aside>
       </div>

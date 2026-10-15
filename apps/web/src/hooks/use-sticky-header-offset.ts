@@ -17,12 +17,21 @@ export function useStickyHeaderOffset(): number {
       const pinned = [...header.querySelectorAll<HTMLElement>("[data-page-header-sticky]")].filter((el) => getComputedStyle(el).position === "sticky");
       setTop(Math.round(pinned.reduce((h, el) => h + el.getBoundingClientRect().height, 0)));
     };
-    measure();
     const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
-    ro?.observe(header);
-    header.querySelectorAll<HTMLElement>("[data-page-header-sticky]").forEach((el) => ro?.observe(el));
+    const watch = () => {
+      ro?.disconnect();
+      ro?.observe(header);
+      header.querySelectorAll<HTMLElement>("[data-page-header-sticky]").forEach((el) => ro?.observe(el));
+      measure();
+    };
+    watch();
+    // A pinned part can mount later: the tab strip of a page that shows tabs once its data has loaded
+    // (Notifications, Tickets). On a phone the header box is `display: contents` and gets no resize callback,
+    // so the strip was never counted and rows snapped under it, half-cut (UI tour run 16, R16-WB-1).
+    const mo = typeof MutationObserver === "undefined" ? null : new MutationObserver(watch);
+    mo?.observe(header, { childList: true, subtree: true });
     window.addEventListener("resize", measure);
-    return () => { ro?.disconnect(); window.removeEventListener("resize", measure); };
+    return () => { ro?.disconnect(); mo?.disconnect(); window.removeEventListener("resize", measure); };
   }, []);
   return top;
 }

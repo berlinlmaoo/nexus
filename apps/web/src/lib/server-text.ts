@@ -50,7 +50,7 @@ export function xpEntryLabel(e: { kind?: string | null; label: string; detail?: 
     case "waiver": return t("Penalty cleared for the day");
     case "peer_bounty": return t("Integrity report · reward");
     case "peer_penalty": return t("Integrity report · penalty");
-    case "admin_adjust": return withDetail("Adjusted by the BoD");
+    case "admin_adjust": return withDetail("Adjusted by the board");
     case "quest_penalty": return t("Quest penalty");
     case "quest": return t("Quest done");
     case "bonus": return e.label.startsWith("No-absence bonus") ? withDetail("No-absence bonus") : withDetail("Bonus");
@@ -258,7 +258,7 @@ const OUTSIDE_MESSAGE_RULES: Rule[] = [
   { re: /^Sudah (.+?) di luar kantor · sisa (.+?) · check-out otomatis (\d{2}:\d{2})\.$/, key: "{duration} away from the office · {left} left · automatic check-out at {time}.", vars: (m) => ({ duration: idDuration(m[1]), left: idDuration(m[2]), time: m[3] }) },
   { re: /^Sudah (.+?) di luar kantor\. Ajukan izin kalau ada kegiatan di luar\.$/, key: "{duration} away from the office. Request a permission if you're working outside.", vars: (m) => ({ duration: idDuration(m[1]) }) },
   { re: /^Kamu di luar kantor sejak (\d{2}:\d{2}), jadi di-check-out offsite\. Menunggu persetujuan atasanmu\.$/, key: "You've been away from the office since {time}, so you were checked out off-site. Waiting for your manager to approve.", vars: (m) => ({ time: m[1] }) },
-  { re: /^Kamu di luar kantor sejak (\d{2}:\d{2}), jadi di-check-out offsite\. Menunggu persetujuan BoD\.$/, key: "You've been away from the office since {time}, so you were checked out off-site. Waiting for the BoD to approve.", vars: (m) => ({ time: m[1] }) },
+  { re: /^Kamu di luar kantor sejak (\d{2}:\d{2}), jadi di-check-out offsite\. Menunggu persetujuan (?:BoD|direksi)\.$/, key: "You've been away from the office since {time}, so you were checked out off-site. Waiting for the board to approve.", vars: (m) => ({ time: m[1] }) },
 ];
 
 const ENUM_LABEL: Record<string, string> = { TODO: "To do", IN_PROGRESS: "In progress", IN_REVIEW: "In review", DONE: "Done", CANCELLED: "Cancelled", URGENT: "Urgent", HIGH: "High", MEDIUM: "Medium", LOW: "Low", NONE: "No priority" };

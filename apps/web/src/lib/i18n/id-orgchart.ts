@@ -16,7 +16,7 @@ export const ID_ORGCHART: Record<string, string> = {
   "Tidy up automatically": "Rapikan otomatis",
   "Download the chart as a sharp PNG (2x), whatever the zoom on screen": "Unduh bagan sebagai PNG tajam (2x), apa pun zoom di layar",
   "Full screen": "Layar penuh",
-  "The chart couldn't be loaded — it needs BoD access.": "Bagan tidak bisa dimuat — butuh akses BoD.",
+  "The chart couldn't be loaded — it needs board access.": "Bagan tidak bisa dimuat — butuh akses direksi.",
 
   // Views
   "Chart view": "Tampilan bagan",
@@ -133,7 +133,7 @@ export const ID_ORGCHART: Record<string, string> = {
   "optional": "opsional",
   "Led by": "Dipimpin oleh",
   "No one": "Tidak ada",
-  "From the BoD/Managers of {name}.": "Dari BoD/Manager {name}.",
+  "From the board members/managers of {name}.": "Dari direksi/Manager {name}.",
   "the card above the group": "kartu di atas grup",
   "This card is drawn under the person chosen, and its line is drawn from them.": "Kartu ini digambar di bawah orang yang dipilih, dan garisnya ditarik dari dia.",
   "job titles show on the chart": "jabatan tampil di bagan",
@@ -166,7 +166,7 @@ export const ID_ORGCHART: Record<string, string> = {
   "Now under:": "Sekarang di bawah:",
   "Release": "Lepas",
   "current": "sekarang",
-  "No BoD or Manager on any card yet.": "Belum ada BoD atau Manager di kartu mana pun.",
+  "No board member or manager on any card yet.": "Belum ada direksi atau Manager di kartu mana pun.",
   "No IP/Team yet. Add one first.": "Belum ada IP/Team. Tambahkan dulu.",
   "Done": "Selesai",
 

@@ -241,7 +241,7 @@ function SuspectCard({ item, onDone }: { item: NexusSuspectItem; onDone: () => v
       </div>
       {item.review && (
         <div className="mt-3 rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-          {item.review.verdict === "INVALID" ? t("Not valid") : t("Fine")} · {item.review.reviewedBy.name ?? "BoD"} · {fmtDate(item.review.reviewedAt)}
+          {item.review.verdict === "INVALID" ? t("Not valid") : t("Fine")} · {item.review.reviewedBy.name ?? "Board"} · {fmtDate(item.review.reviewedAt)}
           {item.review.note && <span className="text-foreground"> — “{item.review.note}”</span>}
         </div>
       )}
@@ -250,7 +250,7 @@ function SuspectCard({ item, onDone }: { item: NexusSuspectItem; onDone: () => v
           <div className="flex items-center gap-1 font-bold text-amber-800 dark:text-amber-300"><AlertTriangle className="h-3 w-3" /> {tn(item.warnings!.length, "Warning sent", "{n} warnings sent")}</div>
           {item.warnings!.map((w) => (
             <div key={w.at} className="text-muted-foreground">
-              <span className="font-semibold text-foreground">{w.by.name ?? "BoD"}</span> · {fmtDate(w.at)} {fmtTime(w.at)} — “{w.message}”
+              <span className="font-semibold text-foreground">{w.by.name ?? "Board"}</span> · {fmtDate(w.at)} {fmtTime(w.at)} — “{w.message}”
             </div>
           ))}
         </div>

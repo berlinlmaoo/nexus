@@ -30,7 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ rec
     const ctx = await getAttendanceWorkspaceContext(session.user.id)
     if (!ctx.workspace) return NextResponse.json({ error: "No workspace membership found", code: "NO_WORKSPACE" }, { status: 404 })
     if (!ctx.canManageAttendance) {
-      return NextResponse.json({ error: "Hanya BoD ke atas yang bisa meninjau absen mencurigakan.", code: "FORBIDDEN" }, { status: 403 })
+      return NextResponse.json({ error: "Hanya direksi ke atas yang bisa meninjau absen mencurigakan.", code: "FORBIDDEN" }, { status: 403 })
     }
     const workspaceId = ctx.workspace.id
     const { recordId } = await params
@@ -116,8 +116,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ rec
         userId: record.userId,
         type: "attendance_invalid",
         ...bi(
-          [`Attendance on ${labelEn} ruled invalid`, `The BoD reviewed your attendance on ${labelEn}: the location was faked (fake GPS), so that day counts as absent without notice (TK). Note: ${note}`],
-          [`Absen ${label} dinyatakan tidak sah`, `BoD meninjau absenmu tanggal ${label}: lokasinya terdeteksi palsu (fake GPS), jadi hari itu dihitung TK. Catatan: ${note}`]
+          [`Attendance on ${labelEn} ruled invalid`, `The board reviewed your attendance on ${labelEn}: the location was faked (fake GPS), so that day counts as absent without notice (TK). Note: ${note}`],
+          [`Absen ${label} dinyatakan tidak sah`, `Direksi meninjau absenmu tanggal ${label}: lokasinya terdeteksi palsu (fake GPS), jadi hari itu dihitung TK. Catatan: ${note}`]
 ),
         link: "/attendance",
         push: true,

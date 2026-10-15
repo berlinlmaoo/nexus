@@ -621,7 +621,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
           <AlertDialogContent className="w-[calc(100vw-2rem)] max-w-md rounded-2xl">
             <AlertDialogHeader>
               <AlertDialogTitle>{tr("Delete this task?")}</AlertDialogTitle>
-              <AlertDialogDescription>{canOpenAudit ? tr("The task is deleted and can be restored from Control Room → Audit for 90 days.") : tr("The task is deleted. A manager or the BoD can restore it for 90 days if you need it back.")}</AlertDialogDescription>
+              <AlertDialogDescription>{canOpenAudit ? tr("The task is deleted and can be restored from Control Room → Audit for 90 days.") : tr("The task is deleted. A manager or the board can restore it for 90 days if you need it back.")}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>{tr("Cancel")}</AlertDialogCancel>
@@ -637,7 +637,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               <AlertDialogDescription>
                 {tr("“{name}” is removed from the task.", { name: confirmAtt?.name || tr("(unnamed)") })}{" "}
                 {confirmAtt?.kind === "PROOF" ? tr("Finance uses it as evidence of the payment.") + " " : ""}
-                {canOpenAudit ? tr("Control Room → Audit can restore it for 90 days.") : tr("A manager or the BoD can restore it for 90 days.")}
+                {canOpenAudit ? tr("Control Room → Audit can restore it for 90 days.") : tr("A manager or the board can restore it for 90 days.")}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -652,7 +652,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
         )}
         {task.isError && !t && (
           <LoadError error={task.error} what={tr("this task")} onRetry={() => void task.refetch()}
-            notFoundTitle={tr("This task doesn't exist any more")} notFoundMessage={tr("It was deleted, or the link is wrong. A BoD or manager can restore a deleted task from Control Room → Audit for 90 days.")}
+            notFoundTitle={tr("This task doesn't exist any more")} notFoundMessage={tr("It was deleted, or the link is wrong. A board member or manager can restore a deleted task from Control Room → Audit for 90 days.")}
             forbiddenTitle={tr("You can't open this task")} forbiddenMessage={tr("It's in a project you're not a member of. Ask its Project Owner to add you.")}
             action={<EmptyAction onClick={requestClose}>{tr("Close")}</EmptyAction>} />
         )}

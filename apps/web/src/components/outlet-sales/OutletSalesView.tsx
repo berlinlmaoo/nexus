@@ -104,7 +104,7 @@ export function OutletSalesView({
           icon={Store}
           tone="muted"
           title={code === 403 ? t("This outlet is for its project members") : t("The outlet didn't load")}
-          message={code === 403 ? t("Ask the Project Owner or a BoD to add you to the project.") : t("Check your connection, then try again.")}
+          message={code === 403 ? t("Ask the Project Owner or a board member to add you to the project.") : t("Check your connection, then try again.")}
           action={code === 403 ? undefined : <EmptyAction onClick={() => q.refetch()}>{t("Try again")}</EmptyAction>}
         />
       </div>
@@ -242,13 +242,15 @@ function Overview({
         />
       </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+      {/* The overview's blocks are snap points, so a scrolled page stops on a whole block instead of on half the
+          "Change target" line (UI tour run 16, R16-WB-1). */}
+      <div data-snap-row className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <p>
           {data.target?.updatedBy
             ? t("Target set by {name}", { name: data.target.updatedBy.name ?? "?" })
             : t("No target for {month} yet.", { month: monthName })}
           {" "}
-          {!data.canManageTargets && !data.target && t("The Project Owner or a BoD sets it.")}
+          {!data.canManageTargets && !data.target && t("The Project Owner or a board member sets it.")}
         </p>
         {data.canManageTargets && !editing && (
           // An outlined button, not bare bold text: it has to read as something to click (UI tour run 13, W-B12).
@@ -261,7 +263,7 @@ function Overview({
       {editing && <TargetEditor projectId={projectId} data={data} onClose={() => setEditing(false)} />}
 
       {waiting.length > 0 && (
-        <section className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+        <section data-snap-row className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-100">
             <Info aria-hidden className="h-4 w-4" />
             {tn(waiting.length, "1 night is waiting for its report", "{n} nights are waiting for their report")}
@@ -300,7 +302,7 @@ function Overview({
 function Gauge({ title, hint, actual, target, pct }: { title: string; hint?: string; actual: string; target: string | null; pct: number | null }) {
   const { t } = useLang();
   return (
-    <article className="rounded-xl border border-border bg-card p-4 md:p-5">
+    <article data-snap-row className="rounded-xl border border-border bg-card p-4 md:p-5">
       <h3 className="text-sm font-semibold">{title}</h3>
       {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
       <p className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 tabular-nums">

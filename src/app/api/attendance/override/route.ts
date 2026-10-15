@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
     const context = await getAttendanceWorkspaceContext(session.user.id)
     if (!context.workspace?.id || !context.canManageAttendance) {
-      return NextResponse.json({ error: "Forbidden — khusus BoD." }, { status: 403 })
+      return NextResponse.json({ error: "Forbidden — khusus direksi." }, { status: 403 })
     }
     const workspaceId = context.workspace.id
 
@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
         effectiveShiftEndTime: shift.shiftEndTime,
         correctedAt: new Date(),
         correctedById: session.user.id,
-        correctionReason: (body.note ?? "").trim() || "Diisi manual oleh BoD (staff gagal absen — sistem error).",
+        correctionReason: (body.note ?? "").trim() || "Diisi manual oleh direksi (staff gagal absen — sistem error).",
       }
 
       await prisma.attendanceRecord.upsert({
@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
       if (singleDay.length > 0) {
         await prisma.attendanceRequest.updateMany({
           where: { id: { in: singleDay.map((r) => r.id) } },
-          data: { status: "REJECTED", reviewNote: "Dibatalkan: hari ini diubah jadi Hadir oleh BoD.", reviewedAt: new Date(), reviewedById: session.user.id, approvalSource: "ADMIN" },
+          data: { status: "REJECTED", reviewNote: "Dibatalkan: hari ini diubah jadi Hadir oleh direksi.", reviewedAt: new Date(), reviewedById: session.user.id, approvalSource: "ADMIN" },
         })
       }
 
@@ -208,7 +208,7 @@ export async function POST(req: NextRequest) {
     if (conflicting.length > 0) {
       await prisma.attendanceRequest.updateMany({
         where: { id: { in: conflicting.map((r) => r.id) } },
-        data: { status: "REJECTED", reviewNote: `Diganti jadi ${action} oleh BoD dari papan absensi.`, reviewedAt: new Date(), reviewedById: session.user.id, approvalSource: "ADMIN" },
+        data: { status: "REJECTED", reviewNote: `Diganti jadi ${action} oleh direksi dari papan absensi.`, reviewedAt: new Date(), reviewedById: session.user.id, approvalSource: "ADMIN" },
       })
     }
 
@@ -224,8 +224,8 @@ export async function POST(req: NextRequest) {
         status: "APPROVED",
         startDate: date,
         endDate: date,
-        reason: (body.note ?? "").trim() || `Status ${dateKey} diubah jadi ${action} oleh BoD dari papan absensi.`,
-        reviewNote: "Diubah oleh BoD dari papan absensi.",
+        reason: (body.note ?? "").trim() || `Status ${dateKey} diubah jadi ${action} oleh direksi dari papan absensi.`,
+        reviewNote: "Diubah oleh direksi dari papan absensi.",
         approvalSource: "ADMIN",
         reviewedAt: new Date(),
         reviewedById: session.user.id,

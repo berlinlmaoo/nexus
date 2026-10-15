@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   try {
     const g = await ctx()
     if (g.error) return g.error
-    if (!g.canManage) return NextResponse.json({ error: "Hanya BoD ke atas yang bisa atur jatah tanggal merah." }, { status: 403 })
+    if (!g.canManage) return NextResponse.json({ error: "Hanya direksi ke atas yang bisa atur jatah tanggal merah." }, { status: 403 })
 
     const body = await req.json().catch(() => ({}))
     const month = String(body?.month ?? "").trim() || formatAttendanceDateKey().slice(0, 7)

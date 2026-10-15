@@ -30,6 +30,18 @@ export function LegalSettings() {
   // whose card starts at or above the line just under the pinned chips, else the first.
   const [inView, setInView] = useState<string | null>(null);
   const list = companies.data?.companies;
+  // Rows snap whole under the pinned chips too, not just under the page header (UI tour run 16, R16-WB-1:
+  // series rows were cut under the chip bar). The chip bar's height is extra snap room for the page.
+  useEffect(() => {
+    const bar = jumpRef.current;
+    if (!bar) return;
+    const root = document.documentElement;
+    const read = () => root.style.setProperty("--page-snap-extra", `${Math.round(bar.offsetHeight)}px`);
+    read();
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(read);
+    ro?.observe(bar);
+    return () => { ro?.disconnect(); root.style.removeProperty("--page-snap-extra"); };
+  }, [list]);
   useEffect(() => {
     if (!list || list.length <= 2) return;
     let frame = 0;
@@ -54,13 +66,13 @@ export function LegalSettings() {
   if (companies.isError) return <p className="py-6 text-sm text-destructive">{(companies.error as Error).message}</p>;
   return (
     <div className="space-y-4">
-      {!canEdit && <p className="text-sm text-muted-foreground">{t("Only the owner or a BoD member with Legal can change these.")}</p>}
+      {!canEdit && <p className="text-sm text-muted-foreground">{t("Only the owner or a board member with Legal can change these.")}</p>}
       {/* A long page (a company each with its letterhead and ~11 series): a row of its companies to jump to
           (UI tour run 13, W-B26). It stays pinned under the header and tabs while the page scrolls (run 14,
           R14-WB-7), and a company it jumps to lands below it. */}
       {(companies.data?.companies.length ?? 0) > 2 && (
         <nav ref={jumpRef} aria-label={t("Companies")} style={{ top: headerTop }}
-          className="sticky z-20 -mx-4 flex flex-wrap gap-1.5 border-b border-border bg-background px-4 py-2 md:-mx-8 md:px-8">
+          className="sticky z-20 -mx-4 flex gap-1.5 overflow-x-auto border-b border-border bg-background px-4 py-2 [scrollbar-width:none] md:-mx-8 md:flex-wrap md:px-8 [&::-webkit-scrollbar]:hidden">
           {companies.data!.companies.map((c) => (
             <button key={c.id} type="button" aria-current={inView === c.id ? "location" : undefined}
               onClick={() => {
@@ -69,9 +81,9 @@ export function LegalSettings() {
                 el.style.scrollMarginTop = `${headerTop + (jumpRef.current?.offsetHeight ?? 0) + 12}px`;
                 el.scrollIntoView({ behavior: "smooth", block: "start" });
               }}
-              className={cn("inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-9",
+              className={cn("inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-9",
                 inView === c.id ? "border-foreground/25 bg-accent text-foreground" : "border-border bg-card hover:bg-muted")}>
-              {c.name}<span className="font-mono text-[10px] text-muted-foreground">{c.code}</span>
+              {c.name}{!sameAsName(c) && <span className="font-mono text-[10px] text-muted-foreground">{c.code}</span>}
             </button>
           ))}
         </nav>
@@ -80,6 +92,11 @@ export function LegalSettings() {
       <TokenHelp />
     </div>
   );
+}
+
+/** A code that only repeats the name ("PATS PATS") is not shown (UI tour run 16, R16-WM-9). */
+function sameAsName(c: { name: string; code: string }): boolean {
+  return c.code.trim().toLowerCase() === c.name.trim().toLowerCase();
 }
 
 function CompanyCard({ company, canEdit }: { company: LegalCompany; canEdit: boolean }) {
@@ -102,8 +119,8 @@ function CompanyCard({ company, canEdit }: { company: LegalCompany; canEdit: boo
 
   return (
     <section id={`legal-co-${company.id}`} className="scroll-mt-32 space-y-4 rounded-lg border border-border p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold">{company.name} <span className="font-mono text-xs font-normal text-muted-foreground">{company.code}</span></h2>
+      <div data-snap-row className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-semibold">{company.name}{!sameAsName(company) && <> <span className="font-mono text-xs font-normal text-muted-foreground">{company.code}</span></>}</h2>
         {!company.legalName && <span className="flex items-center gap-1 text-xs text-amber-600"><AlertTriangle className="h-3.5 w-3.5" /> {t("Legal name (PT) not filled in")}</span>}
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -130,7 +147,7 @@ function CompanyCard({ company, canEdit }: { company: LegalCompany; canEdit: boo
           and Download / Replace landed in different places on each). Label and file on the left, the file name
           cut with an ellipsis and the date kept whole; the buttons in a fixed order, on their own row on a phone
           and at the right from sm. */}
-      <div className="flex flex-col gap-2 rounded-md bg-muted/40 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:gap-3">
+      <div data-snap-row className="flex flex-col gap-2 rounded-md bg-muted/40 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:gap-3">
         <div className="min-w-0 flex-1">
           <div className="font-medium">{t("Letterhead")}</div>
           {company.hasKop ? (
@@ -165,11 +182,11 @@ function SeriesTable({ company, canEdit }: { company: LegalCompany; canEdit: boo
   const [adding, setAdding] = useState(false);
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
+      <div data-snap-row className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">{t("Numbering series")}</h3>
         {canEdit && !adding && <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> {t("Add numbering series")}</Button>}
       </div>
-      <ul className="divide-y divide-border rounded-md border border-border">
+      <ul data-snap-rows className="divide-y divide-border rounded-md border border-border">
         {company.series.map((s) => <SeriesRow key={s.id} s={s} canEdit={canEdit} />)}
         {adding && <NewSeriesRow companyId={company.id} onDone={() => setAdding(false)} />}
       </ul>

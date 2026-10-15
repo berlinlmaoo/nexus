@@ -159,7 +159,7 @@ function ShareBody({ item }: { item: VaultItem }) {
           )}
           {!canExternal && (
             <p className="text-xs text-muted-foreground">
-              {t("Only the person who uploaded this, or BoD, can make a link for people outside NEXUS. You can still share it with people in NEXUS.")}
+              {t("Only the person who uploaded this, or a board member, can make a link for people outside NEXUS. You can still share it with people in NEXUS.")}
             </p>
           )}
         </div>

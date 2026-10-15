@@ -102,6 +102,9 @@ const PHOTO_EXT = /\.(jpe?g|png|gif|webp|heic|heif|avif|bmp)$/i;
 const BOARD_FADE = 40;
 /** The board's header cells follow --board-head-shift (set while the page scrolls, see pageHeaderBottom). */
 const HEAD_SHIFT: CSSProperties = { transform: "translateY(var(--board-head-shift, 0px))" };
+/** Phone board names break between words only: a one-word name is cut with "…" on one line, not split
+ *  mid-word ("Abimanyug / m", UI tour run 16, R16-WM-2); a name with spaces takes two lines. */
+const phoneNameClamp = (name: string | null | undefined) => (name && /\s/.test(name.trim()) ? "line-clamp-2" : "block min-w-0 truncate");
 function isPhotoDocument(url?: string | null, name?: string | null) {
   const path = (url ?? "").split(/[?#]/)[0];
   // The stored file keeps the uploaded extension (see POST /api/attendance/requests); the original
@@ -348,27 +351,57 @@ function Attendance() {
     setBoardMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
     setBoardMoreDown(el.scrollTop + el.clientHeight < el.scrollHeight - 2);
   };
+  // Until the person moves the board themselves, the landing is redone whenever the table changes size: the
+  // first landing could run before the member rows (and their wider day cells) were drawn, so the offsets
+  // were those of the narrow header-only table and the board stood half a column off, with the last day cut
+  // at the right edge (UI tour run 16, R16-WM-R5: "FRI 9 … WED 14" with WED 14 halved).
+  const boardTouched = useRef(false);
   useEffect(() => {
-    if (viewMode !== "grid" || history.isLoading || landedPeriod.current === monthKey) return;
+    if (viewMode !== "grid" || history.isLoading) return;
     const box = boardScrollRef.current;
-    const cell = box?.querySelector<HTMLElement>(`th[data-day="${todayKey}"]`);
-    if (!box || !cell) return;
-    const pinned = box.querySelector<HTMLElement>("th[data-member-col]")?.offsetWidth ?? 0;
-    // Land on a column edge (QA S-25: day columns differ in width, so "3 × today's width" left the first
-    // visible day half under the pinned member column — "D )"): the first column in view starts exactly at
-    // the pinned column's edge. As many days before today as fit, with today whole and clear of the right
-    // fade (UI tour run 12, WM4: landing on "today - 3" cut today at the right edge). No scroll when today fits.
-    const days = [...box.querySelectorAll<HTMLElement>("th[data-day]")];
-    const todayRight = cell.offsetLeft + cell.offsetWidth;
-    const fits = todayRight <= box.clientWidth - BOARD_FADE;
-    let target = cell.offsetLeft - pinned;
-    for (const d of days) {
-      if (d === cell) break;
-      if (todayRight <= d.offsetLeft - pinned + box.clientWidth - BOARD_FADE) { target = d.offsetLeft - pinned; break; }
-    }
-    box.scrollLeft = fits ? 0 : Math.max(0, target);
-    setBoardEdge();
-    landedPeriod.current = monthKey;
+    const table = box?.querySelector("table");
+    if (!box || !table) return;
+    if (landedPeriod.current !== monthKey) boardTouched.current = false;
+    const land = () => {
+      if (boardTouched.current) return;
+      const cell = box.querySelector<HTMLElement>(`th[data-day="${todayKey}"]`);
+      if (!cell) return;
+      const pinned = box.querySelector<HTMLElement>("th[data-member-col]")?.offsetWidth ?? 0;
+      // Land on a column edge (QA S-25: day columns differ in width, so "3 × today's width" left the first
+      // visible day half under the pinned member column — "D )"): the first column in view starts exactly at
+      // the pinned column's edge. As many days before today as fit, with today whole and clear of the right
+      // fade (UI tour run 12, WM4: landing on "today - 3" cut today at the right edge). No scroll when today fits.
+      const days = [...box.querySelectorAll<HTMLElement>("th[data-day]")];
+      const todayRight = cell.offsetLeft + cell.offsetWidth;
+      const fits = todayRight <= box.clientWidth - BOARD_FADE;
+      let target = cell.offsetLeft - pinned;
+      for (const d of days) {
+        if (d === cell) break;
+        if (todayRight <= d.offsetLeft - pinned + box.clientWidth - BOARD_FADE) { target = d.offsetLeft - pinned; break; }
+      }
+      box.scrollLeft = fits ? 0 : Math.max(0, target);
+      setBoardEdge();
+      landedPeriod.current = monthKey;
+    };
+    land();
+    const touched = () => { boardTouched.current = true; };
+    box.addEventListener("pointerdown", touched);
+    box.addEventListener("wheel", touched, { passive: true });
+    box.addEventListener("keydown", touched);
+    if (typeof ResizeObserver === "undefined") return () => {
+      box.removeEventListener("pointerdown", touched);
+      box.removeEventListener("wheel", touched);
+      box.removeEventListener("keydown", touched);
+    };
+    const ro = new ResizeObserver(() => land());
+    ro.observe(table);
+    ro.observe(box);
+    return () => {
+      ro.disconnect();
+      box.removeEventListener("pointerdown", touched);
+      box.removeEventListener("wheel", touched);
+      box.removeEventListener("keydown", touched);
+    };
   }, [viewMode, history.isLoading, monthKey, todayKey, periodDays.length]);
   // The day header stays in view while the PAGE scrolls too (UI tour run 14, R14-WM-16: scrolling the page past
   // the board's top took MON 12…FRI 16 away and the dots lost their dates). The header row is sticky inside the
@@ -610,8 +643,11 @@ function Attendance() {
                 <tr>
                   <th data-member-col style={HEAD_SHIFT} className="sticky left-0 top-0 z-30 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] bg-muted px-2 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:max-w-[20rem] sm:px-4">{tr("Member")}</th>
                   {periodDays.map((pd) => (
-                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} style={HEAD_SHIFT} className={cn("sticky top-0 z-20 snap-start bg-muted px-1 py-1.5 font-medium text-[10px] lg:px-0 leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
-                      <span className={cn("block text-[9px] uppercase", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" })}</span>
+                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} style={HEAD_SHIFT} className={cn("sticky top-0 z-20 snap-start bg-muted px-1 py-1.5 font-medium text-[10px] lg:px-0 lg:text-xs leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
+                      {/* From lg, where the whole period fits, the weekday is one letter over the date at a readable
+                          size; "MON" had to shrink to a few pixels to fit 30 columns (UI tour run 16, R16-WD-3). */}
+                      <span className={cn("block text-[9px] uppercase lg:hidden", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" })}</span>
+                      <span className={cn("hidden text-[11px] uppercase lg:block", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString(locale, { weekday: "narrow", timeZone: "UTC" })}</span>
                       {pd.key === todayKey
                         ? <span className="inline-grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 font-bold text-primary-foreground">{pd.day}</span>
                         : pd.day}
@@ -645,7 +681,7 @@ function Attendance() {
                             <MemberAvatar user={u} />
                             <div className="min-w-0">
                               {/* Phone: first name only, so the pinned column stays narrow (UI tour run 9). */}
-                              <div className="flex min-w-0 items-center gap-1.5"><span className="line-clamp-2 text-[13px] font-medium leading-tight tracking-tight [overflow-wrap:anywhere] sm:hidden" title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
+                              <div className="flex min-w-0 items-center gap-1.5"><span className={cn("text-[13px] font-medium leading-tight tracking-tight sm:hidden", phoneNameClamp(shortName(u.name)))} title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
                               <div className="hidden truncate text-[10px] text-muted-foreground sm:block">{memberSubtitle(u)}</div>
                               <PhoneMemberSummary d={canManage ? dayOffOf(u.id) : null} />
                             </div>
@@ -655,7 +691,7 @@ function Attendance() {
                             <MemberAvatar user={u} />
                             <div className="min-w-0">
                               {/* Phone: first name only, so the pinned column stays narrow (UI tour run 9). */}
-                              <div className="flex min-w-0 items-center gap-1.5"><span className="line-clamp-2 text-[13px] font-medium leading-tight tracking-tight [overflow-wrap:anywhere] sm:hidden" title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
+                              <div className="flex min-w-0 items-center gap-1.5"><span className={cn("text-[13px] font-medium leading-tight tracking-tight sm:hidden", phoneNameClamp(shortName(u.name)))} title={u.name ?? undefined}>{shortName(u.name) || tr("Unnamed")}</span><span className="hidden truncate font-medium sm:inline">{u.name || tr("Unnamed")}</span><span className="hidden sm:contents"><LeftTag leftAt={leftAtOf(u)} /></span></div>
                               <div className="hidden truncate text-[10px] text-muted-foreground sm:block">{memberSubtitle(u)}</div>
                               <PhoneMemberSummary d={canManage ? dayOffOf(u.id) : null} />
                             </div>
@@ -685,21 +721,8 @@ function Attendance() {
                           const pill = "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ring-1";
                           return (
                             <>
-                              <span title={tr("Day off left this period: {left} of {quota} (used {used})", { left: d.remaining, quota: d.quota, used: d.used }) + (d.bonus && d.bonus.days > 0 ? "\n" + tr("Quota {base} + {n} extra ({reasons}) — expires on the 27th", { base: d.baseQuota ?? d.quota - d.bonus.days, n: d.bonus.days, reasons: d.bonus.grants.map((g) => `${g.days}: ${g.reason}`).join("; ") }) : "")}
-                                className={cn(pill, quotaTone(d.remaining), d.bonus && d.bonus.days > 0 && "ring-emerald-300 dark:ring-emerald-400/60")}>
-                                {/* Spelled out (UI tour run 13, W-D24: "0/4 DO" and "0/0 PH" were cryptic). */}
-                                {tr("{left}/{quota} days off", { left: d.remaining, quota: d.quota })}{d.bonus && d.bonus.days > 0 && <span className="ml-0.5 text-emerald-600 dark:text-emerald-400">+</span>}
-                              </span>
-                              <span title={d.redDate.quota === 0
-                                  ? tr("The BoD hasn't set this month's public-holiday allowance yet")
-                                  : tr("Public holidays left this calendar month: {left} of {quota} (used {used})", { left: d.redDate.remaining, quota: d.redDate.quota, used: d.redDate.used })}
-                                className={cn(pill, d.redDate.quota === 0 ? "bg-muted/50 text-muted-foreground/70 ring-border" : quotaTone(d.redDate.remaining))}>
-                                {tr("{left}/{quota} holidays", { left: d.redDate.remaining, quota: d.redDate.quota })}
-                              </span>
-                              <span title={`${formatCount(d.xp.score)} XP · ${d.xp.levelName} (Lv.${d.xp.level}) — ${tr("the XP period is the calendar month, not the 28→27 attendance period")}`}
-                                className={cn(pill, xpTone)}>
-                                {formatCount(d.xp.score)} XP
-                              </span>
+                              {/* Right after Record: at the end of the row it wrapped onto a line of its own
+                                  (UI tour run 16, R16-WD-4). */}
                               <button
                                 type="button"
                                 aria-label={tr("Export this person's attendance (xlsx): one row per day, check-in/out times, lateness, notes")} title={tr("Export this person's attendance (xlsx): one row per day, check-in/out times, lateness, notes")}
@@ -713,6 +736,21 @@ function Attendance() {
                               >
                                 <Download className="inline h-3 w-3" />
                               </button>
+                              <span title={tr("Day off left this period: {left} of {quota} (used {used})", { left: d.remaining, quota: d.quota, used: d.used }) + (d.bonus && d.bonus.days > 0 ? "\n" + tr("Quota {base} + {n} extra ({reasons}) — expires on the 27th", { base: d.baseQuota ?? d.quota - d.bonus.days, n: d.bonus.days, reasons: d.bonus.grants.map((g) => `${g.days}: ${g.reason}`).join("; ") }) : "")}
+                                className={cn(pill, quotaTone(d.remaining), d.bonus && d.bonus.days > 0 && "ring-emerald-300 dark:ring-emerald-400/60")}>
+                                {/* Spelled out (UI tour run 13, W-D24: "0/4 DO" and "0/0 PH" were cryptic). */}
+                                {tr("{left}/{quota} days off", { left: d.remaining, quota: d.quota })}{d.bonus && d.bonus.days > 0 && <span className="ml-0.5 text-emerald-600 dark:text-emerald-400">+</span>}
+                              </span>
+                              <span title={d.redDate.quota === 0
+                                  ? tr("The board hasn't set this month's public-holiday allowance yet")
+                                  : tr("Public holidays left this calendar month: {left} of {quota} (used {used})", { left: d.redDate.remaining, quota: d.redDate.quota, used: d.redDate.used })}
+                                className={cn(pill, d.redDate.quota === 0 ? "bg-muted/50 text-muted-foreground/70 ring-border" : quotaTone(d.redDate.remaining))}>
+                                {tr("{left}/{quota} holidays", { left: d.redDate.remaining, quota: d.redDate.quota })}
+                              </span>
+                              <span title={`${formatCount(d.xp.score)} XP · ${d.xp.levelName} (Lv.${d.xp.level}) — ${tr("the XP period is the calendar month, not the 28→27 attendance period")}`}
+                                className={cn(pill, xpTone)}>
+                                {formatCount(d.xp.score)} XP
+                              </span>
                             </>
                           );
                         })()}
@@ -803,7 +841,7 @@ function Attendance() {
           {boardMore && (
             <button
               type="button"
-              onClick={() => boardScrollRef.current?.scrollBy({ left: 7 * 28, behavior: reduceMotion ? "auto" : "smooth" })}
+              onClick={() => { boardTouched.current = true; boardScrollRef.current?.scrollBy({ left: 7 * 28, behavior: reduceMotion ? "auto" : "smooth" }); }}
               aria-label={tr("Show later days")} title={tr("Show later days")}
               className="absolute right-1 top-1.5 z-40 hidden h-7 w-7 place-items-center rounded-full bg-card text-muted-foreground shadow-sm ring-1 ring-border transition hover:text-foreground sm:grid"
             >
@@ -1203,8 +1241,8 @@ function OfficesSection() {
     onError: (e: unknown) => alert(e instanceof Error ? e.message : tr("Couldn't delete the office.")) });
 
   return (
-    <section className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
+    <section className="rounded-[28px] border border-border bg-card shadow-soft overflow-clip">
+      <div data-snap-row className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
         <div>
           <h2 className="text-lg font-semibold tracking-tight">{tr("Offices and check-in area")}</h2>
           <p className="text-sm text-muted-foreground">{tr("Set office locations and the radius for check-in.")}</p>
@@ -1318,8 +1356,8 @@ function ReflectionsSection({ canPickPeople, members }: { canPickPeople: boolean
   const summarizeError = summarize.error instanceof ApiError ? ((summarize.error.payload as { error?: string } | null)?.error ?? summarize.error.message) : summarize.error ? tr("GIDEON didn't answer. Try again in a minute.") : null;
 
   return (
-    <div className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
+    <div className="rounded-[28px] border border-border bg-card shadow-soft overflow-clip">
+      <div data-snap-row className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
         <div>
           <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><PenLine className="h-4 w-4 text-primary" /> {tr("Reflections")}</h2>
           <p className="text-sm text-muted-foreground">{tr("What was written at check-out, with GIDEON's summary of each day and of the month so far.")}</p>
@@ -1725,8 +1763,8 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
   })();
 
   return (
-    <section className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
+    <section className="rounded-[28px] border border-border bg-card shadow-soft overflow-clip">
+      <div data-snap-row className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
         <div>
           <h2 className="text-lg font-semibold tracking-tight">{tr("Requests and approvals")}</h2>
           <p className="text-sm text-muted-foreground">
@@ -1836,7 +1874,7 @@ function EmploymentStartSection() {
 
   return (
     <section className="rounded-3xl border border-border bg-card">
-      <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
+      <div data-snap-row className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0 flex-1">
           <h2 className="font-display text-base font-bold tracking-tight">{tr("Employment start date")}</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -1961,7 +1999,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
   const typeHint = granting
     ? tr("Granted to the person you pick below and approved straight away; it doesn't use up their quota.")
     : type === "LEAVE" ? (!leave ? tr("Uses one day of your annual leave.") : !leave.eligible ? (leave.reason ?? tr("Annual leave needs 12 months of service.")) : tr("Annual leave: {left} of {quota} days left this year.", { left: leave.remaining, quota: leave.quota }))
-    : type === "SICK" ? tr("A photo of the doctor's note is required. Today or later — a past day is filed by a BoD.")
+    : type === "SICK" ? tr("A photo of the doctor's note is required. Today or later — a past day is filed by a board member.")
     : type === "PERMIT" ? tr("Today or later, with a photo and your location.")
     : type === "DAY_OFF" ? tr("Day off: {left} of {quota} left this period.", { left: remainingDays ?? 0, quota: todayQ.data?.dayOffQuota ?? 0 })
     : tr("Public holiday: {left} of {quota} left this month.", { left: remainingDays ?? 0, quota: redQuota });
@@ -2095,7 +2133,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
               )}
               {geoError && <p className="text-xs font-semibold text-destructive">{geoError}</p>}
               {permitBackdated && (
-                <p className="text-xs font-semibold text-destructive">{tr("A permit can't be filed for a day that has passed. Ask the BoD to enter it if it's really needed.")}</p>
+                <p className="text-xs font-semibold text-destructive">{tr("A permit can't be filed for a day that has passed. Ask the board to enter it if it's really needed.")}</p>
               )}
               {lateReportPreview != null && !permitBackdated && (
                 <p className="text-xs font-semibold text-warning">
@@ -2229,7 +2267,7 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
     mutationFn: (payload: AttendanceActionPayload) => nexusApi.attendanceCheckOut(payload),
     onSuccess: (data) => {
       refresh(); setNotes(""); setOffsitePrompt(null); setOffsiteReason(""); setReflection("");
-      if (data?.pendingApproval) { press.set(null); setOkMessage(tr("Offsite check-out sent — waiting for BoD approval.")); }
+      if (data?.pendingApproval) { press.set(null); setOkMessage(tr("Offsite check-out sent — waiting for board approval.")); }
       else { setOkMessage(""); press.succeed(successTitle("out", atOf(data?.record?.checkOutAt), data?.record)); }
     },
     onError: (e) => {
@@ -2348,7 +2386,7 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
       {offsitePrompt && (
         <div className="mt-3 space-y-2 rounded-2xl border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/40 dark:bg-amber-500/10">
           <div className="text-sm font-bold text-amber-800 dark:text-amber-300">{tr("You’re outside the office area")}</div>
-          <p className="text-xs text-amber-700 dark:text-amber-300">{tr("±{m}m from {office}. Check out from here? A reason is required, and it waits for BoD approval first.", { m: Math.round(offsitePrompt.distanceMeters), office: offsitePrompt.officeName })}</p>
+          <p className="text-xs text-amber-700 dark:text-amber-300">{tr("±{m}m from {office}. Check out from here? A reason is required, and it waits for board approval first.", { m: Math.round(offsitePrompt.distanceMeters), office: offsitePrompt.officeName })}</p>
           <textarea value={offsiteReason} onChange={(e) => setOffsiteReason(e.target.value)} rows={2} placeholder={tr("Reason (e.g. content shoot or client meeting at X)")} className="w-full resize-none rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500 dark:border-amber-500/40 dark:bg-background" />
           <div className="flex gap-2">
             <button onClick={() => { setOffsitePrompt(null); setOffsiteReason(""); }} disabled={busy} className="flex-1 rounded-lg border border-border bg-white py-2 text-xs font-semibold dark:bg-background text-muted-foreground transition hover:bg-accent disabled:opacity-50">{tr("Cancel")}</button>
@@ -2357,7 +2395,7 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
         </div>
       )}
       {okMessage && !offsitePrompt && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">{okMessage}</p>}
-      {checkOutApproval === "PENDING" && !offsitePrompt && !okMessage && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">{tr("Offsite check-out — waiting for BoD approval")}</p>}
+      {checkOutApproval === "PENDING" && !offsitePrompt && !okMessage && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">{tr("Offsite check-out — waiting for board approval")}</p>}
       {!iosOnly && message && <p className="mt-3 text-sm font-semibold text-destructive">{message}</p>}
     </section>
   );

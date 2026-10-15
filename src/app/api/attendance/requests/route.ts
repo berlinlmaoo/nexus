@@ -450,7 +450,7 @@ export async function POST(request: NextRequest) {
     // an older app keeps its picker, and refusing it would give no hint why.
     if (modernClient && !filingForOther && isBackdated(parsedStartDate)) {
       return NextResponse.json(
-        { error: "Tanggal yang sudah lewat tidak bisa diajukan sendiri. Minta BoD yang menginputnya.", code: "BACKDATED_SELF" },
+        { error: "Tanggal yang sudah lewat tidak bisa diajukan sendiri. Minta direksi yang menginputnya.", code: "BACKDATED_SELF" },
         { status: 400 }
       )
     }
@@ -470,7 +470,7 @@ export async function POST(request: NextRequest) {
       // signs off on it — that's what kills "lupa absen kemarin".
       if (isBackdated(parsedStartDate)) {
         return NextResponse.json(
-          { error: "Izin nggak bisa diajukan buat tanggal yang udah lewat. Minta BoD yang input kalau memang perlu.", code: "PERMIT_BACKDATED" },
+          { error: "Izin nggak bisa diajukan buat tanggal yang udah lewat. Minta direksi yang input kalau memang perlu.", code: "PERMIT_BACKDATED" },
           { status: 422 }
         )
       }
@@ -479,7 +479,7 @@ export async function POST(request: NextRequest) {
     const isGrant = Boolean(targetUserId && targetUserId !== session.user.id)
     if (isGrant) {
       if (!canGrant) {
-        return NextResponse.json({ error: "Cuma BoD yang bisa kasih izin ke user lain." }, { status: 403 })
+        return NextResponse.json({ error: "Cuma direksi yang bisa kasih izin ke user lain." }, { status: 403 })
       }
       const targetMembership = await prisma.workspaceMember.findUnique({
         where: { userId_workspaceId: { userId: targetUserId, workspaceId: context.workspace.id } },
@@ -630,7 +630,7 @@ export async function POST(request: NextRequest) {
           const quota = reqType === "DAY_OFF" ? (dayOffQuotaByPeriod.get(monthKey) ?? DEFAULT_DAY_OFF_QUOTA) : (redQuotaByMonth.get(monthKey) ?? 0)
           if (total > quota) {
             return NextResponse.json(
-              { error: `Jatah ${label} ${monthKey} terlampaui. Maksimal ${quota} hari per bulan${quota === 0 ? " (BoD belum set jatah)" : ""}.` },
+              { error: `Jatah ${label} ${monthKey} terlampaui. Maksimal ${quota} hari per bulan${quota === 0 ? " (direksi belum set jatah)" : ""}.` },
               { status: 422 }
             )
           }
@@ -814,8 +814,8 @@ export async function POST(request: NextRequest) {
         userId: effectiveUserId,
         type: "attendance_request_reviewed",
         ...bi(
-          [`${context.user?.name ?? "The BoD"} recorded ${labelsEn[attendanceRequest.type] ?? attendanceRequest.type.toLowerCase()} for you`, `${startEn === endEn ? startEn : `${startEn} – ${endEn}`} is approved already. If this is wrong, talk to your approver.`],
-          [`${context.user?.name ?? "BoD"} mencatat ${labels[attendanceRequest.type] ?? attendanceRequest.type.toLowerCase()} untukmu`, `${start === end ? start : `${start} – ${end}`} sudah disetujui langsung. Kalau ini keliru, hubungi approver kamu.`]
+          [`${context.user?.name ?? "The board"} recorded ${labelsEn[attendanceRequest.type] ?? attendanceRequest.type.toLowerCase()} for you`, `${startEn === endEn ? startEn : `${startEn} – ${endEn}`} is approved already. If this is wrong, talk to your approver.`],
+          [`${context.user?.name ?? "Direksi"} mencatat ${labels[attendanceRequest.type] ?? attendanceRequest.type.toLowerCase()} untukmu`, `${start === end ? start : `${start} – ${end}`} sudah disetujui langsung. Kalau ini keliru, hubungi approver kamu.`]
 ),
         link: `/attendance?request=${attendanceRequest.id}`,
         push: true,

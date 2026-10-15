@@ -160,7 +160,7 @@ function ComplaintsPage() {
     <button onClick={() => setComposing(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New ticket")}</button>
   );
   const emptyCopy = !viewerIsBod
-    ? { title: t("No tickets yet"), message: t("A ticket is how you raise something with the BoD: a complaint, a question, or an attendance record that looks wrong. GIDEON checks the data first, the BoD decides, and it stays between you and them.") }
+    ? { title: t("No tickets yet"), message: t("A ticket is how you raise something with the board: a complaint, a question, or an attendance record that looks wrong. GIDEON checks the data first, the board decides, and it stays between you and them.") }
     : shownTab === "all"
       ? { title: t("No tickets yet"), message: t("Tickets from staff land here: complaints, questions, attendance records that look wrong. GIDEON checks the data first; the decision is yours.") }
       : shownTab === "open"
@@ -171,7 +171,7 @@ function ComplaintsPage() {
     <div>
       <PageHeader
         title={t("Tickets")}
-        subtitle={t("A direct line to the BoD for work or HR issues. Only the BoD can read it.")}
+        subtitle={t("A direct line to the board for work or HR issues. Only the board can read it.")}
         actions={newTicket}
         tabs={viewerIsBod ? (
           <PageTabs label={t("Ticket queues")} value={shownTab} onChange={setTab} tabs={[
@@ -418,7 +418,7 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
         </div>
 
         <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
-          {t("Only the BoD can read this ticket. It won't show up in the feed or to other staff. The BoD replies right here.")}
+          {t("Only the board can read this ticket. It won't show up in the feed or to other staff. The board replies right here.")}
         </div>
         {create.isError && <p className="text-sm font-semibold text-rose-600 dark:text-rose-400">{(create.error as Error)?.message || t("Couldn't send. Check your connection.")}</p>}
       </div>
@@ -506,7 +506,7 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
         {detailQ.isError && (
           <LoadError compact error={detailQ.error} what={t("this ticket")} onRetry={() => void detailQ.refetch()}
             notFoundTitle={t("This ticket doesn't exist")} notFoundMessage={t("It may have been deleted, or the link is wrong. Your own tickets are in the list.")}
-            forbiddenTitle={t("This ticket isn't yours")} forbiddenMessage={t("Only the person who filed it and the BoD can read a ticket.")}
+            forbiddenTitle={t("This ticket isn't yours")} forbiddenMessage={t("Only the person who filed it and the board can read a ticket.")}
             action={<EmptyAction onClick={onClose}>{t("Back to tickets")}</EmptyAction>} />
         )}
         {!!c?.attachments?.length && (
@@ -535,7 +535,7 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
         {c?.messages.map((m) => (
           <div key={m.id} className={cn("flex", m.mine ? "justify-end" : "justify-start")}>
             <div className={cn("max-w-[82%] rounded-2xl px-3 py-2 text-sm shadow-sm", m.mine ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md bg-card ring-1 ring-border")}>
-              {!m.mine && <div className="mb-0.5 flex items-center gap-1 text-[11px] font-bold opacity-70">{m.fromGideon ? (<><GideonMark className="h-3 w-3" /> GIDEON</>) : m.fromReviewer ? "BoD" : (m.author?.name ?? "—")}</div>}
+              {!m.mine && <div className="mb-0.5 flex items-center gap-1 text-[11px] font-bold opacity-70">{m.fromGideon ? (<><GideonMark className="h-3 w-3" /> GIDEON</>) : m.fromReviewer ? "Board" : (m.author?.name ?? "—")}</div>}
               <p className="whitespace-pre-wrap break-words">{m.body}</p>
               <div className={cn("mt-0.5 text-right text-[10px]", m.mine ? "text-primary-foreground/70" : "text-muted-foreground")}>{fmtWhen(m.createdAt)}</div>
             </div>
@@ -547,7 +547,7 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
             {viewerIsBod
               ? t("This ticket is closed, but the attendance fix below still waits for a decision. It stays at the top of All until someone approves or rejects it.")
-              : t("This ticket is closed, but your attendance fix below still waits for a BoD decision.")}
+              : t("This ticket is closed, but your attendance fix below still waits for a board decision.")}
           </div>
         )}
         {corrections.map((cor) => (
@@ -691,8 +691,8 @@ function ProposeRemedyForm({ complaintId, defaultDate, onProposed }: { complaint
 
       <p className="mb-2.5 text-[11px] leading-snug text-muted-foreground">
         {cancelling
-          ? t("Your attendance times won't change. This only asks to cancel that day's XP deduction, and nothing happens until the BoD approves.")
-          : t("Enter the times that should have been recorded. Your attendance doesn't change yet: this is a request waiting for BoD approval.")}
+          ? t("Your attendance times won't change. This only asks to cancel that day's XP deduction, and nothing happens until the board approves.")
+          : t("Enter the times that should have been recorded. Your attendance doesn't change yet: this is a request waiting for board approval.")}
       </p>
 
       <div className="grid grid-cols-2 gap-2">
@@ -731,7 +731,7 @@ function ProposeRemedyForm({ complaintId, defaultDate, onProposed }: { complaint
 
       <button onClick={() => { setError(null); propose.mutate(); }} disabled={!ready || propose.isPending}
         className="mt-2.5 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-primary py-2 text-xs font-bold text-primary-foreground transition hover:opacity-90 disabled:opacity-50">
-        {propose.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} {t("Send to the BoD")}
+        {propose.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} {t("Send to the board")}
       </button>
     </div>
   );
@@ -894,7 +894,7 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
       )}
 
       {pending && !canDecide && (
-        <p className="mt-2.5 text-[11px] font-semibold text-muted-foreground">{t("Waiting for the BoD to approve or reject this. Nothing has changed on your attendance yet.")}</p>
+        <p className="mt-2.5 text-[11px] font-semibold text-muted-foreground">{t("Waiting for the board to approve or reject this. Nothing has changed on your attendance yet.")}</p>
       )}
 
       {pending && canDecide && (

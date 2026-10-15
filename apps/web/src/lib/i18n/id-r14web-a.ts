@@ -4,5 +4,4 @@ export const ID_R14WEB_A: Record<string, string> = {
   "Open map": "Buka peta",
   "Show the bar": "Tampilkan bilahnya",
   "Nothing on this day. Click another day to see its tasks.": "Tidak ada apa pun di hari ini. Klik hari lain untuk melihat tugasnya.",
-  "Done ({month})": "Selesai ({month})",
 }

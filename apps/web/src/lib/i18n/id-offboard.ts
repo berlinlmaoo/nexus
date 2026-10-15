@@ -22,7 +22,7 @@ export const ID_OFFBOARD: Record<string, string> = {
   "Removed from projects, teams and chats.": "Dikeluarkan dari project, tim, dan chat.",
   "Their attendance, requests, projects, tasks and messages stay.": "Absensi, pengajuan, project, task, dan pesannya tetap ada.",
   "Their open tasks stay assigned to them.": "Task yang belum selesai tetap atas namanya.",
-  "Anyone who had them as approver goes back to the BoD safety net.": "Yang approver-nya dia kembali ke BoD sebagai jaring pengaman.",
+  "Anyone who had them as approver goes back to the board safety net.": "Yang approver-nya dia kembali ke direksi sebagai jaring pengaman.",
   // After offboarding
   "{name} is offboarded.": "{name} sudah di-offboard.",
   "Last working day: {date}": "Hari kerja terakhir: {date}",
@@ -34,14 +34,14 @@ export const ID_OFFBOARD: Record<string, string> = {
   "Nothing open.": "Tidak ada yang terbuka.",
   "{n} person lost their approver": "{n} orang kehilangan approver",
   "{n} people lost their approver": "{n} orang kehilangan approver",
-  "Their requests go to the BoD until you set a new approver in the Approval chart.": "Pengajuan mereka masuk ke BoD sampai kamu atur approver baru di Bagan Approval.",
+  "Their requests go to the board until you set a new approver in the Approval chart.": "Pengajuan mereka masuk ke direksi sampai kamu atur approver baru di Bagan Approval.",
   "Open Approval chart": "Buka Bagan Approval",
   "{n} automatic deduction dated after their last day was canceled.": "{n} potongan otomatis setelah hari terakhirnya dibatalkan.",
   "{n} automatic deductions dated after their last day were canceled.": "{n} potongan otomatis setelah hari terakhirnya dibatalkan.",
   // Refusals (the server's `code`)
   "You can't do this to your own account.": "Tidak bisa dilakukan ke akun kamu sendiri.",
   "You can't do this to someone at or above your level.": "Tidak bisa dilakukan ke orang yang setara atau di atas level kamu.",
-  "Only BoD and above can do this.": "Hanya BoD ke atas yang bisa melakukan ini.",
+  "Only the board and above can do this.": "Hanya direksi ke atas yang bisa melakukan ini.",
   "Check the last working day: not after today, and not before they joined.": "Cek hari kerja terakhir: tidak boleh setelah hari ini, dan tidak sebelum tanggal bergabung.",
   "They aren't a member of the company workspace.": "Dia bukan anggota workspace perusahaan.",
   "This account is offboarded already.": "Akun ini sudah di-offboard.",
@@ -57,7 +57,7 @@ export const ID_OFFBOARD: Record<string, string> = {
   "This account has attendance records or requests. Use Offboard instead, so they stay.": "Akun ini punya data absensi/pengajuan. Pakai Offboard supaya datanya tetap ada.",
   "This account has attendance records or requests, so it can't be deleted. It's offboarded already: it can't sign in, and its history stays.": "Akun ini punya data absensi/pengajuan, jadi tidak bisa dihapus. Akunnya sudah di-offboard: tidak bisa masuk, dan riwayatnya tetap ada.",
   // Sign-in refused for an offboarded account (routes/login.tsx)
-  "This account has been deactivated. Ask your BoD if you think this is a mistake.": "Akun ini sudah dinonaktifkan. Hubungi BoD kalau menurutmu ini keliru.",
+  "This account has been deactivated. Ask the board if you think this is a mistake.": "Akun ini sudah dinonaktifkan. Hubungi direksi kalau menurutmu ini keliru.",
   // Task detail: an assignee or creator who left
   "Left the company. Their tasks stay assigned to them.": "Sudah keluar dari perusahaan. Task-nya tetap atas namanya.",
 }

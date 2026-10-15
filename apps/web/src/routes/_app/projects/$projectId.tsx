@@ -74,7 +74,7 @@ import {
   type ViewLayout,
 } from "@/lib/project-views";
 import { t as tt, useLang } from "@/lib/lang";
-import { cn } from "@/lib/utils";
+import { cn, glueDash } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { priorityTone } from "@/lib/calendar/tone";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -660,7 +660,13 @@ function ProjectDetail() {
           <ToolbarButton icon={MoreHorizontal} label={toolsOpen ? tr("Hide view tools") : tr("View tools")} active={toolsOpen || filterCount > 0 || activeModule === "automations"} count={!toolsOpen && filterCount > 0 ? filterCount : undefined} onClick={() => setToolsOpen((o) => !o)} />
           {canEditProject && <button type="button" onClick={() => addTask()} aria-label={tr("Add task")} className="ml-0.5 grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground"><Plus className="h-4 w-4" /></button>}
         </div>
-        <div className={cn("shrink-0 items-center gap-0.5 sm:ml-auto sm:flex", toolsOpen ? "flex basis-full justify-end sm:basis-auto" : "hidden")}>
+        {/* From sm the tabs share their row with Add task only; the view's tools (and the named Automations and AI
+            Autofill) are a row of their own under it, on every view. With the tools beside them, the labels pushed
+            project tabs behind the arrow at 1440 (UI tour run 16, R16-WD-6 follow-up: a hidden tab is a finding). */}
+        <span className="ml-1.5 hidden shrink-0 sm:inline-flex">
+          <AddTaskSplit sections={[...taskLists].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((l) => ({ id: l.id, name: l.name }))} onAdd={addTask} />
+        </span>
+        <div className={cn("shrink-0 items-center gap-0.5 sm:flex sm:basis-full sm:justify-end", toolsOpen ? "flex basis-full justify-end" : "hidden")}>
           {cfg && activeView && !activeModule && (
             <>
               <FilterButton filter={cfg.filter} defs={defs} onChange={setFilter} chipsOpen={showChips} onToggleChips={() => setChipsHidden((h) => !h)} />
@@ -668,18 +674,16 @@ function ProjectDetail() {
               {layout !== "calendar" && <GroupButton cfg={cfg} layout={layout} defs={defs} ctx={ctx} onPatch={patchConfig} readOnly={!canEdit} />}
             </>
           )}
-          {/* Without the view's own tools (Overview, Sheet, Docs…) there is room to name these two (WD-7). */}
-          <ToolbarButton icon={Zap} label={tr("Automations")} active={activeModule === "automations"} onClick={() => select("automations")} showLabel={!(cfg && activeView && !activeModule)} />
-          <ToolbarButton icon={Sparkles} label={tr("AI Autofill")} iconOnly active={autofillOpen} onClick={() => setAutofillOpen(true)} showLabel={!(cfg && activeView && !activeModule)} />
+          {/* Named on every view from lg, as on the Overview (WD-7; UI tour run 16, R16-WD-6: the Board showed bare
+              icons where the Overview said "Automations" and "AI Autofill"). */}
+          <ToolbarButton icon={Zap} label={tr("Automations")} active={activeModule === "automations"} onClick={() => select("automations")} showLabel />
+          <ToolbarButton icon={Sparkles} label={tr("AI Autofill")} iconOnly active={autofillOpen} onClick={() => setAutofillOpen(true)} showLabel />
           {cfg && activeView && !activeModule && (
             <>
               <ToolbarSearch value={query} onChange={(q) => setSearch({ q: q || undefined })} />
               <ToolbarButton icon={SlidersHorizontal} label={tr("View settings")} iconOnly active={viewSettingsOpen} onClick={() => setViewSettingsOpen((o) => !o)} />
             </>
           )}
-          <span className="ml-1.5 hidden sm:inline-flex">
-            <AddTaskSplit sections={[...taskLists].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((l) => ({ id: l.id, name: l.name }))} onAdd={addTask} />
-          </span>
         </div>
       </div>
       {showChips && cfg && (
@@ -1066,7 +1070,9 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   // fade: the narrow one fell mostly on the board's side padding and the cut card still read as a hard clip
   // (UI tour run 14, WD-3).
   const boardRef = useRef<HTMLDivElement>(null);
-  const boardFade = useEdgeFade(boardRef, [tasks.length, cfg.cardSize, linkedLanes.length], true);
+  // A long fade on the board: a column cut at the edge fades out across most of a card's width, so a cut
+  // amount ("Rp 50…") never reads as a value (UI tour run 16, R16-WD-1).
+  const boardFade = useEdgeFade(boardRef, [tasks.length, cfg.cardSize, linkedLanes.length], "board");
   // Phone: the board opens on the first column that holds cards, not on an empty To Do that fills the screen
   // while the cards only peek in (UI tour run 15, R15-WB-8). Once per board.
   const openedOn = useRef(false);
@@ -1302,8 +1308,12 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
       <>
       {/* Phone: one chip per column with its count, which brings that column in; one column fills the screen
           and the others had no sign at all (UI tour run 13, W-M11). */}
+      {/* The chip row stays pinned under the header while the page scrolls, so it is never left half-cut under
+          the tabs (UI tour run 16, R16-WB-1), and its right edge fades while more chips lie that way
+          (R16-WM-7: "SPECIAL BUSINESS U…" ended hard at the screen edge). */}
       {lanes.length > 1 && (
-        <div role="group" aria-label={t("Columns")} className="flex gap-1.5 overflow-x-auto px-4 pt-3 [scrollbar-width:none] sm:hidden [&::-webkit-scrollbar]:hidden">
+        <div className="sticky top-[var(--page-sticky-top,0px)] z-20 bg-card pb-1 sm:hidden">
+        <div role="group" aria-label={t("Columns")} className="flex gap-1.5 overflow-x-auto px-4 pt-3 [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] [scrollbar-width:none] after:block after:w-6 after:shrink-0 after:content-[''] [&::-webkit-scrollbar]:hidden">
           {lanes.map((g) => {
             const tone = COLOR_PRESETS[laneColor(g)];
             return (
@@ -1322,6 +1332,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
               <span className="max-w-[9rem] truncate">{lane.name}</span><span className="tabular-nums opacity-70">{lane.tasks.length}</span>
             </button>
           ))}
+        </div>
         </div>
       )}
       <div ref={boardRef} data-touch-drag-root="" className={cn("overflow-x-auto overscroll-x-contain px-4 pb-6 pt-3 max-sm:snap-x max-sm:snap-mandatory max-sm:scroll-px-4 md:px-8", boardFade)}>
@@ -1383,7 +1394,9 @@ function AddListColumn({ projectId, statusOptions }: { projectId: string; status
   const label = statusOptions ? t("Add status") : t("Add section");
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className="flex h-9 w-56 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground">
+      // As wide as its label: a fixed 14rem left an empty gap before the linked column, which was then cut at the
+      // screen edge (UI tour run 16, R16-WD-1).
+      <button type="button" onClick={() => setOpen(true)} className="flex h-9 w-auto shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground">
         <Plus className="h-4 w-4" />{label}
       </button>
     );
@@ -1691,7 +1704,8 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
       </span>
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
         {task.parentId && <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label={t("Subtask")} />}
-        <span className={cn("truncate text-sm", done && "text-muted-foreground line-through")}>{task.title}</span>
+        {/* Two lines before "…", on a phone and on a desktop (UI tour run 16, R16-WD-7, R16-WM-11). */}
+        <span className={cn("line-clamp-2 text-sm", done && "text-muted-foreground line-through")}>{glueDash(task.title ?? "")}</span>
         {task.parentId && task.parent?.title && <span className="hidden truncate text-xs text-muted-foreground md:inline">· {task.parent.title}</span>}
         <QuestChip task={task} />
         {filteredOut && <FilterHint />}
@@ -2184,8 +2198,22 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   // Progress are hidden; the bar's tooltip and the task itself still say both). Audit 12 Oct 2026.
   const compact = useIsMobile();
   const leftW = compact ? Math.round(Math.min(200, Math.max(120, ((typeof window !== "undefined" ? window.innerWidth : 390) - 32) * 0.4))) : GANTT_LEFT_W;
+  // A task with neither of the view's dates but with a date field the List shows (a request's usage date) is a
+  // one-day marker on that day, as a due-only task is, instead of "No date" beside a date the List and Board
+  // show (UI tour run 16, R16-WB-2). Read-only: a drag would write the view's own dates.
+  const markerKeys = defs.filter((d) => d.kind === "date" && d.key.startsWith("cf:") && !d.hidden).map((d) => d.key);
+  const markerOf = (task: NexusTask): { start: Date; end: Date } | null => {
+    for (const k of markerKeys) {
+      const d = parseDate(taskValues(task, k)[0]);
+      if (d) { const s = startOfDay(d); return { start: s, end: s }; }
+    }
+    return null;
+  };
   const groups = taskGroups.map((g) => {
-    const tasks = g.tasks.map((task) => ({ task, win: taskWindow(task, cfg.startProp, cfg.endProp) }));
+    const tasks = g.tasks.map((task) => {
+      const own = taskWindow(task, cfg.startProp, cfg.endProp);
+      return { task, win: own ?? markerOf(task), marker: !own };
+    });
     // The view's own sort wins; without one, bars run by start date.
     if (!cfg.sort.length) tasks.sort((a, b) => (a.win ? a.win.start.getTime() : 8.64e15) - (b.win ? b.win.start.getTime() : 8.64e15));
     return { list: { id: g.key, name: groupLabelIsBuiltin(groupBy, g.key, defs) ? t(g.label) : g.label }, tasks };
@@ -2397,8 +2425,15 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                       {gStart && <span className="absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-[11px] font-bold text-muted-foreground" style={{ left: xOf(gStart) + 6 }}>{g.list.name}</span>}
                     </div>
                   </div>}
+                  {/* An empty group says so, as an empty Board column does (UI tour run 16, R16-WB-3). */}
+                  {!isCollapsed && !single && g.tasks.length === 0 && (
+                    <div className="flex snap-start border-b border-border/50">
+                      <div className="sticky left-0 z-10 shrink-0 border-r border-border bg-card px-3 py-2.5 pl-9 text-sm text-muted-foreground" style={{ width: leftW }}>{t("No tasks")}</div>
+                      <div style={{ width: timelineW }} />
+                    </div>
+                  )}
                   {/* TASK ROWS */}
-                  {!isCollapsed && <Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.task.id} render={({ task, win: saved }) => {
+                  {!isCollapsed && <Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.task.id} render={({ task, win: saved, marker }) => {
                     const pct = tlProgress(task);
                     const win = saved ? liveWin(task.id, saved) : null;
                     const dur = win ? daysBetween(win.start, win.end) + 1 : 0;
@@ -2411,7 +2446,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                     const cp = bulk.bindCard(task, () => onOpen(task));
                     const selected = bulk.isSelected(task.id);
                     const dragging = drag?.id === task.id && drag.moved;
-                    const canMove = (startW || endW) && !task.id.startsWith("draft-");
+                    const canMove = (startW || endW) && !marker && !task.id.startsWith("draft-");
                     return (
                       <div key={task.id} className={cn("flex snap-start border-b border-border/50 hover:bg-accent/20", selected && "bg-primary/10 ring-1 ring-inset ring-primary")}>
                         <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-card" style={{ width: leftW }}>
@@ -2510,8 +2545,10 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
           </div>
         </div>
         {/* The box's bottom edge fades while rows continue below it; at full scroll it sits over this empty
-            band, so the last row is never dimmed (UI tour run 15, R15-WM-5: rows were cut hard at the edge). */}
-        <div aria-hidden className="pointer-events-none sticky bottom-0 left-0 z-[8] h-6 w-full bg-gradient-to-t from-card to-transparent" />
+            band, so the last row is never dimmed (UI tour run 15, R15-WM-5: rows were cut hard at the edge). Taller and
+            solid at the edge, and above the frozen name column (z-10), which it used to slide under, so a cut row
+            there showed hard (UI tour run 16, R16-WD-10, R16-WM-3). */}
+        <div aria-hidden className="pointer-events-none sticky bottom-0 left-0 z-[15] h-10 w-full bg-gradient-to-t from-card from-35% to-transparent" />
       </div>
 
       {/* Context menu / multi-select handled by the shared TaskBulkProvider (right-click / long-press). */}

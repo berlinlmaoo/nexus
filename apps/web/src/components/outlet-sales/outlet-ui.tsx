@@ -243,7 +243,8 @@ function Row({ label, children, strong, depth = 0, text }: { label: string; chil
   // wide card does the same now (UI tour run 15, R15-WD-2: beside the figures the answers were the only
   // values not on the right edge).
   return (
-    <div className={cn("grid gap-x-3 py-1.5 text-sm", text ? "grid-cols-1 gap-y-0.5" : "grid-cols-[minmax(7.5rem,40%)_1fr]")}>
+    // A snap point: a scrolled report stops on a whole row, not on half an "Event name" line (UI tour run 16, R16-WB-1).
+    <div data-snap-row className={cn("grid gap-x-3 py-1.5 text-sm", text ? "grid-cols-1 gap-y-0.5" : "grid-cols-[minmax(7.5rem,40%)_1fr]")}>
       <dt className={cn("text-muted-foreground", depth === 1 && "pl-3", depth === 2 && "pl-6", strong && "font-medium text-foreground")}>{label}</dt>
       <dd className={cn("min-w-0 break-words tabular-nums", !text && "text-right", text && depth === 1 && "pl-3", text && depth === 2 && "pl-6", strong && "font-semibold")}>{children}</dd>
     </div>

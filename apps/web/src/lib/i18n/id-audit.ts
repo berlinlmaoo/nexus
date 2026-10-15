@@ -16,8 +16,8 @@ export const ID_AUDIT: Record<string, string> = {
   "{n}d ago": "{n} hari lalu",
   "Unknown date": "Tanggal tidak diketahui",
   "Audit access required": "Perlu akses audit",
-  "The audit log is visible to BoD, managers and owners. Ask one of them if you need to know who changed something.":
-    "Log audit hanya terlihat oleh BoD, manager, dan owner. Tanya salah satu dari mereka kalau perlu tahu siapa yang mengubah sesuatu.",
+  "The audit log is visible to the board, managers and owners. Ask one of them if you need to know who changed something.":
+    "Log audit hanya terlihat oleh direksi, manager, dan owner. Tanya salah satu dari mereka kalau perlu tahu siapa yang mengubah sesuatu.",
   "Couldn't load the audit log": "Log audit tidak bisa dimuat",
   "The server didn't answer.": "Server tidak menjawab.",
   "Search entity, action or type…": "Cari nama, aksi, atau jenis…",

@@ -89,7 +89,7 @@ export function describeXpReason(reason: string, amount?: number | null, lateMin
   if (r === "admin:adjust" || r.startsWith("admin:adjust:")) {
     const note = r.slice("admin:adjust:".length).trim()
     const detail = r === "admin:adjust" || note === "" ? null : note
-    return { ...base, kind: "admin_adjust", label: detail ? `Adjusted by the BoD · ${detail}` : "Adjusted by the BoD", detail }
+    return { ...base, kind: "admin_adjust", label: detail ? `Adjusted by the board · ${detail}` : "Adjusted by the board", detail }
   }
 
   if (r === "penalty") return { ...base, kind: "quest_penalty", label: "Penalty quest" }

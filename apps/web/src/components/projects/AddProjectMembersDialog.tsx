@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { AccessLevelPicker } from "@/components/projects/AccessLevelPicker";
 import type { ProjectAccessLevel } from "@/lib/nexus-api";
 
-const ROLE_LABEL: Record<string, string> = { ONE_ABOVE_ALL: "One Above All", BOD: "BoD", MANAGER: "Manager", STAFF: "Staff" };
+const ROLE_LABEL: Record<string, string> = { ONE_ABOVE_ALL: "One Above All", BOD: "Board", MANAGER: "Manager", STAFF: "Staff" };
 
 function rosterOf(data: { members?: NexusUser[] } | NexusUser[] | undefined): NexusUser[] {
   if (!data) return [];
