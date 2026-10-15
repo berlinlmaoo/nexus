@@ -56,7 +56,7 @@ struct AdminOrgChartSection: View {
             } else {
                 ScrollView {
                     EmptyState(icon: "rectangle.3.group", title: T("The chart couldn't load"),
-                               subtitle: problem ?? T("Needs BoD access."),
+                               subtitle: problem ?? T("Needs board access."),
                                actionTitle: T("Try again"), actionIcon: "arrow.clockwise",
                                action: { Task { await load() } })
                         .padding(.top, 40)
@@ -379,7 +379,7 @@ private struct OrgCardBranch: View {
                 .anchorPreference(key: OrgMarkKey.self, value: .bounds) { (!showBod && !showMgr) ? ["src": .rect($0)] : [:] }
             if showBod {
                 OrgStub()
-                OrgPeopleBox(unitId: unit.id, title: "BoD · \(people.bods.count)", people: people.bods,
+                OrgPeopleBox(unitId: unit.id, title: "\(T("Board")) · \(people.bods.count)", people: people.bods,
                              horizontal: true, chips: true, ctx: ctx)
                     .anchorPreference(key: OrgMarkKey.self, value: .bounds) { !showMgr ? ["src": .rect($0)] : [:] }
             }

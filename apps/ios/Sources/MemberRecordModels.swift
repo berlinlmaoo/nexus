@@ -177,7 +177,7 @@ struct RecordXpEntry: Decodable, Identifiable, Sendable {
         case "alpha":          return T("Absent without notice (TK)")
         case "peer_penalty":   return T("Peer report · penalty")
         case "peer_bounty":    return T("Peer report · reward")
-        case "admin_adjust":   return note.isEmpty ? T("Adjusted by a BoD") : "\(T("Adjusted by a BoD")) · \(note)"
+        case "admin_adjust":   return note.isEmpty ? T("Adjusted by a board member") : "\(T("Adjusted by a board member")) · \(note)"
         case "quest":          return T("Quest completed")
         case "quest_penalty":  return T("Penalty quest")
         case "bonus":          return note.isEmpty ? T("Bonus") : "\(T("Bonus")) · \(note)"

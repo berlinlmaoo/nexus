@@ -19,7 +19,7 @@ func canEditTier(_ viewer: String?, _ target: String?) -> Bool {
 }
 func orgRoleLabel(_ r: String?) -> String {
     switch (r ?? "").uppercased() {
-    case "ONE_ABOVE_ALL": return "One Above All"; case "BOD": return "BoD"
+    case "ONE_ABOVE_ALL": return "One Above All"; case "BOD": return "Board"
     case "MANAGER": return "Manager"; case "STAFF": return "Staff"; default: return r ?? "—"
     }
 }

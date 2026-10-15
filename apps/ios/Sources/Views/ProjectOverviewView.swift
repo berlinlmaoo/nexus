@@ -748,19 +748,12 @@ private struct OverviewTeamCard: View {
             Text(T("Person")).frame(maxWidth: .infinity, alignment: .leading)
             // "Done" over a column of this month's counts, on one line like "Open" / "Overdue": "Done this
             // month" broke onto two (UI tour run 14, N-17 / P-I22 / P-M23); the card says the month below.
-            // The web's words: "Done this month" where there is room, "Done (Oct)" on a phone (UI tour run 15).
-            numbers(Text(T("Open")), Text(T("Overdue")), Text(doneHeader))
+            // "Done this month" on every platform, the phone included (UI tour run 16, R16-I-10, decision 3).
+            numbers(Text(T("Open")), Text(T("Overdue")), Text(T("Done this month")))
         }
-        .font(NXFont.text(11, .medium)).foregroundStyle(NX.mutedFg).lineLimit(1)
+        .font(NXFont.text(11, .medium)).foregroundStyle(NX.mutedFg).lineLimit(1).minimumScaleFactor(0.85)
         .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
         .accessibilityHidden(true)
-    }
-
-    private var doneHeader: String {
-        if hSize == .regular { return T("Done this month") }
-        let month = AppDateLocale.formatter("MMM").string(from: Date()).replacingOccurrences(of: ".", with: "")
-            .replacingOccurrences(of: "Sept", with: "Sep")
-        return T("Done ({month})").replacingOccurrences(of: "{month}", with: month)
     }
 
     private var dash: some View {

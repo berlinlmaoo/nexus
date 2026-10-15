@@ -512,10 +512,10 @@ struct CalendarView: View {
     @ViewBuilder private var content: some View {
         if access == "none" {
             EmptyState(icon: "lock", title: T("This calendar is for members of the company"),
-                       subtitle: T("You are in a personal workspace. Ask a BoD or Manager to add you to the company's workspace; the Calendar then shows the tasks of everyone there."))
+                       subtitle: T("You are in a personal workspace. Ask a board member or manager to add you to the company's workspace; the Calendar then shows the tasks of everyone there."))
         } else if access == "off" {
             EmptyState(icon: "calendar", title: T("The Calendar is on its way"),
-                       subtitle: T("It opens for BoD and Managers first, then for everyone. Your own tasks are still in Tasks."))
+                       subtitle: T("It opens for the board and managers first, then for everyone. Your own tasks are still in Tasks."))
         } else if loading && items == nil {
             // Shapes only, so VoiceOver found nothing but the title and Filters on a cold start: one
             // element that says what is happening (impeccable re-audit, 7 Oct 2026).

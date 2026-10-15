@@ -63,7 +63,7 @@ struct LegalView: View {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         case .notInvited:
             EmptyState(icon: "lock", title: T("Legal is by invitation only"),
-                       subtitle: T("Ask the owner or a BoD member with Legal access to invite you."))
+                       subtitle: T("Ask the owner or a board member with Legal access to invite you."))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .failed(let message):
             EmptyState(icon: "exclamationmark.triangle", title: T("Couldn't open Legal"), subtitle: message,

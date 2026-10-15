@@ -86,7 +86,7 @@ struct AdminRefusal: LocalizedError, Sendable {
         switch code {
         case "SELF": return T("You can't do this to your own account.")
         case "RANK": return T("You can't do this to someone at or above your level.")
-        case "FORBIDDEN": return T("Only BoD and above can do this.")
+        case "FORBIDDEN": return T("Only the board and above can do this.")
         case "NOT_FOUND": return T("This account doesn't exist anymore.")
         case "BAD_DATE": return T("Check the last working day: not after today, and not before they joined.")
         case "BAD_REASON": return T("Pick a reason.")

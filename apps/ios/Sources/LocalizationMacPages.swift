@@ -6,7 +6,7 @@ import Foundation
 
 extension AppLanguage {
     static let indonesianMacPages: [String: String] = [
-        "A direct line to the BoD for work or HR issues. Only the BoD can read it.": "Jalur langsung ke BoD untuk urusan kerja atau HR. Hanya BoD yang bisa membacanya.",
+        "A direct line to the board for work or HR issues. Only the board can read it.": "Jalur langsung ke direksi untuk urusan kerja atau HR. Hanya direksi yang bisa membacanya.",
         "App": "Aplikasi",
         "Attendance monitor": "Monitor Absen",
         "Audit log": "Log audit",

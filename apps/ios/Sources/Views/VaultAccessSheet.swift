@@ -67,7 +67,7 @@ struct VaultAccessSheet: View {
         Picker(title, selection: selection) {
             Text(item.parentId == nil ? T("Everyone in the company") : T("Same as the folder above")).tag("")
             Text(T("Managers and above")).tag("MANAGER_PLUS")
-            Text(T("BoD and above")).tag("BOD_PLUS")
+            Text(T("Board and above")).tag("BOD_PLUS")
         }
     }
 

@@ -170,8 +170,8 @@ struct AttendanceView: View {
                         if showOffsite { offsitePrompt }
                         #endif
                         if forcePending { infoBanner(forcePendingMessage, tone: .warning) }
-                        if pending { infoBanner(T("⏳ Checkout outside the office area — waiting for BoD approval"), tone: .warning) }
-                        if rec?.checkOutApproval == "REJECTED" { infoBanner(T("Your out-of-area checkout was rejected by the BoD."), tone: .danger) }
+                        if pending { infoBanner(T("⏳ Checkout outside the office area — waiting for board approval"), tone: .warning) }
+                        if rec?.checkOutApproval == "REJECTED" { infoBanner(T("Your out-of-area checkout was rejected by the board."), tone: .danger) }
                         if let banner { infoBanner(banner.text, tone: banner.good ? .success : .danger) }
                         // A queued tap must never be invisible: someone who thinks they clocked in and
                         // did not would only find out at payroll.
@@ -488,18 +488,19 @@ struct AttendanceView: View {
     /// show a dash rather than a default number: "0/4" for someone whose quota was never set is a
     /// convincing-looking lie.
     /// A quota of 0 says so in words: "0/0 used" carried no information (UI tour run 13, F-17 / I-24 / M-19).
+    /// "0/4 used" on every platform, a quota of 0 included ("0/0 used", as the web; UI tour run 16, R16-I-11 /
+    /// R16-B-24, decision 4).
     private static func quotaValue(_ used: Int?, _ quota: Int?) -> String {
         guard let quota else { return "\u{2014}" }
-        if quota == 0 && (used ?? 0) == 0 { return T("None this month") }
-        return String(format: T("%@ of %@ used"), AppNumber.int(used ?? 0), AppNumber.int(quota))
+        return String(format: T("%@/%@ used"), AppNumber.int(used ?? 0), AppNumber.int(quota))
     }
 
     private var todayStatusValue: String {
         if forcePending { return T("Finish yesterday's attendance") }
         if let s = rec?.status, !s.isEmpty { return Self.humanize(s) }
         if let req = today?.todayRequest, let t = req.type { return "\(Self.humanize(t)) \(Self.humanize(req.status ?? ""))".trimmingCharacters(in: .whitespaces) }
-        // The hero above already says "Ready to check in"; the tile says the state, not the prompt again (F-17).
-        return T("Not checked in yet")
+        // The web's wording before check-in (UI tour run 16, R16-B-24, decision 4).
+        return T("Ready to check in")
     }
     /// Once checked in this is the office on the record. Before that it used to say "5 active
     /// offices", which is a fact about the company and not about the person holding the phone —
@@ -954,7 +955,7 @@ struct AttendanceView: View {
     private var offsitePrompt: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(T("You're outside the office area")).font(NXFont.text(14, .bold)).foregroundStyle(amberTitle)
-            Text(T("Want to check out from here? **A reason is required** — the checkout will wait for BoD approval."))
+            Text(T("Want to check out from here? **A reason is required** — the checkout will wait for board approval."))
                 .font(NXFont.text(12)).foregroundStyle(amberBody)
             TextField(T("Reason (e.g. content shoot / client meeting)"), text: $offsiteReason, axis: .vertical)
                 .font(NXFont.text(14)).lineLimit(2, reservesSpace: true)
@@ -1306,7 +1307,7 @@ struct AttendanceView: View {
                                                               fix: pendingFix, clientId: tapId)
             if case .success = outcome {
                 Haptics.success()
-                banner = Banner(text: T("Checkout sent — waiting for BoD approval ⏳"), good: true)
+                banner = Banner(text: T("Checkout sent — waiting for board approval ⏳"), good: true)
                 reflection = ""
                 await load()
                 // The button itself now reads "Check-out sent · waiting for approval".
@@ -1420,8 +1421,9 @@ struct AttendanceView: View {
     static let clock: DateFormatter = {
         let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; f.timeZone = TimeZone(identifier: "Asia/Jakarta"); return f
     }()
+    /// The clock card's day: "Thursday 15 Oct", no comma, no year for this year (UI tour run 16, decision 10).
     static func dateLabel(_ d: Date) -> String {
-        AppDateLocale.formatter("EEE d MMM", timeZone: TimeZone(identifier: "Asia/Jakarta")).string(from: d)
+        AppDateLocale.weekdayDate(d)
     }
     static func parseISO(_ iso: String) -> Date? {
         let p = ISO8601DateFormatter(); p.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -2573,7 +2575,7 @@ struct RecordActionsSheet: View {
                         }
                         if let w = row.workedMinutes, w > 0 { infoLine("clock", "\(T("Worked")) \(w / 60)h \(w % 60)m") }
                         if row.isCorrected == true {
-                            infoLine("pencil.and.list.clipboard", "\(T("Corrected by BoD")) · \(row.correctionReason ?? "")")
+                            infoLine("pencil.and.list.clipboard", "\(T("Corrected by the board")) · \(row.correctionReason ?? "")")
                         }
                         if let notes = row.notes, !notes.isEmpty { infoLine("text.alignleft", notes) }
                         // Pushed inside this sheet's own stack rather than presented: the sheet
@@ -2700,7 +2702,7 @@ struct RecordActionsSheet: View {
 
     private var changeStatusPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(T("Change status (BoD)"))
+            SectionLabel(T("Change status (board)"))
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], spacing: 8) {
                 ForEach(Self.overrideActions, id: \.self) { action in
                     Button { pendingOverride = action } label: {

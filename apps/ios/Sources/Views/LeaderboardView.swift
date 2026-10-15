@@ -113,7 +113,7 @@ struct LeaderboardView: View {
                     // Why the viewer is missing from the list (UI tour run 13, W-B4), in the web's bordered
                     // info banner rather than plain text (run 14, P-I34 / P-M29).
                     if viewerLeftOut {
-                        Label(T("You're not on this ranking: the BoD is left out, so management doesn't compete with staff."),
+                        Label(T("You're not on this ranking: the board is left out, so management doesn't compete with staff."),
                               systemImage: "info.circle")
                             .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                             .fixedSize(horizontal: false, vertical: true)
@@ -231,7 +231,7 @@ struct Podium: View {
                             if label(rank) == 1 { Image(systemName: "crown.fill").font(.system(size: 18)).foregroundStyle(crown).offset(y: -avatar/2 - 6) }
                         }
                         Text(row.name ?? "—").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Text(AppNumber.int(row.totalXp)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                        Text("\(AppNumber.int(row.totalXp)) XP").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     }
                     .contentShape(Rectangle())
                 }
@@ -268,7 +268,7 @@ struct TieRibbon: View {
             HStack(spacing: 6) {
                 Image(systemName: "crown.fill").font(.system(size: 14))
                 Text(caption)
-                if let top = rows.first { Text("· \(AppNumber.int(top.totalXp))").monospacedDigit() }
+                if let top = rows.first { Text("· \(AppNumber.int(top.totalXp)) XP").monospacedDigit() }
             }
             .font(NXFont.text(14, .semibold)).foregroundStyle(ink)
             .multilineTextAlignment(.center)
@@ -318,7 +318,8 @@ struct RankRow: View {
                     Text("Level \(row.level)\(row.levelName.map { " · \($0)" } ?? "")").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
                 Spacer()
-                Text(AppNumber.int(row.totalXp))
+                // The unit on every value, "1.000 XP" / "−142 XP", as the web (UI tour run 16, decision 5).
+                Text("\(AppNumber.int(row.totalXp)) XP")
                     .font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
             }
             .padding(.horizontal, 14).padding(.vertical, 11)

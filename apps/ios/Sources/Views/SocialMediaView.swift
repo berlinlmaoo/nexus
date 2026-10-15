@@ -154,7 +154,7 @@ struct SocialMediaTab: View {
         Group {
             if store.forbidden {
                 EmptyState(icon: "lock", title: T("This report is for its project members"),
-                           subtitle: T("Ask the Project Owner or a BoD to add you to the project."))
+                           subtitle: T("Ask the Project Owner or a board member to add you to the project."))
             } else if !store.loaded {
                 if let err = store.loadError {
                     ErrorState(message: err, icon: "heart.text.square") {
@@ -472,7 +472,7 @@ struct SocialOverviewView: View {
 
     private func postsCard(_ o: SocialOverview) -> some View {
         OutletCard {
-            Text(T("Contents posted")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+            Text(T("Posts published")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
             ForEach(o.platforms) { p in
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {

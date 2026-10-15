@@ -17,7 +17,7 @@ extension AppLanguage {
         "Your profile, security, notifications and workspace preferences.": "Profil, keamanan, notifikasi, dan preferensi workspace kamu.",
         "Visible to your teammates": "Terlihat oleh rekan setimmu",
         "PNG, JPG or WEBP. Max 5 MB.": "PNG, JPG, atau WEBP. Maks. 5 MB.",
-        "No company Google account linked yet. A BoD links it from Control Room.": "Belum ada akun Google perusahaan yang ditautkan. BoD menautkannya dari Control Room.",
+        "No company Google account linked yet. A board member links it from Control Room.": "Belum ada akun Google perusahaan yang ditautkan. direksi menautkannya dari Control Room.",
         "Phone number": "Nomor HP",
         "08xxxxxxxxxx · outside Indonesia, start with + (e.g. +65…)": "08xxxxxxxxxx · di luar Indonesia, awali dengan + (mis. +65…)",
         "For numbers outside Indonesia, type + and the country code.": "Untuk nomor di luar Indonesia, ketik + dan kode negaranya.",

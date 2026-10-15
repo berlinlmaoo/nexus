@@ -225,7 +225,7 @@ struct SettingsView: View {
                 WorkspaceMembersCard(workspaceId: wsId)
             } else {
                 EmptyState(icon: "person.2", title: T("No workspace yet"),
-                           subtitle: T("Members appear here once you are in a workspace. Ask a BoD or Manager to add you."), compact: true)
+                           subtitle: T("Members appear here once you are in a workspace. Ask a board member or manager to add you."), compact: true)
             }
         case .notifications:
             AutomationNotificationsCard()
@@ -386,7 +386,7 @@ struct SettingsView: View {
                 webField(T("Google Workspace")) {
                     HStack(spacing: 8) {
                         if googleEmail.isEmpty {
-                            Text(T("No company Google account linked yet. A BoD links it from Control Room."))
+                            Text(T("No company Google account linked yet. A board member links it from Control Room."))
                                 .font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
                         } else {
                             Image(systemName: "at").font(.system(size: 14, weight: .semibold)).foregroundStyle(NX.foreground)

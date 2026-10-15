@@ -312,8 +312,8 @@ extension APIClient {
         "forbidden": "This folder is locked to certain roles, and yours isn't one of them.",
         "PREVIEW_ONLY": "This file can't be previewed, and the sender turned downloads off.",
         "VIEW_ONLY": "This link is view-only. The sender turned downloads off.",
-        "EXTERNAL_NOT_ALLOWED": "Only the person who uploaded this, or BoD, can make a link for people outside NEXUS.",
-        "NOT_YOURS": "Only the person who uploaded this, or BoD, can do that.",
+        "EXTERNAL_NOT_ALLOWED": "Only the person who uploaded this, or the board, can make a link for people outside NEXUS.",
+        "NOT_YOURS": "Only the person who uploaded this, or the board, can do that.",
         "TRASHED": "This file is in the trash. Restore it first.",
         "QUOTA": "The vault is full.",
     ]

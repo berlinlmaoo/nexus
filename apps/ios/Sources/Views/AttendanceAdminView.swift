@@ -88,7 +88,7 @@ struct AttendanceAdminSection: View {
                 LoadErrorView(error: loadFailure, what: T("the people list"), retry: { Task { loading = true; await load() } })
             } else if !allowed {
                 EmptyState(icon: "lock.fill", title: "Khusus BoD ke atas",
-                           subtitle: T("Shift, day-off and public-holiday settings can only be managed by BoD / One Above All."))
+                           subtitle: T("Shift, day-off and public-holiday settings can only be managed by the board / One Above All."))
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {

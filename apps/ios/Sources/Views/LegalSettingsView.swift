@@ -19,7 +19,7 @@ struct LegalSettingsPane: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if !canEdit {
-                    Text(T("Only the owner or a BoD member with Legal can change these."))
+                    Text(T("Only the owner or a board member with Legal can change these."))
                         .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
                 if companies == nil && error == nil {

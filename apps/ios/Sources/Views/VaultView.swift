@@ -691,7 +691,7 @@ struct VaultView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(NX.mutedFg)
                     .frame(width: 44, height: 44)
-                    .accessibilityLabel(T("Only whoever uploaded it, or BoD, can restore it"))
+                    .accessibilityLabel(T("Only whoever uploaded it, or the board, can restore it"))
             } else {
                 Menu { menuItems(item) } label: {
                     Image(systemName: "ellipsis")

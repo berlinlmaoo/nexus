@@ -268,7 +268,7 @@ struct MemberProfileView: View {
     /// ranking, which is a different thing from having earned nothing.
     private var unrankedNote: String {
         switch (roleText ?? "").uppercased() {
-        case "BOD", "ONE_ABOVE_ALL": return T("BoD and One Above All sit outside the ranking.")
+        case "BOD", "ONE_ABOVE_ALL": return T("The board and One Above All sit outside the ranking.")
         default:                     return T("No points this period yet.")
         }
     }
@@ -392,13 +392,13 @@ struct MemberProfileView: View {
                 if let d {
                     // "Allowance", not "Day off": the tile above already counts the days off taken.
                     factRow("calendar.badge.minus", T("Days off allowance"),
-                            String(format: T("%d of %d used · %d left"), d.usedRaw ?? d.used ?? 0, d.quota ?? 4, d.remaining ?? 0)
+                            String(format: T("%@/%@ used · %@ left"), AppNumber.int(d.usedRaw ?? d.used ?? 0), AppNumber.int(d.quota ?? 4), AppNumber.int(d.remaining ?? 0))
                             + ((d.bonusDays ?? 0) > 0 ? " · " + String(format: T("incl. %d extra"), d.bonusDays ?? 0) : ""))
                 }
                 if let xp {
                     factRow("sparkles", "XP",
-                            String(format: T("+%d gained · %d lost"), xp.gained ?? 0, xp.lost ?? 0)
-                            + ((xp.removed ?? 0) > 0 ? " · " + String(format: T("%d removed by the BoD"), xp.removed ?? 0) : ""))
+                            String(format: T("+%@ XP gained · %@ XP lost"), AppNumber.int(xp.gained ?? 0), AppNumber.int(xp.lost ?? 0))
+                            + ((xp.removed ?? 0) > 0 ? " · " + String(format: T("%d removed by the board"), xp.removed ?? 0) : ""))
                     // Absences on the tiles and nothing lost read as a contradiction (UI tour run 14, N-32):
                     // say when an absence costs XP and when it does not.
                     if (c?.absent ?? 0) > 0 && (xp.lost ?? 0) == 0 {
@@ -413,8 +413,14 @@ struct MemberProfileView: View {
                     // Joined during the period: the score counts from their first day, with a prorated
                     // allowance (QA S-20, the board's rule too).
                     if let owedDays = score.days, owedDays < days, let from = score.from, !from.isEmpty {
-                        Text(String(format: T("Days worked (present or permit) out of %d working days, from %@: %d days minus %d days-off allowance."),
-                                    score.working, AgendaRange.dayLabel(from), owedDays, score.allowance ?? 0))
+                        // The allowance here is prorated to the days since they joined: name the full one too, so
+                        // "2" beside the header's "4" is not a contradiction (UI tour run 16, R16-I-14; web wording).
+                        Text(T("From {date}: {days} days, {working} working days ({days} − {quota} days off, the {full}-day allowance prorated).")
+                                .replacingOccurrences(of: "{date}", with: AgendaRange.dayLabel(from))
+                                .replacingOccurrences(of: "{days}", with: AppNumber.int(owedDays))
+                                .replacingOccurrences(of: "{working}", with: AppNumber.int(score.working))
+                                .replacingOccurrences(of: "{quota}", with: AppNumber.int(score.allowance ?? 0))
+                                .replacingOccurrences(of: "{full}", with: AppNumber.int(d?.quota ?? 4)))
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         Text(String(format: T("Days worked (present or permit) out of %d working days: %d days minus %d days-off allowance."), score.working, days, d?.quota ?? 4))
