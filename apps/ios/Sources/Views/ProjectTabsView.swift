@@ -339,7 +339,9 @@ struct TimelineTab: View {
     private let monthH: CGFloat = 32
     private let dayH: CGFloat = 42
     /// Narrower Duration / Progress on a portrait iPad, so the chart still shows ten days or more (Q-IA27).
-    private var durationW: CGFloat { metaCompact ? 64 : 90 }
+    /// 84 on a portrait iPad: at 64 the header read "Durati…" and every undated row "No da…" (UI tour run 16,
+    /// R16-I-07 iPad).
+    private var durationW: CGFloat { metaCompact ? 84 : 90 }
     private var progressW: CGFloat { metaCompact ? 84 : 150 }
     private static let DAY: TimeInterval = 86400
 
@@ -373,11 +375,24 @@ struct TimelineTab: View {
     private func window(_ t: BoardTask) -> Win? {
         var s = ProjDate.parse(t.startDate)
         var e = ProjDate.parse(t.dueDate)
-        if s == nil && e == nil { return nil }
+        if s == nil && e == nil { return marker(t) }
         if s == nil { s = e }
         if e == nil { e = s }
         let ss = sod(s!), ee = sod(e!)
         return Win(start: ss, end: ee < ss ? ss : ee)
+    }
+
+    /// A task with neither date but a value in a date field (a request's usage date, which List and Board
+    /// show) is a one-day marker on that day, not "No date" (web R16-WB-2; UI tour run 16, decision 9).
+    /// Date fields that hold names ("Request by") never parse as a date, so they are passed over.
+    private func marker(_ t: BoardTask) -> Win? {
+        for v in t.customFieldValues ?? [] where (v.customField?.type ?? "").uppercased() == "DATE" {
+            guard let raw = v.value?.trimmingCharacters(in: CharacterSet(charactersIn: "\" ")), !raw.isEmpty,
+                  let d = ProjDate.parse(raw) ?? ProjDate.fmt("yyyy-MM-dd").date(from: String(raw.prefix(10))) else { continue }
+            let day = sod(d)
+            return Win(start: day, end: day)
+        }
+        return nil
     }
 
     struct Row: Identifiable { let id: String; let task: BoardTask; let win: Win? }
@@ -576,6 +591,9 @@ struct TimelineTab: View {
                               landing: openingDay(ax: ax), viewport: viewport)
                 }
             }
+            // Rows come to rest whole under the sticky day header, never half cut under it (UI tour run 16,
+            // R16-I-19).
+            .scrollTargetBehavior(.viewAligned(limitBehavior: .never))
         }
         .background(NX.card)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -612,6 +630,8 @@ struct TimelineTab: View {
             if header { leftHeader }
             ForEach(ls) { line in leftLine(line) }
         }
+        // Every line is a resting place for the vertical scroll (chartCard).
+        .scrollTargetLayout()
     }
 
     private func headLabel(_ s: String) -> some View {
@@ -672,6 +692,7 @@ struct TimelineTab: View {
             .accessibilityValue(isCollapsed ? T("Collapsed") : T("Expanded"))
             if showMeta {
                 Text(gDur > 0 ? Self.dayCount(gDur) : "—").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    .lineLimit(1).minimumScaleFactor(0.85)
                     .padding(.horizontal, 8).frame(width: durationW, alignment: .leading)
                 // The rows' status colours (amber in progress, green done), as web — not a fixed blue; the
                 // track is the card colour, since the group row itself is muted (UI tour run 9, P10/M4).
@@ -867,13 +888,15 @@ struct TimelineTab: View {
             ForEach(Array(ax.months.enumerated()), id: \.offset) { _, m in
                 // The month, else its short name, else nothing: a two-day segment at the edge read "No…"
                 // (UI tour run 15, Q-IA30 / Q-M17).
+                // A one-day segment at the chart's end still names its month, a size smaller ("Nov" above
+                // "S 1" was missing on a portrait iPad's 28 pt days; UI tour run 16, R16-I-23).
                 ViewThatFits(in: .horizontal) {
                     Text(m.label).fixedSize()
                     Text(String(m.label.prefix(3))).fixedSize()
-                    Color.clear.frame(width: 1, height: 1)
+                    Text(String(m.label.prefix(3))).lineLimit(1).minimumScaleFactor(0.6)
                 }
                 .font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground.opacity(0.75))
-                    .padding(.leading, 8)
+                    .padding(.leading, m.span <= 1 ? 3 : 8)
                     .frame(width: CGFloat(m.span) * dayW, height: monthH, alignment: .leading)
                     .clipped()
                     .overlay(alignment: .leading) { Rectangle().fill(NX.border.opacity(0.6)).frame(width: 1) }

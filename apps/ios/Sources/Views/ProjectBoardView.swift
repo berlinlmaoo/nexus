@@ -31,10 +31,8 @@ struct ProjectDetailView: View {
     /// the tools move under the tabs (UI tour run 13, I-18 / M-7: "verview", "ategori", "Cal" cut).
     @State private var barWidth: CGFloat = 0
     @State private var toolsWidth: CGFloat = 0
-    /// Automations and Ask GIDEON say their names while the row has room for them beside the tabs (web).
-    @State private var toolLabels = false
-    /// What the two names add to the tools' width (an estimate; the margin below keeps it from flipping).
-    private static let toolLabelsWidth: CGFloat = 190
+    /// Automations and Ask GIDEON say their names on every project view (web; UI tour run 16, R16-B-06).
+    @State private var toolLabels = true
     /// A filter opened from a count on the Overview (owner, 11 Oct 2026): open top-level tasks only,
     /// shown as a chip above the task tabs until it is cleared.
     @State private var drill: OverviewDrill?
@@ -839,10 +837,10 @@ struct ProjectDetailView: View {
         return out
     }
 
-    /// The tabs need more room than the row leaves beside the tools.
-    private var toolsBelowTabs: Bool {
-        barWidth > 0 && tabsWidth > 0 && tabsWidth + toolsWidth + 18 + 24 + 16 > barWidth
-    }
+    /// The tools never drop below the tabs: like the web, the tabs scroll in whatever the labelled tools
+    /// leave (with the strip's chevrons and "…"), so there is no second toolbar row (UI tour run 16, R16-B-06:
+    /// bare ⚡ / ✦ on a row of their own left a ~60 pt band).
+    private var toolsBelowTabs: Bool { false }
 
     @ViewBuilder private var wideTabBar: some View {
         Group {
@@ -867,12 +865,9 @@ struct ProjectDetailView: View {
 
     /// Names on the tools only when they fit in the tab row with 20 pt to spare, so the tools never drop
     /// below the tabs for them (UI tour run 15, Q-M9: an icon-only second row left a ~60 px band).
+    /// Automations and Ask GIDEON are named on every project view, as the web's (UI tour run 16, R16-B-06).
     private func fitToolLabels() {
-        guard barWidth > 0, tabsWidth > 0, toolsWidth > 0 else { return }
-        let iconOnly = toolsWidth - (toolLabels ? Self.toolLabelsWidth : 0)
-        let room = barWidth - tabsWidth - iconOnly - 58
-        let want = room >= Self.toolLabelsWidth + 20
-        if want != toolLabels { toolLabels = want }
+        if !toolLabels { toolLabels = true }
     }
 
     private var measuredTools: some View {
@@ -1342,9 +1337,10 @@ struct ProjectDetailView: View {
                 // scroll's own (not padding inside it), so the snapped column keeps its 14 pt inset.
                 .scrollTargetBehavior(.viewAligned)
                 .contentMargins(.horizontal, 14, for: .scrollContent)
-                // The column peeking in at the edge fades out, so a header count cut to "On Progress 1"
-                // or a card cut mid-word reads as "more this way" (UI tour run 15, R15-I-11 / Q-IA21 / Q-M12).
-                .nxEdgeFade(40)
+                // The column peeking in at the edge fades out, so a card cut mid-word reads as "more this way"
+                // (UI tour run 15, R15-I-11 / Q-IA21 / Q-M12). Wider on iPad / Mac, where 40 pt over a 280 pt
+                // column did not read as a fade at all (run 16, R16-I-13).
+                .nxEdgeFade(wide ? 80 : 48)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 // Columns scrolled off to the left end at the board's edge: on the Mac they showed through
                 // the sidebar's material as blurred ghost cards (UI tour run 14, P-M30).
@@ -1945,6 +1941,7 @@ struct LaneColumn: View {
     /// The project's own custom fields, for the cards (BoardCard.fieldIds).
     var fieldIds: Set<String>? = nil
     @State private var composing = false
+    @Environment(\.horizontalSizeClass) private var hSize
     /// True while a card is hovering over this column, so the target is obvious before you let go.
     @State private var dropTargeted = false
 
@@ -2019,7 +2016,9 @@ struct LaneColumn: View {
                 withAnimation(.easeOut(duration: 0.12)) { dropTargeted = targeted }
             }
         }
-        .frame(width: 280)
+        // An empty column is narrower on a phone, so the next one shows its whole header ("On Progress 12")
+        // instead of a count cut to "1" (UI tour run 16, R16-I-05).
+        .frame(width: hSize == .compact && (lane.tasks ?? []).isEmpty && !composing ? 200 : 280)
         .frame(maxHeight: .infinity, alignment: .top)   // the column fills the board height so its scroll is bounded
     }
 
@@ -2235,7 +2234,48 @@ struct BoardCard: View {
                     PriorityPill(priority: p)
                 }
             }
-            CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText)
+            if hasMeta {
+                CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText)
+                metaRow
+            } else {
+                // Nothing for a meta row: the avatars ride on the chip row, as on the web card, instead of a
+                // near-empty third row; a card with neither ends under its chips (UI tour run 16, R16-B-07 /
+                // R16-I-17: uneven empty bands under the chips).
+                HStack(alignment: .top, spacing: 8) {
+                    CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText)
+                    if !task.assigneeAvatars.isEmpty {
+                        Spacer(minLength: 0)
+                        avatars
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            // Shadow on the flat shape, not the card's content — cheap to rasterize per scroll.
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(NX.card)
+                .nexusShadowSoft()
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+        }
+    }
+
+    /// Something besides the avatars for the bottom row: a due date, subtasks, a quest or comments.
+    private var hasMeta: Bool {
+        dueText != nil || task.totalSubs > 0 || task.hasQuest || task.commentCount > 0
+    }
+
+    private var avatars: some View {
+        HStack(spacing: -7) {
+            ForEach(task.assigneeAvatars, id: \.id) { a in
+                AvatarView(url: a.url, initial: a.initial, size: 22)
+                    .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
+            }
+        }
+    }
+
+    private var metaRow: some View {
             HStack(spacing: 8) {
                 // No "No due" placeholder on every card (Notion shows nothing when there is no date).
                 if let due = dueText {
@@ -2250,23 +2290,8 @@ struct BoardCard: View {
                 if task.commentCount > 0 {
                     Label("\(task.commentCount)", systemImage: "bubble.left").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
-                HStack(spacing: -7) {
-                    ForEach(task.assigneeAvatars, id: \.id) { a in
-                        AvatarView(url: a.url, initial: a.initial, size: 22)
-                            .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
-                    }
-                }
+                avatars
             }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            // Shadow on the flat shape, not the card's content — cheap to rasterize per scroll.
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(NX.card)
-                .nexusShadowSoft()
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
-        }
     }
 
     private var dueText: String? {
