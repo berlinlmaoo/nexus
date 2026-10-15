@@ -260,10 +260,11 @@ struct SocialHeader: View {
                         Image(systemName: "square.and.pencil").font(.system(size: 14, weight: .bold))
                         if labelled { Text(T("Record today")).font(NXFont.text(14, .semibold)).lineLimit(1).fixedSize() }
                     }
-                    .foregroundStyle(.white)
+                    // The web's near-black primary (UI tour run 15, Q-IB22).
+                    .foregroundStyle(NX.background)
                     .padding(.horizontal, labelled ? 14 : 0)
                     .frame(minWidth: 40, minHeight: 40)
-                    .background(NX.violetFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(NX.onyx, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(.plain)

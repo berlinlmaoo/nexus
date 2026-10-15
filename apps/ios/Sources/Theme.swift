@@ -279,9 +279,10 @@ struct SectionLabel: View {
     }
 }
 
-/// `.button--primary` — violet, white, rounded, with a subtle press spring.
+/// `.button--primary` — the web's near-black primary (UI tour run 15, Q-IB22: the app's were violet), rounded,
+/// with a subtle press spring. A caller can still pass its own tint (a destructive red).
 struct NexusPrimaryButton: ButtonStyle {
-    var tint: Color = NX.violet
+    var tint: Color = NX.onyx
     var fullWidth: Bool = true
     /// A disabled button used to draw exactly like an enabled one — full violet, white label — so
     /// a form with a missing required field looked like a button that ignores taps (the BoD hit
@@ -291,7 +292,7 @@ struct NexusPrimaryButton: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(NXFont.display(16, .bold))
-            .foregroundStyle(.white)
+            .foregroundStyle(tint == NX.onyx ? NX.background : .white)
             // A button that hugs its label needs room either side of it. Without this every
             // `fullWidth: false` button drew its label right against both edges: "Try again",
             // "Save", and the profile's old Message button (owner, 9 Oct 2026).

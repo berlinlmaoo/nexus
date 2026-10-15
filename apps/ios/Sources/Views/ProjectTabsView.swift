@@ -333,18 +333,24 @@ struct TimelineTab: View {
     /// Bumped by "Jump to first": the chart scrolls to the first bar.
     @State private var jumpToFirst = 0
 
-    private let rowH: CGFloat = 48
+    /// Taller with Duration / Progress, so a long name wraps to three lines instead of being cut (UI tour run
+    /// 15, Q-M17).
+    private var rowH: CGFloat { showMeta ? 60 : 48 }
     private let monthH: CGFloat = 32
     private let dayH: CGFloat = 42
-    private let durationW: CGFloat = 90
-    private let progressW: CGFloat = 150
+    /// Narrower Duration / Progress on a portrait iPad, so the chart still shows ten days or more (Q-IA27).
+    private var durationW: CGFloat { metaCompact ? 64 : 90 }
+    private var progressW: CGFloat { metaCompact ? 84 : 150 }
     private static let DAY: TimeInterval = 86400
 
     private var compact: Bool { hSize != .regular }
     /// The chart's width, for `showMeta`.
     @State private var chartWidth: CGFloat = 0
     /// Duration and Progress columns: a wide screen with room for them beside the chart.
-    private var showMeta: Bool { !compact && chartWidth >= 900 }
+    /// From 600 pt: a portrait iPad gets them too, in narrow columns with 28 pt days (UI tour run 15, Q-IA27:
+    /// the iPad Timeline had no Duration or Progress while the web does).
+    private var showMeta: Bool { !compact && chartWidth >= 600 }
+    private var metaCompact: Bool { showMeta && chartWidth < 900 }
     /// A day's column: about 40 pt, sized so the chart shows whole days. With the scroll resting on day
     /// boundaries (TableColumnSnap), no day is cut at either edge ("2" half cut at the right, bars on
     /// 14 May cut; UI tour run 14, P-I15 / P-M5).
@@ -353,7 +359,8 @@ struct TimelineTab: View {
         let w = chartWidth - pad * 2
         let viewport = w - leftWidth(w)
         guard viewport > 80 else { return 40 }
-        return viewport / max(1, (viewport / 40).rounded())
+        let target: CGFloat = metaCompact ? 28 : 40
+        return viewport / max(1, (viewport / target).rounded())
     }
     private var cal: Calendar { ProjDate.cal }
     private func sod(_ d: Date) -> Date { cal.startOfDay(for: d) }
@@ -469,6 +476,7 @@ struct TimelineTab: View {
         // A regular width too narrow for Duration and Progress (portrait iPad): the name alone, so the chart
         // keeps more than five days (UI tour run 13, I-19).
         // With Duration and Progress the column took 45% and the Mac chart showed 13 days (UI tour run 14, P-M5).
+        if metaCompact { return 190 + durationW + progressW }
         return showMeta ? min(520, max(440, width * 0.38)) : min(320, max(220, width * 0.38))
     }
 
@@ -689,9 +697,9 @@ struct TimelineTab: View {
                     VStack(alignment: .leading, spacing: 1) {
                         // With Duration / Progress beside it (no dates line under the name) a long name takes
                         // two lines before an ellipsis ("reimburse transport t…", UI tour run 14, P-M13).
-                        Text(t.title).font(NXFont.text(showMeta ? 14 : 15, .medium))
+                        Text(t.title).font(NXFont.text(showMeta ? 13 : 15, .medium))
                             .foregroundStyle(t.isDone ? NX.mutedFg : NX.foreground)
-                            .strikethrough(t.isDone).lineLimit(showMeta ? 2 : 1)
+                            .strikethrough(t.isDone).lineLimit(showMeta ? 3 : 1)
                         // The phone has no Duration column: the dates under the name, so a row whose bar
                         // is out of view still says when it is (UI tour run 13, F-09).
                         if !showMeta {

@@ -434,3 +434,42 @@ struct LocationTrailPostReply: Decodable, Sendable {
     let stage: String?
     let nextAt: String?
 }
+
+// MARK: - Web attendance page parity (UI tour run 15, Q-IB8)
+
+struct EmploymentStartList: Decodable, Sendable {
+    let members: [EmploymentStartMember]
+    let quota: Int?
+}
+
+struct EmploymentStartMember: Decodable, Sendable, Identifiable {
+    let userId: String
+    let name: String?
+    let email: String?
+    let avatar: String?
+    let employmentStartDate: String?
+    let eligible: Bool
+    let eligibleFrom: String?
+    var id: String { userId }
+}
+
+struct EmploymentStartSaved: Decodable, Sendable {
+    let employmentStartDate: String?
+    let eligible: Bool?
+}
+
+struct AttendanceDeductionsSummary: Decodable, Sendable {
+    let month: String?
+    let members: [Member]
+
+    struct Member: Decodable, Sendable {
+        let userId: String
+        let quota: Int
+        let used: Int
+        let remaining: Int
+        let redDate: Quota?
+        let xp: XP?
+    }
+    struct Quota: Decodable, Sendable { let quota: Int; let used: Int; let remaining: Int }
+    struct XP: Decodable, Sendable { let score: Int; let level: Int?; let levelName: String? }
+}

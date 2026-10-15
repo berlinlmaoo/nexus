@@ -57,6 +57,29 @@ extension AppLanguage {
         "A new platform gets its targets after you save.": "Platform baru bisa diberi target setelah disimpan.",
         // Outlet day: an unreported night in one line (Q-IB20)
         "No report yet. Fill report to add the figures.": "Belum ada laporan. Isi laporan untuk menambahkan angkanya.",
+        // Legal document preview: page counter (Q-IB28)
+        "Page {n} of {total}": "Halaman {n} dari {total}",
+        // Attendance parity on iPad / Mac (Q-IB8): employment start date, Board / Log, My record, legend, pills
+        "Employment start date": "Tanggal mulai kerja",
+        "The basis for annual leave ({n} days a year, reset on 1 January). Eligible after 12 months of work. Not filled in = not eligible yet.": "Dasar hak cuti tahunan ({n} hari/tahun, reset 1 Januari). Berhak setelah 12 bulan kerja. Yang belum diisi = belum berhak.",
+        "{filled}/{total} filled in · {eligible} eligible": "{filled}/{total} terisi · {eligible} berhak",
+        "Not filled in only": "Hanya yang belum diisi",
+        "No one matches.": "Tidak ada yang cocok.",
+        "Eligible": "Berhak",
+        "Not yet": "Belum",
+        "Can't request leave yet": "Belum bisa mengajukan cuti",
+        "Eligible for annual leave": "Berhak cuti tahunan",
+        "Eligible from {date}": "Berhak mulai {date}",
+        "Couldn't save the date.": "Tanggal gagal disimpan.",
+        "Clear the date": "Hapus tanggal",
+        "Log": "Log",
+        "My record": "Rekapku",
+        "Web check-in": "Check-in web",
+        "Web check-in · location not tracked": "Check-in web · lokasi tidak dilacak",
+        "{n} active offices": "{n} kantor aktif",
+        "{left}/{quota} days off": "{left}/{quota} day off",
+        "Attendance view": "Tampilan absensi",
+        "Offices": "Kantor",
         // R15-MORE
     ]
 }

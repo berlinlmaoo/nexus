@@ -140,13 +140,19 @@ struct ProjectToolIcon: View {
     let icon: String
     let label: String
     var active = false
+    /// Icon and words, as the web's "Automations" (UI tour run 15, Q-M9); icon only where the row is tight.
+    var labelled = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: 15, weight: .regular))
+            HStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 15, weight: .regular))
+                if labelled { Text(label).font(NXFont.text(14)).lineLimit(1).fixedSize() }
+            }
                 .foregroundStyle(active ? NX.violetText : NX.mutedFg)
-                .frame(width: 34, height: 34)
+                .padding(.horizontal, labelled ? 9 : 0)
+                .frame(minWidth: 34, minHeight: 34)
                 .background(active ? NX.accentBg : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())

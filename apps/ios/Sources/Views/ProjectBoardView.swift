@@ -31,6 +31,10 @@ struct ProjectDetailView: View {
     /// the tools move under the tabs (UI tour run 13, I-18 / M-7: "verview", "ategori", "Cal" cut).
     @State private var barWidth: CGFloat = 0
     @State private var toolsWidth: CGFloat = 0
+    /// Automations and Ask GIDEON say their names while the row has room for them beside the tabs (web).
+    @State private var toolLabels = false
+    /// What the two names add to the tools' width (an estimate; the margin below keeps it from flipping).
+    private static let toolLabelsWidth: CGFloat = 190
     /// A filter opened from a count on the Overview (owner, 11 Oct 2026): open top-level tasks only,
     /// shown as a chip above the task tabs until it is cleared.
     @State private var drill: OverviewDrill?
@@ -138,10 +142,28 @@ struct ProjectDetailView: View {
     /// The Table's own built-in view: its filter, sort and grouping (web Table toolbar; UI tour run 14,
     /// P-I12 / P-M9: the Table had no Filter / Sort / Group while the List and the web Table do).
     private var tableView: ProjectViewFull? { views.first { $0.builtin == "table" } }
+    /// The Calendar's and the Timeline's own built-in views (the server makes one per layout): their filter
+    /// and sort, the same sheet as the Table's (UI tour run 15, Q-IA26 / Q-M27).
+    private var calendarView: ProjectViewFull? { views.first { $0.builtin == "calendar" } }
+    private var timelineView: ProjectViewFull? { views.first { $0.builtin == "timeline" } }
+    /// A tab's own built-in view: what its ⌄ menu and the toolbar's Filter / Sort act on.
+    private func builtinView(_ t: ProjectTab) -> ProjectViewFull? {
+        switch t {
+        case .board, .list: return layoutOf(t).flatMap { l in viewsFor(l).first { $0.builtin == l } }
+        case .table: return tableView
+        case .calendar: return calendarView
+        case .timeline: return timelineView
+        default: return nil
+        }
+    }
+    /// The sections as a built-in view filters and sorts them.
+    private func lanesThrough(_ v: ProjectViewFull?) -> [ProjectDetail.Lane] {
+        v.map { ViewEngine.lanes(filteredLanes, config: configOf($0), ctx: viewContext) } ?? filteredLanes
+    }
     /// The view the toolbar's Filter / Sort / Group and View settings act on, for the tab on screen.
     private var toolView: ProjectViewFull? {
         if let layout = layoutOf(tab) { return activeView(layout) }
-        return tab == .table ? tableView : nil
+        return builtinView(tab)
     }
     /// The view's config as drawn: an on-screen filter (read-only levels) over the saved one.
     private func configOf(_ v: ProjectViewFull) -> ProjectViewConfig { screenConfigs[v.id] ?? v.config }
@@ -724,6 +746,7 @@ struct ProjectDetailView: View {
                             }
                         }
                         .id(item.id)
+                        .nxTabFrame(item.id)
                     }
                     if let layout = layoutOf(tab), canEdit {
                         Button { alertText = ""; boardAlert = .newView(layout: layout) } label: {
@@ -733,8 +756,10 @@ struct ProjectDetailView: View {
                         .buttonStyle(.plain)
                         .hoverEffect(.highlight)
                         .accessibilityLabel(T("New view"))
+                        .nxTabFrame("new-view")
                     }
                 }
+                .coordinateSpace(.named(NXTabFramesKey.space))
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { tabsWidth = $0 }
                 .scrollTargetLayout()
             }
@@ -835,7 +860,19 @@ struct ProjectDetailView: View {
                 }
             }
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0; fitToolLabels() }
+        .onChange(of: tabsWidth) { _, _ in fitToolLabels() }
+        .onChange(of: toolsWidth) { _, _ in fitToolLabels() }
+    }
+
+    /// Names on the tools only when they fit in the tab row with 20 pt to spare, so the tools never drop
+    /// below the tabs for them (UI tour run 15, Q-M9: an icon-only second row left a ~60 px band).
+    private func fitToolLabels() {
+        guard barWidth > 0, tabsWidth > 0, toolsWidth > 0 else { return }
+        let iconOnly = toolsWidth - (toolLabels ? Self.toolLabelsWidth : 0)
+        let room = barWidth - tabsWidth - iconOnly - 58
+        let want = room >= Self.toolLabelsWidth + 20
+        if want != toolLabels { toolLabels = want }
     }
 
     private var measuredTools: some View {
@@ -850,8 +887,10 @@ struct ProjectDetailView: View {
             ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 2) {
-                    if visibleTabs.contains(.overview) { wideViewTab(.tab(.overview)).id(ViewTabItem.tab(.overview).id) }
-                    ForEach(viewTabItems) { item in wideViewTab(item).id(item.id) }
+                    if visibleTabs.contains(.overview) {
+                        wideViewTab(.tab(.overview)).id(ViewTabItem.tab(.overview).id).nxTabFrame(ViewTabItem.tab(.overview).id)
+                    }
+                    ForEach(viewTabItems) { item in wideViewTab(item).id(item.id).nxTabFrame(item.id) }
                     if canEdit {
                         Button { alertText = ""; boardAlert = .newView(layout: layoutOf(tab) ?? "board") } label: {
                             Image(systemName: "plus").font(.system(size: 14, weight: .regular)).foregroundStyle(NX.mutedFg)
@@ -861,6 +900,7 @@ struct ProjectDetailView: View {
                         .hoverEffect(.highlight)
                         .help(T("New view"))
                         .accessibilityLabel(T("New view"))
+                        .nxTabFrame("new-view")
                     }
                     let modules = Self.moduleTabOrder.filter { visibleTabs.contains($0) }
                     if !modules.isEmpty {
@@ -868,9 +908,11 @@ struct ProjectDetailView: View {
                         ForEach(modules) { t in
                             ProjectIconTab(title: t.label, icon: t.macIcon, on: tab == t) { pickTab(t) }
                                 .id(ViewTabItem.tab(t).id)
+                                .nxTabFrame(ViewTabItem.tab(t).id)
                         }
                     }
                 }
+                .coordinateSpace(.named(NXTabFramesKey.space))
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { tabsWidth = $0 }
                 .scrollTargetLayout()
             }
@@ -936,7 +978,7 @@ struct ProjectDetailView: View {
     @ViewBuilder private func wideViewTab(_ item: ViewTabItem) -> some View {
         switch item {
         case .tab(let t):
-            let builtin = layoutOf(t).flatMap { l in viewsFor(l).first { $0.builtin == l } }
+            let builtin = builtinView(t)
             ProjectViewTab(title: t.label, icon: t.macIcon, on: tabIsOn(t),
                            filtered: builtin.map { configOf($0).isFiltered } ?? false,
                            hasMenu: builtin != nil, action: { pickTab(t) }) {
@@ -965,10 +1007,10 @@ struct ProjectDetailView: View {
                 ProjectToolIcon(icon: "rectangle.grid.1x2", label: T("Group"), active: (c.groupBy ?? "section") != "section") { filterView = v }
             }
             if visibleTabs.contains(.automations) {
-                ProjectToolIcon(icon: "bolt", label: T("Automations"), active: tab == .automations) { tab = .automations }
+                ProjectToolIcon(icon: "bolt", label: T("Automations"), active: tab == .automations, labelled: toolLabels) { tab = .automations }
             }
             if detail != nil {
-                ProjectToolIcon(icon: "sparkles", label: T("Ask GIDEON")) { if !cover.isCovered { gideonOpen = true } }
+                ProjectToolIcon(icon: "sparkles", label: T("Ask GIDEON"), labelled: toolLabels) { if !cover.isCovered { gideonOpen = true } }
             }
             if searchApplies && !lanes.isEmpty {
                 ProjectToolbarSearch(query: $query, open: $searchOpen, focused: $searchFocused,
@@ -1004,7 +1046,7 @@ struct ProjectDetailView: View {
     }
 
     private func tabChip(_ t: ProjectTab) -> some View {
-        let builtin = layoutOf(t).flatMap { l in viewsFor(l).first { $0.builtin == l } }
+        let builtin = builtinView(t)
         // The web's outline icons on every width (run 14, P-I26 / P-M19): Overview is the pulse line, Chat
         // an outline bubble, and an outlet's / a social report's Board the 2×2 grid the web draws.
         let icon = isTypedDashboard && t == .board ? "square.grid.2x2" : t.macIcon
@@ -1118,11 +1160,11 @@ struct ProjectDetailView: View {
                 case .board:    boardTab(detail)
                 case .list:     listTab()
                 case .table:    tableTab()
-                case .calendar: CalendarTab(tasks: filteredLanes.flatMap { $0.tasks ?? [] }, onOpen: { open($0) },
+                case .calendar: CalendarTab(tasks: lanesThrough(calendarView).flatMap { $0.tasks ?? [] }, onOpen: { open($0) },
                                             onCreate: { date in if canCreate { prefillDue = date; createLaneId = nil; showCreate = true } },
                                             canCreate: canCreate,
                                             dateFieldId: plotBy, plotChoices: plotChoices, onPlotBy: { choosePlot($0) })
-                case .timeline: TimelineTab(lanes: filteredLanes, onOpen: { open($0) })
+                case .timeline: TimelineTab(lanes: lanesThrough(timelineView), onOpen: { open($0) })
                 default:        EmptyView()
                 }
             }

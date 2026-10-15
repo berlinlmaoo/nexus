@@ -217,14 +217,17 @@ private struct GalleryCard<Preview: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 10) {
-                glyph.resizable().scaledToFit().fontWeight(.semibold).foregroundStyle(tint)
+                // Neutral grey with the dark accent, as the web's cards (UI tour run 15, Q-IA34: lavender).
+                glyph.resizable().scaledToFit().fontWeight(.semibold).foregroundStyle(NX.foreground.opacity(0.8))
                     .frame(width: 16, height: 16)
                     .frame(width: 32, height: 32)
-                    .background(tint.opacity(0.15), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .background(NX.muted, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    // The whole description, as on the web (it was cut to two lines, P-I32 / P-M18).
+                    // Four lines kept for every description, so the cards of a row are one height and their
+                    // previews line up (Q-IA34; the whole text as before, P-I32 / P-M18).
                     Text(blurb).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        .lineLimit(4, reservesSpace: true)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
@@ -240,7 +243,7 @@ private struct GalleryCard<Preview: View>: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(NX.muted.opacity(0.35), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(NX.border))
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
@@ -432,7 +435,7 @@ private struct DashboardPreview: View {
                 ForEach(Array([1.0, 0.78, 0.55, 0.34].enumerated()), id: \.offset) { i, w in
                     GeometryReader { g in
                         RoundedRectangle(cornerRadius: 3)
-                            .fill(i == 3 ? NX.violet.opacity(0.6) : NX.foreground.opacity(0.15))
+                            .fill(i == 3 ? NX.foreground.opacity(0.55) : NX.foreground.opacity(0.15))
                             .frame(width: g.size.width * w, height: 12)
                             .frame(maxWidth: .infinity)
                     }
@@ -459,7 +462,7 @@ private struct DashboardPreview: View {
                             VStack {
                                 Spacer(minLength: 0)
                                 RoundedRectangle(cornerRadius: 2)
-                                    .fill(i == 3 ? NX.violet.opacity(0.6) : NX.foreground.opacity(0.15))
+                                    .fill(i == 3 ? NX.foreground.opacity(0.55) : NX.foreground.opacity(0.15))
                                     .frame(height: g.size.height * h)
                             }
                         }

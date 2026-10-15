@@ -143,13 +143,16 @@ struct LegalDocumentView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: hSize == .regular ? 14 : 18) {
                 header(doc)
+                // Rows with nothing in them are left out, not drawn empty: an empty actions row and an empty
+                // facts block each took the stack's spacing, ~70 pt between the meta line and the segmented
+                // control on iPad / Mac (UI tour run 15, Q-IB28). The phone's status row always has the status.
                 if hSize == .regular {
                     // The status sits in the header's number row on an iPad / Mac; only the actions remain.
-                    HStack(spacing: 8) { docActions(doc); Spacer(minLength: 0) }
+                    if hasActions(doc) { HStack(spacing: 8) { docActions(doc); Spacer(minLength: 0) } }
                 } else {
                     statusRow(doc)
                 }
-                LegalDocumentFacts(doc: doc) { other = LegalOpenID(id: $0) }
+                if hasFacts(doc) { LegalDocumentFacts(doc: doc) { other = LegalOpenID(id: $0) } }
                 panePicker(doc)
                 switch pane {
                 case .overview: LegalDocumentOverview(model: model, doc: doc, wide: hSize == .regular, route: $route)
@@ -212,6 +215,13 @@ struct LegalDocumentView: View {
                 HStack(spacing: 8) { docActions(doc); Spacer(minLength: 0) }
             }
         }
+    }
+
+    private func hasActions(_ doc: LegalDocument) -> Bool { doc.canUploadSignedCopy || doc.status == "SIGNED" }
+
+    /// What LegalDocumentFacts would draw: a signed copy, a void note, a reused number, a parent or addenda.
+    private func hasFacts(_ doc: LegalDocument) -> Bool {
+        doc.signedAt != nil || doc.status == "VOID" || !doc.numberReusedFrom.isEmpty || doc.parent != nil || !doc.addenda.isEmpty
     }
 
     /// Upload signed copy (FINAL / SENT) and Create addendum (SIGNED).
@@ -332,6 +342,10 @@ private struct LegalDocumentOverview: View {
     @State private var notes = ""
     @State private var pdf: URL?
     @State private var pdfFailed = false
+    /// The preview's page counter and full-screen view (the web's "Open full screen"; UI tour run 15, Q-IB28).
+    @State private var pdfPage = 1
+    @State private var pdfPages = 0
+    @State private var fullScreen = false
     @State private var saving = false
     @State private var restoring: Int?
 
@@ -357,9 +371,26 @@ private struct LegalDocumentOverview: View {
     }
 
     private func preview(_ v: LegalDocVersion) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            previewBox(v)
+            if let pdf {
+                Button { fullScreen = true } label: {
+                    Label(T("Open full screen"), systemImage: "arrow.up.left.and.arrow.down.right")
+                        .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
+                        .frame(minHeight: 36).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .fullScreenCover(isPresented: $fullScreen) { LegalPDFFullScreen(file: pdf, title: doc.title) }
+            }
+        }
+    }
+
+    private func previewBox(_ v: LegalDocVersion) -> some View {
         ZStack {
             if let pdf {
-                LegalPDFView(file: pdf)
+                LegalPDFView(file: pdf, page: $pdfPage, pageCount: $pdfPages)
+                    .overlay(alignment: .bottom) { LegalPageCounter(page: pdfPage, count: pdfPages).padding(.bottom, 10) }
             } else if pdfFailed {
                 Text(T("Couldn't open this file.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {

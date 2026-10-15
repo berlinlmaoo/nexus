@@ -549,10 +549,10 @@ struct OutletHeader: View {
                     Image(systemName: "plus").font(.system(size: 14, weight: .bold))
                     if labelled { Text(T("Add event")).font(NXFont.text(14, .semibold)).lineLimit(1).fixedSize() }
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(NX.background)
                 .padding(.horizontal, labelled ? 14 : 0)
                 .frame(minWidth: 40, minHeight: 40)
-                .background(NX.violetFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(NX.onyx, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -1080,9 +1080,9 @@ struct OutletEventCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Button(action: onEdit) {
                         Label(T("Fill report"), systemImage: "square.and.pencil")
-                            .font(NXFont.text(13, .semibold)).foregroundStyle(.white)
+                            .font(NXFont.text(13, .semibold)).foregroundStyle(NX.background)
                             .padding(.horizontal, 12).frame(minHeight: 40)
-                            .background(NX.violetFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .background(NX.onyx, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     .buttonStyle(.plain)
                     .disabled(true)
@@ -1092,9 +1092,9 @@ struct OutletEventCard: View {
                     Button(action: onEdit) {
                         Label(reported ? T("Edit report") : T("Fill report"), systemImage: "square.and.pencil")
                             .font(NXFont.text(13, .semibold))
-                            .foregroundStyle(reported ? NX.foreground : .white)
+                            .foregroundStyle(reported ? NX.foreground : NX.background)
                             .padding(.horizontal, 12).frame(minHeight: 40)
-                            .background(reported ? NX.background : NX.violetFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .background(reported ? NX.background : NX.onyx, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(reported ? NX.border : .clear))
                     }
                     .buttonStyle(.plain)
@@ -1110,8 +1110,17 @@ struct OutletEventCard: View {
                 total("rsvp", event.rsvpTotal)
                 total("hosting", event.hostingTotal)
                 communities
-                story("success")
-                story("fail")
+                if hSize == .regular {
+                    // What worked beside what didn't, as the web's second column (UI tour run 15, Q-IB19).
+                    Divider().overlay(NX.border).padding(.vertical, 4)
+                    HStack(alignment: .top, spacing: 20) {
+                        storyColumn("success")
+                        storyColumn("fail")
+                    }
+                } else {
+                    story("success")
+                    story("fail")
+                }
             } else {
                 // A night with nothing reported says so once, instead of ~20 rows of "—" and "Not filled"
                 // (UI tour run 15, Q-IB20).
@@ -1189,7 +1198,9 @@ struct OutletEventCard: View {
             Divider().overlay(NX.border).padding(.vertical, 4)
             row(T("Communities total"), Text(OutletFormat.count(event.communityTotal)), strong: true, number: true)
             ForEach(list, id: \.rowId) { c in
-                row(itemLabel(c.name, archived: c.archived), Text(OutletFormat.count(event.communityTotals[c.id])), indent: 1, number: true)
+                // A community with its own breakdown is a group header, bold as on the web (Q-IB19).
+                row(itemLabel(c.name, archived: c.archived), Text(OutletFormat.count(event.communityTotals[c.id])),
+                    strong: c.isBreakdown, indent: 1, number: true)
                 if c.isBreakdown {
                     ForEach(shown(c.items), id: \.rowId) { i in
                         row(itemLabel(i.label, archived: i.archived), Text(OutletFormat.count(event.values[i.id])), indent: 2, number: true)
@@ -1199,6 +1210,25 @@ struct OutletEventCard: View {
                     }
                 }
             }
+        }
+    }
+
+    /// One story as a column: the title, then each question over its answer.
+    @ViewBuilder private func storyColumn(_ key: String) -> some View {
+        if let s = form.section(key) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(s.title.text).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                ForEach(s.fields, id: \.key) { f in
+                    let answer = event.texts[f.key] ?? ""
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(f.label.text).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        Text(answer.isEmpty ? T("Not filled") : answer).font(NXFont.text(13))
+                            .foregroundStyle(answer.isEmpty ? NX.mutedFg : NX.foreground)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
     }
 

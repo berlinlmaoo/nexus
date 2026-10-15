@@ -460,6 +460,12 @@ struct LegalSegmentsView: View {
 /// A downloaded PDF drawn in place (the web's iframe of the shown version).
 struct LegalPDFView: UIViewRepresentable {
     let file: URL
+    /// The page on screen (1-based) and the page count, for a "Page 2 of 8" counter.
+    var page: Binding<Int>? = nil
+    var pageCount: Binding<Int>? = nil
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
     func makeUIView(context: Context) -> PDFView {
         let v = PDFView()
         v.autoScales = true
@@ -467,10 +473,79 @@ struct LegalPDFView: UIViewRepresentable {
         v.displayDirection = .vertical
         v.backgroundColor = .secondarySystemBackground
         v.document = PDFDocument(url: file)
+        context.coordinator.observe(v)
+        context.coordinator.report(v)
         return v
     }
     func updateUIView(_ v: PDFView, context: Context) {
-        if v.document?.documentURL != file { v.document = PDFDocument(url: file) }
+        context.coordinator.parent = self
+        if v.document?.documentURL != file {
+            v.document = PDFDocument(url: file)
+            context.coordinator.report(v)
+        }
+    }
+
+    final class Coordinator: NSObject {
+        var parent: LegalPDFView
+        private var token: NSObjectProtocol?
+        init(_ parent: LegalPDFView) { self.parent = parent }
+        deinit { if let token { NotificationCenter.default.removeObserver(token) } }
+
+        func observe(_ v: PDFView) {
+            token = NotificationCenter.default.addObserver(forName: .PDFViewPageChanged, object: v, queue: .main) { [weak self, weak v] _ in
+                guard let self, let v else { return }
+                self.report(v)
+            }
+        }
+
+        func report(_ v: PDFView) {
+            guard let doc = v.document else { return }
+            let count = doc.pageCount
+            let index = v.currentPage.map { doc.index(for: $0) + 1 } ?? 1
+            DispatchQueue.main.async {
+                if self.parent.pageCount?.wrappedValue != count { self.parent.pageCount?.wrappedValue = count }
+                if self.parent.page?.wrappedValue != index { self.parent.page?.wrappedValue = index }
+            }
+        }
+    }
+}
+
+/// A PDF on the whole screen, zoomable, with its page counter and Done (the web's "Open full screen").
+struct LegalPDFFullScreen: View {
+    let file: URL
+    let title: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var page = 1
+    @State private var count = 0
+
+    var body: some View {
+        NavigationStack {
+            LegalPDFView(file: file, page: $page, pageCount: $count)
+                .ignoresSafeArea(edges: .bottom)
+                .overlay(alignment: .bottom) { LegalPageCounter(page: page, count: count).padding(.bottom, 20) }
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button(T("Done")) { dismiss() } }
+                }
+        }
+    }
+}
+
+/// "Page 2 of 8" on a small capsule over a PDF.
+struct LegalPageCounter: View {
+    let page: Int
+    let count: Int
+    var body: some View {
+        if count > 0 {
+            Text(T("Page {n} of {total}").replacingOccurrences(of: "{n}", with: AppNumber.int(page))
+                    .replacingOccurrences(of: "{total}", with: AppNumber.int(count)))
+                .font(NXFont.text(12, .semibold)).monospacedDigit()
+                .foregroundStyle(NX.foreground)
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(.regularMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(NX.border))
+        }
     }
 }
 
