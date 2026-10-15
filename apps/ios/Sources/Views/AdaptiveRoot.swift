@@ -258,6 +258,25 @@ struct NXCardGrid<Content: View>: View {
 enum NXSelection: Hashable {
     case screen(NXScreen)
     case project(ProjectRef)
+
+    /// A project is the same place whatever its ref's name or icon say. A page opened from a link starts
+    /// with a nameless ref; when the sidebar's refresh swapped in the named one, the
+    /// split view took it as a new selection and reset the detail column, which popped the form builder a
+    /// `?form=` link had just pushed back to the project's Forms list (UI tour run 16, R16-I-03 iPad).
+    static func == (a: NXSelection, b: NXSelection) -> Bool {
+        switch (a, b) {
+        case (.screen(let x), .screen(let y)): return x == y
+        case (.project(let x), .project(let y)): return x.id == y.id
+        default: return false
+        }
+    }
+
+    func hash(into hasher: inout Hasher) {
+        switch self {
+        case .screen(let s): hasher.combine(0); hasher.combine(s)
+        case .project(let r): hasher.combine(1); hasher.combine(r.id)
+        }
+    }
 }
 
 /// Picks the shape. Regular width means iPad (any orientation) and, later, a Mac window.
@@ -567,7 +586,8 @@ struct SidebarRoot: View {
             .liveRefresh(every: 30, on: [.nexusWorkspaceChanged], kinds: [RealtimeKind.projects]) {
                 await shortcuts.syncPins()
                 await folderStore.load(workspaceId: workspaceId)
-                keepProjectSelection()
+                // No re-selection after a rename or a new icon: a project's selection compares by id
+                // (NXSelection ==), so its row stays highlighted and the open page keeps its pushes.
             }
         } detail: {
             let needsTopBand = detailHidesNavigationBar
@@ -736,16 +756,6 @@ struct SidebarRoot: View {
 
     /// ⌘1…⌘7, in this order. Also read by the keyboard shortcuts sheet (KeyboardShortcutsHelp.swift).
     static let shortcutScreens: [NXScreen] = [.dashboard, .projects, .tasks, .inbox, .messages, .teamCalendar, .attendance]
-
-    /// A project shortcut is selected by its whole ref (id, name, icon). When a refresh brings the same
-    /// project back renamed or with a new icon, its row's tag changes and the List would show nothing
-    /// selected while its board is still open: follow it to the new ref. Same id, so the board stays.
-    private func keepProjectSelection() {
-        guard case .project(let ref) = selection,
-              let now = (shortcuts.pinned + shortcuts.recent).first(where: { $0.id == ref.id }),
-              now != ref else { return }
-        selection = .project(now)
-    }
 
     /// Whether the detail column draws without a navigation bar, and therefore has nowhere for the
     /// system's sidebar button to live. Project boards hide their bar too, so a shortcut opened
