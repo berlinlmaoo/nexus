@@ -143,13 +143,16 @@ struct LegalDocumentView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: hSize == .regular ? 14 : 18) {
                 header(doc)
+                // Rows with nothing in them are left out, not drawn empty: an empty actions row and an empty
+                // facts block each took the stack's spacing, ~70 pt between the meta line and the segmented
+                // control on iPad / Mac (UI tour run 15, Q-IB28). The phone's status row always has the status.
                 if hSize == .regular {
                     // The status sits in the header's number row on an iPad / Mac; only the actions remain.
-                    HStack(spacing: 8) { docActions(doc); Spacer(minLength: 0) }
+                    if hasActions(doc) { HStack(spacing: 8) { docActions(doc); Spacer(minLength: 0) } }
                 } else {
                     statusRow(doc)
                 }
-                LegalDocumentFacts(doc: doc) { other = LegalOpenID(id: $0) }
+                if hasFacts(doc) { LegalDocumentFacts(doc: doc) { other = LegalOpenID(id: $0) } }
                 panePicker(doc)
                 switch pane {
                 case .overview: LegalDocumentOverview(model: model, doc: doc, wide: hSize == .regular, route: $route)
@@ -212,6 +215,13 @@ struct LegalDocumentView: View {
                 HStack(spacing: 8) { docActions(doc); Spacer(minLength: 0) }
             }
         }
+    }
+
+    private func hasActions(_ doc: LegalDocument) -> Bool { doc.canUploadSignedCopy || doc.status == "SIGNED" }
+
+    /// What LegalDocumentFacts would draw: a signed copy, a void note, a reused number, a parent or addenda.
+    private func hasFacts(_ doc: LegalDocument) -> Bool {
+        doc.signedAt != nil || doc.status == "VOID" || !doc.numberReusedFrom.isEmpty || doc.parent != nil || !doc.addenda.isEmpty
     }
 
     /// Upload signed copy (FINAL / SENT) and Create addendum (SIGNED).
