@@ -10,6 +10,7 @@ import { motion } from "framer-motion";
 import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
+import { SnapTail } from "@/components/SnapTail";
 import { EmptyAction, EmptyState } from "@/components/EmptyState";
 import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { Avatar, AvatarStack } from "@/components/Avatar";
@@ -1266,7 +1267,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
         // Phone: a lane nearly fills the screen, so the next one peeks in by its card edges only, never by half a
         // value ("Rp 3", UI tour run 15, R15-WM-2). Wider screens: an empty lane is narrow, so the columns with
         // cards come into view (R15-WB-8).
-        className={cn("group/lane flex shrink-0 snap-start flex-col rounded-lg p-1.5 transition-shadow", laneW, "max-sm:w-[calc(100vw-4rem)]", showHeader && items.length === 0 && draft !== id && "sm:w-48", showHeader && "max-h-[max(24rem,calc(100dvh-11rem))] max-sm:max-h-[calc(100dvh-16rem)]", dragLaneId === g.key && "opacity-40")}
+        className={cn("group/lane flex shrink-0 snap-start flex-col rounded-lg p-1.5 transition-shadow", laneW, "max-sm:w-[calc(100vw-4rem)]", showHeader && items.length === 0 && draft !== id && "sm:w-48", showHeader && "max-h-[max(24rem,calc(100dvh-11rem))] max-sm:max-h-[max(16rem,calc(100dvh-var(--page-sticky-top,0px)-var(--page-snap-extra,0px)-var(--tabbar-room)-2.25rem))]", dragLaneId === g.key && "opacity-40")}
         onDragOver={(e) => {
           if (!dropOk) return;
           e.preventDefault();
@@ -1325,7 +1326,11 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
             </div>
           </div>
         )}
-        <div data-lane-cards className={cn("relative flex min-h-16 flex-col gap-1.5", showHeader && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain")}>
+        {/* Phone: the lane is as tall as the room between the pinned column chips and the tab bar (the board's own
+            padding included), so the page has nothing left to scroll and the lane header is never cut under the
+            chips (UI tour run 18, R18-WB-1, project-board-2: at 100dvh - 16rem the page scrolled ~30px). Its cards
+            snap whole at the top of the list, and the list's end is a snap point too (SnapTail). */}
+        <div data-lane-cards data-snap-rows={phoneBoard && showHeader ? "" : undefined} className={cn("relative flex min-h-16 flex-col gap-1.5", showHeader && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain", phoneBoard && showHeader && "[scroll-snap-type:y_proximity]")}>
           {slot?.lane === id && <div aria-hidden className="pointer-events-none absolute inset-x-1 z-10 h-0.5 rounded-full" style={{ top: slot.y, backgroundColor: tone.dot }} />}
           {/* "+ New task" sits at the TOP of the column (owner, 10 Oct 2026: "Add task di atas lane"). */}
           {!canEditHere ? null : draft === id ? (
@@ -1360,6 +1365,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
               />
             )}
           />
+          {phoneBoard && showHeader && <SnapTail scroller="parent" />}
         </div>
       </section>
     );
