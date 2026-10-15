@@ -258,7 +258,7 @@ const OUTSIDE_MESSAGE_RULES: Rule[] = [
   { re: /^Sudah (.+?) di luar kantor · sisa (.+?) · check-out otomatis (\d{2}:\d{2})\.$/, key: "{duration} away from the office · {left} left · automatic check-out at {time}.", vars: (m) => ({ duration: idDuration(m[1]), left: idDuration(m[2]), time: m[3] }) },
   { re: /^Sudah (.+?) di luar kantor\. Ajukan izin kalau ada kegiatan di luar\.$/, key: "{duration} away from the office. Request a permission if you're working outside.", vars: (m) => ({ duration: idDuration(m[1]) }) },
   { re: /^Kamu di luar kantor sejak (\d{2}:\d{2}), jadi di-check-out offsite\. Menunggu persetujuan atasanmu\.$/, key: "You've been away from the office since {time}, so you were checked out off-site. Waiting for your manager to approve.", vars: (m) => ({ time: m[1] }) },
-  { re: /^Kamu di luar kantor sejak (\d{2}:\d{2}), jadi di-check-out offsite\. Menunggu persetujuan BoD\.$/, key: "You've been away from the office since {time}, so you were checked out off-site. Waiting for the board to approve.", vars: (m) => ({ time: m[1] }) },
+  { re: /^Kamu di luar kantor sejak (\d{2}:\d{2}), jadi di-check-out offsite\. Menunggu persetujuan (?:BoD|direksi)\.$/, key: "You've been away from the office since {time}, so you were checked out off-site. Waiting for the board to approve.", vars: (m) => ({ time: m[1] }) },
 ];
 
 const ENUM_LABEL: Record<string, string> = { TODO: "To do", IN_PROGRESS: "In progress", IN_REVIEW: "In review", DONE: "Done", CANCELLED: "Cancelled", URGENT: "Urgent", HIGH: "High", MEDIUM: "Medium", LOW: "Low", NONE: "No priority" };

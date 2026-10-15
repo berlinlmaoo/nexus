@@ -24,7 +24,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const ctx = await getAttendanceWorkspaceContext(session.user.id)
     if (!ctx.workspace) return NextResponse.json({ error: "No workspace membership found", code: "NO_WORKSPACE" }, { status: 404 })
     if (!ctx.canManageAttendance) {
-      return NextResponse.json({ error: "Hanya BoD ke atas yang bisa mencabut extra day off.", code: "FORBIDDEN" }, { status: 403 })
+      return NextResponse.json({ error: "Hanya direksi ke atas yang bisa mencabut extra day off.", code: "FORBIDDEN" }, { status: 403 })
     }
     const workspaceId = ctx.workspace.id
 

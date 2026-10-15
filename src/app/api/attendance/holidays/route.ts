@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   try {
     const g = await ctx()
     if (g.error) return g.error
-    if (!g.canManage) return NextResponse.json({ error: "Hanya BoD ke atas yang bisa atur tanggal merah." }, { status: 403 })
+    if (!g.canManage) return NextResponse.json({ error: "Hanya direksi ke atas yang bisa atur tanggal merah." }, { status: 403 })
 
     const body = await req.json().catch(() => ({}))
     const date = String(body?.date ?? "").trim()
@@ -86,7 +86,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const g = await ctx()
     if (g.error) return g.error
-    if (!g.canManage) return NextResponse.json({ error: "Hanya BoD ke atas yang bisa atur tanggal merah." }, { status: 403 })
+    if (!g.canManage) return NextResponse.json({ error: "Hanya direksi ke atas yang bisa atur tanggal merah." }, { status: 403 })
 
     const id = (req.nextUrl.searchParams.get("id") ?? "").trim()
     const date = (req.nextUrl.searchParams.get("date") ?? "").trim()

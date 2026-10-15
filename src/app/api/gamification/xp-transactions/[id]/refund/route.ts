@@ -58,7 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
     if (!member) return NextResponse.json({ error: "Transaksi XP tidak ditemukan.", code: "NOT_FOUND" }, { status: 404 })
     if (owner.userId === session.user.id) {
-      return NextResponse.json({ error: "Potongan XP kamu sendiri dihapus oleh BoD lain.", code: "SELF_REFUND" }, { status: 403 })
+      return NextResponse.json({ error: "Potongan XP kamu sendiri dihapus oleh anggota direksi lain.", code: "SELF_REFUND" }, { status: 403 })
     }
 
     const result = await refundXpTransaction({ transactionId, workspaceId, actorId: session.user.id, note: body.data.note })

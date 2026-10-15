@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
     const g = await context()
     if ("error" in g) return g.error
     if (!g.canManage) {
-      return NextResponse.json({ error: "Hanya BoD ke atas yang bisa kasih extra day off.", code: "FORBIDDEN" }, { status: 403 })
+      return NextResponse.json({ error: "Hanya direksi ke atas yang bisa kasih extra day off.", code: "FORBIDDEN" }, { status: 403 })
     }
 
     const body = await req.json().catch(() => null)
