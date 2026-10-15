@@ -864,6 +864,12 @@ struct ProjectDetailView: View {
     /// so the first row holds only Overview … Timeline, "+" and Add task.
     @ViewBuilder private var wideTabBar: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // The width the bar is offered, read off a view that takes exactly that width. Measured on the bar
+            // itself it included the overflow of a tools row that did not fit, so the module tabs stayed in that
+            // row and pushed every project view ~190 pt wider than the detail column, clipped on both sides
+            // (UI tour run 18, iPad R18-I-01).
+            Color.clear.frame(height: 0)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0; fitToolLabels() }
             HStack(spacing: 8) {
                 wideTabs
                 if tabsOverflow { tabOverflowMenu(wideMenuItems) }
@@ -877,7 +883,6 @@ struct ProjectDetailView: View {
             }
         }
         .background(alignment: .topLeading) { moduleTabsMeasure }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0; fitToolLabels() }
         .onChange(of: tabsWidth) { _, _ in fitToolLabels() }
         .onChange(of: toolsWidth) { _, _ in fitToolLabels() }
     }
@@ -956,7 +961,10 @@ struct ProjectDetailView: View {
     /// The module tabs fit at the start of the tools row beside the tools (measured), else they stay in the
     /// first row.
     private var modulesInToolsRow: Bool {
-        barWidth == 0 || modulesWidth == 0 || modulesWidth + toolsWidth + 18 + 8 + 24 <= barWidth
+        // Leading inset 18, the Spacer's 8 and the row's two 8 pt gaps, the tools' trailing inset 24. Unmeasured
+        // (first pass) the modules stay in the first row, which always fits: a row that overflows widens the
+        // whole page.
+        barWidth > 0 && modulesWidth > 0 && toolsWidth > 0 && modulesWidth + toolsWidth + 18 + 8 + 16 + 24 <= barWidth
     }
 
     /// The module tabs at the start of the tools row, named like the views (UI tour run 16, R16-B-06; web
