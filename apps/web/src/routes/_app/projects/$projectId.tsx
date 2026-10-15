@@ -7,7 +7,7 @@ import { AccessLevelPicker, accessChangeFailed, accessLevelLabel } from "@/compo
 import { ProjectAccessContext, canEditLevel, useProjectCanEdit } from "@/components/projects/project-access";
 import { Button, Card, CardContent as CardBody, Chip } from "@heroui/react";
 import { motion } from "framer-motion";
-import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyAction, EmptyState } from "@/components/EmptyState";
@@ -426,6 +426,9 @@ function ProjectDetail() {
 
   // ── saved views (owner, 12 Oct 2026) ──
   const pv = useProjectViews(projectId, !!data && !isSpecial);
+  // From md the project's other tabs (Spreadsheet, Pages, Forms, Chat) open the tools row, so every view tab fits
+  // row 1 at 1440 (UI tour run 17, R17-WD-3: "2 ›" hid Forms and Chat beside ~900px of empty tools row).
+  const modulesInToolsRow = !useIsMobile();
   const me = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1, staleTime: 300_000 });
   const meId = me.data?.user?.id ?? null;
   const cfDefs = useQuery({ queryKey: ["nexus", "project-custom-fields", projectId], queryFn: () => nexusApi.projectCustomFields(projectId), staleTime: 60_000, retry: false, enabled: !!data && !isSpecial });
@@ -634,14 +637,16 @@ function ProjectDetail() {
   const beforeTabs: ToolbarTab[] = moduleTabs.filter((m) => m.before).map((m) => ({ key: m.id, label: tr(m.label), icon: m.icon }));
   const viewTabs: ToolbarTab[] = visibleViews.map((v) => ({ key: v.id, label: viewName(v, tr), icon: LAYOUT_ICON[v.layout] ?? LayoutGrid, view: v }));
   const afterTabs: ToolbarTab[] = moduleTabs.filter((m) => !m.before).map((m) => ({ key: m.id, label: tr(m.label), icon: m.icon, compact: true }));
-  const lastViewKey = viewTabs.length && afterTabs.length ? viewTabs[viewTabs.length - 1].key : null;
+  const rowOneTabs = modulesInToolsRow ? [...beforeTabs, ...viewTabs] : [...beforeTabs, ...viewTabs, ...afterTabs];
+  const lastViewKey = viewTabs.length && afterTabs.length && !modulesInToolsRow ? viewTabs[viewTabs.length - 1].key : null;
+  const tabNoop = () => {};
   const activeKey = activeModule ?? activeView?.id ?? null;
   const toolbar = data && !isSpecial ? (
     <div className="pb-px">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5">
         <div className="flex min-w-0 flex-1 basis-0">
         <ViewTabsBar
-          tabs={[...beforeTabs, ...viewTabs, ...afterTabs]}
+          tabs={rowOneTabs}
           activeKey={activeKey}
           onSelect={select}
           canEditView={canEditView}
@@ -667,6 +672,23 @@ function ProjectDetail() {
           <AddTaskSplit sections={[...taskLists].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((l) => ({ id: l.id, name: l.name }))} onAdd={addTask} />
         </span>
         <div className={cn("shrink-0 items-center gap-0.5 sm:flex sm:basis-full sm:justify-end", toolsOpen ? "flex basis-full justify-end" : "hidden")}>
+          {modulesInToolsRow && afterTabs.length > 0 && (
+            <div className="mr-auto flex min-w-0 flex-1 pr-4">
+              <ViewTabsBar
+                tabs={afterTabs}
+                activeKey={activeKey}
+                onSelect={select}
+                canEditView={() => false}
+                onReorder={tabNoop}
+                onRename={tabNoop}
+                onSettings={tabNoop}
+                onDuplicate={tabNoop}
+                onCopyLink={tabNoop}
+                onDelete={tabNoop}
+                onHide={tabNoop}
+              />
+            </div>
+          )}
           {cfg && activeView && !activeModule && (
             <>
               <FilterButton filter={cfg.filter} defs={defs} onChange={setFilter} chipsOpen={showChips} onToggleChips={() => setChipsHidden((h) => !h)} />
@@ -909,6 +931,8 @@ function ProjectDetail() {
 }
 
 const LANE_W: Record<ViewConfig["cardSize"], string> = { small: "w-64", medium: "w-72", large: "w-96" };
+/** The same widths in px, for the board's fit check. */
+const LANE_PX: Record<ViewConfig["cardSize"], number> = { small: 256, medium: 288, large: 384 };
 
 /** Values a view's filter asks for, written into a task made inside it (Notion pre-fills them; C-BUG-9). */
 type Prefill = { priority?: string; status?: string; sectionId?: string; assigneeIds?: string[]; tags?: string[]; fields: Array<{ key: string; value: string }> };
@@ -1073,6 +1097,57 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   // A long fade on the board: a column cut at the edge fades out across most of a card's width, so a cut
   // amount ("Rp 50…") never reads as a value (UI tour run 16, R16-WD-1).
   const boardFade = useEdgeFade(boardRef, [tasks.length, cfg.cardSize, linkedLanes.length], "board");
+  // From md, a linked column that would not fit whole at the board's right edge is a narrow rail (its name, "Linked"
+  // and its count) that opens it on a click, so the board never ends on a hard-cut column (UI tour run 17,
+  // R17-WD-1: "PENGAJUAN DANA PATS G…" and "22 M…" were cut at the edge of the 1440 screen). A person's own
+  // choice (open or fold) wins for the visit.
+  // Phone: the board's top is a snap point under the pinned column-chip row (its height as extra snap room), so a
+  // scrolled board starts with whole lane headers, not "On Progress 12" cut in half under the chips (UI tour
+  // run 17, R17-WB-1, project-board-2). Lanes cannot be the page's snap points: the board scroller holds them.
+  const chipRowRef = useRef<HTMLDivElement>(null);
+  const [phoneBoard, setPhoneBoard] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const on = () => setPhoneBoard(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  useEffect(() => {
+    const el = chipRowRef.current;
+    const root = document.documentElement;
+    if (!el || !phoneBoard) return;
+    const read = () => root.style.setProperty("--page-snap-extra", `${Math.round(el.offsetHeight)}px`);
+    read();
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(read);
+    ro?.observe(el);
+    return () => { ro?.disconnect(); root.style.removeProperty("--page-snap-extra"); };
+  }, [phoneBoard, sub, lanes.length > 1]);
+  const [linkedChoice, setLinkedChoice] = useState<Record<string, boolean>>({});
+  const [linkedRail, setLinkedRail] = useState<ReadonlySet<string>>(() => new Set());
+  useLayoutEffect(() => {
+    const box = boardRef.current;
+    if (!box || !linkedLanes.length) return;
+    const lanePx = LANE_PX[cfg.cardSize];
+    const measure = () => {
+      const next = new Set<string>();
+      if (window.matchMedia("(min-width: 768px)").matches) {
+        const boxLeft = box.getBoundingClientRect().left;
+        for (const lane of linkedLanes) {
+          const el = box.querySelector<HTMLElement>(`[data-lane-key="${CSS.escape(`linked-${lane.id}`)}"]`);
+          if (!el) continue;
+          const left = el.getBoundingClientRect().left - boxLeft + box.scrollLeft;
+          // The lane, the gap, the trailing spacer (md:w-6) and the board's right padding (md:px-8) must fit.
+          if (left + lanePx + 10 + 24 + 32 > box.clientWidth) next.add(lane.id);
+        }
+      }
+      setLinkedRail((prev) => (prev.size === next.size && [...next].every((id) => prev.has(id)) ? prev : next));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(box);
+    if (box.firstElementChild) ro.observe(box.firstElementChild);
+    return () => ro.disconnect();
+  }, [linkedLanes, cfg.cardSize]);
   // Phone: the board opens on the first column that holds cards, not on an empty To Do that fills the screen
   // while the cards only peek in (UI tour run 15, R15-WB-8). Once per board.
   const openedOn = useRef(false);
@@ -1290,17 +1365,28 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
     );
   };
 
-  const linkedLaneEls = linkedLanes.map((lane) => (
+  const linkedLaneEls = linkedLanes.map((lane) => (linkedChoice[lane.id] ?? !linkedRail.has(lane.id)) ? (
     <section key={`linked-${lane.id}`} data-lane-key={`linked-${lane.id}`} className={cn("flex shrink-0 snap-start flex-col rounded-lg border border-dashed border-border p-1.5 max-h-[max(24rem,calc(100dvh-11rem))] max-sm:max-h-[calc(100dvh-16rem)]", laneW, "max-sm:w-[calc(100vw-4rem)]")}>
       <div className="mb-1 flex items-center gap-1.5 px-1.5 py-1">
         <span className="truncate text-sm font-semibold">{lane.name}</span>
         <span className="shrink-0 rounded bg-muted px-1.5 text-[11px] text-muted-foreground">{t("Linked")}</span>
         <span className="ml-auto text-xs tabular-nums text-muted-foreground">{lane.tasks.length}</span>
+        <button type="button" onClick={() => setLinkedChoice((c) => ({ ...c, [lane.id]: false }))} aria-label={t("Fold the {name} column", { name: lane.name })} title={t("Fold the {name} column", { name: lane.name })}
+          className="hidden h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:grid"><ChevronRight className="h-3.5 w-3.5" /></button>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overscroll-y-contain">
         <Incremental items={lane.tasks} keyOf={(task) => task.id} render={(task) => <TaskCard task={task} currentProjectId={project.id} keys={keys} cfg={cfg} defs={defs} ctx={ctx} onOpen={onOpen} onDrag={noDrag} onDragEnd={noop} lane={`linked-${lane.id}`} row={null} moving={false} />} />
       </div>
     </section>
+  ) : (
+    <button key={`linked-${lane.id}`} type="button" data-lane-key={`linked-${lane.id}`} onClick={() => setLinkedChoice((c) => ({ ...c, [lane.id]: true }))}
+      aria-label={t("Show the {name} column", { name: lane.name })} title={t("Show the {name} column", { name: lane.name })}
+      className="flex w-11 shrink-0 flex-col items-center gap-2 rounded-lg border border-dashed border-border px-1 py-2.5 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground">
+      <ChevronLeft aria-hidden className="h-3.5 w-3.5 shrink-0" />
+      <span className="text-xs tabular-nums">{lane.tasks.length}</span>
+      <span className="max-h-64 truncate text-sm font-semibold text-foreground [writing-mode:vertical-rl]">{lane.name}</span>
+      <span className="shrink-0 rounded bg-muted px-0.5 py-1.5 text-[11px] [writing-mode:vertical-rl]">{t("Linked")}</span>
+    </button>
   ));
 
   if (!sub) {
@@ -1312,7 +1398,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
           the tabs (UI tour run 16, R16-WB-1), and its right edge fades while more chips lie that way
           (R16-WM-7: "SPECIAL BUSINESS U…" ended hard at the screen edge). */}
       {lanes.length > 1 && (
-        <div className="sticky top-[var(--page-sticky-top,0px)] z-20 bg-card pb-1 sm:hidden">
+        <div ref={chipRowRef} className="sticky top-[var(--page-sticky-top,0px)] z-20 bg-card pb-1 sm:hidden">
         <div role="group" aria-label={t("Columns")} className="flex gap-1.5 overflow-x-auto px-4 pt-3 [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] [scrollbar-width:none] after:block after:w-6 after:shrink-0 after:content-[''] [&::-webkit-scrollbar]:hidden">
           {lanes.map((g) => {
             const tone = COLOR_PRESETS[laneColor(g)];
@@ -1335,7 +1421,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
         </div>
         </div>
       )}
-      <div ref={boardRef} data-touch-drag-root="" className={cn("overflow-x-auto overscroll-x-contain px-4 pb-6 pt-3 max-sm:snap-x max-sm:snap-mandatory max-sm:scroll-px-4 md:px-8", boardFade)}>
+      <div ref={boardRef} data-touch-drag-root="" data-snap-row={phoneBoard && lanes.length > 1 ? "" : undefined} className={cn("overflow-x-auto overscroll-x-contain px-4 pb-6 pt-3 max-sm:snap-x max-sm:snap-mandatory max-sm:scroll-px-4 md:px-8", boardFade)}>
         {/* The trailing spacer keeps the last column clear of the edge at full scroll (W-D4). */}
         <div className="flex min-w-max items-start gap-2.5 after:block after:w-2 after:shrink-0 after:content-[''] md:after:w-6">
           {lanes.map((g) => renderLane(g, null, g.tasks, true))}
