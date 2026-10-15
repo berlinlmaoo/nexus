@@ -111,7 +111,7 @@ function Toggle({ checked, onChange, label, hint, icon, disabled }: { checked: b
         <span className="block text-sm">{label}</span>
         {hint && <span className="mt-0.5 block text-xs text-muted-foreground">{hint}</span>}
       </span>
-      <span className={cn("relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors", checked ? "bg-primary" : "bg-muted dark:bg-control-border")}>
+      <span className={cn("relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors", checked ? "bg-switch-on" : "bg-muted dark:bg-control-border")}>
         <span className={cn("inline-block h-4 w-4 rounded-full bg-card shadow transition-transform dark:bg-background", checked ? "translate-x-4" : "translate-x-0.5")} />
       </span>
     </button>

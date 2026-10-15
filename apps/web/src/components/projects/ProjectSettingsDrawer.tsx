@@ -41,7 +41,7 @@ function Toggle({ checked, onChange, disabled, label }: { checked: boolean; onCh
       onClick={() => onChange(!checked)}
       className={cn(
         "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50",
-        checked ? "bg-primary" : "bg-muted-foreground/30 dark:bg-control-border",
+        checked ? "bg-switch-on" : "bg-muted-foreground/30 dark:bg-control-border",
       )}
     >
       <span className={cn("inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform dark:bg-background", checked ? "translate-x-[22px]" : "translate-x-0.5")} />
