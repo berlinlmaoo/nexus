@@ -875,7 +875,6 @@ function Attendance() {
 
         <ReflectionsSection canPickPeople={canSeeBoard} members={allMembers} />
         <RequestsSection canReview={canReview} canManage={canManage} viewerId={today.data?.viewerId ?? null} />
-        {canManage && <EmploymentStartSection />}
         {canManage && <OfficesSection />}
       </div>
       <AnimatePresence>
@@ -1870,100 +1869,6 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
  * someone has actually worked here, and guessing from account age would rule out everyone who
  * genuinely qualifies.
  */
-function EmploymentStartSection() {
-  const { locale } = useLang();
-  const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["employment-start"], queryFn: () => nexusApi.employmentStartDates(), retry: 1 });
-  const save = useMutation({
-    mutationFn: ({ userId, date }: { userId: string; date: string | null }) => nexusApi.setEmploymentStartDate(userId, date),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["employment-start"] });
-      qc.invalidateQueries({ queryKey: ["attendance-today"] });
-    },
-    onError: (e) => alert(e instanceof Error ? e.message : tr("Couldn't save the date.")),
-  });
-
-  const rows = q.data?.members ?? [];
-  const filled = rows.filter((r) => r.employmentStartDate).length;
-  const eligible = rows.filter((r) => r.eligible).length;
-  // The whole crew in one flat list ran over four screens: a search and "Not filled in only" find the people
-  // still to do (UI tour run 13, W-D25).
-  const [query, setQuery] = useState("");
-  const [missingOnly, setMissingOnly] = useState(false);
-  const needle = query.trim().toLowerCase();
-  const shownRows = rows.filter((m) => (!missingOnly || !m.employmentStartDate) && (!needle || `${m.name ?? ""} ${m.email ?? ""}`.toLowerCase().includes(needle)));
-
-  return (
-    <section className="rounded-3xl border border-border bg-card">
-      <div data-snap-row className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
-        <div className="min-w-0 flex-1">
-          <h2 className="font-display text-base font-bold tracking-tight">{tr("Employment start date")}</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {tr("The basis for annual leave ({n} days a year, reset on 1 January). Eligible after 12 months of work. Not filled in = not eligible yet.", { n: q.data?.quota ?? 12 })}
-          </p>
-        </div>
-        <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-[11px] font-bold">
-          {tr("{filled}/{total} filled in · {eligible} eligible", { filled, total: rows.length, eligible })}
-        </span>
-      </div>
-      {rows.length > 8 && (
-        <div className="flex flex-wrap items-center gap-2 border-b border-border px-5 py-3">
-          <div className="relative min-w-[12rem] flex-1 sm:max-w-xs">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/50" />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} aria-label={tr("Search people")} placeholder={tr("Search…")}
-              className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-3 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20" />
-          </div>
-          <button type="button" aria-pressed={missingOnly} onClick={() => setMissingOnly((v) => !v)}
-            className={cn("rounded-full border px-3 py-1 text-xs font-semibold transition-colors pointer-coarse:min-h-9", missingOnly ? "border-foreground/25 bg-accent text-foreground" : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground")}>
-            {tr("Not filled in only")} <span className="tabular-nums">({rows.length - filled})</span>
-          </button>
-        </div>
-      )}
-      <div data-snap-rows className="divide-y divide-border">
-        {q.isLoading && <p className="px-5 py-4 text-sm text-muted-foreground">{tr("Loading…")}</p>}
-        {!q.isLoading && rows.length > 0 && shownRows.length === 0 && <p className="px-5 py-4 text-sm text-muted-foreground">{tr("No one matches.")}</p>}
-        {shownRows.map((m) => (
-          <div key={m.userId} className="flex flex-wrap items-center gap-3 px-5 py-2.5">
-            <div className="min-w-0 flex-1">
-              {/* Two lines, then "…" (decision 14, UI tour run 17, R17-WM-5: a long name was cut on one line). */}
-              <div className="line-clamp-2 break-words text-sm font-semibold">{glueDash(m.name || m.email || "")}</div>
-              <div className="text-xs text-muted-foreground">
-                {/* Short enough for one line beside the date picker on a phone; the empty picker already says the date
-                    is missing (UI tour run 14, R14-WM-19: "…can't request leave / yet" left "yet" on its own line). */}
-                {!m.employmentStartDate
-                  ? tr("Can't request leave yet")
-                  : m.eligible
-                    ? tr("Eligible for annual leave")
-                    : tr("Eligible from {date}", { date: m.eligibleFrom ? new Date(m.eligibleFrom).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" }) : "—" })}
-              </div>
-            </div>
-            {/* The app's date picker, "14 Oct 2026" (UI tour run 9: a raw input painted "dd/mm/yyyy"). It
-                emits one whole day per pick, so it saves on change. */}
-            <DateField
-              value={m.employmentStartDate ? String(m.employmentStartDate).slice(0, 10) : null}
-              max={new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" })}
-              yearPicker
-              align="end"
-              ariaLabel={tr("Employment start date")}
-              placeholder={tr("Pick a date")}
-              disabled={save.isPending && save.variables?.userId === m.userId}
-              onChange={(next) => {
-                const current = m.employmentStartDate ? String(m.employmentStartDate).slice(0, 10) : null;
-                if (next !== current) save.mutate({ userId: m.userId, date: next });
-              }}
-              className="w-auto shrink-0 rounded-xl border border-border bg-background px-2.5 py-1.5"
-            />
-            <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold",
-              m.eligible ? "bg-success/10 text-success" : "bg-muted text-muted-foreground")}>
-              {m.eligible ? tr("Eligible") : tr("Not yet")}
-            </span>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 const ALL_REQUEST_TYPES = ["LEAVE", "SICK", "PERMIT", "DAY_OFF", "RED_DATE"];
 
 function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void; onCreated: () => void; viewerId: string | null }) {
