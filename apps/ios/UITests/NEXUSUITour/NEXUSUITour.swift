@@ -807,7 +807,7 @@ final class NEXUSUITour: XCTestCase {
         // Legal archive). The pointer goes there first, and the reference picture is taken with it.
         if !web {
             target.element.coordinate(withNormalizedOffset: .zero)
-                .withOffset(CGVector(dx: target.visible.midX - target.element.frame.minX,
+                .withOffset(CGVector(dx: target.visible.minX + 12 - target.element.frame.minX,
                                      dy: target.visible.midY - target.element.frame.minY))
                 .hover()
             pause(0.5)
@@ -883,7 +883,8 @@ final class NEXUSUITour: XCTestCase {
             let repeatsBefore = fresh.map { $0.new < minNewContent && $0.inPlace >= minInPlace } ?? false
             if repeatsBefore || (moved.map { $0 < minShiftedNew } ?? false) {
                 #if targetEnvironment(macCatalyst)
-                if fresh.new < 0.02 && !scrolled && !flipped {
+                // Nothing new at all on the first scroll: maybe the wheel goes the other way.
+                if (fresh?.new ?? 1) < 0.02 && (moved ?? 1) < 0.02 && !scrolled && !flipped {
                     flipped = true
                     macWheelSign = -macWheelSign
                     continue
@@ -1207,8 +1208,11 @@ final class NEXUSUITour: XCTestCase {
         // A scroll-wheel event at a point, not swipeUp(): a swipe needs the element's hit point, and a
         // scroll view half covered by its neighbour (Messages: list beside the chat) has none — the
         // failed swipe ended the whole Mac run after 7 screens (run 3, 13 Oct 2026).
-        at(rect.midX, rect.midY).scroll(byDeltaX: macWheelSign * dx * rect.width,
-                                        deltaY: macWheelSign * dy * rect.height)
+        // A vertical scroll turns the wheel in the left gutter, as the touch drags do: in the middle it landed
+        // on an inner view (the Legal document's PDF preview) and scrolled that instead of the page, so the
+        // Title, Notes and Versions below were never shot (run 17, T-2).
+        at(dx == 0 ? rect.minX + 12 : rect.midX, rect.midY).scroll(byDeltaX: macWheelSign * dx * rect.width,
+                                                                 deltaY: macWheelSign * dy * rect.height)
         #else
         // Vertical drags run down the left gutter (6 pt in), beside the cards and rows rather than on
         // them: a drag starting on a row could open it (run 5, leaderboard → a profile).
