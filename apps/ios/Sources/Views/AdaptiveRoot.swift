@@ -214,11 +214,11 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     /// Work rather than disappear. Pages (`.docs`) and `.teams` were already off the sidebar; their
     /// routes stay alive for old shortcuts and notification links.
     static var groups: [(title: String?, screens: [NXScreen])] { [
-        (T("Home"),   [.dashboard, .messages, .gideon, .inbox, .threads, .vault, .tasks, .submissions, .teamCalendar, .roomBooking]),
+        (T("Home"),   [.dashboard, .messages, .gideon, .inbox, .tasks, .submissions, .teamCalendar, .attendance]),
         // The web sidebar's Work group (AppSidebar.tsx): no Reports or Forms rows (UI tour run 14, P-I36).
         // Both screens stay reachable: Forms from My Submissions ("Open forms"), Reports from its links.
         (T("Work"),   [.projects, .legal, .leaderboard]),
-        (T("Team"),   [.attendance]),
+        (T("Team"),   [.vault, .threads, .roomBooking]),
         (T("System"), [.tickets, .settings, .admin]),
     ] }
 }

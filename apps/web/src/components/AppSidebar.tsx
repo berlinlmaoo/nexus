@@ -34,12 +34,10 @@ const groups = [
       // GIDEON full page (12 Oct 2026, Notion AI's chat page): conversations with search.
       { title: "GIDEON", url: "/gideon", icon: GideonMark },
       { title: "Notifications", url: "/inbox", icon: Inbox },
-      { title: "Threads", url: "/threads", icon: AtSign },
-      { title: "Z Vault", url: "/vault", icon: HardDrive },
       { title: "My Tasks", url: "/my-tasks", icon: CheckSquare },
       { title: "My Submissions", url: "/submissions", icon: FileText },
       { title: "Calendar", url: "/calendar", icon: Calendar },
-      { title: "Room Booking", url: "/room-booking", icon: CalendarClock },
+      { title: "Attendance", url: "/attendance", icon: ClipboardCheck },
     ],
   },
   {
@@ -54,7 +52,9 @@ const groups = [
   {
     label: "Team",
     items: [
-      { title: "Attendance", url: "/attendance", icon: ClipboardCheck },
+      { title: "Z Vault", url: "/vault", icon: HardDrive },
+      { title: "Threads", url: "/threads", icon: AtSign },
+      { title: "Room Booking", url: "/room-booking", icon: CalendarClock },
     ],
   },
   {
