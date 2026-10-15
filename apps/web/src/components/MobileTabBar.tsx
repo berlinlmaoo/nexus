@@ -352,7 +352,7 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
                 disabled={loggingOut}
                 className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 px-3 py-3 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40 disabled:opacity-60"
               >
-                {loggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />} {t("Log out")}
+                {loggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />} {t("self\u0004Sign out")}
               </button>
             </div>
           </motion.div>

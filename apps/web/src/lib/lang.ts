@@ -124,9 +124,16 @@ function fill(s: string, vars?: Record<string, string | number>): string {
   return s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
 }
 
-/** Translate an English source text into the current language, then fill `{placeholders}`. */
+/**
+ * Translate an English source text into the current language, then fill `{placeholders}`. A key may carry a
+ * context before "\u0004" (the gettext convention), for one English text that needs two Indonesian ones:
+ * "self\u0004Sign out" reads "Sign out" in English and "Keluar" in Indonesian, while the sessions list's
+ * "Sign out" (another device) stays "Keluarkan" (UI tour run 18, decision 1).
+ */
 export function t(en: string, vars?: Record<string, string | number>, lang: Lang = current): string {
-  return fill(lang === "id" ? (ID[en] ?? en) : en, vars);
+  const text = lang === "id" ? (ID[en] ?? en) : en;
+  const cut = text.indexOf("\u0004");
+  return fill(cut >= 0 ? text.slice(cut + 1) : text, vars);
 }
 
 /**
