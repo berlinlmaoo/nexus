@@ -68,7 +68,8 @@ struct OfficesCard: View {
                     Image(systemName: "mappin.circle.fill").font(.system(size: 18)).foregroundStyle((o.isActive ?? true) ? NX.violetText : NX.mutedFg)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(o.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Text("\(o.address ?? "—") · " + String(format: T("radius %d m"), o.radiusMeters ?? 0)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                        AddressLine(address: o.address ?? "—", suffix: " · " + String(format: T("radius %d m"), o.radiusMeters ?? 0))
+                            .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     }
                     Spacer(minLength: 6)
                 }
@@ -369,5 +370,29 @@ struct OfficeMapPicker: View {
         let req = MKLocalSearch.Request(); req.naturalLanguageQuery = q
         if let center { req.region = MKCoordinateRegion(center: center, latitudinalMeters: 50_000, longitudinalMeters: 50_000) }
         results = (try? await MKLocalSearch(request: req).start().mapItems) ?? []
+    }
+}
+
+
+/// An address on one line, cut at a comma with a single "…" when it does not fit, never mid-part as
+/// "RT.12/RW.11,..." (UI tour run 15, R15-I-22). `suffix` (the radius) always shows.
+struct AddressLine: View {
+    let address: String
+    var suffix: String = ""
+
+    private var variants: [String] {
+        let parts = address.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        guard parts.count > 1 else { return [address] }
+        return (1...parts.count).reversed().map { n in
+            parts.prefix(n).joined(separator: ", ") + (n < parts.count ? "…" : "")
+        }
+    }
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            ForEach(variants, id: \.self) { v in Text(v + suffix).lineLimit(1).fixedSize() }
+            Text(address + suffix).lineLimit(1)
+        }
+        .accessibilityLabel(address + suffix)
     }
 }

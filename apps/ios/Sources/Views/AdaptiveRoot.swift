@@ -536,6 +536,16 @@ struct SidebarRoot: View {
                 onShortcuts: { if !cover.isCovered { rootSheet = .shortcuts } }
             )
             .background(.bar)
+            // The list fades into the footer, so a row passing under it reads as "more below" instead of
+            // a clipped icon (UI tour run 15, Q-M19 / P-M6).
+            .background(alignment: .top) {
+                Rectangle().fill(.bar)
+                    .mask(LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom))
+                    .frame(height: 24)
+                    .offset(y: -24)
+                    .allowsHitTesting(false)
+            }
+            .overlay(alignment: .top) { Rectangle().fill(NX.border).frame(height: 0.5) }
         }
     }
 

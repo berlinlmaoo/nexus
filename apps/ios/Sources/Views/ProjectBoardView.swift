@@ -1951,6 +1951,14 @@ struct LaneColumn: View {
                     }
                     .padding(.bottom, 8)
                 }
+                // Cards fade out at the column's bottom edge instead of being sliced through (UI tour run 15,
+                // Q-M12).
+                .mask {
+                    VStack(spacing: 0) {
+                        Rectangle()
+                        LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: 18)
+                    }
+                }
             }
             .padding(10)
             .frame(maxHeight: .infinity, alignment: .top)
