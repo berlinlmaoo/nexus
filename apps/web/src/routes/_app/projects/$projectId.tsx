@@ -660,7 +660,13 @@ function ProjectDetail() {
           <ToolbarButton icon={MoreHorizontal} label={toolsOpen ? tr("Hide view tools") : tr("View tools")} active={toolsOpen || filterCount > 0 || activeModule === "automations"} count={!toolsOpen && filterCount > 0 ? filterCount : undefined} onClick={() => setToolsOpen((o) => !o)} />
           {canEditProject && <button type="button" onClick={() => addTask()} aria-label={tr("Add task")} className="ml-0.5 grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground"><Plus className="h-4 w-4" /></button>}
         </div>
-        <div className={cn("shrink-0 items-center gap-0.5 sm:ml-auto sm:flex", toolsOpen ? "flex basis-full justify-end sm:basis-auto" : "hidden")}>
+        {/* From sm the tabs share their row with Add task only; the view's tools (and the named Automations and AI
+            Autofill) are a row of their own under it, on every view. With the tools beside them, the labels pushed
+            project tabs behind the arrow at 1440 (UI tour run 16, R16-WD-6 follow-up: a hidden tab is a finding). */}
+        <span className="ml-1.5 hidden shrink-0 sm:inline-flex">
+          <AddTaskSplit sections={[...taskLists].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((l) => ({ id: l.id, name: l.name }))} onAdd={addTask} />
+        </span>
+        <div className={cn("shrink-0 items-center gap-0.5 sm:flex sm:basis-full sm:justify-end", toolsOpen ? "flex basis-full justify-end" : "hidden")}>
           {cfg && activeView && !activeModule && (
             <>
               <FilterButton filter={cfg.filter} defs={defs} onChange={setFilter} chipsOpen={showChips} onToggleChips={() => setChipsHidden((h) => !h)} />
@@ -669,8 +675,7 @@ function ProjectDetail() {
             </>
           )}
           {/* Named on every view from lg, as on the Overview (WD-7; UI tour run 16, R16-WD-6: the Board showed bare
-              icons where the Overview said "Automations" and "AI Autofill"). Tabs that no longer fit scroll behind
-              the arrow, which counts them. */}
+              icons where the Overview said "Automations" and "AI Autofill"). */}
           <ToolbarButton icon={Zap} label={tr("Automations")} active={activeModule === "automations"} onClick={() => select("automations")} showLabel />
           <ToolbarButton icon={Sparkles} label={tr("AI Autofill")} iconOnly active={autofillOpen} onClick={() => setAutofillOpen(true)} showLabel />
           {cfg && activeView && !activeModule && (
@@ -679,9 +684,6 @@ function ProjectDetail() {
               <ToolbarButton icon={SlidersHorizontal} label={tr("View settings")} iconOnly active={viewSettingsOpen} onClick={() => setViewSettingsOpen((o) => !o)} />
             </>
           )}
-          <span className="ml-1.5 hidden sm:inline-flex">
-            <AddTaskSplit sections={[...taskLists].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((l) => ({ id: l.id, name: l.name }))} onAdd={addTask} />
-          </span>
         </div>
       </div>
       {showChips && cfg && (

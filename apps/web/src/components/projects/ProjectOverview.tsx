@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowUpRight, CalendarClock, CheckCircle2, FileText, ListChecks, Loader2, Pencil, Plus, Sparkles, Users } from "lucide-react";
 import { Avatar, AvatarFace, AvatarStack } from "@/components/Avatar";
@@ -87,6 +87,47 @@ function Section({ title, icon, action, children, className, id }: { title: stri
 }
 
 const linkBtn = "inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]";
+
+/**
+ * The Overview's two columns on a wide screen (UI tour run 16, R16-WB-1: the page snaps to one column's cards, so
+ * the other column was left with a card cut mid-way under the header). The shorter column sticks under the header
+ * when it fits the screen, so only the long one scrolls and snaps; its own cards are then no snap points. When it
+ * does not fit, it scrolls too, with a soft fade at its top under the header, so a card there is never hard-cut.
+ * At rest that fade sits in the page padding above the column (-mt-8), so it never dims the first card.
+ */
+function useColumnPin() {
+  const leftRef = useRef<HTMLDivElement>(null);
+  const rightRef = useRef<HTMLDivElement>(null);
+  const [state, setState] = useState<{ side: "left" | "right" | null; fits: boolean }>({ side: null, fits: false });
+  useEffect(() => {
+    const l = leftRef.current, r = rightRef.current;
+    if (!l || !r || typeof ResizeObserver === "undefined") return;
+    const wide = window.matchMedia("(min-width: 1024px)");
+    const read = () => {
+      if (!wide.matches) { setState((s) => (s.side === null ? s : { side: null, fits: false })); return; }
+      const lh = l.offsetHeight, rh = r.offsetHeight;
+      if (Math.abs(lh - rh) < 8) { setState((s) => (s.side === null ? s : { side: null, fits: false })); return; }
+      const side = lh < rh ? "left" : "right";
+      const top = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--page-sticky-top")) || 0;
+      const fits = Math.min(lh, rh) <= window.innerHeight - top - 32;
+      setState((s) => (s.side === side && s.fits === fits ? s : { side, fits }));
+    };
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(l);
+    ro.observe(r);
+    wide.addEventListener("change", read);
+    window.addEventListener("resize", read);
+    return () => { ro.disconnect(); wide.removeEventListener("change", read); window.removeEventListener("resize", read); };
+  }, []);
+  const classOf = (side: "left" | "right") => {
+    if (state.side !== side) return "";
+    return state.fits
+      ? "lg:sticky lg:top-[calc(var(--page-sticky-top,0px)+1rem)] lg:[&_[data-snap-row]]:[scroll-snap-align:none]"
+      : "lg:before:pointer-events-none lg:before:sticky lg:before:top-[var(--page-sticky-top,0px)] lg:before:z-10 lg:before:-mt-8 lg:before:block lg:before:h-8 lg:before:bg-gradient-to-b lg:before:from-card lg:before:to-transparent lg:before:content-['']";
+  };
+  return { leftRef, rightRef, classOf };
+}
 
 export function ProjectOverview({
   project,
@@ -204,6 +245,8 @@ export function ProjectOverview({
     return map;
   }, [project.members, tasks]);
 
+  const cols = useColumnPin();
+
   const dueLabel = (task: NexusTask) => {
     const d = dueIn(task, today);
     if (d === null) return "";
@@ -242,7 +285,7 @@ export function ProjectOverview({
 
   return (
     <div className="mx-auto grid max-w-6xl gap-4 p-4 md:gap-6 md:p-8 lg:grid-cols-12">
-      <div className="min-w-0 space-y-4 md:space-y-6 lg:col-span-8">
+      <div ref={cols.leftRef} className={cn("min-w-0 space-y-4 md:space-y-6 lg:col-span-8 lg:self-start", cols.classOf("left"))}>
         {/* Progress: the stacked status bar is the progress visual; the counters open the board filtered. */}
         <section aria-labelledby="ov-progress" className={cn(CARD, "overflow-hidden")}>
           <div className="p-4 md:p-5">
@@ -306,7 +349,7 @@ export function ProjectOverview({
         <StatusUpdatesCard projectId={project.id} />
       </div>
 
-      <div className="min-w-0 space-y-4 md:space-y-6 lg:col-span-4">
+      <div ref={cols.rightRef} className={cn("min-w-0 space-y-4 md:space-y-6 lg:col-span-4 lg:self-start", cols.classOf("right"))}>
         <BriefCard project={project} onEdit={onEditBrief} />
 
         <Section id="ov-priority" title={t("Open tasks by priority")} icon={<AlertTriangle className="h-4 w-4" />}>
