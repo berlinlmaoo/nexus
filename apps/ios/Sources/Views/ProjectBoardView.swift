@@ -840,26 +840,19 @@ struct ProjectDetailView: View {
         return out
     }
 
-    /// The tools never drop below the tabs: like the web, the tabs scroll in whatever the labelled tools
-    /// leave (with the strip's chevrons and "…"), so there is no second toolbar row (UI tour run 16, R16-B-06:
-    /// bare ⚡ / ✦ on a row of their own left a ~60 pt band).
-    private var toolsBelowTabs: Bool { false }
 
+    /// The web's two rows (UI tour run 16, R16-B-06, web after run 16): the tabs, "…" and Add task on the
+    /// first; the view tools on a tight second row on the right, Automations and Ask GIDEON named, on every
+    /// view. The tabs keep the first row's width to themselves, so none hides behind the tools.
     @ViewBuilder private var wideTabBar: some View {
-        Group {
-            if toolsBelowTabs {
-                VStack(alignment: .trailing, spacing: 0) {
-                    HStack(spacing: 8) { wideTabs; if tabsOverflow { tabOverflowMenu(wideMenuItems) } }
-                        .padding(.trailing, 24)
-                    measuredTools
-                }
-            } else {
-                HStack(spacing: 8) {
-                    wideTabs
-                    if tabsOverflow { tabOverflowMenu(wideMenuItems) }
-                    measuredTools
-                }
+        VStack(alignment: .trailing, spacing: 0) {
+            HStack(spacing: 8) {
+                wideTabs
+                if tabsOverflow { tabOverflowMenu(wideMenuItems) }
+                wideAddButton.fixedSize()
             }
+            .padding(.trailing, 24)
+            measuredTools
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0; fitToolLabels() }
         .onChange(of: tabsWidth) { _, _ in fitToolLabels() }
@@ -904,7 +897,8 @@ struct ProjectDetailView: View {
                     if !modules.isEmpty {
                         ProjectTabDivider()
                         ForEach(modules) { t in
-                            ProjectIconTab(title: t.label, icon: t.macIcon, on: tab == t) { pickTab(t) }
+                            // Named like the views (UI tour run 16, R16-B-06: four bare icons after "+" on the Mac).
+                            ProjectTabChip(title: t.label, icon: t.macIcon, on: tab == t) { pickTab(t) }
                                 .id(ViewTabItem.tab(t).id)
                                 .nxTabFrame(ViewTabItem.tab(t).id)
                         }
@@ -1025,8 +1019,8 @@ struct ProjectDetailView: View {
                 .help(T("View settings"))
                 .accessibilityLabel(T("View settings"))
             }
-            wideAddButton.padding(.leading, 8)
         }
+        .frame(minHeight: 36)
     }
 
     /// Add task ▾ on the task tabs; New form on Forms (web Forms tab). Nothing below Can edit.
