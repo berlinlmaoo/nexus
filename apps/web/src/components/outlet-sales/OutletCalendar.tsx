@@ -92,6 +92,9 @@ export function OutletCalendar({
               <button
                 key={d}
                 type="button"
+                // Each week row is a snap point too, so a scrolled page that ends on the day panel starts on a whole
+                // week, not on a sliver of the one above (UI tour run 17, R17-WB-1, outlet-day-2).
+                data-snap-row={i % 7 === 0 ? "" : undefined}
                 aria-pressed={isSel}
                 aria-label={label}
                 onClick={() => { picked.current = true; onSelect(d); }}
@@ -152,7 +155,7 @@ export function OutletCalendar({
 
       {/* The day's heading is the snap point, not the whole panel: a panel taller than the screen let the page
           stop anywhere inside it, on the Day target card with the heading scrolled away (UI tour run 16,
-          R16-WD-2). The report rows below are snap points of their own (outlet-ui Row). */}
+          R16-WD-2). The report cards and their groups below are snap points of their own (outlet-ui). */}
       <section ref={panelRef} aria-labelledby="os-day" className="scroll-mt-4">
         <div data-snap-row className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 id="os-day" className="text-base font-semibold">{dayLong(day, locale, data.today.slice(0, 4))}</h3>

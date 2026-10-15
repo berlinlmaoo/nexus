@@ -101,6 +101,9 @@ const PHOTO_EXT = /\.(jpe?g|png|gif|webp|heic|heif|avif|bmp)$/i;
 /** Width of the attendance board's right-edge fade on a phone (w-10); landing keeps today clear of it. */
 const BOARD_FADE = 40;
 /** The board's header cells follow --board-head-shift (set while the page scrolls, see pageHeaderBottom). */
+// The head cells also carry an 8px band of the card's colour upwards (a shadow): when the head is pushed under the
+// page header, a few pixels between the two showed the pill tops of the row above (UI tour run 17, R17-WB-1,
+// attendance-3). At the box's own top the band lies outside the scroll box and is clipped.
 const HEAD_SHIFT: CSSProperties = { transform: "translateY(var(--board-head-shift, 0px))" };
 /** Phone board names break between words only: a one-word name is cut with "…" on one line, not split
  *  mid-word ("Abimanyug / m", UI tour run 16, R16-WM-2); a name with spaces takes two lines. */
@@ -644,9 +647,9 @@ function Attendance() {
             <table className="w-full min-w-max text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr>
-                  <th data-member-col style={HEAD_SHIFT} className="sticky left-0 top-0 z-30 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] bg-muted px-2 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:max-w-[20rem] sm:px-4">{tr("Member")}</th>
+                  <th data-member-col style={HEAD_SHIFT} className="sticky left-0 top-0 z-30 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] bg-muted px-2 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_var(--border),0_-8px_0_0_var(--card)] sm:w-[20rem] sm:min-w-[20rem] sm:max-w-[20rem] sm:px-4">{tr("Member")}</th>
                   {periodDays.map((pd) => (
-                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} style={HEAD_SHIFT} className={cn("sticky top-0 z-20 snap-start bg-muted px-1 py-1.5 font-medium text-[10px] lg:px-0 lg:text-xs leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
+                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} style={HEAD_SHIFT} className={cn("sticky top-0 z-20 snap-start bg-muted px-1 py-1.5 font-medium text-[10px] shadow-[0_-8px_0_0_var(--card)] lg:px-0 lg:text-xs leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
                       {/* From lg, where the whole period fits, the weekday is one letter over the date at a readable
                           size; "MON" had to shrink to a few pixels to fit 30 columns (UI tour run 16, R16-WD-3). */}
                       <span className={cn("block text-[9px] uppercase lg:hidden", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" })}</span>
@@ -656,7 +659,7 @@ function Attendance() {
                         : pd.day}
                     </th>
                   ))}
-                  <th style={HEAD_SHIFT} className="sticky top-0 z-20 bg-muted text-right px-4 py-2 font-medium text-xs text-muted-foreground uppercase">{tr("Score")}</th>
+                  <th style={HEAD_SHIFT} className="sticky top-0 z-20 bg-muted text-right px-4 py-2 font-medium text-xs text-muted-foreground uppercase shadow-[0_-8px_0_0_var(--card)]">{tr("Score")}</th>
                 </tr>
               </thead>
               <tbody>

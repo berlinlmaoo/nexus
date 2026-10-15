@@ -161,7 +161,9 @@ export const DayPanel = memo(function DayPanel({
       <div data-cal-under-sticky="" className="space-y-3 px-[12px] py-3">
         {/* Overdue rail (today only) */}
         {day === today && rail.length > 0 && (
-          <div className="rounded-xl border border-cal-overdue/25 bg-cal-overdue/[0.05] p-[6px] dark:bg-cal-overdue/[0.07]">
+          // Snap points: the panel's cards and group headers (its own scroller on a desktop, the page on a phone),
+          // so a scrolled day starts on a whole card or group with its header (UI tour run 17, R17-WB-1).
+          <div data-snap-row="" className="snap-start rounded-xl border border-cal-overdue/25 bg-cal-overdue/[0.05] p-[6px] dark:bg-cal-overdue/[0.07]">
             {rail.length > 2 ? (
               <Heading level={3}>
                 <button type="button" onClick={() => setRailOpen((v) => !v)} aria-expanded={railOpen} aria-controls={railId}
@@ -193,7 +195,7 @@ export const DayPanel = memo(function DayPanel({
               <SectionCard key={n.unit.id} node={n} collapsed={collapsed} toggle={toggle} mine={mine} lens={lens} common={common} />
             ))}
             {lens === "person" && tree.unplaced.length > 0 && (
-              <div className="rounded-2xl border border-dashed border-border bg-card p-[8px]">
+              <div data-snap-row="" className="snap-start rounded-2xl border border-dashed border-border bg-card p-[8px]">
                 <Heading level={3} className={cn("px-[8px] py-1 text-muted-foreground", CAPS)}>{t("Not in the chart yet · {n}", { n: tree.unplaced.length })}</Heading>
                 {viewerFirst(tree.unplaced, (p) => p.userId === meId).map((p) => <PersonBlock key={p.userId} row={p} unitId={null} level={4} common={common} />)}
               </div>
@@ -201,7 +203,7 @@ export const DayPanel = memo(function DayPanel({
             {/* "By division": a task whose PICs are all outside the chart has no division (never guessed,
                 owner 12 Oct 2026); this is where it is listed, by its PICs. */}
             {lens === "division" && noDivision.length > 0 && (
-              <div className="rounded-2xl border border-dashed border-border bg-card p-[8px]">
+              <div data-snap-row="" className="snap-start rounded-2xl border border-dashed border-border bg-card p-[8px]">
                 <Heading level={3} className={cn("px-[8px] py-1 text-muted-foreground", CAPS)}>{t("No division · {n}", { n: noDivisionCount })}</Heading>
                 {viewerFirst(noDivision, (p) => p.userId === meId).map((p) => <PersonBlock key={p.userId} row={p} unitId={null} level={4} common={common} />)}
               </div>
@@ -246,7 +248,7 @@ function SectionCard({ node, own = false, collapsed, toggle, mine, lens, common 
   const closed = collapsed.has(key);
   const count = own ? new Set([...node.items.map((i) => i.key), ...node.people.flatMap((p) => p.items.map((i) => i.key))]).size : node.count;
   return (
-    <div style={unitVars(common.ix.byId.get(node.unit.id))} className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
+    <div style={unitVars(common.ix.byId.get(node.unit.id))} data-snap-row="" className="snap-start overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
       <Heading level={3}>
         <button type="button" onClick={() => toggle(key)} aria-expanded={!closed}
           className={cn("flex w-full items-center gap-[10px] border-l-[3px] border-[var(--c)] px-[12px] py-2.5 text-left hover:bg-muted/50 dark:border-[var(--cd)]", FOCUS_ROW)}>
@@ -295,7 +297,7 @@ function SubNode({ node, lens, level, common }: { node: TreeNode; lens: Lens; le
   const { tn } = useLang();
   if (node.unit.kind === "GROUP") {
     return (
-      <div className="mx-[4px] mt-2 rounded-xl border border-dashed border-cal-line bg-cal-accent-soft/50 px-[4px] pb-1 pt-1.5 dark:bg-cal-accent-soft/40">
+      <div data-snap-row="" className="mx-[4px] mt-2 snap-start rounded-xl border border-dashed border-cal-line bg-cal-accent-soft/50 px-[4px] pb-1 pt-1.5 dark:bg-cal-accent-soft/40">
         {/* The count with its unit, "CREATIVE · 1 task", as the apps write it (iPhone run 14 N-38). */}
         <Heading level={level} className={cn("px-[6px] pb-0.5 [overflow-wrap:anywhere]", CAPS, SLATE.text)}>
           {node.unit.name} · {tn(node.count, "{n} task", "{n} tasks")}
@@ -305,7 +307,7 @@ function SubNode({ node, lens, level, common }: { node: TreeNode; lens: Lens; le
     );
   }
   return (
-    <div style={unitVars(common.ix.byId.get(node.unit.id))} className="mt-1.5">
+    <div style={unitVars(common.ix.byId.get(node.unit.id))} data-snap-row="" className="mt-1.5 snap-start">
       <Heading level={level} className="flex items-center gap-2 px-[10px] pb-0.5 pt-1">
         <span aria-hidden className="h-3.5 w-[3px] shrink-0 rounded-full bg-[var(--c)] dark:bg-[var(--cd)]" />
         <span className="min-w-0 flex-1 text-xs font-semibold text-foreground/85 [overflow-wrap:anywhere]">{node.unit.name}</span>
@@ -327,7 +329,7 @@ function PersonBlock({ row, unitId, level, common }: { row: PersonRow; unitId: s
   const also = (person?.homeUnitIds ?? []).filter((id) => id !== unitId).map((id) => common.ix.byId.get(id)?.name).filter(Boolean) as string[];
   const isViewer = !!common.meId && row.userId === common.meId;
   return (
-    <div className="mt-1 rounded-xl px-[4px]">
+    <div data-snap-row="" className="mt-1 snap-start rounded-xl px-[4px]">
       <div className="flex items-center gap-2 px-[6px] py-1.5">
         <Face name={p.name} avatar={p.avatar} size={26} />
         <div className="min-w-0 flex-1">

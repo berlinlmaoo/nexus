@@ -243,8 +243,10 @@ function Row({ label, children, strong, depth = 0, text }: { label: string; chil
   // wide card does the same now (UI tour run 15, R15-WD-2: beside the figures the answers were the only
   // values not on the right edge).
   return (
-    // A snap point: a scrolled report stops on a whole row, not on half an "Event name" line (UI tour run 16, R16-WB-1).
-    <div data-snap-row className={cn("grid gap-x-3 py-1.5 text-sm", text ? "grid-cols-1 gap-y-0.5" : "grid-cols-[minmax(7.5rem,40%)_1fr]")}>
+    // Not a snap point itself: the report snaps at its card and its groups (RSVP, Hosting, Communities, the
+    // stories), so it never starts on "Event name" with its status and Edit scrolled away (UI tour run 17,
+    // R17-WB-1; rows were snap points in run 16).
+    <div className={cn("grid gap-x-3 py-1.5 text-sm", text ? "grid-cols-1 gap-y-0.5" : "grid-cols-[minmax(7.5rem,40%)_1fr]")}>
       <dt className={cn("text-muted-foreground", depth === 1 && "pl-3", depth === 2 && "pl-6", strong && "font-medium text-foreground")}>{label}</dt>
       <dd className={cn("min-w-0 break-words tabular-nums", !text && "text-right", text && depth === 1 && "pl-3", text && depth === 2 && "pl-6", strong && "font-semibold")}>{children}</dd>
     </div>
@@ -281,7 +283,7 @@ export function EventDetail({
     const value = key === "rsvp" ? event.rsvpTotal : event.hostingTotal;
     // "RSVP total", sentence case like the Overview's (the server's form still says "RSVP – TOTAL").
     return (
-      <dl className="border-t border-border/70 py-1">
+      <dl data-snap-row className="border-t border-border/70 py-1">
         <Row label={key === "rsvp" ? t("RSVP total") : t("Hosting total")} strong>{num(value)}</Row>
         {items.map((i) => (
           <Row key={i.id} depth={1} label={i.archived ? `${i.label} · ${t("archived")}` : i.label}>{num(figureOf(event, i.id))}</Row>
@@ -293,13 +295,13 @@ export function EventDetail({
     const list = cfg.communities.filter((c) => !c.archived || event.communityTotals?.[c.id] != null);
     if (list.length === 0) return null;
     return (
-      <dl className="border-t border-border/70 py-1">
+      <dl data-snap-row className="border-t border-border/70 py-1">
         <Row label={t("Communities total")} strong>{num(event.communityTotal ?? null)}</Row>
         {list.map((c) => {
           const subs = visibleItems(c.items, event);
           const own = figureOf(event, c.id);
           return (
-            <div key={c.id}>
+            <div key={c.id} data-snap-row={c.mode === "breakdown" && subs.length > 0 ? "" : undefined}>
               <Row depth={1} label={c.archived ? `${c.name} · ${t("archived")}` : c.name} strong={c.mode === "breakdown" && subs.length > 0}>
                 {num(event.communityTotals?.[c.id] ?? null)}
               </Row>
@@ -315,7 +317,7 @@ export function EventDetail({
     const s = section(key);
     if (!s) return null;
     return (
-      <div className="border-t border-border/70 py-1">
+      <div data-snap-row className="border-t border-border/70 py-1">
         <p className="pt-1.5 text-sm font-medium">{pick(s.title, lang)}</p>
         <dl>
           {s.fields.map((f) => <Row key={f.key} depth={1} text besideFigures={wide} label={pick(f.label, lang)}><Answer text={String(event[f.key] ?? "")} /></Row>)}
@@ -329,7 +331,7 @@ export function EventDetail({
   const hasReport = event.status === "REPORTED" || event.rsvpTotal != null || event.hostingTotal != null;
   const captionId = `os-not-yet-${event.id}`;
   return (
-    <article className="rounded-xl border border-border bg-card p-4">
+    <article data-snap-row className="rounded-xl border border-border bg-card p-4">
       <header className="mb-1 flex items-start justify-between gap-3">
         <StatusPill status={event.status} />
         {onEdit && (

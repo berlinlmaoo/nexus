@@ -139,16 +139,18 @@ export function PageHeader({
           {tabs}
         </div>
       )}
-      {/* Desktop: once the page has scrolled, content fades out under the sticky header instead of being cut
-          mid-line at its edge (UI tour run 14, R14-WD-10: the outlet calendar's legend showed half a line under
-          the tabs). At rest it is hidden, so nothing right under the header is dimmed. */}
+      {/* Desktop: once the page has scrolled, a 1rem band of the header's colour under it, so rows snapped 1rem
+          under the header stand clear of it (UI tour run 14, R14-WD-10). At rest it is hidden, so nothing right
+          under the header is covered. Sticky bars that sit right under the header (legal chips, pipeline chips,
+          the legal table head) stack above it (z-41). */}
       <div
         aria-hidden
         className={cn("pointer-events-none absolute inset-x-0 top-full hidden h-4 transition-opacity duration-150 md:block", scrolled ? "opacity-100" : "opacity-0")}
-        // Solid for most of its height: a row snapped 1rem under the header leaves only the tail of the row
-        // before in this band, and a plain fade let an avatar or a strikethrough sliver show through it
-        // (UI tour run 16, R16-WB-1).
-        style={{ background: "linear-gradient(to bottom, var(--page-header-bg, var(--background)) 0%, var(--page-header-bg, var(--background)) 65%, transparent)" }}
+        // Solid over its whole 1rem: a row snapped 1rem under the header leaves the tail of the row before in this
+        // band. A plain fade let an avatar or a strikethrough sliver show (R16-WB-1), and at 65% solid its fading
+        // part still showed a ~10px sliver of the row before (UI tour run 17, R17-WB-1: legal series rows, the
+        // outlet month grid).
+        style={{ background: "var(--page-header-bg, var(--background))" }}
       />
     </div>
   );

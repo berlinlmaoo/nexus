@@ -72,7 +72,10 @@ export function LegalSettings() {
           R14-WB-7), and a company it jumps to lands below it. */}
       {(companies.data?.companies.length ?? 0) > 2 && (
         <nav ref={jumpRef} aria-label={t("Companies")} style={{ top: headerTop }}
-          className="sticky z-20 -mx-4 flex gap-1.5 overflow-x-auto border-b border-border bg-background px-4 py-2 [scrollbar-width:none] md:-mx-8 md:flex-wrap md:px-8 [&::-webkit-scrollbar]:hidden">
+          // From md: above the header's 1rem band (z-41, it sits right under the header), with a band of its own
+          // (a shadow, which the strip's overflow does not clip), so the 1rem a snapped row keeps under the chips
+          // never shows the tail of the row before (UI tour run 17, R17-WB-1: half a series pattern and toggle).
+          className="sticky z-20 -mx-4 flex gap-1.5 overflow-x-auto border-b border-border bg-background px-4 py-2 [scrollbar-width:none] md:z-[41] md:-mx-8 md:flex-wrap md:px-8 md:shadow-[0_1rem_0_0_var(--background)] [&::-webkit-scrollbar]:hidden">
           {companies.data!.companies.map((c) => (
             <button key={c.id} type="button" aria-current={inView === c.id ? "location" : undefined}
               onClick={() => {
@@ -118,8 +121,10 @@ function CompanyCard({ company, canEdit }: { company: LegalCompany; canEdit: boo
   const dirty = draft.name !== company.name || draft.code !== company.code || draft.legalName !== company.legalName || draft.address !== company.address;
 
   return (
-    <section id={`legal-co-${company.id}`} className="scroll-mt-32 space-y-4 rounded-lg border border-border p-4">
-      <div data-snap-row className="flex flex-wrap items-center justify-between gap-2">
+    // The card itself is the snap point, so a company stops with its top edge and padding (UI tour run 17,
+    // R17-WB-1: it snapped at its title, the edge hidden above it).
+    <section id={`legal-co-${company.id}`} data-snap-row className="scroll-mt-32 space-y-4 rounded-lg border border-border p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-semibold">{company.name}{!sameAsName(company) && <> <span className="font-mono text-xs font-normal text-muted-foreground">{company.code}</span></>}</h2>
         {!company.legalName && <span className="flex items-center gap-1 text-xs text-amber-600"><AlertTriangle className="h-3.5 w-3.5" /> {t("Legal name (PT) not filled in")}</span>}
       </div>
