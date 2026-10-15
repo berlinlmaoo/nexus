@@ -413,12 +413,25 @@ struct FormQuestionCard: View {
                         .foregroundStyle(field.name.trimmingCharacters(in: .whitespaces).isEmpty ? NX.mutedFg : NX.foreground)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
+                    // The "*" right after the title's last word, as the web's "Harga *" (UI tour run 15, Q-IA32 /
+                    // Q-M18): the same text, clear, then the star, laid over the field with the same font, so
+                    // the star follows the typed text wherever it wraps.
                     TextField(T("Question"), text: nameBinding, axis: .vertical)
                         .font(NXFont.text(16, .semibold))
                         .foregroundStyle(NX.foreground)
                         .accessibilityLabel(String(format: T("Question %d title"), index + 1))
+                        .overlay(alignment: .topLeading) {
+                            if field.required {
+                                (Text(field.name.isEmpty ? T("Question") : field.name).foregroundColor(.clear)
+                                 + Text(" *").foregroundColor(NX.danger))
+                                    .font(NXFont.text(16, .semibold))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .allowsHitTesting(false)
+                                    .accessibilityLabel(T("Required"))
+                            }
+                        }
                 }
-                if field.required {
+                if field.required && compact {
                     Text("*").font(NXFont.text(16, .semibold)).foregroundStyle(NX.danger)
                         .accessibilityLabel(T("Required"))
                 }

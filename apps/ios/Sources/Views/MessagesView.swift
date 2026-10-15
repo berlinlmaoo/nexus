@@ -316,15 +316,19 @@ struct MessagesView: View {
                                     }
                                 }
                             }
+                            // The phone keeps its card; beside a thread (iPad / Mac) the list is flat, as the web's
+                            // (UI tour run 15, Q-M20: a floating card with a shadow).
                             .background {
-                                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NX.card)
-                                    .nexusShadowSoft()
-                                    .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
+                                if !isSplit {
+                                    RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NX.card)
+                                        .nexusShadowSoft()
+                                        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
+                                }
                             }
                         }
                     }
                 }
-                .padding(16)
+                .padding(isSplit ? 8 : 16)
             }
             .refreshable { await load() }
         }

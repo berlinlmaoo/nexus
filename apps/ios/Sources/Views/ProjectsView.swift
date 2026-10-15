@@ -1228,9 +1228,10 @@ struct CreateProjectSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
         }
-        // Page sized on an iPad / Mac, so the gallery has room for three cards across like the web
-        // (UI tour run 13 M-8, run 14 P-M18: the form sheet held two, with an empty slot).
-        .tallSheet()
+        // Page wide on an iPad / Mac, so the gallery has room for three cards across like the web (UI tour run
+        // 13 M-8, run 14 P-M18), but only as tall as its content: full height left ~1250 pt empty under the
+        // cards (UI tour run 15, Q-IA34).
+        .modifier(PageWideFittedSheet())
     }
 
     private func field<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
@@ -1527,6 +1528,18 @@ struct ProjectsPageListRow: View {
         case "OFF_TRACK": return .danger
         case "COMPLETED", "DONE": return .success
         default: return .accent
+        }
+    }
+}
+
+
+/// A sheet as wide as `.page` and as tall as its content (iOS 18); a large detent before.
+struct PageWideFittedSheet: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.presentationSizing(.page.fitted(horizontal: false, vertical: true))
+        } else {
+            content.presentationDetents([.large])
         }
     }
 }

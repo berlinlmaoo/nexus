@@ -117,7 +117,8 @@ struct OutletGuestOverview: View {
         return GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule().fill(NX.muted)
-                Capsule().fill(NX.violet.opacity(0.45)).frame(width: geo.size.width * f)
+                // Neutral, as the web's bars (UI tour run 15, Q-IB11: purple).
+                Capsule().fill(NX.foreground.opacity(0.4)).frame(width: geo.size.width * f)
             }
         }
         .frame(height: 4)
@@ -140,7 +141,8 @@ struct OutletGuestOverview: View {
             Text(OutletFormat.count(c.total)).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                 .monospacedDigit()
         }
-        .frame(minHeight: 32)
+        // The same height as the RSVP and Hosting rows beside it: a 32 pt row sat Run Club ~10 pt lower than
+        // their first rows (UI tour run 15, Q-IB11).
         .contentShape(Rectangle())
     }
 
@@ -438,7 +440,6 @@ struct OutletReportSettingsView: View {
         // The sheet goes on below its edge (Communities): the indicator shows once (I-5), and on an iPad /
         // Mac the sheet is page sized (see `tallSheet`), so Communities start inside the first screen.
         .scrollIndicatorsFlash(onAppear: true)
-        .environment(\.editMode, .constant(.active))
         .scrollDismissesKeyboard(.interactively)
     }
 
@@ -462,23 +463,29 @@ struct OutletReportSettingsView: View {
     private func itemRows(_ items: Binding<[OutletItem]>, newText: Binding<String>, addLabel: String, inset: CGFloat = 0) -> some View {
         let active = items.wrappedValue.filter { !$0.archived }
         let archived = items.wrappedValue.filter(\.archived)
-        ForEach(active, id: \.rowId) { item in
-            TextField(T("Item name"), text: label(items, item.rowId))
-                .font(NXFont.text(15))
-                .submitLabel(.done)
-                .padding(.leading, inset)
-                // Only the separator under a row: a reordered row kept a full-width top line too, so
-                // "Hosting Team" showed two lines (UI tour run 13 F-23 / run 14 N-29).
-                .listRowSeparator(.hidden, edges: .top)
-        }
-        .onMove { from, to in moveActive(items, from: from, to: to) }
-        .onDelete { offsets in
-            for o in offsets {
-                let item = active[o]
-                remove(item.label, ids: [item.id],
-                       archive: { setArchived(items, item.rowId, true) },
-                       drop: { items.wrappedValue.removeAll { $0.rowId == item.rowId } })
+        // ↑ ↓ and a trash can on every row, the same controls as the communities and the web (UI tour run 15,
+        // Q-IB12: drag handles and red minus buttons for items, arrows for communities, in one sheet).
+        ForEach(Array(active.enumerated()), id: \.element.rowId) { pos, item in
+            HStack(spacing: 14) {
+                TextField(T("Item name"), text: label(items, item.rowId))
+                    .font(NXFont.text(15))
+                    .submitLabel(.done)
+                Button { moveItem(items, item.rowId, by: -1) } label: { Label(T("Move up"), systemImage: "arrow.up") }
+                    .disabled(pos == 0)
+                Button { moveItem(items, item.rowId, by: 1) } label: { Label(T("Move down"), systemImage: "arrow.down") }
+                    .disabled(pos == active.count - 1)
+                Button(role: .destructive) {
+                    remove(item.label, ids: [item.id],
+                           archive: { setArchived(items, item.rowId, true) },
+                           drop: { items.wrappedValue.removeAll { $0.rowId == item.rowId } })
+                } label: { Label(T("Remove"), systemImage: "trash") }
             }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .padding(.leading, inset)
+            // Only the separator under a row: a reordered row kept a full-width top line too, so
+            // "Hosting Team" showed two lines (UI tour run 13 F-23 / run 14 N-29).
+            .listRowSeparator(.hidden, edges: .top)
         }
         addRow(newText, label: addLabel) { append(items, $0) }
             .padding(.leading, inset)
@@ -500,12 +507,6 @@ struct OutletReportSettingsView: View {
         }
     }
 
-    private func moveActive(_ items: Binding<[OutletItem]>, from: IndexSet, to: Int) {
-        var active = items.wrappedValue.filter { !$0.archived }
-        let archived = items.wrappedValue.filter(\.archived)
-        active.move(fromOffsets: from, toOffset: to)
-        items.wrappedValue = active + archived
-    }
 
     private func addRow(_ text: Binding<String>, label: String, add: @escaping (String) -> Void) -> some View {
         HStack(spacing: 10) {
@@ -596,6 +597,13 @@ struct OutletReportSettingsView: View {
     }
 
     /// Swap a community with its active neighbour above or below.
+    /// One step up or down among the active items (archived ones stay at the end).
+    private func moveItem(_ items: Binding<[OutletItem]>, _ rowId: String, by: Int) {
+        let active = items.wrappedValue.indices.filter { !items.wrappedValue[$0].archived }
+        guard let pos = active.firstIndex(where: { items.wrappedValue[$0].rowId == rowId }), active.indices.contains(pos + by) else { return }
+        items.wrappedValue.swapAt(active[pos], active[pos + by])
+    }
+
     private func moveCommunity(_ list: Binding<[OutletCommunity]>, _ rowId: String, by: Int) {
         let active = list.wrappedValue.indices.filter { !list.wrappedValue[$0].archived }
         guard let pos = active.firstIndex(where: { list.wrappedValue[$0].rowId == rowId }), active.indices.contains(pos + by) else { return }

@@ -79,8 +79,8 @@ struct WorkspaceMembersCard: View {
             }
             Button { Task { await invite() } } label: {
                 HStack(spacing: 6) { if busy { ProgressView().scaleEffect(0.7).tint(.white) }; Text(T("Invite")) }
-                    .font(NXFont.text(13, .bold)).foregroundStyle(.white)
-                    .frame(maxWidth: .infinity).padding(.vertical, 9).background(NX.violet, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .font(NXFont.text(13, .bold)).foregroundStyle(NX.background)
+                    .frame(maxWidth: .infinity).padding(.vertical, 9).background(NX.onyx, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }.buttonStyle(.plain).disabled(busy || !inviteEmail.contains("@"))
             if let inviteNotice {
                 HStack(alignment: .top, spacing: 6) {
@@ -485,9 +485,10 @@ struct PasskeyCard: View {
                 }
                 Text(T("Add a passkey"))
             }
-            .font(NXFont.text(13, .bold)).foregroundStyle(.white)
+            // The web's near-black primary (UI tour run 15, Q-IB22), not violet.
+            .font(NXFont.text(13, .bold)).foregroundStyle(NX.background)
             .frame(maxWidth: .infinity).padding(.vertical, 10)
-            .background(busy ? NX.mutedFg.opacity(0.4) : NX.violet,
+            .background(busy ? NX.mutedFg.opacity(0.4) : NX.onyx,
                         in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)

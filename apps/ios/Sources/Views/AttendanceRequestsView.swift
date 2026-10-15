@@ -442,8 +442,9 @@ struct AttendanceRequestsCard: View {
                 }
                 Spacer()
                 Button { composerPermit = false; showComposer = true } label: {
-                    Label(T("New"), systemImage: "plus").font(NXFont.text(12, .bold)).foregroundStyle(.white)
-                        .padding(.horizontal, 12).padding(.vertical, 8).background(NX.violet, in: Capsule())
+                    // The web's near-black primary (UI tour run 15, Q-IB22).
+                    Label(T("New"), systemImage: "plus").font(NXFont.text(12, .bold)).foregroundStyle(NX.background)
+                        .padding(.horizontal, 12).padding(.vertical, 8).background(NX.onyx, in: Capsule())
                 }.buttonStyle(.plain)
             }
             // On the header, not the card: the card already presents the reject sheet, and two

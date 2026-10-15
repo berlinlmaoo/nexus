@@ -40,8 +40,8 @@ struct OfficesCard: View {
                 }
                 Spacer()
                 Button { composer = .new } label: {
-                    Label(T("Office"), systemImage: "plus").font(NXFont.text(12, .bold)).foregroundStyle(.white)
-                        .padding(.horizontal, 12).padding(.vertical, 8).background(NX.violet, in: Capsule())
+                    Label(T("Office"), systemImage: "plus").font(NXFont.text(12, .bold)).foregroundStyle(NX.background)
+                        .padding(.horizontal, 12).padding(.vertical, 8).background(NX.onyx, in: Capsule())
                 }.buttonStyle(.plain)
             }
             if loading {

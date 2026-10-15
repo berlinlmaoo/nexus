@@ -410,7 +410,8 @@ struct FormBuilderView: View {
                 }
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
-                FormSaveIndicator(state: saveState, hasId: currentId != nil, compact: !regular || tightBar) { retry() }
+                // "Saved" in words on an iPad / Mac, as the web's bar (UI tour run 15, Q-IA32).
+                FormSaveIndicator(state: saveState, hasId: currentId != nil, compact: !regular) { retry() }
                 previewButton
                 moreMenu
             }
@@ -423,9 +424,10 @@ struct FormBuilderView: View {
     private var breadcrumb: some View {
         HStack(spacing: 6) {
             // A tight bar drops the project and caps the form's name, so the tabs keep their full labels.
-            if !projectName.isEmpty && !tightBar {
+            // The project stays in a tight bar too, shorter ("Finance PATS /", UI tour run 15, Q-IA32).
+            if !projectName.isEmpty {
                 Text(projectName).foregroundStyle(NX.mutedFg).lineLimit(1).truncationMode(.tail)
-                    .frame(maxWidth: 140, alignment: .leading)
+                    .frame(maxWidth: tightBar ? 100 : 140, alignment: .leading)
                 Text("/").foregroundStyle(NX.mutedFg.opacity(0.6))
             }
             Text(draft.branding.icon.isEmpty ? displayName : "\(draft.branding.icon) \(displayName)")
