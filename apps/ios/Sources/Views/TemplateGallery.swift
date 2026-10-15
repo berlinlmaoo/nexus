@@ -86,6 +86,9 @@ struct TemplateGallery: View {
             : [GridItem(.adaptive(minimum: 200), spacing: 10, alignment: .top)]
     }
 
+    /// Cards share a row (iPad / Mac): their descriptions keep one height so the previews line up.
+    private var rowed: Bool { hSize == .regular }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
@@ -101,7 +104,7 @@ struct TemplateGallery: View {
                     if showBlank {
                         Button { onPick(.blank) } label: {
                             GalleryCard(glyph: Image(systemName: "plus"), tint: NX.violet, title: T("Blank project"),
-                                        blurb: T("Start empty: To Do, In Progress and Done. You pick the tabs.")) { BlankPreview() }
+                                        blurb: T("Start empty: To Do, In Progress and Done. You pick the tabs."), rowed: rowed) { BlankPreview() }
                         }
                         .buttonStyle(PressableCardStyle())
                     }
@@ -114,13 +117,13 @@ struct TemplateGallery: View {
                     ForEach(shownTemplates) { tp in
                         Button { onPick(.template(tp)) } label: {
                             GalleryCard(glyph: Image(systemName: TemplateTint.symbol(tp.icon)), tint: TemplateTint.color(tp.tint),
-                                        title: tp.name.text, blurb: tp.blurb.text) { TemplatePreview(template: tp) }
+                                        title: tp.name.text, blurb: tp.blurb.text, rowed: rowed) { TemplatePreview(template: tp) }
                         }
                         .buttonStyle(PressableCardStyle())
                     }
                     ForEach(shownDashboards) { k in
                         Button { onPick(.type(k)) } label: {
-                            GalleryCard(glyph: k.glyph, tint: NX.violet, title: k.title, blurb: k.blurb) {
+                            GalleryCard(glyph: k.glyph, tint: NX.violet, title: k.title, blurb: k.blurb, rowed: rowed) {
                                 DashboardPreview(kind: k)
                             }
                         }
@@ -212,6 +215,9 @@ private struct GalleryCard<Preview: View>: View {
     let tint: Color
     let title: String
     let blurb: String
+    /// Beside other cards in a row: the description keeps four lines. Alone on a phone row it takes only
+    /// its own lines (UI tour run 16, R16-I-16: an ~80 pt gap above the preview).
+    var rowed = true
     @ViewBuilder let preview: () -> Preview
 
     var body: some View {
@@ -223,11 +229,11 @@ private struct GalleryCard<Preview: View>: View {
                     .frame(width: 32, height: 32)
                     .background(NX.muted, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    Text(UntitledText.wrapped(title)).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground).lineLimit(2)
                     // Four lines kept for every description, so the cards of a row are one height and their
                     // previews line up (Q-IA34; the whole text as before, P-I32 / P-M18).
                     Text(blurb).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                        .lineLimit(4, reservesSpace: true)
+                        .lineLimit(4, reservesSpace: rowed)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)

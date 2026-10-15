@@ -325,7 +325,7 @@ struct AdminUsersSection: View {
         let n = unassignedStaff.count
         return n == 0
             ? "\(placed) \(T("people have an approver; everyone is placed"))"
-            : "\(n) \(T("not placed yet — their requests go to every BoD"))"
+            : "\(n) \(T("not placed yet — their requests go to every board member"))"
     }
     private func count(_ r: String) -> Int { members.filter { $0.role == r }.count }
     private var rows: [WorkspaceRoster.Member] {
@@ -1359,7 +1359,7 @@ struct GoogleLinkSheet: View {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if data?.configured == false {
                 empty("link.badge.plus", T("Google Workspace isn't connected"),
-                      data?.error ?? T("Ask a BoD to connect it."))
+                      data?.error ?? T("Ask a board member to connect it."))
             } else if let made {
                 madePanel(made)
             } else if making {
@@ -1764,7 +1764,7 @@ struct ApproverPickSheet: View {
     var body: some View {
         List {
             Section {
-                Text(T("Their attendance requests go to this person only. A BoD can still override."))
+                Text(T("Their attendance requests go to this person only. A board member can still override."))
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
             ForEach(roleOrder, id: \.self) { role in
@@ -1790,7 +1790,7 @@ struct ApproverPickSheet: View {
             if target.current != nil {
                 Section {
                     Button(role: .destructive) { onPick(nil) } label: {
-                        Label(T("Remove from the chart — requests go back to the BoD"), systemImage: "arrow.uturn.backward")
+                        Label(T("Remove from the chart — requests go back to the board"), systemImage: "arrow.uturn.backward")
                     }
                 }
             }

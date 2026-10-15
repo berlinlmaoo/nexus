@@ -336,7 +336,7 @@ struct PipelineTab: View {
         Group {
             if store.forbidden {
                 EmptyState(icon: "lock", title: T("This pipeline is for its project members"),
-                           subtitle: T("Ask the Project Owner or a BoD to add you to the project."))
+                           subtitle: T("Ask the Project Owner or a board member to add you to the project."))
             } else if !store.loaded {
                 if let err = store.loadError {
                     ErrorState(message: err, icon: "chart.bar.doc.horizontal") {

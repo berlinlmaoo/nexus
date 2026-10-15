@@ -381,7 +381,7 @@ final class VaultUploads {
         let reason = said?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         switch status {
         case 507:
-            return T("The vault is full. Empty the trash or ask BoD for more space.")
+            return T("The vault is full. Empty the trash or ask the board for more space.")
         case 413:
             return T("This file is too big to upload (max 1 GB).")
         case 429:

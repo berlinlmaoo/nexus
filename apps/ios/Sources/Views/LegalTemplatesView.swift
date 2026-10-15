@@ -27,7 +27,7 @@ struct LegalTemplatesPane: View {
                     if hSize == .regular {
                         LegalToggle(label: T("Show archived"), isOn: $showArchived).fixedSize()
                     }
-                    Button { uploading = true } label: { Label(T("Upload template"), systemImage: "square.and.arrow.up") }
+                    Button { uploading = true } label: { Label(T("Upload template"), systemImage: "tray.and.arrow.up") }
                         .buttonStyle(.nxPrimary)
                 }
                 // On a phone the switch sits at the list's right edge (F-29 / M-23).
@@ -388,7 +388,7 @@ struct LegalTemplateDetailView: View {
                         Spacer(minLength: 0)
                         Button { Task { await download(v) } } label: {
                             if downloading == v.version { ProgressView() } else {
-                                Image(systemName: "arrow.down.circle").font(.system(size: 17)).foregroundStyle(NX.mutedFg)
+                                Image(systemName: "tray.and.arrow.down").font(.system(size: 17)).foregroundStyle(NX.mutedFg)
                             }
                         }
                         .buttonStyle(.plain)
@@ -406,7 +406,7 @@ struct LegalTemplateDetailView: View {
                 LegalProblemList(title: T("Fix these in the Word file and upload again:"), lines: versionProblems)
                 Button { Task { await addVersion() } } label: {
                     HStack(spacing: 5) {
-                        if addingVersion { ProgressView() } else { Image(systemName: "arrow.up.doc") }
+                        if addingVersion { ProgressView() } else { Image(systemName: "tray.and.arrow.up") }
                         Text(T("Upload"))
                     }
                 }

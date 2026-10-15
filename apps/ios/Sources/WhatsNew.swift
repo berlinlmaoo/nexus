@@ -181,7 +181,7 @@ enum WhatsNew {
         WhatsNewEntry(
             icon: "person.2.badge.gearshape",
             title: T("Your requests go to your own approver"),
-            body: T("Permits, sick days and leave now land with the person set as your approver in the Approval Chart — your manager, not every BoD at once. If nobody answers in two working days, the BoD is told.")
+            body: T("Permits, sick days and leave now land with the person set as your approver in the Approval Chart — your manager, not every board member at once. If nobody answers in two working days, the board is told.")
         ),
         WhatsNewEntry(
             icon: "magnifyingglass",
@@ -228,13 +228,13 @@ enum WhatsNew {
         WhatsNewEntry(
             icon: "sparkle",
             title: T("GIDEON answers attendance tickets properly"),
-            body: T("File a ticket about your attendance and GIDEON now reads the record itself — your shift, whether a permit covers the day, whether NEXUS was down, and what the day actually cost you. It proposes the fix for a BoD to approve, and it can propose giving your XP back without changing your recorded hours."),
+            body: T("File a ticket about your attendance and GIDEON now reads the record itself — your shift, whether a permit covers the day, whether NEXUS was down, and what the day actually cost you. It proposes the fix for a board member to approve, and it can propose giving your XP back without changing your recorded hours."),
             demo: AnyView(DemoGideon())
         ),
         WhatsNewEntry(
             icon: "at",
             title: T("Threads is open to everyone"),
-            body: T("The company feed used to be BoD-only. Everyone can read, post, comment and like it now — and posts can carry up to four photos."),
+            body: T("The company feed used to be board-only. Everyone can read, post, comment and like it now — and posts can carry up to four photos."),
             demo: AnyView(DemoComposer())
         ),
         WhatsNewEntry(
@@ -252,7 +252,7 @@ enum WhatsNew {
         WhatsNewEntry(
             icon: "ellipsis.circle",
             title: T("Delete a post in Threads"),
-            body: T("BoD only. In Threads, the dots at the top right of a post remove it — your own, or anyone's. It disappears from the feed for everyone."),
+            body: T("Board only. In Threads, the dots at the top right of a post remove it — your own, or anyone's. It disappears from the feed for everyone."),
             bodOnly: true
         ),
         WhatsNewEntry(
@@ -351,7 +351,7 @@ private struct DemoGideon: View {
             }
             HStack(spacing: 6) {
                 NexusChip(text: T("Pending"), tone: .warning)
-                Text(T("Waiting on a BoD decision. The attendance record has not changed."))
+                Text(T("Waiting on a board decision. The attendance record has not changed."))
                     .font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(2)
             }
         }

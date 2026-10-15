@@ -215,7 +215,7 @@ struct LoginView: View {
                 } label: {
                     HStack(spacing: 5) {
                         Text(T("New here?")).foregroundStyle(NX.mutedFg)
-                        Text(T("Create account")).font(NXFont.text(14, .bold)).foregroundStyle(NX.onyx)
+                        Text(T("Request access")).font(NXFont.text(14, .bold)).foregroundStyle(NX.onyx)
                         Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.onyx)
                     }
                     .font(NXFont.text(14))

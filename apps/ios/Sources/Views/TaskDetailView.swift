@@ -92,7 +92,7 @@ struct TaskDetailView: View {
             } else if let loadFailure {
                 LoadErrorView(error: loadFailure, what: T("this task"),
                               notFoundTitle: T("This task doesn't exist any more"),
-                              notFoundMessage: T("It was deleted, or the link is wrong. A BoD or manager can restore a deleted task from Control Room → Audit for 90 days."),
+                              notFoundMessage: T("It was deleted, or the link is wrong. A board member or manager can restore a deleted task from Control Room → Audit for 90 days."),
                               forbiddenTitle: T("You can't open this task"),
                               forbiddenMessage: T("It's in a project you're not a member of. Ask its Project Owner to add you."),
                               retry: { Task { await load() } })

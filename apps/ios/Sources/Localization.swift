@@ -78,7 +78,7 @@ final class AppLanguage {
          indonesianMacScreens, indonesianMacForms, indonesianMacGideon, indonesianUITour, indonesianRun5, indonesianRun6,
          indonesianLegal, indonesianRun7A, indonesianRun7B, indonesianRun7C, indonesianLegalRequests, indonesianRun9, indonesianRun10,
          indonesianRun11A, indonesianRun11B, indonesianRun11C, indonesianOutletCustom, indonesianSocialMedia, indonesianRun12, indonesianRun13,
-         indonesianRun14NF, indonesianRun14PV, indonesianRun14PP, indonesianRun14OL, indonesianRun15]
+         indonesianRun14NF, indonesianRun14PV, indonesianRun14PP, indonesianRun14OL, indonesianRun15, indonesianRun16]
     }
 
     /// English → Indonesian. Keys must match the source literal EXACTLY.
@@ -268,12 +268,12 @@ final class AppLanguage {
         "Failed.": "Gagal.",
         "Check-in successful ✓": "Check-in berhasil ✓",
         "Check-out successful ✓": "Check-out berhasil ✓",
-        "Checkout sent — waiting for BoD approval ⏳": "Check-out terkirim — menunggu persetujuan BoD",
+        "Checkout sent — waiting for board approval ⏳": "Check-out terkirim — menunggu persetujuan direksi",
         "⚠️ You still have an earlier shift that was never checked out. Tap PRESENCE OUT to close it first — then you can clock in again.":
             "⚠️ Masih ada absen sebelumnya yang belum di-check-out. Pencet PRESENCE OUT dulu buat nutup — baru bisa absen lagi.",
-        "⏳ Checkout outside the office area — waiting for BoD approval":
-            "⏳ Checkout di luar area — nunggu approval BoD",
-        "Your out-of-area checkout was rejected by the BoD.": "Checkout di luar area kamu ditolak BoD.",
+        "⏳ Checkout outside the office area — waiting for board approval":
+            "⏳ Checkout di luar area — nunggu approval direksi",
+        "Your out-of-area checkout was rejected by the board.": "Checkout di luar area kamu ditolak direksi.",
         "You're outside the office area": "Kamu di luar area kantor",
         "Reason (e.g. content shoot / client meeting)": "Alasan (mis. shoot konten / meeting client)",
         "Checkout & request approval": "Checkout & minta approval",
@@ -336,8 +336,8 @@ final class AppLanguage {
         "Day off": "Day off",
         "Manage attendance": "Atur absen",
         "You": "Kamu",
-        "Want to check out from here? **A reason is required** — the checkout will wait for BoD approval.":
-            "Mau checkout dari sini? **Wajib isi alasan** — checkout-nya nunggu approval BoD dulu.",
+        "Want to check out from here? **A reason is required** — the checkout will wait for board approval.":
+            "Mau checkout dari sini? **Wajib isi alasan** — checkout-nya nunggu approval direksi dulu.",
         "That day's check-in & check-out are deleted permanently, and the day is shielded from attendance deductions.":
             "Data check-in & check-out hari itu kehapus permanen + hari itu diamankan dari potongan.",
         "Direct": "Langsung",
@@ -572,8 +572,8 @@ final class AppLanguage {
             "Belum ada automation. Atur rule otomatis lewat web (desktop).",
 
         // ── attendance admin / offices / requests ─────────────────────────────
-        "Shift, day-off and public-holiday settings can only be managed by BoD / One Above All.":
-            "Pengaturan shift, jatah libur & tanggal merah cuma bisa diatur BoD / One Above All.",
+        "Shift, day-off and public-holiday settings can only be managed by the board / One Above All.":
+            "Pengaturan shift, jatah libur & tanggal merah cuma bisa diatur direksi / One Above All.",
         "SHIFT & DAY-OFF ALLOWANCE": "SHIFT & JATAH LIBUR",
         "Allowance / staff this month": "Jatah / staff bulan ini",
         "Save allowance": "Simpan jatah",
@@ -705,8 +705,8 @@ final class AppLanguage {
             "Apa yang baru",
         "Threads is open to everyone":
             "Threads sekarang dibuka buat semua",
-        "The company feed used to be BoD-only. Everyone can read, post, comment and like it now — and posts can carry up to four photos.":
-            "Feed perusahaan dulu cuma buat BoD. Sekarang semua orang bisa baca, posting, komentar, dan like — dan tiap postingan bisa bawa sampai empat foto.",
+        "The company feed used to be board-only. Everyone can read, post, comment and like it now — and posts can carry up to four photos.":
+            "Feed perusahaan dulu cuma buat direksi. Sekarang semua orang bisa baca, posting, komentar, dan like — dan tiap postingan bisa bawa sampai empat foto.",
         "Take a post down":
             "Hapus postingan",
         "BoD only. The dots sit at the top right of a post — your own, or anyone's.":
@@ -729,8 +729,8 @@ final class AppLanguage {
             "Tujuh tab nggak lagi berebut satu baris, jadi nggak ada yang kepotong jadi lima huruf.",
         "GIDEON answers attendance tickets properly":
             "GIDEON jawab tiket absen dengan bener",
-        "File a ticket about your attendance and GIDEON now reads the record itself — your shift, whether a permit covers the day, whether NEXUS was down, and what the day actually cost you. It proposes the fix for a BoD to approve, and it can propose giving your XP back without changing your recorded hours.":
-            "Kirim tiket soal absen lo, dan sekarang GIDEON baca catatannya sendiri — shift lo, ada izin yang nutupin hari itu atau nggak, NEXUS lagi mati atau nggak, dan berapa sebenernya yang kepotong hari itu. Dia bikin usulan buat di-approve BoD, dan bisa ngusulin XP lo dibalikin tanpa ngubah jam yang tercatat.",
+        "File a ticket about your attendance and GIDEON now reads the record itself — your shift, whether a permit covers the day, whether NEXUS was down, and what the day actually cost you. It proposes the fix for a board member to approve, and it can propose giving your XP back without changing your recorded hours.":
+            "Kirim tiket soal absen lo, dan sekarang GIDEON baca catatannya sendiri — shift lo, ada izin yang nutupin hari itu atau nggak, NEXUS lagi mati atau nggak, dan berapa sebenernya yang kepotong hari itu. Dia bikin usulan buat di-approve direksi, dan bisa ngusulin XP lo dibalikin tanpa ngubah jam yang tercatat.",
         "Nothing new to show":
             "Belum ada yang baru",
         "No release notes were written for this version.":
@@ -803,8 +803,8 @@ final class AppLanguage {
             "Foto dan file langsung ke server, nggak muter dulu ke internet, jadi lebih cepat kelar. Nggak ada yang perlu dinyalain — app-nya ngecek sendiri lagi di WiFi kantor atau nggak, terus milih jalur yang lebih cepat.",
         "Delete a post in Threads":
             "Hapus postingan di Threads",
-        "BoD only. In Threads, the dots at the top right of a post remove it — your own, or anyone's. It disappears from the feed for everyone.":
-            "Khusus BoD. Di Threads, titik tiga di pojok kanan atas postingan buat menghapusnya — punya sendiri maupun punya orang. Postingannya hilang dari feed buat semua orang.",
+        "Board only. In Threads, the dots at the top right of a post remove it — your own, or anyone's. It disappears from the feed for everyone.":
+            "Khusus direksi. Di Threads, titik tiga di pojok kanan atas postingan buat menghapusnya — punya sendiri maupun punya orang. Postingannya hilang dari feed buat semua orang.",
         "See today's attendance on your wrist, and approve requests there if that is your job. Keep attendance on the Home and Lock Screen, ask Siri, and watch the work session run in the Dynamic Island.":
             "Lihat absensi hari ini dari jam tangan, dan approve pengajuan di situ kalau itu tugasmu. Taruh absensi di Home dan Lock Screen, tanya Siri, dan lihat sesi kerja jalan di Dynamic Island.",
         "Couldn't post that.":
@@ -1029,7 +1029,7 @@ final class AppLanguage {
         "No record": "Tidak ada catatan",
         "shift": "shift",
         "Worked": "Kerja",
-        "Corrected by BoD": "Dikoreksi BoD",
+        "Corrected by the board": "Dikoreksi direksi",
         "No check-in was recorded that day and no request covered it.": "Tidak ada check-in hari itu dan tidak ada pengajuan yang menutupinya.",
         "approved by": "disetujui oleh",
         "open it on the web": "buka di web",
@@ -1058,7 +1058,7 @@ final class AppLanguage {
         "Everything you file through a form — a request, a reimbursement, a report — lands on this board with its status, so you never have to ask where it got to. Start with a form.": "Semua yang kamu ajukan lewat form — permintaan, reimbursement, laporan — tampil di papan ini beserta statusnya, jadi tidak perlu tanya sudah sampai mana. Mulai dari sebuah form.",
         "Open forms": "Buka form",
         "No tickets yet": "Belum ada tiket",
-        "A ticket is how you raise something with BoD — a complaint, a question, or an attendance record that looks wrong. GIDEON checks the data first, BoD decides, and it stays between you and them.": "Tiket adalah cara menyampaikan sesuatu ke BoD — keluhan, pertanyaan, atau catatan absen yang terlihat salah. GIDEON mengecek datanya dulu, BoD memutuskan, dan isinya hanya antara kamu dan mereka.",
+        "A ticket is how you raise something with the board — a complaint, a question, or an attendance record that looks wrong. GIDEON checks the data first, the board decides, and it stays between you and them.": "Tiket adalah cara menyampaikan sesuatu ke direksi — keluhan, pertanyaan, atau catatan absen yang terlihat salah. GIDEON mengecek datanya dulu, direksi memutuskan, dan isinya hanya antara kamu dan mereka.",
         "Only tickets with this status are shown here. The rest are still under All.": "Hanya tiket dengan status ini yang tampil. Sisanya ada di Semua.",
         "Nothing to review yet": "Belum ada yang perlu ditinjau",
         "Leave, sick days, permits and offsite check-outs from your people appear here the moment they're filed, with Approve and Reject right on the row.": "Cuti, sakit, izin, dan check-out luar kantor dari anak buahmu tampil di sini begitu diajukan, dengan tombol Approve dan Reject di barisnya.",
@@ -1138,7 +1138,7 @@ final class AppLanguage {
         "read by": "dibaca",
         "team": "tim",
         "team / office default": "ikut tim / kantor",
-        "their requests go to every BoD": "request-nya masuk ke semua BoD",
+        "their requests go to every board member": "request-nya masuk ke semua anggota direksi",
         "Reject": "Tolak",
         "Someone": "Seseorang",
         "office": "kantor",
@@ -1216,7 +1216,7 @@ final class AppLanguage {
         "WHAT HAPPENED": "CERITAKAN KEJADIANNYA",
         "EVIDENCE PHOTOS (REQUIRED)": "FOTO BUKTI (WAJIB)",
         "Short title for the issue": "Judul singkat masalahnya",
-        "Tell the BoD what happened…": "Ceritain ke BoD apa yang terjadi…",
+        "Tell the board what happened…": "Ceritain ke direksi apa yang terjadi…",
         "At least one photo is required.": "Minimal satu foto bukti.",
         "File ticket": "Kirim tiket",
         "Couldn't file the ticket.": "Tiket gagal dikirim.",
@@ -1225,8 +1225,8 @@ final class AppLanguage {
         "Other": "Lainnya",
         // ── ticket · attendance correction ───────────────────────────────────
         "Attendance correction": "Koreksi absen",
-        "A proposal only — the attendance record moves when a BoD approves it, not before.":
-            "Baru usulan — absen berubah kalau BoD nyetujuin, belum sebelum itu.",
+        "A proposal only — the attendance record moves when a board member approves it, not before.":
+            "Baru usulan — absen berubah kalau direksi nyetujuin, belum sebelum itu.",
         "No correction has been proposed for this ticket yet.":
             "Belum ada usulan koreksi absen buat tiket ini.",
         "Propose an attendance correction": "Ajukan koreksi absen",
@@ -1235,8 +1235,8 @@ final class AppLanguage {
         "No attendance was recorded that day — this would create it.":
             "Hari itu nggak ada absen tercatat — usulan ini yang bakal bikin.",
         "unchanged": "tetap",
-        "Waiting on a BoD decision. The attendance record has not changed.":
-            "Nunggu keputusan BoD. Absennya belum berubah.",
+        "Waiting on a board decision. The attendance record has not changed.":
+            "Nunggu keputusan direksi. Absennya belum berubah.",
         "Approving rewrites that day's attendance record straight away.":
             "Begitu disetujui, absen hari itu langsung ditulis ulang.",
         "XP cut that day":
@@ -1264,8 +1264,8 @@ final class AppLanguage {
         "Couldn't send the attendance correction.": "Koreksi absensi gagal dikirim.",
         "That day's attendance moved after this proposal was written. Check the day again and ask for a fresh proposal.":
             "Absen hari itu udah berubah setelah usulan ini dibuat. Cek lagi harinya, terus minta usulan baru.",
-        "This asks the BoD to rewrite one day's attendance. Nothing changes until they approve it.":
-            "Ini minta BoD nulis ulang absen satu hari. Nggak ada yang berubah sampai mereka nyetujuin.",
+        "This asks the board to rewrite one day's attendance. Nothing changes until they approve it.":
+            "Ini minta anggota direksi nulis ulang absen satu hari. Nggak ada yang berubah sampai mereka nyetujuin.",
         "DATE": "TANGGAL",
         "Set at least one of check-in or check-out.": "Minimal isi salah satu: check-in atau check-out.",
         "Leave the recorded time as it is": "Biarkan jam yang sudah tercatat",
@@ -1340,7 +1340,7 @@ final class AppLanguage {
         "Couldn't load this profile.": "Gagal muat profil ini.",
         "Joined": "Gabung",
         "Level": "Level",
-        "BoD and One Above All sit outside the ranking.": "BoD & One Above All di luar peringkat.",
+        "The board and One Above All sit outside the ranking.": "direksi & One Above All di luar peringkat.",
         "No points this period yet.": "Belum ada poin periode ini.",
         "Day streak": "Streak harian",
         "Not on a team yet.": "Belum masuk tim mana pun.",
@@ -1354,7 +1354,7 @@ final class AppLanguage {
         "No check-out": "Tidak check-out",
         "Peer report · reward": "Laporan rekan · bonus",
         "Peer report · penalty": "Laporan rekan · penalti",
-        "Adjusted by a BoD": "Disesuaikan BoD",
+        "Adjusted by a board member": "Disesuaikan direksi",
         "Quest claimed": "Quest diklaim",
 
         // ── sign-up + delete own account (App Store 5.1.1(v)) ────────────────
@@ -1564,7 +1564,7 @@ final class AppLanguage {
         "Checked in away from the office": "Check-in di luar kantor",
         "Away from the office": "Di luar kantor",
         "Check out first": "Check out dulu",
-        "One day per request, today or later, with a photo of the doctor's note. A past day is filed by a BoD.": "Satu hari per pengajuan, hari ini atau setelahnya, dengan foto surat dokter. Tanggal yang sudah lewat diinput oleh BoD.",
+        "One day per request, today or later, with a photo of the doctor's note. A past day is filed by a board member.": "Satu hari per pengajuan, hari ini atau setelahnya, dengan foto surat dokter. Tanggal yang sudah lewat diinput oleh direksi.",
         "That's %d days — only %d left.": "Itu %d hari — sisa %d saja.",
         "Tap the first day, then the last": "Ketuk hari pertama, lalu hari terakhir",
         "%@ · %d of %d days": "%@ · %d dari %d hari",
@@ -1689,7 +1689,7 @@ final class AppLanguage {
         "The day becomes an on-time check-in over the shift hours, and a single-day request covering it is canceled.": "Hari itu jadi check-in tepat waktu sepanjang jam shift, dan pengajuan satu hari yang mencakupnya dibatalkan.",
         "A check-in already made that day is kept.": "Check-in yang sudah ada hari itu tetap disimpan.",
         "An unfinished check-in (no check-out) that day is removed.": "Check-in yang belum selesai (tanpa check-out) hari itu dihapus.",
-        "Change status (BoD)": "Ubah status (BoD)",
+        "Change status (board)": "Ubah status (direksi)",
         "Clear penalty (restore XP & day-off)": "Hapus penalti (kembalikan XP & day off)",
         "Every action restores that day's XP & day-off deductions and is written to the audit log.": "Setiap aksi mengembalikan potongan XP & day off hari itu dan dicatat di audit log.",
         "Change to %@": "Ubah jadi %@",
@@ -1703,8 +1703,8 @@ final class AppLanguage {
         "previous": "lalu",
         "next": "berikutnya",
         "person": "orang",
-        "BoD and above only": "Khusus BoD ke atas",
-        "Only the BoD and One Above All can give extra day off. Ask one of them if someone has earned it.": "Hanya BoD dan One Above All yang bisa kasih extra day off. Minta ke salah satu dari mereka kalau ada yang layak dapat.",
+        "Board and above only": "Khusus direksi ke atas",
+        "Only the board and One Above All can give extra day off. Ask one of them if someone has earned it.": "Hanya direksi dan One Above All yang bisa kasih extra day off. Minta ke salah satu dari mereka kalau ada yang layak dapat.",
         "Couldn't load extra day off": "Extra day off gagal dimuat",
         "Give extra day off": "Kasih extra day off",
         "Give extra day off?": "Kasih extra day off?",
@@ -1751,7 +1751,7 @@ final class AppLanguage {
         "Never late this period": "Tidak pernah telat periode ini",
         "Day off: %d of %d used, %d left": "Day off: %d dari %d terpakai, sisa %d",
         "XP this period: +%d gained, %d lost": "XP periode ini: +%d didapat, %d hilang",
-        "%d removed by the BoD": "%d dihapus BoD",
+        "%d removed by the board": "%d dihapus direksi",
         "Streak board": "Papan streak",
         "Tap a day for its detail. A red dot means XP was deducted for that day.": "Ketuk tanggal untuk detailnya. Titik merah berarti ada potongan XP untuk hari itu.",
         "Requests": "Pengajuan",
@@ -1847,7 +1847,7 @@ final class AppLanguage {
         "Job titles show on the chart, e.g. CEO, CMO or Lead.": "Jabatan tampil di bagan, misalnya CEO, CMO, atau Lead.",
         "Kind": "Jenis",
         "Led by": "Dipimpin oleh",
-        "Needs BoD access.": "Butuh akses BoD.",
+        "Needs board access.": "Butuh akses direksi.",
         "None": "Tidak ada",
         "Not placed yet": "Belum ditaruh",
         "Not under anyone": "Tidak di bawah siapa pun",
@@ -2004,7 +2004,7 @@ final class AppLanguage {
         "Removed from projects, teams and chats.": "Dikeluarkan dari project, tim, dan chat.",
         "Their attendance, requests, projects, tasks and messages stay.": "Absensi, pengajuan, project, task, dan pesannya tetap ada.",
         "Their open tasks stay assigned to them.": "Task yang belum selesai tetap atas namanya.",
-        "Anyone who had them as approver goes back to the BoD safety net.": "Yang approver-nya dia kembali ke BoD sebagai jaring pengaman.",
+        "Anyone who had them as approver goes back to the board as a safety net.": "Yang approver-nya dia kembali ke direksi sebagai jaring pengaman.",
         "%@ is offboarded.": "%@ sudah di-offboard.",
         "Last working day: %@": "Hari kerja terakhir: %@",
         "Pending requests": "Pengajuan menunggu",
@@ -2015,12 +2015,12 @@ final class AppLanguage {
         "Nothing open.": "Tidak ada yang terbuka.",
         "%d person lost their approver": "%d orang kehilangan approver",
         "%d people lost their approver": "%d orang kehilangan approver",
-        "Their requests go to the BoD until you set a new approver in the Approval chart.": "Pengajuan mereka masuk ke BoD sampai kamu atur approver baru di Bagan Approval.",
+        "Their requests go to the board until you set a new approver in the Approval chart.": "Pengajuan mereka masuk ke direksi sampai kamu atur approver baru di Bagan Approval.",
         "%d automatic deduction dated after their last day was canceled.": "%d potongan otomatis setelah hari terakhirnya dibatalkan.",
         "%d automatic deductions dated after their last day were canceled.": "%d potongan otomatis setelah hari terakhirnya dibatalkan.",
         "You can't do this to your own account.": "Tidak bisa dilakukan ke akun kamu sendiri.",
         "You can't do this to someone at or above your level.": "Tidak bisa dilakukan ke orang yang setara atau di atas level kamu.",
-        "Only BoD and above can do this.": "Hanya BoD ke atas yang bisa melakukan ini.",
+        "Only the board and above can do this.": "Hanya direksi ke atas yang bisa melakukan ini.",
         "This account doesn't exist anymore.": "Akun ini sudah tidak ada.",
         "Check the last working day: not after today, and not before they joined.": "Cek hari kerja terakhir: tidak boleh setelah hari ini, dan tidak sebelum tanggal bergabung.",
         "Pick a reason.": "Pilih alasannya.",
@@ -2518,7 +2518,7 @@ final class AppLanguage {
         "Anyone with the link": "Siapa saja yang punya tautan",
         "They sign in with their NEXUS account. On iPhone and Mac the link opens the app.": "Mereka masuk dengan akun NEXUS. Di iPhone dan Mac tautannya membuka aplikasi.",
         "No account needed — for clients and partners. It opens in the browser.": "Tanpa akun — untuk klien dan mitra. Terbuka di browser.",
-        "Only the person who uploaded this, or BoD, can make a link for people outside NEXUS. You can still share it with people in NEXUS.": "Hanya yang mengunggah ini, atau BoD, yang bisa membuat tautan untuk orang di luar NEXUS. Kamu tetap bisa membagikannya ke orang di NEXUS.",
+        "Only the person who uploaded this, or the board, can make a link for people outside NEXUS. You can still share it with people in NEXUS.": "Hanya yang mengunggah ini, atau direksi, yang bisa membuat tautan untuk orang di luar NEXUS. Kamu tetap bisa membagikannya ke orang di NEXUS.",
         "People can save the file.": "Orang bisa menyimpan berkasnya.",
         "People can save each file, or the whole folder as a .zip.": "Orang bisa menyimpan tiap berkas, atau seluruh folder sebagai .zip.",
         "View only: pictures, videos, sound and PDFs open in the browser. Other files (Word, Excel, ZIP…) can't be opened at all.": "Hanya lihat: gambar, video, suara, dan PDF terbuka di browser. Berkas lain (Word, Excel, ZIP…) sama sekali tidak bisa dibuka.",
@@ -2551,7 +2551,7 @@ final class AppLanguage {
         "What this link opened is no longer available. Ask the sender for a new link.": "Yang dibuka tautan ini sudah tidak tersedia. Minta tautan baru ke pengirimnya.",
         "This link is only for people at the company that shared it.": "Tautan ini hanya untuk orang di perusahaan yang membagikannya.",
         "This folder is locked to certain roles, and yours isn't one of them.": "Folder ini dikunci untuk peran tertentu, dan peranmu tidak termasuk.",
-        "Only the person who uploaded this, or BoD, can do that.": "Hanya yang mengunggah ini, atau BoD, yang bisa melakukannya.",
+        "Only the person who uploaded this, or the board, can do that.": "Hanya yang mengunggah ini, atau direksi, yang bisa melakukannya.",
         "This file is in the trash. Restore it first.": "Berkas ini ada di sampah. Pulihkan dulu.",
         "The vault is full.": "Vault sudah penuh.",
         "Access": "Akses",
@@ -2568,7 +2568,7 @@ final class AppLanguage {
         "Same as the folder above": "Sama dengan folder di atasnya",
         "Everyone in the company": "Semua orang di perusahaan",
         "Managers and above": "Manajer ke atas",
-        "BoD and above": "BoD ke atas",
+        "Board and above": "direksi ke atas",
         "Locked": "Dikunci",
         "Replace file…": "Ganti berkas…",
         "“%@” replaced — its links show the new version": "“%@” diganti — tautannya menampilkan versi baru",
@@ -2579,12 +2579,12 @@ final class AppLanguage {
         "Some photos didn't come through": "Beberapa foto tidak terbaca",
         "1 item couldn't be read from Photos.": "1 item tidak bisa dibaca dari Foto.",
         "%d items couldn't be read from Photos.": "%d item tidak bisa dibaca dari Foto.",
-        "Only whoever uploaded it, or BoD, can restore it": "Hanya yang mengunggahnya, atau BoD, yang bisa memulihkannya",
+        "Only whoever uploaded it, or the board, can restore it": "Hanya yang mengunggahnya, atau direksi, yang bisa memulihkannya",
         "in %@": "di %@",
         // Vault: the upload panel, drops, several items at once (9 Oct)
         "Couldn't read this file.": "Berkas ini tidak bisa dibaca.",
         "Can't reach NEXUS. Check your connection and retry.": "Tidak bisa terhubung ke NEXUS. Cek koneksi lalu coba lagi.",
-        "The vault is full. Empty the trash or ask BoD for more space.": "Vault penuh. Kosongkan sampah atau minta BoD menambah ruang.",
+        "The vault is full. Empty the trash or ask the board for more space.": "Vault penuh. Kosongkan sampah atau minta anggota direksi menambah ruang.",
         "This file is too big to upload (max 1 GB).": "Berkas ini terlalu besar untuk diunggah (maks 1 GB).",
         "Too many uploads at once. Try again in a moment.": "Terlalu banyak unggahan sekaligus. Coba lagi sebentar lagi.",
         "This folder no longer exists.": "Folder ini sudah tidak ada.",
@@ -3355,9 +3355,9 @@ final class AppLanguage {
         "You no longer have access to its project. Ask one of its members if you need it.": "Kamu tidak lagi punya akses ke proyeknya. Minta ke salah satu anggotanya kalau kamu membutuhkannya.",
         "Calendar": "Kalender",
         "This calendar is for members of the company": "Kalender ini khusus anggota perusahaan",
-        "You are in a personal workspace. Ask a BoD or Manager to add you to the company's workspace; the Calendar then shows the tasks of everyone there.": "Kamu sedang di workspace pribadi. Minta BoD atau Manager menambahkanmu ke workspace perusahaan; setelah itu Kalender menampilkan tugas semua orang di sana.",
+        "You are in a personal workspace. Ask a board member or manager to add you to the company's workspace; the Calendar then shows the tasks of everyone there.": "Kamu sedang di workspace pribadi. Minta anggota direksi atau Manager menambahkanmu ke workspace perusahaan; setelah itu Kalender menampilkan tugas semua orang di sana.",
         "The Calendar is on its way": "Kalender segera hadir",
-        "It opens for BoD and Managers first, then for everyone. Your own tasks are still in Tasks.": "Dibuka untuk BoD dan Manager dulu, lalu untuk semua. Tugasmu sendiri tetap ada di Tugas.",
+        "It opens for the board and managers first, then for everyone. Your own tasks are still in Tasks.": "Dibuka untuk direksi dan Manager dulu, lalu untuk semua. Tugasmu sendiri tetap ada di Tugas.",
         "Previous week": "Minggu sebelumnya",
         "Previous month": "Bulan sebelumnya",
         "Next week": "Minggu berikutnya",

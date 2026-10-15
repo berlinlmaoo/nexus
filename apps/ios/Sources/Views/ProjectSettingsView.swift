@@ -110,7 +110,7 @@ struct ProjectSettingsView: View {
     private var readOnlyNote: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "lock.fill").font(.system(size: 12)).foregroundStyle(NX.mutedFg).padding(.top, 2)
-            Text(String(format: T("You have %@ here. Only people with Full access (the Project Owner and the BoD) can change the project's name, photo, status, auto assign and members."),
+            Text(String(format: T("You have %@ here. Only people with Full access (the Project Owner and the board) can change the project's name, photo, status, auto assign and members."),
                         (detail.viewerLevel ?? .edit).label))
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
         }
@@ -335,7 +335,7 @@ struct ProjectSettingsView: View {
                 }.disabled(busy)
             }
         }
-        .alert(String(format: T("Delete the project “%@”? A manager or the BoD can restore it from Control Room → Audit for 90 days."), name), isPresented: $confirmDelete) {
+        .alert(String(format: T("Delete the project “%@”? A manager or the board can restore it from Control Room → Audit for 90 days."), name), isPresented: $confirmDelete) {
                 Button(T("Delete"), role: .destructive) { Task { await deleteProj() } }
                 Button(T("Cancel"), role: .cancel) {}
         }

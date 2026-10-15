@@ -50,7 +50,7 @@ struct RoleChip: View {
     private var label: String {
         switch role {
         case "ONE_ABOVE_ALL": return "One Above All"
-        case "BOD": return "BoD"
+        case "BOD": return "Board"
         case "MANAGER": return "Manager"
         case "STAFF": return "Staff"
         default: return role

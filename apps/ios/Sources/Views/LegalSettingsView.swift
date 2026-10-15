@@ -19,7 +19,7 @@ struct LegalSettingsPane: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if !canEdit {
-                    Text(T("Only the owner or a BoD member with Legal can change these."))
+                    Text(T("Only the owner or a board member with Legal can change these."))
                         .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                 }
                 if companies == nil && error == nil {
@@ -48,7 +48,14 @@ struct LegalSettingsPane: View {
                         ForEach(list) { c in
                             let on = (current ?? list.first?.id) == c.id
                             Button { withAnimation(.snappy) { current = c.id } } label: {
-                                Text(c.name).font(NXFont.text(13, .medium)).lineLimit(1)
+                                // The code beside the name when it says something more ("Intoo INTOO" stays
+                                // "Intoo", "Z" beside "The Z Networks"), as the web's chips (UI tour run 16, R16-B-22).
+                                HStack(spacing: 5) {
+                                    Text(c.name).font(NXFont.text(13, .medium)).lineLimit(1)
+                                    if !c.code.isEmpty && c.code.caseInsensitiveCompare(c.name) != .orderedSame {
+                                        Text(verbatim: c.code).font(.system(size: 11, design: .monospaced)).foregroundStyle(NX.mutedFg)
+                                    }
+                                }
                                     .padding(.horizontal, 12).padding(.vertical, 6)
                                     .nxChoiceChip(on: on)
                                     .frame(minHeight: 44).contentShape(Rectangle())
@@ -97,7 +104,10 @@ private struct LegalCompanyCard: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(company.name).font(NXFont.text(17, .semibold)).foregroundStyle(NX.foreground)
-                    Text(verbatim: company.code).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.mutedFg)
+                    // No "PATS PATS": the code only when it differs from the name (web; UI tour run 16).
+                    if company.code.caseInsensitiveCompare(company.name) != .orderedSame {
+                        Text(verbatim: company.code).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.mutedFg)
+                    }
                     Spacer(minLength: 0)
                     if company.legalName.isEmpty {
                         Label(T("Legal name (PT) not filled in"), systemImage: "exclamationmark.triangle.fill")
@@ -187,14 +197,14 @@ private struct LegalCompanyCard: View {
         HStack(spacing: 6) {
             if company.hasKop {
                 // Bordered like Replace beside it: one button style in the row (N-40).
-                Button { Task { await downloadKop() } } label: { Label(T("Download"), systemImage: "arrow.down.circle") }
+                Button { Task { await downloadKop() } } label: { Label(T("Download"), systemImage: "tray.and.arrow.down") }
                     .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
                     .disabled(kopBusy)
             }
             if canEdit {
                 Button { route = .pick([LegalFileTypes.docx], tag: "kop") } label: {
                     HStack(spacing: 5) {
-                        if kopBusy { ProgressView() } else { Image(systemName: "arrow.up.doc") }
+                        if kopBusy { ProgressView() } else { Image(systemName: "tray.and.arrow.up") }
                         Text(company.hasKop ? T("Replace") : T("Upload letterhead"))
                     }
                 }
@@ -326,11 +336,21 @@ private struct LegalSeriesRow: View {
     }
 
     @ViewBuilder private var inUseToggle: some View {
+        // The web's switch: dark, its words on the right (UI tour run 16, R16-B-22).
         let toggle = Toggle(isOn: Binding(get: { series.active }, set: { v in Task { await patch(["active": v]) } })) {
             Text(T("In use")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
         }
-        .tint(NX.violet)
-        if hSize == .regular { toggle.fixedSize() } else { toggle.labelsHidden().fixedSize() }
+        .labelsHidden()
+        .tint(NX.onyx)
+        .accessibilityLabel(T("In use"))
+        if hSize == .regular {
+            HStack(spacing: 6) {
+                toggle.fixedSize()
+                Text(T("In use")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).accessibilityHidden(true)
+            }
+        } else {
+            toggle.fixedSize()
+        }
     }
 
     private var editor: some View {

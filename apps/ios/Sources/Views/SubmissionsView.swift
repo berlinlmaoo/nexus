@@ -486,14 +486,27 @@ struct SubmissionsView: View {
             if hSize == .regular {
                 let n = CGFloat(max(1, visibleColumns.count))
                 let fair = (width - 2 * gutter - 12 * (n - 1)) / n
-                if fair >= 260 { return fair }
+                // From 200 pt: a portrait 13" iPad shares ~235 pt per lane, so all four lanes fit side by side
+                // instead of a cut In Progress and an unseen Done (UI tour run 16, R16-I-05 iPad).
+                if fair >= 200 { return fair }
                 // Too narrow to share: an empty lane is narrow, as on the web (w-48), so the lanes with cards
                 // stay on screen (UI tour run 15, Q-IA1: "New" with the only 4 cards sat past a cut "Done").
                 return items.isEmpty ? 200 : 300
             }
             // Two empty columns used to fill a phone exactly, so the third sat just off screen with no hint
             // of it (UI tour run 9, I8): an empty one is now narrow enough that the next always peeks in.
-            return items.isEmpty ? min(200, width * 0.4) : min(320, width * 0.85)
+            // The first lane with cards after empty ones stays whole on screen, with the next lane peeking
+            // ~30 pt under the edge fade: "New" was cut through its cards at the screen edge (UI tour run 16,
+            // R16-I-05).
+            let emptyWidth = min(150, width * 0.34)
+            if items.isEmpty { return emptyWidth }
+            let index = visibleColumns.firstIndex { $0.key == col.key } ?? 0
+            let emptyBefore = visibleColumns.prefix(index).filter { c in !shown.contains { $0.columnKey == c.key } }.count
+            if emptyBefore == index && index > 0 {
+                let room = width - 2 * gutter - CGFloat(index) * (emptyWidth + 12) - 30
+                return min(320, max(200, room))
+            }
+            return min(320, width * 0.85)
         }
     }
 

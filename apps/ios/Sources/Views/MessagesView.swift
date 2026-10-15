@@ -689,7 +689,7 @@ struct ChatThreadView: View {
                 } label: {
                     Image(systemName: "pencil")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(NX.violetText)
+                        .foregroundStyle(NX.mutedFg)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(T("Rename group"))
@@ -698,7 +698,7 @@ struct ChatThreadView: View {
                 Button { sheet = .addPeople } label: {
                     Image(systemName: "person.badge.plus")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(NX.violetText)
+                        .foregroundStyle(NX.mutedFg)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(T("Add people"))
@@ -952,8 +952,9 @@ struct ChatThreadView: View {
             if showsAddPeople {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { sheet = .addPeople } label: {
+                        // Grey header icons, as the web's (UI tour run 16, R16-B-25).
                         Image(systemName: "person.badge.plus").font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(NX.violetText)
+                            .foregroundStyle(NX.mutedFg)
                     }
                 }
             }
@@ -1067,7 +1068,7 @@ struct ChatThreadView: View {
         }) { muted in
             Image(systemName: muted ? "bell.slash" : "bell")
                 .font(.system(size: iconSize, weight: .semibold))
-                .foregroundStyle(NX.violetText)
+                .foregroundStyle(NX.mutedFg)
         }
     }
 
@@ -1290,10 +1291,11 @@ struct ChatThreadView: View {
                     .buttonStyle(.plain)
                 }
 
-                // The web's placeholder (UI tour run 15, Q-IA11 / Q-M20).
+                // The web's placeholder (UI tour run 15, Q-IA11 / Q-M20), whole in the iPad's conversation pane:
+                // at 15 pt it was cut to "(@ to tag someo…" (UI tour run 16, R16-I-21).
                 TextField(T("Type a message…  (@ to tag someone)"), text: $input, axis: .vertical)
-                    .font(NXFont.text(15)).lineLimit(1...4)
-                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .font(NXFont.text(14)).lineLimit(1...4)
+                    .padding(.horizontal, 12).padding(.vertical, 10)
                     .background(NX.muted, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .focused($composerFocused)
                     // "typing" while there is text and keys are pressed; an emptied box (a send
@@ -1314,12 +1316,15 @@ struct ChatThreadView: View {
                         return .handled
                     }
 
-                Button { Task { await send() } } label: {
-                    Image(systemName: sending ? "ellipsis" : "paperplane.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(ChatInk.onMine)
-                        .frame(width: 40, height: 40).background(NX.onyx, in: Circle())
                 // A picture on its own is a message. send() always allowed that; the button did
                 // not, so a photo-only reply looked broken until you typed something.
-                }.disabled((input.trimmingCharacters(in: .whitespaces).isEmpty && pendingAttachment == nil) || sending)
+                let empty = input.trimmingCharacters(in: .whitespaces).isEmpty && pendingAttachment == nil
+                Button { Task { await send() } } label: {
+                    // Grey while there is nothing to send, as the web's disabled Send (UI tour run 16, R16-B-25).
+                    Image(systemName: sending ? "ellipsis" : "paperplane.fill").font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(empty ? NX.mutedFg : ChatInk.onMine)
+                        .frame(width: 40, height: 40).background(empty ? NX.muted : NX.onyx, in: Circle())
+                }.disabled(empty || sending)
             }
             .padding(12)
         }

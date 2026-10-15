@@ -22,7 +22,7 @@ extension AppLanguage {
         "100% stacked area chart": "Diagram area bertumpuk 100%",
         "100% stacked bar chart": "Diagram batang bertumpuk 100%",
         "100% stacked column chart": "Diagram kolom bertumpuk 100%",
-        "A BoD can restore it from Audit.": "BoD bisa memulihkannya dari Audit.",
+        "A board member can restore it from Audit.": "direksi bisa memulihkannya dari Audit.",
         "AVERAGE of {value} for each {row}": "Rata-rata {value} untuk setiap {row}",
         "Above the chart": "Di atas diagram",
         "Add a series to start visualising your data": "Tambahkan rangkaian data untuk mulai memvisualisasikan data Anda",

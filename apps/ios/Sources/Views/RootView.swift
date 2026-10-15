@@ -109,9 +109,10 @@ struct RootView: View {
                                 }
                             }
                     }
-                    // Page sized on iPad / Mac: the form sheet was half the screen and its pinned Send bar cut
-                    // "Needed by" mid-line, with Related project and Attachments out of sight (run 15, Q-IB5).
-                    .tallSheet()
+                    // Page wide on iPad / Mac: the form sheet was half the screen and its pinned Send bar cut
+                    // "Needed by" mid-line (run 15, Q-IB5); at most 860 pt tall, as page height left ~650 pt
+                    // empty above the bar (UI tour run 16, R16-I-30).
+                    .modifier(PageWideFittedSheet(maxHeight: 860))
                     // Passed explicitly: a sheet on Mac Catalyst does not always inherit the environment.
                     .environment(auth).environment(router)
                 }

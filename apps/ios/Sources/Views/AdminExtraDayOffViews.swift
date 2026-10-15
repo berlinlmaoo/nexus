@@ -143,8 +143,8 @@ struct AdminExtraDayOffSection: View {
             if loading && list == nil {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if list?.canManage == false || (list == nil && !viewer.isBoD) {
-                EmptyState(icon: "lock.fill", title: T("BoD and above only"),
-                           subtitle: T("Only the BoD and One Above All can give extra day off. Ask one of them if someone has earned it."))
+                EmptyState(icon: "lock.fill", title: T("Board and above only"),
+                           subtitle: T("Only the board and One Above All can give extra day off. Ask one of them if someone has earned it."))
             } else if list == nil, let loadError {
                 EmptyState(icon: "exclamationmark.triangle", title: T("Couldn't load extra day off"), subtitle: loadError,
                            tint: NX.warning, actionTitle: T("Try again"), actionIcon: "arrow.clockwise",

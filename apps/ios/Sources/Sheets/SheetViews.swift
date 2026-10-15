@@ -119,7 +119,7 @@ private struct SheetScreen: View {
             Button(T("Delete"), role: .destructive) { Task { await store.deleteSheet(tab.id) } }
             Button(T("Cancel"), role: .cancel) {}
         } message: { tab in
-            Text(T("“%@” and everything in it is deleted. A BoD can restore it from Audit.").replacingOccurrences(of: "%@", with: tab.name))
+            Text(T("“%@” and everything in it is deleted. A board member can restore it from Audit.").replacingOccurrences(of: "%@", with: tab.name))
         } }
         // A "Show a warning" protected range (web "Heads up!").
         .background { Color.clear.alert(T("Heads up!"), isPresented: Binding(get: { store.protectPrompt != nil }, set: { if !$0 { store.protectPrompt = nil } })) {

@@ -123,7 +123,7 @@ struct ComplaintMessage: Decodable, Identifiable, Sendable {
     /// Only ever drawn on somebody else's bubble — one's own message needs no name on it.
     var authorLabel: String {
         if isGideon { return "GIDEON" }
-        if fromReviewer == true { return "BoD" }
+        if fromReviewer == true { return T("Board") }
         let name = author?.name ?? ""
         return name.isEmpty ? T("Someone") : name
     }
@@ -319,7 +319,7 @@ struct TicketsView: View {
     /// Web complaints.tsx PageHeader: New ticket at the right, the queues in its tabs row.
     private var pageHeader: some View {
         VStack(spacing: 0) {
-            NXPageHeader(title: T("Tickets"), subtitle: T("A direct line to the BoD for work or HR issues. Only the BoD can read it.")) {
+            NXPageHeader(title: T("Tickets"), subtitle: T("A direct line to the board for work or HR issues. Only the board can read it.")) {
                 Button { showCreate = true } label: { Label(T("New ticket"), systemImage: "plus") }
                     .buttonStyle(.nxPrimary)
             }
@@ -338,7 +338,7 @@ struct TicketsView: View {
             NX.background.ignoresSafeArea()
             content
         }
-        .nxSidebarPageChrome(isRoot, phoneSubtitle: T("A direct line to the BoD for work or HR issues. Only the BoD can read it.")) { pageHeader }
+        .nxSidebarPageChrome(isRoot, phoneSubtitle: T("A direct line to the board for work or HR issues. Only the board can read it.")) { pageHeader }
         .navigationTitle(T("Tickets"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -371,7 +371,7 @@ struct TicketsView: View {
                 if filtered.isEmpty {
                     if filter == "ALL" {
                         EmptyState(icon: "ticket", title: T("No tickets yet"),
-                                   subtitle: T("A ticket is how you raise something with BoD — a complaint, a question, or an attendance record that looks wrong. GIDEON checks the data first, BoD decides, and it stays between you and them."),
+                                   subtitle: T("A ticket is how you raise something with the board — a complaint, a question, or an attendance record that looks wrong. GIDEON checks the data first, the board decides, and it stays between you and them."),
                                    actionTitle: T("New ticket"), actionIcon: "square.and.pencil") { showCreate = true }
                     } else if isBod && filter == "OPEN" {
                         EmptyState(icon: "tray", title: T("Inbox is clear"),
@@ -418,9 +418,11 @@ struct TicketsView: View {
     /// Fixed columns; Subject takes the rest. Narrower than they were: on the Mac the subject column was
     /// left ~130 pt and every subject read "Day Off terpot…" (UI tour run 5).
     private enum Col {
-        static let from: CGFloat = 160
+        // From wide enough for "Mohamad Okta Firdaus" on one line; Status hugs its chip, so no band of
+        // empty width sits between Status and Replies (UI tour run 16, R16-M-11).
+        static let from: CGFloat = 200
         static let category: CGFloat = 112
-        static let status: CGFloat = 132
+        static let status: CGFloat = 112
         static let replies: CGFloat = 56
         static let activity: CGFloat = 112
     }
@@ -468,18 +470,18 @@ struct TicketsView: View {
                     Text(t.title).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(2)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
-                    if t.hasGideonReply {
-                        Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
-                            .frame(width: 11, height: 11).foregroundStyle(NX.mutedFg)
-                            .frame(width: 20, height: 20).background(NX.muted, in: Circle())
-                            .accessibilityLabel(T("GIDEON replied"))
-                    }
                 }
-                // The same chip as the narrow rows (one style, UI tour run 11 IP-1), under the subject: beside
-                // it, it left the subject "Tgl 4-8 it…" (UI tour run 13, M-9).
-                if t.showsDecisionMarker {
-                    NexusChip(text: T("Correction awaiting decision"), tone: .accent, systemImage: "calendar.badge.clock")
-                        .fixedSize()
+                // The same chips as the narrow rows (one style, UI tour run 11 IP-1), under the subject: beside
+                // it, it left the subject "Tgl 4-8 it…" (UI tour run 13, M-9). "GIDEON replied" is the web's chip,
+                // not a bare icon after the subject (UI tour run 16, R16-M-11).
+                if t.showsDecisionMarker || t.hasGideonReply {
+                    HStack(spacing: 6) {
+                        if t.showsDecisionMarker {
+                            NexusChip(text: T("Correction awaiting decision"), tone: .accent, systemImage: "calendar.badge.clock")
+                                .fixedSize()
+                        }
+                        if t.hasGideonReply { gideonMarker.fixedSize() }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -873,7 +875,7 @@ struct TicketDetailSheet: View {
                               notFoundTitle: T("This ticket doesn't exist"),
                               notFoundMessage: T("It may have been deleted, or the link is wrong. Your own tickets are in the list."),
                               forbiddenTitle: T("This ticket isn't yours"),
-                              forbiddenMessage: T("Only the person who filed it and the BoD can read a ticket."),
+                              forbiddenMessage: T("Only the person who filed it and the board can read a ticket."),
                               retry: { Task { await loadThread() } },
                               actionTitle: T("Back to tickets"), action: { dismiss() },
                               compact: true)
@@ -1108,7 +1110,7 @@ struct AttendanceCorrectionCard: View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(T("Attendance correction")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                Text(T("A proposal only — the attendance record moves when a BoD approves it, not before."))
+                Text(T("A proposal only — the attendance record moves when a board member approves it, not before."))
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1167,7 +1169,7 @@ struct AttendanceCorrectionCard: View {
                 if canDecide {
                     decideControls(c, working: working)
                 } else {
-                    Text(T("Waiting on a BoD decision. The attendance record has not changed."))
+                    Text(T("Waiting on a board decision. The attendance record has not changed."))
                         .font(NXFont.text(11)).foregroundStyle(NX.warning)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1283,7 +1285,7 @@ struct AttendanceCorrectionCard: View {
     }
 
     private func decidedLine(_ c: AttendanceCorrection) -> String {
-        var parts = ["\(T("Decided by")) \(c.decidedBy?.name ?? "BoD")"]
+        var parts = ["\(T("Decided by")) \(c.decidedBy?.name ?? T("Board"))"]
         if let at = c.decidedAt, let d = ProjDate.parse(at) {
             parts.append("\(ProjDate.dayLabel(d)) · \(AgendaRange.timeLabel(at))")
         }
@@ -1405,7 +1407,7 @@ struct CorrectionComposerSheet: View {
                 NX.background.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        Text(T("This asks the BoD to rewrite one day's attendance. Nothing changes until they approve it."))
+                        Text(T("This asks the board to rewrite one day's attendance. Nothing changes until they approve it."))
                             .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                             .fixedSize(horizontal: false, vertical: true)
                         field(T("DATE")) {
@@ -1571,7 +1573,7 @@ struct NewTicketSheet: View {
                         }
                         field(T("WHAT HAPPENED")) {
                             VStack(alignment: .leading, spacing: 5) {
-                                TextField(T("Tell the BoD what happened…"), text: $detail, axis: .vertical)
+                                TextField(T("Tell the board what happened…"), text: $detail, axis: .vertical)
                                     .font(NXFont.text(15)).lineLimit(5...10).padding(12)
                                     .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                                     .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))

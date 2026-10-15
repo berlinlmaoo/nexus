@@ -654,10 +654,10 @@ private struct CalMonthGridBody: View {
                 HStack(spacing: 0) {
                     ForEach(0..<7, id: \.self) { d in
                         dayCell(grid.days[w * 7 + d], weekend: d >= 5, height: height)
-                            // Regular width: a line between the days, so a cell's marks are seen to
-                            // belong to it and not to the day beside it.
+                            // A line between the days on every width: one bordered grid style for every
+                            // month grid (UI tour run 16, R16-I-06; the phone had row lines only).
                             .overlay(alignment: .trailing) {
-                                if grid.wide && d < 6 { Rectangle().fill(CalTone.hairline).frame(width: 1) }
+                                if d < 6 { Rectangle().fill(CalTone.hairline).frame(width: grid.wide ? 1 : 0.5) }
                             }
                     }
                 }
@@ -702,18 +702,12 @@ private struct CalMonthGridBody: View {
             // 2 pt inside the 54 pt phone cell ran into today's disc (owner, 8 Oct 2026: "nabrak sama
             // tanggal hari ini yang bulet"). The tall cell has room for an edge as well, well clear of
             // the disc, so the pick is seen at a glance across a big grid.
-            .background {
-                if isSel && !g.wide {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(CalTone.accent.opacity(0.14))
-                        .padding(2)
-                }
-            }
-            // Regular width, as the dev web's grid (MonthGrid.tsx `ring-2 ring-inset`): the picked day
-            // is an outlined cell in the near-black of the web's primary, no tint behind its dots.
+            // As the dev web's grid (MonthGrid.tsx `ring-2 ring-inset`): the picked day is an outlined cell
+            // in the near-black of the web's primary, on the phone too (one month-grid style, UI tour run 16,
+            // R16-I-06; the phone's lavender tile was a third way of marking a day).
             .overlay {
-                if isSel && g.wide {
-                    Rectangle().strokeBorder(NX.onyx, lineWidth: 2)
+                if isSel {
+                    Rectangle().strokeBorder(NX.onyx, lineWidth: g.wide ? 2 : 1.5)
                 }
             }
             .contentShape(Rectangle())
@@ -732,8 +726,9 @@ private struct CalMonthGridBody: View {
         let wide = grid.wide
         // Regular width: today is a near-black disc (web `bg-cal-accent` / dark `bg-primary`) and the
         // pick is the cell's outline, so the number itself is not tinted.
-        let todayFg: Color = wide ? NX.background : Color.white
-        let picked: Color = wide ? NX.foreground : CalTone.accent
+        // Today is the navy disc on every width (one month-grid style, UI tour run 16, R16-I-06).
+        let todayFg: Color = NX.background
+        let picked: Color = NX.foreground
         let color: Color = isToday ? todayFg : !inMonth ? NX.mutedFg : (holiday != nil ? CalTone.overdue : (isSel ? picked : NX.foreground))
         let side = CalType.size(min(disc, wide ? 36 : 32))
         return Text("\(Int(day.suffix(2)) ?? 0)")
@@ -741,7 +736,7 @@ private struct CalMonthGridBody: View {
             .lineLimit(1).minimumScaleFactor(0.7)
             .foregroundStyle(color)
             .frame(minWidth: side, minHeight: side)
-            .background { if isToday { Circle().fill(wide ? NX.onyx : CalTone.accentFill) } }
+            .background { if isToday { Circle().fill(NX.onyx) } }
     }
 
     /// The pointer's tooltip on a day (Mac), as the web's: "Thu 8 Oct · 5 tasks" over the divisions and
@@ -1058,11 +1053,15 @@ struct CalItemRow: View {
 
     /// The overdue words are for the eye: VoiceOver already heard them from the status mark, once.
     @ViewBuilder private func meta(_ od: CalOverdue) -> some View {
-        HStack(spacing: 6) {
+        // Wraps instead of cutting the project to "DRAMA GE…" in a nested division card on the Mac's narrow
+        // rail (UI tour run 16, R16-M-04); the mark stays with its name.
+        FlowLayout(spacing: 6) {
             if let p = item.project {
-                RoundedRectangle(cornerRadius: 2).fill(calProjectColor(p.color)).frame(width: 8, height: 8)
-                    .accessibilityHidden(true)
-                Text(p.name).font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg).lineLimit(1)
+                HStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 2).fill(calProjectColor(p.color)).frame(width: 8, height: 8)
+                        .accessibilityHidden(true)
+                    Text(p.name).font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg).lineLimit(1)
+                }
                 if !item.linkedProjectIds.isEmpty {
                     Text(String(format: T("+%d project"), item.linkedProjectIds.count)).font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg)
                 }

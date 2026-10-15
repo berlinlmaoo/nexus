@@ -103,11 +103,21 @@ struct TableColumns: Equatable {
 /// cells read "ul", "Aug" (UI tour run 14, N-03 / P-I2 / P-M2).
 struct TableColumnSnap: ScrollTargetBehavior {
     let starts: [CGFloat]
+    /// The columns' visible width beside the frozen Name column (nil: no limit). One swipe then moves at
+    /// most a page: the first column the edge cut becomes the first beside Name, so no column is ever
+    /// skipped (UI tour run 16, R16-I-06 iPad: Request by and Tanggal Penggunaan were never on screen).
+    var pageWidth: CGFloat? = nil
     func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
         let maxX = max(0, context.contentSize.width - context.containerSize.width)
         guard maxX > 0 else { return }
-        let x = min(max(0, target.rect.origin.x), maxX)
+        var x = min(max(0, target.rect.origin.x), maxX)
         let stops = starts.filter { $0 <= maxX + 0.5 }
+        if let pageWidth, pageWidth > 0 {
+            let from = context.originalTarget.rect.origin.x
+            let forward = stops.last { $0 <= from + pageWidth + 0.5 } ?? from
+            let back = stops.first { $0 >= from - pageWidth - 0.5 } ?? from
+            x = min(max(x, back), max(forward, from))
+        }
         guard let best = stops.min(by: { abs($0 - x) < abs($1 - x) }) else { return }
         target.rect.origin.x = min(best, maxX)
     }
@@ -186,11 +196,14 @@ struct ProjectTableTab: View {
                     }
                     .padding(.bottom, 24)
                 }
+                // Rows come to rest whole under the header, never half cut under it (UI tour run 16,
+                // R16-I-07; the web's WB-1). Each group's rows are the resting places (group(_:_:)).
+                .scrollTargetBehavior(.viewAligned(limitBehavior: .never))
             }
             .frame(width: cols.total + cols.trailingRoom(visibleWidth: visibleWidth), alignment: .leading)
             .frame(maxHeight: .infinity, alignment: .top)
         }
-        .scrollTargetBehavior(TableColumnSnap(starts: cols.columnStarts))
+        .scrollTargetBehavior(TableColumnSnap(starts: cols.columnStarts, pageWidth: visibleWidth - cols.name))
         .modifier(HorizontalOffsetTracker(offsetX: $stickyX))
         .background(NX.card)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -198,9 +211,10 @@ struct ProjectTableTab: View {
         .overlay(alignment: .trailing) {
             if cols.total + cols.trailingRoom(visibleWidth: visibleWidth) - visibleWidth > stickyX + 1 {
                 // Wide enough to read as "more this way": 28 pt looked like a hard cut ("Due", "26 Ma",
-                // UI tour run 14, N-15).
-                LinearGradient(colors: [NX.card.opacity(0), NX.card], startPoint: .leading, endPoint: .trailing)
-                    .frame(width: 44)
+                // UI tour run 14, N-15). On a phone the whole peeking column sits under it, so its money
+                // reads as faded, not as a bare "Rp" (UI tour run 16, R16-I-07).
+                LinearGradient(colors: [NX.card.opacity(0), NX.card.opacity(compact ? 0.92 : 1)], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: compact ? 84 : 52)
                     .allowsHitTesting(false)
             }
         }
@@ -237,6 +251,8 @@ struct ProjectTableTab: View {
                 if onAddTask != nil { newTaskRow(lane.id) }
             }
         }
+        // The header and every row are resting places for the vertical scroll (viewAligned above).
+        .scrollTargetLayout()
         .contentShape(Rectangle())
         // A whole group takes a drop (web: drag a row's grip onto another group).
         .dropDestination(for: String.self) { (ids: [String], _: CGPoint) -> Bool in
@@ -515,7 +531,7 @@ struct ProjectTableRow: View {
                 }
                 // Two lines before an ellipsis, as the web's Table (R14-WB-12): one line cut "reimburse transport
                 // take content pe…" while the row had room for the rest (UI tour run 15, Q-IA25 / Q-M14).
-                Text(task.title)
+                Text(UntitledText.wrapped(task.title))
                     .font(NXFont.text(15, .medium))
                     .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
                     .strikethrough(task.isDone)
@@ -646,10 +662,9 @@ struct ProjectTableRow: View {
 
     private func statusFace(menu: Bool) -> some View {
         HStack(spacing: 6) {
+            // No ⌄ beside the pill: the web's cell is the pill alone, and the whole cell is still the menu
+            // (UI tour run 16, R16-B-11).
             StatusPill(name: status.name, colorKey: status.colorKey, size: 13).fixedSize()
-            if menu {
-                Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(NX.mutedFg)
-            }
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)

@@ -59,7 +59,7 @@ enum FailureText {
                 if code == 403, let r = AccessRefusal.readable(code: nil, message: msg) { return T(r) }
                 // A real sentence wins, in the app's language when it has one.
                 if !msg.isEmpty && !isRaw(msg) { return T(msg) }
-                if code == 403 { return T("Your role can't do this. Ask a BoD if you need it.") }
+                if code == 403 { return T("Your role can't do this. Ask a board member if you need it.") }
                 if code == 404 { return T("It no longer exists. Refresh the page.") }
                 if code >= 500 { return T("Something went wrong on our side. Try again in a moment.") }
                 return T("The server didn't accept it. Check what you entered and try again.")
@@ -173,7 +173,7 @@ struct LoadErrorView: View {
         switch kind {
         case .offline: return T("Check your internet, then try again. Nothing was changed.")
         case .notFound: return notFoundMessage ?? T("It may have been deleted, or the link is wrong.")
-        case .forbidden: return forbiddenMessage ?? T("Your role can't open this. Ask a BoD if you need it.")
+        case .forbidden: return forbiddenMessage ?? T("Your role can't open this. Ask a board member if you need it.")
         case .server: return T("Something went wrong on our side. Try again in a moment.")
         }
     }

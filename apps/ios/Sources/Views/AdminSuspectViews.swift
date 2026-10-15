@@ -206,7 +206,7 @@ struct AdminSuspectSection: View {
             side(T("Check-in"), item.checkIn)
             side(T("Check-out"), item.checkOut)
             if let r = item.review {
-                Text("\(r.verdict == "INVALID" ? T("Not valid") : T("Fine")) · \(r.reviewedBy?.name ?? "BoD")\(r.note.map { " — “\($0)”" } ?? "")")
+                Text("\(r.verdict == "INVALID" ? T("Not valid") : T("Fine")) · \(r.reviewedBy?.name ?? T("Board"))\(r.note.map { " — “\($0)”" } ?? "")")
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }
             if item.state == "open" {
@@ -249,7 +249,7 @@ struct AdminSuspectSection: View {
             if let ws = item.warnings, !ws.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(Array(ws.enumerated()), id: \.offset) { _, w in
-                        Text("⚠︎ \(w.by?.name ?? "BoD") · \(Self.clock(w.at)) — \(w.message ?? "")")
+                        Text("⚠︎ \(w.by?.name ?? T("Board")) · \(Self.clock(w.at)) — \(w.message ?? "")")
                             .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(3)
                     }
                 }

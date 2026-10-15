@@ -23,7 +23,7 @@ struct LegalMembersPane: View {
         switch power {
         case .any: return T("Legal is by invitation only. You can invite anyone of the company.")
         case .staff: return T("Legal is by invitation only. You can invite staff and remove the people you invited.")
-        case .none: return T("Legal is by invitation only. Ask the owner or a BoD member to invite someone.")
+        case .none: return T("Legal is by invitation only. Ask the owner or a board member to invite someone.")
         }
     }
 

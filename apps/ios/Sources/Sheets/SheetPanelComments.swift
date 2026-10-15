@@ -67,7 +67,7 @@ private struct SheetCellThreadView: View {
         .alert(T("Delete this comment?"), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), presenting: deleting) { c in
             Button(T("Delete"), role: .destructive) { Task { await model.delete(c) } }
             Button(T("Cancel"), role: .cancel) {}
-        } message: { _ in Text(T("A BoD can restore it from Audit.")) }
+        } message: { _ in Text(T("A board member can restore it from Audit.")) }
         .alert(T("Couldn't save."), isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button(T("OK"), role: .cancel) {}
         } message: { Text(model.error ?? "") }

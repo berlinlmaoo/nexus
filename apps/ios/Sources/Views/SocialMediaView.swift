@@ -154,7 +154,7 @@ struct SocialMediaTab: View {
         Group {
             if store.forbidden {
                 EmptyState(icon: "lock", title: T("This report is for its project members"),
-                           subtitle: T("Ask the Project Owner or a BoD to add you to the project."))
+                           subtitle: T("Ask the Project Owner or a board member to add you to the project."))
             } else if !store.loaded {
                 if let err = store.loadError {
                     ErrorState(message: err, icon: "heart.text.square") {
@@ -173,7 +173,10 @@ struct SocialMediaTab: View {
                 }
                 // On this inner view, not next to the day sheet below: two .sheet modifiers on one view
                 // leave one of them dead.
-                .sheet(isPresented: $store.settingsOpen) { SocialSettingsSheet(store: store).tallSheet() }
+                .sheet(isPresented: $store.settingsOpen) {
+                    // At most 720 pt tall: page height left ~700 pt empty under the platforms (UI tour run 16, R16-I-29).
+                    SocialSettingsSheet(store: store).modifier(PageWideFittedSheet(maxHeight: 720))
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -430,10 +433,10 @@ struct SocialOverviewView: View {
                     }
                 }
             } else {
-                // Two lines reserved on every card, so the figures below line up across the row whether or not
-                // the line wraps ("(incl. day targets)", UI tour run 15, Q-IB10).
+                // One line on every card, as the web's, stepping the size down rather than wrapping "(incl. day
+                // targets)" (UI tour run 16, R16-B-20); the figures below line up across the row.
                 Text(monthTargetLine(p)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                    .lineLimit(2, reservesSpace: true)
+                    .lineLimit(1).minimumScaleFactor(0.75)
             }
             if let trend = p.trend, trend.count > 1, trend.contains(where: { $0 > 0 }) {
                 SocialSparkline(values: trend)
@@ -441,13 +444,30 @@ struct SocialOverviewView: View {
                     .accessibilityLabel(String(format: T("%@ engagement per day"), p.name))
             }
             Divider().overlay(NX.border)
-            HStack(alignment: .top) {
-                stat(SocialMetric.views.label, p.views)
-                stat(T("Likes"), p.likes)
-                stat(SocialMetric.comments.label, p.comments)
-                stat(SocialMetric.shares.label, p.shares)
+            // Four across while every figure fits on one line, else two by two: in the narrow three-across
+            // cards of a portrait iPad "41.000" broke into "41.00 / 0" and read as a decimal (UI tour run 16,
+            // R16-I-04).
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 10) { stats(p) }
+                Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
+                    GridRow {
+                        stat(SocialMetric.views.label, p.views)
+                        stat(T("Likes"), p.likes)
+                    }
+                    GridRow {
+                        stat(SocialMetric.comments.label, p.comments)
+                        stat(SocialMetric.shares.label, p.shares)
+                    }
+                }
             }
         }
+    }
+
+    @ViewBuilder private func stats(_ p: SocialPlatformOverview) -> some View {
+        stat(SocialMetric.views.label, p.views)
+        stat(T("Likes"), p.likes)
+        stat(SocialMetric.comments.label, p.comments)
+        stat(SocialMetric.shares.label, p.shares)
     }
 
     /// The overview's month target is the sum of every day's target. When a day has its own target that sum
@@ -464,15 +484,17 @@ struct SocialOverviewView: View {
 
     private func stat(_ label: String, _ value: Double?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            // Whole words and whole numbers: neither is ever cut or wrapped (R16-I-04: "Com…", "125.0 / 00").
+            Text(label).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1).fixedSize()
             Text(SocialFormat.count(value)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).monospacedDigit()
+                .lineLimit(1).fixedSize()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func postsCard(_ o: SocialOverview) -> some View {
         OutletCard {
-            Text(T("Contents posted")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+            Text(T("Posts published")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
             ForEach(o.platforms) { p in
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
@@ -504,13 +526,14 @@ struct SocialPctChip: View {
     var size: CGFloat = 13
     var body: some View {
         Text("\(pct)%").font(NXFont.text(size, .bold)).monospacedDigit()
-            .foregroundStyle(pct >= 100 ? NX.success : NX.violetText)
+            // Grey like the web's chip; green once the target is met (UI tour run 16, R16-B-20).
+            .foregroundStyle(pct >= 100 ? NX.success : NX.foreground)
             .padding(.horizontal, 8).padding(.vertical, 3)
-            .background((pct >= 100 ? NX.success : NX.violet).opacity(0.12), in: Capsule())
+            .background(pct >= 100 ? NX.success.opacity(0.12) : NX.muted, in: Capsule())
     }
 }
 
-/// The month's engagement per day, quiet: one line in the brand colour over a faint area.
+/// The month's engagement per day, quiet: one dark line over a faint area, as the web (R16-B-20).
 struct SocialSparkline: View {
     let values: [Double]
     var body: some View {
@@ -527,13 +550,13 @@ struct SocialSparkline: View {
                     p.addLine(to: CGPoint(x: g.size.width, y: g.size.height))
                     p.closeSubpath()
                 }
-                .fill(NX.violet.opacity(0.08))
+                .fill(NX.foreground.opacity(0.06))
                 Path { p in
                     for i in values.indices { if i == 0 { p.move(to: pt(i)) } else { p.addLine(to: pt(i)) } }
                 }
-                .stroke(NX.violet, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                .stroke(NX.foreground, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                 if let last = values.indices.last {
-                    Circle().fill(NX.violet).frame(width: 7, height: 7)
+                    Circle().fill(NX.foreground).frame(width: 7, height: 7)
                         .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
                         .position(pt(last))
                 }
@@ -569,26 +592,14 @@ struct SocialCalendarView: View {
 
     private var grid: some View {
         let cols = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
+        // One month-grid style everywhere (NXMonthGrid.swift; UI tour run 16, R16-I-06).
         return VStack(spacing: 0) {
-            LazyVGrid(columns: cols, spacing: 0) {
-                // "MON", left-aligned over left-aligned day numbers: one month-grid style everywhere (UI tour
-                // run 15, Q-IB13 / R15-WB-3).
-                ForEach(OutletFormat.weekHeader, id: \.self) { w in
-                    Text(w.uppercased()).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
-                        .lineLimit(1)
-                        .padding(.leading, wide ? 8 : 5)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
-                }
-            }
-            .background(NX.muted.opacity(0.5))
-            Divider().overlay(NX.border)
+            NXMonthWeekdayRow(names: OutletFormat.weekHeader, wide: wide)
             LazyVGrid(columns: cols, spacing: 0) {
                 ForEach(OutletFormat.gridDays(store.month), id: \.self) { d in cell(d) }
             }
         }
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
+        .nxMonthGridCard()
     }
 
     @ViewBuilder private func cell(_ d: String) -> some View {
@@ -599,17 +610,11 @@ struct SocialCalendarView: View {
         Button { store.open(d) } label: {
             // Every day number top-left: centred, a day with a note icon pushed its number aside (UI tour run
             // 15, R15-I-18).
+            // The number and the figures under it share one left inset; the notes and own-target marks sit in
+            // the top-right corner, as on the outlet calendar and the web (UI tour run 16, R16-I-08).
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 2) {
-                    Text("\(OutletFormat.parts(d)?.d ?? 0)")
-                        .font(NXFont.text(12, isToday ? .bold : .regular)).monospacedDigit()
-                        .foregroundStyle(isToday ? Color.white : (inMonth && !future ? NX.foreground : NX.mutedFg))
-                        .frame(width: 24, height: 24)
-                        .background(isToday ? NX.violetFill : Color.clear, in: Circle())
-                    if wide { Spacer(minLength: 0) }
-                    if inMonth && (day?.hasNotes == true) { Image(systemName: "square.and.pencil").font(.system(size: 9)).foregroundStyle(NX.mutedFg) }
-                    if inMonth && store.hasOwnTarget(d) { Image(systemName: "target").font(.system(size: 9)).foregroundStyle(NX.violetText) }
-                }
+                NXMonthDayNumber(day: OutletFormat.parts(d)?.d ?? 0, inMonth: inMonth, isToday: isToday,
+                                 muted: future, wide: wide)
                 // The plain dotted figure ("2.200"), never a compact "2.2k" (owner rule R14-WB-2, N-22 / P-M22).
                 if let e = day?.engagement {
                     Text(SocialFormat.count(e)).font(NXFont.text(wide ? 14 : 11, .semibold)).foregroundStyle(NX.foreground)
@@ -630,8 +635,16 @@ struct SocialCalendarView: View {
             }
             .padding(wide ? 6 : 3)
             .frame(maxWidth: .infinity, minHeight: wide ? 92 : 58, alignment: .topLeading)
-            .background(inMonth ? Color.clear : NX.muted.opacity(0.35))
-            .overlay(Rectangle().strokeBorder(NX.border.opacity(0.6), lineWidth: 0.5))
+            .overlay(alignment: .topTrailing) {
+                HStack(spacing: 2) {
+                    if inMonth && (day?.hasNotes == true) {
+                        Image(systemName: "square.and.pencil").font(.system(size: 9)).foregroundStyle(NX.mutedFg)
+                    }
+                    if inMonth && store.hasOwnTarget(d) { NXMonthTargetMark(wide: wide) }
+                }
+                .padding(wide ? 7 : 4)
+            }
+            .nxMonthCell(inMonth: inMonth, selected: false)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -671,6 +684,8 @@ struct SocialDaySheet: View {
     @State private var error: String?
     @State private var targetDraft: [String: (String, String)] = [:]
     @State private var editingTargets = false
+    @Environment(\.horizontalSizeClass) private var hSize
+    private var wide: Bool { hSize == .regular }
 
     private var future: Bool { date > store.today }
     private var editable: Bool { store.canRecord && !future }
@@ -706,13 +721,37 @@ struct SocialDaySheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(editable ? T("Cancel") : T("Close")) { if dirty { confirmDiscard = true } else { dismiss() } }
                 }
-                if editable {
+                if editable && !wide {
                     ToolbarItem(placement: .confirmationAction) {
                         Button { Task { await save() } } label: {
                             if saving { ProgressView() } else { Text(T("Save")).fontWeight(.semibold) }
                         }
                         .disabled(!dirty || saving)
                     }
+                }
+            }
+        }
+        // iPad / Mac: the web's "Save day" button under the form, the fields fading into its bar, so the last
+        // platform's footer reads as "more below" instead of cut (UI tour run 16, R16-B-19 / R16-I-24).
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if wide && editable && ready {
+                HStack {
+                    Spacer(minLength: 0)
+                    Button { Task { await save() } } label: {
+                        HStack(spacing: 6) {
+                            if saving { ProgressView().controlSize(.small) }
+                            Text(T("Save day"))
+                        }
+                    }
+                    .buttonStyle(.nxPrimary)
+                    .disabled(!dirty || saving)
+                }
+                .padding(.horizontal, 20).padding(.vertical, 12)
+                .background(NX.background)
+                .overlay(alignment: .top) { Rectangle().fill(NX.border).frame(height: 1) }
+                .background(alignment: .top) {
+                    LinearGradient(colors: [NX.background.opacity(0), NX.background], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 24).offset(y: -24).allowsHitTesting(false)
                 }
             }
         }
@@ -801,30 +840,58 @@ struct SocialDaySheet: View {
         let eng = SocialFormat.engagement(likes: OutletFormat.parse(f[.likes] ?? ""), comments: OutletFormat.parse(f[.comments] ?? ""),
                                           shares: OutletFormat.parse(f[.shares] ?? ""))
         let info = day?.platforms[p.id]
+        let engagementText = SocialFormat.count(eng.map(Double.init))
+            + (info?.engagementTarget.map { " / \(SocialFormat.count($0))" } ?? "")
         return Section {
-            ForEach(SocialMetric.allCases) { m in
+            if wide {
+                // iPad / Mac: the web's three-column field grid per platform, Engagement in the header
+                // (UI tour run 16, R16-B-19: one long single-column list ~3 screens tall on a Mac).
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: 3),
+                          alignment: .leading, spacing: 12) {
+                    ForEach(SocialMetric.allCases) { m in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(m.label).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                            TextField("—", text: figureBinding(p.id, m))
+                                .keyboardType(.numberPad)
+                                .monospacedDigit()
+                                .padding(.horizontal, 10).frame(minHeight: 36)
+                                .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                                .disabled(!editable)
+                                .accessibilityLabel("\(p.name) \(m.label)")
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            } else {
+                ForEach(SocialMetric.allCases) { m in
+                    HStack {
+                        Text(m.label).foregroundStyle(NX.foreground)
+                        Spacer(minLength: 12)
+                        TextField("—", text: figureBinding(p.id, m))
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .monospacedDigit()
+                            .frame(maxWidth: 160)
+                            .disabled(!editable)
+                            .accessibilityLabel("\(p.name) \(m.label)")
+                    }
+                }
                 HStack {
-                    Text(m.label).foregroundStyle(NX.foreground)
-                    Spacer(minLength: 12)
-                    TextField("—", text: figureBinding(p.id, m))
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .monospacedDigit()
-                        .frame(maxWidth: 160)
-                        .disabled(!editable)
-                        .accessibilityLabel("\(p.name) \(m.label)")
+                    Text(T("Engagement")).font(NXFont.text(14, .semibold))
+                    SocialEngagementInfoButton()
+                    Spacer()
+                    Text(engagementText).font(NXFont.text(14, .semibold)).monospacedDigit()
                 }
             }
-            HStack {
-                Text(T("Engagement")).font(NXFont.text(14, .semibold))
-                SocialEngagementInfoButton()
-                Spacer()
-                Text(SocialFormat.count(eng.map(Double.init))
-                     + (info?.engagementTarget.map { " / \(SocialFormat.count($0))" } ?? ""))
-                    .font(NXFont.text(14, .semibold)).monospacedDigit()
-            }
         } header: {
-            Text(p.isArchived ? "\(p.name) · \(T("archived"))" : p.name)
+            HStack {
+                Text(p.isArchived ? "\(p.name) · \(T("archived"))" : p.name)
+                if wide {
+                    Spacer(minLength: 8)
+                    Text("\(T("Engagement")) \(engagementText)").monospacedDigit().textCase(nil)
+                }
+            }
         } footer: {
             // Every platform says where its day target stands, YouTube without one too; the bottom padding
             // keeps "Month's target ÷ days" off the next platform's header (run 14, P-I31 / P-M22).
@@ -1094,23 +1161,26 @@ struct SocialSettingsSheet: View {
             }
 
             Section {
-                ForEach(active) { p in
-                    HStack {
+                // ↑ ↓ and archive on every row, as the outlet's Report settings and the web: no drag handles
+                // (UI tour run 16, R16-I-22, decision 7).
+                ForEach(Array(active.enumerated()), id: \.element.id) { pos, p in
+                    HStack(spacing: 14) {
                         TextField(T("Platform name"), text: nameBinding(p.id))
+                        Button { movePlatform(p.id, by: -1) } label: { Label(T("Move up"), systemImage: "arrow.up") }
+                            .disabled(pos == 0)
+                        Button { movePlatform(p.id, by: 1) } label: { Label(T("Move down"), systemImage: "arrow.down") }
+                            .disabled(pos == active.count - 1)
                         Button {
                             if !p.platformId.isEmpty && (usage[p.platformId] ?? 0) > 0 { pendingArchive = p }
                             else if p.platformId.isEmpty { rows.removeAll { $0.id == p.id } }
                             else { setArchived(p.id, true) }
-                        } label: { Image(systemName: "archivebox") }
-                        .buttonStyle(.borderless)
+                        } label: { Label(String(format: T("Archive %@"), p.name), systemImage: "archivebox") }
                         .disabled(active.count <= 1)
-                        .accessibilityLabel(String(format: T("Archive %@"), p.name))
                     }
-                }
-                .onMove { from, to in
-                    var a = active
-                    a.move(fromOffsets: from, toOffset: to)
-                    rows = a + archived
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(NX.mutedFg)
+                    .tint(NX.mutedFg)
                 }
                 HStack {
                     Image(systemName: "plus").foregroundStyle(NX.mutedFg)
@@ -1147,8 +1217,15 @@ struct SocialSettingsSheet: View {
         .contentMargins(.top, 8, for: .scrollContent)
         // The sheet goes on below its edge (Platforms, Add platform): the indicator shows once.
         .scrollIndicatorsFlash(onAppear: true)
-        .environment(\.editMode, .constant(.active))
         .scrollDismissesKeyboard(.interactively)
+    }
+
+    /// One step up or down among the active platforms (archived ones stay at the end).
+    private func movePlatform(_ id: String, by step: Int) {
+        var a = active
+        guard let i = a.firstIndex(where: { $0.id == id }), a.indices.contains(i + step) else { return }
+        a.swapAt(i, i + step)
+        rows = a + archived
     }
 
     private func add() {

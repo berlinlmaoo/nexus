@@ -206,14 +206,28 @@ struct OutletDayTargetCard: View {
                         .font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)
                     Spacer(minLength: 4)
                     if store.canManageTargets && !editing {
-                        Button(store.ownTarget(day) != nil ? T("Change day target") : T("Set day target")) { start() }
-                            .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
-                            .frame(minHeight: 40)
+                        // A bordered button, as the web's (UI tour run 16, R16-B-13: a purple text link).
+                        Button { start() } label: {
+                            Label(store.ownTarget(day) != nil ? T("Change day target") : T("Set day target"), systemImage: "pencil")
+                        }
+                        .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+                        .frame(minHeight: 44)
                     }
                 }
                 if editing { editor } else {
-                    metric(T("Sales"), info.sales, info.salesTarget, info.salesPct, info.salesTargetSource, money: true)
-                    metric(T("Pax"), info.pax, info.paxTarget, info.paxPct, info.paxTargetSource, money: false)
+                    // Sales and Pax side by side where they fit, as the web's (R16-B-13), else one over the other.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 20) {
+                            metric(T("Sales"), info.sales, info.salesTarget, info.salesPct, info.salesTargetSource, money: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            metric(T("Pax"), info.pax, info.paxTarget, info.paxPct, info.paxTargetSource, money: false)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        VStack(alignment: .leading, spacing: 12) {
+                            metric(T("Sales"), info.sales, info.salesTarget, info.salesPct, info.salesTargetSource, money: true)
+                            metric(T("Pax"), info.pax, info.paxTarget, info.paxPct, info.paxTargetSource, money: false)
+                        }
+                    }
                 }
             }
             .padding(14)
@@ -321,6 +335,7 @@ struct OutletReportSettingsView: View {
     @State private var newSub: [String: String] = [:]
 
     private var dirty: Bool { draft != nil && draft != loaded?.config }
+    @Environment(\.horizontalSizeClass) private var hSize
 
     var body: some View {
         NavigationStack {
@@ -337,14 +352,38 @@ struct OutletReportSettingsView: View {
             .navigationTitle(T("Report settings"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(T("Cancel")) { if dirty { confirmDiscard = true } else { dismiss() } }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button { Task { await save() } } label: {
-                        if saving { ProgressView() } else { Text(T("Save")).fontWeight(.semibold) }
+                if hSize != .regular {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(T("Cancel")) { if dirty { confirmDiscard = true } else { dismiss() } }
                     }
-                    .disabled(!dirty || saving)
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button { Task { await save() } } label: {
+                            if saving { ProgressView() } else { Text(T("Save")).fontWeight(.semibold) }
+                        }
+                        .disabled(!dirty || saving)
+                    }
+                }
+            }
+            // iPad / Mac: the web drawer's "Cancel" and "Save settings" at the bottom, instead of a greyed
+            // Save in the title bar (UI tour run 16, R16-M-15).
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if hSize == .regular && draft != nil {
+                    HStack(spacing: 10) {
+                        Spacer(minLength: 0)
+                        Button(T("Cancel")) { if dirty { confirmDiscard = true } else { dismiss() } }
+                            .buttonStyle(.nxBordered)
+                        Button { Task { await save() } } label: {
+                            HStack(spacing: 6) {
+                                if saving { ProgressView().controlSize(.small) }
+                                Text(T("Save settings"))
+                            }
+                        }
+                        .buttonStyle(.nxPrimary)
+                        .disabled(!dirty || saving)
+                    }
+                    .padding(.horizontal, 20).padding(.vertical, 12)
+                    .background(NX.background)
+                    .overlay(alignment: .top) { Rectangle().fill(NX.border).frame(height: 1) }
                 }
             }
         }
@@ -482,6 +521,9 @@ struct OutletReportSettingsView: View {
             }
             .labelStyle(.iconOnly)
             .buttonStyle(.borderless)
+            // Grey controls, as the web's (UI tour run 16, R16-B-18: purple arrows, red trash).
+            .foregroundStyle(NX.mutedFg)
+            .tint(NX.mutedFg)
             .padding(.leading, inset)
             // Only the separator under a row: a reordered row kept a full-width top line too, so
             // "Hosting Team" showed two lines (UI tour run 13 F-23 / run 14 N-29).
@@ -498,12 +540,12 @@ struct OutletReportSettingsView: View {
     }
 
     private func itemSection(_ title: String, footer: String, items: Binding<[OutletItem]>, newText: Binding<String>, addLabel: String) -> some View {
+        // The helper line under the heading, as the web's ("RSVP total is the sum of these."), not under the card
+        // (UI tour run 16, R16-B-18).
         Section {
             itemRows(items, newText: newText, addLabel: addLabel)
         } header: {
-            Text(title)
-        } footer: {
-            Text(footer)
+            OutletSettingsHeading(title: title, helper: footer)
         }
     }
 
@@ -566,19 +608,30 @@ struct OutletReportSettingsView: View {
                 }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
+                .foregroundStyle(NX.mutedFg)
+                .tint(NX.mutedFg)
                 .font(NXFont.text(15, .semibold))
-                Picker(T("How it is counted"), selection: c.mode) {
-                    Text(T("Total only")).tag("total")
-                    Text(T("Breakdown")).tag("breakdown")
+                // Inline with its label, as the web's, not a full-width row (UI tour run 16, R16-B-18).
+                HStack(spacing: 10) {
+                    Text(T("How it is counted")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    Spacer(minLength: 8)
+                    Picker(T("How it is counted"), selection: c.mode) {
+                        Text(T("Total only")).tag("total")
+                        Text(T("Breakdown")).tag("breakdown")
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
                 }
-                .pickerStyle(.segmented)
                 if item.isBreakdown {
                     itemRows(c.items,
                              newText: Binding(get: { newSub[item.rowId] ?? "" }, set: { newSub[item.rowId] = $0 }),
                              addLabel: String(format: T("Add item to %@"), item.name.isEmpty ? T("this community") : item.name))
                 }
             } header: {
-                if pos == 0 { Text(T("Communities")) }
+                if pos == 0 {
+                    OutletSettingsHeading(title: T("Communities"), helper: T("The communities that came. Each counts one number, or its own items."))
+                }
             }
         }
         Section {
@@ -590,9 +643,9 @@ struct OutletReportSettingsView: View {
                 archivedRow(c.name) { community(list, c.rowId).wrappedValue.archived = false }
             }
         } header: {
-            if active.isEmpty { Text(T("Communities")) }
-        } footer: {
-            Text(T("The communities that came. Each counts one number, or its own items."))
+            if active.isEmpty {
+                OutletSettingsHeading(title: T("Communities"), helper: T("The communities that came. Each counts one number, or its own items."))
+            }
         }
     }
 
@@ -620,6 +673,20 @@ extension View {
             self.presentationSizing(.page)
         } else {
             self.presentationDetents([.large])
+        }
+    }
+}
+
+
+/// A settings section's heading with its helper line right under it, as the web's (UI tour run 16, R16-B-18).
+struct OutletSettingsHeading: View {
+    let title: String
+    let helper: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+            Text(helper).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).textCase(nil)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

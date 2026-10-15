@@ -19,7 +19,7 @@ func canEditTier(_ viewer: String?, _ target: String?) -> Bool {
 }
 func orgRoleLabel(_ r: String?) -> String {
     switch (r ?? "").uppercased() {
-    case "ONE_ABOVE_ALL": return "One Above All"; case "BOD": return "BoD"
+    case "ONE_ABOVE_ALL": return "One Above All"; case "BOD": return "Board"
     case "MANAGER": return "Manager"; case "STAFF": return "Staff"; default: return r ?? "—"
     }
 }
@@ -386,6 +386,8 @@ struct PasskeyCard: View {
     @State private var revokeTarget: PasskeyInfo?
     /// id of the passkey being revoked right now, so only that row shows a spinner.
     @State private var revoking: String?
+    @State private var deviceName = ""
+    @Environment(\.horizontalSizeClass) private var hSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -397,11 +399,20 @@ struct PasskeyCard: View {
                 touchID: "Sign in with Touch ID instead of typing your password. Your password keeps working.",
                 other: "Sign in with a passkey instead of typing your password. Your password keeps working."))
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-            enrolled
+            // The web's order (UI tour run 16, R16-B-23): name the device and add, then "Your passkeys".
+            addForm
             if let msg {
                 Text(msg.text).font(NXFont.text(12, .semibold)).foregroundStyle(msg.ok ? NX.success : NX.danger)
             }
-            addButton
+            Divider().overlay(NX.border).padding(.vertical, 4)
+            HStack(spacing: 4) {
+                Text(T("Your passkeys")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                if !passkeys.isEmpty {
+                    Text("(\(AppNumber.int(passkeys.count)))").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                }
+            }
+            .accessibilityAddTraits(.isHeader)
+            enrolled
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .nexusCard()
@@ -475,6 +486,21 @@ struct PasskeyCard: View {
         .background(NX.muted.opacity(0.3), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
+    /// The device's name for the new passkey (empty = this device's own name), and Add beside it.
+    @ViewBuilder private var addForm: some View {
+        let field = TextField(T("Device name (e.g. MacBook Pro)"), text: $deviceName)
+            .font(NXFont.text(14))
+            .textInputAutocapitalization(.words).autocorrectionDisabled()
+            .padding(.horizontal, 12).frame(minHeight: 40)
+            .background(NX.background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
+        if hSize == .regular {
+            HStack(spacing: 8) { field; addButton.fixedSize() }
+        } else {
+            VStack(spacing: 8) { field; addButton }
+        }
+    }
+
     private var addButton: some View {
         Button { Task { await add() } } label: {
             HStack(spacing: 6) {
@@ -483,11 +509,11 @@ struct PasskeyCard: View {
                 } else {
                     Image(systemName: "person.badge.key.fill").font(.system(size: 13, weight: .bold))
                 }
-                Text(T("Add a passkey"))
+                Text(T("Add passkey"))
             }
             // The web's near-black primary (UI tour run 15, Q-IB22), not violet.
             .font(NXFont.text(13, .bold)).foregroundStyle(NX.background)
-            .frame(maxWidth: .infinity).padding(.vertical, 10)
+            .frame(maxWidth: hSize == .regular ? nil : .infinity).padding(.horizontal, 16).padding(.vertical, 10)
             .background(busy ? NX.mutedFg.opacity(0.4) : NX.onyx,
                         in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
@@ -537,7 +563,8 @@ struct PasskeyCard: View {
         do {
             // What the person will see next to this device in the web app's passkey list. iOS gives
             // a generic model name ("iPhone") rather than the user-set device name, which is fine.
-            try await PasskeyManager.register(label: UIDevice.current.name)
+            let named = deviceName.trimmingCharacters(in: .whitespacesAndNewlines)
+            try await PasskeyManager.register(label: named.isEmpty ? UIDevice.current.name : named)
             msg = (T("Passkey added ✓"), true)
             await load(spinner: false)
         } catch PasskeyError.canceled {

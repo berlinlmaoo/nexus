@@ -37,28 +37,16 @@ struct OutletCalendarView: View {
 
     /// A bordered grid, the same as the Social Media calendar and the web (F-21).
     private func grid(selected: String) -> some View {
+        // One month-grid style everywhere (NXMonthGrid.swift; UI tour run 16, R16-I-06).
         VStack(spacing: 0) {
-            LazyVGrid(columns: columns, spacing: 0) {
-                ForEach(Array(OutletFormat.weekHeader.enumerated()), id: \.offset) { _, name in
-                    // "MON", left-aligned like the day numbers, one style for every month grid (UI tour run 15).
-                    Text(name.uppercased()).font(NXFont.text(wide ? 12 : 11, .semibold)).foregroundStyle(NX.mutedFg)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.leading, wide ? 8 : 5)
-                        .padding(.vertical, 8)
-                }
-            }
-            .background(NX.muted.opacity(0.5))
-            Divider().overlay(NX.border)
+            NXMonthWeekdayRow(names: OutletFormat.weekHeader, wide: wide)
             LazyVGrid(columns: columns, spacing: 0) {
                 ForEach(OutletFormat.gridDays(store.month), id: \.self) { d in
                     cell(d, selected: d == selected)
                 }
             }
         }
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
+        .nxMonthGridCard()
     }
 
     private func cell(_ d: String, selected: Bool) -> some View {
@@ -74,19 +62,16 @@ struct OutletCalendarView: View {
             if !inMonth { Task { await store.show(month: String(d.prefix(7))) } }
         } label: {
             VStack(alignment: .leading, spacing: 3) {
-                Text("\(number)")
-                    .font(NXFont.text(wide ? 14 : 13, isToday || selected ? .bold : .medium))
-                    .foregroundStyle(isToday ? Color.white : (inMonth ? NX.foreground : NX.mutedFg.opacity(0.6)))
-                    .frame(width: wide ? 28 : 26, height: wide ? 28 : 26)
-                    .background(isToday ? NX.violetFill : .clear, in: Circle())
+                NXMonthDayNumber(day: number, inMonth: inMonth, isToday: isToday, wide: wide)
                 if wide {
                     ForEach(list.prefix(2)) { e in
                         // Two lines for the name: one line cut every event to "ZZ QA cu…" on an iPad (run 14, P-I28).
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
                             Circle().fill(e.status.tone.fg).frame(width: 6, height: 6)
-                            // Up to three lines: two still cut "ZZ QA / custom r…" (UI tour run 15, Q-IB18).
+                            // The whole name: three lines still cut "ZZ QA / custom / report ni…" in a portrait
+                            // iPad's cell (UI tour run 15, Q-IB18; run 16, R16-I-16), so four, a size smaller there.
                             Text(e.name).font(NXFont.text(11, .semibold)).foregroundStyle(NX.foreground)
-                                .lineLimit(3).multilineTextAlignment(.leading)
+                                .lineLimit(4).minimumScaleFactor(0.85).multilineTextAlignment(.leading)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(.horizontal, 5).padding(.vertical, 2)
@@ -110,14 +95,9 @@ struct OutletCalendarView: View {
             .padding(wide ? 6 : 3)
             .frame(maxWidth: .infinity, minHeight: wide ? 104 : 56, alignment: .topLeading)
             .overlay(alignment: .topTrailing) {
-                if ownTarget {
-                    Image(systemName: "target").font(.system(size: wide ? 11 : 9, weight: .semibold))
-                        .foregroundStyle(NX.violetText).padding(wide ? 8 : 3)
-                }
+                if ownTarget { NXMonthTargetMark(wide: wide).padding(wide ? 7 : 4) }
             }
-            .background(selected ? NX.violet.opacity(0.12) : (inMonth ? Color.clear : NX.muted.opacity(0.35)))
-            .overlay(Rectangle().strokeBorder(NX.border.opacity(0.6), lineWidth: 0.5))
-            .overlay(Rectangle().strokeBorder(selected ? NX.violet.opacity(0.6) : .clear, lineWidth: 1.5))
+            .nxMonthCell(inMonth: inMonth, selected: selected)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -137,13 +117,12 @@ struct OutletCalendarView: View {
                 store.openForm(eventId: nil, date: day)
                 tab = .reportForm
             } label: {
-                Label(T("Add event on this day"), systemImage: "plus")
-                    .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
+                // A bordered button, as the web's (UI tour run 16, R16-B-13: a purple text link).
+                Label(T("Add event on this day"), systemImage: "calendar.badge.plus")
                     .lineLimit(1).minimumScaleFactor(0.85)
-                    .frame(minHeight: 40)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
+            .frame(minHeight: 44)
             HStack(alignment: .center, spacing: 8) { title; Spacer(minLength: 4); add }
             OutletDayTargetCard(store: store, day: day)
             if list.isEmpty {

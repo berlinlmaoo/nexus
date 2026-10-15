@@ -174,7 +174,7 @@ struct ApprovalChartView: View {
             }
             if !alone.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("\(T("Not placed")) · \(alone.count) · \(T("their requests go to every BoD"))")
+                    Text("\(T("Not placed")) · \(alone.count) · \(T("their requests go to every board member"))")
                         .font(NXFont.text(11, .bold)).foregroundStyle(NX.warning)
                     FlowLayout(spacing: 8) {
                         ForEach(alone, id: \.idv) { p in

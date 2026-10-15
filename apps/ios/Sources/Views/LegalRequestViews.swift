@@ -84,6 +84,7 @@ struct LegalRequestFormView: View {
     @State private var sending = false
     @State private var sentId: String?
     @State private var attempt = UUID().uuidString
+    @Environment(\.horizontalSizeClass) private var hSize
 
     var body: some View {
         ScrollView {
@@ -153,8 +154,11 @@ struct LegalRequestFormView: View {
         let list = templates(info)
         let template = list.first { $0.id == templateId }
         Text(subtitle(info)).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+        // Company and Document type side by side on iPad / Mac, as the web's two columns (UI tour run 16, R16-B-21).
+        let pair = hSize == .regular ? AnyLayout(HStackLayout(alignment: .top, spacing: 12))
+                                     : AnyLayout(VStackLayout(alignment: .leading, spacing: 14))
         NXCard(padding: 16) {
-            VStack(alignment: .leading, spacing: 14) {
+            pair {
                 LegalFormRow(label: T("Company"), required: info.lockedCompany == nil, error: errors["companyId"]) {
                     if let locked = info.lockedCompany {
                         Text(locked.name).font(NXFont.text(14)).foregroundStyle(NX.foreground)
@@ -177,6 +181,7 @@ struct LegalRequestFormView: View {
                                         placeholder: T("Pick a document type"))
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         if let template {
@@ -212,26 +217,43 @@ struct LegalRequestFormView: View {
         }
         NXCard(padding: 16) {
             VStack(alignment: .leading, spacing: 14) {
+                // The hint inside the empty box, as the web's placeholder (UI tour run 16, R16-B-21: an empty box
+                // with the hint under it).
                 LegalFormRow(label: T("Purpose and notes")) {
-                    TextEditor(text: $purpose)
-                        .font(NXFont.text(14)).scrollContentBackground(.hidden).frame(minHeight: 90)
-                        .padding(.horizontal, 6).padding(.vertical, 4)
-                        .background(NX.background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
+                    TextField(T("What the document is for, who it is with, anything Legal should know"), text: $purpose, axis: .vertical)
+                        .lineLimit(4...10)
+                        .font(NXFont.text(14))
+                        .legalInput()
                 }
-                Text(T("What the document is for, who it is with, anything Legal should know")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                // A "Pick a date" field as on the web, cleared with ×, instead of a "No deadline" switch (R16-B-21).
                 LegalFormRow(label: T("Needed by"), error: errors["deadline"]) {
-                    HStack {
-                        LegalToggle(label: deadline == nil ? T("No deadline") : LegalLabels.day(deadline),
-                                    isOn: Binding(get: { deadline != nil }, set: { deadline = $0 ? LegalText.todayJakarta() : nil }))
+                    if deadline == nil {
+                        Button { deadline = LegalText.todayJakarta() } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "calendar").foregroundStyle(NX.mutedFg)
+                                Text(T("Pick a date")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                                Spacer(minLength: 0)
+                            }
+                            .legalInput()
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        HStack(spacing: 8) {
+                            DatePicker(T("Needed by"), selection: Binding(get: { LegalText.date(fromDay: deadline ?? "") ?? Date() },
+                                                                         set: { deadline = LegalText.dayString($0) }),
+                                       displayedComponents: .date)
+                                .labelsHidden()
+                                .environment(\.locale, AppDateLocale.current)
+                                .environment(\.timeZone, LegalText.jakarta)
+                            Spacer(minLength: 0)
+                            Button { deadline = nil } label: {
+                                Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg).frame(width: 44, height: 44)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(T("Clear"))
+                        }
                     }
-                }
-                if deadline != nil {
-                    DatePicker(T("Needed by"), selection: Binding(get: { LegalText.date(fromDay: deadline ?? "") ?? Date() },
-                                                                 set: { deadline = LegalText.dayString($0) }),
-                               displayedComponents: .date)
-                        .environment(\.locale, AppDateLocale.current)
-                        .environment(\.timeZone, LegalText.jakarta)
                 }
                 LegalFormRow(label: T("Related project or deal")) {
                     LegalLinkButton(value: link, placeholder: T("None"), ownAccess: true) { link = $0 }
@@ -293,6 +315,14 @@ struct LegalRequestFormView: View {
         .frame(maxWidth: .infinity)
         .background(NX.background)
         .overlay(alignment: .top) { Rectangle().fill(NX.border).frame(height: 1) }
+        // The fields fade into the bar, so a line passing under it ("PDF, Word or photos…") reads as "more
+        // below" rather than hidden (UI tour run 16, R16-M-12).
+        .background(alignment: .top) {
+            LinearGradient(colors: [NX.background.opacity(0), NX.background], startPoint: .top, endPoint: .bottom)
+                .frame(height: 24)
+                .offset(y: -24)
+                .allowsHitTesting(false)
+        }
     }
 
     private func sent(_ id: String) -> some View {
@@ -397,10 +427,13 @@ struct MyLegalRequestsStrip: View {
                 Spacer(minLength: 4)
                 LegalChip(text: LegalRequestLabels.stage(r.stage), tone: LegalRequestLabels.stageTone(r.stage))
             }
-            Text([r.company?.name, r.isAddendum && !r.parentNumberText.isEmpty ? String(format: T("Amends %@"), r.parentNumberText) : nil]
+            Text([r.company?.name, r.isAddendum && !r.parentNumberText.isEmpty ? String(format: T("Amends %@"), LegalLabels.unbroken(r.parentNumberText)) : nil]
                     .compactMap { $0 }.joined(separator: " · "))
-                // Wrapped, not cut: "PATS · Amends PATS/PKS-…" hid the number (UI tour run 15, Q-IB23).
+                // Wrapped, not cut: "PATS · Amends PATS/PKS-…" hid the number (UI tour run 15, Q-IB23); the number
+                // itself never breaks at its "/" or "-" (UI tour run 16, R16-I-19), and shrinks a little if alone
+                // on a line it cannot fill.
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                .minimumScaleFactor(0.85)
                 .fixedSize(horizontal: false, vertical: true)
             // When it was sent, then the deadline and the number, as the web card's meta line (UI tour
             // run 12, IP3: the app left "Sent 14 Oct" out).
@@ -419,7 +452,7 @@ struct MyLegalRequestsStrip: View {
                 Text(reason).font(NXFont.text(12)).foregroundStyle(NX.danger).lineLimit(2)
             }
             if r.canDownload {
-                Label(r.stage == "SIGNED" ? T("Download signed copy") : T("Download final document"), systemImage: "arrow.down.circle")
+                Label(r.stage == "SIGNED" ? T("Download signed copy") : T("Download final document"), systemImage: "tray.and.arrow.down")
                     .font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
             }
         }
@@ -511,7 +544,7 @@ struct MyLegalRequestSheet: View {
                         Button { Task { await download(r) } } label: {
                             HStack(spacing: 6) {
                                 if downloading { ProgressView() }
-                                Label(T("Download"), systemImage: "arrow.down.circle")
+                                Label(T("Download"), systemImage: "tray.and.arrow.down")
                             }
                         }
                         .buttonStyle(.nxPrimary).disabled(downloading)
@@ -831,10 +864,13 @@ struct LegalRequestCard: View {
                 Spacer(minLength: 4)
                 if r.rejected { LegalChip(text: T("Rejected"), tone: .danger, icon: "nosign") }
             }
-            Text([r.company?.name, r.isAddendum && !r.parentNumberText.isEmpty ? String(format: T("Amends %@"), r.parentNumberText) : nil]
+            Text([r.company?.name, r.isAddendum && !r.parentNumberText.isEmpty ? String(format: T("Amends %@"), LegalLabels.unbroken(r.parentNumberText)) : nil]
                     .compactMap { $0 }.joined(separator: " · "))
-                // Wrapped, not cut: "PATS · Amends PATS/PKS-…" hid the number (UI tour run 15, Q-IB23).
+                // Wrapped, not cut: "PATS · Amends PATS/PKS-…" hid the number (UI tour run 15, Q-IB23); the number
+                // itself never breaks at its "/" or "-" (UI tour run 16, R16-I-19), and shrinks a little if alone
+                // on a line it cannot fill.
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                .minimumScaleFactor(0.85)
                 .fixedSize(horizontal: false, vertical: true)
             // A narrow board column (iPad portrait) cut "PIC · Q…" and "Sig…" and wrapped the date (UI tour
             // run 10, IPD-3): the date and the count keep their width, the PIC has its own line, and the

@@ -109,11 +109,10 @@ struct LeaderboardView: View {
         } else {
             ScrollView {
                 VStack(spacing: 16) {
-                    // No "XP ranking for everyone" line: the subtitle above already says it (UI tour run 14, N-36).
                     // Why the viewer is missing from the list (UI tour run 13, W-B4), in the web's bordered
                     // info banner rather than plain text (run 14, P-I34 / P-M29).
                     if viewerLeftOut {
-                        Label(T("You're not on this ranking: the BoD is left out, so management doesn't compete with staff."),
+                        Label(T("You're not on this ranking: the board is left out, so management doesn't compete with staff."),
                               systemImage: "info.circle")
                             .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                             .fixedSize(horizontal: false, vertical: true)
@@ -123,6 +122,11 @@ struct LeaderboardView: View {
                             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
                     }
 
+                    // The web card's caption over the ranking (UI tour run 16, R16-I-25; web master over run 14 N-36).
+                    if !ranked.isEmpty {
+                        Text(T("XP ranking for everyone")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     if ranked.count >= 1 {
                         // More people share 1st than the podium has steps: one gold band with everyone tied
                         // and "7-way tie for 1st · 1.000" on it, as on the web. Three "1" blocks left four of
@@ -231,7 +235,7 @@ struct Podium: View {
                             if label(rank) == 1 { Image(systemName: "crown.fill").font(.system(size: 18)).foregroundStyle(crown).offset(y: -avatar/2 - 6) }
                         }
                         Text(row.name ?? "—").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Text(AppNumber.int(row.totalXp)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                        Text("\(AppNumber.int(row.totalXp)) XP").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     }
                     .contentShape(Rectangle())
                 }
@@ -268,11 +272,13 @@ struct TieRibbon: View {
             HStack(spacing: 6) {
                 Image(systemName: "crown.fill").font(.system(size: 14))
                 Text(caption)
-                if let top = rows.first { Text("· \(AppNumber.int(top.totalXp))").monospacedDigit() }
+                if let top = rows.first { Text("· \(AppNumber.int(top.totalXp)) XP").monospacedDigit() }
             }
             .font(NXFont.text(14, .semibold)).foregroundStyle(ink)
             .multilineTextAlignment(.center)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 84, maximum: 96), spacing: 12, alignment: .top)], alignment: .center, spacing: 12) {
+            // Down to 70 pt a person, so seven tied fit one row on an iPad as on the web (UI tour run 16, R16-I-25:
+            // "Zaki Mahmuda" alone on a second row).
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 70, maximum: 96), spacing: 10, alignment: .top)], alignment: .center, spacing: 12) {
                 ForEach(rows) { row in
                     Button { onOpen(row) } label: {
                         VStack(spacing: 5) {
@@ -318,7 +324,8 @@ struct RankRow: View {
                     Text("Level \(row.level)\(row.levelName.map { " · \($0)" } ?? "")").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
                 Spacer()
-                Text(AppNumber.int(row.totalXp))
+                // The unit on every value, "1.000 XP" / "−142 XP", as the web (UI tour run 16, decision 5).
+                Text("\(AppNumber.int(row.totalXp)) XP")
                     .font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
             }
             .padding(.horizontal, 14).padding(.vertical, 11)

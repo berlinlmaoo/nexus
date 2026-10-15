@@ -225,7 +225,7 @@ struct SettingsView: View {
                 WorkspaceMembersCard(workspaceId: wsId)
             } else {
                 EmptyState(icon: "person.2", title: T("No workspace yet"),
-                           subtitle: T("Members appear here once you are in a workspace. Ask a BoD or Manager to add you."), compact: true)
+                           subtitle: T("Members appear here once you are in a workspace. Ask a board member or manager to add you."), compact: true)
             }
         case .notifications:
             AutomationNotificationsCard()
@@ -386,7 +386,7 @@ struct SettingsView: View {
                 webField(T("Google Workspace")) {
                     HStack(spacing: 8) {
                         if googleEmail.isEmpty {
-                            Text(T("No company Google account linked yet. A BoD links it from Control Room."))
+                            Text(T("No company Google account linked yet. A board member links it from Control Room."))
                                 .font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
                         } else {
                             Image(systemName: "at").font(.system(size: 14, weight: .semibold)).foregroundStyle(NX.foreground)
@@ -396,7 +396,8 @@ struct SettingsView: View {
                         }
                         Spacer(minLength: 0)
                     }
-                    .padding(.horizontal, 12)
+                    // Room above and below when the sentence wraps to two lines (UI tour run 16, R16-I-20 iPad).
+                    .padding(.horizontal, 12).padding(.vertical, 9)
                     .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
                     .background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))

@@ -258,6 +258,25 @@ struct NXCardGrid<Content: View>: View {
 enum NXSelection: Hashable {
     case screen(NXScreen)
     case project(ProjectRef)
+
+    /// A project is the same place whatever its ref's name or icon say. A page opened from a link starts
+    /// with a nameless ref; when the sidebar's refresh swapped in the named one, the
+    /// split view took it as a new selection and reset the detail column, which popped the form builder a
+    /// `?form=` link had just pushed back to the project's Forms list (UI tour run 16, R16-I-03 iPad).
+    static func == (a: NXSelection, b: NXSelection) -> Bool {
+        switch (a, b) {
+        case (.screen(let x), .screen(let y)): return x == y
+        case (.project(let x), .project(let y)): return x.id == y.id
+        default: return false
+        }
+    }
+
+    func hash(into hasher: inout Hasher) {
+        switch self {
+        case .screen(let s): hasher.combine(0); hasher.combine(s)
+        case .project(let r): hasher.combine(1); hasher.combine(r.id)
+        }
+    }
 }
 
 /// Picks the shape. Regular width means iPad (any orientation) and, later, a Mac window.
@@ -509,7 +528,14 @@ struct SidebarRoot: View {
         // System and the page lost a quarter of the window (UI tour run 4). A pointer needs no 44 pt
         // rows; the iPad keeps them.
         .environment(\.defaultMinListRowHeight, 30)
+        // Tighter gaps between the groups, so a 900 pt window shows the whole nav down to Control Room above
+        // the account footer instead of half of it (UI tour run 16, R16-M-06).
+        .environment(\.defaultMinListHeaderHeight, 24)
+        .listSectionSpacing(.compact)
         #endif
+        // The list's end clears the fade above the footer, so its last row ("Pin a project to keep it here.")
+        // is never left half under it (UI tour run 16, R16-I-14 iPad).
+        .contentMargins(.bottom, 24, for: .scrollContent)
         // The nav can be taller than the window (a Mac window ~1250 pt tall ends at Tickets under the
         // account footer, with Settings and Control Room below it): the scroll indicator shows there is
         // more, and it flashes when the sidebar appears (UI tour run 14, P-M6). It was hidden.
@@ -567,7 +593,8 @@ struct SidebarRoot: View {
             .liveRefresh(every: 30, on: [.nexusWorkspaceChanged], kinds: [RealtimeKind.projects]) {
                 await shortcuts.syncPins()
                 await folderStore.load(workspaceId: workspaceId)
-                keepProjectSelection()
+                // No re-selection after a rename or a new icon: a project's selection compares by id
+                // (NXSelection ==), so its row stays highlighted and the open page keeps its pushes.
             }
         } detail: {
             let needsTopBand = detailHidesNavigationBar
@@ -737,16 +764,6 @@ struct SidebarRoot: View {
     /// ⌘1…⌘7, in this order. Also read by the keyboard shortcuts sheet (KeyboardShortcutsHelp.swift).
     static let shortcutScreens: [NXScreen] = [.dashboard, .projects, .tasks, .inbox, .messages, .teamCalendar, .attendance]
 
-    /// A project shortcut is selected by its whole ref (id, name, icon). When a refresh brings the same
-    /// project back renamed or with a new icon, its row's tag changes and the List would show nothing
-    /// selected while its board is still open: follow it to the new ref. Same id, so the board stays.
-    private func keepProjectSelection() {
-        guard case .project(let ref) = selection,
-              let now = (shortcuts.pinned + shortcuts.recent).first(where: { $0.id == ref.id }),
-              now != ref else { return }
-        selection = .project(now)
-    }
-
     /// Whether the detail column draws without a navigation bar, and therefore has nowhere for the
     /// system's sidebar button to live. Project boards hide their bar too, so a shortcut opened
     /// from the sidebar would otherwise strand the user exactly like Dashboard did.
@@ -809,14 +826,15 @@ struct SidebarRoot: View {
     @ViewBuilder private func navRow(_ screen: NXScreen) -> some View {
         let standIn = screen == .projects && openProjectWithoutRow
         let selected = selection == .screen(screen) || standIn
-        // On the Mac the selection is a quiet grey (SidebarSelection), so the row keeps dark text; elsewhere
-        // the system fill is strong and the glyph turns white on it.
-        let onFill = selection == .screen(screen) && !SidebarSelection.isQuiet
-        let glyph: Color = onFill ? Color.white : (selected ? NX.foreground : NX.mutedFg)
+        // The web's selected row on every platform: a lavender pill (SidebarSelection) with the name and the
+        // glyph in the accent. The iPad's white glyph on the system's grey pill all but vanished (UI tour run
+        // 16, R16-B-26).
+        let onFill = false
+        let glyph: Color = selected ? NX.violetText : NX.mutedFg
         Label {
             HStack(spacing: 6) {
-                Text(screen.sidebarTitle).font(NXFont.text(15)).lineLimit(1)
-                    .modifier(SidebarSelection.TextColor())
+                Text(screen.sidebarTitle).font(NXFont.text(15, selected ? .medium : .regular)).lineLimit(1)
+                    .foregroundStyle(selected ? NX.violetText : NX.foreground)
                 Spacer(minLength: 4)
                 let n = badgeCount(screen)
                 if n > 0 { SidebarCountBadge(count: n, warning: screen == .attendance, onSelection: onFill) }
@@ -844,7 +862,7 @@ struct SidebarRoot: View {
         .tag(NXSelection.screen(screen))
         .modifier(MacSidebarRowInsets())
         // Not the List's own selection (that is the open project): the quiet muted pill the web draws.
-        .listRowBackground(standIn ? AnyView(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NX.muted).padding(.horizontal, 10)) : nil)
+        .listRowBackground(standIn ? AnyView(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(SidebarSelection.fill).padding(.horizontal, 10)) : nil)
     }
 
     private func badgeCount(_ screen: NXScreen) -> Int {
@@ -915,17 +933,14 @@ enum SidebarRootSheet: String, Identifiable {
 /// list's tint, so a grey tint gives a grey fill; the rows then keep their own dark text instead of the
 /// white the system puts on a strong fill. The iPad keeps the system's own behaviour.
 enum SidebarSelection {
-    #if targetEnvironment(macCatalyst)
+    /// The selection is the soft accent pill on every platform now (web; UI tour run 16, R16-B-26).
     static let isQuiet = true
-    #else
-    static let isQuiet = false
-    #endif
-    /// Notion's selected-row grey on the sidebar's background.
-    static let fill = Color(light: 0xdcdbd8, dark: 0x3c3c3e)
+    /// The web sidebar's selected-row lavender (`bg-accent`).
+    static var fill: Color { NX.accentBg }
 
     struct Tint: ViewModifier {
         func body(content: Content) -> some View {
-            if SidebarSelection.isQuiet { content.tint(SidebarSelection.fill) } else { content }
+            content.tint(SidebarSelection.fill)
         }
     }
 

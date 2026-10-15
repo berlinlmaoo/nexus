@@ -82,7 +82,7 @@ struct DashboardView: View {
     }
     private var statData: [StatDatum] {
         [
-            .init(value: projectCount, total: nil, label: T("Projects"), icon: "rectangle.stack.fill", from: "#c4b5fd", to: "#7c3aed", glow: "#a78bfa"),
+            .init(value: projectCount, total: nil, label: T("Projects"), icon: "doc.text.fill", from: "#c4b5fd", to: "#7c3aed", glow: "#a78bfa"),
             .init(value: mission.done, total: mission.total, label: T("Tasks"), icon: "checklist", from: "#6ee7b7", to: "#059669", glow: "#34d399"),
             .init(value: game?.questsDone ?? 0, total: game?.questList.count ?? 0, label: T("Quests"), icon: "sparkles", from: "#fcd34d", to: "#ea580c", glow: "#fbbf24"),
         ]
@@ -195,24 +195,21 @@ struct DashboardView: View {
             // iPad / Mac: the button sits 28 pt above the window's bottom edge (52 + 28 = 80 pt), and with
             // no margin it covered the agenda's last day ("Sun 25", UI tour run 11 PD-19). 92 pt lets every
             // card scroll clear of it. The phone's 72 is unchanged.
-            .contentMargins(.bottom, hSize == .regular ? 16 : 72, for: .scrollContent)
-            // iPad / Mac: the cards fade out at the scroll's bottom edge rather than being sliced through
-            // above the band kept for the GIDEON button (UI tour run 15, Q-IA9 / Q-M7).
+            // iPad / Mac: the page runs to the window's bottom edge and the cards dissolve over its last 96 pt,
+            // where the floating GIDEON button sits (28–80 pt up); the scroll ends 108 pt up, so the last card
+            // can always rest whole above the fade. A 92 pt band kept empty for the button cut the cards hard
+            // above an empty strip (UI tour run 16, R16-I-10 / R16-M-05; runs 12–15, PD3 / Q-IA9 / Q-M7).
+            .contentMargins(.bottom, hSize == .regular ? 108 : 72, for: .scrollContent)
             .mask {
                 VStack(spacing: 0) {
                     Rectangle()
                     if hSize == .regular {
-                        LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: 28)
+                        LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: 96)
                     }
                 }
                 .ignoresSafeArea()
             }
             .modifier(StatusBarScrollEdge())
-            // iPad / Mac: the scroll area ends above the floating GIDEON button (52 pt, 28 pt above the window's
-            // bottom edge), so no card scrolls under it, on the first screen or further down (UI tour runs 12
-            // and 13, PD3 / I-4 / I-17: it covered the agenda's last day and month). The band below is the
-            // page's own background. The phone's Home is unchanged.
-            .padding(.bottom, hSize == .regular ? 92 : 0)
             .background(NX.background.ignoresSafeArea())
             .overlay { statModal }
             .overlay { levelModal }
@@ -277,7 +274,7 @@ struct DashboardView: View {
             dailyCalendarCard
             // A portrait iPad gets the web Home's widgets too; the iPhone Home stays as it is (owner rule).
             if hSize == .regular {
-                scheduleCard
+                calendarAndSchedule
                 messagesCard
                 leaderboardCard
             }
@@ -292,6 +289,21 @@ struct DashboardView: View {
         HomeScheduleCard(tasks: tasksList, onOpenTask: { openTarget = .task($0) }, onOpenMyTasks: { router.go(.tasks) })
     }
     private var messagesCard: some View { HomeMessagesCard { router.go(.messages) } }
+    /// The web Home's Calendar widget beside "Your schedule" where both fit, else one over the other
+    /// (UI tour run 16, R16-B-14: the Calendar widget was missing on iPad and Mac).
+    private var calendarAndSchedule: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 18) {
+                HomeCalendarCard { router.go(.teamCalendar) }.frame(maxWidth: .infinity)
+                scheduleCard.frame(maxWidth: .infinity)
+            }
+            .frame(minWidth: 620)
+            VStack(alignment: .leading, spacing: 18) {
+                HomeCalendarCard { router.go(.teamCalendar) }
+                scheduleCard
+            }
+        }
+    }
     private var leaderboardCard: some View { HomeLeaderboardCard { router.go(.leaderboard) } }
 
     /// Mac, wide window: the day's work on the left, the person (level, profile, XP rules) on the right.
@@ -307,7 +319,7 @@ struct DashboardView: View {
                     statCards
                     xpRulesCard
                     dailyCalendarCard
-                    scheduleCard
+                    calendarAndSchedule
                     quickActions
                     projectShortcuts
                 }
@@ -340,7 +352,7 @@ struct DashboardView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .leading, spacing: 18) {
                     dailyCalendarCard
-                    scheduleCard
+                    calendarAndSchedule
                     projectShortcuts
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1328,7 +1340,11 @@ if !XpRules.tiers.isEmpty {
                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(NX.border, lineWidth: 1))
             }
             .buttonStyle(.plain)
-            Text(name).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            // The phone's card names the person here; on iPad / Mac the greeting above already does, and the
+            // web card has no name under Edit profile (UI tour run 16, R16-B-14).
+            if hSize != .regular {
+                Text(name).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            }
         }
         .nexusCard()
     }
@@ -1442,19 +1458,29 @@ enum XpRules {
     static let tiers: [Tier] = []
 }
 
-/// Home has no navigation bar, so cards scrolled under the status bar with nothing between them and the
-/// clock (UI tour run 13, F-25). An empty bar at the top edge gives the scroll view the system's scroll-edge
-/// effect there, as under every other screen's bar; the layout itself is untouched. iOS 26+.
+/// Home and Calendar have no navigation bar, so their scrolled content ran under the status bar with
+/// nothing between it and the clock (UI tour run 13, F-25; run 14, N-30; run 15, R15-I-08 / Q-IA10).
+/// A top safe-area inset whose background is the page's own colour: the scroll view scrolls under the inset,
+/// and the background (a ShapeStyle background extends into the safe area) covers the status bar opaquely.
+/// The run 15 version framed the colour to 0 pt BEFORE `ignoresSafeArea`, so the fixed frame never grew
+/// into the status bar and nothing was drawn (R16-I-02 / R16-I-11). On the Mac the window's hidden title bar
+/// leaves no top safe area, so a short band keeps scrolled cards off the traffic-light row (R16-M-05).
 struct StatusBarScrollEdge: ViewModifier {
-    /// The page's own background over the status bar, fully opaque: under the system's hard scroll edge a
-    /// blurred ghost of the scrolled tiles still showed behind the clock (UI tour run 14, N-30; run 15,
-    /// R15-I-08 / Q-IA10). A zero-height strip at the top that extends into the top safe area.
     func body(content: Content) -> some View {
-        content.overlay(alignment: .top) {
-            NX.background
-                .frame(height: 0)
-                .ignoresSafeArea(edges: .top)
+        content.safeAreaInset(edge: .top, spacing: 0) {
+            Color.clear
+                .frame(height: Self.band)
+                .background(NX.background)
                 .allowsHitTesting(false)
+                .accessibilityHidden(true)
         }
+    }
+
+    private static var band: CGFloat {
+        #if targetEnvironment(macCatalyst)
+        return 12
+        #else
+        return 0
+        #endif
     }
 }

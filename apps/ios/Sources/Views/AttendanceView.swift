@@ -170,8 +170,8 @@ struct AttendanceView: View {
                         if showOffsite { offsitePrompt }
                         #endif
                         if forcePending { infoBanner(forcePendingMessage, tone: .warning) }
-                        if pending { infoBanner(T("⏳ Checkout outside the office area — waiting for BoD approval"), tone: .warning) }
-                        if rec?.checkOutApproval == "REJECTED" { infoBanner(T("Your out-of-area checkout was rejected by the BoD."), tone: .danger) }
+                        if pending { infoBanner(T("⏳ Checkout outside the office area — waiting for board approval"), tone: .warning) }
+                        if rec?.checkOutApproval == "REJECTED" { infoBanner(T("Your out-of-area checkout was rejected by the board."), tone: .danger) }
                         if let banner { infoBanner(banner.text, tone: banner.good ? .success : .danger) }
                         // A queued tap must never be invisible: someone who thinks they clocked in and
                         // did not would only find out at payroll.
@@ -488,18 +488,19 @@ struct AttendanceView: View {
     /// show a dash rather than a default number: "0/4" for someone whose quota was never set is a
     /// convincing-looking lie.
     /// A quota of 0 says so in words: "0/0 used" carried no information (UI tour run 13, F-17 / I-24 / M-19).
+    /// "0/4 used" on every platform, a quota of 0 included ("0/0 used", as the web; UI tour run 16, R16-I-11 /
+    /// R16-B-24, decision 4).
     private static func quotaValue(_ used: Int?, _ quota: Int?) -> String {
         guard let quota else { return "\u{2014}" }
-        if quota == 0 && (used ?? 0) == 0 { return T("None this month") }
-        return String(format: T("%@ of %@ used"), AppNumber.int(used ?? 0), AppNumber.int(quota))
+        return String(format: T("%@/%@ used"), AppNumber.int(used ?? 0), AppNumber.int(quota))
     }
 
     private var todayStatusValue: String {
         if forcePending { return T("Finish yesterday's attendance") }
         if let s = rec?.status, !s.isEmpty { return Self.humanize(s) }
         if let req = today?.todayRequest, let t = req.type { return "\(Self.humanize(t)) \(Self.humanize(req.status ?? ""))".trimmingCharacters(in: .whitespaces) }
-        // The hero above already says "Ready to check in"; the tile says the state, not the prompt again (F-17).
-        return T("Not checked in yet")
+        // The web's wording before check-in (UI tour run 16, R16-B-24, decision 4).
+        return T("Ready to check in")
     }
     /// Once checked in this is the office on the record. Before that it used to say "5 active
     /// offices", which is a fact about the company and not about the person holding the phone —
@@ -954,7 +955,7 @@ struct AttendanceView: View {
     private var offsitePrompt: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(T("You're outside the office area")).font(NXFont.text(14, .bold)).foregroundStyle(amberTitle)
-            Text(T("Want to check out from here? **A reason is required** — the checkout will wait for BoD approval."))
+            Text(T("Want to check out from here? **A reason is required** — the checkout will wait for board approval."))
                 .font(NXFont.text(12)).foregroundStyle(amberBody)
             TextField(T("Reason (e.g. content shoot / client meeting)"), text: $offsiteReason, axis: .vertical)
                 .font(NXFont.text(14)).lineLimit(2, reservesSpace: true)
@@ -1306,7 +1307,7 @@ struct AttendanceView: View {
                                                               fix: pendingFix, clientId: tapId)
             if case .success = outcome {
                 Haptics.success()
-                banner = Banner(text: T("Checkout sent — waiting for BoD approval ⏳"), good: true)
+                banner = Banner(text: T("Checkout sent — waiting for board approval ⏳"), good: true)
                 reflection = ""
                 await load()
                 // The button itself now reads "Check-out sent · waiting for approval".
@@ -1420,8 +1421,9 @@ struct AttendanceView: View {
     static let clock: DateFormatter = {
         let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; f.timeZone = TimeZone(identifier: "Asia/Jakarta"); return f
     }()
+    /// The clock card's day: "Thursday 15 Oct", no comma, no year for this year (UI tour run 16, decision 10).
     static func dateLabel(_ d: Date) -> String {
-        AppDateLocale.formatter("EEE d MMM", timeZone: TimeZone(identifier: "Asia/Jakarta")).string(from: d)
+        AppDateLocale.weekdayDate(d)
     }
     static func parseISO(_ iso: String) -> Date? {
         let p = ISO8601DateFormatter(); p.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -1683,14 +1685,26 @@ struct StreakBoardCard: View {
         let n = CGFloat(periodDays.count)
         // iPad / Mac: a day may narrow to 20 pt so the whole period fits, as on the web; at 24 pt a 13" iPad
         // missed by a few points and opened mid-period with a cut column at each edge (UI tour run 15, Q-IB21).
-        let least: CGFloat = hSize == .regular ? 18 : cell
+        // 16 pt since run 16 (R16-M-14): a default Mac window missed the whole 28 Sep – 27 Oct period by three
+        // days at 18.
+        let least: CGFloat = hSize == .regular ? 16 : cell
         return min(40, max(least, ((stripWidth - gap * (n - 1)) / n).rounded(.down)))
     }
     private let gap: CGFloat = 3
+    /// The strip's width rounded down to whole days, while the period does not fit; nil = all the room.
+    private var wholeDaysWidth: CGFloat? {
+        guard stripWidth > 0, periodDays.count > 1 else { return nil }
+        let step = cellW + gap
+        let fit = Int((stripWidth + gap) / step)
+        guard fit > 0, fit < periodDays.count else { return nil }
+        return CGFloat(fit) * step - gap
+    }
     @Environment(\.horizontalSizeClass) private var hSize
     /// Wide enough that "Muhammad …" rows can be told apart (UI tour run 13, F-16 / I-24: 76 pt cut every
     /// name to about ten characters); more on an iPad or Mac, where the board has room.
-    private var nameW: CGFloat { hSize == .regular ? 150 : 104 }
+    /// 190 on iPad / Mac: full names, as the web's board, where 150 turned them into "Irvandes Hasri Ilham M."
+    /// (UI tour run 16, R16-B-24).
+    private var nameW: CGFloat { hSize == .regular ? 190 : 104 }
 
     // ProjDate's shared Calendar and DateFormatter cache instead of fresh ones. These are read from
     // `body`, and constructing a DateFormatter there is about the most expensive thing you can do:
@@ -1873,8 +1887,17 @@ struct StreakBoardCard: View {
                     if wide {
                         Button { Task { await exportMonth() } } label: {
                             if exporting { ProgressView().scaleEffect(0.7).frame(width: 30, height: 30).touchTarget44(drawn: 30) }
-                            else { Image(systemName: "square.and.arrow.up").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.foreground).frame(width: 30, height: 30).touchTarget44(drawn: 30) }
+                            else {
+                                // Named, as the web's "Export" (UI tour run 16, R16-B-24: bare icons).
+                                Label(T("Export"), systemImage: "square.and.arrow.up")
+                                    .font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                                    .padding(.horizontal, 10).frame(height: 30)
+                                    .overlay(Capsule().strokeBorder(NX.border))
+                                    .frame(minHeight: 44).contentShape(Rectangle())
+                            }
                         }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 4)
                         .disabled(exporting)
                         .accessibilityLabel(T("Export this month as a spreadsheet"))
                         .sheet(item: $exportItem) { item in ActivityView(items: [item.url]) }
@@ -2093,10 +2116,10 @@ struct StreakBoardCard: View {
     @ViewBuilder static func trackingMark(_ row: AttendanceRow?) -> some View {
         switch row?.locationTrackingState {
         case "web":
-            Image(systemName: "globe").font(.system(size: 9, weight: .bold)).foregroundStyle(Color(hex: "#0284c7"))
+            Image(systemName: "globe").font(.system(size: 8, weight: .bold)).foregroundStyle(Color(hex: "#0284c7"))
                 .accessibilityLabel(T("Web check-in · location not tracked"))
         case "denied":
-            Image(systemName: "location.slash").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.mutedFg)
+            Image(systemName: "location.slash").font(.system(size: 8, weight: .bold)).foregroundStyle(NX.mutedFg)
                 .accessibilityLabel(T("Location off"))
         default:
             EmptyView()
@@ -2156,6 +2179,11 @@ struct StreakBoardCard: View {
                 // the scroll view now STARTS there: its initial position comes from `daysAnchor`, not
                 // from anything that has to happen after layout. The tries below only centre it.
                 .defaultScrollAnchor(daysAnchor)
+                // Exactly as wide as the whole days that fit: with the scroll resting on a day, neither edge
+                // ever cuts one ("TU…" at the right, a sliver at the left; UI tour run 16, R16-I-17 /
+                // R16-M-14). The width is measured outside this frame, on the room the board leaves.
+                .frame(width: wholeDaysWidth, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { stripWidth = $0 }
                 // One scroll view per period, so another month opens from its own anchor.
                 .id(monthOffset)
@@ -2293,7 +2321,10 @@ struct StreakBoardCard: View {
                             .modifier(OutsideNowMark(since: Self.outsideSince(m.rowByDay[pd.key], dayKey: pd.key, todayKey: liveKey),
                                                      name: m.name, cell: cell))
                             // Web check-in / location off, as the web board's corner marks (Q-IB8).
-                            .overlay(alignment: .topTrailing) { Self.trackingMark(m.rowByDay[pd.key]).offset(x: 3, y: -3) }
+                            // Inside the cell's corner: offset out of it, the mark crossed into the row above
+                            // and showed as a clipped ")" beside the first day in view (UI tour run 16,
+                            // R16-I-13 / R16-M-14).
+                            .overlay(alignment: .topTrailing) { Self.trackingMark(m.rowByDay[pd.key]).padding(1) }
                         // Every cell with a record opens it — a manager reviewing their people
                         // and staff on their own board need the day's detail and its
                         // location trail too. The BoD also opens id-less and empty days to
@@ -2573,7 +2604,7 @@ struct RecordActionsSheet: View {
                         }
                         if let w = row.workedMinutes, w > 0 { infoLine("clock", "\(T("Worked")) \(w / 60)h \(w % 60)m") }
                         if row.isCorrected == true {
-                            infoLine("pencil.and.list.clipboard", "\(T("Corrected by BoD")) · \(row.correctionReason ?? "")")
+                            infoLine("pencil.and.list.clipboard", "\(T("Corrected by the board")) · \(row.correctionReason ?? "")")
                         }
                         if let notes = row.notes, !notes.isEmpty { infoLine("text.alignleft", notes) }
                         // Pushed inside this sheet's own stack rather than presented: the sheet
@@ -2700,7 +2731,7 @@ struct RecordActionsSheet: View {
 
     private var changeStatusPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(T("Change status (BoD)"))
+            SectionLabel(T("Change status (board)"))
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], spacing: 8) {
                 ForEach(Self.overrideActions, id: \.self) { action in
                     Button { pendingOverride = action } label: {

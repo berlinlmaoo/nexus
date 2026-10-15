@@ -47,7 +47,7 @@ struct VaultShareSheet: View {
                 Text(T("Who can open this link"))
             } footer: {
                 if !externalAllowed {
-                    Text(T("Only the person who uploaded this, or BoD, can make a link for people outside NEXUS. You can still share it with people in NEXUS."))
+                    Text(T("Only the person who uploaded this, or the board, can make a link for people outside NEXUS. You can still share it with people in NEXUS."))
                 }
             }
 

@@ -72,7 +72,7 @@ struct AdminUserDetailView: View {
                 // attendance data, owner 13 Oct 2026). Say so instead of drawing the neutral values.
                 if member.isPersonalHidden && !isBod {
                     card(T("Attendance")) {
-                        Text(T("Their approver, work hours and attendance mode are visible only to the people above them in the Approval chart and to the BoD."))
+                        Text(T("Their approver, work hours and attendance mode are visible only to the people above them in the Approval chart and to the board."))
                             .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -308,7 +308,7 @@ struct AdminUserDetailView: View {
     }
 
     private var approvalCard: some View {
-        card(T("Attendance approval"), T("This person's permits, leave and sick days go to their approver. Without one, requests go to every BoD.")) {
+        card(T("Attendance approval"), T("This person's permits, leave and sick days go to their approver. Without one, requests go to every board member.")) {
             HStack(spacing: 10) {
                 if let a = member.approver {
                     AvatarView(url: a.avatar, initial: String((a.name ?? "?").first ?? "?").uppercased(), size: 28)
@@ -682,7 +682,7 @@ struct OffboardUserSheet: View {
             T("Removed from projects, teams and chats."),
             T("Their attendance, requests, projects, tasks and messages stay."),
             T("Their open tasks stay assigned to them."),
-            T("Anyone who had them as approver goes back to the BoD safety net."),
+            T("Anyone who had them as approver goes back to the board as a safety net."),
         ]
     }
 
@@ -740,7 +740,7 @@ struct OffboardUserSheet: View {
                 } header: {
                     Text(String(format: lost.count == 1 ? T("%d person lost their approver") : T("%d people lost their approver"), lost.count))
                 } footer: {
-                    Text(T("Their requests go to the BoD until you set a new approver in the Approval chart."))
+                    Text(T("Their requests go to the board until you set a new approver in the Approval chart."))
                 }
             }
             if canceled > 0 {

@@ -8,6 +8,20 @@ import UniformTypeIdentifiers
 // ─────────────────────────────────────────────────────────────────────────────
 
 enum LegalLabels {
+    /// A long document number with its middle folded, as the web's archive: "PKS/PATS-UNIV/…/2026/005".
+    /// The first two and the last two parts stay; short numbers are untouched (UI tour run 16, R16-M-01).
+    static func shortNumber(_ number: String) -> String {
+        let parts = number.split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count > 4 else { return number }
+        return (parts.prefix(2) + ["…"] + parts.suffix(2)).joined(separator: "/")
+    }
+
+    /// Text that never breaks inside "I/II/III" or a number like "PATS/PKS-UNIV": a word joiner after each
+    /// slash and hyphen keeps the run on one line (UI tour run 16, R16-M-13 / R16-I-19 iPad).
+    static func unbroken(_ text: String) -> String {
+        text.replacingOccurrences(of: "/", with: "/\u{2060}").replacingOccurrences(of: "-", with: "-\u{2060}")
+    }
+
     static let docTypes = ["SURAT", "SP", "SK", "PKS", "SPK", "NDA", "MOU", "ADD", "INVOICE", "PJM", "PGB", "OTHER"]
     /// An addendum: made from a signed document, numbered after it (…/ADD-n).
     static let addendumType = "ADD"

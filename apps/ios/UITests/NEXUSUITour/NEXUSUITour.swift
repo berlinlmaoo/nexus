@@ -833,7 +833,7 @@ final class NEXUSUITour: XCTestCase {
         var scrolled = false
         #endif
         while page < maxPages {
-            drag(target, dx: 0, dy: -0.5)
+            drag(target, dx: 0, dy: -pageStep)
             if navigatedAway() { break }
             if !web { _ = waitForSpinnersToStop(timeout: 4) }
             let shot = takeShot(root)
@@ -848,14 +848,15 @@ final class NEXUSUITour: XCTestCase {
             }
             #endif
             if data == last { break }
-            // Moved, but by less than about a sixth of the view: the end of the scroll, or nothing moved at
-            // all and only a clock or a hover changed. That picture is mostly the page before again (UI tour
-            // run 13, F-08 / M-27; run 15, R15-I-20 / T-1 / T-2: a 28–60 pt scroll and a pixel-identical page
-            // were still kept, because exact pixel rows never matched and the check gave up).
-            if let shift = contentShift(from: last, to: data, in: target.visible, window: root.windows.firstMatch.frame),
-               shift < minPageShift {
+            // Too little new on it: the end of the scroll, or nothing moved at all and only a clock or a
+            // hover changed (UI tour run 13, F-08 / M-27; run 15, R15-I-20 / T-1). A page is dropped only when
+            // about 90% of its content rows are already on the page before. Run 16 (R16-I-04): the run 15
+            // check measured a scroll SHIFT, and blank rows matched at any shift, so real pages read as "not
+            // moved" and were lost (project overview 4 → 1, leaderboard 5 → 2).
+            let fresh = newContent(from: last, to: data, in: target.visible, window: root.windows.firstMatch.frame)
+            if let fresh, fresh.new < minNewContent, fresh.inPlace >= minInPlace {
                 #if targetEnvironment(macCatalyst)
-                if shift == 0 && !scrolled && !flipped {
+                if fresh.new < 0.02 && !scrolled && !flipped {
                     flipped = true
                     macWheelSign = -macWheelSign
                     continue
@@ -873,45 +874,59 @@ final class NEXUSUITour: XCTestCase {
         return page - 1
     }
 
-    /// The least a page must have moved (fraction of the scrolled view's visible height) to be kept. A drag
-    /// asks for half; the last page of a list often moves less, and its new rows still count (run 15: the
-    /// leaderboard's last page moved ~0.19 and held the bottom of the ranking).
-    private var minPageShift: CGFloat { CGFloat(Double(env["TOUR_MIN_PAGE_SHIFT"] ?? "") ?? 0.15) }
+    /// How far each page drag scrolls, as a fraction of the visible scroll area. 0.7 leaves about 30% of
+    /// the page before on screen for context, and reaches more of a long list within TOUR_MAX_PAGES than
+    /// the 0.5 of runs 3–16 did (run 16, T-1: 40–70% repeats, while the Mac List covered 35 of 106 rows).
+    private var pageStep: CGFloat { CGFloat(Double(env["TOUR_PAGE_STEP"] ?? "") ?? 0.7) }
 
-    /// How far the content inside `rect` (screen points) moved up between two screenshots, as a fraction of
-    /// the rect's height: 0 = the same rows, 0.5 = half a view. nil when no shift explains the new picture
-    /// (a different screen, a sheet that opened): then it counts as a new page.
+    /// A page is dropped only when BOTH tests say it is the page before again (losing a real page is worse than
+    /// keeping a repeat). Measured offline on every consecutive pair of runs 15 and 16 (296 pages):
+    /// - new rows (`minNewContent`): a list of look-alike rows ("REIMBURSE PATS SPORTS · 4 May") can score low
+    ///   though it scrolled a whole screen (run 15 iPad timeline-3: 0.09), so this alone is not enough;
+    /// - rows still in place (`minInPlace`): the share of the page's rows found within 5% of the same height
+    ///   on the page before. That timeline page scores 0.25; true repeats 0.91–1.00 (iPad settings-2 0.09 /
+    ///   0.91, Mac overview-4 0.00 / 1.00). No real page with new rows under 0.20 stays above 0.82 in place.
+    private var minNewContent: CGFloat { CGFloat(Double(env["TOUR_MIN_NEW_CONTENT"] ?? "") ?? 0.08) }
+    private var minInPlace: CGFloat { CGFloat(Double(env["TOUR_MIN_IN_PLACE"] ?? "") ?? 0.85) }
+
+    /// The share of the new picture's content rows inside `rect` (screen points) that the old picture does
+    /// not hold ANYWHERE in that rect: 0 = nothing new, 1 = all new. It does not depend on how far the page
+    /// moved, so blank rows (which match at any shift) cannot hide new content. nil when the pictures cannot
+    /// be read; then the page counts as new.
     ///
-    /// The rect is cut into vertical strips, each matched on its own, and the largest shift wins: a column
-    /// that does not scroll (the Settings section list, a sticky Name column) shares every pixel row with
-    /// the column that does, so whole rows never matched at any shift (run 15).
-    private func contentShift(from old: Data, to new: Data, in rect: CGRect, window: CGRect) -> CGFloat? {
-        guard let a = stripHashes(old, rect: rect, window: window),
-              let b = stripHashes(new, rect: rect, window: window), a.count == b.count else { return nil }
-        var moved: CGFloat?
+    /// The rect is cut into 4 vertical strips, each compared on its own, and the strip with the most new
+    /// rows decides: a column that does not scroll (the Settings section list, a sticky Name column) holds no
+    /// new rows, and must not water down the column that scrolled.
+    /// `inPlace`: the share of the new picture's content rows found in the old one within 5% of the rect's
+    /// height of the same place; the strip with the fewest decides (the one that scrolled).
+    private func newContent(from old: Data, to new: Data, in rect: CGRect, window: CGRect) -> (new: CGFloat, inPlace: CGFloat)? {
+        guard let a = stripRows(old, rect: rect, window: window, every: 1),
+              let b = stripRows(new, rect: rect, window: window, every: 1), a.count == b.count else { return nil }
+        var fresh: CGFloat?
+        var inPlace: CGFloat = 1
         for (sa, sb) in zip(a, b) {
-            guard sa.count == sb.count, sa.count > 40 else { continue }
-            let h = sa.count
-            var best = (shift: -1, match: 0.0)
-            for s in 0..<(h * 3 / 4) {
-                let n = h - s
-                var same = 0
-                for i in 0..<n where sb[i] == sa[i + s] { same += 1 }
-                let match = Double(same) / Double(n)
-                if match > best.match + 0.01 { best = (s, match) }
-                if match > 0.97 { break }
-            }
-            guard best.shift >= 0, best.match >= 0.6 else { continue }
-            moved = max(moved ?? 0, CGFloat(best.shift) / CGFloat(h))
+            let seen = Set(sa.compactMap { $0 })
+            let sampled = stride(from: 0, to: sb.count, by: 2).compactMap { i in sb[i].map { (i, $0) } }
+            guard sampled.count >= 20 else { continue }
+            let unseen = sampled.filter { !seen.contains($0.1) }.count
+            fresh = max(fresh ?? 0, CGFloat(unseen) / CGFloat(sampled.count))
+            let reach = max(1, sa.count / 20)
+            let near = sampled.filter { i, h in
+                let lo = max(0, i - reach), hi = min(sa.count - 1, i + reach)
+                return lo <= hi && sa[lo...hi].contains(h)
+            }.count
+            inPlace = min(inPlace, CGFloat(near) / CGFloat(sampled.count))
         }
-        return moved
+        return fresh.map { ($0, inPlace) }
     }
 
-    /// For each of 4 vertical strips of `rect`, one hash per pixel row (every other row) in a PNG screenshot
-    /// (the picture is of `window`, or of the whole screen when its size says so). A row hashes the mean
-    /// colour of 24 blocks, coarsened to 16 levels: a sub-point scroll re-rasterises text a little, and
-    /// exact pixels then never matched (run 15: pixel-identical pages differed in 0.1% of their pixels).
-    private func stripHashes(_ png: Data, rect: CGRect, window: CGRect) -> [[UInt64]]? {
+    /// For each of 4 vertical strips of `rect`, one hash per pixel row (every `every` rows) in a PNG
+    /// screenshot (the picture is of `window`, or of the whole screen when its size says so); nil for a
+    /// blank row (one flat colour across the strip). A row hashes the mean colour of 24 blocks, coarsened to
+    /// 16 levels: a sub-point scroll re-rasterises text a little, and exact pixels then never matched (run 15:
+    /// pixel-identical pages differed in 0.1% of their pixels). The old page is read at every row, so a
+    /// scroll by an odd number of pixels still finds its rows.
+    private func stripRows(_ png: Data, rect: CGRect, window: CGRect, every: Int) -> [[UInt64?]]? {
         guard let image = UIImage(data: png)?.cgImage else { return nil }
         let width = image.width, height = image.height
         let bytesPerRow = width * 4
@@ -932,10 +947,11 @@ final class NEXUSUITour: XCTestCase {
         let blockWidth = (x1 - x0) / (strips * blocks)
         guard blockWidth > 0, y1 - y0 > 8 else { return nil }
         return (0..<strips).map { strip in
-            var out: [UInt64] = []
-            out.reserveCapacity((y1 - y0) / 2)
-            for y in stride(from: y0, to: y1, by: 2) {
+            var out: [UInt64?] = []
+            out.reserveCapacity((y1 - y0) / every)
+            for y in stride(from: y0, to: y1, by: every) {
                 var hash: UInt64 = 0xcbf29ce484222325
+                var low = Int.max, high = Int.min
                 for block in 0..<blocks {
                     let start = x0 + (strip * blocks + block) * blockWidth
                     var sum = 0
@@ -943,9 +959,11 @@ final class NEXUSUITour: XCTestCase {
                         let i = y * bytesPerRow + x * 4
                         sum += Int(pixels[i]) + Int(pixels[i + 1]) + Int(pixels[i + 2])
                     }
-                    hash = (hash ^ UInt64((sum / (blockWidth * 3)) >> 4)) &* 0x100000001b3
+                    let level = (sum / (blockWidth * 3)) >> 4
+                    low = min(low, level); high = max(high, level)
+                    hash = (hash ^ UInt64(level)) &* 0x100000001b3
                 }
-                out.append(hash)
+                out.append(low == high ? nil : hash)
             }
             return out
         }
@@ -993,7 +1011,11 @@ final class NEXUSUITour: XCTestCase {
                 // (Against the whole window: a page scroll view under the sidebar is still a viewport.)
                 let shown = element.frame.intersection(screen)
                 let isViewport = element.frame.height <= shown.height * 1.05 && element.frame.width <= shown.width * 1.05
-                let area = visible.width * visible.height * (isViewport ? 1 : 0.5)
+                // A scroll view under a sheet is not hittable: the sheet's own scroll view is the page now,
+                // even when the dimmed page behind it is larger (run 16, T-2: the iPad socmed day sheet and
+                // the Mac Legal document got one page, because the drags scrolled the page behind them).
+                let covered = !element.isHittable
+                let area = visible.width * visible.height * (isViewport ? 1 : 0.5) * (covered ? 0.2 : 1)
                 if area > bestArea { best = ScrollTarget(element: element, visible: visible); bestArea = area }
             }
         }

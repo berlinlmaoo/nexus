@@ -1321,7 +1321,7 @@ struct RequestComposerSheet: View {
             if !l.eligible { return l.reason ?? T("Annual leave needs 12 months of service.") }
             return String(format: T("Annual leave: %d of %d days left this year."), l.remaining ?? 0, l.quota ?? 12)
         case "SICK":
-            return T("One day per request, today or later, with a photo of the doctor's note. A past day is filed by a BoD.")
+            return T("One day per request, today or later, with a photo of the doctor's note. A past day is filed by a board member.")
         case "PERMIT":
             return T("One day per request, today or later, with a photo and your location.")
         case "DAY_OFF":
