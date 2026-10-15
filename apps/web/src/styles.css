@@ -512,9 +512,11 @@
  *   2. this .glass-bar layer paints the multi-inset "thick glass" edge recipe
  *      (lifted from the reference) + a faint tint for text legibility. */
 /* The tint is dense enough that text and a red button under the bar no longer show through it (UI tour run 16,
-   R16-WM-6: "QA Dev 3" and "Delete account" ghosted through the bar). */
+   R16-WM-6: "QA Dev 3" and "Delete account" ghosted through the bar). Run 17 (R17-WM-3): at 0.86 / 0.74 names,
+   "commented on:" and the red button were still legible through it, so the bar is now near-opaque; the glass
+   edge, catch-light and shadow stay. */
 .glass-bar {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(255, 255, 255, 0.74) 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97) 0%, rgba(255, 255, 255, 0.95) 100%);
   box-shadow:
     0 16px 40px -14px rgba(15, 23, 42, 0.26),
     0 2px 6px -3px rgba(15, 23, 42, 0.1),
@@ -523,7 +525,7 @@
     inset 0 0 0 1px rgba(255, 255, 255, 0.45);
 }
 .dark .glass-bar {
-  background: linear-gradient(180deg, rgba(56, 58, 68, 0.86) 0%, rgba(30, 32, 40, 0.78) 100%);
+  background: linear-gradient(180deg, rgba(56, 58, 68, 0.97) 0%, rgba(30, 32, 40, 0.95) 100%);
   box-shadow:
     0 16px 40px -14px rgba(0, 0, 0, 0.6),
     inset 0 1px 1px rgba(255, 255, 255, 0.22),
@@ -634,6 +636,12 @@ html:has([data-snap-rows]:not([role="dialog"] *), [data-snap-row]:not([role="dia
 [data-snap-row],
 [data-snap-top] {
   scroll-snap-align: start;
+}
+/* Rows inside a part marked data-snap-off are no snap points (the Overview's pinned column). An attribute, not a
+   utility class: this file's rules are unlayered and win over any Tailwind utility (UI tour run 17, R17-WB-1). */
+[data-snap-off] [data-snap-rows] > *,
+[data-snap-off] [data-snap-row] {
+  scroll-snap-align: none;
 }
 /* A scroll box of its own (a table, a side panel) snaps its rows under its own sticky head. */
 [data-snap-box] {

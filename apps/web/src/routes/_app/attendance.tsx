@@ -23,7 +23,7 @@ import { SelfieCapture, type SelfieCaptureHandle } from "@/components/attendance
 import { AttendanceButton, CoveredByRequestCard, placeLine, REFLECTION_MIN, successTitle, useAttendancePress, workedLabel, type DayState } from "@/components/attendance/AttendanceButton";
 import { MobileCheckInHero } from "@/components/attendance/MobileCheckInHero";
 import { MorphPanel, rectCenter, type MorphOrigin } from "@/components/motion/MorphPanel";
-import { cn } from "@/lib/utils";
+import { cn, glueDash } from "@/lib/utils";
 import { PERIOD_BASELINE_XP } from "@/lib/levels";
 // The board's colours and the BoD "Change status" panel live in shared files since the member record
 // page (/people/:userId) draws the same cells and offers the same panel (28 Sep 2026).
@@ -101,6 +101,9 @@ const PHOTO_EXT = /\.(jpe?g|png|gif|webp|heic|heif|avif|bmp)$/i;
 /** Width of the attendance board's right-edge fade on a phone (w-10); landing keeps today clear of it. */
 const BOARD_FADE = 40;
 /** The board's header cells follow --board-head-shift (set while the page scrolls, see pageHeaderBottom). */
+// The head cells also carry an 8px band of the card's colour upwards (a shadow): when the head is pushed under the
+// page header, a few pixels between the two showed the pill tops of the row above (UI tour run 17, R17-WB-1,
+// attendance-3). At the box's own top the band lies outside the scroll box and is clipped.
 const HEAD_SHIFT: CSSProperties = { transform: "translateY(var(--board-head-shift, 0px))" };
 /** Phone board names break between words only: a one-word name is cut with "…" on one line, not split
  *  mid-word ("Abimanyug / m", UI tour run 16, R16-WM-2); a name with spaces takes two lines. */
@@ -418,7 +421,10 @@ function Attendance() {
       const head = box.querySelector<HTMLElement>("thead");
       const headH = head?.offsetHeight ?? 0;
       const room = Math.max(0, box.clientHeight - headH - 56);
-      const shift = Math.min(room, Math.max(0, pageHeaderBottom - box.getBoundingClientRect().top));
+      // From md up the header draws a 1rem fade band under itself once the page has scrolled; the pinned head
+      // sits below that band, or the band covered the weekday letters' top half (UI tour run 17, R17-WD-2).
+      const band = window.matchMedia("(min-width: 768px)").matches ? 16 : 0;
+      const shift = Math.min(room, Math.max(0, pageHeaderBottom + band - box.getBoundingClientRect().top));
       box.style.setProperty("--board-head-shift", `${Math.round(shift)}px`);
       // Rows snap whole under the (possibly shifted) day header, not half under it (UI tour run 15, R15-WB-1).
       box.style.setProperty("--board-snap-top", `${Math.round(shift + headH)}px`);
@@ -502,13 +508,15 @@ function Attendance() {
           />
           <FunMetric
             icon={<MapPin className="h-5 w-5" />}
+            // Before check-in the helper says what the card lists, not a second state name: the state is "Ready to
+            // check in" on the status card beside it (decision 7, UI tour run 17; it read "Not checked in yet").
             // Per record (owner, 28 Sep 2026): a check-in made away from the office shows the address it
             // was made at, not the office the record is filed under; inside the radius it stays the office.
             label={todayPlace.away ? tr("Where you checked in") : today.data?.noGeofence && !today.data?.today?.checkInAt ? tr("Any location") : tr("Offices")}
             value={today.data?.today?.checkInAt
               ? (todayPlace.label || tr("{n} active offices", { n: today.data?.activeOfficeCount ?? 0 }))
               : today.data?.noGeofence ? tr("Check in from anywhere") : (today.data?.today?.officeLocation?.name || tr("{n} active offices", { n: today.data?.activeOfficeCount ?? 0 }))}
-            helper={`${todayPlace.away ? `${tr("Away from the office")} · ` : ""}${today.data?.today?.checkInAt ? `${tr("In {time}", { time: fmtTime(today.data.today.checkInAt) })} · ${tr("Out {time}", { time: fmtTime(today.data.today.checkOutAt) })}` : tr("Not checked in yet")}${today.data?.today?.id && today.data.today.checkInAt ? ` · ${tr("see your location trail")}` : ""}`}
+            helper={`${todayPlace.away ? `${tr("Away from the office")} · ` : ""}${today.data?.today?.checkInAt ? `${tr("In {time}", { time: fmtTime(today.data.today.checkInAt) })} · ${tr("Out {time}", { time: fmtTime(today.data.today.checkOutAt) })}` : tr("Where you can check in")}${today.data?.today?.id && today.data.today.checkInAt ? ` · ${tr("see your location trail")}` : ""}`}
             tone="purple"
             onClick={today.data?.today?.id && today.data.today.checkInAt ? () => setTrailFor({ id: today.data!.today!.id, title: tr("Your location trail"), subtitle: `${tr("Today")}${todayPlace.label ? ` · ${todayPlace.label}${todayPlace.away ? ` (${tr("away from the office")})` : ""}` : ""}` }) : undefined}
           />
@@ -632,7 +640,10 @@ function Attendance() {
           // Phone: a swipe sideways stops on whole columns, a day starting right at the pinned member column
           // (scroll-snap with the column's width as padding), and the right edge fades while more days lie
           // that way (UI tour run 12, WM4: "Wed 14" was cut there with nothing saying so).
-          <div className="relative">
+          // `isolate`: the board's own layers (pinned head z-30, edge fades z-30, the arrow z-40) stack inside this
+          // box only. Without it the bottom fade painted over the phone's pinned page title when a section below
+          // the board snapped right under the header (UI tour run 17, R17-WM-1).
+          <div className="relative isolate">
           <div ref={boardScrollRef} onScroll={setBoardEdge} className="isolate max-h-[calc(100dvh-11rem)] overflow-auto overscroll-contain [scroll-padding-top:var(--board-snap-top,0px)] [scroll-snap-type:y_proximity] max-sm:[scroll-padding-left:7.5rem] max-sm:[scroll-snap-type:both_proximity]">
             {/* `min-w-max`: with a plain `w-full` the 31 day columns and the member column were
                 squeezed into the phone's width, so the name, the pills and the dots all landed on
@@ -641,9 +652,9 @@ function Attendance() {
             <table className="w-full min-w-max text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr>
-                  <th data-member-col style={HEAD_SHIFT} className="sticky left-0 top-0 z-30 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] bg-muted px-2 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:max-w-[20rem] sm:px-4">{tr("Member")}</th>
+                  <th data-member-col style={HEAD_SHIFT} className="sticky left-0 top-0 z-30 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] bg-muted px-2 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_var(--border),0_-8px_0_0_var(--card)] sm:w-[20rem] sm:min-w-[20rem] sm:max-w-[20rem] sm:px-4">{tr("Member")}</th>
                   {periodDays.map((pd) => (
-                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} style={HEAD_SHIFT} className={cn("sticky top-0 z-20 snap-start bg-muted px-1 py-1.5 font-medium text-[10px] lg:px-0 lg:text-xs leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
+                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} style={HEAD_SHIFT} className={cn("sticky top-0 z-20 snap-start bg-muted px-1 py-1.5 font-medium text-[10px] shadow-[0_-8px_0_0_var(--card)] lg:px-0 lg:text-xs leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
                       {/* From lg, where the whole period fits, the weekday is one letter over the date at a readable
                           size; "MON" had to shrink to a few pixels to fit 30 columns (UI tour run 16, R16-WD-3). */}
                       <span className={cn("block text-[9px] uppercase lg:hidden", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" })}</span>
@@ -653,7 +664,7 @@ function Attendance() {
                         : pd.day}
                     </th>
                   ))}
-                  <th style={HEAD_SHIFT} className="sticky top-0 z-20 bg-muted text-right px-4 py-2 font-medium text-xs text-muted-foreground uppercase">{tr("Score")}</th>
+                  <th style={HEAD_SHIFT} className="sticky top-0 z-20 bg-muted text-right px-4 py-2 font-medium text-xs text-muted-foreground uppercase shadow-[0_-8px_0_0_var(--card)]">{tr("Score")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1904,7 +1915,8 @@ function EmploymentStartSection() {
         {shownRows.map((m) => (
           <div key={m.userId} className="flex flex-wrap items-center gap-3 px-5 py-2.5">
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold">{m.name || m.email}</div>
+              {/* Two lines, then "…" (decision 14, UI tour run 17, R17-WM-5: a long name was cut on one line). */}
+              <div className="line-clamp-2 break-words text-sm font-semibold">{glueDash(m.name || m.email || "")}</div>
               <div className="text-xs text-muted-foreground">
                 {/* Short enough for one line beside the date picker on a phone; the empty picker already says the date
                     is missing (UI tour run 14, R14-WM-19: "…can't request leave / yet" left "yet" on its own line). */}

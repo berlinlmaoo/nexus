@@ -328,7 +328,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
             {/* The health chips and the view switch stay in view under the page header while the page scrolls
                 (owner, 12 Oct 2026: the row slid half under the tab bar). Its top is the header's height where
                 that header is sticky (md+), else the top of the screen. */}
-            <div className="sticky z-30 -mx-4 -my-2.5 flex items-center gap-3 bg-card px-4 py-1.5 md:-mx-8 md:px-8" style={{ top: stickyTop }}>
+            <div className="sticky z-30 -mx-4 -my-2.5 flex items-center gap-3 bg-card px-4 py-1.5 md:z-[41] md:-mx-8 md:px-8" style={{ top: stickyTop }}>
               <div role="group" aria-label={t("Health")} className="-mx-4 flex min-w-0 flex-1 gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0 xl:flex-wrap xl:overflow-visible">
                 {(["", ...HEALTH_ORDER] as const).map((k) => {
                   const on = health === k;
