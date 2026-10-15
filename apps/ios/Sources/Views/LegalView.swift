@@ -136,7 +136,9 @@ struct LegalDocumentsPane: View {
     @State private var width: CGFloat = 0
     /// The web's table from 680 pt, so a portrait iPad gets it too, without the Counterparty column below
     /// 860 pt (UI tour run 16, R16-I-27 iPad: a card list where the web has a table).
-    private static let tableWidth: CGFloat = 680
+    /// 620 since run 17: beside the open sidebar a portrait 13" iPad has ~665 pt, so 680 was never reached and
+    /// the iPad kept the cards (UI tour run 17, iPad R17-I-09).
+    private static let tableWidth: CGFloat = 620
     private var table: Bool { wide && width - 2 * gutter >= Self.tableWidth }
     private var showCounterparty: Bool { width - 2 * gutter >= 860 }
 
@@ -357,7 +359,9 @@ struct LegalDocumentsPane: View {
 
     /// The archive table's columns (UI tour run 16, R16-M-01 / R16-M-13): a folded number, a narrower
     /// Counterparty (mostly "—"), a Company wide enough for "The Z Networks" on one line; Title takes the rest.
-    private static let numberW: CGFloat = 210
+    /// 170 since run 17: the folded number needs at most ~170 pt ("PATS/PKS-UNIV/…/2026/005"), and the 40 pt
+    /// spare went to Title, which still stopped at "…University" after two lines (UI tour run 17, R17-M-09).
+    private static let numberW: CGFloat = 170
     private static let counterpartyW: CGFloat = 130
     private static let companyW: CGFloat = 120
 

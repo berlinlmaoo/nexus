@@ -64,9 +64,12 @@ struct LegalSettingsPane: View {
                             .accessibilityAddTraits(on ? .isSelected : [])
                         }
                     }
-                    .padding(.horizontal, gutter)
                 }
-                .nxEdgeFade()
+                // The inset as the scroll's margin and a wider fade: 24 pt over a chip padded inside the content
+                // did not read as a fade, so "The Z Networks TZN" looked cut at the screen edge (UI tour run 17,
+                // iPhone R17-I-15).
+                .contentMargins(.horizontal, gutter, for: .scrollContent)
+                .nxEdgeFade(44)
                 .background(NX.background)
             }
         }
@@ -296,8 +299,7 @@ private struct LegalSeriesRow: View {
     /// Web-mobile's compact row (UI tour run 10, IP-5), one line each (UI tour run 12, IP10: the meta wrapped
     /// an orphan "· Yearly" line and the pattern broke mid-token): the name; the type · period, where the
     /// type gives way and the period is never cut (run 11, PD-10); the pattern, ellipsized, whole in its
-    /// VoiceOver label and pointer tooltip and in the editor. On a phone the switch has no "In use" words
-    /// (still its VoiceOver label).
+    /// VoiceOver label and pointer tooltip and in the editor. The switch says "In use" beside it.
     private var summary: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
@@ -343,13 +345,12 @@ private struct LegalSeriesRow: View {
         .labelsHidden()
         .tint(NX.onyx)
         .accessibilityLabel(T("In use"))
-        if hSize == .regular {
-            HStack(spacing: 6) {
-                toggle.fixedSize()
-                Text(T("In use")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).accessibilityHidden(true)
-            }
-        } else {
+        // Its words beside it on every width, as the web's (UI tour run 17, iPhone R17-I-15), with the standard
+        // 8 pt of air: at 6 the label read as part of the switch (R17-B-07).
+        HStack(spacing: 8) {
             toggle.fixedSize()
+            Text(T("In use")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1).fixedSize()
+                .accessibilityHidden(true)
         }
     }
 

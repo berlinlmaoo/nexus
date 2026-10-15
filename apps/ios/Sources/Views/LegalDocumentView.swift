@@ -89,6 +89,7 @@ struct LegalDocumentView: View {
         // The document's title once it is in (I-25 / M-22: a generic "Document"); the number stays in the header.
         .navigationTitle(model.doc.map { $0.title.isEmpty ? T("Document") : $0.title } ?? T("Document"))
         .navigationBarTitleDisplayMode(.inline)
+        .modifier(MacPlainBackButton())
         .task { await model.load() }
         // PDFs are made in the background after generate / save / upload / approve: while a recent Word
         // version has none yet, ask again every 4 s, for at most 3 minutes after it was made.
@@ -631,7 +632,13 @@ private struct LegalPreviewHeight: ViewModifier {
     let wide: Bool
     func body(content: Content) -> some View {
         if wide {
+            #if targetEnvironment(macCatalyst)
+            // A Mac window is short: at 86% the preview ran past the window's bottom, so its page counter and
+            // "Open full screen" were never on screen beside it as on the iPad (UI tour run 17, R17-M-12).
+            content.containerRelativeFrame(.vertical) { h, _ in max(360, h * 0.62) }
+            #else
             content.containerRelativeFrame(.vertical) { h, _ in max(480, h * 0.86) }
+            #endif
         } else {
             content.frame(height: 460)
         }

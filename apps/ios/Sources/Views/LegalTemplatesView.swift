@@ -79,7 +79,8 @@ struct LegalTemplatesPane: View {
             Image(systemName: "doc.text").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(tpl.name).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(2)
+                    // The dash sticks to the word after it, as the web's (run 17): two lines never end on "–".
+                    Text(UntitledText.wrapped(tpl.name)).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(2)
                         .multilineTextAlignment(.leading)
                     if tpl.archived { NexusChip(text: T("Archived")) }
                 }

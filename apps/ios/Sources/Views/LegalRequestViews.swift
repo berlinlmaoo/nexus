@@ -427,8 +427,7 @@ struct MyLegalRequestsStrip: View {
                 Spacer(minLength: 4)
                 LegalChip(text: LegalRequestLabels.stage(r.stage), tone: LegalRequestLabels.stageTone(r.stage))
             }
-            Text([r.company?.name, r.isAddendum && !r.parentNumberText.isEmpty ? String(format: T("Amends %@"), LegalLabels.unbroken(r.parentNumberText)) : nil]
-                    .compactMap { $0 }.joined(separator: " · "))
+            LegalAmendsLine(company: r.company?.name, amends: r.isAddendum && !r.parentNumberText.isEmpty ? r.parentNumberText : nil)
                 // Wrapped, not cut: "PATS · Amends PATS/PKS-…" hid the number (UI tour run 15, Q-IB23); the number
                 // itself never breaks at its "/" or "-" (UI tour run 16, R16-I-19), and shrinks a little if alone
                 // on a line it cannot fill.
@@ -864,8 +863,7 @@ struct LegalRequestCard: View {
                 Spacer(minLength: 4)
                 if r.rejected { LegalChip(text: T("Rejected"), tone: .danger, icon: "nosign") }
             }
-            Text([r.company?.name, r.isAddendum && !r.parentNumberText.isEmpty ? String(format: T("Amends %@"), LegalLabels.unbroken(r.parentNumberText)) : nil]
-                    .compactMap { $0 }.joined(separator: " · "))
+            LegalAmendsLine(company: r.company?.name, amends: r.isAddendum && !r.parentNumberText.isEmpty ? r.parentNumberText : nil)
                 // Wrapped, not cut: "PATS · Amends PATS/PKS-…" hid the number (UI tour run 15, Q-IB23); the number
                 // itself never breaks at its "/" or "-" (UI tour run 16, R16-I-19), and shrinks a little if alone
                 // on a line it cannot fill.
