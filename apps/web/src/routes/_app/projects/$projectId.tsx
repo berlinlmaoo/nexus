@@ -1321,8 +1321,10 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
           setDragLaneId(null);
         }}
       >
+        {/* shrink-0: in a column taller than the screen the flex column squeezed this header to its pill's height,
+            so that column's "New task" sat ~6px above the others' (QA 16 Oct 2026). */}
         {showHeader && (
-          <div className="mb-1 flex h-7 items-center gap-1 px-0.5" style={{ color: tone.text }}>
+          <div className="mb-1 flex h-7 shrink-0 items-center gap-1 px-0.5" style={{ color: tone.text }}>
             <span
               draggable={!!section}
               onDragStart={(e) => { if (!section) return; setDragLaneId(g.key); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", g.key); }}
@@ -1351,7 +1353,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
             padding included), so the page has nothing left to scroll and the lane header is never cut under the
             chips (UI tour run 18, R18-WB-1, project-board-2: at 100dvh - 16rem the page scrolled ~30px). Its cards
             snap whole at the top of the list, and the list's end is a snap point too (SnapTail). */}
-        <div data-lane-cards data-snap-rows={phoneBoard && showHeader ? "" : undefined} className={cn("relative flex min-h-16 flex-col gap-1.5", showHeader && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain", phoneBoard && showHeader && "[scroll-snap-type:y_proximity]")}>
+        <div data-lane-cards data-snap-rows={phoneBoard && showHeader ? "" : undefined} className={cn("relative flex min-h-16 flex-col gap-1.5 [&>*]:shrink-0", showHeader && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain", phoneBoard && showHeader && "[scroll-snap-type:y_proximity]")}>
           {slot?.lane === id && <div aria-hidden className="pointer-events-none absolute inset-x-1 z-10 h-0.5 rounded-full" style={{ top: slot.y, backgroundColor: tone.dot }} />}
           {/* "+ New task" sits at the TOP of the column (owner, 10 Oct 2026: "Add task di atas lane"). */}
           {!canEditHere ? null : draft === id ? (
