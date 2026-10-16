@@ -1282,7 +1282,7 @@ struct CreateProjectSheet: View {
                 onOpenProject(made)
                 return
             } else if kind == .outlet {
-                // Any number of outlets, one project each (owner, 10 Oct 2026, for Ryan); it opens on its
+                // Any number of outlets, one project each (owner, 10 Oct 2026, for the outlet team); it opens on its
                 // Overview once the list knows it.
                 let made = try await APIClient.shared.outletProjectCreate(workspaceId: workspaceId, name: trimmed,
                                                                           folderId: folder?.id, memberIds: Array(memberIds),

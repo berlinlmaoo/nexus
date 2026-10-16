@@ -246,7 +246,7 @@ struct ListPropLine: View {
             }
             if !hidePriority, let p = task.priority, p.uppercased() != "NONE" { PriorityPill(priority: p) }
             if let status { StatusPill(name: status.name, colorKey: status.colorKey, size: 11).fixedSize() }
-            // People last, always: a person field ("ryan ceo pats") sat after the amount on some rows while
+            // People last, always: a person field (a staff member's name) sat after the amount on some rows while
             // the assignees' avatars ended others, so "who" jumped between the start and the end of the
             // line (UI tour run 11, PD-6).
             ForEach(chips.filter(\.isPerson)) { chip in customValue(chip) }

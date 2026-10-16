@@ -1,11 +1,11 @@
 import SwiftUI
 
-// MARK: - Outlet Sales Dashboard: Calendar and Report form (owner, 10 Oct 2026, for Ryan)
+// MARK: - Outlet Sales Dashboard: Calendar and Report form (owner, 10 Oct 2026, for the outlet team)
 //
 // Calendar: "Ketika pencet sebuah tanggal, di bawah muncul details" — a month grid (Monday first, six
-// weeks), and under it the picked day with every event of that day as Ryan listed it.
+// weeks), and under it the picked day with every event of that day as the outlet team listed it.
 // Report form: "form dengan pertanyaan yang diatas, supaya team nya tinggal isi form nya" — drawn from
-// the server's form (`form` in every answer), one card per section in Ryan's order and words.
+// the server's form (`form` in every answer), one card per section in the outlet team's order and words.
 
 struct OutletCalendarView: View {
     @Bindable var store: OutletSalesStore

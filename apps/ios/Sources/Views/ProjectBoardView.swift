@@ -382,7 +382,7 @@ struct ProjectDetailView: View {
     /// type still opens it as an empty task project.
     private var isPipeline: Bool { detail?.type == "PIPELINE" }
 
-    /// An Outlet Sales Dashboard (owner, 10 Oct 2026, for Ryan): Overview · Calendar · Board · Report form
+    /// An Outlet Sales Dashboard (owner, 10 Oct 2026, for the outlet team): Overview · Calendar · Board · Report form
     /// · Chat — the web's order, none of the task tabs. Its Overview,
     /// Calendar and Board are the outlet's own (OutletSalesView.swift), not the task ones of the same name.
     private var isOutlet: Bool { detail?.type == "OUTLET_SALES" }

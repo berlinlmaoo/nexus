@@ -1756,7 +1756,7 @@ struct StreakBoardCard: View {
     @Environment(\.horizontalSizeClass) private var hSize
     /// Wide enough that "Muhammad …" rows can be told apart (UI tour run 13, F-16 / I-24: 76 pt cut every
     /// name to about ten characters); more on an iPad or Mac, where the board has room.
-    /// 190 on iPad / Mac: full names, as the web's board, where 150 turned them into "Irvandes Hasri Ilham M."
+    /// 190 on iPad / Mac: full names, as the web's board, where 150 turned them into "Irfan Hadi Ismail M."
     /// (UI tour run 16, R16-B-24).
     /// Since run 17 (R17-M-05): narrower, 150 pt (names shorten to initials, `nameVariants`), only when the full
     /// 190 pt would keep the whole period from fitting at the 14 pt day minimum; the period first, as on the web.
@@ -2438,7 +2438,7 @@ struct StreakBoardCard: View {
     /// The name, and under it, for someone who left the company, a muted "Left · 10 Oct" (offboarding,
     /// 8 Oct 2026). Two short lines fit a row; the name keeps its size so the column stays even.
     /// The full name, then shorter forms of it: the words after the first become initials one by
-    /// one from the end ("Muhammad Alvar Pratama" → "Muhammad Alvar P." → "Muhammad A. P.").
+    /// one from the end ("Muhammad Arif Pratama" → "Muhammad Arif P." → "Muhammad A. P.").
     static func nameVariants(_ name: String) -> [String] {
         let words = name.split(separator: " ").map(String.init)
         guard words.count > 1 else { return [name] }
@@ -2454,7 +2454,7 @@ struct StreakBoardCard: View {
     static func nameLabel(_ m: Member) -> some View {
         // One size for every row (run 14, N-05 / P-I23: a shrink-to-fit name came out in three sizes
         // and was still cut). A name too long for the column keeps its first word and turns the
-        // rest into initials ("Ashley K. A."); only a name that still does not fit is cut.
+        // rest into initials ("Anisa K. A."); only a name that still does not fit is cut.
         // Someone who left carries a muted "Left · 10 Oct" after the name on the same line, at the same 11 pt
         // (it was a 7 pt second line; UI tour run 20, R20-B-08), shortened to "Left" where the date does not fit.
         let variants = nameVariants(m.name)

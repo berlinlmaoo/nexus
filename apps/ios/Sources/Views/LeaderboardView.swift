@@ -289,7 +289,7 @@ struct TieRibbon: View {
             .font(NXFont.text(14, .semibold)).foregroundStyle(ink)
             .multilineTextAlignment(.center)
             // Down to 70 pt a person, so seven tied fit one row on an iPad as on the web (UI tour run 16, R16-I-25:
-            // "Zaki Mahmuda" alone on a second row).
+            // "Zainal Mahdi" alone on a second row).
             // One line per name, as the web's band (UI tour run 20, R20-B-24: "Zainal / Mahdi" took two lines while
             // the other names took one): up to 120 pt a person, a long name steps down a little before it is cut.
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 70, maximum: 120), spacing: 10, alignment: .top)], alignment: .center, spacing: 12) {

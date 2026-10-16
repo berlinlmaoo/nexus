@@ -15,7 +15,7 @@ import Foundation
 // only hides: nothing in the tab is deleted. The Finance and P&L tabs were removed (owner, 11 Oct 2026).
 
 enum ProjectKind: String, CaseIterable, Identifiable {
-    // Outlet Sales Dashboard took Finance Dashboard's card (owner, 10 Oct 2026, for Ryan), in the web's
+    // Outlet Sales Dashboard took Finance Dashboard's card (owner, 10 Oct 2026, for the outlet team), in the web's
     // order: Task Project · Outlet Sales Dashboard · Content Planner · Pipeline Dashboard. FINANCE stays a
     // type the server knows (and refuses to create, 400 TYPE_COMING_SOON); it is just no longer offered.
     case task = "TASK", outlet = "OUTLET_SALES", content = "CONTENT", pipeline = "PIPELINE"

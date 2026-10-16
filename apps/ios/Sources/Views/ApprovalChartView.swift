@@ -5,7 +5,7 @@ import UIKit
 /// ApprovalChart.tsx`), bukan daftar bertingkat.
 ///
 /// Daftar bertingkat yang dulu dipakai di sini menjawab "siapa di bawah siapa" satu bagian per
-/// atasan, tapi tidak pernah memperlihatkan RANTAINYA: willy → gerro → riri terbaca sebagai tiga
+/// atasan, tapi tidak pernah memperlihatkan RANTAINYA: seorang staf → atasannya → BoD terbaca sebagai tiga
 /// bagian yang tidak berhubungan. BoD menggambar bagan itu di web supaya rantainya terlihat, lalu
 /// membuka HP dan mendapat bentuk lain. Sekarang bentuknya satu.
 ///

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Outlet Sales Dashboard: the owner's revisions after the meeting with Ryan (14 Oct 2026)
+// MARK: - Outlet Sales Dashboard: the owner's revisions after the meeting with the outlet team (14 Oct 2026)
 //
 // Guest overview (Overview tab): RSVP total with its items, Hosting total with its items, Communities with
 // each community's total (a Breakdown community opens onto its own items). Day target (Calendar tab): the

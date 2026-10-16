@@ -129,7 +129,7 @@ struct CFChipView: View {
             // Show as Bar / Ring: the number (unless hidden) and a short bar or a ring, no pill.
             CFNumberValue(text: chip.label, style: n.style, fill: n.fill, font: NXFont.text(10, .semibold), color: NX.mutedFg, barWidth: 40)
         } else if chip.isPerson {
-            // A text value that names someone ("Request by" holding "Sifal") is text, not a person: the text
+            // A text value that names someone ("Request by" holding "Sari") is text, not a person: the text
             // glyph and the field's name, never an assignee-looking chip (decision 5 of run 19, R19-M-05).
             // The web's "T" text glyph, as every text property (decision 2 of run 20, R20-B-11; it was "≡").
             Label { Text(chip.fieldName.map { "\($0): \(chip.label)" } ?? chip.label) } icon: { TextPropertyGlyph(size: 10) }

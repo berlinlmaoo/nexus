@@ -424,7 +424,7 @@ struct TicketsView: View {
     /// Fixed columns; Subject takes the rest. Narrower than they were: on the Mac the subject column was
     /// left ~130 pt and every subject read "Day Off terpot…" (UI tour run 5).
     private enum Col {
-        // From wide enough for "Mohamad Okta Firdaus" on one line; Status hugs its chip, so no band of
+        // From wide enough for "Mohamad Oki Fauzan" on one line; Status hugs its chip, so no band of
         // empty width sits between Status and Replies (UI tour run 16, R16-M-11).
         static let from: CGFloat = 200
         static let category: CGFloat = 112

@@ -4,7 +4,7 @@ import Foundation
 // Indonesian for the Outlet Sales Dashboard revisions of 14 Oct 2026 (report settings, guest overview,
 // daily targets; Views/OutletSalesCustom.swift and the outlet views). Wording follows the web's
 // apps/web/src/lib/i18n/id-outlet.ts; the iOS keys use %@ / %d where the web writes {month} / {n}.
-// Sales, Pax, RSVP and Hosting stay as Ryan wrote them. Keys must not appear in any other
+// Sales, Pax, RSVP and Hosting stay as the outlet team wrote them. Keys must not appear in any other
 // Localization*.swift (scripts/check-localization.sh).
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -22,5 +22,5 @@ Also:
 – Search inside a project.
 – The XP rules card opens. It was decorative before.
 
-Bagas checked every button this time.
+The team checked every button this time.
 Except the ones he didn't.

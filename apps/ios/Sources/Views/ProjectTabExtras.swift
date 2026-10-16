@@ -542,7 +542,7 @@ struct ProjectTableRow: View {
                 if task.isSubtask {
                     Image(systemName: "arrow.turn.down.right").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
                 }
-                // The whole name, wrapped, as the web's Table: two lines and "…" cut "FEE HOSTING PR NAZHWA ROSI
+                // The whole name, wrapped, as the web's Table: two lines and "…" cut "FEE HOSTING PR NADIA RAHMA
                 // - 22…" (UI tour run 19, R19-I-18). The row grows with it.
                 Text(UntitledText.wrapped(task.title))
                     .font(NXFont.text(15, .medium))

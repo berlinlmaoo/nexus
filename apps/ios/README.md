@@ -33,6 +33,21 @@ curl -o /dev/null -w '%{http_code} %{redirect_url}\n' \
 # 401 (tanpa redirect) = sehat. 3xx = domainnya redirect, jangan dipakai di Config.
 ```
 
+### Dev server
+
+Branch `dev` builds (the `NEXUS_DEV_SERVER` flag) can switch to the DEV server (Tuning Room → Server). Its
+address is not in this repo: `project.yml` commits the placeholder `https://nexus-dev.invalid`
+(`NEXUS_DEV_SERVER_URL`, Info.plist key `NEXUSDevServerURL`), and the build phase "Dev server address" writes
+the real one into the built Info.plist from a file outside every checkout:
+
+```sh
+mkdir -p ~/.config/nexus
+echo 'https://<dev-host>:<port>' > ~/.config/nexus/ios-dev-server-url   # once per Mac
+```
+
+Every checkout and worktree on that Mac then builds with it, with no per-checkout step. Without the file the
+build still succeeds (it prints a note) and the Dev server is simply unreachable from that build.
+
 ## Sekali setup di Mac ini
 
 1. **Install platform iOS** (Xcode 26 pisahin SDK dari platform runtime):

@@ -11,7 +11,7 @@ enum ProjectTab: String, CaseIterable, Identifiable {
     // Sprints was removed (owner, 11 Oct 2026); an old "sprints" key in hiddenTabs is just ignored.
     case timeline = "Timeline", automations = "Automations"
     case pages = "Pages", forms = "Forms", chat = "Chat"
-    // Only an Outlet Sales Dashboard shows it (owner, 10 Oct 2026, for Ryan): the night's report form.
+    // Only an Outlet Sales Dashboard shows it (owner, 10 Oct 2026, for the outlet team): the night's report form.
     case reportForm = "Report form"
     var id: String { rawValue }
     var icon: String {

@@ -1109,7 +1109,7 @@ struct CalItemRow: View {
                         }
                     }
                     .accessibilityHidden(true)
-                    // Every name, wrapped, as the web: one line cut "WILLIAM ERSAN, Daniel Afrizal, Mohamad Okta Fi…"
+                    // Every name, wrapped, as the web: one line cut "WAHYU EKA, Dani Arif, Mohamad Oki Fa…"
                     // (UI tour run 19, R19-I-09).
                     Text(here.map { who($0) }.joined(separator: ", "))
                         .font(NXFont.text(CalType.size(11.5), .semibold)).foregroundStyle(NX.foreground.opacity(0.9))
@@ -1117,7 +1117,7 @@ struct CalItemRow: View {
                 }
             }
             if !others.isEmpty {
-                // Every name in full: cut at two lines the overdue card read "…WILLIAM ERSAN (Multimedia),
+                // Every name in full: cut at two lines the overdue card read "…WAHYU EKA (Multimedia),
                 // Moha…" (UI tour run 14, P-M8).
                 Text(here.isEmpty ? othersText : "\(T("with")) \(othersText)")
                     .font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg)
