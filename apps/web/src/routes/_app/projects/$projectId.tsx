@@ -1238,8 +1238,12 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
     }
   };
 
+  // A New from before this view mounted (clicked on another layout) is not replayed here (QA 16 Oct 2026: switching
+  // Board → List opened an empty inline row).
+  const seenNew = useRef(newSignal?.n);
   useEffect(() => {
-    if (!newSignal || !canEditHere) return;
+    if (!newSignal || !canEditHere || newSignal.n === seenNew.current) return;
+    seenNew.current = newSignal.n;
     const lane = (newSignal.key && isSection ? lanes.find((g) => g.key === newSignal.key) : undefined) ?? lanes.find((g) => !collapsed.has(g.key)) ?? lanes[0];
     if (!lane) return;
     if (collapsed.has(lane.key)) onToggleGroup(lane.key);
@@ -1814,7 +1818,9 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
       >
         {toggleDone.isPending || draft ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : done ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : <Circle className="h-4 w-4 text-muted-foreground/60" />}
       </span>
-      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+      {/* The name keeps at least ~a third of the row: with many properties shown they used to take all of it and
+          the name shrank to nothing (QA 16 Oct 2026); the properties are cut at the row's end instead. */}
+      <span className="flex min-w-0 flex-1 items-center gap-1.5 sm:min-w-[min(35%,16rem)]">
         {task.parentId && <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label={t("Subtask")} />}
         {/* Two lines before "…", on a phone and on a desktop (UI tour run 16, R16-WD-7, R16-WM-11). */}
         <span className={cn("line-clamp-2 text-sm", done && "text-muted-foreground line-through")}>{glueDash(task.title ?? "")}</span>
@@ -1825,7 +1831,7 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
       {/* Phone: the properties wrap onto a second line under the title instead of disappearing (UI tour
           13 Oct 2026: at 440 px the list showed titles only; the desktop row shows amount, person, dates,
           priority and status). From sm up they sit right-aligned on the same line, as before. */}
-      <PropLine slots task={task} keys={keys} defs={defs} ctx={ctx} className="basis-full pl-[26px] sm:basis-auto sm:shrink-0 sm:flex-nowrap sm:justify-end sm:pl-0 sm:[&>*]:shrink-0" />
+      <PropLine slots task={task} keys={keys} defs={defs} ctx={ctx} className="basis-full pl-[26px] sm:min-w-0 sm:basis-auto sm:shrink sm:flex-nowrap sm:justify-start sm:overflow-hidden sm:pl-0 sm:[&>*]:shrink-0" />
       <ChevronRight className="hidden h-4 w-4 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground sm:block" />
     </button>
   );
@@ -1841,8 +1847,10 @@ function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs
   const { t } = useLang();
   const qc = useQueryClient();
   const [draft, setDraft] = useState<string | null>(null);
+  const seenNew = useRef(newSignal?.n);
   useEffect(() => {
-    if (!newSignal) return;
+    if (!newSignal || newSignal.n === seenNew.current) return;
+    seenNew.current = newSignal.n;
     if (!groupBy) { setDraft("all"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
     const g = (newSignal.key && groupBy === "section" ? groups.find((x) => x.key === newSignal.key) : undefined) ?? groups[0];
     if (!g) return;

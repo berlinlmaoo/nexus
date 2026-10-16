@@ -51,7 +51,7 @@ export function TaskBodyEditor({ taskId, projectId, onOpenTask }: { taskId: stri
     setPeers(info.peers);
   }, []);
 
-  if (body.isLoading) return <div className="flex h-24 items-center justify-center text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /></div>;
+  if (body.isLoading) return <div className="flex h-7 items-center px-1 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /></div>;
   if (body.isError || !body.data) return <p className="text-sm text-muted-foreground">{t("Couldn't load the description.")}</p>;
 
   return (
@@ -62,11 +62,13 @@ export function TaskBodyEditor({ taskId, projectId, onOpenTask }: { taskId: stri
         canEdit={body.data.canEdit}
         ctx={ctx}
         variant="embedded"
+        className="is-compact"
         placeholder={t("Add a description… type '/' for blocks, '@' to mention")}
         onRestSave={onRestSave}
         onStatus={onStatus}
       />
-      <div className="mt-1.5 flex min-h-5 items-center justify-end gap-2 text-[11px] text-muted-foreground" aria-live="polite">
+      {/* The save line takes no room until it has something to say, so an empty body stays one line. */}
+      <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-muted-foreground empty:mt-0" aria-live="polite">
         {peers.length > 0 && (
           <span className="flex items-center gap-1.5">
             <span className="flex -space-x-1">

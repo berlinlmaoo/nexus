@@ -144,7 +144,7 @@ export function NumberFieldInput({ raw, fieldOptions, onSet, ariaLabel, inline, 
     );
   }
   const start = () => { setDraft(wholeRupiah ? normalizeNumberFieldValue(raw, fieldOptions) : editText(raw, o)); setEditing(true); };
-  const shown = raw.trim() ? <NumberFieldValue raw={raw} fieldOptions={fieldOptions} align={align} /> : <span className="text-muted-foreground">{placeholder ?? ""}</span>;
+  const shown = raw.trim() ? <NumberFieldValue raw={raw} fieldOptions={fieldOptions} align={align} /> : <span className="text-muted-foreground/70">{placeholder ?? ""}</span>;
   return (
     <button type="button" onClick={start} onFocus={start} aria-label={ariaLabel}
       className={cn("block w-full min-w-0 text-left text-sm", inline ? "min-h-7 rounded-md px-1.5 py-1 hover:bg-muted" : "min-h-[34px] rounded-lg border border-border bg-background px-2.5 py-1.5 hover:border-primary/40")}>

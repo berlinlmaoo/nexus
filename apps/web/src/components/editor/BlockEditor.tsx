@@ -98,12 +98,20 @@ function BlockEditorSession(props: BlockEditorProps & { onReset: () => void }) {
 
   useEffect(() => () => ydoc.destroy(), [ydoc]);
 
-  if (phase === "joining") return <StaticPreview doc={props.initialDoc} variant={props.variant} className={props.className} />;
+  if (phase === "joining") return <StaticPreview doc={props.initialDoc} variant={props.variant} className={props.className} placeholder={props.canEdit ? props.placeholder ?? t("Write something, or type '/' for commands…") : undefined} />;
   return <LiveEditor {...props} ydoc={ydoc} provider={phase === "live" ? provider : null} me={me} />;
 }
 
 /** What the page looks like while the live room is being joined (same CSS, no editor yet). */
-function StaticPreview({ doc, variant, className }: { doc: JSONContent | null; variant?: "page" | "embedded"; className?: string }) {
+/** An empty document: no content, or paragraphs with nothing in them. */
+function isBlankDoc(doc: JSONContent | null): boolean {
+  const nodes = doc?.content ?? [];
+  return nodes.every((n) => n.type === "paragraph" && !(n.content ?? []).length);
+}
+
+function StaticPreview({ doc, variant, className, placeholder }: { doc: JSONContent | null; variant?: "page" | "embedded"; className?: string;
+  /** Shown while joining when the page is empty, as the live editor shows it (else a blank band read as broken). */
+  placeholder?: string }) {
   const html = useMemo(() => {
     try {
       return generateHTML(doc ?? EMPTY, buildExtensions({
@@ -117,7 +125,9 @@ function StaticPreview({ doc, variant, className }: { doc: JSONContent | null; v
   }, [doc]);
   return (
     <div className={cn("nx-editor", variant === "embedded" && "is-embedded", className)} aria-busy="true">
-      <div className="tiptap ProseMirror nx-static" dangerouslySetInnerHTML={{ __html: html }} />
+      {placeholder && isBlankDoc(doc)
+        ? <div className="tiptap ProseMirror nx-static"><p className="is-empty is-editor-empty" data-placeholder={placeholder} /></div>
+        : <div className="tiptap ProseMirror nx-static" dangerouslySetInnerHTML={{ __html: html }} />}
     </div>
   );
 }
