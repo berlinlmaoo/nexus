@@ -66,9 +66,10 @@ const LeaderboardPodium = React.forwardRef<HTMLDivElement, LeaderboardPodiumProp
                   )}
                 </div>
               )}
-              <span className="absolute -bottom-1 -right-1 grid place-items-center rounded-full bg-card p-1 shadow-sm ring-1 ring-border">
+              {/* A shared step goes without the crown badge: on the stack it covered the "+4". */}
+              {group.length === 1 && <span className="absolute -bottom-1 -right-1 grid place-items-center rounded-full bg-card p-1 shadow-sm ring-1 ring-border">
                 <Crown className={cn("h-3.5 w-3.5", s.crown)} />
-              </span>
+              </span>}
             </div>
             {group.length === 1 ? (
               <div className="line-clamp-2 max-w-full text-balance text-center text-sm font-semibold leading-tight [overflow-wrap:anywhere]">{group[0].userName}</div>
