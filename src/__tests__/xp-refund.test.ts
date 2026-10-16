@@ -25,6 +25,10 @@ vi.mock("@/lib/prisma", () => {
         db.txns.push(t)
         return t
       }),
+      // applyXpDelta: the period's ledger sum, for the period level it caches in UserXp.currentLevel.
+      aggregate: vi.fn(async ({ where }: { where: { userId: string; createdAt: { gte: Date } } }) => ({
+        _sum: { amount: db.txns.filter((t) => t.userId === where.userId && t.createdAt >= where.createdAt.gte).reduce((s, t) => s + t.amount, 0) },
+      })),
     },
     xpRefund: {
       findUnique: vi.fn(async ({ where }: { where: { transactionId: string } }) => db.refunds.find((r) => r.transactionId === where.transactionId) ?? null),

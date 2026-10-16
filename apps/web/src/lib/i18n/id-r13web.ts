@@ -25,5 +25,5 @@ export const ID_R13WEB: Record<string, string> = {
 
   // Leaderboard (W-B4, W-D9)
   "You're not on this ranking: the board is left out, so management doesn't compete with staff.": "Kamu tidak masuk peringkat ini: direksi tidak diikutkan, supaya manajemen tidak bersaing dengan staf.",
-  "Everyone's XP for {range}. It resets on the 1st.": "XP semua orang untuk {range}. Direset setiap tanggal 1.",
+  "Everyone's XP for {range}. It resets on the 28th.": "XP semua orang untuk {range}. Direset setiap tanggal 28.",
 };

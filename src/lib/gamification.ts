@@ -4,8 +4,9 @@ import type { Prisma } from "@/generated/prisma/client"
 
 // ===== Levels (mirror apps/web/src/lib/levels.ts) =====
 // Period-based scoring: every user starts each period at PERIOD_BASELINE_XP (1000 =
-// Diamond) and quests move them up (toward Anak Kesayangan AA = 1500) or down
-// (penalty quests → Gold/Silver/Iron, can go negative). Tiers rescaled to top out at 1500.
+// Diamond); quests and BoD adjustments move them up (toward Anak Kesayangan AA = 1500), attendance
+// penalties and BoD adjustments move them down (Gold/Silver/Iron, can go negative). The level is
+// ALWAYS this period's level (owner, 16 Oct 2026): there is no all-time level.
 export const PERIOD_BASELINE_XP = 1000
 export const LEVELS: { level: number; name: string; floor: number }[] = [
   { level: 1, name: "Iron", floor: 0 },
@@ -33,11 +34,12 @@ export function levelForXp(totalXp: number) {
 
 /**
  * Monthly leaderboard period boundary. The leaderboard "resets" on the 28th at
- * 00:00 Asia/Jakarta — i.e. it only counts XP earned since the most recent 28th.
- * Non-destructive: cumulative UserXp.totalXp (which drives levels) is untouched.
+ * 00:00 Asia/Jakarta — i.e. it only counts XP earned since the most recent 28th, the same
+ * 28th→27th period as attendance and Reports (owner, 16 Oct 2026; it was the 1st since 21 Jun 2026).
+ * Non-destructive: the ledger and the all-time UserXp.totalXp are untouched.
  * Asia/Jakarta is a fixed +07:00 offset (no DST), so the boundary is exact.
  */
-const LEADERBOARD_RESET_DAY = 1 // XP period = kalender bulan, reset tiap tanggal 1
+export const LEADERBOARD_RESET_DAY = 28
 const JAKARTA_OFFSET = "+07:00"
 
 export function getLeaderboardPeriodStart(now: Date = new Date()): Date {
@@ -82,30 +84,37 @@ export function priorityBonus(priority?: string | null): number {
 }
 
 /**
- * Award XP to a user and log a transaction. `amount` may be NEGATIVE (penalty quests).
- * UserXp.totalXp keeps an all-time running tally (can go negative); the displayed
- * score & level are computed per-period as PERIOD_BASELINE_XP + this-period's deltas.
+ * Atomically apply a totalXp delta (DB-side increment, so concurrent awards for the SAME user can't
+ * lost-update each other) and set the cached currentLevel to this PERIOD's level: PERIOD_BASELINE_XP +
+ * the ledger since the period start, the same number the leaderboard and GET /api/gamification/me show
+ * (owner, 16 Oct 2026: level = period XP only). UserXp.totalXp stays an all-time tally.
+ * Call it AFTER the ledger row is written (created, updated or deleted) in the same transaction.
+ * Exported for lib/xp-refund (a removed deduction hands its XP back through the same path).
  */
-/** Atomically apply a totalXp delta (DB-side increment, so concurrent awards for the SAME user can't
- *  lost-update each other) and reconcile the cached currentLevel from the authoritative new total. */
-/** Exported for lib/xp-refund (a removed deduction hands its XP back through the same path). */
 export async function applyXpDelta(tx: Prisma.TransactionClient, userId: string, delta: number) {
+  const agg = await tx.xpTransaction.aggregate({ _sum: { amount: true }, where: { userId, createdAt: { gte: getLeaderboardPeriodStart() } } })
+  const level = levelForXp(PERIOD_BASELINE_XP + (agg._sum.amount ?? 0)).level
   const ux = await tx.userXp.upsert({
     where: { userId },
-    create: { userId, totalXp: delta, currentLevel: levelForXp(delta).level },
+    create: { userId, totalXp: delta, currentLevel: level },
     update: { totalXp: { increment: delta } },
   })
-  const level = levelForXp(ux.totalXp).level
   if (level !== ux.currentLevel) {
     await tx.userXp.update({ where: { userId }, data: { currentLevel: level } })
   }
 }
 
+/** The period level of a user right now (what UserXp.currentLevel holds, recomputed: a new period resets it). */
+export async function periodLevelOf(userId: string): Promise<number> {
+  return levelForXp(await getPeriodScore(userId)).level
+}
+
+/** Award XP to a user and log a transaction. `amount` may be NEGATIVE (a BoD adjustment). */
 export async function awardXp(userId: string, amount: number, reason: string, taskId?: string) {
   if (!userId || amount === 0) return
   await prisma.$transaction(async (tx) => {
-    await applyXpDelta(tx, userId, amount)
     await tx.xpTransaction.create({ data: { userId, amount, reason, taskId: taskId ?? null } })
+    await applyXpDelta(tx, userId, amount)
   })
 }
 
@@ -125,8 +134,8 @@ export async function awardXpOnce(userId: string, amount: number, reason: string
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${userId}|${reason}`})::int8)`
     const already = await tx.xpTransaction.findFirst({ where: { userId, reason }, select: { id: true } })
     if (already) return false
-    await applyXpDelta(tx, userId, amount)
     await tx.xpTransaction.create({ data: { userId, amount, reason } })
+    await applyXpDelta(tx, userId, amount)
     return true
   })
 }
@@ -292,42 +301,9 @@ export async function computeQuestProgress(userId: string, q: { requirementType:
     // Tasks completed this week that were already past their due date.
     return prisma.task.count({ where: { assignees: { some: { userId } }, status: "DONE", updatedAt: { gte: since }, dueDate: { lt: new Date() } } })
   }
-  if (q.requirementType === "has_overdue") {
-    // Penalty condition: tasks assigned to the user that are PAST due and not finished.
-    return prisma.task.count({ where: { assignees: { some: { userId } }, status: { notIn: ["DONE", "CANCELLED"] }, dueDate: { lt: new Date() } } })
-  }
+  // "has_overdue" was the penalty quests' condition; they were removed (16 Oct 2026), so it never completes.
   return 0
 }
 
-/**
- * Auto-apply penalty quests (xpReward < 0) for a user — evaluated lazily on app open.
- * A penalty applies at most ONCE per leaderboard period (idempotent via QuestClaim),
- * even if this runs on every gamification read. Deducts XP when the bad condition is met.
- */
-export async function applyAutoPenalties(userId: string): Promise<void> {
-  if (!userId) return
-  const memberships = await prisma.workspaceMember.findMany({ where: { userId }, select: { workspaceId: true } })
-  const workspaceIds = memberships.map((m) => m.workspaceId)
-  if (workspaceIds.length === 0) return
-
-  const penalties = await prisma.quest.findMany({
-    where: { workspaceId: { in: workspaceIds }, isActive: true, xpReward: { lt: 0 } },
-  })
-  if (penalties.length === 0) return
-
-  const periodKey = `pen:${getLeaderboardPeriodStart().toISOString().slice(0, 10)}`
-  for (const q of penalties) {
-    const progress = await computeQuestProgress(userId, q)
-    if (progress < q.requiredCount) continue
-    const already = await prisma.questClaim.findUnique({
-      where: { userId_questKey_periodKey: { userId, questKey: q.id, periodKey } },
-    })
-    if (already) continue
-    try {
-      await prisma.questClaim.create({ data: { userId, questKey: q.id, periodKey, xpAwarded: q.xpReward, questId: q.id } })
-      await awardXp(userId, q.xpReward, "penalty")
-    } catch {
-      // Unique-constraint race → another request already applied it this period. Safe to ignore.
-    }
-  }
-}
+// Penalty quests (xpReward < 0, applied lazily on app open) were removed (owner, 16 Oct 2026): quests only
+// reward (0–50 XP, quests/admin), and the automatic penalties are attendance's (company workspace only).

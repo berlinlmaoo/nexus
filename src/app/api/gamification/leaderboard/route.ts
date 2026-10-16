@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { levelForXp, getLeaderboardPeriodStart, getLeaderboardPeriodEnd, PERIOD_BASELINE_XP } from "@/lib/gamification"
+import { levelForXp, getLeaderboardPeriodStart, getLeaderboardPeriodEnd, PERIOD_BASELINE_XP, LEADERBOARD_RESET_DAY } from "@/lib/gamification"
 
 export async function GET() {
   try {
@@ -25,7 +25,7 @@ export async function GET() {
     )
 
     // Monthly leaderboard: every user starts each period at PERIOD_BASELINE_XP (1000)
-    // and quests push their score up/down. Period resets on the 28th 00:00 Asia/Jakarta.
+    // and quests, attendance penalties and BoD adjustments move it. Period resets on the 28th 00:00 Asia/Jakarta.
     const periodStart = getLeaderboardPeriodStart()
     const periodEnd = getLeaderboardPeriodEnd()
 
@@ -64,7 +64,7 @@ export async function GET() {
     return NextResponse.json({
       rows,
       viewer: { ranked: !viewerExcluded, reason: viewerExcluded ? "MANAGEMENT" : null },
-      period: { start: periodStart.toISOString(), end: periodEnd.toISOString(), resetDay: 28, timezone: "Asia/Jakarta" },
+      period: { start: periodStart.toISOString(), end: periodEnd.toISOString(), resetDay: LEADERBOARD_RESET_DAY, timezone: "Asia/Jakarta" },
     })
   } catch (error) {
     console.error("leaderboard error:", error)

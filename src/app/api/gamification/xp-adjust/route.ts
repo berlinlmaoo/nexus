@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { ORG_WORKSPACE_ID, orgRoleOf } from "@/lib/org"
-import { awardXp } from "@/lib/gamification"
+import { awardXp, periodLevelOf } from "@/lib/gamification"
 
 const MAX_ABS = 1000
 
@@ -53,14 +53,15 @@ export async function POST(req: NextRequest) {
       select: { id: true },
     })
     if (dup) {
-      const cur = await prisma.userXp.findUnique({ where: { userId }, select: { totalXp: true, currentLevel: true } })
-      return NextResponse.json({ ok: true, duplicate: true, totalXp: cur?.totalXp ?? null, currentLevel: cur?.currentLevel ?? null })
+      const cur = await prisma.userXp.findUnique({ where: { userId }, select: { totalXp: true } })
+      return NextResponse.json({ ok: true, duplicate: true, totalXp: cur?.totalXp ?? null, currentLevel: cur ? await periodLevelOf(userId) : null })
     }
 
     await awardXp(userId, amount, reason)
 
-    const xp = await prisma.userXp.findUnique({ where: { userId }, select: { totalXp: true, currentLevel: true } })
-    return NextResponse.json({ ok: true, totalXp: xp?.totalXp ?? null, currentLevel: xp?.currentLevel ?? null })
+    // currentLevel = this period's level, as the leaderboard and the profile show it (owner, 16 Oct 2026).
+    const xp = await prisma.userXp.findUnique({ where: { userId }, select: { totalXp: true } })
+    return NextResponse.json({ ok: true, totalXp: xp?.totalXp ?? null, currentLevel: xp ? await periodLevelOf(userId) : null })
   } catch (error) {
     console.error("xp-adjust POST error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

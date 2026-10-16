@@ -1,10 +1,11 @@
 // NEXUS Phaëthon — level tiers + XP curve. Mirror of backend src/lib/gamification.ts LEVELS.
-// `floor` = cumulative total XP required to BE at that level.
+// `floor` = the period score required to BE at that level (the level is the period's level only).
 
 export type LevelTier = { level: number; name: string; floor: number };
 
-// Period-based scoring: everyone starts each period (resets 28th) at 1000 XP = Diamond,
-// and quests move them up (toward Anak Kesayangan AA = 1500) or down (penalty quests).
+// Period-based scoring: everyone starts each period at 1000 XP = Diamond. The period runs from the
+// 28th 00:00 WIB to the 27th, like attendance (server: LEADERBOARD_RESET_DAY, leaderboard `resetDay`).
+// Quests and BoD adjustments move a score up; attendance penalties and BoD adjustments move it down.
 export const PERIOD_BASELINE_XP = 1000;
 export const LEVELS: LevelTier[] = [
   { level: 1, name: "Iron", floor: 0 },
