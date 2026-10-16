@@ -1170,9 +1170,7 @@ function ScheduleCard() {
         <div className="flex flex-1 flex-col items-center justify-center gap-3 py-4 text-center">
           <span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/10 text-primary"><CalendarClock className="h-6 w-6" aria-hidden /></span>
           <p className="text-sm text-muted-foreground">{t("No upcoming tasks with a due date.")}</p>
-          {/* Only when there are open tasks to date: with none, the Tasks tile above already offers "Open My Tasks"
-              (one place for one action, UI tour run 20, R20-WB-7). */}
-          {(tasks.data ?? []).some((x) => !["DONE", "CANCELLED"].includes((x.status ?? "").toUpperCase())) && <Link to="/my-tasks" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">{t("Open My Tasks")}</Link>}
+          <Link to="/my-tasks" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">{t("Open My Tasks")}</Link>
         </div>
       )}
       <div className="space-y-2.5">

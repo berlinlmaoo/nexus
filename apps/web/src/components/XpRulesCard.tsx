@@ -34,7 +34,7 @@ function Row({ xp, rule, note, auto, tone }: { xp: string; rule: string; note: s
   );
 }
 
-/** Opens the XP rules card on the page and brings it into view (the Home "No active quests" tile). */
+/** Opens the XP rules card on the page and brings it into view. */
 export const OPEN_XP_RULES_EVENT = "nexus:open-xp-rules";
 export function openXpRules() {
   window.dispatchEvent(new Event(OPEN_XP_RULES_EVENT));
