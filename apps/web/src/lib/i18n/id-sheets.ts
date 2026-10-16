@@ -255,6 +255,7 @@ export const ID_SHEETS: Record<string, string> = {
   "Couldn't move the row.": "Gagal mindahin baris.",
   "Couldn't save the column.": "Gagal nyimpen kolom.",
   "Couldn't delete the column.": "Gagal hapus kolom.",
+  "Someone else changed the columns just now. The latest version is shown; please make your change again.": "Kolomnya barusan diubah orang lain. Versi terbaru sudah ditampilkan; ulangi perubahanmu ya.",
   "This spreadsheet can't be opened yet.": "Spreadsheet-nya belum bisa dibuka.",
   "Delete sheet \"{name}\"? All of its rows go too (it can be restored from Audit).": "Hapus sheet \"{name}\"? Semua barisnya ikut hilang (bisa dipulihkan dari Audit).",
   "live": "live",

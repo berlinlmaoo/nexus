@@ -2,10 +2,11 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import type { Prisma } from "@/generated/prisma/client"
 import { auth } from "@/lib/auth"
 import {
   MAX_ROWS_PER_WRITE, ROW_HEIGHT_MAX, ROW_HEIGHT_MIN,
-  coerceCellValue, normalizeCellStyle, protectedRowsBlock, readCells, readStyles, resolveSheetAccess,
+  coerceCellValue, lockSheetRows, normalizeCellStyle, protectedRowsBlock, readCells, readStyles, resolveSheetAccess,
 } from "@/lib/project-sheets"
 import { emitSheetStructure, originTabOf } from "@/lib/socket-emitter"
 import { restorableDelete } from "@/lib/deletion-snapshot"
@@ -24,8 +25,8 @@ function midpoint(prev: number | null, next: number | null): number {
 }
 
 /** Rewrite positions to 0,1,2… — only when midpoints have collapsed. */
-async function renumber(sheetId: string) {
-  await prisma.$executeRaw`
+async function renumber(tx: Prisma.TransactionClient, sheetId: string) {
+  await tx.$executeRaw`
     UPDATE "SheetRow" r
     SET "position" = s.rn - 1
     FROM (SELECT "id", row_number() OVER (ORDER BY "position" ASC, "createdAt" ASC) AS rn
@@ -33,6 +34,8 @@ async function renumber(sheetId: string) {
     WHERE r."id" = s."id" AND r."sheetId" = ${sheetId}
   `
 }
+
+class RowAnchorMissing extends Error {}
 
 // POST — add rows.
 //   { count }               append N blank rows
@@ -63,96 +66,107 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ she
     const count = incoming ? incoming.length : Math.max(1, Math.min(MAX_INSERT, Number(body.count) || 1))
     if (count > MAX_INSERT) return NextResponse.json({ error: `Maksimal ${MAX_INSERT} baris.` }, { status: 422 })
 
-    // `beforeRowId` exists because null afterRowId means APPEND, so "insert above the first row"
-    // had no way to be expressed. It resolves to "after whatever precedes it", or to a position
-    // below the current minimum when there is nothing before it.
-    const beforeRowId = typeof body.beforeRowId === "string" ? body.beforeRowId : null
-    let afterRowId = typeof body.afterRowId === "string" ? body.afterRowId : null
-    let insertAtTop = false
-    if (beforeRowId && !afterRowId) {
-      const target = await prisma.sheetRow.findFirst({
-        where: { id: beforeRowId, sheetId }, select: { position: true },
-      })
-      if (!target) return NextResponse.json({ error: "Baris acuannya nggak ketemu." }, { status: 404 })
-      const prev = await prisma.sheetRow.findFirst({
-        where: { sheetId, position: { lt: target.position } },
-        orderBy: { position: "desc" },
-        select: { id: true },
-      })
-      if (prev) afterRowId = prev.id
-      else insertAtTop = true
-    }
+    // Positions are picked and the rows inserted under the sheet's row lock (race audit 16 Oct 2026, H6):
+    // two appends at once used to read the same last row and both take last + 1.
+        // `beforeRowId` exists because null afterRowId means APPEND, so "insert above the first row"
+        // had no way to be expressed. It resolves to "after whatever precedes it", or to a position
+        // below the current minimum when there is nothing before it.
+    let created
+    try {
+      created = await prisma.$transaction(async (tx) => {
+        await lockSheetRows(tx, sheetId)
+        const beforeRowId = typeof body.beforeRowId === "string" ? body.beforeRowId : null
+        let afterRowId = typeof body.afterRowId === "string" ? body.afterRowId : null
+        let insertAtTop = false
+        if (beforeRowId && !afterRowId) {
+          const target = await tx.sheetRow.findFirst({
+            where: { id: beforeRowId, sheetId }, select: { position: true },
+          })
+          if (!target) throw new RowAnchorMissing()
+          const prev = await tx.sheetRow.findFirst({
+            where: { sheetId, position: { lt: target.position } },
+            orderBy: { position: "desc" },
+            select: { id: true },
+          })
+          if (prev) afterRowId = prev.id
+          else insertAtTop = true
+        }
 
-    let start: number
-    let step = 1
-    if (insertAtTop) {
-      const first = await prisma.sheetRow.findFirst({
-        where: { sheetId }, orderBy: { position: "asc" }, select: { position: true },
-      })
-      // Positions are floats, so going below the current minimum needs no renumber.
-      start = (first?.position ?? 0) - count
-      step = 1
-    } else if (afterRowId) {
-      const prev = await prisma.sheetRow.findFirst({
-        where: { id: afterRowId, sheetId }, select: { position: true },
-      })
-      if (!prev) return NextResponse.json({ error: "Baris acuannya nggak ketemu." }, { status: 404 })
-      const next = await prisma.sheetRow.findFirst({
-        where: { sheetId, position: { gt: prev.position } },
-        orderBy: { position: "asc" },
-        select: { position: true },
-      })
-      if (next && next.position - prev.position < MIN_GAP) {
-        // Out of room between these two — renumber, then recompute against the fresh positions.
-        await renumber(sheetId)
-        const p2 = await prisma.sheetRow.findFirst({ where: { id: afterRowId, sheetId }, select: { position: true } })
-        const n2 = await prisma.sheetRow.findFirst({
-          where: { sheetId, position: { gt: p2?.position ?? 0 } },
-          orderBy: { position: "asc" }, select: { position: true },
+        let start: number
+        let step = 1
+        if (insertAtTop) {
+          const first = await tx.sheetRow.findFirst({
+            where: { sheetId }, orderBy: { position: "asc" }, select: { position: true },
+          })
+          // Positions are floats, so going below the current minimum needs no renumber.
+          start = (first?.position ?? 0) - count
+          step = 1
+        } else if (afterRowId) {
+          const prev = await tx.sheetRow.findFirst({
+            where: { id: afterRowId, sheetId }, select: { position: true },
+          })
+          if (!prev) throw new RowAnchorMissing()
+          const next = await tx.sheetRow.findFirst({
+            where: { sheetId, position: { gt: prev.position } },
+            orderBy: { position: "asc" },
+            select: { position: true },
+          })
+          if (next && next.position - prev.position < MIN_GAP) {
+            // Out of room between these two — renumber, then recompute against the fresh positions.
+            await renumber(tx, sheetId)
+            const p2 = await tx.sheetRow.findFirst({ where: { id: afterRowId, sheetId }, select: { position: true } })
+            const n2 = await tx.sheetRow.findFirst({
+              where: { sheetId, position: { gt: p2?.position ?? 0 } },
+              orderBy: { position: "asc" }, select: { position: true },
+            })
+            start = midpoint(p2?.position ?? 0, n2?.position ?? null)
+            step = ((n2?.position ?? (p2?.position ?? 0) + 1) - start) / (count + 1)
+          } else {
+            start = midpoint(prev.position, next?.position ?? null)
+            step = next ? (next.position - start) / (count + 1) : 1
+          }
+        } else {
+          const last = await tx.sheetRow.findFirst({
+            where: { sheetId }, orderBy: { position: "desc" }, select: { position: true },
+          })
+          start = (last?.position ?? -1) + 1
+        }
+
+        const data = Array.from({ length: count }, (_, i) => {
+          const cells: Record<string, unknown> = {}
+          const src = incoming?.[i]
+          if (src) {
+            for (const [columnId, raw] of Object.entries(src)) {
+              const col = columnsById.get(columnId)
+              if (!col) continue
+              const v = coerceCellValue(col.type, raw)
+              if (v !== null) cells[columnId] = v
+            }
+          }
+          const at = positions && positions.length === count ? positions[i] : start + i * step
+          const styles: Record<string, unknown> = {}
+          const srcStyles = incomingStyles?.[i]
+          if (srcStyles && typeof srcStyles === "object") {
+            for (const [columnId, raw] of Object.entries(srcStyles as Record<string, unknown>)) {
+              const st = columnsById.has(columnId) ? normalizeCellStyle(raw) : null
+              if (st) styles[columnId] = st
+            }
+          }
+          return { sheetId, position: at, cells: cells as object, ...(Object.keys(styles).length ? { styles: styles as object } : {}) }
         })
-        start = midpoint(p2?.position ?? 0, n2?.position ?? null)
-        step = ((n2?.position ?? (p2?.position ?? 0) + 1) - start) / (count + 1)
-      } else {
-        start = midpoint(prev.position, next?.position ?? null)
-        step = next ? (next.position - start) / (count + 1) : 1
-      }
-    } else {
-      const last = await prisma.sheetRow.findFirst({
-        where: { sheetId }, orderBy: { position: "desc" }, select: { position: true },
-      })
-      start = (last?.position ?? -1) + 1
+
+        // Exactly the rows this request made. Reading back "every row between the lowest and highest
+        // new position" also returned the rows already sitting in that span — so undoing a delete of rows
+        // 2 and 9 put rows 3–8 into the client cache a second time.
+        return (await tx.sheetRow.createManyAndReturn({
+          data,
+          select: { id: true, position: true, cells: true, styles: true, height: true, updatedAt: true },
+        })).sort((a, b) => a.position - b.position)
+      }, { timeout: 30_000 })
+    } catch (e) {
+      if (e instanceof RowAnchorMissing) return NextResponse.json({ error: "Baris acuannya nggak ketemu." }, { status: 404 })
+      throw e
     }
-
-    const data = Array.from({ length: count }, (_, i) => {
-      const cells: Record<string, unknown> = {}
-      const src = incoming?.[i]
-      if (src) {
-        for (const [columnId, raw] of Object.entries(src)) {
-          const col = columnsById.get(columnId)
-          if (!col) continue
-          const v = coerceCellValue(col.type, raw)
-          if (v !== null) cells[columnId] = v
-        }
-      }
-      const at = positions && positions.length === count ? positions[i] : start + i * step
-      const styles: Record<string, unknown> = {}
-      const srcStyles = incomingStyles?.[i]
-      if (srcStyles && typeof srcStyles === "object") {
-        for (const [columnId, raw] of Object.entries(srcStyles as Record<string, unknown>)) {
-          const st = columnsById.has(columnId) ? normalizeCellStyle(raw) : null
-          if (st) styles[columnId] = st
-        }
-      }
-      return { sheetId, position: at, cells: cells as object, ...(Object.keys(styles).length ? { styles: styles as object } : {}) }
-    })
-
-    // Exactly the rows this request made. Reading back "every row between the lowest and highest
-    // new position" also returned the rows already sitting in that span — so undoing a delete of rows
-    // 2 and 9 put rows 3–8 into the client cache a second time.
-    const created = (await prisma.sheetRow.createManyAndReturn({
-      data,
-      select: { id: true, position: true, cells: true, styles: true, height: true, updatedAt: true },
-    })).sort((a, b) => a.position - b.position)
     emitSheetStructure(sheetId, session.user.id, originTabOf(req))
     return NextResponse.json({
       rows: created.map((r) => ({
@@ -187,16 +201,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
       const order = [...new Set(body.order.filter((x): x is string => typeof x === "string"))]
       if (!order.length) return NextResponse.json({ error: "order kosong." }, { status: 400 })
       if (order.length > 20000) return NextResponse.json({ error: "Kebanyakan baris." }, { status: 422 })
-      const found = await prisma.sheetRow.findMany({ where: { id: { in: order }, sheetId }, select: { id: true, position: true } })
-      if (found.length !== order.length) return NextResponse.json({ error: "Ada baris yang nggak ketemu." }, { status: 404 })
-      const slots = found.map((r) => r.position).sort((a, b) => a - b)
       const blocked = await protectedRowsBlock(session.user.id, access.sheet, order)
       if (blocked) return NextResponse.json({ error: blocked }, { status: 403 })
-      await prisma.$executeRaw`
-        UPDATE "SheetRow" r SET "position" = v.pos
-        FROM (SELECT unnest(${order}::text[]) AS id, unnest(${slots}::float8[]) AS pos) v
-        WHERE r."id" = v.id AND r."sheetId" = ${sheetId}
-      `
+      // The slots are read and rewritten under the sheet's row lock, so a row inserted or moved in between
+      // can't end up sharing a position with one of these (race audit 16 Oct 2026, H6).
+      const missing = await prisma.$transaction(async (tx) => {
+        await lockSheetRows(tx, sheetId)
+        const found = await tx.sheetRow.findMany({ where: { id: { in: order }, sheetId }, select: { id: true, position: true } })
+        if (found.length !== order.length) return true
+        const slots = found.map((r) => r.position).sort((a, b) => a - b)
+        await tx.$executeRaw`
+          UPDATE "SheetRow" r SET "position" = v.pos
+          FROM (SELECT unnest(${order}::text[]) AS id, unnest(${slots}::float8[]) AS pos) v
+          WHERE r."id" = v.id AND r."sheetId" = ${sheetId}
+        `
+        return false
+      }, { timeout: 30_000 })
+      if (missing) return NextResponse.json({ error: "Ada baris yang nggak ketemu." }, { status: 404 })
       emitSheetStructure(sheetId, session.user.id, originTabOf(req))
       return NextResponse.json({ ok: true, reordered: order.length })
     }
@@ -231,28 +252,41 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
     if (!rowId) return NextResponse.json({ error: "rowId wajib." }, { status: 400 })
     const afterRowId = typeof body.afterRowId === "string" ? body.afterRowId : null
 
-    let position: number
-    if (!afterRowId) {
-      const first = await prisma.sheetRow.findFirst({
-        where: { sheetId }, orderBy: { position: "asc" }, select: { position: true },
-      })
-      position = (first?.position ?? 0) - 1
-    } else {
-      const prev = await prisma.sheetRow.findFirst({ where: { id: afterRowId, sheetId }, select: { position: true } })
-      if (!prev) return NextResponse.json({ error: "Baris acuannya nggak ketemu." }, { status: 404 })
-      const next = await prisma.sheetRow.findFirst({
-        where: { sheetId, position: { gt: prev.position }, id: { not: rowId } },
-        orderBy: { position: "asc" }, select: { position: true },
-      })
-      if (next && next.position - prev.position < MIN_GAP) {
-        await renumber(sheetId)
-        return PATCH(req, { params: Promise.resolve({ sheetId }) })
+    // Read the neighbours and write the new position under the sheet's row lock (race audit 16 Oct 2026, H6):
+    // two moves (or a move and an insert) into the same gap used to take the same midpoint.
+    const moved = await prisma.$transaction(async (tx): Promise<{ status: 404; error: string } | { position: number }> => {
+      await lockSheetRows(tx, sheetId)
+      let position: number
+      if (!afterRowId) {
+        const first = await tx.sheetRow.findFirst({
+          where: { sheetId }, orderBy: { position: "asc" }, select: { position: true },
+        })
+        position = (first?.position ?? 0) - 1
+      } else {
+        const neighbours = async () => {
+          const prev = await tx.sheetRow.findFirst({ where: { id: afterRowId, sheetId }, select: { position: true } })
+          if (!prev) return null
+          const next = await tx.sheetRow.findFirst({
+            where: { sheetId, position: { gt: prev.position }, id: { not: rowId } },
+            orderBy: { position: "asc" }, select: { position: true },
+          })
+          return { prev, next }
+        }
+        let n = await neighbours()
+        if (!n) return { status: 404, error: "Baris acuannya nggak ketemu." }
+        if (n.next && n.next.position - n.prev.position < MIN_GAP) {
+          await renumber(tx, sheetId)
+          n = await neighbours()
+          if (!n) return { status: 404, error: "Baris acuannya nggak ketemu." }
+        }
+        position = midpoint(n.prev.position, n.next?.position ?? null)
       }
-      position = midpoint(prev.position, next?.position ?? null)
-    }
-
-    const updated = await prisma.sheetRow.updateMany({ where: { id: rowId, sheetId }, data: { position } })
-    if (!updated.count) return NextResponse.json({ error: "Barisnya nggak ketemu." }, { status: 404 })
+      const updated = await tx.sheetRow.updateMany({ where: { id: rowId, sheetId }, data: { position } })
+      if (!updated.count) return { status: 404, error: "Barisnya nggak ketemu." }
+      return { position }
+    }, { timeout: 30_000 })
+    if ("error" in moved) return NextResponse.json({ error: moved.error }, { status: moved.status })
+    const position = moved.position
     emitSheetStructure(sheetId, session.user.id, originTabOf(req))
     return NextResponse.json({ ok: true, position })
   } catch (error) {

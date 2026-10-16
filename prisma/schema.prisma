@@ -2966,6 +2966,10 @@ model ProjectSheet {
   /// tabColor?, hiddenRows?: rowId[], hiddenCols?: colId[], merges?: [{ r, c, rs, cs }] }.
   /// See readSheetSettings in src/lib/project-sheets.ts. prisma/sql/2026-10-11-sheet-formatting.sql.
   settings    Json     @default("{}")
+  /// Bumped by every write of `columns` (race audit 16 Oct 2026, H6). A structure PATCH that sends the
+  /// version it last saw gets 409 SHEET_STRUCTURE_CHANGED when someone else changed the columns since.
+  /// prisma/sql/2026-10-16-sheet-structure-version.sql.
+  structureVersion Int @default(0)
   position    Int      @default(0)
   createdById String?
   createdAt   DateTime @default(now())
