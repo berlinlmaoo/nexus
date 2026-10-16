@@ -337,7 +337,7 @@ function Phaethon() {
       <Link
         to="/login"
         onClick={(e) => { e.stopPropagation(); stopMusic(); }}
-        className="fixed left-6 top-6 z-40 inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-white/25 transition-colors hover:text-white/60"
+        className="fixed left-6 top-6 z-50 inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-white/25 transition-colors hover:text-white/60"
       >
         <ArrowLeft className="h-3 w-3" /> {t("exit")}
       </Link>
