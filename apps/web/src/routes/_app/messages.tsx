@@ -252,7 +252,7 @@ function Messages() {
           )}
           {(["DM", "GROUP", "PROJECT"] as const).map((kind) => groups[kind].length > 0 && (
             <div key={kind} className="py-1">
-              <div className="px-4 py-1 md:pl-8 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{kind === "DM" ? t("Direct") : kind === "GROUP" ? t("Groups") : t("Projects")}</div>
+              <div className="px-4 py-1 md:pl-8 text-xs font-semibold text-muted-foreground">{kind === "DM" ? t("Direct") : kind === "GROUP" ? t("Groups") : t("Projects")}</div>
               {groups[kind].map((c) => {
                 const muted = isMuted(c);
                 // The open room is being read as it arrives; its count would only flicker.

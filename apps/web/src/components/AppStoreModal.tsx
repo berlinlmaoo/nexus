@@ -65,7 +65,7 @@ export function AppStoreModal() {
             <div className="flex items-center justify-between gap-3 border-b border-border bg-gradient-to-br from-accent via-card to-secondary px-5 py-3.5">
               <div className="flex items-center gap-2">
                 <Apple className="h-4 w-4 text-primary" />
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground/70">{t("Now on the App Store")}</p>
+                <p className="text-sm font-semibold text-foreground/80">{t("Now on the App Store")}</p>
               </div>
               <button onClick={later} aria-label={t("Close")} className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent">
                 <X className="h-4 w-4" />
