@@ -105,6 +105,8 @@ open class RequestsApi(private val api: ApiClient) {
     /**
      * One date per request (REQ-ATT-25): `endDate` is `startDate`, except annual leave, which the
      * server takes as a run of consecutive dates (owner 29 Sep). [lat]/[lng] go together or not at all.
+     * [idempotencyKey] (16 Oct 2026): one key per submit, the same on a retry of it, sent as `Idempotency-Key`;
+     * the server stores one request per key and answers a repeat with the original (200, duplicate: true).
      */
     open suspend fun create(
         type: String,
@@ -114,6 +116,7 @@ open class RequestsApi(private val api: ApiClient) {
         lat: Double?,
         lng: Double?,
         endDate: String = date,
+        idempotencyKey: String? = null,
     ) {
         val body = MultipartBody.Builder().setType(MultipartBody.FORM)
             .addFormDataPart("type", type)
@@ -132,7 +135,10 @@ open class RequestsApi(private val api: ApiClient) {
                 }
             }
             .build()
-        api.send(Request.Builder().url(api.url("/api/attendance/requests")).post(body).build(), JsonObject.serializer())
+        val request = Request.Builder().url(api.url("/api/attendance/requests")).post(body)
+            .apply { if (idempotencyKey != null) header("Idempotency-Key", idempotencyKey) }
+            .build()
+        api.send(request, JsonObject.serializer())
     }
 
     /** approve | reject (needs a note ≥ 3) | cancel (own only). */

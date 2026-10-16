@@ -1177,6 +1177,10 @@ struct RequestComposerSheet: View {
     @State private var busy = false
     @State private var err: String?
     @State private var uploadProgress = UploadProgress()
+    /// One idempotency key per submit, kept while the form says the same thing (a retry after a timeout or a
+    /// second tap sends the same key and gets back the request already stored); a changed form gets a new one.
+    @State private var submitKey: SubmitKey?
+    private struct SubmitKey { let form: String; let key: String }
     /// Quotas and eligibility, so a type nobody can use is never offered in the first place.
     @State private var quota: AttendanceToday?
     /// Izin carries the same evidence a check-in does: a photo AND where it was filed from.
@@ -1598,19 +1602,29 @@ struct RequestComposerSheet: View {
         (earliest ?? Date.distantPast)...
     }
 
+    private func keyForSubmit(_ form: String) -> String {
+        if let k = submitKey, k.form == form { return k.key }
+        let k = SubmitKey(form: form, key: UUID().uuidString)
+        submitKey = k
+        return k.key
+    }
+
     private func submit() async {
         busy = true; err = nil; defer { busy = false }
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone
+        let dates = isLeave ? leaveBlocks.map { "\(f.string(from: $0.0))..\(f.string(from: $0.1))" }.joined(separator: ",") : f.string(from: start)
+        let key = keyForSubmit([type, dates, reason.trimmingCharacters(in: .whitespaces), attach?.name ?? "", String(attach?.data.count ?? 0)].joined(separator: "|"))
         if isLeave {
             // One request per run of consecutive dates. A refusal stops the rest and says which dates
             // were already sent, so nothing is filed twice on a retry.
             var sent: [String] = []
-            for (from, to) in leaveBlocks {
+            for (i, (from, to)) in leaveBlocks.enumerated() {
                 do {
                     try await APIClient.shared.createAttendanceRequest(type: type, startDate: f.string(from: from),
                                                                        endDate: f.string(from: to),
                                                                        reason: reason.trimmingCharacters(in: .whitespaces), attachment: nil,
-                                                                       lat: nil, lng: nil, progress: uploadProgress)
+                                                                       lat: nil, lng: nil, idempotencyKey: "\(key)-\(i)",
+                                                                       progress: uploadProgress)
                     sent.append(from == to ? f.string(from: from) : "\(f.string(from: from))–\(f.string(from: to))")
                 } catch {
                     let why = (error as? LocalizedError)?.errorDescription ?? T("Couldn't send the request.")
@@ -1631,6 +1645,7 @@ struct RequestComposerSheet: View {
                                                                endDate: day,
                                                                reason: reason.trimmingCharacters(in: .whitespaces), attachment: attach,
                                                                lat: coords?.lat, lng: coords?.lng,
+                                                               idempotencyKey: key,
                                                                progress: uploadProgress)
             // A request for today holds the outside-the-office clock on the server the moment it
             // exists (PENDING counts), so the Live Activity's countdown and the phone's own outside

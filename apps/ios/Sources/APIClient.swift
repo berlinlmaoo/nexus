@@ -2759,13 +2759,18 @@ struct APIClient {
     /// `lat`/`lng` are required by the server for a self-filed PERMIT — the same evidence a
     /// check-in carries. The app never sent them, so every permit filed from an iPhone was refused
     /// with "Izin wajib menyertakan lokasi" and staff quietly moved to the web to file one.
+    /// `idempotencyKey` (16 Oct 2026): one key per submit, the same on a retry of it, sent as `Idempotency-Key`.
+    /// The server stores one request per key and answers a repeat with the original (200, duplicate: true)
+    /// instead of a second row or "overlaps with another request". Builds without it keep the old behaviour.
     func createAttendanceRequest(type: String, startDate: String, endDate: String, reason: String,
                                  attachment: (name: String, data: Data)? = nil,
                                  lat: Double? = nil, lng: Double? = nil,
+                                 idempotencyKey: String? = nil,
                                  progress: UploadProgress? = nil) async throws -> Bool {
         let boundary = "Boundary-\(UUID().uuidString)"
         var req = makeRequest("/api/attendance/requests", method: "POST")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if let idempotencyKey { req.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key") }
         var body = Data()
         func field(_ name: String, _ value: String) {
             body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".data(using: .utf8)!)

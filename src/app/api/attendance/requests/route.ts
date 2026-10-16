@@ -503,6 +503,54 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/** What a request row is returned with (create and replay alike). */
+const REQUEST_INCLUDE = {
+  user: { select: { id: true, name: true, email: true, avatar: true } },
+  reviewedBy: { select: { id: true, name: true, email: true } },
+  team: { select: { id: true, name: true } },
+} as const
+
+/** A client's key for one submit: letters, digits and . _ : - (a UUID fits), 8 to 200 characters. */
+const CLIENT_REQUEST_ID_RE = /^[A-Za-z0-9._:-]{8,200}$/
+
+/**
+ * The idempotency key of a submit (16 Oct 2026): the form field `clientRequestId`, else the `Idempotency-Key`
+ * header. Absent = null, the behaviour every released client has. Present but malformed = refused, so a client
+ * bug is seen instead of silently losing the guarantee.
+ */
+function readClientRequestId(request: NextRequest, formData: FormData): { ok: true; key: string | null } | { ok: false; response: NextResponse } {
+  const field = formData.get("clientRequestId")
+  const raw = (typeof field === "string" && field.trim() ? field : request.headers.get("idempotency-key") ?? "").trim()
+  if (!raw) return { ok: true, key: null }
+  if (!CLIENT_REQUEST_ID_RE.test(raw)) {
+    return { ok: false, response: NextResponse.json({ error: "Idempotency key must be 8–200 characters of letters, digits, . _ : -", code: "BAD_IDEMPOTENCY_KEY" }, { status: 400 }) }
+  }
+  return { ok: true, key: raw }
+}
+
+/** The request a key already stored for this person, if any. */
+function findByClientRequestId(db: Db, userId: string, clientRequestId: string) {
+  return db.attendanceRequest.findFirst({ where: { userId, clientRequestId }, include: REQUEST_INCLUDE })
+}
+
+/** A repeat of a submit that was already stored: the original, 200, duplicate:true — never a second row. */
+function replayResponse(row: Parameters<typeof serializeAttendanceRequest>[0]) {
+  return NextResponse.json({ request: serializeAttendanceRequest(row), duplicate: true }, { status: 200 })
+}
+
+/** A unique index refused the row (Prisma P2002, or the raw 23505 through the driver adapter). */
+function isUniqueRefusal(err: unknown): boolean {
+  const seen = new Set<unknown>()
+  const walk = (v: unknown, depth: number): boolean => {
+    if (!v || typeof v !== "object" || depth > 5 || seen.has(v)) return false
+    seen.add(v)
+    const o = v as Record<string, unknown>
+    if (o.code === "P2002" || o.code === "23505" || o.originalCode === "23505") return true
+    return ["cause", "meta", "driverAdapterError", "error"].some((k) => walk(o[k], depth + 1))
+  }
+  return walk(err, 0)
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
@@ -522,11 +570,24 @@ export async function POST(request: NextRequest) {
     }
     const formData = await request.formData().catch(() => null)
     if (!formData) return NextResponse.json({ error: "The form data couldn't be read.", code: "BAD_FORM_DATA" }, { status: 400 })
+    const idem = readClientRequestId(request, formData)
+    if (!idem.ok) return idem.response
+    const clientRequestId = idem.key
     const type = String(formData.get("type") ?? "")
     const startDate = String(formData.get("startDate") ?? "")
     const endDate = String(formData.get("endDate") ?? "")
     const reason = String(formData.get("reason") ?? "")
     const targetUserId = String(formData.get("targetUserId") ?? "").trim()
+    // A repeat of a submit already stored (same key, same person): the original, before any rule is read
+    // again — the second answer must be the first one, not "overlaps with your own request". A key is
+    // looked up only for the caller, or for the person a BoD may file for.
+    if (clientRequestId) {
+      const owner = targetUserId && targetUserId !== session.user.id ? targetUserId : session.user.id
+      if (owner === session.user.id || context.canManageAttendance) {
+        const original = await findByClientRequestId(prisma, owner, clientRequestId)
+        if (original) return replayResponse(original)
+      }
+    }
     const supportingDocument = formData.get("supportingDocument")
     // Where the person was when they filed. Same pair check-in already collects.
     //
@@ -783,8 +844,15 @@ export async function POST(request: NextRequest) {
     // every request writer takes (attreq|user: this route, the BoD day-off and override routes, the
     // cron's auto day-off), and the same checks are made again inside it. A request that loses answers
     // exactly what it would have answered a moment later — the overlap 409 or the quota 422.
-    const created = await prisma.$transaction(async (tx) => {
+    // With an idempotency key, the key is checked first inside the lock: a repeat that waited on the lock
+    // finds the row the first one stored, and gets it back (200 duplicate:true). The partial unique index
+    // (userId, clientRequestId) refuses a second row even outside the lock; that refusal is the same replay.
+    const store = () => prisma.$transaction(async (tx) => {
       await lockAttendanceRequests(tx, effectiveUserId)
+      if (clientRequestId) {
+        const original = await findByClientRequestId(tx, effectiveUserId, clientRequestId)
+        if (original) return replayResponse(original)
+      }
       const conflict =
         (await overlapConflict(tx, conflictArgs)) ??
         (await quotaConflict(tx, conflictArgs)) ??
@@ -805,34 +873,21 @@ export async function POST(request: NextRequest) {
           submittedLng: permitLng,
           submittedAddress: permitAddress,
           reportDelayMinutes: permitDelay,
+          ...(clientRequestId ? { clientRequestId } : {}),
           // BoD granting on behalf of a user → already approved by that BoD.
           ...(isGrant ? { status: "APPROVED" as const, reviewedById: session.user.id, reviewedAt: new Date() } : {}),
         },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              avatar: true,
-            },
-          },
-          reviewedBy: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-          team: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
+        include: REQUEST_INCLUDE,
       })
     })
+    let created: Awaited<ReturnType<typeof store>>
+    try {
+      created = await store()
+    } catch (err) {
+      const original = clientRequestId && isUniqueRefusal(err) ? await findByClientRequestId(prisma, effectiveUserId, clientRequestId) : null
+      if (!original) throw err
+      created = replayResponse(original)
+    }
     if (created instanceof NextResponse) {
       if (supportingDocumentUrl) {
         await unlink(path.join(process.cwd(), "public", "uploads", "attendance", "requests", path.basename(supportingDocumentUrl))).catch(() => {})

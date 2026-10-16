@@ -1999,16 +1999,28 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
   // Ask as soon as a permit is picked — a permission prompt at submit time is where people give up.
   useEffect(() => { if (needsLocation && !coords) askLocation(); }, [needsLocation]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // One idempotency key per submit (16 Oct 2026): kept while the form says the same thing, so a retry after a
+  // timeout or a second click sends the same key and the server hands back the request it already stored. A
+  // changed form is a new submit with a new key.
+  const submitKey = useRef<{ form: string; key: string } | null>(null);
+  const keyForSubmit = () => {
+    const form = JSON.stringify([type, date, leaveBlocks, reason.trim(), granting ? targetUserId : "", attachment?.name ?? "", attachment?.size ?? 0]);
+    if (submitKey.current?.form !== form) submitKey.current = { form, key: newClientRequestId() };
+    return submitKey.current.key;
+  };
+
   const create = useMutation({
     mutationFn: async () => {
+      const key = keyForSubmit();
       if (multiLeave) {
         // One request per run of consecutive dates; stop at the first refusal and say which dates it hit.
-        for (const [startDate, endDate] of leaveBlocks) {
-          await nexusApi.createAttendanceRequest({ type, startDate, endDate, reason: reason.trim(), supportingDocument: null, lat: null, lng: null });
+        // Each run has its own key, so a retry replays the runs already stored and files the rest.
+        for (const [i, [startDate, endDate]] of leaveBlocks.entries()) {
+          await nexusApi.createAttendanceRequest({ type, startDate, endDate, reason: reason.trim(), supportingDocument: null, lat: null, lng: null, clientRequestId: `${key}-${i}` });
         }
         return;
       }
-      await nexusApi.createAttendanceRequest({ type, startDate: date, endDate: date, reason: reason.trim(), targetUserId: granting && targetUserId ? targetUserId : undefined, supportingDocument: attachment, lat: coords?.lat ?? null, lng: coords?.lng ?? null });
+      await nexusApi.createAttendanceRequest({ type, startDate: date, endDate: date, reason: reason.trim(), targetUserId: granting && targetUserId ? targetUserId : undefined, supportingDocument: attachment, lat: coords?.lat ?? null, lng: coords?.lng ?? null, clientRequestId: key });
     },
     onSuccess: () => { onCreated(); onClose(); },
   });
@@ -2447,4 +2459,12 @@ function DayOffLogModal({ kind, origin, onClose }: { kind: "DAY_OFF" | "RED_DATE
 
 function Legend({ cls, label }: { cls: string; label: string }) {
   return <div className="inline-flex items-center gap-1.5"><span className={`h-3 w-3 rounded ${cls}`} /> {label}</div>;
+}
+
+/** A fresh idempotency key for one attendance request submit (a UUID; any 8–200 of [A-Za-z0-9._:-] is accepted). */
+function newClientRequestId(): string {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  } catch { /* not a secure context: fall through */ }
+  return `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }

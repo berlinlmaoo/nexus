@@ -1506,6 +1506,11 @@ model AttendanceRequest {
   /// Kapan request ini dieskalasi ke BoD karena manager-nya diam melewati batas (cron
   /// attendance-escalation). Sekali saja — kolom ini yang mencegah BoD diberi tahu setiap 30 menit.
   escalatedAt           DateTime?
+  /// The key a client sent with the submit (form field clientRequestId or the Idempotency-Key header, 16 Oct
+  /// 2026): a repeat with the same key from the same person returns this request instead of storing another.
+  /// Unique per userId WHERE NOT NULL — a partial index, so it lives in
+  /// prisma/sql/2026-10-16-attendance-request-client-id.sql, not here. Null = a client that sends none.
+  clientRequestId       String?
 
   userId                String
   user                  User                      @relation("AttendanceRequestUser", fields: [userId], references: [id], onDelete: Cascade)
