@@ -113,14 +113,16 @@ export function OutletSalesView({
 
   const toolbar = (
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <MonthSwitcher month={month} today={today} onChange={(m) => { setMonth(m); setSelected(null); }} />
-      {/* Labelled on a phone too (UI tour run 13, W-M13: bare icons); the row wraps when it must. */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Phone: the switcher spans the width, and the actions are an even grid under it (Add event on its own
+          full-width line), not a row that wrapped one button alone (UI tour run 20, R20-WM-5). */}
+      <MonthSwitcher month={month} today={today} onChange={(m) => { setMonth(m); setSelected(null); }} className="max-sm:w-full max-sm:justify-between" />
+      {/* Labelled on a phone too (UI tour run 13, W-M13: bare icons). */}
+      <div className="flex flex-wrap items-center gap-2 max-sm:grid max-sm:w-full max-sm:grid-cols-2">
         {(data.canManageSettings ?? data.canManageTargets) && (
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:h-11"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:h-11"
           >
             <Settings2 aria-hidden className="h-4 w-4" />
             {t("Report settings")}
@@ -129,7 +131,7 @@ export function OutletSalesView({
         <button
           type="button"
           onClick={() => copyLink()}
-          className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:h-11"
+          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:h-11"
         >
           <Link2 aria-hidden className="h-4 w-4" />
           {t("Copy form link")}
@@ -137,7 +139,7 @@ export function OutletSalesView({
         <button
           type="button"
           onClick={() => openForm({ date: selected ?? undefined })}
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-sm font-semibold text-primary-foreground transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:h-11"
+          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 text-sm font-semibold text-primary-foreground transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:h-11 max-sm:col-span-2"
         >
           <Plus aria-hidden className="h-4 w-4" /> {t("Add event")}
         </button>
@@ -187,7 +189,7 @@ export function OutletSalesView({
       )}
 
       <Sheet open={!!openEvent} onOpenChange={(o) => { if (!o) setOpenId(null); }}>
-        <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-lg [&>button:first-of-type]:hidden">
+        <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-xl [&>button:first-of-type]:hidden">
           {openEvent && (
             <>
               <header className="flex items-center justify-between gap-2 border-b border-border px-5 py-3">

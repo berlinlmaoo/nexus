@@ -171,12 +171,12 @@ export function StatusPill({ status, className }: { status: OutletStatus; classN
 }
 
 /** ‹ Oktober 2026 › with "This month" when another month is shown. */
-export function MonthSwitcher({ month, today, onChange }: { month: string; today: string; onChange: (m: string) => void }) {
+export function MonthSwitcher({ month, today, onChange, className }: { month: string; today: string; onChange: (m: string) => void; className?: string }) {
   const { t, locale } = useLang();
   const current = today.slice(0, 7);
   const btn = "grid h-9 w-9 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:h-11 pointer-coarse:w-11";
   return (
-    <div className="flex items-center gap-1">
+    <div className={cn("flex items-center gap-1", className)}>
       <button type="button" className={btn} onClick={() => onChange(shiftMonthKey(month, -1))} aria-label={t("Previous month")}>
         <ChevronLeft className="h-4 w-4" />
       </button>

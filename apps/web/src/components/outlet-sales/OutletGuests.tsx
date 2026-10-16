@@ -162,7 +162,9 @@ function Communities({ guests }: { guests: OutletGuests }) {
                     <span className="shrink-0 font-medium tabular-nums">{count(c.total, lang)}</span>
                   </div>
                 )}
-                <div aria-hidden className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
+                {/* With the chevron gutter, the bar starts where the name does (UI tour run 20, R20-WM-5: "Run Club"
+                    sat indented over a bar from the card's edge). */}
+                <div aria-hidden className={cn("mt-1 h-1 overflow-hidden rounded-full bg-muted", gutter && "ml-[1.125rem]")}>
                   <div className="h-full rounded-full bg-primary/40 transition-[width] duration-300 ease-out" style={{ width: `${share}%` }} />
                 </div>
                 {expandable && isOpen && (
