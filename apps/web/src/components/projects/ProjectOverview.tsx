@@ -160,7 +160,21 @@ function useColumnPin() {
   // (UI tour run 19, R19-WD-R2: the page's end rested on a "Who's working on what" row, and the right column began
   // under the header without its "Sections" title).
   const snapOffOf = (side: "left" | "right") => (state.side === side ? "" : undefined);
-  return { leftRef, rightRef, classOf, snapOffOf };
+  // The shorter column, when it scrolls along (does not fit), gets a band of canvas over the 1rem gap between the
+  // page header and its pinned card heads. The page rests on the long column's cards, so that gap is where the short
+  // column's rows passed under, cut (UI tour run 20, R20-WD-R1: a sliver of a "Who's working on what" person row
+  // above its pinned head).
+  const maskOf = (side: "left" | "right") => state.side === side && !state.fits;
+  return { leftRef, rightRef, classOf, snapOffOf, maskOf };
+}
+
+/**
+ * A canvas-coloured band pinned right under the page header, over the 1rem gap above the pinned card heads of a
+ * column that scrolls without snapping (useColumnPin.maskOf). In its resting place it sits in the grid's top padding
+ * (-mt-4, taking no room), so it shows nothing until the column scrolls under the header.
+ */
+function ColumnGapMask() {
+  return <div aria-hidden data-column-gap-mask="" className="pointer-events-none sticky top-[var(--page-sticky-top,0px)] z-[6] -mt-4 mb-0 h-4 bg-card" />;
 }
 
 export function ProjectOverview({
@@ -330,6 +344,7 @@ export function ProjectOverview({
     <div className="mx-auto grid max-w-6xl gap-4 p-4 md:gap-6 md:p-8 lg:grid-cols-12">
       <div ref={cols.leftRef} data-snap-off={cols.snapOffOf("left")} className={cn("min-w-0 space-y-4 md:space-y-6 lg:col-span-8 lg:self-start", cols.classOf("left"))}>
         <SnapOff.Provider value={cols.snapOffOf("left") !== undefined}>
+        {cols.maskOf("left") && <ColumnGapMask />}
         {/* Progress: the stacked status bar is the progress visual; the counters open the board filtered. */}
         <section aria-labelledby="ov-progress" className={cn(CARD, "overflow-hidden")}>
           <div className="p-4 md:p-5">
@@ -396,6 +411,7 @@ export function ProjectOverview({
 
       <div ref={cols.rightRef} data-snap-off={cols.snapOffOf("right")} className={cn("min-w-0 space-y-4 md:space-y-6 lg:col-span-4 lg:self-start", cols.classOf("right"))}>
         <SnapOff.Provider value={cols.snapOffOf("right") !== undefined}>
+        {cols.maskOf("right") && <ColumnGapMask />}
         <BriefCard project={project} onEdit={onEditBrief} />
 
         <Section id="ov-priority" title={t("Open tasks by priority")} icon={<AlertTriangle className="h-4 w-4" />}>
