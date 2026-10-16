@@ -18,6 +18,7 @@ import { qrMatrix, qrSvgPath } from "@/lib/qr";
 import { useLang } from "@/lib/lang";
 import { useRealtimeRoom } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
+import { SnapTail } from "@/components/SnapTail";
 import { FormHead, FormRenderer, QuestionControl } from "./FormRenderer";
 import {
   cleanFields, condIncomplete, COVER_PRESETS, fieldTitle, hasOptions, ICON_CHOICES, kindMeta, kindOf, logicParents, MAPPING_TARGETS, needsValue, newFieldId, newQuestion,
@@ -1352,7 +1353,10 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
       ) : tab === "questions" ? (
         <div className="flex min-h-0 flex-1">
           {/* Question cards snap whole at the top of the column, the form head first, so a scroll never stops
-              with a card cut through its title (UI tour run 16, R16-WB-1: the Harga card's top was cut). */}
+              with a card cut through its title (UI tour run 16, R16-WB-1: the Harga card's top was cut). The cards
+              are marked data-snap-top and the column ends in a SnapTail, so its END is a snap point too: scrolled
+              to the bottom, the column starts on a whole card, not on a card's input under a scrolled-off title
+              (UI tour run 19, R19-WD-R1: the room under "Add question" let the last page stop mid-card). */}
           <div className="@container min-h-0 flex-1 overflow-y-auto [scroll-snap-type:y_proximity]" onClick={() => { setSelected(null); setSlashFor(null); }}>
             <div className="group/head relative snap-start">
               <FormHead branding={draft.branding}>
@@ -1387,7 +1391,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
                 {/* questions */}
                 <div className="mt-6 pb-24 md:pl-0" onDragOver={(e) => { if (dragFrom.current) e.preventDefault(); }}>
                   {fields.map((f, i) => (
-                    <div key={f.id} className="snap-start">
+                    <div key={f.id} data-snap-top="" className="snap-start">
                       {/* gap above each card: drop target + "add a question here" */}
                       <div
                         className="group/gap relative flex h-5 items-center justify-center"
@@ -1435,6 +1439,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
                 </div>
               </FormHead>
             </div>
+            <SnapTail scroller="parent" />
           </div>
           <aside className="hidden w-[320px] shrink-0 overflow-y-auto border-l border-border bg-background lg:block" aria-label={t("Question settings")}>{panel}</aside>
           {/* Phone / tablet: the same panel as a bottom sheet. */}
