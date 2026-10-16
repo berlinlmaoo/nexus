@@ -579,7 +579,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
   const done = isDoneStatus(t?.status);
 
   return createPortal(
-    <div className="fixed inset-0 z-50 grid place-items-center p-0 sm:p-4">
+    <div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center p-0 sm:p-4">
       <motion.div
         className="absolute inset-0 bg-foreground/30 dark:bg-scrim backdrop-blur-sm"
         style={{ opacity: backdropO }}
@@ -1071,7 +1071,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
             </SecCard>
 
             {previewAtt && createPortal(
-              <div className="fixed inset-0 z-[90] grid place-items-center p-4" onClick={() => setPreviewAtt(null)}>
+              <div className="fixed inset-0 z-[90] grid grid-cols-1 place-items-center p-4" onClick={() => setPreviewAtt(null)}>
                 <div className="absolute inset-0 bg-foreground/60 dark:bg-scrim backdrop-blur-sm" />
                 <div className="relative z-10 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
@@ -1174,7 +1174,7 @@ function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; ti
     onError: (e) => toast.error(e instanceof Error ? e.message : tr("Couldn't create the quest")),
   });
   return createPortal(
-    <div className="fixed inset-0 z-[90] grid place-items-center bg-black/50 dark:bg-scrim p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[90] grid grid-cols-1 place-items-center bg-black/50 dark:bg-scrim p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">{tr("Make a quest")}</h3></div>
         <label className="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Quest title")}</label>

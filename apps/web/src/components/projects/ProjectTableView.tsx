@@ -324,7 +324,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
       </div>
 
       {addingField && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={() => setAddingField(false)}>
+        <div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={() => setAddingField(false)}>
       <EscClose onClose={() => setAddingField(false)} />
           <div role="dialog" aria-modal="true" aria-label={t("New field")} className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <FieldEditor saving={createField.isPending} onSave={(p) => createField.mutate(p)} onCancel={() => setAddingField(false)} />
