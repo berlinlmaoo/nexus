@@ -2,6 +2,7 @@
 export const ID_R12WEB: Record<string, string> = {
   "Number reused by": "Nomornya dipakai lagi oleh",
   "{n}-way tie for 1st": "{n} orang seri di peringkat 1",
+  "{n} tied": "{n} orang seri",
   "Settings sections": "Bagian pengaturan",
   "Uploaded {date}": "Diunggah {date}",
   "NEXUS app for macOS": "Aplikasi NEXUS macOS",

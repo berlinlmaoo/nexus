@@ -30,21 +30,15 @@ function Leaderboard() {
   // (1, 1, 1, 4); within a tie the order is by name (lib/competition-rank.ts).
   const ranked = competitionRank(board.data?.rows ?? [], (r) => r.totalXp, (r) => r.name ?? "");
 
-  const podiumRankings = ranked.slice(0, 3).map((r, i) => ({
-    userId: r.userId,
-    userName: r.name ?? "—",
-    rank: i + 1,
-    label: r.rank,
-    value: r.totalXp,
-    avatarUrl: r.avatar,
-  }));
-
-  // More people share 1st than the podium has steps: everyone tied stands in one row in place of the podium,
-  // under "7-way tie for 1st" (UI tour run 12, WD2; run 14, R14-WB-9: three "1" blocks left four people out).
-  const tiedFirst = ranked.filter((r) => r.rank === 1).length;
-  const podiumTie = tiedFirst > 3
-    ? ranked.filter((r) => r.rank === 1).map((r, i) => ({ userId: r.userId, userName: r.name ?? "—", rank: i + 1, label: 1, value: r.totalXp, avatarUrl: r.avatar }))
-    : undefined;
+  // The podium's three steps are the three best scores; people who tie stand on one step together (owner,
+  // 16 Oct 2026). The list beneath keeps the competition ranks (1, 1, 1, 4).
+  const podiumGroups: { userId: string; userName: string; value: number; avatarUrl?: string | null }[][] = [];
+  for (const r of ranked) {
+    const last = podiumGroups[podiumGroups.length - 1];
+    if (last && last[0].value === r.totalXp) last.push({ userId: r.userId, userName: r.name ?? "—", value: r.totalXp, avatarUrl: r.avatar });
+    else if (podiumGroups.length < 3) podiumGroups.push([{ userId: r.userId, userName: r.name ?? "—", value: r.totalXp, avatarUrl: r.avatar }]);
+    else break;
+  }
 
   const rankings = ranked.map((r) => ({
     userId: r.userId,
@@ -104,9 +98,9 @@ function Leaderboard() {
               // The page header already says "Leaderboard" (it showed twice, audit 12 Oct 2026).
               title=""
               subtitle={t("XP ranking for everyone")}
-              podiumRankings={podiumRankings}
-              podiumCaption={tiedFirst > 3 ? t("{n}-way tie for 1st", { n: tiedFirst }) : undefined}
-              podiumTie={podiumTie}
+              podiumGroups={podiumGroups}
+              tiedLabel={(n) => t("{n} tied", { n })}
+              moreLabel={(n) => t("+{n} more", { n })}
               rankings={rankings}
               currentUserId={meId}
               onSelectUser={(item) => setXpUser({ id: item.userId, name: item.userName, avatar: item.avatarUrl })}
