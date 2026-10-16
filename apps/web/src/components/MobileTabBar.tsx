@@ -14,7 +14,7 @@ import { useTheme } from "@/lib/theme";
 import { useLang } from "@/lib/lang";
 import { useChatUnread } from "@/lib/chat-unread";
 import { cn } from "@/lib/utils";
-import { GideonMark } from "@/components/gideon/GideonMark";
+import { navGroups } from "@/components/nav-groups";
 import { thumbUrl } from "@/lib/thumb";
 import { openGlobalSearch } from "@/lib/search-event";
 
@@ -31,47 +31,6 @@ const primary = [
   { title: "Projects", url: "/projects", icon: FolderKanban },
 ] as const;
 
-const moreGroups = [
-  {
-    label: "Home",
-    items: [
-      { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-      { title: "Messages", url: "/messages", icon: MessageCircle },
-      // GIDEON's floating button is desktop-only (it covered phone content, audit 12 Oct 2026); here it is.
-      { title: "GIDEON", url: "/gideon", icon: GideonMark },
-      { title: "Notifications", url: "/inbox", icon: Inbox },
-      { title: "Threads", url: "/threads", icon: AtSign },
-      { title: "Z Vault", url: "/vault", icon: HardDrive },
-      { title: "My Tasks", url: "/my-tasks", icon: CheckSquare },
-      { title: "My Submissions", url: "/submissions", icon: FileText },
-      { title: "Calendar", url: "/calendar", icon: Calendar },
-      { title: "Room Booking", url: "/room-booking", icon: CalendarClock },
-    ],
-  },
-  {
-    label: "Work",
-    items: [
-      { title: "Projects", url: "/projects", icon: FolderKanban },
-      // Invitation only (owner, 14 Oct 2026): shown when canAccessLegal; the server refuses everyone else.
-      { title: "Legal", url: "/legal", icon: Scale },
-      { title: "Leaderboard", url: "/leaderboard", icon: Trophy },
-    ],
-  },
-  {
-    label: "Team",
-    items: [
-      { title: "Attendance", url: "/attendance", icon: ClipboardCheck },
-    ],
-  },
-  {
-    label: "System",
-    items: [
-      { title: "Tickets", url: "/complaints", icon: Ticket },
-      { title: "Settings", url: "/settings", icon: Settings },
-      { title: "Control Room", url: "/admin", icon: Shield },
-    ],
-  },
-] as const;
 
 export function MobileTabBar() {
   const { t: tr } = useLang();
@@ -236,7 +195,7 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
   // The pipeline board has no entry in More (owner, 9 Oct 2026): it opens from Projects like any project.
   const canManageOrg = ["ONE_ABOVE_ALL", "BOD", "MANAGER"].includes(orgRole ?? "");
   // Ticket is OPEN to everyone since 2026-07-29 (staff see only their own tickets).
-  const visibleGroups = moreGroups
+  const visibleGroups = navGroups
     .map((g) => ({ ...g, items: g.items.filter((i) => canManageOrg || i.url !== "/admin") }))
     .filter((g) => g.items.length > 0);
   useEffect(() => {
@@ -290,7 +249,8 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
               </button>
               {visibleGroups.map((g) => (
                 <div key={g.label} className="mb-3">
-                  <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t(g.label)}</div>
+                  {/* Sentence case, as the sidebar (UI tour run 20, R20-WM-2: "HOME", "WORK" in small caps). */}
+                  <div className="px-2 pb-1 text-xs font-medium text-muted-foreground">{t(g.label)}</div>
                   <div className="grid grid-cols-1 gap-0.5">
                     {g.items.filter((item) => (isCompany || (item.url !== "/vault" && item.url !== "/threads")) && (canAccessLegal || item.url !== "/legal")).map((item) => {
                       const active = isActive(item.url);
