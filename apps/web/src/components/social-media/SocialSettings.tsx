@@ -147,9 +147,12 @@ export function SocialSettings({
                   <h3 className="text-sm font-semibold">{t("Targets for {month}", { month: monthLabel(data.month, locale) })}</h3>
                   <p className="text-xs text-muted-foreground">{t("Each day's target is the month's split evenly, unless a day sets its own in the calendar. Leave a box empty for no target.")}</p>
                 </div>
+                {/* Each platform: its name as a heading above a plain card, as the outlet's Report settings sections (UI
+                    tour run 19, R19-WB-6: a fieldset legend cut into the card's border). */}
                 {savedActive.map((p) => (
-                  <fieldset key={p.id} className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-card p-3">
-                    <legend className="px-1 text-xs font-semibold">{p.name}</legend>
+                  <div key={p.id} role="group" aria-labelledby={`socmed-target-${p.id}`} className="flex flex-col gap-1.5">
+                  <h4 id={`socmed-target-${p.id}`} className="text-sm font-semibold text-foreground">{p.name}</h4>
+                  <div className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-card p-3">
                     <label className="text-xs font-medium text-muted-foreground">
                       {t("Engagement target")}
                       <input inputMode="numeric" value={targets[p.id]?.engagementTarget ?? ""} placeholder={t("No target")} onChange={(e) => setTargets({ ...targets, [p.id]: { ...targets[p.id], engagementTarget: fmt(digitsOf(e.target.value)) } })} className={cn(numCls, "mt-1")} />
@@ -158,7 +161,8 @@ export function SocialSettings({
                       {t("Posts target")}
                       <input inputMode="numeric" value={targets[p.id]?.postsTarget ?? ""} placeholder={t("No target")} onChange={(e) => setTargets({ ...targets, [p.id]: { ...targets[p.id], postsTarget: fmt(digitsOf(e.target.value)) } })} className={cn(numCls, "mt-1")} />
                     </label>
-                  </fieldset>
+                  </div>
+                  </div>
                 ))}
               </section>
 
