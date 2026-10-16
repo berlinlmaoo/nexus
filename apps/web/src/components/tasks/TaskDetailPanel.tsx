@@ -192,7 +192,7 @@ function isDoneStatus(s?: string | null) {
 function PropRow({ icon: Icon, label, aside, hint, children }: { icon: typeof Plus; label: string; aside?: ReactNode; hint?: string; children: ReactNode }) {
   return (
     <div role="listitem" className="group/prop flex min-h-9 items-start gap-1 rounded-lg">
-      <div className="flex h-9 w-[124px] shrink-0 items-center gap-2 px-1.5 text-sm text-muted-foreground sm:w-40 pointer-coarse:h-11" title={hint ?? label}>
+      <div className="flex h-9 w-[136px] shrink-0 items-center gap-2 px-1.5 text-sm text-muted-foreground sm:w-40 pointer-coarse:h-11" title={hint ?? label}>
         <Icon className="h-4 w-4 shrink-0" aria-hidden />
         <span className="min-w-0 truncate">{label}</span>
         {aside}

@@ -1245,7 +1245,8 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
     if (collapsed.has(lane.key)) onToggleGroup(lane.key);
     const rowKey = sub ? buildGroups(tasks, sub, { keepHidden: true })[0]?.key ?? null : null;
     setDraft(`${rowKey ?? ""}::${lane.key}`);
-    requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-lane-key="${CSS.escape(lane.key)}"]`)?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" }));
+    // Only when the column is out of sight (a phone showing another one): "nearest" leaves a visible column alone.
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-lane-key="${CSS.escape(lane.key)}"]`)?.scrollIntoView({ behavior: "smooth", inline: "nearest", block: "nearest" }));
   }, [newSignal?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const renderLane = (g: TaskGroup, rowKey: string | null, laneTasks: NexusTask[], showHeader: boolean) => {
     const id = `${rowKey ?? ""}::${g.key}`;

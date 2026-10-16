@@ -399,8 +399,8 @@ export function FilterChips({ filter, defs, onChange, dirty, canSave, onSave, on
         <PopoverTrigger asChild>
           <button type="button" className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><Plus className="h-3 w-3" />{t("Filter")}</button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-auto p-0">
-          <PropPicker defs={defs} onPick={(key) => { onChange({ ...filter, simple: [...filter.simple, defaultRule(defs, key)] }); setAdding(false); }} />
+        <PopoverContent align="start" sideOffset={6} className="w-auto rounded-xl p-0 shadow-pop">
+          <PropPicker defs={defs} placeholder={t("Filter by…")} onPick={(key) => { onChange({ ...filter, simple: [...filter.simple, defaultRule(defs, key)] }); setAdding(false); }} />
           <div className="border-t border-border p-1">
             <button type="button" onClick={() => { onChange({ ...filter, advanced: filter.advanced ?? { id: newId(), mode: "and", rules: [] } }); setAdding(false); }} className={cn(menuItemCls, "text-muted-foreground")}><Plus className="h-4 w-4" />{t("Add advanced filter")}</button>
           </div>
@@ -433,7 +433,7 @@ export function FilterButton({ filter, defs, onChange, chipsOpen, onToggleChips 
       <PopoverContent align="end" sideOffset={6} className="w-auto rounded-xl p-0 shadow-pop">
         <PropPicker defs={defs} placeholder={t("Filter by…")} onPick={(key) => { onChange({ ...filter, simple: [defaultRule(defs, key)] }); setOpen(false); if (!chipsOpen) onToggleChips(); }} />
         <div className="border-t border-border p-1">
-          <button type="button" onClick={() => { onChange({ ...filter, advanced: { id: newId(), mode: "and", rules: [] } }); setOpen(false); if (!chipsOpen) onToggleChips(); }} className={menuItemCls}><ListFilter className="h-3.5 w-3.5 text-muted-foreground" />{t("Advanced filter (And / Or)")}</button>
+          <button type="button" onClick={() => { onChange({ ...filter, advanced: { id: newId(), mode: "and", rules: [] } }); setOpen(false); if (!chipsOpen) onToggleChips(); }} className={cn(menuItemCls, "text-muted-foreground")}><Plus className="h-4 w-4" />{t("Add advanced filter")}</button>
         </div>
       </PopoverContent>
     </Popover>
