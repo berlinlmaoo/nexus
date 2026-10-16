@@ -163,6 +163,38 @@ SCHEMAS = {
         },
         required=["query"],
     ),
+    "nexus_get_calendar": object_schema(
+        "Read the person's Master Calendar for a range of days: every task due on those days that someone is doing, "
+        "exactly as their Calendar shows it — day, time, title, status, project and who is doing it. Use it for "
+        "'what's on my calendar this week', 'what is due Friday', 'what does the design team have next week'. "
+        "A row with masked:true is a task of a private project the person is not in: call it 'Internal task' and never "
+        "guess or invent its title, project or details. Tasks with nobody assigned are not on the calendar. "
+        "Default range: this week (Monday to Sunday, WIB). At most 62 days per call. Read only.",
+        {
+            "from": {"type": "string", "description": "First day, YYYY-MM-DD (WIB). A relative day such as 'friday' or 'besok' is also understood."},
+            "to": {"type": "string", "description": "Last day, YYYY-MM-DD, inclusive."},
+            "date": {"type": "string", "description": "One day only, YYYY-MM-DD (instead of from/to)."},
+            "mine": {"type": "boolean", "description": "Only tasks the person is doing."},
+            "projectId": {"type": "string"},
+            "projectName": {"type": "string"},
+            "division": {"type": "string", "description": "A division or unit of the org chart, by name or id: its tasks and those of the units under it."},
+        },
+    ),
+    "nexus_list_room_bookings": object_schema(
+        "Read Room Booking: the bookings of the company's meeting rooms for a range of days (room, time in WIB, title, "
+        "who booked), the free time of each room per day, and — with `time` — which rooms are free for that exact slot "
+        "and the nearest free slots. Use it for 'is the meeting room free tomorrow at 2?' or 'what's booked in the "
+        "Studio this week'. Default: today and the next 6 days. At most 62 days per call. Read only.",
+        {
+            "from": {"type": "string", "description": "First day, YYYY-MM-DD (WIB)."},
+            "to": {"type": "string", "description": "Last day, YYYY-MM-DD, inclusive."},
+            "date": {"type": "string", "description": "One day only, YYYY-MM-DD; needed with `time`."},
+            "room": {"type": "string", "description": "A room name as said (e.g. 'Studio', 'VIP'). Omit for every room."},
+            "time": {"type": "string", "description": "A start time to check, HH:mm WIB, on `date`."},
+            "endTime": {"type": "string", "description": "End of the slot to check, HH:mm WIB. Default: one hour after `time`."},
+            "durationMinutes": {"type": "integer", "minimum": 15, "maximum": 720},
+        },
+    ),
     "nexus_get_doc": object_schema(
         "Read ONE NEXUS document (page) as plain text, with its title, project and URL.",
         {"docId": {"type": "string"}},

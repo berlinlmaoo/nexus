@@ -7,7 +7,7 @@ import { SelectPicker } from "@/components/SelectPicker";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import {
-  AlertTriangle, ArrowDownToLine, ArrowUp, AtSign, Check, ChevronDown, ChevronRight, ClipboardList, Copy, ExternalLink, FilePlus2, FileText,
+  AlertTriangle, ArrowDownToLine, ArrowUp, AtSign, CalendarClock, Check, ChevronDown, ChevronRight, ClipboardList, Copy, ExternalLink, FilePlus2, FileText,
   FolderKanban, History, ImagePlus, ListChecks, Loader2, Maximize2, MessageCircle, MessageSquare, Minimize2, MoreHorizontal, PanelRight,
   Paperclip, Pencil, Plus, Search, ShieldCheck, SquarePen, Trash2, UserRound, X,
 } from "lucide-react";
@@ -79,6 +79,8 @@ function stepText(s: GideonStep, t: LangApi["t"]): string {
     case "update_task": return a ? t("Updating task {name}", { name: a }) : t("Updating a task");
     case "add_task_comment": return a ? t("Commenting on {name}", { name: a }) : t("Commenting on a task");
     case "create_document": return a ? t("Writing doc {name}", { name: a }) : t("Writing a doc");
+    case "get_calendar": return a ? t("Reading the calendar, {range}", { range: a }) : t("Reading the calendar");
+    case "list_room_bookings": return a ? t("Checking room bookings, {range}", { range: a }) : t("Checking room bookings");
     case "vision_analyze": case "vision": return t("Looking at the image");
     default: return s.label || s.tool;
   }
@@ -438,7 +440,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
       t("What's overdue in {name}, and who owns it?", { name: c.projectName }),
       t("Turn the next steps of {name} into tasks", { name: c.projectName }),
     ];
-    return [t("What's overdue for me?"), t("Summarize my week across projects"), t("What did my team decide recently? Cite the sources.")];
+    return [t("What's on my calendar this week?"), t("What's overdue for me?"), t("Summarize my week across projects"), t("What did my team decide recently? Cite the sources.")];
   }, [pageContext, t]);
 
   const modeDef = GIDEON_APPROVAL_MODES.find((m) => m.id === mode) ?? GIDEON_APPROVAL_MODES[1];
@@ -1188,7 +1190,7 @@ function useGo() {
 
 function SourceChip({ source, n }: { source: GideonRef; n?: number }) {
   const go = useGo();
-  const Icon = source.kind === "project" ? FolderKanban : source.kind === "doc" ? FileText : source.kind === "comment" ? MessageSquare : source.kind === "message" ? MessageCircle : source.kind === "form" ? ClipboardList : ListChecks;
+  const Icon = source.kind === "project" ? FolderKanban : source.kind === "booking" ? CalendarClock : source.kind === "doc" ? FileText : source.kind === "comment" ? MessageSquare : source.kind === "message" ? MessageCircle : source.kind === "form" ? ClipboardList : ListChecks;
   return (
     <a
       href={source.url}

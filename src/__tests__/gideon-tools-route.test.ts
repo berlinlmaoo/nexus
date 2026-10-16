@@ -4,6 +4,9 @@ vi.mock('@/lib/gideon-service-auth', () => ({
   authenticateGideonService: vi.fn(),
 }))
 
+// The calendar tools import lib/calendar/server, which imports the session helper; no session is used here.
+vi.mock('@/lib/auth', () => ({ auth: vi.fn(async () => null) }))
+
 vi.mock('@/lib/notification-service', () => ({
   notifyTaskAssigned: vi.fn(),
   notifyTaskCompleted: vi.fn(),

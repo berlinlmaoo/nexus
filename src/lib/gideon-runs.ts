@@ -56,8 +56,11 @@ export function needsApproval(mode: ApprovalMode, action: string, input: Record<
 
 // ── Shapes sent to the web (and stored in GideonMessage.meta) ─────────────────────────────────────────
 
-/** A source a run read. comment / form / message + excerpt: 12 Oct 2026 (workspace Q&A); older clients draw them as links. */
-export type GideonRef = { kind: "task" | "project" | "doc" | "comment" | "form" | "message"; id: string; title: string; projectId?: string | null; url: string; excerpt?: string | null }
+/**
+ * A source a run read. comment / form / message + excerpt: 12 Oct 2026 (workspace Q&A); older clients draw them
+ * as links. booking (a room booking, 16 Oct 2026): the released apps show it as a plain, untappable chip.
+ */
+export type GideonRef = { kind: "task" | "project" | "doc" | "comment" | "form" | "message" | "booking"; id: string; title: string; projectId?: string | null; url: string; excerpt?: string | null }
 export type GideonCard = {
   kind: "task" | "doc" | "comment"
   action: "created" | "updated" | "commented"
@@ -207,6 +210,8 @@ export function stepLabel(tool: string, arg?: string | null): string {
     case "update_task": return a ? `Updating task ${a}` : "Updating a task"
     case "add_task_comment": return a ? `Commenting on ${a}` : "Commenting on a task"
     case "create_document": return a ? `Writing doc ${a}` : "Writing a doc"
+    case "get_calendar": return a ? `Reading the calendar, ${a}` : "Reading the calendar"
+    case "list_room_bookings": return a ? `Checking room bookings, ${a}` : "Checking room bookings"
     default: return tool.replace(/_/g, " ")
   }
 }
@@ -245,6 +250,15 @@ export async function stepArg(tool: string, input: Record<string, unknown>): Pro
         const id = str(input.projectId)
         if (!id) return null
         return (await prisma.project.findUnique({ where: { id }, select: { name: true } }))?.name ?? null
+      }
+      // The days asked about, as typed ("2026-10-19 – 2026-10-25", "Friday"); no lookup.
+      case "get_calendar":
+      case "list_room_bookings": {
+        const from = str(input.from) ?? str(input.date)
+        const to = str(input.to)
+        const room = tool === "list_room_bookings" ? str(input.room) : null
+        const days = from && to && to !== from ? `${from} – ${to}` : from ?? to
+        return [room, days].filter(Boolean).join(", ") || null
       }
       default:
         return null
@@ -295,6 +309,13 @@ export function refsFromResult(tool: string, data: unknown): GideonRef[] {
       break
     case "search_workspace":
       if (Array.isArray(d.hits)) for (const h of d.hits.slice(0, 12)) if (h?.id && h?.kind) push({ kind: h.kind, id: h.id, title: h.title, projectId: h.projectId ?? null, url: h.url, excerpt: h.excerpt ?? null })
+      break
+    case "list_room_bookings":
+      if (Array.isArray(d.bookings)) for (const b of d.bookings.slice(0, 12)) if (b?.id && b?.title) push({ kind: "booking", id: b.id, title: b.title, url: `/room-booking?booking=${b.id}`, excerpt: `${b.room} · ${b.dayLabel ?? b.day} ${b.start}–${b.end}${b.bookedBy ? ` · ${b.bookedBy}` : ""}` })
+      break
+    // Calendar rows are tasks; a masked row (private project) has no id and never becomes a source.
+    case "get_calendar":
+      if (Array.isArray(d.items)) for (const t of d.items.filter((x: AnyObj) => x && !x.masked && x.id).slice(0, 12)) push({ kind: "task", id: t.id, title: t.title, projectId: t.projectId ?? null, url: taskUrl(t.id) })
       break
   }
   return out

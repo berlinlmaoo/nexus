@@ -46,7 +46,7 @@ export type GideonAttachment = {
 };
 
 // ── What a run shows beside the text (mirrors src/lib/gideon-runs.ts on the server) ─────────────────
-export type GideonRef = { kind: "task" | "project" | "doc" | "comment" | "form" | "message"; id: string; title: string; projectId?: string | null; url: string; excerpt?: string | null };
+export type GideonRef = { kind: "task" | "project" | "doc" | "comment" | "form" | "message" | "booking"; id: string; title: string; projectId?: string | null; url: string; excerpt?: string | null };
 export type GideonCard = {
   kind: "task" | "doc" | "comment";
   action: "created" | "updated" | "commented";

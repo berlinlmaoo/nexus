@@ -26,6 +26,7 @@ import { runAutomations } from '@/lib/automation-engine'
 import { searchWorkspace, type SearchHitKind } from '@/lib/workspace-search'
 import { emitCommentAdded, emitTaskCreated, emitTaskUpdated } from '@/lib/socket-emitter'
 import type { Prisma, ProjectStatus, TaskPriority, TaskStatus, User } from '@/generated/prisma/client'
+import { gideonGetCalendar, gideonListRoomBookings } from '@/lib/gideon-calendar-tools'
 import {
   cardFromResult, needsApproval, parseApprovalMode, proposalView, publishRunEvent, recordStep, refsFromResult,
   resolveRunForToolCall, stepArg, stepLabel, type GideonDiffRow } from '@/lib/gideon-runs'
@@ -49,6 +50,8 @@ type GideonAction =
   | 'get_doc'
   | 'create_document'
   | 'search_workspace'
+  | 'get_calendar'
+  | 'list_room_bookings'
 
 type ToolBody = {
   action?: GideonAction | string
@@ -1258,7 +1261,7 @@ async function normalizeToolInput(actor: User, action: string, raw: Record<strin
     const q = asString(input.q) || asString(input.text) || asString(input.search) || asString(input.question) || asString(input.keyword) || asString(input.keywords)
     if (q) input.query = q
   }
-  const wantsProject = action === 'get_project_summary' || action === 'list_custom_fields' || action === 'create_doc' || action === 'create_task' || action === 'list_tasks'
+  const wantsProject = action === 'get_project_summary' || action === 'list_custom_fields' || action === 'create_doc' || action === 'create_task' || action === 'list_tasks' || action === 'get_calendar'
   if (wantsProject && !asString(input.projectId)) {
     const name = asString(input.project) || asString(input.projectName) || (action === 'get_project_summary' ? asString(input.name) || asString(input.query) : '')
     if (name) {
@@ -1299,6 +1302,11 @@ async function dispatch(actor: User, action: string, rawInput: Record<string, un
       return getDoc(actor, input)
     case 'search_workspace':
       return searchWorkspaceTool(actor, input)
+    // The Master Calendar and Room Booking, read as this person sees them (16 Oct 2026).
+    case 'get_calendar':
+      return gideonGetCalendar(actor.id, input)
+    case 'list_room_bookings':
+      return gideonListRoomBookings(actor.id, input)
     case 'create_task':
       return createTask(actor, input)
     case 'update_task':

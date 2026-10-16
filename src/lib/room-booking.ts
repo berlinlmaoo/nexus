@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma"
-import { ROOM_BOOKING_ROOMS } from "@/lib/validations"
+import { BOOKING_ROOMS, ROOM_CAPACITY } from "@/lib/room-booking-rooms"
 import { createInAppNotification, roomName } from "@/lib/notification-service"
 import { bi } from "@/lib/notification-text"
 import { formatBookingSlot } from "@/lib/room-booking-format"
@@ -21,12 +21,6 @@ export const bookingInclude = {
 } as const
 
 export type BookingWithCreator = Prisma.RoomBookingGetPayload<{ include: typeof bookingInclude }>
-
-/** The rooms, in the order the Room Booking page lists them. One list for the server (validations.ts). */
-export const BOOKING_ROOMS: readonly string[] = ROOM_BOOKING_ROOMS
-
-/** Seats per room, for the picker. None is recorded yet; a room without a number shows none. */
-export const ROOM_CAPACITY: Readonly<Record<string, number>> = {}
 
 const MIN = 60_000
 /** Free slots are offered on this grid, this far either side of the asked start, on the same WIB day. */
