@@ -39,7 +39,10 @@ export const WRITE_ACTIONS = new Set(["create_task", "update_task", "add_task_co
  *  - always_ask: every write.
  *  - review ("Review before writing", the web default): anything that touches other people's work or
  *    attention — editing an existing task, a comment others will read, a task assigned to someone else.
- *    A new task for nobody / only the asker, and a new doc, are made directly and shown as a card.
+ *    A new task for only the asker, and a new doc, are made directly and shown as a card.
+ *    A new task for NOBODY is held too (16 Oct 2026): "turn this doc into tasks for the people named" was
+ *    made as tasks for nobody, then assigned by separate update cards. Held, the assignees that follow are
+ *    merged into the one create card (tools route, mergeIntoCreateProposal) and Discard leaves nothing.
  *  - dont_ask: nothing waits (what GIDEON did before 12 Oct 2026, and what released apps still get).
  */
 export function needsApproval(mode: ApprovalMode, action: string, input: Record<string, unknown>, actorId: string): boolean {
@@ -49,7 +52,7 @@ export function needsApproval(mode: ApprovalMode, action: string, input: Record<
   if (action === "update_task" || action === "add_task_comment") return true
   if (action === "create_task") {
     const ids = Array.isArray(input.assigneeIds) ? input.assigneeIds.filter((x): x is string => typeof x === "string") : []
-    return ids.some((id) => id !== actorId)
+    return ids.length === 0 || ids.some((id) => id !== actorId)
   }
   return false
 }
@@ -73,7 +76,8 @@ export type GideonCard = {
   dueDate?: string | null
   assignees?: string[]
 }
-export type GideonDiffRow = { field: string; from?: string | null; to?: string | null }
+/** `toDay` / `fromDay`: the "YYYY-MM-DD" behind a Due row's label, for clients that show it in their own language. */
+export type GideonDiffRow = { field: string; from?: string | null; to?: string | null; fromDay?: string | null; toDay?: string | null }
 export type GideonProposalView = {
   id: string
   action: string
@@ -440,10 +444,15 @@ export async function runMeta(runId: string, opts: { citedBy?: string } = {}): P
   }
 }
 
-/** Short text for prompts: tell the model what its approval mode means, so it reports honestly. */
+/**
+ * Short text for prompts: tell the model what its approval mode means, so it reports honestly, and how to
+ * make a task in ONE call (the server holds and merges anyway, see needsApproval).
+ */
 export function approvalPromptLine(mode: ApprovalMode, lang: "id" | "en" = "id"): string {
   if (mode === "dont_ask") return ""
   return lang === "en"
-    ? "[APPROVAL] Some writes are held for the person's approval. When a NEXUS tool answers with proposed:true, the change has NOT happened yet: say it is waiting for their approval in the card below, never that it is done."
-    : "[PERSETUJUAN] Sebagian perubahan ditahan sampai orangnya menyetujui. Kalau tool NEXUS menjawab proposed:true, perubahannya BELUM terjadi: bilang perubahan itu menunggu persetujuannya di kartu di bawah, jangan bilang sudah selesai."
+    ? "[APPROVAL] Some writes are held for the person's approval. When a NEXUS tool answers with proposed:true, the change has NOT happened yet: say it is waiting for their approval in the card below, never that it is done. " +
+      "A new task is ONE nexus_create_task call with everything in it — title, section/status, dueDate and assigneeIds of the people named — never a create followed by an update to assign it or date it."
+    : "[PERSETUJUAN] Sebagian perubahan ditahan sampai orangnya menyetujui. Kalau tool NEXUS menjawab proposed:true, perubahannya BELUM terjadi: bilang perubahan itu menunggu persetujuannya di kartu di bawah, jangan bilang sudah selesai. " +
+      "Task baru = SATU panggilan nexus_create_task yang sudah lengkap — judul, section/status, dueDate, dan assigneeIds orang yang disebut — jangan bikin dulu lalu update untuk meng-assign atau memberi tenggat."
 }

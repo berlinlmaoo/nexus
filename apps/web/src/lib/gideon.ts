@@ -59,7 +59,7 @@ export type GideonCard = {
   dueDate?: string | null;
   assignees?: string[];
 };
-export type GideonDiffRow = { field: string; from?: string | null; to?: string | null };
+export type GideonDiffRow = { field: string; from?: string | null; to?: string | null; fromDay?: string | null; toDay?: string | null };
 export type GideonProposal = {
   id: string;
   action: "create_task" | "update_task" | "add_task_comment" | "create_document" | string;

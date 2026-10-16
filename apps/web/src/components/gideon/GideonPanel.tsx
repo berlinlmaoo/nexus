@@ -1234,8 +1234,21 @@ const FIELD_WORD: Record<string, string> = {
   Description: "Description", Comment: "Comment", Body: "Body", "Custom fields": "Custom fields",
 };
 
+/**
+ * A Due row's day in the reader's language ("Fri 23 Oct" / "Jum 23 Okt"), keeping the WIB time the server put
+ * after it; the server's English label when there is no day.
+ */
+function diffDayText(label: string | null | undefined, day: string | null | undefined, locale: string): string | null {
+  if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return label ?? null;
+  const d = new Date(`${day}T12:00:00Z`);
+  const sameYear = day.slice(0, 4) === String(new Date().getFullYear());
+  const text = d.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }), timeZone: "UTC" }).replace(/,/g, "");
+  const time = label?.match(/\b\d{2}:\d{2}$/)?.[0];
+  return time ? `${text} ${time}` : text;
+}
+
 function ProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDecided: (p: GideonProposal) => void }) {
-  const { t } = useLang();
+  const { t, locale } = useLang();
   const [pending, setPending] = useState<"apply" | "discard" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const decide = async (d: "apply" | "discard") => {
@@ -1271,8 +1284,8 @@ function ProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDec
             <div key={i} className="grid grid-cols-[6.5rem_1fr] gap-2">
               <dt className="text-muted-foreground">{t(FIELD_WORD[row.field] ?? row.field)}</dt>
               <dd className="min-w-0 break-words">
-                {row.from != null && row.from !== "" && <><span className="text-muted-foreground line-through decoration-muted-foreground/60">{row.from}</span> <span aria-hidden>→</span> </>}
-                <span className="font-medium">{row.field === "Status" && row.to ? t(row.to) : row.to ?? "—"}</span>
+                {row.from != null && row.from !== "" && <><span className="text-muted-foreground line-through decoration-muted-foreground/60">{diffDayText(row.from, row.fromDay, locale)}</span> <span aria-hidden>→</span> </>}
+                <span className="font-medium">{row.field === "Status" && row.to ? t(row.to) : diffDayText(row.to, row.toDay, locale) ?? "—"}</span>
               </dd>
             </div>
           ))}

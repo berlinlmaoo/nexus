@@ -247,7 +247,10 @@ SCHEMAS = {
         required=["projectId"],
     ),
     "nexus_create_task": object_schema(
-        "Create a NEXUS task. Prefer projectId; taskListId can target a specific list. Performs server-side read-back verification.",
+        "Create a NEXUS task. Prefer projectId; taskListId can target a specific list. Performs server-side read-back verification. "
+        "ONE call per task, complete: put the people it is for in assigneeIds and the deadline in dueDate here — never create "
+        "first and assign or date it with nexus_update_task afterwards. When the answer is proposed:true, the returned "
+        "proposalId is the task's only id until it is approved; nexus_update_task with taskId = that proposalId joins the same card.",
         {
             "projectId": {"type": "string"},
             "taskListId": {"type": "string"},
@@ -255,8 +258,8 @@ SCHEMAS = {
             "description": {"type": "string"},
             "status": TASK_STATUS,
             "priority": TASK_PRIORITY,
-            "dueDate": {"type": "string", "description": "ISO date/datetime, e.g. 2026-04-30 or 2026-04-30T10:00:00+07:00"},
-            "assigneeIds": {"type": "array", "items": {"type": "string"}},
+            "dueDate": {"type": "string", "description": "YYYY-MM-DD or ISO datetime, e.g. 2026-04-30 or 2026-04-30T10:00:00+07:00. A weekday name means the NEXT one, never today (said on a Friday, 'Friday' = next week's Friday); only 'today' is today. Say the resolved date in your reply."},
+            "assigneeIds": {"type": "array", "items": {"type": "string"}, "description": "The people the task is for (user ids from nexus_list_members). Include them here, in this call."},
             "customFields": CUSTOM_FIELD_UPDATES,
         },
         required=["title"],

@@ -27,6 +27,8 @@ import { searchWorkspace, type SearchHitKind } from '@/lib/workspace-search'
 import { emitCommentAdded, emitTaskCreated, emitTaskUpdated } from '@/lib/socket-emitter'
 import type { Prisma, ProjectStatus, TaskPriority, TaskStatus, User } from '@/generated/prisma/client'
 import { gideonGetCalendar, gideonListRoomBookings } from '@/lib/gideon-calendar-tools'
+import { humanDay, parseDueInput, todayWib } from '@/lib/gideon-dates'
+import { wibDay, wibTime } from '@/lib/calendar/core'
 import {
   cardFromResult, needsApproval, parseApprovalMode, proposalView, publishRunEvent, recordStep, refsFromResult,
   resolveRunForToolCall, stepArg, stepLabel, type GideonDiffRow } from '@/lib/gideon-runs'
@@ -98,15 +100,6 @@ function asTaskPriority(value: unknown) {
   if (!priority) return undefined
   if (!TASK_PRIORITIES.has(priority)) throw new Error(`Invalid task priority: ${priority}`)
   return priority as TaskPriority
-}
-
-function asDate(value: unknown) {
-  if (value === null) return null
-  const raw = asString(value)
-  if (!raw) return undefined
-  const parsed = new Date(raw)
-  if (Number.isNaN(parsed.getTime())) throw new Error(`Invalid date: ${raw}`)
-  return parsed
 }
 
 function asLimit(value: unknown, fallback = 50) {
@@ -1039,7 +1032,8 @@ async function createTask(actor: User, input: Record<string, unknown>) {
   if (!title) throw new Error('title is required')
   const status = asTaskStatus(input.status) || 'TODO'
   const priority = asTaskPriority(input.priority) || 'MEDIUM'
-  const dueDate = asDate(input.dueDate)
+  // A relative day ("Friday", "besok") resolves to an explicit date; today's weekday means next week (gideon-dates.ts).
+  const dueDate = parseDueInput(input.dueDate)
   const requestedAssigneeIds = asStringArray(input.assigneeIds)
   const taskList = await resolveTaskList(actor, input, status)
   await assertCanWrite(actor, taskList.projectId)
@@ -1100,7 +1094,9 @@ async function createTask(actor: User, input: Record<string, unknown>) {
   const verified = await prisma.task.findUnique({ where: { id: task.id }, include: taskInclude })
   // Realtime (12 Oct 2026): a task GIDEON made appears on open boards like any other new task.
   emitTaskCreated(taskList.projectId, JSON.parse(JSON.stringify(verified || task)))
-  return serializeTask(verified || task)
+  const made = verified || task
+  // The day to say in the reply ("due Fri 23 Oct"), resolved and explicit.
+  return { ...serializeTask(made), ...(made.dueDate ? { dueLabel: dueLabel(made.dueDate) } : {}) }
 }
 
 async function updateTask(actor: User, input: Record<string, unknown>) {
@@ -1114,7 +1110,7 @@ async function updateTask(actor: User, input: Record<string, unknown>) {
   const description = input.description === null ? null : asString(input.description)
   const status = asTaskStatus(input.status)
   const priority = asTaskPriority(input.priority)
-  const dueDate = asDate(input.dueDate)
+  const dueDate = parseDueInput(input.dueDate)
   const taskListId = asString(input.taskListId)
   const assigneeIds = asStringArray(input.assigneeIds)
   const customFieldUpdates = await resolveCustomFieldUpdates(actor, existing.taskList.projectId, input)
@@ -1202,7 +1198,7 @@ async function updateTask(actor: User, input: Record<string, unknown>) {
   }).catch(() => {})
 
   emitTaskUpdated(existing.taskList.projectId, JSON.parse(JSON.stringify(verified)))
-  return serializeTask(verified)
+  return { ...serializeTask(verified), ...(dueDate !== undefined && verified.dueDate ? { dueLabel: dueLabel(verified.dueDate) } : {}) }
 }
 
 async function addTaskComment(actor: User, input: Record<string, unknown>) {
@@ -1388,8 +1384,25 @@ export async function POST(req: Request) {
   const started = Date.now()
 
   try {
+    // Assignees / a due date for a task this run only proposed so far: into that one create card.
+    const merged = action === 'update_task' ? await mergeIntoCreateProposal(auth.actor, run.id, input) : null
+    if (merged) {
+      publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg, label, status: 'done' } })
+      publishRunEvent(run.id, { type: 'proposal', proposal: proposalView(merged.proposal) })
+      await recordStep(run.id, { tool: action, arg, ok: true, durationMs: Date.now() - started })
+      return ok({
+        proposed: true,
+        merged: true,
+        proposalId: merged.proposal.id,
+        status: 'PENDING',
+        summary: merged.proposal.summary,
+        ...(merged.due ? { due: merged.due } : {}),
+        note: 'Merged into the same create-task card (the task does not exist until approved). NOT applied yet; tell the person it is waiting for their approval in the card below. Next time put assignees and the due date in nexus_create_task itself.',
+      })
+    }
+
     if (needsApproval(parseApprovalMode(run.approvalMode) ?? 'dont_ask', action, input, auth.actor.id)) {
-      const proposal = await proposeWrite(auth.actor, run.id, action, input)
+      const { proposal, due } = await proposeWrite(auth.actor, run.id, action, input)
       publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg, label, status: 'done' } })
       publishRunEvent(run.id, { type: 'proposal', proposal: proposalView(proposal) })
       await recordStep(run.id, { tool: action, arg, ok: true, durationMs: Date.now() - started })
@@ -1398,7 +1411,11 @@ export async function POST(req: Request) {
         proposalId: proposal.id,
         status: 'PENDING',
         summary: proposal.summary,
-        note: 'NOT applied yet. It is waiting for the person to approve it in NEXUS; tell them so, do not say it is done.',
+        // The resolved day, to say in the reply ("due Fri 23 Oct"), never just "Friday".
+        ...(due ? { due } : {}),
+        note: action === 'create_task'
+          ? `NOT applied yet. It is waiting for the person to approve it in NEXUS; tell them so, do not say it is done.${due ? ` Say the due date as "${due}".` : ''} This proposalId is the only id of the task until then: to add assignees or a due date to it, call nexus_update_task with taskId = this proposalId and it joins the same card.`
+          : `NOT applied yet. It is waiting for the person to approve it in NEXUS; tell them so, do not say it is done.${due ? ` Say the due date as "${due}".` : ''}`,
       })
     }
 
@@ -1518,22 +1535,37 @@ async function getDoc(actor: User, input: Record<string, unknown>) {
 const STATUS_WORD: Record<string, string> = { TODO: 'To do', IN_PROGRESS: 'In progress', IN_REVIEW: 'In review', DONE: 'Done', CANCELLED: 'Cancelled' }
 const fmtDate = (d: Date | string | null | undefined) => (d ? new Date(d).toISOString().slice(0, 10) : null)
 
+/**
+ * A due date as the card and the reply say it: "Fri 23 Oct" (plus the WIB time when it has one), so a relative
+ * day the person used ("due Friday") is never left for them to work out (owner, 16 Oct 2026).
+ */
+function dueLabel(d: Date | string | null | undefined): string | null {
+  if (!d) return null
+  const date = new Date(d)
+  const time = wibTime(date)
+  return `${humanDay(wibDay(date), 'en', todayWib())}${time ? ` ${time}` : ''}`
+}
+const dueDay = (d: Date | string | null | undefined) => (d ? wibDay(new Date(d)) : null)
+
 async function userNames(ids: string[]): Promise<string> {
   if (!ids.length) return '—'
   const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
   return ids.map((id) => users.find((u) => u.id === id)?.name ?? '?').join(', ')
 }
 
+type WriteDescription = { summary: string; diff: GideonDiffRow[]; projectId: string | null; taskId: string | null; due?: string | null }
+
 /**
  * Check the write exactly as far as it can be checked without making it (access, the task and list it
- * names), describe it as a diff, and store it. Applying it later re-runs the real action as the same
- * person, so a permission lost in between still refuses.
+ * names) and describe it as a diff. Applying it later re-runs the real action as the same person, so a
+ * permission lost in between still refuses.
  */
-async function proposeWrite(actor: User, runId: string, action: string, input: Record<string, unknown>) {
+async function describeWrite(actor: User, action: string, input: Record<string, unknown>): Promise<WriteDescription> {
   let summary = ''
   const diff: GideonDiffRow[] = []
   let projectId: string | null = null
   let taskId: string | null = null
+  let dueText: string | null | undefined
 
   if (action === 'create_task') {
     const title = asString(input.title)
@@ -1543,13 +1575,20 @@ async function proposeWrite(actor: User, runId: string, action: string, input: R
     await assertCanWrite(actor, taskList.projectId)
     projectId = taskList.projectId
     summary = `Create task “${title}” in ${taskList.project.name}`
-    diff.push({ field: 'Title', to: title }, { field: 'Section', to: taskList.name }, { field: 'Status', to: STATUS_WORD[status] ?? status })
+    // The whole task on one card, every time (owner, 16 Oct 2026): title, section, status, due, assignees —
+    // an empty due date or assignee list says so instead of leaving the row out.
+    const due = parseDueInput(input.dueDate)
+    dueText = dueLabel(due)
+    const assignees = asStringArray(input.assigneeIds) ?? []
+    diff.push(
+      { field: 'Title', to: title },
+      { field: 'Section', to: taskList.name },
+      { field: 'Status', to: STATUS_WORD[status] ?? status },
+      { field: 'Due', to: dueText ?? '—', toDay: dueDay(due) },
+      { field: 'Assignees', to: await userNames(assignees) },
+    )
     const priority = asTaskPriority(input.priority)
     if (priority) diff.push({ field: 'Priority', to: priority })
-    const due = asDate(input.dueDate)
-    if (due) diff.push({ field: 'Due', to: fmtDate(due) })
-    const assignees = asStringArray(input.assigneeIds)
-    if (assignees?.length) diff.push({ field: 'Assignees', to: await userNames(assignees) })
     const description = asString(input.description)
     if (description) diff.push({ field: 'Description', to: description.slice(0, 300) })
   } else if (action === 'update_task') {
@@ -1566,8 +1605,11 @@ async function proposeWrite(actor: User, runId: string, action: string, input: R
     if (status && status !== existing.status) diff.push({ field: 'Status', from: STATUS_WORD[existing.status] ?? existing.status, to: STATUS_WORD[status] ?? status })
     const priority = asTaskPriority(input.priority)
     if (priority && priority !== existing.priority) diff.push({ field: 'Priority', from: existing.priority, to: priority })
-    const due = asDate(input.dueDate)
-    if (due !== undefined && fmtDate(due) !== fmtDate(existing.dueDate)) diff.push({ field: 'Due', from: fmtDate(existing.dueDate) ?? '—', to: fmtDate(due) ?? '—' })
+    const due = parseDueInput(input.dueDate)
+    if (due !== undefined && fmtDate(due) !== fmtDate(existing.dueDate)) {
+      dueText = dueLabel(due)
+      diff.push({ field: 'Due', from: dueLabel(existing.dueDate) ?? '—', to: dueText ?? '—', fromDay: dueDay(existing.dueDate), toDay: dueDay(due) })
+    }
     const listId = asString(input.taskListId)
     if (listId && listId !== existing.taskListId) {
       const target = await resolveTaskList(actor, { taskListId: listId })
@@ -1611,19 +1653,52 @@ async function proposeWrite(actor: User, runId: string, action: string, input: R
   } else {
     throw new Error(`${action} cannot be proposed`)
   }
+  return { summary, diff, projectId, taskId, due: dueText }
+}
 
-  return prisma.gideonProposal.create({
+/** Describe the write and store it as a proposal for the person to approve. */
+async function proposeWrite(actor: User, runId: string, action: string, input: Record<string, unknown>) {
+  const d = await describeWrite(actor, action, input)
+  const proposal = await prisma.gideonProposal.create({
     data: {
       runId,
       userId: actor.id,
       action,
       input: input as Prisma.InputJsonValue,
-      summary: summary.slice(0, 300),
-      diff: diff as unknown as Prisma.InputJsonValue,
-      projectId,
-      taskId,
+      summary: d.summary.slice(0, 300),
+      diff: d.diff as unknown as Prisma.InputJsonValue,
+      projectId: d.projectId,
+      taskId: d.taskId,
     },
   })
+  return { proposal, due: d.due ?? null }
+}
+
+/** The fields of an update_task that a task not created yet can take into its create proposal. */
+const MERGEABLE_FIELDS = ['title', 'description', 'status', 'priority', 'dueDate', 'assigneeIds', 'taskListId', 'customFields'] as const
+
+/**
+ * An update_task aimed at a task this run has only PROPOSED (its id is the create proposal's id — the only id
+ * the model has for it): the fields go into that create proposal instead (owner, 16 Oct 2026). One card per new
+ * task, complete; nothing exists until Apply, so Discard leaves nothing behind. Null when the id is not a
+ * pending create proposal of this run and person.
+ */
+async function mergeIntoCreateProposal(actor: User, runId: string, input: Record<string, unknown>) {
+  const id = asString(input.taskId) ?? asString(input.proposalId)
+  if (!id) return null
+  const target = await prisma.gideonProposal.findFirst({ where: { id, runId, userId: actor.id, action: 'create_task', status: 'PENDING' } })
+  if (!target) return null
+  const merged: Record<string, unknown> = { ...((target.input as Record<string, unknown>) ?? {}) }
+  for (const key of MERGEABLE_FIELDS) if (input[key] !== undefined) merged[key] = input[key]
+  const d = await describeWrite(actor, 'create_task', merged)
+  // Conditional, like the Apply claim: a proposal decided in the meantime is not changed under the person.
+  const changed = await prisma.gideonProposal.updateMany({
+    where: { id: target.id, status: 'PENDING' },
+    data: { input: merged as Prisma.InputJsonValue, summary: d.summary.slice(0, 300), diff: d.diff as unknown as Prisma.InputJsonValue, projectId: d.projectId },
+  })
+  if (changed.count === 0) throw new Error('That task proposal was already decided; ask again.')
+  const proposal = await prisma.gideonProposal.findUnique({ where: { id: target.id } })
+  return proposal ? { proposal, due: d.due ?? null } : null
 }
 
 /**
