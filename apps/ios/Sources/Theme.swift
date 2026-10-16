@@ -390,29 +390,12 @@ struct PageTopInsetReader: ViewModifier {
     }
 }
 
-/// A row under a `StickyInPageScroll` head: while any part of it is under the stuck head it is not drawn, so the
-/// head never sits on a sliced row ("0/14" and name halves under the attendance day row, an avatar sliver under
-/// "Who's working on what"; UI tour run 19, iPhone R19-I-05 / R19-I-31, iPad R19-I-11, Mac R19-M-04). The page
-/// shows whole rows under the head and a row's height of card at most. `head`: the stuck head's height.
-struct HiddenUnderStickyHead: ViewModifier {
-    let head: CGFloat
-    @Environment(\.pageScrollTopInset) private var top
-    func body(content: Content) -> some View {
-        if #available(iOS 18.0, *), head > 0 {
-            let top = self.top, head = self.head
-            content.visualEffect { view, proxy in
-                let f = proxy.frame(in: .scrollView(axis: .vertical))
-                return view.opacity(f.minY < top + head - 0.5 && f.maxY > top ? 0 : 1)
-            }
-        } else {
-            content
-        }
-    }
-}
-
 /// A header that stays under the page's top edge while the rows below it scroll by, then leaves with them:
 /// it only moves down, at most `limit` (the rows' height). iOS 18+, where the page's inset is known
 /// (`pageScrollTopInset`); the attendance board's day row and the Overview's "Who's working on what" head.
+/// The head is opaque and drawn above its rows (zIndex), so a row scrolling under it is clipped by it. Rows
+/// were blanked whole while under it since run 19, which left an empty row-sized band (decision 29 of run 20,
+/// R20-B-04).
 struct StickyInPageScroll: ViewModifier {
     let limit: CGFloat
     @Environment(\.pageScrollTopInset) private var top

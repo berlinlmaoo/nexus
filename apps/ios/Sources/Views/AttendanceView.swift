@@ -132,6 +132,8 @@ struct AttendanceView: View {
     private var isRoot: Bool { NXSidebarPage.isRoot(.attendance, hSize: hSize, router: router) }
     /// The page scroll's top content inset (the pinned header above it).
     @State private var pageTopInset: CGFloat = 0
+    /// The Days off / Public holidays card's log, open (web DayOffLogModal).
+    @State private var allowanceLog: AttendanceAllowanceLogSheet.Kind?
 
     /// Web attendance.tsx PageHeader; the subtitle follows whether this person sees the crew board.
     private var pageHeader: some View {
@@ -457,23 +459,31 @@ struct AttendanceView: View {
     /// fixed minimum with its lower half empty (UI tour run 14, P-M11).
     private var metricsGrid: some View {
         Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+            // No label above a heading (decision 4 of run 20, R20-I-23 / R20-B-31): each card's heading is the
+            // answer, with the icon and colour saying what it is about (fix20 API copy 4).
             GridRow {
-                FunMetricCard(icon: "cup.and.saucer.fill", label: T("Today's status"), value: todayStatusValue,
-                              helper: todayStatusHelper, tint: NX.success)
+                FunMetricCard(icon: "cup.and.saucer.fill", value: todayStatusValue,
+                              helper: todayStatusHelper, tint: NX.success, spokenName: T("Today's status"))
                 FunMetricCard(icon: nearby?.inside == true && dispRec?.officeLocation?.name == nil ? "checkmark.circle.fill" : "mappin.circle.fill",
-                              label: officeLabel, value: officeValue, helper: officeHelper, tint: officeTint)
+                              value: officeValue, helper: officeHelper, tint: officeTint, spokenName: officeLabel)
             }
             GridRow {
-                FunMetricCard(icon: "sparkles", label: T("Days off"), value: Self.quotaValue(today?.dayOffUsedThisMonth, today?.dayOffQuota),
-                              helper: dayOffHelper, tint: NX.warning)
-                // No "0/0 used", which read like a bug (decision 10 of run 19, R19-B-13).
+                // "x/4" always counts what was USED (decision 10 of run 20, R20-B-19); the card opens the period's
+                // day-off log, as the web's (decision 11, R20-B-18).
+                FunMetricCard(icon: "sparkles", value: dayOffValue, helper: dayOffHelper, tint: NX.warning,
+                              action: { allowanceLog = .dayOff })
+                // No "0/0 used", which read like a bug (decision 10 of run 19, R19-B-13); the subline says where the
+                // detail is, not "No public holidays this month" a second time (R20-I-11 / R20-B-18).
                 let noHolidays = today?.redDateQuota == 0 && (today?.redDateUsedThisMonth ?? 0) == 0
-                FunMetricCard(icon: "calendar", label: T("Public holidays"),
-                              value: noHolidays ? T("None this month") : Self.quotaValue(today?.redDateUsedThisMonth, today?.redDateQuota),
-                              helper: noHolidays ? T("No public holidays this month") : T("This month's public\u{2011}holiday allowance"),
-                              tint: Color(hex: "#fb7185"))
+                FunMetricCard(icon: "calendar",
+                              value: noHolidays ? T("None this month")
+                                  : String(format: T("Public holidays · %@/%@ used"), AppNumber.int(today?.redDateUsedThisMonth ?? 0), AppNumber.int(today?.redDateQuota ?? 0)),
+                              helper: T("See public holidays used"),
+                              tint: Color(hex: "#fb7185"), spokenName: noHolidays ? T("Public holidays") : nil,
+                              action: { allowanceLog = .holiday })
             }
         }
+        .sheet(item: $allowanceLog) { kind in AttendanceAllowanceLogSheet(kind: kind) }
     }
 
     /// Under today's status: the schedule it is measured against.
@@ -486,21 +496,19 @@ struct AttendanceView: View {
     /// The quota above already counts extra days the BoD granted for this period; this says so,
     /// so a number that grew overnight is not a mystery. Older servers send no breakdown.
     private var dayOffHelper: String {
-        let base = T("This month's day-off allowance")
-        guard let bonus = today?.dayOffAllowance?.bonus, bonus > 0 else { return base }
-        return "\(base) · " + String(format: T("incl. %d extra"), bonus)
+        guard let a = today?.dayOffAllowance, let bonus = a.bonus, bonus > 0 else { return T("See how your days off were used") }
+        let reasons = (a.grants ?? []).compactMap(\.reason).filter { !$0.isEmpty }.joined(separator: ", ")
+        return T("Includes {n} extra ({reasons}) — expires on the 27th")
+            .replacingOccurrences(of: "{n}", with: AppNumber.int(bonus))
+            .replacingOccurrences(of: "{reasons}", with: reasons)
     }
 
-    /// Allowances belong to each person and come from the API. When the server doesn't send one,
-    /// show a dash rather than a default number: "0/4" for someone whose quota was never set is a
-    /// convincing-looking lie.
-    /// A quota of 0 says so in words: "0/0 used" carried no information (UI tour run 13, F-17 / I-24 / M-19).
-    /// "0/4 used" on every platform, a quota of 0 included ("0/0 used", as the web; UI tour run 16, R16-I-11 /
-    /// R16-B-24, decision 4).
-    private static func quotaValue(_ used: Int?, _ quota: Int?) -> String {
-        guard let quota else { return "\u{2014}" }
-        return String(format: T("%@/%@ used"), AppNumber.int(used ?? 0), AppNumber.int(quota))
+    /// "Days off · 0/4 used" (fix20 API copy 3); a dash while the quota is unknown.
+    private var dayOffValue: String {
+        guard let quota = today?.dayOffQuota else { return "\(T("Days off")) · \u{2014}" }
+        return String(format: T("Days off · %@/%@ used"), AppNumber.int(today?.dayOffUsedThisMonth ?? 0), AppNumber.int(quota))
     }
+
 
     private var todayStatusValue: String {
         if forcePending { return T("Finish yesterday's attendance") }
@@ -1513,11 +1521,33 @@ private struct DrawnCheck: View {
 
 struct FunMetricCard: View {
     let icon: String
-    let label: String
+    /// A small label above the value. Attendance passes none since run 20 (decision 4: no label above a heading).
+    var label: String = ""
     let value: String
     var helper: String = ""
     let tint: Color
+    /// What VoiceOver says before the value when no label is drawn ("Public holidays: None this month").
+    var spokenName: String? = nil
+    /// Opens the card's detail; the helper then ends in a chevron (web FunMetric onClick).
+    var action: (() -> Void)? = nil
+
     var body: some View {
+        if let action {
+            Button(action: action) { card }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(spoken)
+                .accessibilityAddTraits(.isButton)
+        } else {
+            card.accessibilityElement(children: .combine).accessibilityLabel(spoken)
+        }
+    }
+
+    private var spoken: String {
+        [spokenName ?? (label.isEmpty ? nil : label), value, helper.isEmpty ? nil : helper].compactMap { $0 }.joined(separator: ". ")
+    }
+
+    private var card: some View {
         VStack(alignment: .leading, spacing: 0) {
             Image(systemName: icon).font(.system(size: 16, weight: .semibold)).foregroundStyle(tint)
                 .frame(width: 38, height: 38)
@@ -1532,14 +1562,22 @@ struct FunMetricCard: View {
             // The label first and small, the answer second and large: the eye lands on the number,
             // and the word above it says what the number is about.
             // A label in sentence case, not an uppercase eyebrow (decision 1 of run 19, R19-I-32 / R19-B-15).
-            Text(label).font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg)
-                .lineLimit(1).minimumScaleFactor(0.8)
+            if !label.isEmpty {
+                Text(label).font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+            }
             Text(value).font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
                 .lineLimit(2).minimumScaleFactor(0.6).fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
             if !helper.isEmpty {
-                Text(helper).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
-                    .lineLimit(2).fixedSize(horizontal: false, vertical: true).padding(.top, 3)
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(helper).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    if action != nil {
+                        Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.mutedFg)
+                    }
+                }
+                .padding(.top, 3)
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -1718,7 +1756,7 @@ struct StreakBoardCard: View {
     @Environment(\.horizontalSizeClass) private var hSize
     /// Wide enough that "Muhammad …" rows can be told apart (UI tour run 13, F-16 / I-24: 76 pt cut every
     /// name to about ten characters); more on an iPad or Mac, where the board has room.
-    /// 190 on iPad / Mac: full names, as the web's board, where 150 turned them into "Irvandes Hasri Ilham M."
+    /// 190 on iPad / Mac: full names, as the web's board, where 150 turned them into "Irfan Hadi Ismail M."
     /// (UI tour run 16, R16-B-24).
     /// Since run 17 (R17-M-05): narrower, 150 pt (names shorten to initials, `nameVariants`), only when the full
     /// 190 pt would keep the whole period from fitting at the 14 pt day minimum; the period first, as on the web.
@@ -1727,14 +1765,29 @@ struct StreakBoardCard: View {
         guard gridWidth > 0, periodDays.count > 1 else { return 190 }
         let n = CGFloat(periodDays.count)
         let needed = n * 14 + (n - 1) * gap
-        let pills: CGFloat = webTools && !deductions.isEmpty ? Self.pillsW + lane : 0
+        let pills: CGFloat = webTools && !deductions.isEmpty ? pillsW + lane : 0
         let others = scoreW + 2 * lane + pills
         return gridWidth - others - 190 >= needed ? 190 : 150
     }
     /// The board's whole width (names, days, score, pills), for `nameW`.
     @State private var gridWidth: CGFloat = 0
-    /// The per-person pills column: "4/10 days off" and "−590 XP" side by side.
-    private static let pillsW: CGFloat = 140
+    /// The per-person pills column: "4 days off left" and "−590 XP" side by side.
+    /// Wide enough for the chips in words ("4 days off left", "1.000 XP"), and for a third, "2 holidays left",
+    /// only in a month with public holidays (decisions 10 and 11 of run 20, R20-B-19 / R20-B-25).
+    private var pillsW: CGFloat { showsHolidayChips ? 250 : 160 }
+    /// The per-person holidays chip shows only when the month has public holidays (fix20 API copy 4).
+    private var showsHolidayChips: Bool {
+        deductions.values.contains { ($0.redDate?.quota ?? 0) > 0 || ($0.redDate?.used ?? 0) > 0 }
+    }
+
+    /// "4 days off left", "1 day off left", "No days off left" (fix20 API copy 3): what is LEFT, in words.
+    static func daysOffLeft(_ n: Int) -> String {
+        n <= 0 ? T("No days off left") : n == 1 ? T("1 day off left") : T("{n} days off left").replacingOccurrences(of: "{n}", with: AppNumber.int(n))
+    }
+
+    static func holidaysLeft(_ n: Int) -> String {
+        n <= 0 ? T("No holidays left") : n == 1 ? T("1 holiday left") : T("{n} holidays left").replacingOccurrences(of: "{n}", with: AppNumber.int(n))
+    }
 
     // ProjDate's shared Calendar and DateFormatter cache instead of fresh ones. These are read from
     // `body`, and constructing a DateFormatter there is about the most expensive thing you can do:
@@ -2063,6 +2116,8 @@ struct StreakBoardCard: View {
     /// edges kept a half day ("N 1", "S 1") and the leave badge sat on the cut one (UI tour run 18, iPhone
     /// R18-I-04, iPad R18-I-05).
     private func alignLeadDay(_ proxy: ScrollViewProxy? = nil) {
+        // iOS 18: WholeDayStrip places the strip by its offset (see `grid`).
+        if #available(iOS 18.0, *) { return }
         guard !periodDays.isEmpty else { return }
         let key = todayKey.flatMap { leadingDayKey(today: $0) } ?? (wholeDaysWidth == nil ? periodDays[0].key : nil)
         guard let key else { return }
@@ -2071,6 +2126,7 @@ struct StreakBoardCard: View {
     }
 
     private func scrollToToday(_ proxy: ScrollViewProxy) {
+        if #available(iOS 18.0, *) { return }
         alignLeadDay(proxy)
         guard let t = todayKey else { return }
         Task { @MainActor in
@@ -2084,6 +2140,12 @@ struct StreakBoardCard: View {
                 }
             }
         }
+    }
+
+    /// The index of `leadingDayKey`: the day WholeDayStrip puts flush with the left edge (iOS 18).
+    private var leadIndex: Int? {
+        guard let t = todayKey, let key = leadingDayKey(today: t) else { return nil }
+        return periodDays.firstIndex { $0.key == key }
     }
 
     /// The day to put flush with the strip's left edge so today lands mid-strip; nil while the strip's
@@ -2244,12 +2306,14 @@ struct StreakBoardCard: View {
                 // size change (the rows, then the pills column loading), which put the strip back at today's
                 // fraction of the period, mid-day, after the whole-day scroll: half a MON 12 column at the left,
                 // a MON 19 sliver at the right (UI tour run 19, iPhone R19-I-02, iPad R19-I-05).
-                .modifier(InitialScrollAnchor(anchor: daysAnchor, realign: { alignLeadDay(proxy) }))
-                // The day flush with the strip's left edge, by identity: the strip changes width after the
-                // first scroll (the members, then the iPad / Mac pills column load and the day width follows),
-                // and a position kept in points then sat mid-day, so both edges cut a column ("N" of SUN 11,
-                // "MO 2("; UI tour run 17, iPhone R17-I-05 / R17-I-12, iPad R17-I-07, Mac R17-M-05).
-                .scrollPosition(id: $leadDay, anchor: .leading)
+                // iOS 18 and later (UI tour run 20, iPhone R20-I-02, iPad R20-I-01, the third report): the strip is
+                // placed by its offset in points, a whole number of days, and put back on a whole day whenever the
+                // layout moves it. The id-based scrolls below never landed: in a reproduction on the iPhone 17 Pro
+                // Max simulator the strip stayed where the initial anchor had put it for the wider, not yet narrowed
+                // strip (run 20: 369 pt, 8 pt into SUN 11), whatever `scrollTo` and the bound id asked for, while an
+                // offset of 15 whole days landed exactly. iOS 17 keeps the anchor and the id (WholeDayStrip).
+                .modifier(WholeDayStrip(anchor: daysAnchor, step: cellW + gap, lead: leadIndex, leadDay: $leadDay,
+                                        realign: { alignLeadDay(proxy) }))
                 // Exactly as wide as the whole days that fit: with the scroll resting on a day, neither edge
                 // ever cuts one ("TU…" at the right, a sliver at the left; UI tour run 16, R16-I-17 /
                 // R16-M-14). The width is measured outside this frame, on the room the board leaves.
@@ -2271,30 +2335,37 @@ struct StreakBoardCard: View {
                     .zIndex(1)
                 scoreColumn
             }
-            // The web board's per-person pills, "0/4 days off" and "−590 XP" (managers, iPad / Mac; Q-IB8).
+            // The web board's per-person pills, "4 days off left" and "−590 XP" (managers, iPad / Mac; Q-IB8).
             if webTools && !deductions.isEmpty {
                 VStack(alignment: .leading, spacing: gap) {
                     // The pills' column named like Score beside it (UI tour run 19, R19-B-19).
                     Text("\(T("Days off")) · XP").font(.system(size: 11, weight: .semibold)).foregroundStyle(NX.mutedFg)
                         .lineLimit(1).minimumScaleFactor(0.8)
-                        .frame(width: Self.pillsW, height: headerH, alignment: .bottomLeading)
+                        .frame(width: pillsW, height: headerH, alignment: .bottomLeading)
                         .background(NX.card)
                         .modifier(StickyInPageScroll(limit: stickyLimit))
                         .zIndex(1)
                     ForEach(shownMembers) { m in
                         HStack(spacing: 4) {
                             if let d = deductions[m.id] {
-                                Self.pill(T("{left}/{quota} days off").replacingOccurrences(of: "{left}", with: AppNumber.int(d.remaining))
-                                            .replacingOccurrences(of: "{quota}", with: AppNumber.int(d.quota)),
+                                // In words, never a bare "4/4" that reads as used on one screen and left on the
+                                // next (decision 10 of run 20, R20-B-19).
+                                Self.pill(Self.daysOffLeft(d.remaining),
                                           tone: d.remaining == 0 ? NX.danger : d.remaining <= 1 ? NX.warning : NX.mutedFg)
+                                    .help(T("Day off left this period: {left} of {quota} (used {used})")
+                                            .replacingOccurrences(of: "{left}", with: AppNumber.int(d.remaining))
+                                            .replacingOccurrences(of: "{quota}", with: AppNumber.int(d.quota))
+                                            .replacingOccurrences(of: "{used}", with: AppNumber.int(d.used)))
+                                if showsHolidayChips, let r = d.redDate {
+                                    Self.pill(Self.holidaysLeft(r.remaining), tone: r.remaining == 0 && r.quota > 0 ? NX.danger : NX.mutedFg)
+                                }
                                 if let xp = d.xp {
                                     Self.pill("\(xp.score < 0 ? "−" : "")\(AppNumber.int(abs(xp.score))) XP",
                                               tone: xp.score < 0 ? NX.danger : xp.score > 1000 ? NX.success : NX.mutedFg)
                                 }
                             }
                         }
-                        .frame(width: Self.pillsW, height: cell, alignment: .leading)
-                        .modifier(HiddenUnderStickyHead(head: headerH))
+                        .frame(width: pillsW, height: cell, alignment: .leading)
                     }
                 }
             }
@@ -2319,6 +2390,11 @@ struct StreakBoardCard: View {
             .lineLimit(1).fixedSize()
     }
 
+    /// The weekday as wide as a day allows at 11 pt: "MON", "MO" or "M".
+    static func weekdayText(_ label: String, width: CGFloat) -> String {
+        width >= 28 ? label : width >= 20 ? String(label.prefix(2)) : String(label.prefix(1))
+    }
+
     private var dateRow: some View {
         HStack(spacing: gap) {
             ForEach(periodDays) { pd in
@@ -2326,14 +2402,16 @@ struct StreakBoardCard: View {
                 // Two readable lines as on the web, 9 and 11 pt (they were 7 and 8; UI tour run 17, R17-B-11).
                 // A narrow day takes the weekday's first two letters rather than shrinking it.
                 VStack(spacing: 1) {
-                    // 11 pt, the floor for text (UI tour run 19, R19-B-19: 9 pt letters).
-                    Text(cellW < 24 ? String(pd.weekdayLabel.prefix(2)) : pd.weekdayLabel)
+                    // 11 pt, the floor for text (UI tour run 19, R19-B-19: 9 pt letters). Never scaled below it: the 0.7
+                    // scale factor still drew 8 pt letters in the narrow iPad / Mac days (run 20, R20-B-08), which now
+                    // take one letter, as a calendar's weekday row does.
+                    Text(Self.weekdayText(pd.weekdayLabel, width: cellW))
                         .font(.system(size: 11, weight: isToday ? .bold : .medium))
                         .foregroundStyle(isToday ? NX.violetText : NX.mutedFg)
-                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .lineLimit(1)
                     Text("\(pd.day)").font(.system(size: 11, weight: isToday ? .bold : .medium))
                         .foregroundStyle(isToday ? Color.white : NX.foreground.opacity(0.75))
-                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .lineLimit(1).fixedSize()
                         .frame(width: max(cellW, 18), height: 15)
                         .background(isToday ? NX.violet : Color.clear, in: Capsule())
                 }
@@ -2353,7 +2431,6 @@ struct StreakBoardCard: View {
         VStack(alignment: .leading, spacing: gap) {
             ForEach(shownMembers) { m in
                 Self.nameLabel(m).frame(width: nameW, height: cell, alignment: .leading)
-                    .modifier(HiddenUnderStickyHead(head: headerH))
             }
         }
     }
@@ -2361,7 +2438,7 @@ struct StreakBoardCard: View {
     /// The name, and under it, for someone who left the company, a muted "Left · 10 Oct" (offboarding,
     /// 8 Oct 2026). Two short lines fit a row; the name keeps its size so the column stays even.
     /// The full name, then shorter forms of it: the words after the first become initials one by
-    /// one from the end ("Muhammad Alvar Pratama" → "Muhammad Alvar P." → "Muhammad A. P.").
+    /// one from the end ("Muhammad Arif Pratama" → "Muhammad Arif P." → "Muhammad A. P.").
     static func nameVariants(_ name: String) -> [String] {
         let words = name.split(separator: " ").map(String.init)
         guard words.count > 1 else { return [name] }
@@ -2375,23 +2452,30 @@ struct StreakBoardCard: View {
     }
 
     static func nameLabel(_ m: Member) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // One size for every row (run 14, N-05 / P-I23: a shrink-to-fit name came out in three sizes
-            // and was still cut). A name too long for the column keeps its first word and turns the
-            // rest into initials ("Ashley K. A."); only a name that still does not fit is cut.
-            ViewThatFits(in: .horizontal) {
-                ForEach(Array(nameVariants(m.name).enumerated()), id: \.offset) { _, v in
+        // One size for every row (run 14, N-05 / P-I23: a shrink-to-fit name came out in three sizes
+        // and was still cut). A name too long for the column keeps its first word and turns the
+        // rest into initials ("Anisa K. A."); only a name that still does not fit is cut.
+        // Someone who left carries a muted "Left · 10 Oct" after the name on the same line, at the same 11 pt
+        // (it was a 7 pt second line; UI tour run 20, R20-B-08), shortened to "Left" where the date does not fit.
+        let variants = nameVariants(m.name)
+        let tags: [String] = m.leftAt == nil ? [] : [LeftTag.label(m.leftAt), LeftTag.leftWord]
+        return ViewThatFits(in: .horizontal) {
+            ForEach(Array(tags.enumerated()), id: \.offset) { _, tag in
+                ForEach(Array(variants.enumerated()), id: \.offset) { _, v in
+                    (Text(v) + Text(verbatim: "  " + tag).foregroundColor(NX.mutedFg))
+                        .lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                }
+            }
+            if tags.isEmpty {
+                ForEach(Array(variants.enumerated()), id: \.offset) { _, v in
                     Text(v).lineLimit(1).fixedSize(horizontal: true, vertical: false)
                 }
-                Text(m.name).lineLimit(1)
             }
-            .font(NXFont.text(11, .medium)).foregroundStyle(NX.foreground)
-            .accessibilityElement(children: .ignore).accessibilityLabel(m.name)
-            if m.leftAt != nil {
-                Text(LeftTag.label(m.leftAt)).font(NXFont.text(7, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                    .accessibilityLabel(LeftTag.accessibilityText(m.leftAt))
-            }
+            Text(m.name).lineLimit(1)
         }
+        .font(NXFont.text(11, .medium)).foregroundStyle(NX.foreground)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(m.leftAt == nil ? m.name : "\(m.name), \(LeftTag.accessibilityText(m.leftAt))")
     }
 
     private var scoreColumn: some View {
@@ -2401,7 +2485,6 @@ struct StreakBoardCard: View {
                     .font(NXFont.text(10, .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .frame(width: scoreW, height: cell, alignment: .trailing)
-                    .modifier(HiddenUnderStickyHead(head: headerH))
             }
         }
     }
@@ -2439,7 +2522,6 @@ struct StreakBoardCard: View {
                     }
                 }
                 .frame(height: cell)
-                .modifier(HiddenUnderStickyHead(head: headerH))
             }
         }
     }
@@ -2497,7 +2579,7 @@ struct StreakBoardCard: View {
             let nowKey = ProjDate.fmt("yyyy-MM-dd").string(from: Date())
             return HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: gap) {
-                    Color.clear.frame(height: 26)
+                    Color.clear.frame(height: 30)
                     ForEach(members) { m in
                         StreakBoardCard.nameLabel(m).frame(width: nameW, height: cell, alignment: .leading)
                     }
@@ -2507,16 +2589,17 @@ struct StreakBoardCard: View {
                         ForEach(periodDays) { pd in
                             let isToday = pd.key == todayKey
                             VStack(spacing: 1) {
-                                Text(pd.weekdayLabel).font(.system(size: 7, weight: isToday ? .bold : .medium))
-                                    .foregroundStyle(isToday ? NX.violetText : NX.mutedFg.opacity(0.8))
-                                    .lineLimit(1).minimumScaleFactor(0.6)
-                                Text("\(pd.day)").font(.system(size: 9, weight: isToday ? .bold : .regular))
+                                // 11 pt as the card's board (UI tour run 20, R20-B-08: 7 and 9 pt).
+                                Text(StreakBoardCard.weekdayText(pd.weekdayLabel, width: cell)).font(.system(size: 11, weight: isToday ? .bold : .medium))
+                                    .foregroundStyle(isToday ? NX.violetText : NX.mutedFg)
+                                    .lineLimit(1)
+                                Text("\(pd.day)").font(.system(size: 11, weight: isToday ? .bold : .regular))
                                     .foregroundStyle(isToday ? Color.white : NX.mutedFg).frame(width: cell, height: 16)
                                     .background(isToday ? NX.violet : Color.clear, in: Capsule())
                             }
-                            .frame(width: cell, height: 26)
+                            .frame(width: cell, height: 30)
                             .overlay(alignment: .leading) {
-                                if pd.startsMonth { Rectangle().fill(NX.border).frame(width: 1, height: 26).offset(x: -gap / 2) }
+                                if pd.startsMonth { Rectangle().fill(NX.border).frame(width: 1, height: 30).offset(x: -gap / 2) }
                             }
                         }
                     }
@@ -2541,7 +2624,7 @@ struct StreakBoardCard: View {
                     }
                 }
                 VStack(alignment: .trailing, spacing: gap) {
-                    Text(T("Score")).font(.system(size: 9, weight: .semibold)).foregroundStyle(NX.mutedFg).frame(height: 26, alignment: .bottom)
+                    Text(T("Score")).font(.system(size: 11, weight: .semibold)).foregroundStyle(NX.mutedFg).frame(height: 30, alignment: .bottom)
                     ForEach(members) { m in
                         StreakBoardCard.scoreText(worked: m.workedDays, target: StreakBoardCard.scoreTarget(m, periodDays: periodDays.count))
                             .font(NXFont.text(11, .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
@@ -2985,21 +3068,60 @@ private struct ExportLabelStyle: LabelStyle {
 
 
 
-/// `defaultScrollAnchor` for the first offset only (iOS 18), and a whole-day realignment whenever the content
-/// changes width; iOS 17 keeps the plain anchor (UI tour run 19, R19-I-02).
-struct InitialScrollAnchor: ViewModifier {
+/// The attendance board's day strip at rest on whole days.
+///
+/// iOS 18 and later: the strip's offset is `lead` whole days (`step` each), set when the strip appears and again
+/// whenever `lead` changes (the strip's width or the day width settled), and put back on a whole day whenever the
+/// layout leaves it mid-day while nobody is scrolling: today's day while the person has not scrolled, else the
+/// nearest whole day. `lead` nil = the period's first day (a past period, or the whole period fits).
+/// iOS 17: the anchor at today's fraction of the period plus the day flush with the edge by id (run 17-19).
+struct WholeDayStrip: ViewModifier {
     let anchor: UnitPoint
+    let step: CGFloat
+    let lead: Int?
+    @Binding var leadDay: String?
     let realign: () -> Void
 
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
-            content
-                .defaultScrollAnchor(anchor, for: .initialOffset)
-                .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentSize.width }) { old, new in
-                    if old != new { realign() }
-                }
+            content.modifier(WholeDayStripOffset(step: step, lead: lead))
         } else {
-            content.defaultScrollAnchor(anchor)
+            content
+                .defaultScrollAnchor(anchor)
+                .scrollPosition(id: $leadDay, anchor: .leading)
         }
+    }
+}
+
+@available(iOS 18.0, *)
+private struct WholeDayStripOffset: ViewModifier {
+    let step: CGFloat
+    let lead: Int?
+    @State private var position = ScrollPosition()
+    @State private var phase: ScrollPhase = .idle
+    /// The person scrolled the strip themselves: from then on it only snaps to the nearest whole day.
+    @State private var userMoved = false
+
+    private var leadX: CGFloat { CGFloat(lead ?? 0) * step }
+
+    func body(content: Content) -> some View {
+        content
+            .scrollPosition($position)
+            .onScrollPhaseChange { _, now in
+                phase = now
+                if now == .interacting || now == .tracking { userMoved = true }
+            }
+            .onScrollGeometryChange(for: [CGFloat].self, of: { [$0.contentOffset.x, $0.containerSize.width, $0.contentSize.width] }) { _, g in
+                settle(offset: g[0], container: g[1], content: g[2])
+            }
+            .onAppear { position.scrollTo(x: leadX) }
+            .onChange(of: lead) { _, _ in if !userMoved { position.scrollTo(x: leadX) } }
+    }
+
+    private func settle(offset: CGFloat, container: CGFloat, content: CGFloat) {
+        guard phase == .idle, step > 0, content > container else { return }
+        let end = content - container
+        let target = userMoved ? min((offset / step).rounded() * step, end) : min(leadX, end)
+        if abs(offset - target) > 0.5 { position.scrollTo(x: target) }
     }
 }

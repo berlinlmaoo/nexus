@@ -500,6 +500,9 @@ struct ActiveSessionsCard: View {
             let f = RelativeDateTimeFormatter()
             f.locale = locale
             f.dateTimeStyle = .named
+            // "25 min ago", not "25 minutes ago", which a group row cut to "Active 25 minute…" (UI tour run 20,
+            // R20-I-16).
+            f.unitsStyle = .short
             rel = f.localizedString(for: d, relativeTo: Date())
         } else {
             rel = d.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(locale))

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Outlet Sales Dashboard: the owner's revisions after the meeting with Ryan (14 Oct 2026)
+// MARK: - Outlet Sales Dashboard: the owner's revisions after the meeting with the outlet team (14 Oct 2026)
 //
 // Guest overview (Overview tab): RSVP total with its items, Hosting total with its items, Communities with
 // each community's total (a Breakdown community opens onto its own items). Day target (Calendar tab): the
@@ -131,15 +131,17 @@ struct OutletGuestOverview: View {
     private func communityRow(_ c: OutletGuestCommunity, expandable: Bool) -> some View {
         // The name starts where the RSVP and Hosting labels start; the chevron follows it, so the three groups
         // keep one label column (UI tour run 19, R19-I-26: a leading chevron slot indented every community).
+        // Run 20 (decision 12, R20-I-17 / R20-B-29): as the web, a grey "›" BEFORE the name of a community that
+        // opens, and its slot kept on the others, so every community name starts at one edge.
         HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(NX.mutedFg)
+                .rotationEffect(.degrees(open.contains(c.id) ? 90 : 0))
+                .frame(width: 12)
+                .opacity(expandable ? 1 : 0)
+                .accessibilityHidden(true)
             Text(c.archived ? "\(c.name) · \(T("archived"))" : c.name)
                 .font(NXFont.text(14)).foregroundStyle(c.archived ? NX.mutedFg : NX.foreground).lineLimit(1)
-            if expandable {
-                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(NX.violetText)
-                    .rotationEffect(.degrees(open.contains(c.id) ? 90 : 0))
-                    .accessibilityHidden(true)
-            }
             Spacer(minLength: 4)
             Text(OutletFormat.count(c.total)).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                 .monospacedDigit()
@@ -521,17 +523,18 @@ struct OutletReportSettingsView: View {
                 }
             }
             .padding(.leading, inset)
-            // Only the separator under a row: a reordered row kept a full-width top line too, so
-            // "Hosting Team" showed two lines (UI tour run 13 F-23 / run 14 N-29).
-            .listRowSeparator(.hidden, edges: .top)
+            // A hairline between rows (UI tour run 20, R20-B-32: hiding each row's top edge hid the line it shares
+            // with the row above, so the ↑ ↓ trash columns floated). Rows move by the arrows now, not by a drag,
+            // so the doubled line of a dragged row (run 13 F-23 / run 14 N-29) does not come back.
+            .listRowSeparatorTint(NX.border)
         }
         addRow(newText, label: addLabel) { append(items, $0) }
             .padding(.leading, inset)
-            .listRowSeparator(.hidden, edges: .top)
+            .listRowSeparatorTint(NX.border)
         ForEach(archived, id: \.rowId) { item in
             archivedRow(item.label) { setArchived(items, item.rowId, false) }
                 .padding(.leading, inset)
-                .listRowSeparator(.hidden, edges: .top)
+                .listRowSeparatorTint(NX.border)
         }
     }
 
@@ -549,7 +552,9 @@ struct OutletReportSettingsView: View {
     private func addRow(_ text: Binding<String>, label: String, add: @escaping (String) -> Void) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "plus.circle.fill").foregroundStyle(NX.violetText)
-            TextField(label, text: text)
+            // The label in the secondary text colour, not the pale placeholder grey that read as disabled (UI tour
+            // run 20, R20-I-18 / R20-B-20: 2.05:1).
+            TextField(text: text, prompt: Text(label).foregroundStyle(NX.mutedFg)) { Text(label) }
                 .font(NXFont.text(15))
                 .submitLabel(.done)
                 .onSubmit { commit(text, add) }

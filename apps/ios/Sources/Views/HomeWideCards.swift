@@ -59,8 +59,10 @@ struct HomeScheduleCard: View {
     var body: some View {
         HomeWideCard(title: T("Your schedule"), onSeeAll: onOpenMyTasks) {
             if items.isEmpty {
+                // Regular muted, as web; no "Open My Tasks" here: the Tasks tile above says it already (decision 8 of
+                // run 20, R20-B-05, web WB-7).
                 EmptyState(icon: "calendar.badge.clock", title: T("No upcoming tasks with a due date."),
-                           actionTitle: T("Open My Tasks"), actionIcon: nil, action: onOpenMyTasks, compact: true)
+                           compact: true, quietTitle: true)
             } else {
                 VStack(spacing: 4) {
                     ForEach(items) { t in
@@ -167,8 +169,12 @@ struct HomeLeaderboardCard: View {
                             AvatarView(url: item.row.avatar, initial: item.row.initial, size: 30)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(item.row.name ?? "—").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                                Text(DashboardView.levelText(item.row.level, item.row.levelName))
-                                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                                // With the tier badge, as the web widget's rows (R20-B-05).
+                                HStack(spacing: 4) {
+                                    TierBadge(level: item.row.level, size: 14)
+                                    Text(DashboardView.levelText(item.row.level, item.row.levelName))
+                                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                                }
                             }
                             Spacer(minLength: 6)
                             Text("\(AppNumber.int(item.row.totalXp)) XP").font(NXFont.text(13, .semibold))
@@ -230,5 +236,33 @@ struct HomeCalendarCard: View {
             }
             .nxMonthGridCard()
         }
+    }
+}
+
+/// The web's TierBadge (components/gamification/TierBadge.tsx): each level's icon on its own gradient medallion.
+struct TierBadge: View {
+    let level: Int
+    var size: CGFloat = 32
+
+    private static let visuals: [(icon: String, from: String, to: String)] = [
+        ("shield.fill", "#a8b1bd", "#5b6675"),       // 1 Iron
+        ("medal.fill", "#e0a36b", "#9c5a28"),        // 2 Bronze
+        ("medal.fill", "#eef1f5", "#9aa6b5"),        // 3 Silver
+        ("medal.fill", "#ffe066", "#e0a200"),        // 4 Gold
+        ("hexagon.fill", "#7df0dd", "#0d9488"),      // 5 Platinum
+        ("diamond.fill", "#7dd3fc", "#2563eb"),      // 6 Diamond
+        ("shield.lefthalf.filled", "#c4b5fd", "#7c3aed"), // 7 Master
+        ("crown.fill", "#f5a8e8", "#c026d3"),        // 8 Elite
+        ("trophy.fill", "#fdba74", "#ea580c"),       // 9 Supreme
+        ("sparkles", "#fbbf24", "#f43f5e"),          // 10
+    ]
+
+    var body: some View {
+        let v = Self.visuals[max(0, min(Self.visuals.count - 1, level - 1))]
+        Image(systemName: v.icon).font(.system(size: size * 0.48, weight: .bold)).foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(LinearGradient(colors: [Color(hex: v.from), Color(hex: v.to)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                        in: RoundedRectangle(cornerRadius: size * 0.3, style: .continuous))
+            .accessibilityHidden(true)
     }
 }

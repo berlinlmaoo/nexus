@@ -65,9 +65,18 @@ enum ServerEnvironment: String, CaseIterable, Identifiable {
     var baseURL: URL {
         switch self {
         case .production: return Config.productionBaseURL
-        case .dev: return URL(string: "https://nexus-prod.tail765d02.ts.net:8443")!
+        case .dev: return Self.devURL
         }
     }
+
+    /// The DEV server's address: Info.plist key NEXUSDevServerURL, which the build fills in from
+    /// ~/.config/nexus/ios-dev-server-url (project.yml, README "Dev server"). The committed default is a
+    /// placeholder that resolves nowhere, so this public repo names no internal host.
+    static let devURL: URL = {
+        if let s = Bundle.main.object(forInfoDictionaryKey: "NEXUSDevServerURL") as? String,
+           !s.isEmpty, !s.hasPrefix("$("), let url = URL(string: s) { return url }
+        return URL(string: "https://nexus-dev.invalid")!
+    }()
 
     /// Whether this build can switch at all.
     static var isAvailable: Bool {

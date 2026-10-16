@@ -1164,7 +1164,8 @@ struct CreateProjectSheet: View {
     /// left ~450 pt of empty sheet under three cards (UI tour run 17, R17-B-08). The form keeps the cap.
     private var sheetHeight: CGFloat {
         guard pick == nil, galleryHeight > 0 else { return 760 }
-        return min(760, galleryHeight + 72)
+        // The inline title bar is ~50 pt: 72 left 60-90 pt of empty sheet under the cards (UI tour run 20, R20-B-27).
+        return min(760, galleryHeight + 52)
     }
 
     var body: some View {
@@ -1281,7 +1282,7 @@ struct CreateProjectSheet: View {
                 onOpenProject(made)
                 return
             } else if kind == .outlet {
-                // Any number of outlets, one project each (owner, 10 Oct 2026, for Ryan); it opens on its
+                // Any number of outlets, one project each (owner, 10 Oct 2026, for the outlet team); it opens on its
                 // Overview once the list knows it.
                 let made = try await APIClient.shared.outletProjectCreate(workspaceId: workspaceId, name: trimmed,
                                                                           folderId: folder?.id, memberIds: Array(memberIds),
@@ -1571,6 +1572,13 @@ struct PageWideFittedSheet: ViewModifier {
             content.presentationDetents([.large])
         }
     }
+}
+
+/// How tall a sheet's content wants to be, for a sheet that hugs it (PageWideFittedSheet's cap): the Legal
+/// request form left ~190 pt of empty sheet under Send on an iPad (UI tour run 20, iPad R20-I-04).
+struct SheetFitHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat? = nil
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) { value = nextValue() ?? value }
 }
 
 @available(iOS 18.0, *)

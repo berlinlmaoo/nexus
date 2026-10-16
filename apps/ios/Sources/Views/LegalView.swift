@@ -146,7 +146,8 @@ struct LegalDocumentsPane: View {
     /// the iPad kept the cards (UI tour run 17, iPad R17-I-09).
     private static let tableWidth: CGFloat = 620
     private var table: Bool { wide && width - 2 * gutter >= Self.tableWidth }
-    private var showCounterparty: Bool { width - 2 * gutter >= 860 }
+    /// Every table width, as the web and the Mac (UI tour run 20, iPad R20-I-02: the iPad table had none).
+    private var showCounterparty: Bool { table }
 
     var body: some View {
         ScrollView {
@@ -259,14 +260,20 @@ struct LegalDocumentsPane: View {
                 .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
                 .accessibilityHint(T("Clear filters"))
             }
-            Button { sheet = .dates } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "calendar").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
-                    Text(dateLabel).font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+            // iPad / Mac: the web's two date fields, "From – To" (UI tour run 20, iPad R20-I-02); the phone keeps
+            // the one control that opens both.
+            if wide {
+                LegalDateRangeFields(from: binding(\.from), to: binding(\.to))
+            } else {
+                Button { sheet = .dates } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "calendar").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
+                        Text(dateLabel).font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+                    }
+                    .legalInput()
                 }
-                .legalInput()
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
             LegalLinkButton(value: link, placeholder: T("Any project or deal")) { v in
                 link = v
                 query.projectId = v?.projectId
@@ -345,7 +352,10 @@ struct LegalDocumentsPane: View {
         } else if let result {
             LegalListCard {
                 if table {
+                    // Opaque and above the rows, so a row scrolling under it is clipped by it: no row is blanked into
+                    // an empty band (decision 29 of run 20, R20-B-04).
                     VStack(spacing: 0) { wideHeader; Divider().overlay(NX.border) }
+                        .background(NX.card)
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headH = $0 }
                         .modifier(StickyInPageScroll(limit: max(0, tableH - 120)))
                         .zIndex(1)
@@ -379,7 +389,6 @@ struct LegalDocumentsPane: View {
                             .padding(.bottom, 6)
                         }
                     }
-                    .modifier(HiddenUnderStickyHead(head: table ? headH : 0))
                 }
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { tableH = $0 }
@@ -399,7 +408,7 @@ struct LegalDocumentsPane: View {
         HStack(spacing: 12) {
             Text(T("Number")).frame(width: numberW, alignment: .leading)
             Text(T("Title")).frame(maxWidth: .infinity, alignment: .leading)
-            if showCounterparty { Text(T("Counterparty")).frame(width: Self.counterpartyW, alignment: .leading) }
+            if showCounterparty { Text(T("Counterparty")).frame(width: counterpartyW, alignment: .leading) }
             Text(T("Company")).frame(width: companyW, alignment: .leading)
             Text(T("Date")).frame(width: dateW, alignment: .leading)
             Text(T("Status")).frame(width: statusW, alignment: .leading)
@@ -415,15 +424,22 @@ struct LegalDocumentsPane: View {
     /// Counterparty (mostly "—"), a Company wide enough for "The Z Networks" on one line; Title takes the rest.
     /// 170 since run 17: the folded number needs at most ~170 pt ("PATS/PKS-UNIV/…/2026/005"), and the 40 pt
     /// spare went to Title, which still stopped at "…University" after two lines (UI tour run 17, R17-M-09).
-    private static let counterpartyW: CGFloat = 130
+    private var counterpartyW: CGFloat { narrowTable ? 96 : 130 }
+    /// A wide table (a Mac window, an iPad in landscape) gives the number the web's width: "SPK/CH/PATS-UNIV/…/2027/001"
+    /// rather than "SPK/CH/…/2027/001" (UI tour run 20, R20-B-23).
+    private var wideTable: Bool { width - 2 * gutter >= 1000 }
     /// A narrow table (a portrait iPad beside the sidebar, ~665 pt) gives its spare width to Title: with the
     /// wide columns Title had ~130 pt and ended "[TEST] seq 03_SPK_City_…", while "PATS" and "14 Oct" sat in
     /// ~150 pt of empty room each (UI tour run 18, iPad R18-I-02).
     private var narrowTable: Bool { width - 2 * gutter < 760 }
-    private var numberW: CGFloat { narrowTable ? 150 : 170 }
-    private var companyW: CGFloat { narrowTable ? 96 : 120 }
+    private var numberW: CGFloat { narrowTable ? 150 : wideTable ? 230 : 170 }
+    // "The Z Networks" whole with room before the Date column (iPad R20-I-07: it butted against it).
+    private var companyW: CGFloat { narrowTable ? 104 : 124 }
     private var dateW: CGFloat { narrowTable ? 62 : 90 }
     private var statusW: CGFloat { narrowTable ? 74 : 80 }
+
+    /// A person's name kept on one line: "Signed 14 Oct by QA / Dev 5" broke it (UI tour run 20, R20-I-14).
+    static func glued(_ name: String) -> String { name.replacingOccurrences(of: " ", with: "\u{00A0}") }
 
     private func subtitle(_ d: LegalDocumentSummary) -> String {
         // An addendum says "Addendum to …" on its own line below, so the type isn't repeated (run 14, N-26).
@@ -433,7 +449,7 @@ struct LegalDocumentsPane: View {
         var s = parts.joined(separator: " · ")
         // "1 addendum" / "2 addenda" (F-28).
         if d.addendaCount > 0 { s += (s.isEmpty ? "" : " · ") + (d.addendaCount == 1 ? T("1 addendum") : String(format: T("%d addenda"), d.addendaCount)) }
-        if let at = d.signedAt { s += (s.isEmpty ? "" : " · ") + String(format: T("Signed %@ by %@"), LegalLabels.date(at), d.signedBy?.name ?? "—") }
+        if let at = d.signedAt { s += (s.isEmpty ? "" : " · ") + String(format: T("Signed %@ by %@"), LegalLabels.date(at), Self.glued(d.signedBy?.name ?? "—")) }
         return s
     }
 
@@ -474,25 +490,29 @@ struct LegalDocumentsPane: View {
                 if d.number.isEmpty {
                     Text("—").font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.foreground)
                 } else {
-                    LegalNumberText(number: d.number).foregroundStyle(NX.foreground).strikethrough(d.numberReleased)
+                    VStack(alignment: .leading, spacing: 4) {
+                        LegalNumberText(number: d.number).foregroundStyle(NX.foreground).strikethrough(d.numberReleased)
+                        // Under the number it is about, as the web (iPad R20-I-02: it sat in the title column).
+                        reusedLine(d)
+                    }
                 }
             }
             .frame(width: numberW, alignment: .leading)
             .help(d.number)
             VStack(alignment: .leading, spacing: 2) {
                 // The whole title, as the web's archive (UI tour run 19, iPad R19-I-04: two lines and "…").
-                Text(LegalLabels.unbroken(d.title)).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground)
+                Text(LegalLabels.title(d.title)).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground)
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
                 let sub = subtitle(d)
-                if !sub.isEmpty { Text(sub).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2) }
+                // The whole meta line, wrapped ("4 addenda · Signed 14 Oct by QA…" was cut; iPad R20-I-07).
+                if !sub.isEmpty { Text(sub).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true) }
                 parentLine(d)
-                reusedLine(d)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if showCounterparty {
                 Text(d.counterparty.isEmpty ? "—" : d.counterparty).font(NXFont.text(13)).foregroundStyle(NX.foreground)
-                    .lineLimit(2).frame(width: Self.counterpartyW, alignment: .leading)
+                    .lineLimit(2).frame(width: counterpartyW, alignment: .leading)
             }
             // One line, a size smaller where it must: "The Z / Networks" broke over two (R19-I-04).
             Text(d.company?.name ?? "—").font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(1).minimumScaleFactor(0.75)
@@ -556,6 +576,60 @@ struct LegalDocumentsPane: View {
 }
 
 /// From / To for the archive (each optional).
+/// The web archive's DateRange (LegalDocuments.tsx): "From" and "To" fields, each empty until picked, From never
+/// after To and To never before From, each with its own clear button.
+private struct LegalDateRangeFields: View {
+    @Binding var from: String?
+    @Binding var to: String?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            field(T("From"), $from, lower: nil, upper: to)
+            Text(verbatim: "–").foregroundStyle(NX.mutedFg).accessibilityHidden(true)
+            field(T("To"), $to, lower: from, upper: nil)
+        }
+    }
+
+    @ViewBuilder private func field(_ label: String, _ value: Binding<String?>, lower: String?, upper: String?) -> some View {
+        if let day = value.wrappedValue {
+            let lo = lower.flatMap { LegalText.date(fromDay: $0) } ?? .distantPast
+            let hi = upper.flatMap { LegalText.date(fromDay: $0) } ?? .distantFuture
+            HStack(spacing: 2) {
+                DatePicker(label, selection: Binding(get: { LegalText.date(fromDay: day) ?? Date() },
+                                                     set: { value.wrappedValue = LegalText.dayString($0) }),
+                           in: lo...max(lo, hi), displayedComponents: .date)
+                    .labelsHidden()
+                    .environment(\.locale, AppDateLocale.current)
+                    .environment(\.timeZone, LegalText.jakarta)
+                    .accessibilityLabel(label)
+                Button { value.wrappedValue = nil } label: {
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 13)).foregroundStyle(NX.mutedFg)
+                        .frame(width: 28, height: 28).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(format: T("Clear %@"), label))
+            }
+        } else {
+            Button {
+                // Starts on today, kept inside the other end of the range.
+                var start = LegalText.todayJakarta()
+                if let upper, start > upper { start = upper }
+                if let lower, start < lower { start = lower }
+                value.wrappedValue = start
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
+                    Text(label).font(NXFont.text(13, .medium)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                }
+                .frame(minWidth: 84, alignment: .leading)
+                .legalInput()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(label)
+        }
+    }
+}
+
 private struct LegalDateRangeSheet: View {
     @Binding var from: String?
     @Binding var to: String?

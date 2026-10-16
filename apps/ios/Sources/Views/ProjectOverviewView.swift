@@ -784,9 +784,9 @@ private struct OverviewTeamCard: View {
                 .zIndex(1)
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(all ? stats.people : Array(stats.people.prefix(limit))) { p in
-                        row(p, maxOpen: maxOpen).modifier(HiddenUnderStickyHead(head: headHeight))
+                        row(p, maxOpen: maxOpen)
                     }
-                    if stats.unassigned > 0 { unassignedRow(maxOpen: maxOpen).modifier(HiddenUnderStickyHead(head: headHeight)) }
+                    if stats.unassigned > 0 { unassignedRow(maxOpen: maxOpen) }
                     if stats.people.count > limit {
                         OverviewLinkButton(title: all ? T("Show fewer") : OverviewMath.plural(stats.people.count - limit, "Show 1 more", "Show %d more")) {
                             all.toggle()

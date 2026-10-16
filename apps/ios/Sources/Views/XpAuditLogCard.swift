@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The web leaderboard's admin XP log (XpAuditLog.tsx), for BoD and up: a folded card under the ranking,
-/// "XP log · ADMIN, Every XP change, added or deducted, for everyone". Open, it lists every change newest
+/// "XP log, Every XP change, added or deducted, for everyone". Open, it lists every change newest
 /// first, filtered by sign and by period, 40 at a time. The iPhone had no such card, so the tour found
 /// nothing after the last rank (UI tour run 18, iPhone R18-I-06).
 struct XpAuditLogCard: View {
@@ -38,12 +38,9 @@ struct XpAuditLogCard: View {
                 .frame(width: 36, height: 36)
                 .background(NX.muted, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 8) {
-                    Text(T("XP log")).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground)
-                    Text(T("Admin").uppercased()).font(NXFont.text(10, .bold)).foregroundStyle(NX.warning)
-                        .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(NX.warning.opacity(0.14), in: Capsule())
-                }
+                // No badge: the log is BoD and up only, and the "ADMIN" one named a role that is gone (decision 3
+                // of run 20, R20-I-03 / R20-B-07; web WB-1).
+                Text(T("XP log")).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground)
                 Text(T("Every XP change, added or deducted, for everyone")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                     .fixedSize(horizontal: false, vertical: true)
             }

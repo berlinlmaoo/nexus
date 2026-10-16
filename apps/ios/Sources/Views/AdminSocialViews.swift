@@ -144,6 +144,9 @@ struct EmptyState: View {
     /// The action as the web's filled primary button (near-black), where the web draws it so: Room
     /// Booking's "New booking" (UI tour run 15, Q-IA15 / Q-M22).
     var prominent: Bool = false
+    /// The title in the regular muted text, for a one-line empty state inside a card (web Home's "No upcoming
+    /// tasks with a due date.", UI tour run 20, R20-B-05).
+    var quietTitle: Bool = false
 
     /// The web's calm empty state after the UI sweep: one muted icon in a soft circle, the title, why it
     /// is empty and where things come from, and the next step as a quiet button. No illustration stack.
@@ -156,7 +159,8 @@ struct EmptyState: View {
                 .background(NX.muted, in: Circle())
                 .padding(.bottom, 4)
                 .accessibilityHidden(true)
-            Text(title).font(NXFont.text(compact ? 15 : 16, .semibold)).foregroundStyle(NX.foreground).multilineTextAlignment(.center)
+            Text(title).font(quietTitle ? NXFont.text(14) : NXFont.text(compact ? 15 : 16, .semibold))
+                .foregroundStyle(quietTitle ? NX.mutedFg : NX.foreground).multilineTextAlignment(.center)
             if !subtitle.isEmpty {
                 Text(subtitle).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 380)

@@ -129,9 +129,10 @@ struct CFChipView: View {
             // Show as Bar / Ring: the number (unless hidden) and a short bar or a ring, no pill.
             CFNumberValue(text: chip.label, style: n.style, fill: n.fill, font: NXFont.text(10, .semibold), color: NX.mutedFg, barWidth: 40)
         } else if chip.isPerson {
-            // A text value that names someone ("Request by" holding "Sifal") is text, not a person: the text
+            // A text value that names someone ("Request by" holding "Sari") is text, not a person: the text
             // glyph and the field's name, never an assignee-looking chip (decision 5 of run 19, R19-M-05).
-            Label(chip.fieldName.map { "\($0): \(chip.label)" } ?? chip.label, systemImage: "text.alignleft")
+            // The web's "T" text glyph, as every text property (decision 2 of run 20, R20-B-11; it was "≡").
+            Label { Text(chip.fieldName.map { "\($0): \(chip.label)" } ?? chip.label) } icon: { TextPropertyGlyph(size: 10) }
                 .font(NXFont.text(10, .medium)).lineLimit(1)
                 .labelStyle(CFPersonLabelStyle())
                 .padding(.vertical, 3)
@@ -140,7 +141,10 @@ struct CFChipView: View {
         } else if chip.isDate {
             // A date field wears the calendar; the clock is the due date's alone (web PropValue / DateChips,
             // UI tour run 10, IP-3: both dates on a card had a clock).
-            Label(chip.label, systemImage: "calendar").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            // Named as web WD-4 does ("Request by 15 Apr", "Tanggal Penggunaan 4 Jul"): a bare date read like a due
+            // date, and three in a row said nothing (UI tour run 20, R20-B-03).
+            Label(chip.fieldName.map { "\($0) \(chip.label)" } ?? chip.label, systemImage: "calendar")
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 .padding(.vertical, 2)
                 .accessibilityLabel(chip.fieldName.map { "\($0): \(chip.label)" } ?? chip.label)
         } else if let key = chip.colorKey {
@@ -148,6 +152,11 @@ struct CFChipView: View {
             Text(chip.label).font(NXFont.text(10, .semibold)).lineLimit(1)
                 .padding(.horizontal, 7).padding(.vertical, 3)
                 .foregroundStyle(sw.fg).background(sw.bg, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+        } else if chip.number != nil {
+            // Money and other numbers as plain text on the meta line, no grey chip, as the web card (UI tour run 20,
+            // R20-B-12, decision 22).
+            Text(chip.label).font(NXFont.text(11, .medium)).foregroundStyle(NX.mutedFg).monospacedDigit().lineLimit(1)
+                .padding(.vertical, 2)
         } else {
             Text(chip.label).font(NXFont.text(10, .semibold)).lineLimit(1)
                 .padding(.horizontal, 7).padding(.vertical, 3)
@@ -157,6 +166,23 @@ struct CFChipView: View {
 }
 
 /// Icon and name close together, like web's pill (gap 4).
+/// The web's text-property glyph (lucide "Type"): a plain "T". SF Symbols has no bare T, so it is a letter drawn
+/// at the size and weight of the symbols beside it. `symbol` stands for it wherever an icon name is passed on.
+struct TextPropertyGlyph: View {
+    static let symbol = "nx.text"
+    var size: CGFloat = 12
+
+    var body: some View {
+        Text(verbatim: "T").font(.system(size: size * 1.1, weight: .medium)).frame(minWidth: size)
+            .accessibilityHidden(true)
+    }
+
+    /// The text glyph for `symbol`, else that SF Symbol.
+    @ViewBuilder static func icon(_ name: String, size: CGFloat) -> some View {
+        if name == symbol { TextPropertyGlyph(size: size) } else { Image(systemName: name).font(.system(size: size)) }
+    }
+}
+
 private struct CFPersonLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 4) { configuration.icon.imageScale(.small); configuration.title }
@@ -175,11 +201,16 @@ struct CFChipRow: View {
     /// R15-I-13: "26 May 31 May ⏱ 26 May", "15 May 15 May"). nil = every date, as before.
     var capDates = false
     var due: String? = nil
+    /// A task's priority, drawn as the first item of the same flow: beside the row, the chips wrapped under its
+    /// second chip, not at the card's text edge (UI tour run 20, iPhone R20-I-08, R20-B-13).
+    var priority: String? = nil
     var body: some View {
         let all = (values ?? []).filter { only?.contains($0.customFieldId) ?? true }.compactMap(customFieldChip)
         let (chips, hidden) = capDates ? Self.capped(all, due: due) : (all, 0)
-        if !chips.isEmpty || hidden > 0 {
+        let prio = priority.flatMap { $0.uppercased() == "NONE" ? nil : $0 }
+        if !chips.isEmpty || hidden > 0 || prio != nil {
             FlowLayout(spacing: 5) {
+                if let prio { PriorityPill(priority: prio).fixedSize() }
                 ForEach(chips) { CFChipView(chip: $0) }
                 if hidden > 0 {
                     Text("+\(hidden)").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)

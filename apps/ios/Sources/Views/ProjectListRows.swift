@@ -130,11 +130,15 @@ struct ListPropLine: View {
     }
 
     var body: some View {
-        if let columnLayout {
-            columns(columnLayout)
-        } else {
-            chips
+        Group {
+            if let columnLayout {
+                columns(columnLayout)
+            } else {
+                chips
+            }
         }
+        // A done row's values faded, as the web mutes the whole row (decision 23 of run 20, R20-B-09).
+        .opacity(task.isDone ? 0.55 : 1)
     }
 
     /// Fixed slots, always in this order: the fields, due date, priority, status, people. A slot with no
@@ -154,6 +158,7 @@ struct ListPropLine: View {
                 if layout.due { MeasuredSlot(key: "due", widths: slotWidths) { if !dueSaid { dueSlot } } }
                 if layout.priority { MeasuredSlot(key: "priority", widths: slotWidths) { prioritySlot } }
                 if layout.status { MeasuredSlot(key: "status", widths: slotWidths) { statusSlot } }
+                if layout.people && showPeople { MeasuredSlot(key: "people", widths: slotWidths) { people } }
             }
             .fixedSize())
         }
@@ -197,7 +202,8 @@ struct ListPropLine: View {
 
     @ViewBuilder private func fieldSlot(_ id: String) -> some View {
         if let cfv = (task.customFieldValues ?? []).first(where: { $0.customFieldId == id }), let chip = customFieldChip(cfv) {
-            if chip.colorKey != nil || chip.isPerson || chip.number?.isVisual == true {
+            // A date wears its field's name, as web WD-4 ("Request by 15 Apr"; UI tour run 20, R20-B-03).
+            if chip.colorKey != nil || chip.isPerson || chip.isDate || chip.number?.isVisual == true {
                 CFChipView(chip: chip).fixedSize()
             } else {
                 Text(chip.label).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).monospacedDigit().lineLimit(1)
@@ -240,7 +246,7 @@ struct ListPropLine: View {
             }
             if !hidePriority, let p = task.priority, p.uppercased() != "NONE" { PriorityPill(priority: p) }
             if let status { StatusPill(name: status.name, colorKey: status.colorKey, size: 11).fixedSize() }
-            // People last, always: a person field ("ryan ceo pats") sat after the amount on some rows while
+            // People last, always: a person field (a staff member's name) sat after the amount on some rows while
             // the assignees' avatars ended others, so "who" jumped between the start and the end of the
             // line (UI tour run 11, PD-6).
             ForEach(chips.filter(\.isPerson)) { chip in customValue(chip) }
@@ -318,6 +324,9 @@ struct ListTaskRow: View {
     let task: BoardTask
     let status: RowStatus?
     let wide: Bool
+    /// The List is at least 760 pt wide (a default Mac window, an iPad in landscape): one line per row, always
+    /// (decision 6 of run 20, R20-B-02). Narrower, a row that does not fit takes two lines.
+    var oneLine = false
     /// Wide: the columns every row of this List draws (same order, same width).
     var columnLayout = ListColumns.Layout()
     /// Grouped by priority: the row leaves the priority pill out.
@@ -364,21 +373,29 @@ struct ListTaskRow: View {
             // iPad left only Kategori, so the amount and the date vanished from the rows while the web and
             // the Mac show them (UI tour run 14, P-I1), and the title was cut short beside empty slots
             // (P-I10). The two-line row gives the title the whole width and lists every value under it.
+            // Run 20 (decision 6, R20-B-02): a List at least 760 pt wide keeps one line per row, as the web: the
+            // columns as wide as their widest value (shared by every row, so they still line up) before the title
+            // gives way; there the two-line row left ~380 pt blank right of the status on a Mac.
             ViewThatFits(in: .horizontal) {
                 wideRow(columnLayout)
                 if columnLayout.withoutText != columnLayout { wideRow(columnLayout.withoutText) }
-                compactRow
+                if oneLine {
+                    wideRow(columnLayout.withoutText, measured: true)
+                    wideRow(columnLayout.withoutText, measured: true, titleMin: 120)
+                } else {
+                    compactRow
+                }
             }
         } else {
             compactRow
         }
     }
 
-    private func wideRow(_ layout: ListColumns.Layout) -> some View {
+    private func wideRow(_ layout: ListColumns.Layout, measured: Bool = false, titleMin: CGFloat = 180) -> some View {
         HStack(spacing: 10) {
             leading
-            titleLine.frame(minWidth: 180, idealWidth: 180, maxWidth: .infinity, alignment: .leading)
-            ListPropLine(task: task, status: status, columnLayout: layout, hidePriority: hidePriority)
+            titleLine.frame(minWidth: titleMin, idealWidth: titleMin, maxWidth: .infinity, alignment: .leading)
+            ListPropLine(task: task, status: status, columnLayout: layout, hidePriority: hidePriority, measured: measured)
         }
     }
 
@@ -413,7 +430,8 @@ struct ListTaskRow: View {
 
     @ViewBuilder private var leading: some View {
         if selecting { TaskSelectionMark(selected: selected) }
-        Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
+        // Done: an outline check, as the web (decision 23 of run 20, R20-B-09).
+        Image(systemName: task.isDone ? "checkmark.circle" : "circle")
             .font(.system(size: wide ? 17 : 15))
             .foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.55))
     }
@@ -527,6 +545,13 @@ enum ListColumns {
         }
     }
 
+    /// A date column: the calendar, the field's name and "28 Sep" (the date carries its name since run 20, R20-B-03).
+    static func dateWidth(_ name: String?) -> CGFloat {
+        guard let name, !name.isEmpty else { return dateFieldW }
+        let font = UIFont(name: "Inter", size: 11) ?? .systemFont(ofSize: 11)
+        return max(dateFieldW, ceil((name as NSString).size(withAttributes: [.font: font]).width) + 64)
+    }
+
     static func fieldIds(fields: [CustomField], lanes: [ProjectDetail.Lane], max: Int = 4) -> [String] {
         var used = Set<String>()
         var seen: [String] = []
@@ -552,8 +577,9 @@ enum ListColumns {
                        statusShown: Bool, priorityShown: Bool) -> Layout {
         let tasks = lanes.flatMap { $0.tasks ?? [] }
         let types = Dictionary(fields.map { ($0.id, $0.type.uppercased()) }, uniquingKeysWith: { a, _ in a })
+        let names = Dictionary(fields.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
         let cols = fieldIds(fields: fields, lanes: lanes).map { id in
-            Layout.Field(id: id, width: types[id] == "DATE" ? dateFieldW : fieldW,
+            Layout.Field(id: id, width: types[id] == "DATE" ? dateWidth(names[id]) : fieldW,
                          keep: ["SELECT", "MULTI_SELECT", "STATUS"].contains(types[id] ?? ""),
                          textual: ["TEXT", "CREATED", "URL", "EMAIL", "PHONE"].contains(types[id] ?? ""))
         }

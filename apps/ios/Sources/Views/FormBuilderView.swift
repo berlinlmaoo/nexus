@@ -499,9 +499,12 @@ struct FormBuilderView: View {
             }
             .disabled(deleting)
         } label: {
+            // Neutral grey as every other overflow button (decision 27 of run 20, Mac R20-M-09: it took the violet tint).
             Image(systemName: "ellipsis").font(.system(size: 15, weight: .medium))
+                .foregroundStyle(NX.mutedFg)
                 .frame(width: 30, height: 30).contentShape(Rectangle())
         }
+        .tint(NX.mutedFg)
         .accessibilityLabel(T("More"))
     }
 

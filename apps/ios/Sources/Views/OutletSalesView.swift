@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Outlet Sales Dashboard project view (owner, 10 Oct 2026, for Ryan)
+// MARK: - Outlet Sales Dashboard project view (owner, 10 Oct 2026, for the outlet team)
 //
 // A project of type OUTLET_SALES shows Overview · Calendar · Board · Report form · Chat, as the web's
 // OutletSalesView. The four outlet tabs are ProjectDetailView's own
@@ -12,7 +12,7 @@ import SwiftUI
 // only draws what it is told, and refetches the shown month whenever `outlet-sales-changed` arrives on
 // the project's room (held by ProjectDetailView).
 //
-// Ryan's request, the source of the labels and their order: Overview = sales and pax of the month
+// The outlet team's request, the source of the labels and their order: Overview = sales and pax of the month
 // against its target ("Rp2.000.000 / Rp2.000.000 (100%)", "3.000 / 6.000 (50%)"); Calendar = tap a day,
 // its events' reports below; Board = the three statuses; Report form = the server's form, so the team
 // only fills it in.
@@ -668,7 +668,7 @@ struct OutletCalendarLegend: View {
     }
 
     private var target: some View {
-        Label(T("Day target"), systemImage: "target").labelStyle(LegendLabelStyle(tint: NX.violetText))
+        Label(T("Day target"), systemImage: "target").labelStyle(LegendLabelStyle(tint: NX.mutedFg)) // neutral as the mark (decision 12)
     }
 
     private var note: some View {
@@ -1115,7 +1115,7 @@ struct OutletBoardView: View {
     }
 }
 
-// MARK: - The night's report as Ryan listed it
+// MARK: - The night's report as the outlet team listed it
 
 /// Nama event · Hari/Tanggal · Sales · Pax · RSVP – TOTAL and its four parts · HOSTING – TOTAL and its
 /// three · Hal yang berhasil (Apa / Kenapa berhasil / Gimana biar bisa terulang lagi) · Hal yang gagal

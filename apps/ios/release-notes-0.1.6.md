@@ -49,4 +49,4 @@ Juga di versi ini:
 - Aplikasi Mac kini satu nomor versi dengan HP.
 - Ikon baru: tanda X, hitam di atas putih.
 
-Bagas sudah tes semuanya. Katanya.
+Tim sudah tes semuanya. Katanya.

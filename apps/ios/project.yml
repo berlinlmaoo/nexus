@@ -55,6 +55,22 @@ targets:
             echo "$DUP" | sed 's/^/error:   /'
             exit 1
           fi
+    postBuildScripts:
+      # The DEV server's real address from a file outside every checkout (~/nexus, worktrees, the tour's
+      # copy), written into the built Info.plist before signing. No file: the placeholder stays, and the
+      # Dev server simply cannot be reached from that build.
+      - name: Dev server address
+        basedOnDependencyAnalysis: false
+        script: |
+          case " $SWIFT_ACTIVE_COMPILATION_CONDITIONS " in *" NEXUS_DEV_SERVER "*) ;; *) exit 0 ;; esac
+          F="$HOME/.config/nexus/ios-dev-server-url"
+          if [ ! -f "$F" ]; then
+            echo "note: $F not found; the Dev server stays $NEXUS_DEV_SERVER_URL (see apps/ios/README.md)"
+            exit 0
+          fi
+          URL=$(head -n 1 "$F" | tr -d '[:space:]')
+          [ -n "$URL" ] || exit 0
+          /usr/libexec/PlistBuddy -c "Set :NEXUSDevServerURL $URL" "$TARGET_BUILD_DIR/$INFOPLIST_PATH"
     dependencies:
       # Embeds the widget extension into the app. platformFilter keeps it OUT of the Mac Catalyst
       # build: ActivityKit does not exist on macOS, so a Mac archive that tries to embed this fails
@@ -89,6 +105,11 @@ targets:
         # BRANCH dev ONLY — never merge this line to main. Turns on the Production / Dev server switch
         # (Sources/Config.swift ServerEnvironment, Tuning Room → Server, long press on the login title).
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) NEXUS_DEV_SERVER"
+        # The DEV server's address (Config.swift ServerEnvironment.dev), read from Info.plist key
+        # NEXUSDevServerURL. Committed as a placeholder that resolves nowhere; the real address comes from
+        # ~/.config/nexus/ios-dev-server-url on the building Mac (the "Dev server address" phase below,
+        # README "Dev server"), so it never sits in this public repo.
+        NEXUS_DEV_SERVER_URL: "https://nexus-dev.invalid"
         PRODUCT_BUNDLE_IDENTIFIER: id.znetworks.nexus
         PRODUCT_NAME: NEXUS
         # Associated Domains (passkeys) live in BOTH entitlement files: this one for iOS/iPadOS,

@@ -116,43 +116,59 @@ struct InboxView: View {
     }
 
     private var list: some View {
-        ScrollView {
-            VStack(spacing: 12) {
-                // A plain line, and only when something is unread (web: an empty inbox had a
-                // "0 unread" bar over its empty state).
-                if unread > 0 {
-                    Text(unread == 1 ? T("1 unread notification") : String(format: T("%d unread notifications"), unread))
-                        .font(NXFont.text(14, .medium)).foregroundStyle(NX.mutedFg)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
-                if items.isEmpty {
-                    EmptyState(icon: "tray", title: T("Inbox clean"),
-                               subtitle: T("Requests to approve, replies to your tickets, mentions and announcements land here the moment they happen. Nothing needs you right now."),
-                               tint: NX.success, compact: true)
-                } else {
-                    if shown.isEmpty {
-                        EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("Nothing of this kind"),
-                                   subtitle: T("This filter only shows one type of notification. Everything else is still in All."),
-                                   actionTitle: T("Show all"), actionIcon: nil, action: { group = .all }, compact: true)
-                    } else {
-                        VStack(spacing: 0) {
-                            ForEach(Array(shown.enumerated()), id: \.element.id) { idx, n in
-                                if idx > 0 { Divider().overlay(NX.border) }
-                                NotificationRow(notification: n, roster: roster, onDelete: { Task { await delete(n) } },
-                                                onMarkRead: { Task { await markRead(n) } }) { open(n) }
+        // A List, so a row's actions are swipe actions (and a context menu), not two bordered buttons that left
+        // the titles about 60 % of the row (decision 16 of run 20, R20-I-27; R20-I-12). The rows keep the web's
+        // hairline card: one inset-grouped section.
+        List {
+            // A plain line, and only when something is unread (web: an empty inbox had a
+            // "0 unread" bar over its empty state).
+            if unread > 0 {
+                Text(unread == 1 ? T("1 unread notification") : String(format: T("%d unread notifications"), unread))
+                    .font(NXFont.text(14, .medium)).foregroundStyle(NX.mutedFg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 4, trailing: 4))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+            if items.isEmpty {
+                EmptyState(icon: "tray", title: T("Inbox clean"),
+                           subtitle: T("Requests to approve, replies to your tickets, mentions and announcements land here the moment they happen. Nothing needs you right now."),
+                           tint: NX.success, compact: true)
+                    .listRowBackground(Color.clear).listRowSeparator(.hidden)
+            } else if shown.isEmpty {
+                EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("Nothing of this kind"),
+                           subtitle: T("This filter only shows one type of notification. Everything else is still in All."),
+                           actionTitle: T("Show all"), actionIcon: nil, action: { group = .all }, compact: true)
+                    .listRowBackground(Color.clear).listRowSeparator(.hidden)
+            } else {
+                Section {
+                    ForEach(shown) { n in
+                        NotificationRow(notification: n, roster: roster, onDelete: { Task { await delete(n) } },
+                                        onMarkRead: { Task { await markRead(n) } }) { open(n) }
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(NX.card)
+                            .listRowSeparatorTint(NX.border)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) { Task { await delete(n) } } label: {
+                                    Label(T("Delete notification"), systemImage: "trash")
+                                }
+                                if !n.isRead {
+                                    Button { Task { await markRead(n) } } label: {
+                                        Label(T("Mark as read"), systemImage: "checkmark")
+                                    }
+                                    .tint(NX.onyx)
+                                }
                             }
-                        }
-                        // Hairline card like the web's (rounded-xl border bg-card), no drop shadow.
-                        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                 }
             }
-            .padding(.horizontal, NXSidebarPage.gutter(isRoot))
-            .padding(.vertical, isRoot ? 24 : 16)
         }
+        .listStyle(.insetGrouped)
+        .listSectionSpacing(.compact)
+        .scrollContentBackground(.hidden)
+        .contentMargins(.horizontal, max(0, NXSidebarPage.gutter(isRoot) - 20), for: .scrollContent)
+        .contentMargins(.vertical, isRoot ? 24 : 16, for: .scrollContent)
+        .environment(\.defaultMinListRowHeight, 0)
         .refreshable { await load() }
     }
 
@@ -259,6 +275,10 @@ private struct NotificationRowMenu: ViewModifier {
                     Button(role: .destructive, action: onDelete) { Label(T("Delete notification"), systemImage: "trash") }
                 }
             }
+            .accessibilityActions {
+                if let onMarkRead, !isRead { Button(T("Mark as read"), action: onMarkRead) }
+                if let onDelete { Button(T("Delete notification"), action: onDelete) }
+            }
         }
     }
 }
@@ -267,9 +287,9 @@ struct NotificationRow: View {
     let notification: NexusNotification
     /// The workspace's people (GET /api/members), for rows without an `actor`.
     var roster: [MentionUser] = []
-    /// The web's trash button at the row's right (Inbox only; nil elsewhere).
+    /// Delete (Inbox only; nil elsewhere): a swipe action and the context menu.
     var onDelete: (() -> Void)? = nil
-    /// The web's per-row "Mark as read" on an unread row, without opening it (UI tour run 9, P12).
+    /// "Mark as read" on an unread row without opening it (UI tour run 9, P12): a swipe action and the context menu.
     var onMarkRead: (() -> Void)? = nil
     let onTap: () -> Void
 
@@ -282,34 +302,13 @@ struct NotificationRow: View {
                 Text(metaText).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }
             Spacer(minLength: 4)
-            if let onMarkRead, !notification.isRead {
-                Button(action: onMarkRead) {
-                    Image(systemName: "checkmark").font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(NX.foreground)
-                        .frame(width: 34, height: 34)
-                        .background(NX.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
-                }
-                .buttonStyle(.plain)
-                .help(T("Mark as read"))
-                .accessibilityLabel(T("Mark as read"))
-            }
-            if let onDelete {
-                Button(action: onDelete) {
-                    Image(systemName: "trash").font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(NX.foreground)
-                        .frame(width: 34, height: 34)
-                        .background(NX.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(T("Delete notification"))
-            } else if notification.tapTarget != nil {
+            // Mark read and Delete are the row's swipe actions and its context menu (decision 16 of run 20,
+            // R20-I-27), so the title has the row's whole width.
+            if notification.tapTarget != nil && onDelete == nil {
                 Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold))
                     .foregroundStyle(NX.mutedFg).padding(.top, 4)
             }
-            // After the ✓ / 🗑 buttons, as on the web (UI tour run 15, Q-IA13 / Q-M24). Near-black like the
-            // web's unread dot (it was violet).
+            // The unread dot at the row's end, near-black like the web's (it was violet).
             if !notification.isRead {
                 Circle().fill(NX.foreground).frame(width: 8, height: 8).padding(.top, 6)
             }

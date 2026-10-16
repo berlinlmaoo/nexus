@@ -206,8 +206,9 @@ struct SettingsView: View {
         if tab == .profile {
             webProfileCard
             JoinWorkspaceCard()
-            webDeleteCard
+            // The danger zone last (decision 26 of run 20, Mac R20-M-08): Sign out, then Delete account.
             webLogoutCard
+            webDeleteCard
         } else {
             tabContent
         }
@@ -368,7 +369,7 @@ struct SettingsView: View {
     /// The web's Profile card: "Visible to your teammates", the photo with Change photo / Remove and its
     /// hint, Full name | Email side by side, Google Workspace, Phone number, and Save at the right.
     private var webProfileCard: some View {
-        NXCard(padding: 24) {
+        NXCard(padding: 16) {
             VStack(alignment: .leading, spacing: 22) {
                 HStack(alignment: .top) {
                     webCardTitle(T("Profile"), T("Visible to your teammates"))
@@ -481,7 +482,7 @@ struct SettingsView: View {
 
     /// The web's Delete account card: what it does, and the red button at its right.
     private var webDeleteCard: some View {
-        NXCard(padding: 24) {
+        NXCard(padding: 16) {
             VStack(alignment: .leading, spacing: 12) {
                 Text(T("Delete account")).font(NXFont.text(16, .semibold)).foregroundStyle(NX.danger)
                 Text(T("Permanently delete your NEXUS account. You won't be able to sign in again, and this can't be undone."))
@@ -497,10 +498,11 @@ struct SettingsView: View {
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.danger.opacity(0.4)))
     }
 
-    /// Logout, which the web keeps in its sidebar footer: a card of its own here, after Delete account.
+    /// Logout, which the web keeps in its sidebar footer: a card of its own here, before Delete account.
     private var webLogoutCard: some View {
-        // 24 pt inside like Profile and Delete account, so the three cards' text shares one left edge (R19-B-12).
-        NXCard(padding: 24) {
+        // 16 pt inside, as Profile, Delete account and every card of the other tabs, so the text keeps one left
+        // edge across the tabs (R19-B-12; run 20, R20-B-26: 24 pt here moved it 8 pt against Security).
+        NXCard(padding: 16) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(AppLanguage.signOutOwn).font(NXFont.text(16, .semibold)).foregroundStyle(NX.foreground)

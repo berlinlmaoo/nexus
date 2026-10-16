@@ -26,6 +26,9 @@ struct ProjectDetailView: View {
     @State private var query = ""
     /// The tab row is wider than the screen: a "…" menu lists every tab (Notion, UI tour run 9).
     @State private var tabsOverflow = false
+    /// The wide tab row: its width and each tab's own (wideTabSplit).
+    @State private var tabRowWidth: CGFloat = 0
+    @State private var tabWidths: [String: CGFloat] = [:]
     @State private var tabsWidth: CGFloat = 0
     /// The wide tab bar's width and its tools' width: when the tabs and the tools don't share one row,
     /// the tools move under the tabs (UI tour run 13, I-18 / M-7: "verview", "ategori", "Cal" cut).
@@ -279,6 +282,23 @@ struct ProjectDetailView: View {
     private func choosePlot(_ id: String?) {
         plotBy = id
         UserDefaults.standard.set(id ?? "due", forKey: plotKey)
+        // Saved on the Calendar view as the web does (`config.dateProp`), where the person may change it.
+        if canEdit, let v = calendarView {
+            Task { try? await APIClient.shared.updateProjectView(projectId, viewId: v.id, patch: ["dateProp": id.map { "cf:\($0)" } ?? "due"]) }
+        }
+    }
+
+    /// "Show tasks by" in the Calendar view's settings, where the web has it (fix20 API copy 5, decision 24 of run
+    /// 20, R20-B-30): it was an extra "Plot by" control in the calendar's month row.
+    @ViewBuilder private var showTasksByPicker: some View {
+        if !plotChoices.isEmpty {
+            Picker(selection: Binding(get: { plotBy ?? "" }, set: { choosePlot($0.isEmpty ? nil : $0) })) {
+                ForEach(plotChoices) { c in Text(c.name).tag(c.id ?? "") }
+            } label: {
+                Label(T("Show tasks by"), systemImage: "calendar")
+            }
+            .pickerStyle(.menu)
+        }
     }
 
     /// Once per screen: the template, the saved views and the DATE fields. Each is optional: a server
@@ -362,7 +382,7 @@ struct ProjectDetailView: View {
     /// type still opens it as an empty task project.
     private var isPipeline: Bool { detail?.type == "PIPELINE" }
 
-    /// An Outlet Sales Dashboard (owner, 10 Oct 2026, for Ryan): Overview · Calendar · Board · Report form
+    /// An Outlet Sales Dashboard (owner, 10 Oct 2026, for the outlet team): Overview · Calendar · Board · Report form
     /// · Chat — the web's order, none of the task tabs. Its Overview,
     /// Calendar and Board are the outlet's own (OutletSalesView.swift), not the task ones of the same name.
     private var isOutlet: Bool { detail?.type == "OUTLET_SALES" }
@@ -617,11 +637,14 @@ struct ProjectDetailView: View {
             if wide, let d = detail {
                 let members = ProjectMemberStack(members: d.members ?? []) { if !cover.isCovered { showSettings = true } }
                     .padding(.trailing, 4)
+                // The name on one line and the members' faces kept, as the web and the Mac, before the buttons
+                // keep their words (UI tour run 20, iPad R20-I-08: "ZZ QA Social / Media Report" on two lines;
+                // R20-I-09: no member avatar).
                 ViewThatFits(in: .horizontal) {
                     headerRow(titleCap: nil) { HStack(spacing: 10) { members; headerActions(labelled: true) } }
+                    headerRow(titleCap: nil) { HStack(spacing: 10) { members; headerActions(labelled: false) } }
                     headerRow(titleCap: nil) { headerActions(labelled: true) }
                     headerRow(titleCap: 300) { headerActions(labelled: true) }
-                    headerRow(titleCap: nil) { HStack(spacing: 10) { members; headerActions(labelled: false) } }
                 }
             } else {
                 headerRow(titleCap: nil) {
@@ -629,7 +652,7 @@ struct ProjectDetailView: View {
                 }
             }
         }
-        .padding(.leading, isPresented ? 6 : (wide ? 24 : 14))
+        .padding(.leading, isPresented ? (wide ? 24 : 20) : (wide ? 24 : 14))
         .padding(.trailing, wide ? 24 : 14)
         .padding(.top, wide ? 12 : 4).padding(.bottom, 4)
     }
@@ -641,13 +664,14 @@ struct ProjectDetailView: View {
             SidebarReopenButton()
             // Only when there is somewhere to go back to: opened from the sidebar the board is the root.
             if isPresented {
-                // The circled back button of every other pushed screen, not a bare "<" (UI tour run 19, R19-I-14).
+                // The circled back button of every other pushed screen, not a bare "<" (UI tour run 19, R19-I-14): the
+                // bar's bordered 44 pt circle, no shadow, at the bar's 20 pt inset (run 20, R20-I-07: it was a smaller
+                // shadowed circle at 6 pt).
                 Button { dismiss() } label: {
                     Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundStyle(NX.foreground)
                         .frame(width: 44, height: 44)
-                        .background(.regularMaterial, in: Circle())
-                        .overlay(Circle().strokeBorder(NX.border.opacity(0.7), lineWidth: 0.5))
-                        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+                        .background(NX.card, in: Circle())
+                        .overlay(Circle().strokeBorder(NX.border, lineWidth: 1))
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
@@ -878,7 +902,6 @@ struct ProjectDetailView: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 8) {
                     wideTabs
-                    if tabsOverflow { tabOverflowMenu(wideMenuItems) }
                     wideAddButton.fixedSize()
                 }
                 .padding(.trailing, 24)
@@ -909,52 +932,112 @@ struct ProjectDetailView: View {
             .padding(.trailing, 24)
     }
 
+    /// One row, whole tabs only (decision 5 of run 20, iPad R20-I-05 / R20-I-06, web WD-6): the tabs that fit, in
+    /// their order, then "+" (New view), then "N more" with the rest (Notion). The tab on screen is always in the
+    /// row: if it lives in the overflow it takes the last place. The row scrolled before, behind a "›", ending on a
+    /// half tab with Table, Calendar, Timeline and "+" out of sight on a portrait iPad.
     private var wideTabs: some View {
-        HStack(spacing: 8) {
-            ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 2) {
-                    if visibleTabs.contains(.overview) {
-                        wideViewTab(.tab(.overview)).id(ViewTabItem.tab(.overview).id).nxTabFrame(ViewTabItem.tab(.overview).id)
-                    }
-                    ForEach(viewTabItems) { item in wideViewTab(item).id(item.id).nxTabFrame(item.id) }
-                    // Where the tools row has no room for them (a portrait iPad), the modules stay after the
-                    // views, as before run 17, rather than adding a third row.
-                    let rowModules = modulesInToolsRow ? [] : Self.moduleTabOrder.filter { visibleTabs.contains($0) }
-                    if canEdit {
-                        Button { alertText = ""; boardAlert = .newView(layout: layoutOf(tab) ?? "board") } label: {
-                            Image(systemName: "plus").font(.system(size: 14, weight: .regular)).foregroundStyle(NX.mutedFg)
-                                .frame(width: 34, height: 34).frame(minHeight: 44).contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .hoverEffect(.highlight)
-                        .help(T("New view"))
-                        .accessibilityLabel(T("New view"))
-                        .nxTabFrame("new-view")
-                    }
-                    if !rowModules.isEmpty {
-                        ProjectTabDivider()
-                        ForEach(rowModules) { t in
-                            ProjectTabChip(title: t.label, icon: t.macIcon, on: tab == t) { pickTab(t) }
-                                .id(ViewTabItem.tab(t).id)
-                                .nxTabFrame(ViewTabItem.tab(t).id)
-                        }
-                    }
+        let split = wideTabSplit
+        return HStack(spacing: 2) {
+            ForEach(split.shown) { item in oneRowTab(item) }
+            if canEdit {
+                Button { alertText = ""; boardAlert = .newView(layout: layoutOf(tab) ?? "board") } label: {
+                    Image(systemName: "plus").font(.system(size: 14, weight: .regular)).foregroundStyle(NX.mutedFg)
+                        .frame(width: 34, height: 34).frame(minHeight: 44).contentShape(Rectangle())
                 }
-                .coordinateSpace(.named(NXTabFramesKey.space))
-                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { tabsWidth = $0 }
-                .scrollTargetLayout()
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .help(T("New view"))
+                .accessibilityLabel(T("New view"))
             }
-            // A swipe comes to rest with a whole tab at the leading edge, never "tegori" / "3oard" (UI tour run
-            // 14, N-09 / P-I11); the trailing edge fades over whatever lies beyond.
-            .scrollTargetBehavior(.viewAligned)
-            .modifier(NXTabRowScroller(activeId: activeTabItemId, itemIds: wideMenuItems.map(\.id), proxy: proxy,
-                                       overflowing: $tabsOverflow, contentWidth: tabsWidth))
-            }
-            // The inset sits OUTSIDE the scroll view: inside it, it scrolled away with the tabs and a
-            // scrolled row put its first tab flush against the sidebar (UI tour run 10, MAC-1).
-            .padding(.leading, 18)
+            if !split.hidden.isEmpty { moreTabsMenu(split.hidden) }
+            Spacer(minLength: 0)
         }
+        .padding(.leading, 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { tabRowWidth = $0 }
+        .background(alignment: .topLeading) { tabWidthsMeasure }
+    }
+
+    @ViewBuilder private func oneRowTab(_ item: ViewTabItem) -> some View {
+        if case .tab(let t) = item, Self.moduleTabOrder.contains(t) {
+            ProjectTabChip(title: t.label, icon: t.macIcon, on: tab == t) { pickTab(t) }
+        } else {
+            wideViewTab(item)
+        }
+    }
+
+    /// Every tab's own width, measured on hidden copies, for `wideTabSplit`.
+    private var tabWidthsMeasure: some View {
+        HStack(spacing: 2) {
+            ForEach(wideMenuItems) { item in
+                oneRowTab(item)
+                    .fixedSize()
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { w in
+                        if abs((tabWidths[item.id] ?? 0) - w) > 0.5 { tabWidths[item.id] = w }
+                    }
+            }
+        }
+        .fixedSize()
+        .hidden()
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+
+    /// The tabs in the row and the ones in "N more".
+    private var wideTabSplit: (shown: [ViewTabItem], hidden: [ViewTabItem]) {
+        let items = wideMenuItems
+        let gap: CGFloat = 2
+        let plusW: CGFloat = canEdit ? 34 + gap : 0
+        let room = tabRowWidth - 18
+        guard room > 0, items.allSatisfy({ tabWidths[$0.id] != nil }) else { return (items, []) }
+        let width = { (i: ViewTabItem) -> CGFloat in (tabWidths[i.id] ?? 0) + gap }
+        if items.map(width).reduce(0, +) + plusW <= room { return (items, []) }
+        let moreW: CGFloat = 92 + gap
+        let avail = room - plusW - moreW
+        var shown: [ViewTabItem] = []
+        var used: CGFloat = 0
+        for i in items {
+            guard used + width(i) <= avail else { break }
+            shown.append(i); used += width(i)
+        }
+        if let active = items.first(where: { $0.id == activeTabItemId }), !shown.contains(where: { $0.id == active.id }) {
+            while let last = shown.last, used + width(active) > avail {
+                shown.removeLast(); used -= width(last)
+            }
+            shown.append(active)
+        }
+        let ids = Set(shown.map(\.id))
+        return (shown, items.filter { !ids.contains($0.id) })
+    }
+
+    /// "N more": the tabs the row has no room for, by their full names, in their order.
+    private func moreTabsMenu(_ items: [ViewTabItem]) -> some View {
+        Menu {
+            ForEach(items) { item in
+                switch item {
+                case .tab(let t):
+                    Button { pickTab(t) } label: { Label(t.label, systemImage: t.macIcon) }
+                case .view(let v, let t):
+                    let layout = layoutOf(t) ?? "board"
+                    Button { tab = t; pickView(layout, v.id) } label: { Label(viewTitle(v), systemImage: t.macIcon) }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(String(format: T("%d more"), items.count)).font(NXFont.text(14))
+                Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold))
+            }
+            .foregroundStyle(NX.mutedFg)
+            .padding(.horizontal, 8).frame(minHeight: 44).contentShape(Rectangle())
+            .lineLimit(1).fixedSize()
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(T("More views"))
+        .accessibilityLabel(String(format: T("%d more"), items.count))
     }
 
     /// Every tab of the wide first row in its order: Overview and the views.
@@ -1012,6 +1095,10 @@ struct ProjectDetailView: View {
                 Button { filterView = v } label: {
                     Label(T("Filter and sort…"), systemImage: configOf(v).isFiltered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease")
                 }
+                Divider()
+            }
+            if tab == .calendar && !plotChoices.isEmpty {
+                showTasksByPicker
                 Divider()
             }
             ForEach(items) { item in
@@ -1144,6 +1231,7 @@ struct ProjectDetailView: View {
 
     @ViewBuilder private func viewMenuItems(_ v: ProjectViewFull) -> some View {
         Button { filterView = v } label: { Label(T("Filter and sort…"), systemImage: "line.3.horizontal.decrease.circle") }
+        if v.builtin == "calendar" { showTasksByPicker }
         // Saved views are made, renamed and deleted from Can edit (access levels round 2).
         if canEdit {
             Button { alertText = v.name ?? ""; boardAlert = .renameView(v) } label: { Label(T("Rename…"), systemImage: "pencil") }
@@ -1238,7 +1326,7 @@ struct ProjectDetailView: View {
                 case .calendar: CalendarTab(tasks: lanesThrough(calendarView).flatMap { $0.tasks ?? [] }, onOpen: { open($0) },
                                             onCreate: { date in if canCreate { prefillDue = date; createLaneId = nil; showCreate = true } },
                                             canCreate: canCreate,
-                                            dateFieldId: plotBy, plotChoices: plotChoices, onPlotBy: { choosePlot($0) },
+                                            dateFieldId: plotBy, plotChoices: plotChoices, onPlotBy: nil,
                                             dateFieldIds: dateFields.map(\.id))
                 case .timeline: TimelineTab(lanes: lanesThrough(timelineView), onOpen: { open($0) }, dateFieldIds: dateFields.map(\.id))
                 default:        EmptyView()
@@ -1438,7 +1526,10 @@ struct ProjectDetailView: View {
                 // a pale To Do column scrolled half away left only its "•••" floating at the edge, and the
                 // "+ Status" column was cut at the other (UI tour run 14, N-13 / P-I13). The margin is the
                 // scroll's own (not padding inside it), so the snapped column keeps its 14 pt inset.
-                .scrollTargetBehavior(.viewAligned)
+                // iPad / Mac: only on a column start whose window ends in a gap between columns, so with narrow
+                // empty lanes every resting place still shows whole columns (R20-B-10); the phone as before.
+                .modifier(WideBoardSnap(widths: wide ? wideColumnWidths(detail, shown: shown, statusStyle: statusStyle, grouped: grouped) : [],
+                                        gap: Self.wideGap, leading: 14, viewport: boardViewport))
                 .contentMargins(.leading, 14, for: .scrollContent)
                 // iPad / Mac: the columns are sized so whole columns fill the board (`wideLaneWidth`), so a
                 // resting board never cuts one at its edge and "Add status" never peeks under a fade (UI tour
@@ -1482,12 +1573,50 @@ struct ProjectDetailView: View {
     /// The room for columns: the board less its 14 pt leading margin and one 12 pt gap at the right edge.
     private var wideAvail: CGFloat { boardViewport - 14 - Self.wideGap }
 
-    /// iPad / Mac: as many columns of at least 260 pt as fit whole, sharing the room exactly, so a board at
-    /// rest never cuts a column at its right edge. nil on a phone or before the board is measured.
+    /// An empty lane's width on iPad / Mac: its header and "+" (web w-48; UI tour run 20, R20-B-10: an empty To Do
+    /// took a full ~430 pt lane).
+    private static let emptyLaneW: CGFloat = 200
+
+    /// iPad / Mac: the width of a lane WITH cards. The first window holds as many lanes as fit (an empty lane at
+    /// `emptyLaneW`, the others at least 260 pt, then the tail's columns counted at 260) and the lanes with cards
+    /// share the room exactly, so a board at rest never cuts a column at its right edge. nil on a phone or before
+    /// the board is measured.
     private var wideLaneWidth: CGFloat? {
         guard wide, boardViewport > 0 else { return nil }
-        let k = max(1, Int((wideAvail + Self.wideGap) / (260 + Self.wideGap)))
-        return (wideAvail - Self.wideGap * CGFloat(k - 1)) / CGFloat(k)
+        let shown = displayLanes("board")
+        var used: CGFloat = 0, empty: CGFloat = 0, full = 0, count = 0
+        var i = 0
+        while true {
+            let isEmpty = i < shown.count && Self.laneIsEmpty(shown[i])
+            let w: CGFloat = isEmpty ? Self.emptyLaneW : 260
+            let next = used + (count > 0 ? Self.wideGap : 0) + w
+            guard next <= wideAvail + 0.5 else { break }
+            used = next; count += 1
+            if isEmpty { empty += w } else { full += 1 }
+            i += 1
+            if i > shown.count + 8 { break }
+        }
+        guard full > 0 else { return 260 }
+        return (wideAvail - empty - Self.wideGap * CGFloat(max(0, count - 1))) / CGFloat(full)
+    }
+
+    private static func laneIsEmpty(_ lane: ProjectDetail.Lane) -> Bool { (lane.tasks ?? []).isEmpty }
+
+    /// A lane's drawn width on iPad / Mac (nil = the phone's default).
+    private func laneWidth(_ lane: ProjectDetail.Lane) -> CGFloat? {
+        guard let w = wideLaneWidth else { return nil }
+        return Self.laneIsEmpty(lane) ? Self.emptyLaneW : w
+    }
+
+    /// Every column of the wide board in order, with its width: the lanes, "Add status", the linked lanes.
+    private func wideColumnWidths(_ detail: ProjectDetail, shown: [ProjectDetail.Lane], statusStyle: Bool, grouped: Bool) -> [CGFloat] {
+        guard let w = wideLaneWidth else { return [] }
+        var widths = shown.map { Self.laneIsEmpty($0) ? Self.emptyLaneW : w }
+        if statusStyle && detail.canManageProject { widths.append(Self.addStatusW) }
+        if !grouped {
+            for lane in linkedLanes(detail) { widths.append(linkedAsRail(lane.id, shownCount: shown.count) ? Self.railW : w) }
+        }
+        return widths
     }
 
     /// The board's columns after the project's own lanes: "Add status", then the linked lanes.
@@ -1502,7 +1631,9 @@ struct ProjectDetailView: View {
     private func fitsWithoutRails(shownCount: Int) -> Bool {
         guard let w = wideLaneWidth, let d = detail else { return true }
         let tail = boardTail(d)
-        var widths = Array(repeating: w, count: shownCount)
+        let shown = displayLanes("board")
+        var widths = shown.count == shownCount ? shown.map { Self.laneIsEmpty($0) ? Self.emptyLaneW : w }
+            : Array(repeating: w, count: shownCount)
         if tail.addStatus { widths.append(Self.addStatusW) }
         widths += Array(repeating: w, count: tail.linked.count)
         let total = widths.reduce(0, +) + Self.wideGap * CGFloat(max(0, widths.count - 1))
@@ -1516,12 +1647,8 @@ struct ProjectDetailView: View {
     /// The end margin that makes the last resting place a column's start, so the board's end shows whole
     /// columns too.
     private func wideTrailingRoom(_ detail: ProjectDetail, shown: [ProjectDetail.Lane], statusStyle: Bool, grouped: Bool) -> CGFloat {
-        guard let w = wideLaneWidth else { return 32 }
-        var widths = Array(repeating: w, count: shown.count)
-        if statusStyle && detail.canManageProject { widths.append(Self.addStatusW) }
-        if !grouped {
-            for lane in linkedLanes(detail) { widths.append(linkedAsRail(lane.id, shownCount: shown.count) ? Self.railW : w) }
-        }
+        guard wideLaneWidth != nil else { return 32 }
+        let widths = wideColumnWidths(detail, shown: shown, statusStyle: statusStyle, grouped: grouped)
         var starts: [CGFloat] = []
         var x: CGFloat = 0
         for v in widths { starts.append(x); x += v + Self.wideGap }
@@ -1592,7 +1719,7 @@ struct ProjectDetailView: View {
             canAdd: addable && canEdit,
             canEdit: canEdit,
             fieldIds: projectFieldIds,
-            width: wideLaneWidth
+            width: laneWidth(lane)
         )
     }
 
@@ -2406,7 +2533,9 @@ struct BoardCard: View {
             if task.isSubtask { SubtaskBadge(parentTitle: task.parent?.title) }
             HStack(alignment: .top, spacing: 8) {
                 if let selectMark { TaskSelectionMark(selected: selectMark) }
-                Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
+                // A done card is muted as a whole, as the web's: an outline check, faded chips (decision 23 of run 20,
+                // R20-B-09; it kept a solid green check and full-colour chips).
+                Image(systemName: task.isDone ? "checkmark.circle" : "circle")
                     .font(.system(size: 16)).foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.5))
                 // A done card's title muted and lighter, as the web's (UI tour run 19, R19-B-03).
                 Text(UntitledText.wrapped(task.title)).font(NXFont.text(14, task.isDone ? .medium : .bold))
@@ -2419,18 +2548,16 @@ struct BoardCard: View {
             }
             // The priority on the meta line with the values, as the web's card, not beside the title (R19-B-03).
             if hasMeta {
-                HStack(alignment: .top, spacing: 6) {
-                    priorityPill
-                    CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText)
-                }
+                CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText, priority: task.priority)
+                    .opacity(task.isDone ? 0.55 : 1)
                 metaRow
             } else {
                 // Nothing for a meta row: the avatars ride on the chip row, as on the web card, instead of a
                 // near-empty third row; a card with neither ends under its chips (UI tour run 16, R16-B-07 /
                 // R16-I-17: uneven empty bands under the chips).
                 HStack(alignment: .top, spacing: 8) {
-                    priorityPill
-                    CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText)
+                    CFChipRow(values: task.customFieldValues, only: fieldIds, capDates: true, due: dueText, priority: task.priority)
+                        .opacity(task.isDone ? 0.55 : 1)
                     if !task.assigneeAvatars.isEmpty {
                         Spacer(minLength: 0)
                         avatars
@@ -2447,10 +2574,6 @@ struct BoardCard: View {
                 .nexusShadowSoft()
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
         }
-    }
-
-    @ViewBuilder private var priorityPill: some View {
-        if let p = task.priority, p.uppercased() != "NONE" { PriorityPill(priority: p).fixedSize() }
     }
 
     /// Something besides the avatars for the bottom row: a due date, subtasks, a quest or comments.
@@ -2498,6 +2621,49 @@ struct BoardCard: View {
 
 /// A linked lane folded to a narrow rail on an iPad / Mac board (web R17-WD-1): its count, the source project's
 /// name upright, "Linked". A click opens the lane.
+/// The wide board's resting places (see `boardTab`): `.viewAligned` on a phone, else `WholeColumnSnap`.
+private struct WideBoardSnap: ViewModifier {
+    let widths: [CGFloat]
+    let gap: CGFloat
+    let leading: CGFloat
+    let viewport: CGFloat
+    func body(content: Content) -> some View {
+        if widths.isEmpty || viewport <= 0 {
+            content.scrollTargetBehavior(.viewAligned)
+        } else {
+            content.scrollTargetBehavior(WholeColumnSnap(widths: widths, gap: gap, leading: leading, viewport: viewport))
+        }
+    }
+}
+
+/// Rests on a column's start (the column at the leading margin) only where the window's right edge falls in
+/// the gap after a column (or past the last one), and on the scroll's end; the nearest such place to where the
+/// swipe would stop. With every column the same width each start qualified (the old `.viewAligned`); with narrow
+/// empty lanes some starts would cut a column at the right edge, and those are skipped.
+struct WholeColumnSnap: ScrollTargetBehavior {
+    let widths: [CGFloat]
+    let gap: CGFloat
+    let leading: CGFloat
+    let viewport: CGFloat
+
+    func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
+        let maxX = max(0, context.contentSize.width - context.containerSize.width)
+        guard maxX > 0 else { return }
+        var starts: [CGFloat] = [], ends: [CGFloat] = []
+        var x: CGFloat = 0
+        for w in widths { starts.append(x); ends.append(x + w); x += w + gap }
+        let total = x - gap
+        let clean = starts.filter { s in
+            guard s <= maxX + 0.5 else { return false }
+            let edge = s + viewport - leading
+            return edge >= total - 0.5 || ends.contains { e in edge >= e - 0.5 && edge <= e + gap + 0.5 }
+        } + [maxX]
+        let proposed = min(max(0, target.rect.origin.x), maxX)
+        guard let best = clean.min(by: { abs($0 - proposed) < abs($1 - proposed) }) else { return }
+        target.rect.origin.x = min(best, maxX)
+    }
+}
+
 private struct LinkedLaneRail: View {
     let lane: ProjectDetail.Lane
     let open: () -> Void
@@ -2505,6 +2671,9 @@ private struct LinkedLaneRail: View {
     var body: some View {
         Button(action: open) {
             VStack(spacing: 10) {
+                // The web's expand chevron on a folded lane (UI tour run 20, R20-B-10).
+                Image(systemName: "chevron.left").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.mutedFg)
+                    .accessibilityHidden(true)
                 Text("\((lane.tasks ?? []).count)").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg).monospacedDigit()
                 Text(lane.name).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
                     .lineLimit(1).fixedSize()

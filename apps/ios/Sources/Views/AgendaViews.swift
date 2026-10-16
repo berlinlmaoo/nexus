@@ -258,7 +258,9 @@ struct AgendaScaffold<Content: View>: View {
             } else if isEmpty, let emptyTitle {
                 ScrollView {
                     EmptyState(icon: emptyIcon, title: emptyTitle, subtitle: emptyText,
-                               actionTitle: emptyActionTitle, actionIcon: nil, action: emptyAction, prominent: true)
+                               // The secondary (outline) style, as web: the header "+" is the primary action
+                               // (decision 13 of run 20, R20-I-10 / R20-B-14; web WB-5).
+                               actionTitle: emptyActionTitle, actionIcon: nil, action: emptyAction)
                         .frame(maxWidth: .infinity)
                         .padding(.horizontal, NXSidebarPage.gutter(pageRoot))
                         .padding(.top, 48)

@@ -1109,7 +1109,7 @@ struct CalItemRow: View {
                         }
                     }
                     .accessibilityHidden(true)
-                    // Every name, wrapped, as the web: one line cut "WILLIAM ERSAN, Daniel Afrizal, Mohamad Okta Fi…"
+                    // Every name, wrapped, as the web: one line cut "WAHYU EKA, Dani Arif, Mohamad Oki Fa…"
                     // (UI tour run 19, R19-I-09).
                     Text(here.map { who($0) }.joined(separator: ", "))
                         .font(NXFont.text(CalType.size(11.5), .semibold)).foregroundStyle(NX.foreground.opacity(0.9))
@@ -1117,7 +1117,7 @@ struct CalItemRow: View {
                 }
             }
             if !others.isEmpty {
-                // Every name in full: cut at two lines the overdue card read "…WILLIAM ERSAN (Multimedia),
+                // Every name in full: cut at two lines the overdue card read "…WAHYU EKA (Multimedia),
                 // Moha…" (UI tour run 14, P-M8).
                 Text(here.isEmpty ? othersText : "\(T("with")) \(othersText)")
                     .font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg)
@@ -1273,7 +1273,9 @@ struct CalSectionCard: View {
         // "1 task", not a bare "1": the count is of distinct tasks, and one task shared by three teams of
         // the card is listed under each of them, so a bare number read as a miscount of the rows below
         // (UI tour run 14, N-38).
-        let number = Text(CalFormat.tasks(count)).font(NXFont.text(CalType.size(11.5), .bold)).monospacedDigit()
+        // The bare count, as the web's card (UI tour run 20, iPad R20-I-12); VoiceOver still says "2 tasks".
+        let number = Text(AppNumber.int(count)).font(NXFont.text(CalType.size(11.5), .bold)).monospacedDigit()
+            .accessibilityLabel(CalFormat.tasks(count))
             .lineLimit(1).fixedSize()
             .padding(.horizontal, 8).padding(.vertical, 2).background(NX.muted, in: Capsule())
         let chevron = Image(systemName: "chevron.down").font(NXFont.text(CalType.size(11), .semibold)).foregroundStyle(NX.mutedFg)

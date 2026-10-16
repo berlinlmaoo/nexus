@@ -169,7 +169,13 @@ const MIN_LAST_STEP = Number(process.env.TOUR_MIN_LAST_STEP) || 0.15;
  * `legal-document-2..4` the archive list scrolled behind the document drawer, which stayed put).
  */
 async function capture(page, dir, id) {
-  const shot = (n) => page.screenshot({ path: path.join(dir, n === 1 ? `${id}.png` : `${id}-${n}.png`) });
+  // The pointer off the content before every shot (run 20 tour request 2: the first leaderboard row was grey
+  // from the pointer's hover on wd leaderboard-2…4, "Hosting Team" outlined on wd outlet-settings-2).
+  const shot = async (n) => {
+    await page.mouse.move(0, 0).catch(() => {});
+    await page.waitForTimeout(150);
+    return page.screenshot({ path: path.join(dir, n === 1 ? `${id}.png` : `${id}-${n}.png`) });
+  };
   for (const f of fs.readdirSync(dir)) if (f.startsWith(`${id}-`) && /^-\d+\.png$/.test(f.slice(id.length))) fs.rmSync(path.join(dir, f));
   const step = () => page.evaluate((MIN_LAST_STEP_IN) => {
     const vw = innerWidth, vh = innerHeight;
@@ -205,7 +211,12 @@ async function capture(page, dir, id) {
     const overlay = overlays[overlays.length - 1] ?? null;
     // How far the furthest-moving scroller went, as a fraction of its own height; `snapped`: a scroller came
     // to rest on its last snap point short of its end, which is then the last page.
+    // `fresh`: how much of the VIEWPORT is new, each scroller's move weighted by the share of the viewport it
+    // covers (run 20 tour request 1: wd / wm project-table-5 and wm project-board-3 were taken although only an
+    // inner scroller had moved a little, so they repeated most of the page before). The document counts whole.
+    // `moved` (the furthest-moving scroller) still decides whether paging goes on.
     let moved = 0;
+    let fresh = 0;
     let snapped = false;
     let more = false;   // a scroller that still has a page to go after this step
     for (const [s, bottom] of end) {
@@ -278,23 +289,61 @@ async function capture(page, dir, id) {
       }
       if (target < limit && !snappedHere) more = true;
       s.scrollTop = target;
-      if (s.scrollTop > before + 1) moved = Math.max(moved, (s.scrollTop - before) / height);
+      let share = 1;
+      if (s !== doc) {
+        const r = s.getBoundingClientRect();
+        const w = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
+        const h = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+        share = Math.min(1, (w * h) / (vw * vh));
+      }
+      if (s.scrollTop > before + 1) {
+        moved = Math.max(moved, (s.scrollTop - before) / height);
+        fresh = Math.min(1, fresh + ((s.scrollTop - before) / height) * share);
+      }
     }
-    return { moved, snapped: snapped && !more };
-  }, MIN_LAST_STEP).catch(() => ({ moved: 0, snapped: false }));
+    return { moved, fresh, snapped: snapped && !more };
+  }, MIN_LAST_STEP).catch(() => ({ moved: 0, fresh: 0, snapped: false }));
   await shot(1);
   let pages = 1;
   // A step that moved less than half a viewport shows mostly the previous page again (UI tour run 13, W-M24:
   // dashboard-3 and projects-2 were 50-77 px further down), so the paging ends there; but when it still
   // reached a real part of the page (MIN_LAST_STEP), that end is shot once as the last page.
   while (pages < MAX_PAGES) {
-    const { moved, snapped } = await step();
-    if (moved < MIN_LAST_STEP) break;
+    const { moved, fresh, snapped } = await step();
+    if (moved < MIN_LAST_STEP || fresh < MIN_LAST_STEP) break;
     await page.waitForTimeout(700);
     pages += 1;
     await shot(pages);
     // A page resting on its last snap point shows everything not yet seen: it is the last one.
     if (moved < MIN_PAGE_STEP || snapped) break;
+  }
+  // Run 20 tour request 4: a content scroller inside the page (the Table's rows above its Calculate footer, the
+  // Timeline's late rows) that is still short of its end when the paging stops is brought to its end once and
+  // shot, so its last rows are seen. Only scrollers of a fifth of the viewport or more, not the navigation, and
+  // only when that end shows at least MIN_LAST_STEP of the viewport as new.
+  const tail = await page.evaluate((MIN_LAST_STEP_IN) => {
+    const vw = innerWidth, vh = innerHeight;
+    let any = false;
+    for (const el of document.body.querySelectorAll("*")) {
+      if (el.scrollHeight <= el.clientHeight + 4 || el.clientHeight < 120) continue;
+      if (!/(auto|scroll|overlay)/.test(getComputedStyle(el).overflowY)) continue;
+      if (el.closest("nav, [role='navigation'], [data-sidebar]")) continue;
+      const r = el.getBoundingClientRect();
+      const w = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
+      const h = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+      if (w * h < vw * vh * 0.2) continue;
+      const max = el.scrollHeight - el.clientHeight;
+      // What the end brings in, as a share of the VIEWPORT (as `fresh` in the paging): no near-duplicate page.
+      if (Math.min(1, (max - el.scrollTop) / el.clientHeight) * ((w * h) / (vw * vh)) < MIN_LAST_STEP_IN) continue;
+      el.scrollTop = max;
+      any = true;
+    }
+    return any;
+  }, MIN_LAST_STEP).catch(() => false);
+  if (tail && pages < MAX_PAGES + 1) {
+    await page.waitForTimeout(700);
+    pages += 1;
+    await shot(pages);
   }
   return { pages };
 }

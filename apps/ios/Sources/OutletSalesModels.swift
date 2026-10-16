@@ -1,7 +1,7 @@
 import Foundation
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Outlet Sales Dashboard (owner, 10 Oct 2026, for Ryan): one project = one outlet. Each night is an
+// Outlet Sales Dashboard (owner, 10 Oct 2026, for the outlet team): one project = one outlet. Each night is an
 // event with its report (sales, pax, RSVP, hosting, what worked, what didn't), the month has its own
 // targets, and the server decides every total, percent and status — this app only shows them.
 // Contract: handoff/chat/OUTLET-SALES.md, server src/lib/outlet-sales.ts (commit 0cedc3a).
@@ -201,7 +201,7 @@ struct OutletSummary: Decodable, Sendable {
     }
 }
 
-// MARK: - The server's form (§5): sections and fields in Ryan's order and words, in both languages
+// MARK: - The server's form (§5): sections and fields in the outlet team's order and words, in both languages
 
 struct OutletBilingual: Decodable, Hashable, Sendable {
     let en: String
@@ -389,7 +389,7 @@ struct OutletEventDetail: Decodable, Sendable {
     let config: OutletReportConfig?
 }
 
-// MARK: - The outlet's own report breakdown (owner, 14 Oct 2026, after a meeting with Ryan)
+// MARK: - The outlet's own report breakdown (owner, 14 Oct 2026, after a meeting with the outlet team)
 //
 // RSVP items, Hosting items and Communities, set up per outlet (Report settings). Every item has a stable
 // id: renaming changes the label only, and an item removed while reports hold figures for it stays,
@@ -497,7 +497,7 @@ struct OutletReportConfig: Codable, Hashable, Sendable {
         try c.encode(communities, forKey: OutletAnyKey("communities"))
     }
 
-    /// The seven items every outlet starts with (Ryan's words, the same in both languages).
+    /// The seven items every outlet starts with (the outlet team's words, the same in both languages).
     static let standard = OutletReportConfig(
         rsvp: [OutletItem(id: "rsvpWalkIn", label: "Walk-in RSVP"), OutletItem(id: "rsvpTeam", label: "RSVP Team"),
                OutletItem(id: "rsvpPr", label: "RSVP PR"), OutletItem(id: "rsvpEo", label: "RSVP EO")],
@@ -656,7 +656,7 @@ enum OutletFormat {
         return grouped(n)
     }
 
-    /// Ryan's "actual / target (pct%)". No target → the actual alone; a target but nothing filled →
+    /// The outlet team's "actual / target (pct%)". No target → the actual alone; a target but nothing filled →
     /// "— / Rp20.000.000" (no percent).
     static func vsTarget(_ actual: Int64?, _ target: Int64?, _ pct: Int64?, money: Bool) -> String {
         let fmt: (Int64?) -> String = money ? rupiah : count

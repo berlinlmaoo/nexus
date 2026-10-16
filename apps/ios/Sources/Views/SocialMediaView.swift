@@ -456,9 +456,18 @@ struct SocialOverviewView: View {
                 // targets)" to "(in…" (UI tour run 17, iPad R17-I-02).
                 // Two lines kept on every card side by side, so one card's wrapped helper does not push its
                 // sparkline and figures below the others' (UI tour run 18, R18-M-06).
-                Text(monthTargetLine(p)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                    .lineLimit(2, reservesSpace: wide).minimumScaleFactor(0.9)
-                    .fixedSize(horizontal: false, vertical: true)
+                // Run 20 (Mac R20-M-03, iPad R20-I-03): the one Text broke before "(incl. day targets)" on the Mac and
+                // cut it to "(incl. day tar…" on the iPad. Now: the whole line where it fits (12, then 11 pt, as the
+                // web keeps it), else whole phrases on their own lines, never cut.
+                let line = monthTargetLine(p)
+                ViewThatFits(in: .horizontal) {
+                    Text(line).font(NXFont.text(12)).lineLimit(1).fixedSize()
+                    Text(line).font(NXFont.text(11)).lineLimit(1).fixedSize()
+                    phraseLines(Self.phraseParts(line, atDots: false))
+                    phraseLines(Self.phraseParts(line, atDots: true))
+                }
+                .foregroundStyle(NX.mutedFg)
+                .frame(minHeight: wide ? 32 : nil, alignment: .topLeading)
             }
             if let trend = p.trend, trend.count > 1, trend.contains(where: { $0 > 0 }) {
                 SocialSparkline(values: trend)
@@ -492,12 +501,14 @@ struct SocialOverviewView: View {
         Text(T("No engagement target")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             .lineLimit(1).fixedSize()
         if store.canManage {
+            // An underlined text link in the text colour, as web (decision 12 of run 20, R20-B-29: a violet link
+            // with an icon).
             Button { store.settingsOpen = true } label: {
-                Label(T("Set a target"), systemImage: "target").font(NXFont.text(12, .semibold))
+                Text(T("Set a target")).font(NXFont.text(12, .medium)).underline()
                     .lineLimit(1).fixedSize()
             }
             .buttonStyle(.borderless)
-            .foregroundStyle(NX.violetText)
+            .foregroundStyle(NX.foreground)
         }
     }
 
@@ -528,6 +539,25 @@ struct SocialOverviewView: View {
                 .joined(separator: " (")
         }
         .joined(separator: " · ")
+    }
+
+    /// The helper's phrases: split before "(", and also after each " · " when `atDots`.
+    static func phraseParts(_ line: String, atDots: Bool) -> [String] {
+        let flat = line.replacingOccurrences(of: "\u{00A0}", with: " ")
+        let dots = flat.components(separatedBy: " · ")
+        let groups = atDots ? dots.enumerated().map { i, g in i < dots.count - 1 ? g + " ·" : g } : [flat]
+        return groups.flatMap { g -> [String] in
+            let parts = g.components(separatedBy: " (")
+            return parts.enumerated().map { i, part in i == 0 ? part : "(" + part }
+        }
+    }
+
+    private func phraseLines(_ parts: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
+                Text(part).font(NXFont.text(12)).lineLimit(1).fixedSize()
+            }
+        }
     }
 
     private func stat(_ label: String, _ value: Double?) -> some View {
@@ -660,8 +690,13 @@ struct SocialCalendarView: View {
             // The number and the figures under it share one left inset; the notes and own-target marks sit in
             // the top-right corner, as on the outlet calendar and the web (UI tour run 16, R16-I-08).
             VStack(alignment: .leading, spacing: 3) {
-                NXMonthDayNumber(day: OutletFormat.parts(d)?.d ?? 0, inMonth: inMonth, isToday: isToday,
-                                 muted: future, wide: wide)
+                // The day-target mark right after the number, as on the outlet calendar (decision 12 of run 20,
+                // R20-I-21); the notes mark keeps the corner.
+                HStack(alignment: .center, spacing: 2) {
+                    NXMonthDayNumber(day: OutletFormat.parts(d)?.d ?? 0, inMonth: inMonth, isToday: isToday,
+                                     muted: future, wide: wide)
+                    if inMonth && store.hasOwnTarget(d) { NXMonthTargetMark(wide: wide) }
+                }
                 // The plain dotted figure ("2.200"), never a compact "2.2k" (owner rule R14-WB-2, N-22 / P-M22).
                 if let e = day?.engagement {
                     // Smaller, regular weight and muted under the bold day number, so "2" over "2.200" no longer
@@ -693,7 +728,6 @@ struct SocialCalendarView: View {
                     if inMonth && (day?.hasNotes == true) {
                         Image(systemName: "square.and.pencil").font(.system(size: 9)).foregroundStyle(NX.mutedFg)
                     }
-                    if inMonth && store.hasOwnTarget(d) { NXMonthTargetMark(wide: wide) }
                 }
                 .padding(wide ? 7 : 4)
             }
@@ -912,8 +946,10 @@ struct SocialDaySheet: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(m.label).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
                             // An empty box, not a "—" placeholder that read as an entered value (R19-B-14).
+                            // Numbers right-aligned, as the web and Notion (UI tour run 20, R20-B-22).
                             TextField("", text: figureBinding(p.id, m))
                                 .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
                                 .monospacedDigit()
                                 .padding(.horizontal, 10).frame(minHeight: 36)
                                 .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -950,7 +986,15 @@ struct SocialDaySheet: View {
                 SheetSectionTitle(p.isArchived ? "\(p.name) · \(T("archived"))" : p.name)
                 if wide {
                     Spacer(minLength: 8)
-                    Text("\(T("Engagement")) \(engagementText)").monospacedDigit().textCase(nil)
+                    // The achieved value bold, the target muted, and the info icon, as the web's header (R20-B-22).
+                    HStack(spacing: 4) {
+                        Text(T("Engagement")).foregroundStyle(NX.mutedFg)
+                        SocialEngagementInfoButton()
+                        (Text(SocialFormat.count(eng.map(Double.init))).bold().foregroundColor(NX.foreground)
+                         + Text(info?.engagementTarget.map { " / \(SocialFormat.count($0))" } ?? "").foregroundColor(NX.mutedFg))
+                            .monospacedDigit()
+                    }
+                    .textCase(nil)
                 }
             }
         } footer: {
@@ -1208,6 +1252,19 @@ struct SocialSettingsSheet: View {
                 set: { v in var cur = targets[pid] ?? ["", ""]; cur[i] = OutletFormat.regroup(v); targets[pid] = cur })
     }
 
+    private func targetBox(_ label: String, _ text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            TextField(text: text, prompt: Text(T("No target")).foregroundStyle(NX.mutedFg)) { Text(label) }
+                .keyboardType(.numberPad).multilineTextAlignment(.trailing).monospacedDigit()
+                .font(NXFont.text(14))
+                .padding(.horizontal, 10).frame(height: 36)
+                .background(NX.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     private var active: [SocialPlatformRow] { rows.filter { !$0.archived } }
     private var archived: [SocialPlatformRow] { rows.filter { $0.archived } }
 
@@ -1215,35 +1272,32 @@ struct SocialSettingsSheet: View {
         List {
             // The web's subtitle (run 14, P-I31 / P-M31), on the same left edge as the section headers and with
             // no empty band above it (UI tour run 15, Q-IB14).
+            // A section header, so it starts on the same left edge as the headings under it (UI tour run 20, iPad
+            // R20-I-11: a row inset put it 4 pt to their right).
             Section {
+                EmptyView()
+            } header: {
                 Text(T("What this report tracks, and the month's goals per platform."))
-                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).textCase(nil)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Section {
+                // As the web: per platform, Engagement and Posts side by side, each an input box, the figure
+                // right-aligned; the helper under the heading (UI tour run 20, R20-B-21: plain right-aligned text
+                // with no input chrome, the helper under the card).
                 ForEach(originalRows.filter { !$0.archived }) { p in
                     VStack(alignment: .leading, spacing: 8) {
                         Text(p.name).font(NXFont.text(13, .semibold))
-                        HStack {
-                            Text(T("Engagement target")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                            Spacer()
-                            TextField(T("No target"), text: targetBinding(p.platformId, 0))
-                                .keyboardType(.numberPad).multilineTextAlignment(.trailing).frame(maxWidth: 150)
-                        }
-                        HStack {
-                            Text(T("Posts target")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                            Spacer()
-                            TextField(T("No target"), text: targetBinding(p.platformId, 1))
-                                .keyboardType(.numberPad).multilineTextAlignment(.trailing).frame(maxWidth: 150)
+                        HStack(alignment: .top, spacing: 12) {
+                            targetBox(T("Engagement"), targetBinding(p.platformId, 0))
+                            targetBox(T("Posts"), targetBinding(p.platformId, 1))
                         }
                     }
                     .moveDisabled(true)
                 }
             } header: {
-                SheetSectionTitle(String(format: T("Targets for %@"), OutletFormat.monthLabel(store.month)))
-            } footer: {
-                Text(T("Each day's target is the month's split evenly, unless a day sets its own in the calendar. Leave a box empty for no target."))
+                OutletSettingsHeading(title: String(format: T("Targets for %@"), OutletFormat.monthLabel(store.month)),
+                                      helper: T("Each day's target is the month's split evenly, unless a day sets its own in the calendar. Leave a box empty for no target."))
             }
 
             Section {

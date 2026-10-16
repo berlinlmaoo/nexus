@@ -1,11 +1,11 @@
 import SwiftUI
 
-// MARK: - Outlet Sales Dashboard: Calendar and Report form (owner, 10 Oct 2026, for Ryan)
+// MARK: - Outlet Sales Dashboard: Calendar and Report form (owner, 10 Oct 2026, for the outlet team)
 //
 // Calendar: "Ketika pencet sebuah tanggal, di bawah muncul details" — a month grid (Monday first, six
-// weeks), and under it the picked day with every event of that day as Ryan listed it.
+// weeks), and under it the picked day with every event of that day as the outlet team listed it.
 // Report form: "form dengan pertanyaan yang diatas, supaya team nya tinggal isi form nya" — drawn from
-// the server's form (`form` in every answer), one card per section in Ryan's order and words.
+// the server's form (`form` in every answer), one card per section in the outlet team's order and words.
 
 struct OutletCalendarView: View {
     @Bindable var store: OutletSalesStore
@@ -66,7 +66,7 @@ struct OutletCalendarView: View {
                 // day's number and read as that day's (UI tour run 19, R19-I-27).
                 HStack(alignment: .center, spacing: 2) {
                     NXMonthDayNumber(day: number, inMonth: inMonth, isToday: isToday, wide: wide)
-                    if ownTarget && !wide { NXMonthTargetMark(wide: false) }
+                    if ownTarget { NXMonthTargetMark(wide: wide) }
                 }
                 if wide {
                     ForEach(list.prefix(2)) { e in
@@ -101,9 +101,6 @@ struct OutletCalendarView: View {
             }
             .padding(wide ? 6 : 3)
             .frame(maxWidth: .infinity, minHeight: wide ? 104 : 56, alignment: .topLeading)
-            .overlay(alignment: .topTrailing) {
-                if ownTarget && wide { NXMonthTargetMark(wide: wide).padding(7) }
-            }
             .nxMonthCell(inMonth: inMonth, selected: selected)
             .contentShape(Rectangle())
         }

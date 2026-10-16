@@ -36,4 +36,4 @@ Juga di versi ini:
 - Keluar akun sekarang benar-benar menutup sesimu.
 - Ikon baru: tanda X, hitam di atas putih.
 
-Bagas sudah tes di MacBook-nya. Semoga di MacBook-mu juga.
+Tim sudah tes di MacBook. Semoga di MacBook-mu juga.

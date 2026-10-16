@@ -15,7 +15,8 @@ import SwiftUI
 // ============================================================================
 
 /// The Table's column widths for one window width: the web's grid (Name minmax(240px, 2fr), every other
-/// column minmax(140px, 1fr), a 40px open column). Wider than the window = it scrolls sideways.
+/// column minmax(140px, 1fr)). Wider than the window = it scrolls sideways. No trailing open column: every
+/// cell opens the task, and the web table ends on Status (UI tour run 20, Mac R20-M-02: a column of "›").
 ///
 /// Every column after Name has its own width (`widths`, in order: Assignee, Due date, the project's fields,
 /// Priority, Status), so a field column is at least as wide as its header: "Tanggal Penggunaan" wrapped
@@ -23,7 +24,6 @@ import SwiftUI
 struct TableColumns: Equatable {
     var name: CGFloat
     var widths: [CGFloat]
-    let open: CGFloat = 40
     /// Assignee, Due date, Priority, Status.
     static let fixedCount = 4
 
@@ -32,14 +32,14 @@ struct TableColumns: Equatable {
     func field(_ i: Int) -> CGFloat { widths[2 + i] }
     var priority: CGFloat { widths[widths.count - 2] }
     var status: CGFloat { widths[widths.count - 1] }
-    var total: CGFloat { name + widths.reduce(0, +) + open }
+    var total: CGFloat { name + widths.reduce(0, +) }
 
     /// The sideways offsets at which a column starts right after the frozen Name column: the only places
     /// the scroll comes to rest, so no column is ever half under it (see TableColumnSnap).
     var columnStarts: [CGFloat] {
         var out: [CGFloat] = [0]
         var x: CGFloat = 0
-        for w in widths + [open] { x += w; out.append(x) }
+        for w in widths { x += w; out.append(x) }
         return out
     }
 
@@ -82,25 +82,17 @@ struct TableColumns: Equatable {
             return TableColumns(name: width - column, widths: mins.map { _ in column })
         }
         // Wider than the window on an iPad / Mac: Name keeps its minimum (it took half the window before,
-        // UI tour run 14, P-I12 / P-M9) and the columns that fit beside it share the rest, so the window's
-        // edge falls on a column boundary and no amount is cut mid-number ("Rp 6.842.09", run 11, PD-1).
-        var used = minName
-        var k = 0
-        // A column fits with room for the header's 22 pt "›" after it, unless it is the last one.
-        while k < mins.count && used + mins[k] <= width - (k + 1 < mins.count ? 22 : 0) { used += mins[k]; k += 1 }
-        guard k > 0 else { return TableColumns(name: max(minName, width - minCol), widths: mins) }
-        // The columns that fit share the room, so the window's edge falls on a column boundary: a column peeking
-        // in under the edge fade left a sliver of cut letters (UI tour run 17, R17-B-09). That more columns
-        // follow is said by the "›" in the header (run 15, Q-M15: "Request by" looked like the last column).
-        // The 22 pt of the header's "›" stay free while more columns follow, so it never lies on the last
-        // header's words ("Tanggal Penggunaa›", UI tour run 18, R18-M-04).
-        let peek: CGFloat = k < mins.count ? 22 : 0
-        let extra = max(0, width - used - peek)
-        let nameExtra = min(extra, 80)
-        let each = (extra - nameExtra) / CGFloat(k)
-        var widths = mins
-        for i in 0..<k { widths[i] += each }
-        return TableColumns(name: minName + nameExtra, widths: widths)
+        // UI tour run 14, P-I12 / P-M9), and EVERY column gets one width, the room beside Name shared by the k
+        // widest-header columns that fit. Each resting place (a column start, TableColumnSnap) then shows k whole
+        // columns, on the first page and after every swipe: with columns of their own widths a later page ended
+        // mid-column, and the strip covering the cut left a ~180 pt empty band before "›" (UI tour run 20, iPad
+        // R20-I-10; the cover itself came from Mac R19-M-02). The 22 pt of the header's "›" stay free (R18-M-04).
+        let peek: CGFloat = 22
+        let widest = mins.max() ?? minCol
+        let k = max(1, min(mins.count - 1, Int((width - minName - peek) / widest)))
+        let nameExtra = min(80, max(0, width - minName - peek - CGFloat(k) * widest))
+        let column = max(minCol, (width - minName - nameExtra - peek) / CGFloat(k))
+        return TableColumns(name: minName + nameExtra, widths: mins.map { _ in column })
     }
 }
 
@@ -166,9 +158,26 @@ struct ProjectTableTab: View {
     /// so they stay at the leading edge (UI tour run 13, F-05 / I-7 / M-6: scrolled right, the rows had no
     /// name and the group headers were blank bands). iOS 18+; earlier systems scroll the column away.
     @State private var stickyX: CGFloat = 0
+    /// Where every resting place of the vertical scroll starts (group headers, rows, "Show more", "+ New task"),
+    /// the rows' height and the scroll's own: for `endRoom`.
+    @State private var rowTops: [String: CGFloat] = [:]
+    @State private var rowsHeight: CGFloat = 0
+    @State private var rowsViewport: CGFloat = 0
+
+    /// The room after the last row: 24 pt, plus what makes the scroll's END a row start too. At the end the scroll
+    /// cannot snap, so the last pages began with the bottom of the row before (its hairline ~3 pt under the
+    /// header: a doubled rule; UI tour run 20, R20-I-06). With the end on a row start every resting offset is a row
+    /// boundary, and the header's own rule is the only line at the top.
+    private var endRoom: CGFloat {
+        let base: CGFloat = 24
+        let maxOff = rowsHeight + base - rowsViewport
+        guard rowsViewport > 0, maxOff > 0, let next = rowTops.values.filter({ $0 >= maxOff - 0.5 }).min() else { return base }
+        return base + (next - maxOff)
+    }
 
     private var compact: Bool { hSize != .regular }
-    /// Date fields that hold names ("Request by" from a Notion import): a person icon, not a calendar.
+    /// Date fields that hold names ("Request by" from a Notion import): the text glyph, not a calendar (and not a
+    /// person: only real people get that, decision 5 of run 19; decision 2 of run 20).
     private var nameFields: Set<String> {
         let tasks = lanes.flatMap { $0.tasks ?? [] }
         return Set(fields.filter { ["DATE", "CREATED"].contains($0.type.uppercased()) && cfFieldHoldsNames($0.id, in: tasks) }.map(\.id))
@@ -200,8 +209,11 @@ struct ProjectTableTab: View {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(lanes) { lane in group(lane, cols) }
                     }
-                    .padding(.bottom, 24)
+                    .coordinateSpace(.named(TableRowTop.space))
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowsHeight = $0 }
+                    .padding(.bottom, endRoom)
                 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowsViewport = $0 }
                 // Rows come to rest whole under the header, never half cut under it (UI tour run 16,
                 // R16-I-07; the web's WB-1). Each group's rows are the resting places (group(_:_:)).
                 .scrollTargetBehavior(.viewAligned(limitBehavior: .never))
@@ -253,10 +265,12 @@ struct ProjectTableTab: View {
         let limit = shown[lane.id] ?? 40
         return VStack(alignment: .leading, spacing: 0) {
             groupHeader(lane, count: tasks.count, collapsed: isCollapsed)
+                .modifier(TableRowTop(key: "g:\(lane.id)", tops: $rowTops))
             if !isCollapsed {
                 let order: () -> [String] = { tasks.map(\.id) }
                 ForEach(Array(tasks.prefix(limit))) { t in
                     row(t, laneId: lane.id, cols: cols, order: order)
+                        .modifier(TableRowTop(key: "t:\(t.id)", tops: $rowTops))
                 }
                 if tasks.count > limit {
                     let more = min(25, tasks.count - limit)
@@ -271,8 +285,9 @@ struct ProjectTableTab: View {
                     .buttonStyle(.plain)
                     .hoverEffect(.highlight)
                     .overlay(alignment: .bottom) { TableHairline() }
+                    .modifier(TableRowTop(key: "m:\(lane.id)", tops: $rowTops))
                 }
-                if onAddTask != nil { newTaskRow(lane.id) }
+                if onAddTask != nil { newTaskRow(lane.id).modifier(TableRowTop(key: "n:\(lane.id)", tops: $rowTops)) }
             }
         }
         // The header and every row are resting places for the vertical scroll (viewAligned above).
@@ -408,6 +423,21 @@ struct StickyColumnEdge: View {
 }
 
 /// The Table's 1pt grid line under a row.
+/// Reports a resting place's top in the table rows' coordinate space (ProjectTableTab.endRoom); a row that goes
+/// away (a group folded) takes its entry with it.
+struct TableRowTop: ViewModifier {
+    static let space = "tableRows"
+    let key: String
+    @Binding var tops: [String: CGFloat]
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.space)).minY } action: { y in
+                if abs((tops[key] ?? -1) - y) > 0.5 { tops[key] = y }
+            }
+            .onDisappear { tops[key] = nil }
+    }
+}
+
 struct TableHairline: View {
     var body: some View { Rectangle().fill(NX.border).frame(height: 1) }
 }
@@ -424,7 +454,8 @@ struct TableHeaderRow: View {
     var body: some View {
         HStack(spacing: 0) {
             // The web's "T" text-field icon, not Notion's "Aa" (parity outranks Notion; UI tour run 19, R19-I-18).
-            cell(T("Name"), icon: "character", width: cols.name, first: true)
+            // The web's "T" text glyph (UI tour run 20, R20-I-04 / R20-B-11; it was "Aa", then "A").
+            cell(T("Name"), icon: TextPropertyGlyph.symbol, width: cols.name, first: true)
                 .background(NX.card)
                 .overlay(alignment: .trailing) { StickyColumnEdge(active: stickyX > 0) }
                 .offset(x: stickyX)
@@ -435,12 +466,10 @@ struct TableHeaderRow: View {
             // Tanggal Penggunaan…, then Priority and Status): an iPad beside the sidebar showed the four
             // built-in columns and never a field (UI tour run 10, IPD-4).
             ForEach(Array(fields.enumerated()), id: \.element.id) { i, f in
-                cell(f.name, icon: nameFields.contains(f.id) ? "person" : Self.icon(f.type), width: cols.field(i))
+                cell(f.name, icon: nameFields.contains(f.id) ? TextPropertyGlyph.symbol : Self.icon(f.type), width: cols.field(i))
             }
             cell(T("Priority"), icon: "flag", width: cols.priority)
             cell(T("Status"), icon: "rectangle.split.3x1", width: cols.status)
-            Color.clear.frame(width: cols.open, height: 44)
-                .overlay(alignment: .leading) { Rectangle().fill(NX.border).frame(width: 1) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(NX.card)
@@ -449,7 +478,7 @@ struct TableHeaderRow: View {
 
     private func cell(_ title: String, icon: String, width: CGFloat, first: Bool = false) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: icon).font(.system(size: 12))
+            TextPropertyGlyph.icon(icon, size: 12)
             // One line: a field's column is as wide as its header (TableColumns.headerWidth), so
             // "Tanggal Penggunaan" neither wraps (UI tour run 14, P-I12) nor cuts (F-06).
             Text(title).font(NXFont.text(13)).lineLimit(1).truncationMode(.tail)
@@ -474,7 +503,7 @@ struct TableHeaderRow: View {
         case "URL": return "link"
         case "CHECKBOX": return "checkmark.square"
         case "FILE": return "paperclip"
-        default: return "text.alignleft"
+        default: return TextPropertyGlyph.symbol
         }
     }
 }
@@ -524,12 +553,6 @@ struct ProjectTableRow: View {
             }
             priorityCell.modifier(TableCell(width: cols.priority, height: rowH))
             statusCell.modifier(TableCell(width: cols.status, height: rowH))
-            openButton {
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .medium)).foregroundStyle(NX.mutedFg)
-                    .frame(maxWidth: .infinity)
-            }
-            .modifier(TableCell(width: cols.open, height: rowH, inset: 0))
-            .accessibilityLabel(T("Open"))
         }
         // Every cell as tall as the row's tallest (a wrapped name).
         .fixedSize(horizontal: false, vertical: true)
@@ -556,7 +579,7 @@ struct ProjectTableRow: View {
                 if task.isSubtask {
                     Image(systemName: "arrow.turn.down.right").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
                 }
-                // The whole name, wrapped, as the web's Table: two lines and "…" cut "FEE HOSTING PR NAZHWA ROSI
+                // The whole name, wrapped, as the web's Table: two lines and "…" cut "FEE HOSTING PR NADIA RAHMA
                 // - 22…" (UI tour run 19, R19-I-18). The row grows with it.
                 Text(UntitledText.wrapped(task.title))
                     .font(NXFont.text(15, .medium))
@@ -766,10 +789,11 @@ struct ProjectTableRow: View {
     }
 }
 
-/// An empty Table cell: one quiet dash, the same in every column.
+/// An empty Table cell: blank, as the web table (decision 21 of run 20, R20-I-26 / WD-7; it was a "—"). VoiceOver
+/// still says "Empty".
 struct TableEmptyMark: View {
     var body: some View {
-        Text("—").font(NXFont.text(14)).foregroundStyle(NX.mutedFg.opacity(0.6)).accessibilityLabel(T("Empty"))
+        Color.clear.frame(width: 1, height: 14).accessibilityElement().accessibilityLabel(T("Empty"))
     }
 }
 

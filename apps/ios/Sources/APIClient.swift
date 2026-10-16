@@ -2755,6 +2755,12 @@ struct APIClient {
     func attendanceRequests(scope: String) async throws -> [AttendanceRequest] {
         (try await run(makeRequest("/api/attendance/requests?scope=\(enc(scope))"), decode: AttendanceRequestsResponse.self, cache: "attendance-requests-\(scope)")).requests
     }
+    /// With the nightly job's own day-off deductions, which the list leaves out otherwise: the day-off log is
+    /// the one place they belong, because the card that opens it counts them (web DayOffLogModal).
+    func attendanceRequests(scope: String, includeAutoDeductions: Bool) async throws -> [AttendanceRequest] {
+        guard includeAutoDeductions else { return try await attendanceRequests(scope: scope) }
+        return (try await run(makeRequest("/api/attendance/requests?scope=\(enc(scope))&includeAutoDeductions=1"), decode: AttendanceRequestsResponse.self)).requests
+    }
     @discardableResult
     /// `lat`/`lng` are required by the server for a self-filed PERMIT — the same evidence a
     /// check-in carries. The app never sent them, so every permit filed from an iPhone was refused

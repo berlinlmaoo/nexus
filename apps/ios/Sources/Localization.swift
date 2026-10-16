@@ -78,7 +78,7 @@ final class AppLanguage {
          indonesianMacScreens, indonesianMacForms, indonesianMacGideon, indonesianUITour, indonesianRun5, indonesianRun6,
          indonesianLegal, indonesianRun7A, indonesianRun7B, indonesianRun7C, indonesianLegalRequests, indonesianRun9, indonesianRun10,
          indonesianRun11A, indonesianRun11B, indonesianRun11C, indonesianOutletCustom, indonesianSocialMedia, indonesianRun12, indonesianRun13,
-         indonesianRun14NF, indonesianRun14PV, indonesianRun14PP, indonesianRun14OL, indonesianRun15, indonesianRun16, indonesianRun17, indonesianRun18, indonesianRun19, indonesianGideonRooms]
+         indonesianRun14NF, indonesianRun14PV, indonesianRun14PP, indonesianRun14OL, indonesianRun15, indonesianRun16, indonesianRun17, indonesianRun18, indonesianRun19, indonesianRun20, indonesianGideonRooms]
     }
 
     /// English → Indonesian. Keys must match the source literal EXACTLY.
@@ -2919,8 +2919,8 @@ final class AppLanguage {
         "The folder wasn't deleted.": "Folder tidak jadi dihapus.",
         "Drop a project here to take it out of its folder.": "Lepas proyek di sini untuk mengeluarkannya dari folder.",
         "Goes into %@": "Masuk ke %@",
-        // Outlet Sales Dashboard (owner, 10 Oct 2026, for Ryan): web's id-outlet.ts. The form's questions
-        // come from the server in both languages; Sales, Pax, RSVP and Hosting stay as Ryan wrote them.
+        // Outlet Sales Dashboard (owner, 10 Oct 2026, for the outlet team): web's id-outlet.ts. The form's questions
+        // come from the server in both languages; Sales, Pax, RSVP and Hosting stay as the outlet team wrote them.
         "One outlet: sales and pax against the month's target, a calendar of events, and a report form for every night.": "Satu outlet: sales dan pax dibanding target bulanan, kalender event, dan form laporan untuk tiap malam.",
         "Create project + open dashboard": "Buat proyek + buka dashboard",
         "Report form": "Form laporan",

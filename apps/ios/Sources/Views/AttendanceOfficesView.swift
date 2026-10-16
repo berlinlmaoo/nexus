@@ -30,18 +30,23 @@ struct OfficesCard: View {
         var office: Office? { if case .edit(let o) = self { return o } else { return nil } }
     }
     @State private var composer: Composer?
+    @State private var deleting: Office?
+    @State private var deleteError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
+                // The web's wording and button (UI tour run 20, Mac R20-M-04: "Offices & geofence", "+ Office").
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(T("Offices & geofence")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                    Text(T("Office locations and the check-in radius.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    Text(T("Offices and check-in area")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                    Text(T("Set office locations and the radius for check-in.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 Button { composer = .new } label: {
-                    Label(T("Office"), systemImage: "plus").font(NXFont.text(12, .bold)).foregroundStyle(NX.background)
+                    Label(T("New office"), systemImage: "mappin").font(NXFont.text(12, .bold)).foregroundStyle(NX.background)
                         .padding(.horizontal, 12).padding(.vertical, 8).background(NX.onyx, in: Capsule())
+                        .lineLimit(1).fixedSize()
                 }.buttonStyle(.plain)
             }
             if loading {
@@ -57,6 +62,21 @@ struct OfficesCard: View {
         .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
         .task { await load() }
         .sheet(item: $composer) { c in OfficeComposerSheet(editing: c.office) { await load() } }
+        .alert(T("Delete this office?"), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), presenting: deleting) { o in
+            Button(T("Cancel"), role: .cancel) {}
+            Button(T("Delete"), role: .destructive) {
+                Task {
+                    do { _ = try await APIClient.shared.deleteOffice(id: o.id) } catch { deleteError = error.localizedDescription }
+                    await load()
+                }
+            }
+        } message: { o in
+            Text(T("Delete “{name}”? It disappears from the list and nobody can check in there anymore. Days already recorded there keep the office's name.")
+                    .replacingOccurrences(of: "{name}", with: o.name))
+        }
+        .alert(T("Couldn't delete the office"), isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
+            Button("OK") { deleteError = nil }
+        } message: { Text(deleteError ?? "") }
     }
 
     private func row(_ o: Office) -> some View {
@@ -76,10 +96,34 @@ struct OfficesCard: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            Toggle("", isOn: Binding(get: { o.isActive ?? true }, set: { on in Task { try? await APIClient.shared.updateOffice(id: o.id, fields: ["isActive": on]); await load() } }))
-                // The plain system switch (UI tour run 9, I10), in the brand fill like the app's other switches.
-                .toggleStyle(.switch).labelsHidden().tint(NX.violet).fixedSize()
-            Button { composer = .edit(o) } label: { Image(systemName: "pencil").font(.system(size: 13)).foregroundStyle(NX.mutedFg) }.buttonStyle(.plain)
+            // The web row's controls (Mac R20-M-04): delete, Edit, and the Active / Inactive chip that switches it.
+            Button { deleting = o } label: {
+                Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(NX.mutedFg)
+                    .frame(width: 30, height: 30)
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).touchTarget44(drawn: 30)
+            .accessibilityLabel(T("Delete office"))
+            Button { composer = .edit(o) } label: {
+                Label(T("Edit"), systemImage: "pencil").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                    .padding(.horizontal, 10).frame(height: 30)
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                    .lineLimit(1).fixedSize()
+            }
+            .buttonStyle(.plain)
+            let active = o.isActive ?? true
+            Button {
+                Task { try? await APIClient.shared.updateOffice(id: o.id, fields: ["isActive": !active]); await load() }
+            } label: {
+                Text(active ? T("Active") : T("Inactive")).font(NXFont.text(11, .bold))
+                    .foregroundStyle(active ? NX.success : NX.mutedFg)
+                    .padding(.horizontal, 10).padding(.vertical, 3)
+                    .background(active ? NX.success.opacity(0.15) : NX.muted, in: Capsule())
+                    .lineLimit(1).fixedSize()
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(active ? T("Active") : T("Inactive"))
         }
         .padding(.vertical, 4)
     }

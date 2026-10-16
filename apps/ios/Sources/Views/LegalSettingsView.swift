@@ -17,7 +17,7 @@ struct LegalSettingsPane: View {
     /// The chip that is lit: the company whose card header has reached the chip row (`updateLit`).
     @State private var lit: String?
     /// Each card's top, and the end of the page, in the scroll view's visible space; the chip row's height.
-    @State private var cardTops: [String: CGFloat] = [:]
+    @State private var cardFrames: [String: CGRect] = [:]
     @State private var pageEnd: CGFloat = .infinity
     @State private var viewport: CGFloat = 0
     @State private var chipRowH: CGFloat = 0
@@ -37,8 +37,8 @@ struct LegalSettingsPane: View {
                     ForEach(companies ?? []) { c in
                         LegalCompanyCard(company: c, canEdit: canEdit) { await load() }
                             .id(c.id)
-                            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .scrollView(axis: .vertical)).minY } action: {
-                                cardTops[c.id] = $0
+                            .onGeometryChange(for: CGRect.self) { $0.frame(in: .scrollView(axis: .vertical)) } action: {
+                                cardFrames[c.id] = $0
                                 updateLit()
                             }
                     }
@@ -105,17 +105,22 @@ struct LegalSettingsPane: View {
         .task { await load() }
     }
 
-    /// The company whose card header has reached the chip row, as the web lights its chips; at the page's
-    /// end, where a last short card can never reach the top, the last card whose header is in view. It
-    /// switched while ~75% of the screen still showed the company before (UI tour run 18, iPhone R18-I-10):
-    /// the scroll position named the card whose top was NEAREST the page top, from below as well.
+    /// One rule on every platform (decision 14 of run 20, R20-I-15 / Mac R20-M-05): the lit company is the one
+    /// whose card covers the largest part of the visible scroll area (under the chip row); at the end of the
+    /// scroll, the last company with a card in view. The header-reached-the-top rule of run 18 lagged: PATS
+    /// filled ~75 % of the view while "Intoo" was still lit.
     private func updateLit() {
         guard let list = companies, !list.isEmpty, viewport > 0 else { return }
-        let top = chipRowH + 1
+        let top = chipRowH, bottom = viewport
+        func shown(_ id: String) -> CGFloat {
+            guard let f = cardFrames[id] else { return 0 }
+            return max(0, min(f.maxY, bottom) - max(f.minY, top))
+        }
         var pick = list.first?.id
-        for c in list { if let y = cardTops[c.id], y <= top { pick = c.id } }
-        if pageEnd <= viewport + 1, let last = list.last(where: { (cardTops[$0.id] ?? .infinity) < viewport * 0.5 }) {
+        if pageEnd <= viewport + 1, let last = list.last(where: { shown($0.id) > 0 }) {
             pick = last.id
+        } else if let best = list.max(by: { shown($0.id) < shown($1.id) }), shown(best.id) > 0 {
+            pick = best.id
         }
         if pick != lit { lit = pick }
     }

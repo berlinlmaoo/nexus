@@ -1,7 +1,7 @@
 import Foundation
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Outlet Sales Dashboard endpoints (owner, 10 Oct 2026, for Ryan): /api/projects/:id/outlet-sales/**.
+// Outlet Sales Dashboard endpoints (owner, 10 Oct 2026, for the outlet team): /api/projects/:id/outlet-sales/**.
 //
 // In their own file like PipelineAPI.swift. Access is the project's: members read and fill reports,
 // the lead / Manager / BoD / OAA set the month's targets (403 TARGETS_FORBIDDEN for anyone else; the

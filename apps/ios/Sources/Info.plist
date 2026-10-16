@@ -97,5 +97,7 @@
 			</array>
 		</dict>
 	</array>
+	<key>NEXUSDevServerURL</key>
+	<string>$(NEXUS_DEV_SERVER_URL)</string>
 </dict>
 </plist>
