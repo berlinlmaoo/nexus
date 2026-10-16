@@ -73,6 +73,19 @@ export type GideonProposal = {
   error?: string | null;
   /** book_room only (16 Oct 2026): what the booking card draws; the rooms' availability is read live. */
   booking?: GideonBookingView | null;
+  /** move_room_booking / cancel_room_booking only (16 Oct 2026): the booking before and after. */
+  bookingChange?: GideonBookingChangeView | null;
+};
+type GideonBookingSlot = { room: string; day: string; dayLabel: string; start: string; end: string; startsAt: string; endsAt: string };
+/** Server gideon-book-room-plan.ts GideonBookingChangeView. A move's `after.room` is null when it is picked on the card. */
+export type GideonBookingChangeView = {
+  kind: "move" | "cancel";
+  bookingId: string;
+  title: string;
+  bookedBy: string | null;
+  before: GideonBookingSlot;
+  after: (Omit<GideonBookingSlot, "room"> & { room: string | null; requestedRoom: string | null; candidates: string[] }) | null;
+  applied?: GideonBookingSlot | null;
 };
 /** Server gideon-book-room-plan.ts GideonBookingView. Times are ISO instants; day is the WIB day. */
 export type GideonBookingView = {
@@ -321,16 +334,18 @@ async function gjson<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-export const roomAvailability = (startsAt: string, endsAt: string) =>
-  gjson<RoomAvailability>(`/api/room-bookings/availability?startsAt=${encodeURIComponent(startsAt)}&endsAt=${encodeURIComponent(endsAt)}`);
+/** `excludeBookingId`: the booking a move card is moving (its own slot is not "taken" by itself). */
+export const roomAvailability = (startsAt: string, endsAt: string, excludeBookingId?: string) =>
+  gjson<RoomAvailability>(`/api/room-bookings/availability?startsAt=${encodeURIComponent(startsAt)}&endsAt=${encodeURIComponent(endsAt)}${excludeBookingId ? `&excludeBookingId=${encodeURIComponent(excludeBookingId)}` : ""}`);
 
 export const pendingGideonProposals = () => gjson<{ proposals: GideonProposal[] }>("/api/gideon/proposals");
 
 /**
  * Apply or discard. A 409/410/422 still carries the proposal's new state, which is returned. `booking`: the room
- * and slot picked on a book_room card (required to apply one).
+ * and slot picked on a book_room card (required to apply one); on a move card the same plus `bookingId`, on a
+ * cancel card `{ bookingId }` alone (required to apply those).
  */
-export async function decideGideonProposal(id: string, decision: "apply" | "discard", booking?: { room: string; startsAt: string; endsAt: string }): Promise<GideonProposal> {
+export async function decideGideonProposal(id: string, decision: "apply" | "discard", booking?: { bookingId?: string; room?: string; startsAt?: string; endsAt?: string }): Promise<GideonProposal> {
   try {
     const r = await gjson<{ proposal: GideonProposal }>(`/api/gideon/proposals/${id}`, { method: "POST", body: JSON.stringify({ decision, ...(booking ? { booking } : {}) }) });
     return r.proposal;

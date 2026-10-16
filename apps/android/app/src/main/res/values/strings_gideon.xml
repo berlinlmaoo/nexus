@@ -110,4 +110,18 @@
     <string name="gx_someone">someone</string>
     <string name="gx_room_none_free">No room is free then. Nearest free times:</string>
     <string name="gx_room_booked">Room booked</string>
+    <!-- GIDEON moves or cancels a room booking (16 Oct 2026) -->
+    <string name="gx_step_move_booking">Moving a booking</string>
+    <string name="gx_step_move_booking_n">Moving booking %1$s</string>
+    <string name="gx_step_cancel_booking">Cancelling a booking</string>
+    <string name="gx_step_cancel_booking_n">Cancelling booking %1$s</string>
+    <string name="gx_move_booking">Move a booking</string>
+    <string name="gx_cancel_booking">Cancel a booking</string>
+    <string name="gx_booking_now">Now</string>
+    <string name="gx_booking_moves_to">Moves to</string>
+    <string name="gx_booking_booked_by">Booked by %1$s</string>
+    <string name="gx_booking_moved">Booking moved</string>
+    <string name="gx_booking_cancelled">Booking cancelled</string>
+    <string name="gx_cancel_booking_confirm">Cancel booking</string>
+    <string name="gx_cancel_booking_hint">This frees the room for that time. A BoD can restore it from the Audit.</string>
 </resources>

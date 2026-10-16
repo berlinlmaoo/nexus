@@ -4,11 +4,16 @@ import { BOOKING_ROOMS, ROOM_CAPACITY } from "@/lib/room-booking-rooms"
 import { createInAppNotification, roomName } from "@/lib/notification-service"
 import { bi } from "@/lib/notification-text"
 import { formatBookingSlot } from "@/lib/room-booking-format"
+import { isWorkspaceManagerRole } from "@/lib/rbac"
+import { getUserWorkspaceIds } from "@/lib/workspace-scope"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 
 /**
- * Room Booking — the one path that makes a booking (POST /api/room-bookings and GIDEON book_room), and the
- * reads both need: a slot's conflict, the nearest free slots around it, and every room's availability for
- * one slot (the room picker on GIDEON's card).
+ * Room Booking — the one path that makes a booking (POST /api/room-bookings and GIDEON book_room), the one
+ * path that changes or deletes one (PATCH/DELETE /api/room-bookings/:id and GIDEON move_room_booking /
+ * cancel_room_booking, 16 Oct 2026: same permission, same checks, same notifications), and the reads they
+ * need: a slot's conflict, the nearest free slots around it, and every room's availability for one slot (the
+ * room picker on GIDEON's cards).
  *
  * Double booking is refused twice: the findFirst below gives the friendly 409 in the ordinary case, and the
  * database's exclusion constraint RoomBooking_no_overlap (prisma/sql/2026-10-16-room-booking-no-overlap.sql)
@@ -72,7 +77,7 @@ export function findRoomConflict(workspaceIds: string[], room: string, start: Da
   })
 }
 
-/** ACTIVE bookings of these rooms on the WIB day of `at` (plus whatever crosses into it). */
+/** ACTIVE bookings of these rooms on the WIB day of `at` (plus whatever crosses into it), except `excludeId`. */
 async function bookingsOfDay(workspaceIds: string[], rooms: readonly string[], at: Date, excludeId?: string) {
   const day = wibDayBounds(at)
   return prisma.roomBooking.findMany({
@@ -141,8 +146,9 @@ export type RoomAvailability = {
  * Every room for one slot: free, or held by whom until when. With no room free, the nearest slots (same day,
  * ±2 h) in which at least one room is.
  */
-export async function roomAvailability(workspaceIds: string[], start: Date, end: Date): Promise<{ rooms: RoomAvailability[]; freeSlots: FreeSlot[] }> {
-  const bookings = await bookingsOfDay(workspaceIds, BOOKING_ROOMS, start)
+export async function roomAvailability(workspaceIds: string[], start: Date, end: Date, excludeId?: string): Promise<{ rooms: RoomAvailability[]; freeSlots: FreeSlot[] }> {
+  // excludeId: the booking being moved (GIDEON's move card) does not hold its own new slot.
+  const bookings = await bookingsOfDay(workspaceIds, BOOKING_ROOMS, start, excludeId)
   const rooms = BOOKING_ROOMS.map((room): RoomAvailability => {
     const hit = bookings.find((b) => b.room === room && overlaps({ start, end }, b))
     return {
@@ -224,4 +230,156 @@ export async function createRoomBooking(input: {
   }).catch(() => null)
 
   return { ok: true, booking }
+}
+
+// ── Changing and deleting a booking ───────────────────────────────────────────────────────────────────
+
+/** A booking can be edited/deleted by its creator, or by a workspace MANAGER/BoD/One-Above-All. */
+export async function canManageBooking(userId: string, workspaceId: string, createdById: string): Promise<boolean> {
+  if (createdById === userId) return true
+  const membership = await prisma.workspaceMember.findUnique({
+    where: { userId_workspaceId: { userId, workspaceId } },
+    select: { role: true },
+  })
+  return isWorkspaceManagerRole(membership?.role ?? null)
+}
+
+const NOT_YOURS = {
+  change: "Cuma pembuat booking atau manager yang bisa ubah booking ini.",
+  delete: "Cuma pembuat booking atau manager yang bisa hapus booking ini.",
+} as const
+
+export type BookingRefusal = { ok: false; status: number; body: Record<string, unknown> }
+export type ManageableBooking = { ok: true; booking: BookingWithCreator; workspaceIds: string[] }
+
+/**
+ * The booking `userId` may change (or delete): one of their workspaces', and theirs or managed by them
+ * (canManageBooking). 404 when it is not in their workspaces, 403 when it is not theirs to change.
+ */
+export async function findManageableBooking(userId: string, bookingId: string, verb: keyof typeof NOT_YOURS = "change"): Promise<ManageableBooking | BookingRefusal> {
+  const workspaceIds = await getUserWorkspaceIds(userId)
+  const booking = await prisma.roomBooking.findFirst({
+    where: { id: bookingId, workspaceId: { in: workspaceIds } },
+    include: bookingInclude,
+  })
+  if (!booking) return { ok: false, status: 404, body: { error: "Booking not found" } }
+  if (!(await canManageBooking(userId, booking.workspaceId, booking.createdById))) {
+    return { ok: false, status: 403, body: { error: NOT_YOURS[verb] } }
+  }
+  return { ok: true, booking, workspaceIds }
+}
+
+export type BookingPatch = {
+  room?: string
+  title?: string
+  description?: string | null
+  startsAt?: Date
+  endsAt?: Date
+  status?: "ACTIVE" | "CANCELLED"
+}
+
+/**
+ * Change one booking as `userId` (PATCH /api/room-bookings/:id, GIDEON move_room_booking): the permission
+ * above, a real range, and for an ACTIVE result no other ACTIVE booking of the room in the person's
+ * workspaces — refused by the database too when two requests race (RoomBooking_no_overlap), both as the
+ * same 409 ROOM_TAKEN. Changed by somebody other than the owner (a manager) → the owner is told.
+ * `before` is the booking as it was.
+ */
+export async function updateRoomBooking(input: { userId: string; bookingId: string; patch: BookingPatch }): Promise<
+  { ok: true; booking: BookingWithCreator; before: BookingWithCreator } | BookingRefusal
+> {
+  const { userId, bookingId, patch } = input
+  const access = await findManageableBooking(userId, bookingId, "change")
+  if (!access.ok) return access
+  const { booking: existing, workspaceIds } = access
+  if (patch.room !== undefined && !BOOKING_ROOMS.includes(patch.room)) return { ok: false, status: 400, body: { error: "Unknown room", code: "UNKNOWN_ROOM" } }
+
+  const nextRoom = patch.room ?? existing.room
+  const nextStart = patch.startsAt ?? existing.startsAt
+  const nextEnd = patch.endsAt ?? existing.endsAt
+  if (nextEnd <= nextStart) return { ok: false, status: 400, body: { error: "End time must be after start time" } }
+
+  const nextStatus = patch.status ?? existing.status
+  if (nextStatus === "ACTIVE") {
+    const conflict = await findRoomConflict(workspaceIds, nextRoom, nextStart, nextEnd, bookingId)
+    if (conflict) return { ok: false, status: 409, body: await roomTakenBody(workspaceIds, nextRoom, nextStart, nextEnd, bookingId) }
+  }
+
+  let booking: BookingWithCreator
+  try {
+    booking = await prisma.roomBooking.update({
+      where: { id: bookingId },
+      data: {
+        ...(patch.room !== undefined ? { room: patch.room } : {}),
+        ...(patch.title !== undefined ? { title: patch.title.trim() } : {}),
+        ...(patch.description !== undefined ? { description: patch.description?.trim() || null } : {}),
+        ...(patch.startsAt !== undefined ? { startsAt: nextStart } : {}),
+        ...(patch.endsAt !== undefined ? { endsAt: nextEnd } : {}),
+        ...(patch.status !== undefined ? { status: patch.status } : {}),
+      },
+      include: bookingInclude,
+    })
+  } catch (error) {
+    // A move raced another booking into the same slot: the database refused it (RoomBooking_no_overlap).
+    if (isRoomOverlapViolation(error)) {
+      return { ok: false, status: 409, body: await roomTakenBody(workspaceIds, nextRoom, nextStart, nextEnd, bookingId) }
+    }
+    throw error
+  }
+
+  // Changed by somebody other than the owner (a manager) → the owner is told what happened.
+  if (userId !== existing.createdById) {
+    const cancelled = booking.status !== "ACTIVE"
+    await createInAppNotification({
+      userId: existing.createdById,
+      type: "booking_changed",
+      ...bi(
+        [cancelled ? `${roomName(existing.room, "en")} booking cancelled` : `${roomName(booking.room, "en")} booking changed`, cancelled
+          ? `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt, "en")} was cancelled by a manager.`
+          : `${booking.title} is now ${formatBookingSlot(booking.startsAt, booking.endsAt, "en")} in ${roomName(booking.room, "en")}.`],
+        [cancelled ? `Booking ${existing.room} dibatalkan` : `Booking ${booking.room} diubah`, cancelled
+          ? `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)} dibatalkan oleh manager.`
+          : `${booking.title} sekarang ${formatBookingSlot(booking.startsAt, booking.endsAt)} di ${booking.room}.`]
+      ),
+      link: "/room-booking",
+      push: true,
+    }).catch(() => null)
+  }
+  return { ok: true, booking, before: existing }
+}
+
+/**
+ * Delete one booking as `userId` (DELETE /api/room-bookings/:id, GIDEON cancel_room_booking): the same
+ * permission; the owner is told when a manager did it; kept in the Audit so Control Room → Audit can
+ * restore it (refused there if the room has been booked for that time since).
+ */
+export async function deleteRoomBooking(input: { userId: string; bookingId: string; request?: Request; via?: string }): Promise<
+  { ok: true; before: BookingWithCreator } | BookingRefusal
+> {
+  const { userId, bookingId } = input
+  const access = await findManageableBooking(userId, bookingId, "delete")
+  if (!access.ok) return access
+  const existing = access.booking
+
+  if (userId !== existing.createdById) {
+    await createInAppNotification({
+      userId: existing.createdById,
+      type: "booking_changed",
+      ...bi(
+        [`${roomName(existing.room, "en")} booking deleted`, `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt, "en")} was deleted by a manager.`],
+        [`Booking ${existing.room} dihapus`, `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)} dihapus oleh manager.`]
+      ),
+      link: "/room-booking",
+      push: true,
+    }).catch(() => null)
+  }
+  await restorableDelete({
+    entityType: "room_booking", entityId: bookingId,
+    entityName: `${existing.room} · ${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)}`,
+    workspaceId: existing.workspaceId, userId, request: input.request,
+    metadata: { room: existing.room, createdById: existing.createdById, ...(input.via ? { via: input.via } : {}) },
+    meta: { open: { type: "room_booking", id: bookingId } },
+    remove: (tx) => tx.roomBooking.delete({ where: { id: bookingId } }),
+  })
+  return { ok: true, before: existing }
 }

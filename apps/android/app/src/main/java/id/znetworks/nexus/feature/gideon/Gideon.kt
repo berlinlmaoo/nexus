@@ -48,10 +48,11 @@ import java.time.ZoneId
 /**
  * A write GIDEON holds for the person's Apply / Discard (server proposalView; iOS GideonProposal). `booking`: a
  * book_room proposal's card (16 Oct 2026); a build without it cannot apply one (the server asks for the room).
+ * `bookingChange`: a move_room_booking / cancel_room_booking card (16 Oct 2026), the booking before and after.
  */
 @Serializable data class GProposal(val id: String, val action: String? = null, val summary: String? = null, val status: String = "PENDING",
                                    val error: String? = null, val diff: List<GDiffRow> = emptyList(), val card: GCard? = null,
-                                   val booking: GBooking? = null) {
+                                   val booking: GBooking? = null, val bookingChange: GBookingChange? = null) {
     val isPending: Boolean get() = status == "PENDING"
 }
 
@@ -59,8 +60,26 @@ import java.time.ZoneId
 @Serializable data class GBooking(val title: String? = null, val startsAt: String? = null, val endsAt: String? = null,
                                   val room: String? = null, val bookingId: String? = null)
 
-/** The room and slot picked on the card, sent with Apply; the server checks both again. */
-data class GBookingChoice(val room: String, val startsAt: String, val endsAt: String)
+/**
+ * The room and slot picked on the card, sent with Apply; the server checks both again. A move card also sends the
+ * booking it moves; a cancel card only that ([cancel]: room and slot empty).
+ */
+data class GBookingChoice(val room: String, val startsAt: String, val endsAt: String, val bookingId: String? = null) {
+    companion object {
+        fun cancel(bookingId: String) = GBookingChoice("", "", "", bookingId)
+    }
+}
+
+/**
+ * A booking GIDEON wants to move or cancel (server GideonBookingChangeView): the booking when the card was made,
+ * where a move puts it (its room null when it is picked on the card), and once applied where it landed.
+ */
+@Serializable data class GBookingChange(val kind: String = "move", val bookingId: String = "", val title: String? = null, val bookedBy: String? = null,
+                                        val before: GBookingSlot = GBookingSlot(), val after: GBookingAfter? = null, val applied: GBookingSlot? = null) {
+    val isMove: Boolean get() = kind == "move"
+}
+@Serializable data class GBookingSlot(val room: String? = null, val startsAt: String = "", val endsAt: String = "")
+@Serializable data class GBookingAfter(val room: String? = null, val candidates: List<String> = emptyList(), val startsAt: String = "", val endsAt: String = "")
 
 /** Apply / Discard of one proposal, as asked in the centred dialog. */
 data class GDecision(val proposal: GProposal, val apply: Boolean, val booking: GBookingChoice? = null)
@@ -228,7 +247,7 @@ object GideonSteps {
     enum class Kind {
         LIST_PROJECTS, LOOKUP_PEOPLE, LIST_TASKS, SEARCH_TASKS, SEARCH_WORKSPACE, READ_PROJECT, READ_NAMED, READ_FIELDS, READ_TASK,
         SEARCH_DOCS, READ_DOC, CREATE_TASK, UPDATE_TASK, COMMENT, WRITE_DOC, LOOK_IMAGE, LABEL, WORKING,
-        READ_CALENDAR, ROOM_BOOKINGS, BOOK_ROOM,
+        READ_CALENDAR, ROOM_BOOKINGS, BOOK_ROOM, MOVE_BOOKING, CANCEL_BOOKING,
     }
 
     /** [arg] is the step's own handle (≤ 60 chars) or null when the sentence has none. */
@@ -256,6 +275,8 @@ object GideonSteps {
             "get_calendar" -> t(Kind.READ_CALENDAR)
             "list_room_bookings" -> t(Kind.ROOM_BOOKINGS)
             "book_room" -> t(Kind.BOOK_ROOM)
+            "move_room_booking" -> t(Kind.MOVE_BOOKING)
+            "cancel_room_booking" -> t(Kind.CANCEL_BOOKING)
             "vision_analyze", "vision" -> t(Kind.LOOK_IMAGE, false)
             // An unknown tool: the server's own label when it reads as words, never a raw tool name.
             else -> s.label?.trim()?.takeIf { it.isNotEmpty() && !looksLikeToolName(it) && it != s.tool }?.let { Text(Kind.LABEL, it) } ?: Text(Kind.WORKING, null)
@@ -390,9 +411,13 @@ class GideonChat(private val api: ApiClient, private val scope: CoroutineScope) 
         }
     }
 
-    /** Every room for one slot, for the book_room card's picker (read live); null when it could not be read. */
-    suspend fun roomAvailability(startsAt: String, endsAt: String): GRoomAvailability? = try {
-        api.get("/api/room-bookings/availability?startsAt=" + URLEncoder.encode(startsAt, "UTF-8") + "&endsAt=" + URLEncoder.encode(endsAt, "UTF-8"),
+    /**
+     * Every room for one slot, for the book_room / move card's picker (read live); null when it could not be read.
+     * [excludeBookingId]: the booking a move card is moving, so its own slot does not count as taken.
+     */
+    suspend fun roomAvailability(startsAt: String, endsAt: String, excludeBookingId: String? = null): GRoomAvailability? = try {
+        api.get("/api/room-bookings/availability?startsAt=" + URLEncoder.encode(startsAt, "UTF-8") + "&endsAt=" + URLEncoder.encode(endsAt, "UTF-8") +
+            (excludeBookingId?.let { "&excludeBookingId=" + URLEncoder.encode(it, "UTF-8") } ?: ""),
             GRoomAvailability.serializer())
     } catch (e: ApiError) {
         null

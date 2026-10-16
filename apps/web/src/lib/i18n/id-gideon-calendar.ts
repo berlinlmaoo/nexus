@@ -19,4 +19,19 @@ export const ID_GIDEON_CALENDAR: Record<string, string> = {
   "Booked by {name} until {time}": "Dibooking {name} sampai {time}",
   "No room is free then. Nearest free times:": "Tidak ada ruangan kosong di jam itu. Jam kosong terdekat:",
   "Open Room Booking": "Buka Room Booking",
+
+  // Moving / cancelling a booking (move_room_booking / cancel_room_booking)
+  "Moving booking {name}": "Memindahkan booking {name}",
+  "Moving a booking": "Memindahkan booking",
+  "Cancelling booking {name}": "Membatalkan booking {name}",
+  "Cancelling a booking": "Membatalkan booking",
+  "Move a booking": "Pindahkan booking",
+  "Cancel a booking": "Batalkan booking",
+  "Now": "Sekarang",
+  "Moves to": "Pindah ke",
+  "Booked by {name}": "Dibooking oleh {name}",
+  "Booking moved": "Booking dipindahkan",
+  "Booking cancelled": "Booking dibatalkan",
+  "Cancel booking": "Batalkan booking",
+  "This frees the room for that time. A BoD can restore it from the Audit.": "Ruangannya jadi kosong di jam itu. BoD bisa memulihkannya dari Audit.",
 };

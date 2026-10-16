@@ -25,6 +25,10 @@ _ACTION_BY_TOOL = {
     # A write, as the asking user, through the Room Booking page's own rules; held for approval like
     # create_task (and always when no single room was named: the person picks it on the card).
     "nexus_book_room": "book_room",
+    # Moving / cancelling an existing booking (16 Oct 2026): the Room Booking page's own PATCH / DELETE
+    # rules, as the asking user, held for approval the same way.
+    "nexus_move_room_booking": "move_room_booking",
+    "nexus_cancel_room_booking": "cancel_room_booking",
     "nexus_create_document": "create_document",
     "nexus_get_attendance_day": "get_attendance_day",
     # Two remedies, both PROPOSAL-only. Neither has a counterpart that applies one: a BoD decides both

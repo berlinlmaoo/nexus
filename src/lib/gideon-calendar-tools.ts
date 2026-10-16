@@ -201,7 +201,7 @@ export async function gideonListRoomBookings(actorId: string, input: Record<stri
     bookings,
     ...(free.length ? { freeTime: free } : {}),
     ...(slot ? { slot } : {}),
-    note: "Times are WIB. This is read only: to book, use nexus_book_room.",
+    note: "Times are WIB. This is read only: to book, use nexus_book_room; to move or cancel one of these bookings, nexus_move_room_booking / nexus_cancel_room_booking with its id.",
   }
 }
 

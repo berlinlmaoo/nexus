@@ -27,7 +27,9 @@ import { searchWorkspace, type SearchHitKind } from '@/lib/workspace-search'
 import { emitCommentAdded, emitTaskCreated, emitTaskUpdated } from '@/lib/socket-emitter'
 import type { Prisma, ProjectStatus, TaskPriority, TaskStatus, User } from '@/generated/prisma/client'
 import { gideonGetCalendar, gideonListRoomBookings } from '@/lib/gideon-calendar-tools'
-import { BookRoomRefusal, describeBookRoom, gideonBookRoom } from '@/lib/gideon-book-room'
+import {
+  BookRoomRefusal, describeBookRoom, describeCancelRoomBooking, describeMoveRoomBooking, gideonBookRoom,
+  gideonCancelRoomBooking, gideonMoveRoomBooking } from '@/lib/gideon-book-room'
 import { humanDay, parseDueInput, todayWib } from '@/lib/gideon-dates'
 import { wibDay, wibTime } from '@/lib/calendar/core'
 import {
@@ -56,6 +58,8 @@ type GideonAction =
   | 'get_calendar'
   | 'list_room_bookings'
   | 'book_room'
+  | 'move_room_booking'
+  | 'cancel_room_booking'
 
 type ToolBody = {
   action?: GideonAction | string
@@ -1308,6 +1312,11 @@ async function dispatch(actor: User, action: string, rawInput: Record<string, un
     // A write (approval modes, gideon-runs.ts): the Room Booking page's own path, as this person.
     case 'book_room':
       return gideonBookRoom(actor.id, input)
+    // Moving / cancelling one (16 Oct 2026): the Room Booking page's PATCH / DELETE path, as this person.
+    case 'move_room_booking':
+      return gideonMoveRoomBooking(actor.id, input)
+    case 'cancel_room_booking':
+      return gideonCancelRoomBooking(actor.id, input)
     case 'create_task':
       return createTask(actor, input)
     case 'update_task':
@@ -1422,7 +1431,11 @@ export async function POST(req: Request) {
         summary: proposal.summary,
         // The resolved day, to say in the reply ("due Fri 23 Oct"), never just "Friday".
         ...(due ? { due } : {}),
-        note: action === 'book_room'
+        note: action === 'move_room_booking'
+          ? 'NOT moved yet. It is waiting for the person on the card below, which shows the booking before and after (and every room with whether it is free then) and where they tap Apply; tell them so, do not say it is moved.'
+          : action === 'cancel_room_booking'
+          ? 'NOT cancelled yet. It is waiting for the person to confirm it on the card below; tell them so, do not say it is cancelled.'
+          : action === 'book_room'
           ? 'NOT booked yet. It is waiting for the person on the card below, where they pick or confirm the room (every room is shown with whether it is free then) and tap Apply; tell them so, do not say it is booked, and do not ask which room in the chat.'
           : action === 'create_task'
           ? `NOT applied yet. It is waiting for the person to approve it in NEXUS; tell them so, do not say it is done.${due ? ` Say the due date as "${due}".` : ''} This proposalId is the only id of the task until then: to add assignees or a due date to it, call nexus_update_task with taskId = this proposalId and it joins the same card.`
@@ -1564,7 +1577,8 @@ async function userNames(ids: string[]): Promise<string> {
   return ids.map((id) => users.find((u) => u.id === id)?.name ?? '?').join(', ')
 }
 
-type WriteDescription = { summary: string; diff: GideonDiffRow[]; projectId: string | null; taskId: string | null; due?: string | null }
+/** `store`: facts resolved when describing that the proposal keeps in its input (a booking's "before"). */
+type WriteDescription = { summary: string; diff: GideonDiffRow[]; projectId: string | null; taskId: string | null; due?: string | null; store?: Record<string, unknown> }
 
 /**
  * Check the write exactly as far as it can be checked without making it (access, the task and list it
@@ -1577,6 +1591,7 @@ async function describeWrite(actor: User, action: string, input: Record<string, 
   let projectId: string | null = null
   let taskId: string | null = null
   let dueText: string | null | undefined
+  let store: Record<string, unknown> | undefined
 
   if (action === 'create_task') {
     const title = asString(input.title)
@@ -1653,6 +1668,11 @@ async function describeWrite(actor: User, action: string, input: Record<string, 
     const booking = await describeBookRoom(actor.id, input)
     summary = booking.summary
     diff.push(...booking.diff)
+  } else if (action === 'move_room_booking' || action === 'cancel_room_booking') {
+    const change = action === 'move_room_booking' ? await describeMoveRoomBooking(actor.id, input) : await describeCancelRoomBooking(actor.id, input)
+    summary = change.summary
+    diff.push(...change.diff)
+    store = change.store
   } else if (action === 'create_document') {
     const pid = String(input.projectId ?? '').trim()
     const title = String(input.title ?? '').trim()
@@ -1668,7 +1688,7 @@ async function describeWrite(actor: User, action: string, input: Record<string, 
   } else {
     throw new Error(`${action} cannot be proposed`)
   }
-  return { summary, diff, projectId, taskId, due: dueText }
+  return { summary, diff, projectId, taskId, due: dueText, store }
 }
 
 /** Describe the write and store it as a proposal for the person to approve. */
@@ -1679,7 +1699,7 @@ async function proposeWrite(actor: User, runId: string, action: string, input: R
       runId,
       userId: actor.id,
       action,
-      input: input as Prisma.InputJsonValue,
+      input: (d.store ? { ...input, ...d.store } : input) as Prisma.InputJsonValue,
       summary: d.summary.slice(0, 300),
       diff: d.diff as unknown as Prisma.InputJsonValue,
       projectId: d.projectId,

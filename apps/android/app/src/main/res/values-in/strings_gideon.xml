@@ -109,4 +109,18 @@
     <string name="gx_someone">seseorang</string>
     <string name="gx_room_none_free">Tidak ada ruangan kosong di jam itu. Jam kosong terdekat:</string>
     <string name="gx_room_booked">Ruangan dibooking</string>
+    <!-- GIDEON memindahkan / membatalkan booking ruangan (16 Okt 2026) -->
+    <string name="gx_step_move_booking">Memindahkan booking</string>
+    <string name="gx_step_move_booking_n">Memindahkan booking %1$s</string>
+    <string name="gx_step_cancel_booking">Membatalkan booking</string>
+    <string name="gx_step_cancel_booking_n">Membatalkan booking %1$s</string>
+    <string name="gx_move_booking">Pindahkan booking</string>
+    <string name="gx_cancel_booking">Batalkan booking</string>
+    <string name="gx_booking_now">Sekarang</string>
+    <string name="gx_booking_moves_to">Pindah ke</string>
+    <string name="gx_booking_booked_by">Dibooking oleh %1$s</string>
+    <string name="gx_booking_moved">Booking dipindahkan</string>
+    <string name="gx_booking_cancelled">Booking dibatalkan</string>
+    <string name="gx_cancel_booking_confirm">Batalkan booking</string>
+    <string name="gx_cancel_booking_hint">Ruangannya jadi kosong di jam itu. BoD bisa memulihkannya dari Audit.</string>
 </resources>

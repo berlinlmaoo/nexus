@@ -333,37 +333,9 @@ internal fun BookRoomCard(
             }
             if (loadFailed) Text(stringResource(R.string.gx_rooms_failed), fontSize = 12.sp, color = c.dangerText)
             if (named != null && !named.free) Text(stringResource(R.string.gx_room_named_busy, roomLabel(named.room)), fontSize = 12.sp, color = c.warningFg)
-            rooms.forEach { r ->
-                val selected = room == r.room && r.free
-                val rowShape = RoundedCornerShape(10.dp)
-                Row(Modifier.fillMaxWidth().clip(rowShape).background(if (selected) c.violetText.copy(alpha = 0.06f) else c.card)
-                    .border(1.dp, if (selected) c.violetText else c.border, rowShape)
-                    .clickable(enabled = r.free && !deciding) { touched = true; room = r.room }
-                    .padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(if (selected) Icons.Outlined.RadioButtonChecked else Icons.Outlined.RadioButtonUnchecked, null,
-                        tint = if (selected) c.violetText else c.mutedFg, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Column(Modifier.weight(1f)) {
-                        val seats = r.capacity?.let { " · " + stringResource(R.string.gx_room_seats, it) }.orEmpty()
-                        Text(roomLabel(r.room) + seats, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (r.free) c.foreground else c.mutedFg)
-                        r.busy?.let { b ->
-                            Text(stringResource(R.string.gx_room_booked_by, b.by ?: stringResource(R.string.gx_someone), BookRoomTime.clock(b.endsAt)),
-                                fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                }
-            }
-            val slots = availability?.freeSlots.orEmpty()
+            RoomRows(rooms, room, enabled = !deciding) { r -> touched = true; room = r }
             if (availability != null && rooms.none { it.free }) {
-                Text(stringResource(R.string.gx_room_none_free), fontSize = 12.sp, color = c.mutedFg)
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    slots.forEach { f ->
-                        Text("${BookRoomTime.clock(f.startsAt)}–${BookRoomTime.clock(f.endsAt)}", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.foreground,
-                            modifier = Modifier.clip(RoundedCornerShape(50)).border(1.dp, c.border, RoundedCornerShape(50))
-                                .clickable { room = null; touched = false; startsAt = f.startsAt; endsAt = f.endsAt }
-                                .padding(horizontal = 10.dp, vertical = 4.dp))
-                    }
-                }
+                FreeSlotChips(availability?.freeSlots.orEmpty()) { f -> room = null; touched = false; startsAt = f.startsAt; endsAt = f.endsAt }
             }
             p.error?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.dangerText) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
@@ -376,6 +348,161 @@ internal fun BookRoomCard(
             if (p.status == "APPLIED") booking.room?.let { Text(roomLabel(it), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground) }
             val text = when (GideonReview.status(p)) {
                 GideonReview.Status.APPLIED -> stringResource(R.string.gx_room_booked)
+                GideonReview.Status.DISCARDED -> stringResource(R.string.gx_discarded)
+                GideonReview.Status.APPLYING -> stringResource(R.string.gx_applying)
+                GideonReview.Status.FAILED -> p.error?.takeIf { it.isNotBlank() } ?: stringResource(R.string.gx_apply_failed)
+                GideonReview.Status.OTHER -> p.status.lowercase().replaceFirstChar { it.uppercase() }
+            }
+            Text(text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = when (p.status) { "APPLIED" -> c.success; "FAILED" -> c.dangerText; else -> c.mutedFg })
+        }
+    }
+}
+
+/**
+ * Every room for one slot as rows (the book_room card and the move card): free ones selectable, busy ones disabled
+ * with who holds them until when, the capacity when it is known.
+ */
+@Composable
+internal fun RoomRows(rooms: List<GRoomSlot>, selected: String?, enabled: Boolean, onPick: (String) -> Unit) {
+    val c = Nx.colors
+    rooms.forEach { r ->
+        val isSelected = selected == r.room && r.free
+        val rowShape = RoundedCornerShape(10.dp)
+        Row(Modifier.fillMaxWidth().clip(rowShape).background(if (isSelected) c.violetText.copy(alpha = 0.06f) else c.card)
+            .border(1.dp, if (isSelected) c.violetText else c.border, rowShape)
+            .clickable(enabled = r.free && enabled) { onPick(r.room) }
+            .padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(if (isSelected) Icons.Outlined.RadioButtonChecked else Icons.Outlined.RadioButtonUnchecked, null,
+                tint = if (isSelected) c.violetText else c.mutedFg, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                val seats = r.capacity?.let { " · " + stringResource(R.string.gx_room_seats, it) }.orEmpty()
+                Text(roomLabel(r.room) + seats, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (r.free) c.foreground else c.mutedFg)
+                r.busy?.let { b ->
+                    Text(stringResource(R.string.gx_room_booked_by, b.by ?: stringResource(R.string.gx_someone), BookRoomTime.clock(b.endsAt)),
+                        fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+}
+
+/** The nearest free slots (same day, ±2 h) when no room is free: a chip moves the card to that time. */
+@Composable
+internal fun FreeSlotChips(slots: List<GFreeSlot>, onPick: (GFreeSlot) -> Unit) {
+    val c = Nx.colors
+    Text(stringResource(R.string.gx_room_none_free), fontSize = 12.sp, color = c.mutedFg)
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        slots.forEach { f ->
+            Text("${BookRoomTime.clock(f.startsAt)}–${BookRoomTime.clock(f.endsAt)}", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.foreground,
+                modifier = Modifier.clip(RoundedCornerShape(50)).border(1.dp, c.border, RoundedCornerShape(50))
+                    .clickable { onPick(f) }
+                    .padding(horizontal = 10.dp, vertical = 4.dp))
+        }
+    }
+}
+
+/**
+ * GIDEON's move_room_booking / cancel_room_booking card (owner, 16 Oct 2026; web GideonBookingChangeCard, iOS
+ * GideonBookingChangeCard). Both show the booking as it is now; a move also shows where it goes, with the room rows
+ * and nearest-slot chips of the book_room card (the rooms for the new slot are read live, leaving this booking out,
+ * and checked again on Apply). The new room is preselected when it is free; when it could be more than one room, or
+ * is busy, the person picks. Apply sends the booking id (and for a move the room and slot).
+ */
+@Composable
+internal fun BookingChangeCard(
+    p: GProposal,
+    change: GBookingChange,
+    deciding: Boolean,
+    loadRooms: suspend (String, String, String?) -> GRoomAvailability?,
+    onApply: (GBookingChoice) -> Unit,
+    onDiscard: () -> Unit,
+) {
+    val c = Nx.colors
+    val shape = RoundedCornerShape(12.dp)
+    val move = change.isMove
+    var startsAt by remember(p.id) { mutableStateOf(change.after?.startsAt ?: change.before.startsAt) }
+    var endsAt by remember(p.id) { mutableStateOf(change.after?.endsAt ?: change.before.endsAt) }
+    var room by remember(p.id) { mutableStateOf<String?>(null) }
+    var touched by remember(p.id) { mutableStateOf(false) }
+    var availability by remember(p.id) { mutableStateOf<GRoomAvailability?>(null) }
+    var loadFailed by remember(p.id) { mutableStateOf(false) }
+    LaunchedEffect(p.id, startsAt, endsAt, p.error) {
+        if (!p.isPending || !move) return@LaunchedEffect
+        loadFailed = false
+        val a = loadRooms(startsAt, endsAt, change.bookingId)
+        availability = a
+        loadFailed = a == null
+        if (a != null && !touched) {
+            val free = a.rooms.filter { it.free }
+            val candidates = free.filter { it.room in (change.after?.candidates ?: emptyList()) }
+            room = change.after?.room?.takeIf { r -> free.any { it.room == r } } ?: candidates.singleOrNull()?.room
+        }
+    }
+    val rooms = availability?.rooms.orEmpty()
+    val target = change.after?.room?.let { r -> rooms.firstOrNull { it.room == r } }
+    val choice: GBookingChoice? = if (!move) GBookingChoice.cancel(change.bookingId)
+        else rooms.firstOrNull { it.room == room && it.free }?.let { GBookingChoice(it.room, startsAt, endsAt, change.bookingId) }
+
+    @Composable
+    fun slotBox(label: String?, slotRoom: String?, s: String, e: String, bookedBy: String?, highlighted: Boolean, struck: Boolean) {
+        val boxShape = RoundedCornerShape(10.dp)
+        val deco = if (struck) TextDecoration.LineThrough else null
+        Column(Modifier.fillMaxWidth().clip(boxShape).background(c.card).border(1.dp, if (highlighted) c.violetText.copy(alpha = 0.5f) else c.border, boxShape)
+            .padding(horizontal = 10.dp, vertical = 7.dp)) {
+            label?.let { Text(it, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg) }
+            slotRoom?.takeIf { it.isNotBlank() }?.let { Text(roomLabel(it), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, textDecoration = deco) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Event, null, tint = c.mutedFg, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(BookRoomTime.slot(s, e), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.mutedFg, textDecoration = deco)
+            }
+            bookedBy?.takeIf { it.isNotBlank() }?.let { Text(stringResource(R.string.gx_booking_booked_by, it), fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        }
+    }
+
+    Column(Modifier.fillMaxWidth().clip(shape).background(c.warning.copy(alpha = 0.06f)).border(1.dp, c.warning.copy(alpha = 0.3f), shape).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.Top) {
+            Icon(Icons.Outlined.VerifiedUser, null, tint = c.warningFg, modifier = Modifier.size(14.dp).padding(top = 2.dp))
+            Spacer(Modifier.width(6.dp))
+            Column {
+                Text(stringResource(if (move) R.string.gx_move_booking else R.string.gx_cancel_booking), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
+                Text(change.title.orEmpty(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+            }
+        }
+        slotBox(if (move) stringResource(R.string.gx_booking_now) else null, change.before.room, change.before.startsAt, change.before.endsAt,
+            change.bookedBy, highlighted = false, struck = !move && p.status == "APPLIED")
+        if (move) {
+            val landed = change.applied
+            if (!p.isPending && landed != null) slotBox(stringResource(R.string.gx_booking_moves_to), landed.room, landed.startsAt, landed.endsAt, null, highlighted = true, struck = false)
+            else slotBox(stringResource(R.string.gx_booking_moves_to), room ?: change.after?.room, startsAt, endsAt, null, highlighted = true, struck = false)
+        }
+        if (p.isPending) {
+            if (move) {
+                if (availability == null && !loadFailed) Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp); Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.gx_rooms_checking), fontSize = 12.sp, color = c.mutedFg)
+                }
+                if (loadFailed) Text(stringResource(R.string.gx_rooms_failed), fontSize = 12.sp, color = c.dangerText)
+                if (target != null && !target.free) Text(stringResource(R.string.gx_room_named_busy, roomLabel(target.room)), fontSize = 12.sp, color = c.warningFg)
+                RoomRows(rooms, room, enabled = !deciding) { r -> touched = true; room = r }
+                if (availability != null && rooms.none { it.free }) {
+                    FreeSlotChips(availability?.freeSlots.orEmpty()) { f -> room = null; touched = false; startsAt = f.startsAt; endsAt = f.endsAt }
+                }
+            } else {
+                Text(stringResource(R.string.gx_cancel_booking_hint), fontSize = 12.sp, color = c.mutedFg)
+            }
+            p.error?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.dangerText) }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+                if (deciding) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                NxButton(stringResource(R.string.gx_discard), { onDiscard() }, kind = NxButtonKind.BORDERED, enabled = !deciding, compact = true)
+                NxButton(stringResource(if (move) R.string.gx_apply else R.string.gx_cancel_booking_confirm), { choice?.let { onApply(it) } },
+                    kind = NxButtonKind.PRIMARY, icon = Icons.Filled.Check, enabled = !deciding && choice != null, compact = true)
+            }
+        } else {
+            val text = when (GideonReview.status(p)) {
+                GideonReview.Status.APPLIED -> stringResource(if (move) R.string.gx_booking_moved else R.string.gx_booking_cancelled)
                 GideonReview.Status.DISCARDED -> stringResource(R.string.gx_discarded)
                 GideonReview.Status.APPLYING -> stringResource(R.string.gx_applying)
                 GideonReview.Status.FAILED -> p.error?.takeIf { it.isNotBlank() } ?: stringResource(R.string.gx_apply_failed)

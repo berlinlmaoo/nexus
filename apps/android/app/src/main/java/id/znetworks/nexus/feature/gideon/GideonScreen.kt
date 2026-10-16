@@ -154,7 +154,7 @@ fun GideonScreen(onBack: () -> Unit, project: Pair<String, String>? = null) {
                 s.openFailed != null -> EmptyState(Icons.Outlined.ErrorOutline, stringResource(R.string.gx_open_failed), problemText(s.openFailed!!),
                     stringResource(R.string.gx_try_again), { s.chatId?.let(chat::open) ?: chat.startNew() }, Modifier.fillMaxSize())
                 s.messages.isEmpty() && !s.thinking -> FreshChat { send(it) }
-                else -> Transcript(s, indonesian, loadRooms = chat::roomAvailability) { d -> decision = d }
+                else -> Transcript(s, indonesian, loadRooms = { a, b, x -> chat.roomAvailability(a, b, x) }) { d -> decision = d }
             }
         }
         s.error?.let { p ->
@@ -232,7 +232,7 @@ private fun FreshChat(onAsk: (String) -> Unit) {
 }
 
 @Composable
-private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: suspend (String, String) -> GRoomAvailability?, onDecide: (GDecision) -> Unit) {
+private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: suspend (String, String, String?) -> GRoomAvailability?, onDecide: (GDecision) -> Unit) {
     val c = Nx.colors
     val list = rememberLazyListState()
     LaunchedEffect(s.messages.size, s.thinking) { if (s.messages.isNotEmpty()) list.animateScrollToItem(s.messages.size) }
@@ -250,8 +250,13 @@ private fun Transcript(s: GideonChat.State, indonesian: Boolean, loadRooms: susp
                 m.proposals.forEach { p ->
                     val b = p.booking
                     // A room booking has its own card with the room picker; every other change is a diff.
-                    if (p.action == "book_room" && b != null) BookRoomCard(p, b, deciding = p.id in s.deciding, loadRooms = loadRooms,
+                    val change = p.bookingChange
+                    if (p.action == "book_room" && b != null) BookRoomCard(p, b, deciding = p.id in s.deciding, loadRooms = { x, y -> loadRooms(x, y, null) },
                         onApply = { choice -> onDecide(GDecision(p, true, choice)) }, onDiscard = { onDecide(GDecision(p, false)) })
+                    // Moving / cancelling one (16 Oct 2026): the booking before and after.
+                    else if ((p.action == "move_room_booking" || p.action == "cancel_room_booking") && change != null)
+                        BookingChangeCard(p, change, deciding = p.id in s.deciding, loadRooms = loadRooms,
+                            onApply = { choice -> onDecide(GDecision(p, true, choice)) }, onDiscard = { onDecide(GDecision(p, false)) })
                     else ProposalCard(p, deciding = p.id in s.deciding) { apply -> onDecide(GDecision(p, apply)) }
                 }
                 m.cards.forEach { card -> ResultCard(card) }
@@ -300,6 +305,8 @@ fun stepText(st: GStep): String {
         GideonSteps.Kind.READ_CALENDAR -> pick(R.string.gx_step_calendar, R.string.gx_step_calendar_n)
         GideonSteps.Kind.ROOM_BOOKINGS -> pick(R.string.gx_step_rooms, R.string.gx_step_rooms_n)
         GideonSteps.Kind.BOOK_ROOM -> pick(R.string.gx_step_book_room, R.string.gx_step_book_room_n)
+        GideonSteps.Kind.MOVE_BOOKING -> pick(R.string.gx_step_move_booking, R.string.gx_step_move_booking_n)
+        GideonSteps.Kind.CANCEL_BOOKING -> pick(R.string.gx_step_cancel_booking, R.string.gx_step_cancel_booking_n)
         GideonSteps.Kind.LOOK_IMAGE -> stringResource(R.string.gx_step_image)
         GideonSteps.Kind.LABEL -> a.orEmpty()
         GideonSteps.Kind.WORKING -> stringResource(R.string.gx_working)

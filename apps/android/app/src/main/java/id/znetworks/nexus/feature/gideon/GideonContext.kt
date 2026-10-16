@@ -97,10 +97,16 @@ enum class GideonApprovalMode(val key: String) {
 
 /** Review before writing: deciding a proposal and keeping the transcript in step with the answer. */
 object GideonReview {
-    /** POST /api/gideon/proposals/:id body; `booking` = the room and slot picked on a book_room card. */
+    /**
+     * POST /api/gideon/proposals/:id body; `booking` = the room and slot picked on a book_room card, plus the booking
+     * id on a move card, or the booking id alone on a cancel card.
+     */
     fun body(apply: Boolean, booking: GBookingChoice? = null): JsonObject = buildJsonObject {
         put("decision", if (apply) "apply" else "discard")
-        if (booking != null) put("booking", buildJsonObject { put("room", booking.room); put("startsAt", booking.startsAt); put("endsAt", booking.endsAt) })
+        if (booking != null) put("booking", buildJsonObject {
+            if (booking.room.isNotEmpty()) { put("room", booking.room); put("startsAt", booking.startsAt); put("endsAt", booking.endsAt) }
+            booking.bookingId?.let { put("bookingId", it) }
+        })
     }
 
     /**
