@@ -663,3 +663,20 @@ html:has([data-page-canvas="card"]) :is([data-snap-tail="document"], [data-tabba
   scroll-snap-type: y proximity;
   scroll-padding-top: var(--snap-box-head, 0px);
 }
+
+/* GIDEON's "Thinking…" line: a light band sweeping across muted text, like Notion AI's. */
+.gideon-shimmer {
+  background: linear-gradient(90deg, var(--muted-foreground) 0%, var(--muted-foreground) 40%, var(--foreground) 50%, var(--muted-foreground) 60%, var(--muted-foreground) 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: gideon-shimmer 1.8s linear infinite;
+}
+@keyframes gideon-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -150% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gideon-shimmer { animation: none; color: var(--muted-foreground); background: none; }
+}

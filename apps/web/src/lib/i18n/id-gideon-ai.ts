@@ -142,4 +142,11 @@ export const ID_GIDEON_AI: Record<string, string> = {
   "Friendly": "Ramah",
   "Confident": "Yakin",
   "Straightforward": "Lugas",
+  // GIDEON in Notion AI's layout (16 Oct 2026)
+  "Thinking…": "Sedang berpikir…",
+  "Stopped": "Dihentikan",
+  "You stopped this answer.": "Kamu menghentikan jawaban ini.",
+  "Suggestions": "Saran",
+  "Choose approval mode": "Pilih mode persetujuan",
+  "Ask {assistant}": "Tanya {assistant}",
 };
