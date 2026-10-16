@@ -863,25 +863,28 @@ struct ProjectDetailView: View {
     /// Since run 17 (web): the module tabs (Spreadsheet, Pages, Forms, Chat) open the tools row on the left,
     /// so the first row holds only Overview … Timeline, "+" and Add task.
     @ViewBuilder private var wideTabBar: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // The width the bar is offered, read off a view that takes exactly that width. Measured on the bar
-            // itself it included the overflow of a tools row that did not fit, so the module tabs stayed in that
-            // row and pushed every project view ~190 pt wider than the detail column, clipped on both sides
-            // (UI tour run 18, iPad R18-I-01).
-            Color.clear.frame(height: 0)
-                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0; fitToolLabels() }
-            HStack(spacing: 8) {
-                wideTabs
-                if tabsOverflow { tabOverflowMenu(wideMenuItems) }
-                wideAddButton.fixedSize()
-            }
-            .padding(.trailing, 24)
-            HStack(spacing: 8) {
-                if modulesInToolsRow { moduleTabs }
-                Spacer(minLength: 8)
-                measuredTools
+        // The bar takes exactly the width it is offered (OfferedWidth), whatever its rows ask for. A tools row
+        // that grew once the views loaded (Filter, Sort, Group, search) made the bar wider than the detail
+        // column; the page's VStack then laid EVERY child out at that wider width, the bar's own width probe
+        // included, so the module tabs never left the tools row and every task view stayed ~190 pt too wide,
+        // clipped on both sides (UI tour runs 18 and 19, iPad R19-I-01 / R19-I-02). Overview has no such tools
+        // and always fitted.
+        OfferedWidth {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 8) {
+                    wideTabs
+                    if tabsOverflow { tabOverflowMenu(wideMenuItems) }
+                    wideAddButton.fixedSize()
+                }
+                .padding(.trailing, 24)
+                HStack(spacing: 8) {
+                    if modulesInToolsRow { moduleTabs }
+                    Spacer(minLength: 8)
+                    measuredTools
+                }
             }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0; fitToolLabels() }
         .background(alignment: .topLeading) { moduleTabsMeasure }
         .onChange(of: tabsWidth) { _, _ in fitToolLabels() }
         .onChange(of: toolsWidth) { _, _ in fitToolLabels() }
