@@ -252,11 +252,11 @@ function DateChips({ task, items, fit }: { task: NexusTask; items: PropDef[]; fi
   const tip = (text: string) => `${(shown.get(text) ?? []).join(", ")}: ${text}`;
   const lead = startText && dueText && startText !== dueText ? (
     <span title={`${tip(startText)} · ${tip(dueText)}`} aria-label={`${tip(startText)}, ${tip(dueText)}`} className={cn("inline-flex shrink-0 items-center gap-1 text-[11px] tabular-nums", overdue ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
-      <Clock className="h-3 w-3" />{startText}<ArrowRight className="h-3 w-3 opacity-70" aria-hidden />{dueText}
+      <Clock className="h-3 w-3 shrink-0" />{startText}<ArrowRight className="h-3 w-3 shrink-0 opacity-70" aria-hidden />{dueText}
     </span>
   ) : dueText || startText ? (
     <span title={tip((dueText ?? startText)!)} aria-label={tip((dueText ?? startText)!)} className={cn("inline-flex shrink-0 items-center gap-1 text-[11px] tabular-nums", overdue ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
-      <Clock className="h-3 w-3" />{dueText ?? startText}{!dueText && <ArrowRight className="h-3 w-3 opacity-70" aria-hidden />}
+      <Clock className="h-3 w-3 shrink-0" />{dueText ?? startText}{!dueText && <ArrowRight className="h-3 w-3 shrink-0 opacity-70" aria-hidden />}
     </span>
   ) : null;
   const room = !fit ? others.length : !lead ? 2 : startText && dueText && startText !== dueText ? 0 : 1;
@@ -265,11 +265,14 @@ function DateChips({ task, items, fit }: { task: NexusTask; items: PropDef[]; fi
   return (
     <>
       {lead}
-      {/* Any other date names its field ("Request by 24 May"): beside the due date's clock a second bare date
-          could not be told apart (UI tour run 19, R19-WD-4). */}
+      {/* Any other date names its field ("Request by: 24 May"): beside the due date's clock a second bare date
+          could not be told apart (UI tour run 19, R19-WD-4). With a colon, as a text property's "Request by: Sifal"
+          (one pattern, UI tour run 20, R20-WD-8). */}
       {shownOthers.map((text) => (
-        <span key={text} title={tip(text)} aria-label={tip(text)} className="inline-flex min-w-0 shrink-0 items-center gap-1 text-[11px] tabular-nums text-muted-foreground">
-          <CalendarDays className="h-3 w-3 shrink-0" aria-hidden /><span className="truncate opacity-80">{(shown.get(text) ?? [])[0]}</span>{text}
+        // The one part that gives way in a narrow slot: its field name truncates, never the due date and its clock
+        // before it (UI tour run 20, R20-WD-3: "PELUNASAN …" lost half its clock).
+        <span key={text} title={tip(text)} aria-label={tip(text)} className="inline-flex min-w-0 items-center gap-1 text-[11px] tabular-nums text-muted-foreground">
+          <CalendarDays className="h-3 w-3 shrink-0" aria-hidden /><span className="min-w-0 truncate opacity-80">{(shown.get(text) ?? [])[0]}:</span><span className="shrink-0">{text}</span>
         </span>
       ))}
       {folded.length > 0 && (
