@@ -5,7 +5,6 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 import {
   LeaderboardPodium,
-  LeaderboardTie,
   type LeaderboardRanking as LeaderboardPodiumRanking,
 } from "@/components/ui/leaderboard-podium"
 import {
@@ -24,17 +23,16 @@ interface LeaderboardCardProps extends React.HTMLAttributes<HTMLDivElement> {
   subtitle?: string
   fromDate?: string | Date
   toDate?: string | Date
-  podiumRankings: LeaderboardPodiumRanking[]
+  /** The top three scores, best first; several people on one score share its step. */
+  podiumGroups: LeaderboardPodiumRanking[][]
+  tiedLabel: (n: number) => string
+  moreLabel: (n: number) => string
   rankings: LeaderboardRankingItem[]
   currentUserId?: string
   runOptions?: LeaderboardRunOption[]
   selectedRunId?: string
   onRunChange?: (runId: string) => void
   onSelectUser?: (item: LeaderboardRankingItem, origin?: MorphOrigin) => void
-  /** A line under the podium, e.g. how many share 1st when more do than the podium has steps. */
-  podiumCaption?: React.ReactNode
-  /** Set when more people share 1st than the podium has steps: everyone tied, shown in place of the podium. */
-  podiumTie?: LeaderboardPodiumRanking[]
 }
 
 function formatRangeDate(date: string | Date) {
@@ -56,15 +54,15 @@ const LeaderboardCard = React.forwardRef<HTMLDivElement, LeaderboardCardProps>(
       subtitle,
       fromDate,
       toDate,
-      podiumRankings,
+      podiumGroups,
+      tiedLabel,
+      moreLabel,
       rankings,
       currentUserId,
       runOptions,
       selectedRunId,
       onRunChange,
       onSelectUser,
-      podiumCaption,
-      podiumTie,
       ...props
     },
     ref
@@ -117,14 +115,7 @@ const LeaderboardCard = React.forwardRef<HTMLDivElement, LeaderboardCardProps>(
           ) : null}
         </div>
 
-        {podiumTie && podiumTie.length > 0 ? (
-          <LeaderboardTie rankings={podiumTie} caption={podiumCaption} className="mx-auto mb-6 max-w-3xl" />
-        ) : (
-          <>
-            <LeaderboardPodium rankings={podiumRankings} className={cn("mx-auto max-w-3xl", podiumCaption ? "mb-3" : "mb-6")} />
-            {podiumCaption ? <p className="mb-6 text-center text-sm font-semibold text-muted-foreground">{podiumCaption}</p> : null}
-          </>
-        )}
+        <LeaderboardPodium groups={podiumGroups} tiedLabel={tiedLabel} moreLabel={moreLabel} className="mx-auto mb-6 max-w-3xl" />
 
         <LeaderboardRankings
           rankings={rankings}

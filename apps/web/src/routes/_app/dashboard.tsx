@@ -150,7 +150,7 @@ function TopBar({ userName, unread }: { userName: string; unread: number }) {
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div>
           <p className="text-xl font-medium text-foreground/80">{greeting}</p>
-          <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">{userName}!</h1>
+          <h1 className="font-display text-3xl font-bold tracking-tight lg:text-4xl">{userName}!</h1>
         </div>
         {!railChip && (
           <div className="flex w-full items-center gap-3 sm:w-auto">
