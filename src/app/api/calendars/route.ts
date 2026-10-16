@@ -4,14 +4,11 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { ROOM_BOOKING_ROOMS } from "@/lib/validations"
-import { isSystemAdminUser } from "@/lib/rbac"
 
-// Managing calendars (create/edit/delete) mirrors project-folder management: BoD/Manager (+ system
-// admin). Viewing is open to any workspace member — enforced in GET by workspace membership.
+// Managing calendars (create/edit/delete) mirrors project-folder management: Manager and above. Viewing is open to any workspace member — enforced in GET by workspace membership.
 const MANAGER_ROLES: readonly string[] = ["BOD", "MANAGER", "ONE_ABOVE_ALL"]
 
 async function canManageCalendars(userId: string, workspaceId: string) {
-  if (await isSystemAdminUser(userId)) return true
   const m = await prisma.workspaceMember.findUnique({
     where: { userId_workspaceId: { userId, workspaceId } },
     select: { role: true },
@@ -37,15 +34,14 @@ export async function GET() {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const userId = session.user.id
-    const isAdmin = await isSystemAdminUser(userId)
 
     // A calendar is shared across its workspace: list every calendar in a workspace the viewer
-    // belongs to (system admins see all). Per-task access is still re-checked in /api/calendar-tasks.
+    // belongs to. Per-task access is still re-checked in /api/calendar-tasks.
     const memberships = await prisma.workspaceMember.findMany({ where: { userId }, select: { workspaceId: true } })
     const workspaceIds = memberships.map((m) => m.workspaceId)
 
     const calendars = await prisma.calendar.findMany({
-      where: isAdmin ? {} : { workspaceId: { in: workspaceIds.length ? workspaceIds : ["__none__"] } },
+      where: { workspaceId: { in: workspaceIds.length ? workspaceIds : ["__none__"] } },
       orderBy: [{ position: "asc" }, { createdAt: "asc" }],
       select: calendarSelect,
     })

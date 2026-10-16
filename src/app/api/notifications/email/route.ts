@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { isSystemAdminUser } from "@/lib/rbac"
+import { orgRoleOf } from "@/lib/org"
 import {
   sendEmail,
   taskAssignedEmail,
@@ -18,8 +18,8 @@ export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  // Sends an arbitrary message to anyone in the company's name: system admin only.
-  if (!(await isSystemAdminUser(session.user.id)))
+  // Sends an arbitrary message to anyone in the company's name: the company's One Above All only.
+  if ((await orgRoleOf(session.user.id)) !== "ONE_ABOVE_ALL")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   try {

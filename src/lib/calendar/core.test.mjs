@@ -208,7 +208,7 @@ test("settings: bad values fall back, audience", () => {
   const n = core.normalizeCalendarSettings({ audience: "everyone", visibility: 3, overdueWindowDays: 0, urgentDays: 2, privateNamePrefixes: [" Finance ", "", 7], privateProjectIds: "x", folderUnits: { f1: "u1", f2: 5 } })
   assert.equal(n.audience, "all", "decision 14: everyone"); assert.equal("folderUnits" in n, false, "retired 12 Oct 2026"); assert.equal(n.visibility, "all_except_private"); assert.equal(n.overdueWindowDays, 14)
   assert.deepEqual(n.privateNamePrefixes, ["finance"]); assert.deepEqual(n.privateProjectIds, [])
-  const a = (aud, orgRole, extra = {}) => core.inAudience({ ...core.CALENDAR_SETTINGS_DEFAULTS, audience: aud, ...extra }, { userId: "u", orgRole, isAdmin: false })
+  const a = (aud, orgRole, extra = {}) => core.inAudience({ ...core.CALENDAR_SETTINGS_DEFAULTS, audience: aud, ...extra }, { userId: "u", orgRole })
   assert.equal(a("bod", "BOD"), true); assert.equal(a("bod", "ONE_ABOVE_ALL"), true); assert.equal(a("bod", "MANAGER"), false)
   assert.equal(a("managers", "MANAGER"), true); assert.equal(a("managers", "STAFF"), false); assert.equal(a("all", "STAFF"), true)
   assert.equal(a("bod", "STAFF", { audienceUserIds: ["u"] }), true, "a tester")

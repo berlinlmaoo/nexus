@@ -29,16 +29,12 @@ export async function GET(request: NextRequest) {
     // Everyone else silently gets the unfiltered report (no 403, so old clients keep working).
     let memberIds: string[] = []
     if (requestedMemberIds.length > 0) {
-      const [viewer, primaryMembership] = await prisma.$transaction([
-        prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
-        prisma.workspaceMember.findFirst({
-          where: { userId },
-          select: { role: true },
-          orderBy: { joinedAt: 'asc' },
-        }),
-      ])
+      const primaryMembership = await prisma.workspaceMember.findFirst({
+        where: { userId },
+        select: { role: true },
+        orderBy: { joinedAt: 'asc' },
+      })
       const canFilterMembers =
-        viewer?.role === 'ADMIN' ||
         primaryMembership?.role === 'BOD' ||
         primaryMembership?.role === 'ONE_ABOVE_ALL'
       if (canFilterMembers) memberIds = requestedMemberIds

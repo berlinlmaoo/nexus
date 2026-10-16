@@ -53,7 +53,7 @@ export function SearchModal({ onClose, takeInitial }: { onClose: () => void; tak
   const membersQ = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
   const profileQ = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 });
   const myId = profileQ.data?.user?.id;
-  const seesRecords = SEES_EVERY_RECORD.has(membersQ.data?.role ?? "") || profileQ.data?.user?.role === "ADMIN";
+  const seesRecords = SEES_EVERY_RECORD.has(membersQ.data?.role ?? "");
   const r = search.data;
 
   const openPerson = async (id: string) => {

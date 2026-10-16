@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
-import { checkProjectAccess, isSystemAdminUser, isAccessLevel, roleForLevel, type AccessLevel } from "@/lib/rbac"
+import { checkProjectAccess, isAccessLevel, roleForLevel, type AccessLevel } from "@/lib/rbac"
 import { ensureProjectSheet } from "@/lib/project-sheets"
 import { syncProjectRoomSafe } from "@/lib/chat-membership"
 import { emitWorkspaceChanged } from "@/lib/socket-emitter"
@@ -66,46 +66,15 @@ function isMissingSchemaError(error: unknown) {
     && (error.code === "P2021" || error.code === "P2022")
 }
 
-async function canManageTeamInWorkspace(userId: string, workspaceId: string, teamId?: string) {
-  if (!teamId) return false
-
-  const team = await prisma.team.findUnique({
-    where: { id: teamId },
-    select: {
-      workspaceId: true,
-      members: {
-        where: { userId },
-        select: { id: true },
-      },
-    },
-  })
-
-  return Boolean(team && team.workspaceId === workspaceId && team.members.length > 0)
-}
-
 export async function GET(request: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    const isSystemAdmin = await isSystemAdminUser(session.user.id)
 
     const workspaceId = request.nextUrl.searchParams.get("workspaceId")
     const includeAllWorkspace = request.nextUrl.searchParams.get("includeAllWorkspace") === "1"
-    const teamId = request.nextUrl.searchParams.get("teamId") || undefined
 
     if (workspaceId) {
-      if (isSystemAdmin) {
-        const projects = await prisma.project.findMany({
-          where: { workspaceId },
-          select: projectListSelect,
-          orderBy: { createdAt: "desc" },
-        })
-
-        const result = await withTaskCounts(projects)
-
-        return NextResponse.json(result)
-      }
-
       const workspaceMembership = await prisma.workspaceMember.findUnique({
         where: {
           userId_workspaceId: {
@@ -120,21 +89,17 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 })
       }
 
-      const canSeeAllWorkspaceProjects =
-        hasProjectWideAccess(workspaceMembership.role) ||
-        await canManageTeamInWorkspace(session.user.id, workspaceId, teamId)
-
+      // Only the projects the viewer can open (lib/rbac.ts projectAccessLevel): every project, Pipeline
+      // boards included, for BoD / One Above All asking for the whole workspace; otherwise their own.
+      // `teamId` no longer widens the list (owner, 16 Oct 2026).
       const where: Record<string, unknown> = {
         workspaceId,
       }
 
-      if (!includeAllWorkspace || !canSeeAllWorkspaceProjects) {
+      if (!includeAllWorkspace || !hasProjectWideAccess(workspaceMembership.role)) {
         where.members = {
           some: { userId: session.user.id },
         }
-      } else {
-        // The pipeline board shows only to its own members, whatever the viewer's rank (owner, 9 Oct 2026).
-        where.OR = [{ type: { not: "PIPELINE" } }, { members: { some: { userId: session.user.id } } }]
       }
 
       const projects = await prisma.project.findMany({
@@ -177,20 +142,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (whereScopes.length === 0) {
-      if (!isSystemAdmin) {
-        return NextResponse.json([])
-      }
+      return NextResponse.json([])
     }
 
-    const scoped: Record<string, unknown> = isSystemAdmin
-      ? {}
-      : whereScopes.length === 1
-        ? whereScopes[0]
-        : { OR: whereScopes }
-    // The pipeline board shows only to its own members, whatever the viewer's rank (owner, 9 Oct 2026).
-    const where: Record<string, unknown> = isSystemAdmin
-      ? { ...scoped }
-      : { AND: [scoped, { OR: [{ type: { not: "PIPELINE" } }, { members: { some: { userId: session.user.id } } }] }] }
+    // Pipeline boards follow the same rule as every other project (owner, 16 Oct 2026).
+    const where: Record<string, unknown> = whereScopes.length === 1 ? whereScopes[0] : { OR: whereScopes }
 
     const projects = await prisma.project.findMany({
       where,

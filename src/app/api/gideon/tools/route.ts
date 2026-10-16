@@ -116,7 +116,7 @@ function descriptionExcerpt(description?: string | null) {
   return description.length > 280 ? `${description.slice(0, 277)}...` : description
 }
 
-function actorScopedProjectWhere(actor: Pick<User, 'id' | 'role'>, input: Record<string, unknown>) {
+function actorScopedProjectWhere(actor: Pick<User, 'id'>, input: Record<string, unknown>) {
   const where: Prisma.ProjectWhereInput = {}
   const workspaceId = asString(input.workspaceId)
   const status = asString(input.status) as ProjectStatus | undefined
@@ -124,17 +124,15 @@ function actorScopedProjectWhere(actor: Pick<User, 'id' | 'role'>, input: Record
   if (workspaceId) where.workspaceId = workspaceId
   if (status) where.status = status
 
-  if (actor.role !== 'ADMIN') {
-    where.OR = [
-      { members: { some: { userId: actor.id } } },
-      { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD'] } } } } },
-    ]
-  }
+  where.OR = [
+    { members: { some: { userId: actor.id } } },
+    { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD'] } } } } },
+  ]
 
   return where
 }
 
-function actorScopedTaskWhere(actor: Pick<User, 'id' | 'role'>, input: Record<string, unknown>) {
+function actorScopedTaskWhere(actor: Pick<User, 'id'>, input: Record<string, unknown>) {
   const where: Prisma.TaskWhereInput = {}
   const taskListWhere: Prisma.TaskListWhereInput = {}
   const projectId = asString(input.projectId)
@@ -147,13 +145,11 @@ function actorScopedTaskWhere(actor: Pick<User, 'id' | 'role'>, input: Record<st
   if (priority) where.priority = priority
   if (assigneeId) where.assignees = { some: { userId: assigneeId } }
 
-  if (actor.role !== 'ADMIN') {
-    taskListWhere.project = {
-      OR: [
-        { members: { some: { userId: actor.id } } },
-        { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD'] } } } } },
-      ],
-    }
+  taskListWhere.project = {
+    OR: [
+      { members: { some: { userId: actor.id } } },
+      { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD'] } } } } },
+    ],
   }
 
   if (Object.keys(taskListWhere).length > 0) where.taskList = taskListWhere
@@ -265,9 +261,7 @@ async function listMembers(actor: User, input: Record<string, unknown>) {
     const members = await prisma.projectMember.findMany({
       where: {
         projectId,
-        ...(actor.role === 'ADMIN'
-          ? {}
-          : {
+        ...({
               project: {
                 OR: [
                   { members: { some: { userId: actor.id } } },
@@ -286,7 +280,7 @@ async function listMembers(actor: User, input: Record<string, unknown>) {
   const members = await prisma.workspaceMember.findMany({
     where: {
       ...(workspaceId ? { workspaceId } : {}),
-      ...(actor.role === 'ADMIN' ? {} : { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } } }),
+      workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } },
     },
     select: { role: true, user: { select: { id: true, name: true, email: true, avatar: true } }, workspace: { select: { id: true, name: true, slug: true } } },
     orderBy: { joinedAt: 'asc' },
@@ -334,9 +328,7 @@ async function getProjectSummary(actor: User, input: Record<string, unknown>) {
   const project = await prisma.project.findUnique({
     where: {
       id: projectId,
-      ...(actor.role === 'ADMIN'
-        ? {}
-        : {
+      ...({
             OR: [
               { members: { some: { userId: actor.id } } },
               { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD'] } } } } },
@@ -830,9 +822,7 @@ async function getAccessibleProject(actor: User, projectId: string) {
   const project = await prisma.project.findUnique({
     where: {
       id: projectId,
-      ...(actor.role === 'ADMIN'
-        ? {}
-        : {
+      ...({
             OR: [
               { members: { some: { userId: actor.id } } },
               { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD'] } } } } },
@@ -846,8 +836,8 @@ async function getAccessibleProject(actor: User, projectId: string) {
 }
 
 // Web-parity WRITE gate: a user may create/update tasks + comment via Gideon only where they could on
-// the web — project MEMBER+ (LEAD/MEMBER), workspace BoD/Manager/One-Above-All, or system ADMIN. VIEWERs
-// and non-members stay read-only. (ADMIN/workspace-admin short-circuit inside checkProjectAccess.)
+// the web — project MEMBER+ (LEAD/MEMBER) or workspace BoD/One-Above-All. VIEWERs and non-members stay
+// read-only. (The workspace-wide rule lives inside checkProjectAccess.)
 async function assertCanWrite(actor: User, projectId: string) {
   const { allowed } = await checkProjectAccess(actor.id, projectId, ['MEMBER'])
   if (!allowed) throw new Error('Kamu gak punya akses buat bikin/ubah di project ini lewat Gideon.')
@@ -871,9 +861,7 @@ async function resolveTaskList(actor: User, input: Record<string, unknown>, stat
       where: {
         id: taskListId,
         ...(projectId ? { projectId } : {}),
-        ...(actor.role === 'ADMIN'
-          ? {}
-          : {
+        ...({
               project: {
                 OR: [
                   { members: { some: { userId: actor.id } } },
@@ -1459,8 +1447,7 @@ async function getTaskDetail(actor: User, input: Record<string, unknown>) {
   }
 }
 
-function docProjectScope(actor: Pick<User, 'id' | 'role'>): Prisma.DocWhereInput {
-  if (actor.role === 'ADMIN') return {}
+function docProjectScope(actor: Pick<User, 'id'>): Prisma.DocWhereInput {
   return {
     project: {
       OR: [

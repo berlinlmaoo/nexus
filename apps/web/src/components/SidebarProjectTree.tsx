@@ -98,7 +98,7 @@ export function SidebarProjectTree() {
   const projectsQuery = useQuery({ queryKey: ["nexus", "projects"], queryFn: nexusApi.projects, retry: false, staleTime: 60_000 });
   const foldersQuery = useQuery({ queryKey: ["nexus", "project-folders"], queryFn: () => nexusApi.projectFolders(), retry: false, staleTime: 60_000 });
   const roleQuery = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
-  // The folder and project PATCH routes allow BoD / Manager / One Above All (and the system admin).
+  // The folder and project PATCH routes allow BoD / Manager / One Above All.
   const canManage = ["ONE_ABOVE_ALL", "BOD", "MANAGER"].includes(roleQuery.data?.role ?? "");
 
   const projects = projectsQuery.data ?? [];

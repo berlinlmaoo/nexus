@@ -12,6 +12,7 @@ import bcrypt from "bcryptjs"
 import { getUserOrgRole, isBodPlus } from "@/lib/feed"
 import { WORKSPACE_HIERARCHY } from "@/lib/rbac"
 import type { WorkspaceRole } from "@/generated/prisma/client"
+import { ORG_WORKSPACE_ID } from "@/lib/org"
 
 const SYSTEM_ROLES: SystemRole[] = ["ADMIN", "MEMBER"]
 
@@ -39,7 +40,6 @@ export async function GET(
             name: true,
             email: true,
             avatar: true,
-            role: true,
             createdAt: true,
             updatedAt: true,
             // Offboarding (lib/offboarding.ts). Additive.
@@ -132,6 +132,8 @@ export async function GET(
     return NextResponse.json({
       user: {
         ...userFields,
+        // The retired system flag's field, derived from the company role (16 Oct 2026).
+        role: legacySystemRole(workspaceMemberships),
         formerMemberships: formerMemberships.map((f) => ({
           workspaceId: f.workspaceId,
           workspaceName: f.workspace.name,
@@ -170,7 +172,7 @@ export async function PATCH(
     // dan memanggilnya terasa berhasil padahal tidak mengubah apa pun.
     const hasWorkspaceEmail = Object.prototype.hasOwnProperty.call(body, "googleWorkspaceEmail")
 
-    // Identitas akun — nama, email login, sandi — hanya BoD ke atas (atau system admin).
+    // Identitas akun — nama, email login, sandi — hanya BoD ke atas.
     // `canAccessUserManagement` di atas masih meloloskan Manager; untuk peran dan tautan Google
     // itu memang cukup, untuk mengganti sandi orang tidak.
     const wantsName = typeof body.name === "string"
@@ -179,7 +181,7 @@ export async function PATCH(
     const touchesAccount = wantsName || wantsEmail || wantsPassword
     if (touchesAccount) {
       const orgRole = await getUserOrgRole(session.user.id)
-      if (!context.isSystemAdmin && !isBodPlus(orgRole)) {
+      if (!isBodPlus(orgRole)) {
         return NextResponse.json({ error: "Hanya BoD ke atas yang bisa mengubah nama, email, atau sandi akun." }, { status: 403 })
       }
     }
@@ -200,20 +202,22 @@ export async function PATCH(
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    // targetTierGuard (audit 28 Sep 2026). The system role (ADMIN/MEMBER) is only ever given or
-    // taken by a system admin: `canAccessUserManagement` lets Managers through, and a Manager could
-    // PATCH themselves to ADMIN. And nobody but a system admin touches a system admin's account, or
-    // an account at or above their own workspace tier (One Above All excepted), except their own —
-    // otherwise a BoD could reset an OAA's email and password and sign in as them.
-    if (role !== undefined && role !== existing.role && !context.isSystemAdmin) {
-      return NextResponse.json({ error: "Hanya system admin yang bisa mengubah peran sistem." }, { status: 403 })
+    // The system role (User.role ADMIN/MEMBER) is retired (16 Oct 2026): power comes from the workspace
+    // role only, so nobody changes it any more. An unchanged value (an older client echoing it) passes.
+    const echoedRole = role === undefined || role === existing.role
+      || role === ((await getUserOrgRole(existing.id)) === "ONE_ABOVE_ALL" ? "ADMIN" : "MEMBER")
+    if (!echoedRole) {
+      return NextResponse.json({ error: "Peran sistem sudah tidak dipakai. Atur peran di workspace." }, { status: 403 })
     }
+    // targetTierGuard (audit 28 Sep 2026). Nobody touches an account at or above their own company tier
+    // (One Above All excepted), except their own — otherwise a BoD could reset an OAA's email and password
+    // and sign in as them. The company's One Above All is changed only by themselves.
     const isSelf = existing.id === session.user.id
-    if (!isSelf && !context.isSystemAdmin && (touchesAccount || hasWorkspaceEmail)) {
-      if (existing.role === "ADMIN") {
-        return NextResponse.json({ error: "Akun ini system admin — cuma sesama system admin yang bisa mengubahnya." }, { status: 403 })
-      }
+    if (!isSelf && (touchesAccount || hasWorkspaceEmail)) {
       const [callerRole, targetRole] = await Promise.all([getUserOrgRole(session.user.id), getUserOrgRole(existing.id)])
+      if (targetRole === "ONE_ABOVE_ALL") {
+        return NextResponse.json({ error: "Akun ini One Above All — hanya pemiliknya yang bisa mengubahnya." }, { status: 403 })
+      }
       const callerTier = WORKSPACE_HIERARCHY[callerRole as WorkspaceRole] ?? 0
       const targetTier = WORKSPACE_HIERARCHY[targetRole as WorkspaceRole] ?? 0
       if (callerTier !== WORKSPACE_HIERARCHY.ONE_ABOVE_ALL && targetTier >= callerTier) {
@@ -229,7 +233,6 @@ export async function PATCH(
       password?: string
       sessionVersion?: { increment: number }
     } = {}
-    if (role !== undefined) data.role = role
 
     if (wantsName) {
       const name = String(body.name).trim()
@@ -303,7 +306,6 @@ export async function PATCH(
         name: true,
         email: true,
         avatar: true,
-        role: true,
         googleWorkspaceEmail: true,
         createdAt: true,
         updatedAt: true,
@@ -318,8 +320,6 @@ export async function PATCH(
       userId: session.user.id,
       request,
       metadata: {
-        previousRole: existing.role,
-        role,
         previousGoogleWorkspaceEmail: existing.googleWorkspaceEmail,
         googleWorkspaceEmail: data.googleWorkspaceEmail,
         // Sandinya sendiri tidak pernah masuk audit — cukup fakta bahwa ia diganti.
@@ -344,11 +344,20 @@ export async function PATCH(
       }).catch(() => null)
     }
 
-    return NextResponse.json({ user: updated })
+    const orgMembership = await prisma.workspaceMember.findMany({
+      where: { userId: updated.id, workspaceId: ORG_WORKSPACE_ID },
+      select: { workspaceId: true, role: true },
+    })
+    return NextResponse.json({ user: { ...updated, role: legacySystemRole(orgMembership) } })
   } catch (error) {
     console.error("Error updating admin user role:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
+}
+
+/** The value of the retired `role` field (User.role, 16 Oct 2026): "ADMIN" for the company's One Above All. */
+function legacySystemRole(memberships: { workspaceId: string; role: WorkspaceRole }[]): SystemRole {
+  return memberships.some((m) => m.workspaceId === ORG_WORKSPACE_ID && m.role === "ONE_ABOVE_ALL") ? "ADMIN" : "MEMBER"
 }
 
 const HAS_ATTENDANCE_DATA_MESSAGE = "Akun ini punya data absensi/pengajuan. Pakai Offboard supaya datanya tetap ada."
@@ -366,10 +375,10 @@ async function hasAttendanceData(
   return Boolean(request)
 }
 
-// Permanently delete a user account. Stricter than role edits: only a system ADMIN or an org
-// BoD / One Above All may purge an account (plain Managers may NOT). Guards: can't delete yourself,
-// can't delete a system ADMIN unless you're one too, can't delete the LAST system admin, and the
-// target must already be removed from every workspace (so an active staffer can't be nuked by
+// Permanently delete a user account. Stricter than role edits: only an org BoD / One Above All may
+// purge an account (plain Managers may NOT). Guards: can't delete yourself, can't delete the company's
+// One Above All unless you're one too, can't delete the LAST One Above All, and the target must
+// already be removed from every workspace (so an active staffer can't be nuked by
 // accident — match the "remove from Members first, then delete the ghost" flow). SHARED/owned content
 // the user created (tasks, attachments, portfolios, quests, workflow bundles, proof annotations,
 // goals + their milestones/links, docs, team calendar events, room bookings) is REASSIGNED to the
@@ -387,12 +396,10 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const canDelete =
-      context.isSystemAdmin ||
-      // BoD+ of the COMPANY workspace only — every sign-up is One Above All of a personal workspace.
-      isBodPlus(context.orgRole)
+    // BoD+ of the COMPANY workspace only — every sign-up is One Above All of a personal workspace.
+    const canDelete = isBodPlus(context.orgRole)
     if (!canDelete) {
-      return NextResponse.json({ error: "Forbidden — hanya system admin / BoD yang bisa hapus akun." }, { status: 403 })
+      return NextResponse.json({ error: "Forbidden — hanya BoD ke atas yang bisa hapus akun." }, { status: 403 })
     }
 
     const userId = (await params).userId
@@ -408,8 +415,7 @@ export async function DELETE(
         id: true,
         name: true,
         email: true,
-        role: true,
-        workspaceMembers: { select: { workspace: { select: { name: true } } } },
+        workspaceMembers: { select: { workspaceId: true, role: true, workspace: { select: { name: true } } } },
       },
     })
 
@@ -417,15 +423,18 @@ export async function DELETE(
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    if (target.role === "ADMIN" && !context.isSystemAdmin) {
-      return NextResponse.json({ error: "Akun ini system-admin — cuma sesama system-admin yang bisa hapus." }, { status: 403 })
+    const targetIsOaa = target.workspaceMembers.some((m) => m.workspaceId === ORG_WORKSPACE_ID && m.role === "ONE_ABOVE_ALL")
+    if (targetIsOaa && context.orgRole !== "ONE_ABOVE_ALL") {
+      return NextResponse.json({ error: "Akun ini One Above All — cuma sesama One Above All yang bisa hapus." }, { status: 403 })
     }
 
-    // Never delete the last system admin — that would lock everyone out of user management permanently.
-    if (target.role === "ADMIN") {
-      const otherAdmins = await prisma.user.count({ where: { role: "ADMIN", id: { not: userId } } })
-      if (otherAdmins === 0) {
-        return NextResponse.json({ error: "Gak bisa hapus system-admin terakhir — harus ada minimal satu admin." }, { status: 409 })
+    // Never delete the last One Above All — that would lock everyone out of user management permanently.
+    if (targetIsOaa) {
+      const otherOaas = await prisma.workspaceMember.count({
+        where: { workspaceId: ORG_WORKSPACE_ID, role: "ONE_ABOVE_ALL", userId: { not: userId } },
+      })
+      if (otherOaas === 0) {
+        return NextResponse.json({ error: "Gak bisa hapus One Above All terakhir — harus ada minimal satu." }, { status: 409 })
       }
     }
 
@@ -507,7 +516,7 @@ export async function DELETE(
       entityName: target.email,
       userId: actorId,
       request,
-      metadata: { deletedName: target.name, deletedRole: target.role, ...summary },
+      metadata: { deletedName: target.name, ...summary },
     })
 
     return NextResponse.json({ ok: true, deletedUser: { id: target.id, name: target.name, email: target.email }, ...summary })

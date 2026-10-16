@@ -88,12 +88,12 @@ const membershipFilterOptions: Array<{ value: MembershipFilter; label: string }>
   { value: "all", label: "All users" },
   { value: "workspace-members", label: "Workspace members" },
   { value: "non-members", label: "Non-members" },
-  { value: "system-admins", label: "System admins" },
+  { value: "system-admins", label: "One Above All" },
 ]
 
 const systemRoleOptions: Array<{ value: "all" | SystemRole; label: string }> = [
   { value: "all", label: "All system roles" },
-  { value: "ADMIN", label: "System admin" },
+  { value: "ADMIN", label: "One Above All" },
   { value: "MEMBER", label: "Member" },
 ]
 
@@ -124,7 +124,6 @@ export function UserManagementPage({ currentUserName }: UserManagementPageProps)
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null)
   const [availableWorkspaces, setAvailableWorkspaces] = useState<WorkspaceOption[]>([])
-  const [pendingSystemRole, setPendingSystemRole] = useState<SystemRole>("MEMBER")
   const [pendingWorkspaceId, setPendingWorkspaceId] = useState("")
   const [pendingWorkspaceRole, setPendingWorkspaceRole] = useState<WorkspaceRole>("MEMBER")
   const [activeAction, setActiveAction] = useState<string | null>(null)
@@ -170,7 +169,6 @@ export function UserManagementPage({ currentUserName }: UserManagementPageProps)
       const payload = data as UserDetailResponse
       setSelectedUser(payload.user)
       setAvailableWorkspaces(payload.availableWorkspaces)
-      setPendingSystemRole(payload.user.role)
       setDetailOpen(true)
     } catch (error) {
       console.error("Failed to fetch admin user detail:", error)
@@ -210,32 +208,6 @@ export function UserManagementPage({ currentUserName }: UserManagementPageProps)
     await fetchUserDetail(selectedUserId)
     await fetchUsers()
   }, [fetchUserDetail, fetchUsers, selectedUserId])
-
-  const handleSystemRoleSave = async () => {
-    if (!selectedUser || pendingSystemRole === selectedUser.role) return
-
-    setActiveAction("system-role")
-    try {
-      const res = await fetch(`/api/admin/users/${selectedUser.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: pendingSystemRole }),
-      })
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data?.error || "Failed to update system role")
-      }
-
-      toast.success("System role updated")
-      await refreshSelectedUser()
-    } catch (error) {
-      console.error("Failed to update system role:", error)
-      toast.error(error instanceof Error ? error.message : "Failed to update system role")
-    } finally {
-      setActiveAction(null)
-    }
-  }
 
   const handleAddWorkspaceMembership = async () => {
     if (!selectedUser || !pendingWorkspaceId) return
@@ -409,7 +381,7 @@ export function UserManagementPage({ currentUserName }: UserManagementPageProps)
                       {user.name}
                     </p>
                     <Badge variant={systemRoleBadgeVariant(user.role)}>
-                      {user.role === "ADMIN" ? "System Admin" : "Member"}
+                      {user.role === "ADMIN" ? "One Above All" : "Member"}
                     </Badge>
                   </div>
                   <p className="truncate text-sm text-on-surface-variant/55">{user.email}</p>
@@ -468,7 +440,7 @@ export function UserManagementPage({ currentUserName }: UserManagementPageProps)
                         {selectedUser.name}
                       </h3>
                       <Badge variant={systemRoleBadgeVariant(selectedUser.role)}>
-                        {selectedUser.role === "ADMIN" ? "System Admin" : "Member"}
+                        {selectedUser.role === "ADMIN" ? "One Above All" : "Member"}
                       </Badge>
                     </div>
                     <p className="text-sm text-on-surface-variant/60">{selectedUser.email}</p>
@@ -481,31 +453,6 @@ export function UserManagementPage({ currentUserName }: UserManagementPageProps)
 
               <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
                 <div className="space-y-6">
-                  <div className="space-y-4 rounded-[1.75rem] bg-surface-container-low/40 p-5">
-                    <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-on-surface-variant/35">
-                      <Shield className="h-3.5 w-3.5" />
-                      System Role
-                    </p>
-                    <div className="flex flex-col gap-3 sm:flex-row">
-                      <Select value={pendingSystemRole} onValueChange={(value) => setPendingSystemRole(value as SystemRole)}>
-                        <SelectTrigger className="h-11 flex-1 rounded-2xl border-none bg-surface-container-lowest font-medium">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ADMIN">System Admin</SelectItem>
-                          <SelectItem value="MEMBER">Member</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        onClick={() => void handleSystemRoleSave()}
-                        disabled={activeAction === "system-role" || pendingSystemRole === selectedUser.role}
-                        className="h-11 w-full rounded-2xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-primary-foreground sm:w-auto"
-                      >
-                        {activeAction === "system-role" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
-                      </Button>
-                    </div>
-                  </div>
-
                   <div className="space-y-4 rounded-[1.75rem] bg-surface-container-low/40 p-5">
                     <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-on-surface-variant/35">
                       <UserPlus className="h-3.5 w-3.5" />

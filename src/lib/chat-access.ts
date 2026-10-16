@@ -120,21 +120,15 @@ export async function conversationMemberAccess(userId: string, conversationId: s
 }
 
 /**
- * What decides whether someone may add or remove people in a group: their system role and their role
- * in every workspace they are in. One query, so the conversation list answers `canManageMembers` for
+ * What decides whether someone may add or remove people in a group: their role in every workspace
+ * they are in. One query, so the conversation list answers `canManageMembers` for
  * every row from it instead of a lookup per row.
  */
-export type MemberManagerContext = { systemRole: string | null; roleIn: Map<string, string> }
+export type MemberManagerContext = { roleIn: Map<string, string> }
 
 export async function memberManagerContext(userId: string): Promise<MemberManagerContext> {
-  const u = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true, workspaceMembers: { select: { workspaceId: true, role: true } } },
-  })
-  return {
-    systemRole: u?.role ?? null,
-    roleIn: new Map((u?.workspaceMembers ?? []).map((m) => [m.workspaceId, m.role] as const)),
-  }
+  const members = await prisma.workspaceMember.findMany({ where: { userId }, select: { workspaceId: true, role: true } })
+  return { roleIn: new Map(members.map((m) => [m.workspaceId, m.role] as const)) }
 }
 
 /**
@@ -149,7 +143,6 @@ export function canManageMembersIn(
   return canManageGroupMembers({
     kind: room.type,
     callerWorkspaceRole: room.workspaceId ? (ctx.roleIn.get(room.workspaceId) ?? null) : null,
-    callerSystemRole: ctx.systemRole,
     targetIsSelf,
   })
 }

@@ -36,7 +36,7 @@ struct Team: Decodable, Identifiable, Sendable {
     let color: String?
     let divisionId: String?
     let workspaceId: String?
-    /// Sent by the server per team: true for a workspace admin or a system admin. The edit controls
+    /// Sent by the server per team: true for a workspace admin (Manager and above). The edit controls
     /// key off this rather than off the caller's global role, because the answer differs per team —
     /// and every action is re-checked server-side regardless, so this only decides what is drawn.
     let canManage: Bool?

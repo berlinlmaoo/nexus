@@ -13,9 +13,9 @@ import { OffboardRefused, isOffboardReason, offboardAuthorityError, offboardUser
 /**
  * POST /api/admin/users/:userId/offboard — { lastWorkingDay?: "YYYY-MM-DD", reason, note? }
  *
- * Someone left the company (lib/offboarding.ts has what happens and what stays). Who: a system ADMIN,
- * or BoD / One Above All of the company workspace; never yourself; never someone of equal or higher
- * company role unless you are a system ADMIN or One Above All. lastWorkingDay defaults to today (Jakarta).
+ * Someone left the company (lib/offboarding.ts has what happens and what stays). Who: BoD / One Above
+ * All of the company workspace; never yourself; never someone of equal or higher company role unless you
+ * are One Above All. lastWorkingDay defaults to today (Jakarta).
  *
  * 200 { ok, user: { id, name }, leftAt, lastWorkingDay, workspaces: [name], approverEdgesCleared: [{ id, name }],
  *       pendingRequests, autoDeductionsCanceled, openTasks }
@@ -34,7 +34,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       where: { id: userId },
       select: {
         id: true,
-        role: true,
         deactivatedAt: true,
         workspaceMembers: { where: { workspaceId: ORG_WORKSPACE_ID }, select: { role: true } },
       },
@@ -42,10 +41,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const denied = offboardAuthorityError({
       action: "offboard",
       actorId,
-      actorIsSystemAdmin: context.isSystemAdmin,
       actorCompanyRole: context.orgRole,
       targetId: userId,
-      targetSystemRole: target?.role ?? "MEMBER",
       targetCompanyRole: target?.workspaceMembers[0]?.role ?? null,
     })
     if (denied) return NextResponse.json({ error: denied.error, code: denied.code }, { status: denied.status })
@@ -53,9 +50,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (target.deactivatedAt) {
       return NextResponse.json({ error: "Akun ini sudah di-offboard.", code: "ALREADY_OFFBOARDED" }, { status: 409 })
     }
-    // Company authority reaches company members. A system admin may also offboard someone who is only
-    // in other workspaces.
-    if (target.workspaceMembers.length === 0 && !context.isSystemAdmin) {
+    // Company authority reaches company members only.
+    if (target.workspaceMembers.length === 0) {
       return NextResponse.json(
         { error: "Orang ini bukan anggota workspace perusahaan.", code: "NOT_MEMBER" },
         { status: 409 },

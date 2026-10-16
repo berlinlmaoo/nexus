@@ -16,7 +16,7 @@ import {
  *
  * Who gets what:
  *   • not signed in → 401;
- *   • signed in but not in the company workspace (and not a system admin) → 200 { access: "none" } with
+ *   • signed in but not in the company workspace → 200 { access: "none" } with
  *     empty lists, so a personal-workspace account shows "enter a workspace code" instead of an error;
  *   • outside the rollout audience (AppSetting "calendar".audience) → 200 { access: "off" };
  *   • otherwise the data, with `access` = "all" for admin/OAA/BoD/Manager and the visibility mode for staff.
@@ -34,29 +34,27 @@ export type CalendarAccess = "all" | CalendarSettings["visibility"]
 export type CalendarCaller =
   | { kind: "none"; userId: string }
   | { kind: "off"; userId: string }
-  | { kind: "ok"; userId: string; orgRole: string | null; isAdmin: boolean; viewer: CalViewer; settings: CalendarSettings; access: CalendarAccess }
+  | { kind: "ok"; userId: string; orgRole: string | null; viewer: CalViewer; settings: CalendarSettings; access: CalendarAccess }
 
 /** The signed-in caller, or the 401 response. */
 export async function calendarCaller(): Promise<CalendarCaller | NextResponse> {
   const session = await auth()
   const userId = session?.user?.id
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  const [user, member, settings] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
+  const [member, settings] = await Promise.all([
     prisma.workspaceMember.findUnique({ where: { userId_workspaceId: { userId, workspaceId: ORG_WORKSPACE_ID } }, select: { role: true } }),
     getCalendarSettings(),
   ])
-  const isAdmin = user?.role === "ADMIN"
   const orgRole = member?.role ?? null
-  if (!isAdmin && !orgRole) return { kind: "none", userId }
-  if (!inAudience(settings, { userId, orgRole, isAdmin })) return { kind: "off", userId }
+  if (!orgRole) return { kind: "none", userId }
+  if (!inAudience(settings, { userId, orgRole })) return { kind: "off", userId }
   // BoD / One Above All see every project; Managers only their own (owner 13 Oct 2026, lib/rbac.ts).
-  const full = isAdmin || hasProjectWideAccess(orgRole)
+  const full = hasProjectWideAccess(orgRole)
   const memberProjectIds = full
     ? new Set<string>()
     : new Set((await prisma.projectMember.findMany({ where: { userId, project: { workspaceId: ORG_WORKSPACE_ID } }, select: { projectId: true } })).map((m) => m.projectId))
   return {
-    kind: "ok", userId, orgRole, isAdmin, settings,
+    kind: "ok", userId, orgRole, settings,
     viewer: { userId, full, memberProjectIds },
     access: full ? "all" : effectiveVisibility(settings),
   }

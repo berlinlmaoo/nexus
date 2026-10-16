@@ -1011,7 +1011,6 @@ export async function getAttendanceWorkspaceContext(userId: string) {
         name: true,
         email: true,
         avatar: true,
-        role: true,
       },
     }),
     prisma.workspaceMember.findFirst({
@@ -1032,9 +1031,8 @@ export async function getAttendanceWorkspaceContext(userId: string) {
   const workspace = workspaceMember?.workspace ?? null
   const workspaceRole = workspaceMember?.role ?? null
   const attendanceRole = workspaceMember?.attendanceRole ?? "NONE" // vestigial — role retired
-  const isSystemAdmin = user?.role === "ADMIN"
-  // Full workspace attendance management (every staff) stays BoD / One-Above-All / system-admin.
-  const canManageAttendance = Boolean(isSystemAdmin || workspaceRole === "BOD" || workspaceRole === "ONE_ABOVE_ALL")
+  // Full workspace attendance management (every staff) stays BoD / One-Above-All.
+  const canManageAttendance = Boolean(workspaceRole === "BOD" || workspaceRole === "ONE_ABOVE_ALL")
   // Bagan Approval: seorang MANAGER melihat + menyetujui absensi orang-orang yang ditaruh di
   // bawahnya di bagan (WorkspaceMember.approverId), dan HANYA mereka. Lead tim tidak lagi memberi
   // kuasa apa pun — konsep itu dihapus bersama bagan.
@@ -1048,10 +1046,10 @@ export async function getAttendanceWorkspaceContext(userId: string) {
   }
   const canReviewAttendanceRequests = canManageAttendance || directReportIds.length > 0
   // Approvals (owner, 30 Sep 2026): whose requests and offsite check-outs this person sees and
-  // decides. null = everyone (One Above All, system admin). A BoD: everyone in their own tree of the
+  // decides. null = everyone (One Above All). A BoD: everyone in their own tree of the
   // chart, never another BoD's. Anyone else: the people directly under them.
   let approvalScopeUserIds: string[] | null = null
-  if (!isSystemAdmin && workspaceRole !== "ONE_ABOVE_ALL") {
+  if (workspaceRole !== "ONE_ABOVE_ALL") {
     approvalScopeUserIds =
       workspaceRole === "BOD" && workspace?.id ? subtreeOf(userId, await loadChart(workspace.id)) : directReportIds
   }

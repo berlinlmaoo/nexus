@@ -4,8 +4,6 @@ import prisma from "@/lib/prisma"
 import { restorableSoftDelete } from "@/lib/deletion-snapshot"
 
 async function canManage(userId: string, workspaceId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
-  if (user?.role === "ADMIN") return true
   const m = await prisma.workspaceMember.findUnique({ where: { userId_workspaceId: { userId, workspaceId } }, select: { role: true } })
   return m?.role === "BOD" || m?.role === "MANAGER" || m?.role === "ONE_ABOVE_ALL"
 }

@@ -2978,7 +2978,6 @@ export const nexusApi = {
   auditLogs: (query = "") => apiFetch<{ logs: NexusAuditLog[]; total: number }>(`/api/audit${query ? `?${query}` : ""}`),
   auditEntry: (id: string) => apiFetch<NexusAuditEntryDetail>(`/api/audit/${encodeURIComponent(id)}`),
   auditRestore: (id: string) => apiFetch<NexusAuditRestoreResult>(`/api/audit/${encodeURIComponent(id)}/restore`, { method: "POST" }),
-  updateUserRole: (userId: string, role: string) => apiFetch<{ user?: NexusAdminUser }>(`/api/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) }),
   googleWorkspaceAccounts: () => apiFetch<GoogleWorkspaceAccounts>("/api/admin/google-workspace/accounts"),
   // Membuat mailbox BARU lalu menautkannya. BoD saja — ini satu-satunya panggilan di NEXUS yang
   // mengisi seat lisensi berbayar.

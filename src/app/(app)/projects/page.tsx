@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { ProjectsPageClient } from "@/components/projects/projects-page-client"
 import type { ProjectCardData } from "@/components/projects/project-card"
-import { isSystemAdminUser } from "@/lib/rbac"
+import { hasProjectWideAccess } from "@/lib/rbac"
 
 export const dynamic = "force-dynamic"
 
@@ -12,42 +12,28 @@ export default async function ProjectsPage() {
   if (!session?.user?.id) redirect("/login")
 
   const userId = session.user.id
-  const isSystemAdmin = await isSystemAdminUser(userId)
-
   // Get user's workspace (first one)
   const workspaceMember = await prisma.workspaceMember.findFirst({
     where: { userId },
     select: { workspaceId: true, role: true },
   })
 
-  if (!workspaceMember && !isSystemAdmin) redirect("/login")
+  if (!workspaceMember) redirect("/login")
 
-  const fallbackWorkspace = !workspaceMember
-    ? await prisma.workspace.findFirst({
-        select: { id: true },
-        orderBy: { createdAt: "asc" },
-      })
-    : null
+  const workspaceId = workspaceMember.workspaceId
 
-  const workspaceId = workspaceMember?.workspaceId ?? fallbackWorkspace?.id ?? ""
+  // BoD / One Above All see every project of the workspace (lib/rbac.ts); everyone else their own.
+  const canSeeAllWorkspaceProjects = hasProjectWideAccess(workspaceMember.role)
 
-  const canSeeAllWorkspaceProjects =
-    isSystemAdmin ||
-    workspaceMember?.role === "BOD" ||
-    workspaceMember?.role === "MANAGER" || workspaceMember?.role === "ONE_ABOVE_ALL"
-
-  // Fetch projects for the workspace. Owners/admins can see all workspace projects.
   const projects = await prisma.project.findMany({
-    where: isSystemAdmin
-      ? {}
-      : {
-          workspaceId,
-          ...(canSeeAllWorkspaceProjects
-            ? {}
-            : {
-                members: { some: { userId } },
-              }),
-        },
+    where: {
+      workspaceId,
+      ...(canSeeAllWorkspaceProjects
+        ? {}
+        : {
+            members: { some: { userId } },
+          }),
+    },
     include: {
       members: {
         include: {

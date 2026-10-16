@@ -1,11 +1,10 @@
 import prisma from "@/lib/prisma"
-import { isSystemAdminUser } from "@/lib/rbac"
 
 /**
  * Who may see a person's PERSONAL attendance data — XP penalties with their dates (late, absent, no
  * check-out), shift hours, per-day shifts, rest days, Flexi / no-geofence flags, approver (owner decision,
  * 13 Oct 2026): the person themself and the people above them. "Above" =
- *   - a system admin, a BoD or One Above All of the workspace, or
+ *   - a BoD or One Above All of the workspace, or
  *   - anyone up their approval chain (WorkspaceMember.approverId, followed to the top — the manager, the
  *     manager's approver, and so on).
  * Fellow Staff (and a Manager who isn't up that chain) see the public things only: name, avatar, role,
@@ -17,12 +16,9 @@ import { isSystemAdminUser } from "@/lib/rbac"
 export type PersonalScope = { all: boolean; canSee: (userId: string) => boolean }
 
 export async function personalScope(viewerId: string, workspaceId: string): Promise<PersonalScope> {
-  const [rows, sysAdmin] = await Promise.all([
-    prisma.workspaceMember.findMany({ where: { workspaceId }, select: { userId: true, role: true, approverId: true } }),
-    isSystemAdminUser(viewerId),
-  ])
+  const rows = await prisma.workspaceMember.findMany({ where: { workspaceId }, select: { userId: true, role: true, approverId: true } })
   const me = rows.find((r) => r.userId === viewerId)
-  const all = sysAdmin || me?.role === "BOD" || me?.role === "ONE_ABOVE_ALL"
+  const all = me?.role === "BOD" || me?.role === "ONE_ABOVE_ALL"
   if (all) return { all: true, canSee: () => true }
   const approverOf = new Map(rows.map((r) => [r.userId, r.approverId]))
   const memo = new Map<string, boolean>()
@@ -51,5 +47,5 @@ export async function canSeePersonalAttendance(viewerId: string, targetId: strin
     select: { workspaceId: true },
   })
   for (const s of shared) if ((await personalScope(viewerId, s.workspaceId)).canSee(targetId)) return true
-  return (await isSystemAdminUser(viewerId))
+  return false
 }

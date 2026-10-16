@@ -3,14 +3,12 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { isSystemAdminUser } from "@/lib/rbac"
 import { validateFolderPlacement } from "@/lib/folder-tree"
 import { normalizeAggregateProjectIds } from "@/lib/folder-aggregate"
 import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 
 async function canManageWorkspace(userId: string, workspaceId: string) {
-  if (await isSystemAdminUser(userId)) return true
 
   const membership = await prisma.workspaceMember.findUnique({
     where: { userId_workspaceId: { userId, workspaceId } },

@@ -4,12 +4,10 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { ROOM_BOOKING_ROOMS } from "@/lib/validations"
-import { isSystemAdminUser } from "@/lib/rbac"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 
 const MANAGER_ROLES: readonly string[] = ["BOD", "MANAGER", "ONE_ABOVE_ALL"]
 async function canManageCalendars(userId: string, workspaceId: string) {
-  if (await isSystemAdminUser(userId)) return true
   const m = await prisma.workspaceMember.findUnique({
     where: { userId_workspaceId: { userId, workspaceId } },
     select: { role: true },

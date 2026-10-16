@@ -41,11 +41,9 @@ export default async function OpsDashboardPage() {
     )
   }
 
-  const workspaceIds = context.isSystemAdmin
-    ? context.workspaceMemberships.map((membership) => membership.workspaceId)
-    : context.workspaceMemberships
-        .filter((membership) => membership.role === "BOD" || membership.role === "MANAGER" || membership.role === "ONE_ABOVE_ALL")
-        .map((membership) => membership.workspaceId)
+  const workspaceIds = context.workspaceMemberships
+    .filter((membership) => membership.role === "BOD" || membership.role === "MANAGER" || membership.role === "ONE_ABOVE_ALL")
+    .map((membership) => membership.workspaceId)
 
   if (workspaceIds.length === 0) {
     return (

@@ -47,6 +47,11 @@ model User {
   phoneNumber    String?
   // whatsappId / waLinkCode / waLinkExpiresAt: retired 12 Oct 2026 with the NEXUS WhatsApp feature. The
   // columns stay in the database (unused) until prisma/sql/2026-10-12-retire-wa-webhooks-DROP.sql runs.
+  /// RETIRED 16 Oct 2026 (unused): the system ADMIN flag grants nothing any more — power comes from the
+  /// workspace role only (WorkspaceMember.role). Kept so released builds and a rollback still read it; the
+  /// column stays until a later contract release. prisma/sql/2026-10-16-retire-system-admin-flag.sql
+  /// resets every ADMIN to MEMBER at the release. The API's legacy `role` field is derived from the company
+  /// role instead ("ADMIN" = the company's One Above All).
   role           SystemRole        @default(MEMBER)
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
@@ -1566,6 +1571,7 @@ model ProjectPage {
 
 // ─── ENUMS ─────────────────────────────────────────────────────
 
+/// User.role. ADMIN is retired (16 Oct 2026, unused): nothing reads it for access; see User.role.
 enum SystemRole {
   ADMIN
   MEMBER

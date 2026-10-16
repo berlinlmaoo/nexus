@@ -18,7 +18,7 @@ import { refundXpTransaction, xpRefundTexts } from "@/lib/xp-refund"
  *   200 { ok: true, refund: { id, transactionId, userId, amount, refunded, reason, kind, label, dateKey,
  *         originalCreatedAt, createdAt, note, refundedBy: { id, name } }, totalXp }
  *   400 NOT_A_DEDUCTION   the row is a gain or a 0 XP marker
- *   403 FORBIDDEN         not BoD / One Above All / system admin
+ *   403 FORBIDDEN         not BoD / One Above All
  *   403 SELF_REFUND       your own deduction — another BoD removes it
  *   404 NOT_FOUND         no such row, or it belongs to someone outside your workspace
  *   409 ALREADY_REFUNDED  removed before (idempotent: a retried tap changes nothing)

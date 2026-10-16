@@ -19,8 +19,7 @@ const memberInclude = {
  * writing a member row here would be undone the next time the room is provisioned.
  *
  * Who (owner decision, 8 Oct 2026): adding anyone, or removing anyone other than yourself, takes
- * Manager, BoD or One Above All in the group's workspace, or a system admin (chat-rules
- * canManageGroupMembers); everyone else gets 403 MANAGER_REQUIRED. Leaving — DELETE with your own
+ * Manager, BoD or One Above All in the group's workspace (chat-rules canManageGroupMembers); everyone else gets 403 MANAGER_REQUIRED. Leaving — DELETE with your own
  * userId — stays open to every member. Until then any member could add or remove anyone. Creating a
  * group with its first members (POST /api/conversations) is unchanged.
  *

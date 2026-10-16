@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma"
 import { USER_CARD_SELECT } from "@/lib/user-card-select"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
-import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
+import { checkProjectAccess } from "@/lib/rbac"
 import { executeAutomations } from "@/lib/automation-engine"
 import { emitTaskCreated } from "@/lib/socket-emitter"
 import type { Prisma } from "@/generated/prisma/client"
@@ -21,7 +21,6 @@ export async function GET(request: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    const isSystemAdmin = await isSystemAdminUser(session.user.id)
 
     const searchParams = request.nextUrl.searchParams
     const projectId = searchParams.get("projectId")
@@ -34,58 +33,56 @@ export async function GET(request: NextRequest) {
     const where: Prisma.TaskWhereInput = {}
     const andClauses: Prisma.TaskWhereInput[] = []
 
-    if (!isSystemAdmin) {
-      const workspaceMemberships = await prisma.workspaceMember.findMany({
-        where: { userId: session.user.id },
-        select: { workspaceId: true, role: true },
+    const workspaceMemberships = await prisma.workspaceMember.findMany({
+      where: { userId: session.user.id },
+      select: { workspaceId: true, role: true },
+    })
+
+    const adminWorkspaceIds = workspaceMemberships
+      .filter((membership) => hasProjectWideAccess(membership.role)) // BoD / One Above All (owner 13 Oct 2026)
+      .map((membership) => membership.workspaceId)
+
+    const memberWorkspaceIds = workspaceMemberships
+      .filter((membership) => !hasProjectWideAccess(membership.role)) // Manager + Staff: member projects only
+      .map((membership) => membership.workspaceId)
+
+    const accessScopes: Prisma.TaskWhereInput[] = []
+
+    if (adminWorkspaceIds.length > 0) {
+      accessScopes.push({
+        taskList: {
+          project: {
+            workspaceId: { in: adminWorkspaceIds },
+          },
+        },
       })
+    }
 
-      const adminWorkspaceIds = workspaceMemberships
-        .filter((membership) => hasProjectWideAccess(membership.role)) // BoD / One Above All (owner 13 Oct 2026)
-        .map((membership) => membership.workspaceId)
-
-      const memberWorkspaceIds = workspaceMemberships
-        .filter((membership) => !hasProjectWideAccess(membership.role)) // Manager + Staff: member projects only
-        .map((membership) => membership.workspaceId)
-
-      const accessScopes: Prisma.TaskWhereInput[] = []
-
-      if (adminWorkspaceIds.length > 0) {
-        accessScopes.push({
-          taskList: {
-            project: {
-              workspaceId: { in: adminWorkspaceIds },
+    if (memberWorkspaceIds.length > 0) {
+      accessScopes.push({
+        taskList: {
+          project: {
+            workspaceId: { in: memberWorkspaceIds },
+            members: {
+              some: { userId: session.user.id },
             },
           },
-        })
-      }
+        },
+      })
+    }
 
-      if (memberWorkspaceIds.length > 0) {
-        accessScopes.push({
-          taskList: {
-            project: {
-              workspaceId: { in: memberWorkspaceIds },
-              members: {
-                some: { userId: session.user.id },
-              },
-            },
-          },
-        })
-      }
+    // Your own tasks wherever they are (assigned to you): a Manager who isn't a member of a project any more
+    // (owner 13 Oct 2026, membership-only access) still sees the tasks they were given, as search does.
+    accessScopes.push({ assignees: { some: { userId: session.user.id } } })
 
-      // Your own tasks wherever they are (assigned to you): a Manager who isn't a member of a project any more
-      // (owner 13 Oct 2026, membership-only access) still sees the tasks they were given, as search does.
-      accessScopes.push({ assignees: { some: { userId: session.user.id } } })
+    if (accessScopes.length === 0) {
+      return NextResponse.json([])
+    }
 
-      if (accessScopes.length === 0) {
-        return NextResponse.json([])
-      }
-
-      if (accessScopes.length === 1) {
-        Object.assign(where, accessScopes[0])
-      } else {
-        andClauses.push({ OR: accessScopes })
-      }
+    if (accessScopes.length === 1) {
+      Object.assign(where, accessScopes[0])
+    } else {
+      andClauses.push({ OR: accessScopes })
     }
 
     if (projectId) {

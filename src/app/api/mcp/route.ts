@@ -8,7 +8,7 @@ import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js"
 import type { Prisma } from "@/generated/prisma/client"
 import prisma from "@/lib/prisma"
 import { sectionForStatus } from "@/lib/status-sections"
-import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
+import { checkProjectAccess } from "@/lib/rbac"
 import { getUserWorkspaceIds } from "@/lib/workspace-scope"
 import { logAudit } from "@/lib/audit"
 import { runAutomations } from "@/lib/automation-engine"
@@ -24,12 +24,11 @@ const forbidden = (msg = "Forbidden: kamu gak punya akses ke project ini.") => (
 const hasScope = (extra: { authInfo?: AuthInfo }, scope: string) => (extra.authInfo?.scopes ?? []).includes(scope)
 
 // The single source of truth for "which projects may this user READ" — identical rule to the web app's
-// GET /api/tasks: system admin → all (undefined = unrestricted); BOD/MANAGER/ONE_ABOVE_ALL workspaces →
-// every project in them; STAFF workspaces → only projects where they are a ProjectMember. This closes the
+// GET /api/tasks: BOD/ONE_ABOVE_ALL workspaces → every project in them; MANAGER/STAFF workspaces → only
+// projects where they are a ProjectMember. This closes the
 // gap where listing tasks without a projectId would otherwise expose tasks from projects a STAFF user
 // isn't a member of.
-async function accessibleProjectWhere(userId: string): Promise<Prisma.ProjectWhereInput | undefined> {
-  if (await isSystemAdminUser(userId)) return undefined
+async function accessibleProjectWhere(userId: string): Promise<Prisma.ProjectWhereInput> {
   const wsIds = await getUserWorkspaceIds(userId)
   const memberships = await prisma.workspaceMember.findMany({
     where: { userId, workspaceId: { in: wsIds } },
@@ -54,7 +53,7 @@ const handler = createMcpHandler(
         const userId = mcpUserId(extra)
         const where = await accessibleProjectWhere(userId)
         const projects = await prisma.project.findMany({
-          where: where ?? {},
+          where,
           select: { id: true, name: true, workspaceId: true, color: true },
           orderBy: { name: "asc" },
           take: 200,
@@ -98,7 +97,7 @@ const handler = createMcpHandler(
         const tasks = await prisma.task.findMany({
           where: {
             taskList: {
-              ...(projWhere ? { project: projWhere } : {}),
+              project: projWhere,
               ...(args.projectId ? { projectId: args.projectId } : {}),
             },
             ...(args.taskListId ? { taskListId: args.taskListId } : {}),

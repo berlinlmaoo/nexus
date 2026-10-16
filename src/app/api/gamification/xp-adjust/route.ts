@@ -16,13 +16,12 @@ export async function POST(req: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true, name: true } })
-    const isSysAdmin = me?.role === "ADMIN"
+    const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true } })
     // BoD+ of the COMPANY workspace only (every sign-up is One Above All of a personal workspace),
     // and the target must be a member of the company workspace too.
     const orgRole = await orgRoleOf(session.user.id)
     const isBoD = orgRole === "BOD" || orgRole === "ONE_ABOVE_ALL"
-    if (!isSysAdmin && !isBoD) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    if (!isBoD) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     const workspaceIds = [ORG_WORKSPACE_ID]
 
     const body = await req.json().catch(() => null)

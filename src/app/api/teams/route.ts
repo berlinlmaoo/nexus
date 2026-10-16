@@ -9,7 +9,6 @@ import { syncTeamProjectAccess, syncTeamMemberAccess, revokeTeamProjectAccess, r
 import { logAudit } from '@/lib/audit'
 import { getPrimaryWorkspaceDefaults } from '@/lib/workspace-defaults'
 import { isPrimaryTeamName, isPrimaryWorkspace } from '@/lib/primary-team'
-import { isSystemAdminUser } from '@/lib/rbac'
 import { canonicalEmail } from '@/lib/email-auth'
 
 async function getTeamContext(teamId: string, actorId: string) {
@@ -45,27 +44,22 @@ async function getTeamContext(teamId: string, actorId: string) {
     select: { role: true, attendanceRole: true },
   })
 
-  const isSystemAdmin = await isSystemAdminUser(actorId)
   const canManage = Boolean(
-    isSystemAdmin ||
-      (workspaceMembership &&
-        (workspaceMembership.role === 'BOD' ||
-          workspaceMembership.role === 'MANAGER' || workspaceMembership.role === 'ONE_ABOVE_ALL'))
+    workspaceMembership &&
+      (workspaceMembership.role === 'BOD' ||
+        workspaceMembership.role === 'MANAGER' || workspaceMembership.role === 'ONE_ABOVE_ALL')
   )
   const canManageAttendanceSettings = Boolean(
-    isSystemAdmin ||
-      (workspaceMembership &&
-        (workspaceMembership.role === 'BOD' ||
-          workspaceMembership.role === 'MANAGER' || workspaceMembership.role === 'ONE_ABOVE_ALL' ||
-          workspaceMembership.attendanceRole === 'SUPERVISOR'))
+    workspaceMembership &&
+      (workspaceMembership.role === 'BOD' ||
+        workspaceMembership.role === 'MANAGER' || workspaceMembership.role === 'ONE_ABOVE_ALL' ||
+        workspaceMembership.attendanceRole === 'SUPERVISOR')
   )
 
-  return { team, workspaceMembership, canManage, canManageAttendanceSettings, isSystemAdmin }
+  return { team, workspaceMembership, canManage, canManageAttendanceSettings }
 }
 
 async function canManageWorkspace(workspaceId: string, actorId: string) {
-  const isSystemAdmin = await isSystemAdminUser(actorId)
-  if (isSystemAdmin) return true
   const membership = await prisma.workspaceMember.findUnique({
     where: { userId_workspaceId: { userId: actorId, workspaceId } },
     select: { role: true },
@@ -93,7 +87,6 @@ export async function GET(req: NextRequest) {
     const session = await auth()
     const user = session?.user
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    const isSystemAdmin = await isSystemAdminUser(user.id)
 
     const workspaceMemberships = await prisma.workspaceMember.findMany({
       where: { userId: user.id },
@@ -103,9 +96,7 @@ export async function GET(req: NextRequest) {
     // Division list (grouping layer above teams). Returned to all members so the
     // grouped Crew Hub view can render section headers; only BoD/Manager edit them.
     if (req.nextUrl.searchParams.get('resource') === 'divisions') {
-      const divisionScope = isSystemAdmin
-        ? {}
-        : { workspaceId: { in: workspaceMemberships.map((m) => m.workspaceId) } }
+      const divisionScope = { workspaceId: { in: workspaceMemberships.map((m) => m.workspaceId) } }
       const divisions = await prisma.division.findMany({
         where: divisionScope,
         orderBy: [{ position: 'asc' }, { name: 'asc' }],
@@ -126,9 +117,6 @@ export async function GET(req: NextRequest) {
       .map((membership) => membership.workspaceId)
 
     const teamScopes: Prisma.TeamWhereInput[] = []
-    if (isSystemAdmin) {
-      teamScopes.push({})
-    }
     if (adminWorkspaceIds.length > 0) {
       teamScopes.push({ workspaceId: { in: adminWorkspaceIds } })
     }
@@ -194,9 +182,9 @@ export async function GET(req: NextRequest) {
     }).map((team) => ({
       ...team,
       isPrimaryTeam: isPrimaryWorkspace(team.workspace) && isPrimaryTeamName(team.name),
-      canManage: isSystemAdmin || adminWorkspaceIds.includes(team.workspaceId),
+      canManage: adminWorkspaceIds.includes(team.workspaceId),
       canManageAttendanceSettings:
-        isSystemAdmin || adminWorkspaceIds.includes(team.workspaceId) || attendanceSupervisorWorkspaceIds.includes(team.workspaceId),
+        adminWorkspaceIds.includes(team.workspaceId) || attendanceSupervisorWorkspaceIds.includes(team.workspaceId),
     }))
 
     return NextResponse.json(teams)

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { firstUnlinkableProject, workspaceItemWriteRefusal } from "@/lib/write-access"
-import { isWorkspaceMemberOrAdmin } from "@/lib/read-access"
+import { isWorkspaceMemberOf } from "@/lib/read-access"
 import { logAudit } from "@/lib/audit"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 
@@ -18,7 +18,7 @@ export async function GET(
     // Signed in is not enough (API.md E5): the portfolios list shows a workspace's portfolios to its members.
     const portfolioRef = await prisma.portfolio.findUnique({ where: { id: (await params).portfolioId }, select: { workspaceId: true } })
     if (!portfolioRef) return NextResponse.json({ error: "Portfolio not found" }, { status: 404 })
-    if (!(await isWorkspaceMemberOrAdmin(session.user.id, portfolioRef.workspaceId))) {
+    if (!(await isWorkspaceMemberOf(session.user.id, portfolioRef.workspaceId))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -108,7 +108,7 @@ export async function PATCH(
     if (!existing) {
       return NextResponse.json({ error: "Portfolio not found" }, { status: 404 })
     }
-    // Signed in is not enough (writes batch): members of the portfolio's workspace (or a system admin).
+    // Signed in is not enough (writes batch): members of the portfolio's workspace.
     const refusal = await workspaceItemWriteRefusal(session.user.id, existing.workspaceId)
     if (refusal) return refusal
 
@@ -117,7 +117,7 @@ export async function PATCH(
         return NextResponse.json({ error: "projectIds must be an array" }, { status: 400 })
       }
       // Only projects ADDED now are checked (same workspace, or one the caller can open); the list is
-      // sent whole, so the ones already in it (perhaps added by a system admin) are kept as they are.
+      // sent whole, so the ones already in it (perhaps added by someone else) are kept as they are.
       const linked = new Set(
         (await prisma.portfolioProject.findMany({ where: { portfolioId }, select: { projectId: true } })).map((row) => row.projectId),
       )
@@ -178,7 +178,7 @@ export async function DELETE(
     if (!existing) {
       return NextResponse.json({ error: "Portfolio not found" }, { status: 404 })
     }
-    // Signed in is not enough (writes batch): members of the portfolio's workspace (or a system admin).
+    // Signed in is not enough (writes batch): members of the portfolio's workspace.
     const refusal = await workspaceItemWriteRefusal(session.user.id, existing.workspaceId)
     if (refusal) return refusal
 

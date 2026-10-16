@@ -176,8 +176,8 @@ export function effectiveVisibility(s: CalendarSettings): CalendarVisibility {
 }
 
 /** Company role: ONE_ABOVE_ALL | BOD | MANAGER | STAFF, or null for a non-member. */
-export function inAudience(s: CalendarSettings, v: { userId: string; orgRole: string | null; isAdmin: boolean }): boolean {
-  if (v.isAdmin || s.audienceUserIds.includes(v.userId)) return true
+export function inAudience(s: CalendarSettings, v: { userId: string; orgRole: string | null }): boolean {
+  if (s.audienceUserIds.includes(v.userId)) return true
   if (s.audience === "all") return true
   if (v.orgRole === "ONE_ABOVE_ALL" || v.orgRole === "BOD") return true
   return s.audience === "managers" && v.orgRole === "MANAGER"

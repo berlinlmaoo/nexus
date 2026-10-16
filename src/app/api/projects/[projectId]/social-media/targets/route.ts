@@ -7,7 +7,7 @@ import { putSocialTargets, socialGate } from "@/lib/social-media-server"
 /**
  * Monthly targets per platform (owner, 14 Oct 2026). PUT { month, platforms: { [platformId]: { engagementTarget?,
  * postsTarget? } } }: a key left out keeps its value, null clears it. Full access (the Project
- * Owner, BoD / One Above All, a system admin); anyone else 403 SETTINGS_FORBIDDEN.
+ * Owner, BoD / One Above All); anyone else 403 SETTINGS_FORBIDDEN.
  */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
   try {

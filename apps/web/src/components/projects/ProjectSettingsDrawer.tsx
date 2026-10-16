@@ -147,14 +147,13 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   // Tabs follow the rule of every other project setting on the server (LEAD = Manager and above).
   const canManageTabs = (ORG_HIERARCHY[wsm.data?.role ?? ""] ?? 0) >= (ORG_HIERARCHY.MANAGER ?? 2);
   // Name, photo, status, auto assign and members follow the same server rule (PATCH /api/projects/:id,
-  // the icon upload and …/members need project LEAD = Manager and above, or a system admin). Staff saw all
+  // the icon upload and …/members need project LEAD = Manager and above). Staff saw all
   // of it live and every save ended in a bare "Couldn't save." (QA 13 Oct 2026): it is read-only for them
   // now, with one line saying who can change it. Until the role is known nothing is editable.
-  const profileQ = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1, staleTime: 60_000 });
   // The server says what this viewer may do here (GET /api/projects/:id viewerCanManage, lib/rbac.ts): a Staff
   // member who leads this project manages it too (owner, 13 Oct 2026). The org-role guess is only for an
   // older payload without the flag.
-  const canManage = project.viewerCanManage ?? (canManageTabs || profileQ.data?.user?.role === "ADMIN");
+  const canManage = project.viewerCanManage ?? canManageTabs;
   const roleKnown = project.viewerCanManage !== undefined || !!wsm.data;
   const saveErrorText = (e: unknown) => e instanceof ApiError && e.status === 403
     ? t("You need Full access to change this project's settings.")

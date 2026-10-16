@@ -9,31 +9,27 @@ export type LinkViewer = Pick<LegalActor, "userId" | "orgRole">
 
 // Linking a legal document to a project or a Pipeline deal (owner, 14 Oct 2026). Legal access doesn't widen
 // project access: you can link only what you can already open (the rule of lib/rbac.ts projectAccessLevel —
-// a PIPELINE board only for its members, other projects for BoD/One Above All or their members).
+// every project, Pipeline boards included, for BoD/One Above All; their own projects for everyone else).
 
-async function wide(actor: LinkViewer): Promise<boolean> {
-  const user = await prisma.user.findUnique({ where: { id: actor.userId }, select: { role: true } })
-  return user?.role === "ADMIN" || hasProjectWideAccess(actor.orgRole)
+function wide(actor: LinkViewer): boolean {
+  return hasProjectWideAccess(actor.orgRole)
 }
 
-async function visibleProjects(actor: LinkViewer): Promise<Prisma.ProjectWhereInput> {
-  const member = { members: { some: { userId: actor.userId } } }
-  if (!(await wide(actor))) return { workspaceId: ORG_WORKSPACE_ID, ...member }
-  return { workspaceId: ORG_WORKSPACE_ID, OR: [{ type: { not: "PIPELINE" } }, member] }
+function visibleProjects(actor: LinkViewer): Prisma.ProjectWhereInput {
+  if (wide(actor)) return { workspaceId: ORG_WORKSPACE_ID }
+  return { workspaceId: ORG_WORKSPACE_ID, members: { some: { userId: actor.userId } } }
 }
 
-/** Deals live on PIPELINE boards, which are for their members only. */
-async function visibleDeals(actor: LinkViewer): Promise<Prisma.PipelineDealWhereInput> {
-  const user = await prisma.user.findUnique({ where: { id: actor.userId }, select: { role: true } })
-  if (user?.role === "ADMIN") return { project: { workspaceId: ORG_WORKSPACE_ID } }
-  return { project: { workspaceId: ORG_WORKSPACE_ID, members: { some: { userId: actor.userId } } } }
+/** Deals live on PIPELINE boards, which follow the same project rule. */
+function visibleDeals(actor: LinkViewer): Prisma.PipelineDealWhereInput {
+  return { project: visibleProjects(actor) }
 }
 
 export async function searchLinks(actor: LinkViewer, q: string) {
   const needle = q.trim().slice(0, 100)
   const [projects, deals] = await Promise.all([
     prisma.project.findMany({
-      where: { AND: [await visibleProjects(actor), { type: { not: "PIPELINE" } }, needle ? { name: { contains: needle, mode: "insensitive" } } : {}] },
+      where: { AND: [visibleProjects(actor), { type: { not: "PIPELINE" } }, needle ? { name: { contains: needle, mode: "insensitive" } } : {}] },
       select: { id: true, name: true },
       orderBy: { updatedAt: "desc" },
       take: 15,
@@ -41,7 +37,7 @@ export async function searchLinks(actor: LinkViewer, q: string) {
     prisma.pipelineDeal.findMany({
       where: {
         AND: [
-          await visibleDeals(actor),
+          visibleDeals(actor),
           needle ? { OR: [{ name: { contains: needle, mode: "insensitive" } }, { code: { contains: needle, mode: "insensitive" } }, { brand: { contains: needle, mode: "insensitive" } }] } : {},
         ],
       },
@@ -55,8 +51,8 @@ export async function searchLinks(actor: LinkViewer, q: string) {
 
 /** Null when the actor may link it, else why not. `undefined`/null ids are always fine (no link). */
 export async function linkProblem(actor: LinkViewer, projectId?: string | null, dealId?: string | null): Promise<string | null> {
-  if (projectId && !(await prisma.project.count({ where: { AND: [{ id: projectId }, await visibleProjects(actor)] } }))) return "Project not found"
-  if (dealId && !(await prisma.pipelineDeal.count({ where: { AND: [{ id: dealId }, await visibleDeals(actor)] } }))) return "Deal not found"
+  if (projectId && !(await prisma.project.count({ where: { AND: [{ id: projectId }, visibleProjects(actor)] } }))) return "Project not found"
+  if (dealId && !(await prisma.pipelineDeal.count({ where: { AND: [{ id: dealId }, visibleDeals(actor)] } }))) return "Deal not found"
   return null
 }
 
@@ -68,8 +64,8 @@ export async function redactLinks<T extends { project: { id: string } | null; de
   const projectIds = [...new Set(docs.map((d) => d.project?.id).filter((x): x is string => !!x))]
   const dealIds = [...new Set(docs.map((d) => d.deal?.id).filter((x): x is string => !!x))]
   const [projects, deals] = await Promise.all([
-    projectIds.length ? prisma.project.findMany({ where: { AND: [{ id: { in: projectIds } }, await visibleProjects(actor)] }, select: { id: true } }) : [],
-    dealIds.length ? prisma.pipelineDeal.findMany({ where: { AND: [{ id: { in: dealIds } }, await visibleDeals(actor)] }, select: { id: true } }) : [],
+    projectIds.length ? prisma.project.findMany({ where: { AND: [{ id: { in: projectIds } }, visibleProjects(actor)] }, select: { id: true } }) : [],
+    dealIds.length ? prisma.pipelineDeal.findMany({ where: { AND: [{ id: { in: dealIds } }, visibleDeals(actor)] }, select: { id: true } }) : [],
   ])
   const okP = new Set(projects.map((p) => p.id))
   const okD = new Set(deals.map((d) => d.id))

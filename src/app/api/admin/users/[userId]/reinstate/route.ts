@@ -32,7 +32,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       where: { id: userId },
       select: {
         id: true,
-        role: true,
         deactivatedAt: true,
         workspaceMembers: { where: { workspaceId: ORG_WORKSPACE_ID }, select: { role: true } },
         formerMemberships: { where: { workspaceId: ORG_WORKSPACE_ID }, select: { role: true } },
@@ -41,10 +40,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const denied = offboardAuthorityError({
       action: "reinstate",
       actorId,
-      actorIsSystemAdmin: context.isSystemAdmin,
       actorCompanyRole: context.orgRole,
       targetId: userId,
-      targetSystemRole: target?.role ?? "MEMBER",
       // The role they had in the company (or have, if someone re-added them meanwhile).
       targetCompanyRole: target?.workspaceMembers[0]?.role ?? target?.formerMemberships[0]?.role ?? null,
     })
@@ -53,7 +50,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!target.deactivatedAt) {
       return NextResponse.json({ error: "Akun ini tidak sedang di-offboard.", code: "NOT_OFFBOARDED" }, { status: 409 })
     }
-    if (target.formerMemberships.length === 0 && target.workspaceMembers.length === 0 && !context.isSystemAdmin) {
+    if (target.formerMemberships.length === 0 && target.workspaceMembers.length === 0) {
       return NextResponse.json(
         { error: "Orang ini dulu bukan anggota workspace perusahaan.", code: "NOT_MEMBER" },
         { status: 409 },

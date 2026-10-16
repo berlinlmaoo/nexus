@@ -18,19 +18,14 @@ export type AuditAccess =
   | { ok: true; allSeeing: boolean; scope: Prisma.AuditLogWhereInput }
 
 export async function resolveAuditAccess(userId: string): Promise<AuditAccess> {
-  const [memberships, user] = await Promise.all([
-    prisma.workspaceMember.findMany({
-      where: { userId },
-      select: { workspaceId: true, role: true },
-    }),
-    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
-  ])
+  const memberships = await prisma.workspaceMember.findMany({
+    where: { userId },
+    select: { workspaceId: true, role: true },
+  })
 
-  const isGlobalAdmin = user?.role === 'ADMIN'
-  // All-seeing = system admin or One Above All of the COMPANY workspace. Being ONE_ABOVE_ALL of any
-  // other workspace is what every sign-up gets for their personal workspace, so it only scopes.
-  const isAllSeeing =
-    isGlobalAdmin || memberships.some((m) => m.workspaceId === ORG_WORKSPACE_ID && m.role === 'ONE_ABOVE_ALL')
+  // All-seeing = One Above All of the COMPANY workspace. Being ONE_ABOVE_ALL of any other workspace is
+  // what every sign-up gets for their personal workspace, so it only scopes.
+  const isAllSeeing = memberships.some((m) => m.workspaceId === ORG_WORKSPACE_ID && m.role === 'ONE_ABOVE_ALL')
   const adminWorkspaceIds = memberships
     .filter((m) => m.role === 'BOD' || m.role === 'MANAGER' || m.role === 'ONE_ABOVE_ALL')
     .map((m) => m.workspaceId)

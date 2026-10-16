@@ -40,7 +40,7 @@ export function previousMonthKey(now = new Date()): string {
 
 /**
  * Who may read whose reflections: yourself, your direct reports (Bagan Approval), and everyone
- * if you manage attendance (BoD / One Above All / system admin). Same rule as the history board.
+ * if you manage attendance (BoD / One Above All). Same rule as the history board.
  */
 export async function reflectionAccess(viewerId: string, targetUserId: string | null | undefined) {
   const ctx = await getAttendanceWorkspaceContext(viewerId)

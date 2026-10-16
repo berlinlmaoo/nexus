@@ -17,8 +17,8 @@ import { canDeleteGroup, isRoomAdmin, MESSAGE_KIND_SYSTEM, orderInfoMembers } fr
  * Same access as the messages route (conversationAccess): a project room by the project's rules, a
  * group/DM by a member row while still in the room's workspace.
  *
- *   isAdmin    MANAGER, BOD or ONE_ABOVE_ALL in the room's workspace, or a system admin — the people who
- *              may add and remove members (owner, 8 Oct 2026). A room without a workspace: admins only.
+ *   isAdmin    MANAGER, BOD or ONE_ABOVE_ALL in the room's workspace — the people who may add and remove
+ *              members (owner, 8 Oct 2026). A room without a workspace: nobody.
  *   canEdit    may change the name and the description: any member of a GROUP. Project rooms and DMs: no.
  *   canDelete  may delete the group (DELETE /api/conversations/:id, 9 Oct 2026): canManageMembers, or
  *              being its only remaining member — who can no longer leave it (LAST_MEMBER). GROUP only.
@@ -40,7 +40,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ con
       select: {
         id: true, type: true, name: true, description: true, projectId: true, workspaceId: true, createdAt: true,
         project: { select: { name: true } },
-        members: { select: { userId: true, user: { select: { id: true, name: true, avatar: true, deactivatedAt: true, role: true } } } },
+        members: { select: { userId: true, user: { select: { id: true, name: true, avatar: true, deactivatedAt: true } } } },
       },
     })
     if (!convo) return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -71,7 +71,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ con
         name: m.user.name,
         avatar: m.user.avatar,
         isMe: m.userId === userId,
-        isAdmin: isRoomAdmin({ workspaceRole: roleOf.get(m.userId) ?? null, systemRole: m.user.role }),
+        isAdmin: isRoomAdmin({ workspaceRole: roleOf.get(m.userId) ?? null }),
         deactivatedAt: m.user.deactivatedAt,
       })),
     )

@@ -16,7 +16,7 @@ const h = vi.hoisted(() => ({
 vi.mock('@/lib/audit', () => ({ logAudit: vi.fn() }))
 vi.mock('@/lib/socket-emitter', () => ({ emitOutletSalesChanged: vi.fn() }))
 vi.mock('@/lib/deletion-snapshot', () => ({ restorableDelete: vi.fn() }))
-vi.mock('@/lib/rbac', () => ({ checkProjectAccess: vi.fn(), isSystemAdminUser: vi.fn(), hasProjectLevel: vi.fn() }))
+vi.mock('@/lib/rbac', () => ({ checkProjectAccess: vi.fn(), hasProjectLevel: vi.fn() }))
 vi.mock('@/lib/prisma', () => {
   const withRow = (data: Record<string, unknown>) => ({
     ...h.event,

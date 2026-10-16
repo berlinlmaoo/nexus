@@ -83,7 +83,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Z Networks workspace role is managed automatically" }, { status: 400 })
     }
 
-    const denied = await membershipChangeError(session.user.id, context.isSystemAdmin, target.workspaceId, {
+    const denied = await membershipChangeError(session.user.id, target.workspaceId, {
       targetUserId: target.userId,
       currentRole: target.role,
       newRole: role,
@@ -159,7 +159,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Z Networks membership is required for all users" }, { status: 400 })
     }
 
-    const denied = await membershipChangeError(session.user.id, context.isSystemAdmin, target.workspaceId, {
+    const denied = await membershipChangeError(session.user.id, target.workspaceId, {
       targetUserId: target.userId,
       currentRole: target.role,
     })
