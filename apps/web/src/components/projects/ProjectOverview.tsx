@@ -95,11 +95,15 @@ function Section({ title, icon, action, children, className, id, pinHead, headEx
     </div>
   );
   const snapRow = useSnapRow();
+  // In the column whose cards are no snap points (it scrolls along with the long one), every card's head is pinned:
+  // where that column is cut under the header, the card there still shows its title (UI tour run 19, R19-WD-R2:
+  // "Sections" lost its title). Its rows already carry no snap point.
+  const pinned = pinHead || snapRow === undefined;
   return (
     // A card stops whole under the pinned project header while the page scrolls (UI tour run 15, R15-WB-1).
     // `overflow-clip` (not hidden) when the head is pinned: a sticky head cannot stick inside an overflow-hidden box.
-    <section aria-labelledby={id} data-snap-row={snapRow} className={cn(CARD, "min-w-0", pinHead ? "overflow-clip" : "overflow-hidden", className)}>
-      {pinHead ? (
+    <section aria-labelledby={id} data-snap-row={snapRow} className={cn(CARD, "min-w-0", pinned ? "overflow-clip" : "overflow-hidden", className)}>
+      {pinned ? (
         <div ref={headRef} className="sticky top-[var(--page-sticky-top,0px)] z-[5] rounded-t-2xl bg-card md:top-[calc(var(--page-sticky-top,0px)+1rem)]">
           {head}
           {headExtra}
@@ -116,9 +120,8 @@ const linkBtn = "inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 te
  * The Overview's two columns on a wide screen (UI tour run 16, R16-WB-1: the page snaps to one column's cards, so
  * the other column was left with a card cut mid-way under the header). The shorter column sticks under the header
  * when it fits the screen, so only the long one scrolls and snaps; its own cards are then no snap points. When it
- * does not fit, it scrolls too, with a soft fade at its top under the header, so a card there is never hard-cut;
- * its cards are no snap points then either (run 19, R19-WD-R2), so the page rests on the long column's cards.
- * At rest that fade sits in the page padding above the column (-mt-8), so it never dims the first card.
+ * does not fit, it scrolls too; its cards are no snap points then either and each pins its head under the header
+ * (run 19, R19-WD-R2), so the page rests on the long column's cards and the short one still names its card.
  */
 function useColumnPin() {
   const leftRef = useRef<HTMLDivElement>(null);
@@ -147,9 +150,8 @@ function useColumnPin() {
   }, []);
   const classOf = (side: "left" | "right") => {
     if (state.side !== side) return "";
-    return state.fits
-      ? "lg:sticky lg:top-[calc(var(--page-sticky-top,0px)+1rem)]"
-      : "lg:before:pointer-events-none lg:before:sticky lg:before:top-[var(--page-sticky-top,0px)] lg:before:z-10 lg:before:-mt-8 lg:before:block lg:before:h-8 lg:before:bg-gradient-to-b lg:before:from-card lg:before:to-transparent lg:before:content-['']";
+    // Not fitting: no top fade any more, its cards pin their heads instead (Section, run 19 R19-WD-R2).
+    return state.fits ? "lg:sticky lg:top-[calc(var(--page-sticky-top,0px)+1rem)]" : "";
   };
   // The shorter column's cards stop being snap points: the column carries data-snap-off (styles.css), and its cards
   // and rows drop data-snap-row (SnapOff context), so SnapTail and the UI tour, which look for that attribute, skip
