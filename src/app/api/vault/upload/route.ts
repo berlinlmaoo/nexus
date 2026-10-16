@@ -15,6 +15,12 @@ import {
   newStorageKey,
   ensureStorageDir,
   assertQuota,
+  assertLiveFolderTx,
+  lockVaultQuota,
+  lockVaultTree,
+  vaultQuotaProblemTx,
+  withFreeName,
+  VaultWriteRefused,
   VAULT_ITEM_INCLUDE,
   serializeVaultItem,
   type VaultItemRow,
@@ -65,13 +71,9 @@ export async function POST(request: NextRequest) {
     const quotaError = await assertQuota(actor.workspaceId, file.size)
     if (quotaError) return NextResponse.json({ error: quotaError }, { status: 507 })
 
-    const name = await uniqueNameInFolder(
-      actor.workspaceId,
-      parentId,
-      cleanItemName(file.name, "Berkas"),
-    )
-
-    const storageKey = newStorageKey(file.name || name)
+    const desiredName = cleanItemName(file.name, "Berkas")
+    const workspaceId = actor.workspaceId
+    const storageKey = newStorageKey(file.name || desiredName)
     finalPath = await ensureStorageDir(storageKey)
 
     // Write to a temp name and rename into place: a reader (or the backup timer, which walks this
@@ -85,25 +87,37 @@ export async function POST(request: NextRequest) {
       return Number.isFinite(n) && n > 0 && n < 100000 ? Math.round(n) : null
     }
 
-    const created = await prisma.vaultItem.create({
-      data: {
-        kind: "FILE",
-        name,
-        parentId,
-        workspaceId: actor.workspaceId,
-        uploaderId: actor.userId,
-        ownerId: actor.userId,
-        storageKey,
-        mimeType: resolveMime(file.type, file.name),
-        size: buffer.byteLength,
-        // Sent by the client because the server has no image library. Used only to reserve the right
-        // aspect box so the grid doesn't jump when a thumbnail loads.
-        width: num(form.get("width")),
-        height: num(form.get("height")),
-      },
-      include: VAULT_ITEM_INCLUDE,
-    })
+    // The row, under the Vault's locks (race audit 16 Oct 2026, H10/M16): the folder is still live, the
+    // quota is re-summed with every other upload held off, and the name is picked there (a unique index
+    // refuses a duplicate; withFreeName then picks again).
+    const created = await withFreeName(() => prisma.$transaction(async (tx) => {
+      await lockVaultTree(tx, workspaceId, "shared")
+      await lockVaultQuota(tx, workspaceId)
+      await assertLiveFolderTx(tx, workspaceId, parentId)
+      const full = await vaultQuotaProblemTx(tx, workspaceId, buffer.byteLength)
+      if (full) throw new VaultWriteRefused(507, { error: full, code: "VAULT_FULL" })
+      const name = await uniqueNameInFolder(workspaceId, parentId, desiredName, undefined, tx)
+      return tx.vaultItem.create({
+        data: {
+          kind: "FILE",
+          name,
+          parentId,
+          workspaceId,
+          uploaderId: actor.userId,
+          ownerId: actor.userId,
+          storageKey,
+          mimeType: resolveMime(file.type, file.name),
+          size: buffer.byteLength,
+          // Sent by the client because the server has no image library. Used only to reserve the right
+          // aspect box so the grid doesn't jump when a thumbnail loads.
+          width: num(form.get("width")),
+          height: num(form.get("height")),
+        },
+        include: VAULT_ITEM_INCLUDE,
+      })
+    }))
     committed = true
+    const name = created.name
 
     logAudit({
       action: "create",
@@ -118,6 +132,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(serializeVaultItem(created as unknown as VaultItemRow, actor), { status: 201 })
   } catch (error) {
+    if (error instanceof VaultWriteRefused) return NextResponse.json(error.body, { status: error.status })
     console.error("[vault] upload failed:", error)
     return NextResponse.json({ error: "Failed to upload" }, { status: 500 })
   } finally {

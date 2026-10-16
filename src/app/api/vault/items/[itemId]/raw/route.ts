@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { serveFile } from "@/lib/file-response"
-import { getVaultActor, canReadItem, storagePath } from "@/lib/vault"
+import { getVaultActor, canReadItem, storagePath, vaultEtag } from "@/lib/vault"
 
 // GET /api/vault/items/<id>/raw[?download=1][&v=<content version>]
 //
@@ -30,6 +30,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const wantsDownload = request.nextUrl.searchParams.has("download")
     return serveFile(request, storagePath(item.storageKey), {
       filename: item.name,
+      // Changes with the bytes (a replace), so If-Range never stitches two versions together.
+      etag: vaultEtag(item.storageKey),
       // The stored type when the table knows it (a HEIC photo is image/heic, so Safari shows it).
       mimeType: item.mimeType,
       forceDownload: wantsDownload,
