@@ -57,7 +57,7 @@ export function hiddenTabsOf(project?: Pick<NexusProject, "hiddenTabs"> | null):
  * "Content Planner" card became the Content Plan template; CONTENT stays a type nobody creates.
  *
  * Project types offered when creating a project. TASK; since 9 Oct 2026 PIPELINE (the GM's pipeline board —
- * components/pipeline); since 10 Oct 2026 OUTLET_SALES (owner, for Ryan: one project per outlet —
+ * components/pipeline); since 10 Oct 2026 OUTLET_SALES (owner, for the outlet team: one project per outlet —
  * components/outlet-sales), in the place the Finance Dashboard card had. Content Planner waits for
  * the owner's references.
  */

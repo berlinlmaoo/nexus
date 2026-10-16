@@ -12,7 +12,7 @@ export function isSystemMessage(m: Pick<NexusMessage, "kind"> | null | undefined
   return m?.kind === "SYSTEM";
 }
 
-/** "Mira" · "Mira and Yuda" · "Mira, Yuda and Anita" (ID: "… dan …"). */
+/** "Mira" · "Mira and Yoga" · "Mira, Yoga and Anita" (ID: "… dan …"). */
 export function joinNames(names: string[]): string {
   const list = names.filter((n) => n.trim());
   if (list.length <= 1) return list[0] ?? "";

@@ -77,7 +77,7 @@ test("A3 3 Oct: sections Finance & Tech, Framework Agency, PATS, Suwara", () => 
   const g = golden["2026-10-03.bod.top.json"]
   assert.deepEqual(g.tree.root.children.map((c) => c.unit), ["Finance & Tech", "Framework Agency", "PATS", "Suwara"])
 })
-test("A5 by person: Dava under Project Management, Hary with 2 tasks under Multimedia", () => {
+test("A5 by person: a PM member under Project Management, a member with 2 tasks under Multimedia", () => {
   const g = golden["2026-09-18.bod.fa.json"]
   const pm = g.tree.root.children.find((c) => c.unit === "Project Management")
   assert.deepEqual(pm.people.map((p) => p.userId), [person("Person 14").userId])
@@ -121,8 +121,8 @@ test("overdue: within the window red, older grey, done never", () => {
 })
 test("filters: mine, my division, people, projects, priority, hide done", () => {
   const items = sg("items-2026-09-18.bod.json")
-  const hary = person("Person 19").userId
-  const ctx = { ix, meId: hary, myHomes: person("Person 19").homeUnitIds, today: TODAY, nowMs: NOW, windowDays: WINDOW }
+  const viewer = person("Person 19").userId
+  const ctx = { ix, meId: viewer, myHomes: person("Person 19").homeUnitIds, today: TODAY, nowMs: NOW, windowDays: WINDOW }
   const f = (patch) => core.filterItems(items, { ...core.NO_FILTERS, ...patch }, ctx).length
   assert.equal(f({}), 5)
   assert.equal(f({ scope: "me" }), 2)

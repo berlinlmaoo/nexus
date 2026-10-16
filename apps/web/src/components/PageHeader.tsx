@@ -90,8 +90,9 @@ export function PageHeader({
       {icon && <div className="shrink-0 text-2xl sm:mt-0.5">{icon}</div>}
       <div className="min-w-0">
         {/* Compact (project) header on a phone: a long name takes two lines instead of being cut beside the
-            icon buttons (UI tour run 13, W-M15). */}
-        <h1 className={cn("text-xl md:text-2xl font-semibold tracking-tight truncate", compact && "max-sm:line-clamp-2 max-sm:whitespace-normal max-sm:break-words max-sm:text-lg max-sm:leading-snug")}>{title}</h1>
+            icon buttons (UI tour run 13, W-M15), balanced, so the second line is never one orphaned word (UI tour
+            run 20, R20-WM-12: "ZZ QA Social Media / Report"). */}
+        <h1 className={cn("text-xl md:text-2xl font-semibold tracking-tight truncate", compact && "max-sm:line-clamp-2 max-sm:whitespace-normal max-sm:break-words max-sm:text-lg max-sm:leading-snug max-sm:[text-wrap:balance]")}>{title}</h1>
         {subtitle && <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground max-md:hidden">{subtitle}</p>}
       </div>
     </div>

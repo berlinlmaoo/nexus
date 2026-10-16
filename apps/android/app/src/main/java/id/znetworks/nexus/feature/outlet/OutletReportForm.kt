@@ -60,7 +60,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 
 /**
- * "Report form" (OUTLET-SALES §7): pick the night (or a new one), fill Ryan's questions as the server's form lists
+ * "Report form" (OUTLET-SALES §7): pick the night (or a new one), fill the outlet team's questions as the server's form lists
  * them, save. A new event sends what is filled; an existing one sends only the keys that changed.
  */
 @Composable

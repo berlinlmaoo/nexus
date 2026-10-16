@@ -32,8 +32,8 @@ class OffboardTest {
 
     @Test fun offboardResult() {
         val r = NexusJson.decodeFromString(OffboardResult.serializer(), """{"ok":true,"user":{"id":"a","name":"Rina"},"leftAt":"2026-10-10T00:00:00.000Z",
-            "lastWorkingDay":"2026-10-10","workspaces":["Z Networks"],"approverEdgesCleared":[{"id":"x","name":"Dimas"}],"pendingRequests":2,"autoDeductionsCanceled":1,"openTasks":5}""")
-        assertEquals(listOf("Dimas"), r.approverEdgesCleared.map { it.name })
+            "lastWorkingDay":"2026-10-10","workspaces":["Z Networks"],"approverEdgesCleared":[{"id":"x","name":"Doni"}],"pendingRequests":2,"autoDeductionsCanceled":1,"openTasks":5}""")
+        assertEquals(listOf("Doni"), r.approverEdgesCleared.map { it.name })
         assertEquals(5, r.openTasks)
     }
 
@@ -81,7 +81,7 @@ class OffboardTest {
     @Test fun recapsMarkWhoLeft() {
         val h = NexusJson.decodeFromString(HistoryResponse.serializer(), """{"records":[
             {"id":"r1","attendanceDate":"2026-10-01T00:00:00.000Z","checkInAt":"2026-10-01T01:00:00.000Z","user":{"id":"a","name":"Rina","leftAt":"2026-10-03T00:00:00.000Z"}}],
-            "roster":[{"id":"a","name":"Rina","leftAt":"2026-10-03T00:00:00.000Z"},{"id":"b","name":"Dimas"}]}""")
+            "roster":[{"id":"a","name":"Rina","leftAt":"2026-10-03T00:00:00.000Z"},{"id":"b","name":"Doni"}]}""")
         val board = BoardModel.members(h.records, "v", "Viewer", h.roster)
         assertEquals("2026-10-03T00:00:00.000Z", board.first { it.id == "a" }.leftAt)
         assertNull(board.first { it.id == "b" }.leftAt)

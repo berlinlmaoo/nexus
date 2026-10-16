@@ -61,7 +61,7 @@ export const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/
  * proposeAttendanceCorrection below; that never restores an allowance. A PENALTY CANCELLATION always does — the day-off allowance that people complain about losing is, in
  * every case seen so far, the nightly cron's AUTO deduction (alpha / late >120), and approving a
  * cancellation already restores that allowance together with the XP (`autoDayOffs`). Keeping DAY_OFF
- * locked out of that remedy meant Violet's ticket (13 Sep 2026: permit cancelled, sick, one day-off
+ * locked out of that remedy meant a staff member's ticket (13 Sep 2026: permit cancelled, sick, one day-off
  * cut) got an answer and no proposal — the exact "solved but nothing happened" the BoD complained
  * about. So `openProposal` takes `allowDayOff`, set only by the cancellation remedy. GIDEON still
  * cannot touch a day off the person CHOSE: a cancellation with nothing auto-deducted is refused below.
@@ -332,7 +332,7 @@ async function openProposal(
     throw new Error(`reason is required (min ${CORRECTION_REASON_MIN} chars) — the BoD approves on this sentence alone`)
   }
   // The reason is what the BoD reads on the approval card, on a phone. A 900-character essay there
-  // (Farchan, 16 Sep 2026) is skipped, not read — and the model happily writes one unless refused.
+  // (a staff member, 16 Sep 2026) is skipped, not read — and the model happily writes one unless refused.
   if (reason.length > CORRECTION_REASON_READABLE_MAX) {
     throw new Error(`reason terlalu panjang (${reason.length} > ${CORRECTION_REASON_READABLE_MAX} karakter): tulis 1–2 kalimat — tanggal, sebab, apa yang diusulkan`)
   }

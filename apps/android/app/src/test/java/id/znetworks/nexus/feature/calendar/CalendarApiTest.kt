@@ -98,10 +98,10 @@ class CalendarApiTest {
         val byProject = day.filter { it.placement == PlacedBy.PROJECT }
         assertEquals(3, byProject.size)
         assertTrue(byProject.all { it.placements.single().let { p -> structure.unitById[p.unitId]?.name == "PATS Entertainment" } })
-        // Fortunatus is flagged as not in the chart.
-        val fortunatus = "cmnr9lfd3000701rq5ev4pkfv"
+        // A member outside the chart is flagged as not in it.
+        val outsider = "cmnr9lfd3000701rq5ev4pkfv"
         // A company member with no card in the Bagan.
-        assertEquals(1, day.count { fortunatus in it.unplacedIds }); assertTrue(structure.personById.getValue(fortunatus).homeUnitIds.isEmpty())
+        assertEquals(1, day.count { outsider in it.unplacedIds }); assertTrue(structure.personById.getValue(outsider).homeUnitIds.isEmpty())
         assertEquals(1, day.count { it.noStatus })
         assertEquals(items("2026-09-18", "bod").items.map { it.key }, items("2026-09-18", "staff").items.map { it.key })
     }

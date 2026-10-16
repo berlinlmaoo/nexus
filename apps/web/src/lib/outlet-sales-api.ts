@@ -1,11 +1,11 @@
 import { apiFetch } from "@/lib/nexus-api";
 
 /**
- * The Outlet Sales Dashboard API (owner, 10 Oct 2026, for Ryan; Project.type "OUTLET_SALES"):
+ * The Outlet Sales Dashboard API (owner, 10 Oct 2026, for the outlet team; Project.type "OUTLET_SALES"):
  * GET /api/projects/:id/outlet-sales?month=YYYY-MM, POST …/outlet-sales/events,
  * GET/PATCH/DELETE …/outlet-sales/events/:eventId, GET/PUT …/outlet-sales/targets.
  * Server: src/lib/outlet-sales.ts (rules) and src/lib/outlet-sales-server.ts. Spec for the apps:
- * agents:~/handoff/chat/OUTLET-SALES.md.
+ * the OUTLET-SALES handoff spec.
  */
 
 export type OutletPerson = { id: string; name: string | null; avatar: string | null };

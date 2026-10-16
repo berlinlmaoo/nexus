@@ -24,7 +24,7 @@ export type ProjectType = (typeof PROJECT_TYPES)[number]
 /**
  * The types that can be created today. The rest answer TYPE_COMING_SOON. PIPELINE since 9 Oct 2026
  * (owner: the GM's pipeline board, rebuilt in NEXUS — routes under /api/projects/:id/pipeline, rules in
- * lib/pipeline.ts). OUTLET_SALES since 10 Oct 2026 (owner, for Ryan: "Outlet Sales Dashboard" takes the
+ * lib/pipeline.ts). OUTLET_SALES since 10 Oct 2026 (owner, for the outlet team: "Outlet Sales Dashboard" takes the
  * place of the Finance Dashboard card in the picker; one project = one outlet, as many as needed — routes
  * under /api/projects/:id/outlet-sales, rules in lib/outlet-sales.ts). FINANCE stays a known type that
  * cannot be created (no client offers it any more); Content Planner waits for the owner's references.

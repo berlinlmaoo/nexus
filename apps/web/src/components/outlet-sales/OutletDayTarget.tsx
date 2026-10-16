@@ -14,7 +14,7 @@ function digitsOf(v: string): number | null {
 const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "" : new Intl.NumberFormat("id-ID").format(Math.round(n)));
 
 /**
- * The calendar's picked day against its target (owner, 14 Oct 2026, after a meeting with Ryan): the day's
+ * The calendar's picked day against its target (owner, 14 Oct 2026, after a meeting with the outlet team): the day's
  * sales and pax (its events added up) against the target in force — the day's own, else the month's
  * target split over its days, per metric. Those who set the monthly target can give the day its own
  * sales target, pax target, or both; an empty box = the month's share again. Numbers from the server

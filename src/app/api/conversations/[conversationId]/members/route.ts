@@ -24,7 +24,7 @@ const memberInclude = {
  * group with its first members (POST /api/conversations) is unchanged.
  *
  * Each change leaves a log line in the group, in the same transaction (chat-system.ts): "Budi added
- * Mira and Yuda" (only the people really added), "Budi removed Mira", "Mira left". The people added get
+ * Mira and Yoga" (only the people really added), "Budi removed Mira", "Mira left". The people added get
  * one push each from that line — it replaces the "X added you to Y" Inbox notification written here
  * until then.
  */

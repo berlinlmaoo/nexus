@@ -37,6 +37,7 @@ import { holdProject, patchTaskInCaches } from "@/lib/task-cache";
 import { canDragTask, DragHandle, useGroupMove } from "@/components/projects/views/group-move";
 import { useTouchDrag } from "@/components/projects/views/touch-drag";
 import { useProjectCanEdit } from "@/components/projects/project-access";
+import { EdgeArrows } from "@/components/EdgeArrows";
 
 const TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"];
 const TASK_PRIORITIES = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"];
@@ -192,9 +193,10 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
     ? <DragHandle onDragStart={(e) => mover.startDrag(e, task, gKey, subKey)} onDragEnd={mover.endDrag} className="group-hover:opacity-100" />
     : null);
   const row = (task: NexusTask, handle: ReactNode = null) => (
-    // One row height for every row (UI tour run 14, WD-11: a link or file cell made some rows taller): two
-    // lines of name fit, and a cell never grows the row.
-    <div key={task.id} {...bulk.bindRow(task)} className={cn("group grid h-12 snap-start items-stretch border-b border-border text-sm hover:bg-muted/40", bulk.isSelected(task.id) && "bg-accent")} style={{ gridTemplateColumns: gridTemplate }}>
+    // One row height for every row (UI tour run 14, WD-11: a link or file cell made some rows taller), and a cell
+    // never grows the row. From md a denser 36px row with the name on one line, as Notion (UI tour run 20, R20-WD-7:
+    // rows were ~48px); a phone keeps two lines of name.
+    <div key={task.id} {...bulk.bindRow(task)} className={cn("group grid h-12 md:h-9 snap-start items-stretch border-b border-border text-sm hover:bg-muted/40", bulk.isSelected(task.id) && "bg-accent")} style={{ gridTemplateColumns: gridTemplate }}>
       <NameCell key={task.title} task={task} handle={handle} onRename={(title) => patchTask(task.id, { title })} onOpen={() => onOpen(task)} />
       {columns.map((key) => (
         <div key={key} className="relative flex min-w-0 items-center overflow-hidden border-l border-border px-1.5 py-1 [&>*]:min-w-0 [&>*]:flex-1">
@@ -226,6 +228,10 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
           fades (W-D2: "Kategori" ended hard at the edge). Phone: the box runs down to the tab bar (W-M23). */}
       {/* Rows snap whole under the pinned column names (UI tour run 15, R15-WB-1 / R15-WM-3); the header row
           has a set height so the snap offset is exact. */}
+      <div className="relative">
+      {/* The header's right end says when more columns lie that way (UI tour run 20, R20-WM-6: a glyph sliver of
+          the third column's name sat at the edge); the rows keep their fade. */}
+      <EdgeArrows target={scrollRef} sides="right" className="right-px top-px h-[35px] rounded-tr-lg" />
       <div ref={scrollRef} data-snap-box style={{ "--snap-box-head": "36px" } as CSSProperties} className={cn("overflow-auto overscroll-x-contain rounded-lg border border-border max-h-[max(20rem,calc(100dvh-10rem))] max-md:max-h-[max(16rem,calc(100dvh-var(--tabbar-room)-8rem))]", edgeFade)}>
         {/* Width from the columns' minimums, never from cell contents (perf pass, 12 Oct 2026): with min-w-max a
             row that loaded wider content widened every column and the header jumped. */}
@@ -306,6 +312,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
           </div>
         </div>
       </div>
+      </div>
 
       {addingField && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={() => setAddingField(false)}>
@@ -352,7 +359,7 @@ function NameCell({ task, handle, onRename, onOpen }: { task: NexusTask; handle?
           title={task.title}
           // Breaks between words only (break-words splits a word only when it alone is wider than the cell), and a
           // spaced dash stays with the word after it, so a clamp never ends on "–…" (UI tour run 17, R17-WM-2).
-          className={cn("line-clamp-2 min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm font-medium leading-snug break-words hover:border-border", done && "text-muted-foreground line-through")}
+          className={cn("line-clamp-2 md:line-clamp-1 min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm font-medium leading-snug break-words hover:border-border", done && "text-muted-foreground line-through")}
         >
           {glueDash(title)}
         </button>
@@ -382,7 +389,8 @@ function CreatedCell({ raw, task, members }: { raw: string; task: NexusTask; mem
   const creatorId = task.creatorId ?? null;
   const creator = creatorId ? members.find((m) => m.id === creatorId) ?? (directory.get(creatorId) ? { id: creatorId, ...directory.get(creatorId)! } : null) : null;
   const person = isTime ? creator : byName ?? (text ? { id: "", name: text, avatar: null } : null);
-  let body: ReactNode = <span className="text-muted-foreground/60">—</span>;
+  // Empty cells are blank (decision 21, UI tour run 20, R20-WD-7); only the summary row says "—".
+  let body: ReactNode = null;
   if (person?.name) {
     body = (
       <span className="truncate text-sm" title={isTime ? `${person.name} · ${when!.toLocaleString(locale, { timeZone: "Asia/Jakarta" })}` : person.name}>{person.name}</span>
@@ -437,11 +445,11 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
   }
   if (colKey === "dueDate" || colKey === "due") {
     const d = task.dueDate ? localYmd(task.dueDate) : "";
-    return <DateField value={d || null} onChange={(v) => patchTask(task.id, { dueDate: v })} ariaLabel={t("Due date")} placeholder="—" />;
+    return <DateField value={d || null} onChange={(v) => patchTask(task.id, { dueDate: v })} ariaLabel={t("Due date")} placeholder="" />;
   }
   if (colKey === "start") {
     const d = task.startDate ? localYmd(task.startDate) : "";
-    return <DateField value={d || null} onChange={(v) => patchTask(task.id, { startDate: v } as Parameters<typeof nexusApi.updateTask>[1])} ariaLabel={t("Start date")} placeholder="—" />;
+    return <DateField value={d || null} onChange={(v) => patchTask(task.id, { startDate: v } as Parameters<typeof nexusApi.updateTask>[1])} ariaLabel={t("Start date")} placeholder="" />;
   }
   if (colKey === "section") {
     const current = task.taskListId ?? task.taskList?.id ?? "";
@@ -455,11 +463,11 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
   }
   if (colKey === "created" || colKey === "updated") {
     const v = colKey === "created" ? task.createdAt : task.updatedAt;
-    return <span className="block truncate px-1.5 py-1 text-sm text-muted-foreground">{v ? new Date(v).toLocaleDateString(locale, { day: "numeric", month: "short", ...(new Date(v).getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }) }) : "—"}</span>;
+    return <span className="block truncate px-1.5 py-1 text-sm text-muted-foreground">{v ? new Date(v).toLocaleDateString(locale, { day: "numeric", month: "short", ...(new Date(v).getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }) }) : ""}</span>;
   }
   if (colKey === "subtasks") {
     const subs = task.subtasks ?? [];
-    return <span className="block px-1.5 py-1 text-sm tabular-nums text-muted-foreground">{subs.length ? `${subs.filter((x) => x.status === "DONE").length}/${subs.length}` : "—"}</span>;
+    return <span className="block px-1.5 py-1 text-sm tabular-nums text-muted-foreground">{subs.length ? `${subs.filter((x) => x.status === "DONE").length}/${subs.length}` : ""}</span>;
   }
   if (colKey === "comments") return <span className="block px-1.5 py-1 text-sm tabular-nums text-muted-foreground">{task._count?.comments ?? 0}</span>;
   if (colKey === "assignee") return <AssigneeCell task={task} members={members} onToggle={(uid, has) => toggleAssignee(task.id, uid, has)} />;
@@ -498,9 +506,9 @@ function MultiSelectCell({ field, value, onSet }: { field: NexusCustomField; val
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button className="flex w-full min-w-0 items-center gap-1 rounded-md border border-transparent px-1 py-1 text-left hover:border-border">
+        <button aria-label={field.name} className="flex w-full min-w-0 items-center gap-1 rounded-md border border-transparent px-1 py-1 text-left hover:border-border">
           {selected.length === 0 ? (
-            <span className="flex-1 text-xs text-muted-foreground">—</span>
+            <span className="flex-1" />
           ) : (
             <>
               <span className="min-w-0 flex-1 truncate rounded-full bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary" title={selected.join(", ")}>{selected[0]}</span>
@@ -533,9 +541,9 @@ function AssigneeCell({ task, members, onToggle }: { task: NexusTask; members: N
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button className="flex w-full items-center gap-1 rounded-md border border-transparent px-1 py-1 text-left hover:border-border">
+        <button aria-label={t("Assignee")} className="flex w-full items-center gap-1 rounded-md border border-transparent px-1 py-1 text-left hover:border-border">
           {current.length === 0 ? (
-            <span className="text-xs text-muted-foreground">—</span>
+            <span className="h-6" />
           ) : (
             <span className="flex items-center -space-x-1.5">
               {current.slice(0, 3).map((u) => <Avatar key={u.id} userId={u.id} name={u.name} avatar={u.avatar} size={24} className="ring-card" />)}

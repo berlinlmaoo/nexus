@@ -36,7 +36,7 @@ import { notificationMessage, notificationTitle } from "@/lib/server-text";
 import { chatUnreadTotal } from "@/lib/chat-unread";
 import { isSystemMessage, systemSentence } from "@/lib/chat-system";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
-import { XpRulesCard } from "@/components/XpRulesCard";
+import { openXpRules, XpRulesCard } from "@/components/XpRulesCard";
 import { UserXpLogModal } from "@/components/UserXpLogModal";
 import { MorphPanel, type MorphOrigin } from "@/components/motion/MorphPanel";
 import { activeNotifications, fmtTime, nexusApi, notificationGroup, statusLabel, type NexusDashboardResponse, type NexusProject, type NexusTask, type NexusQuest, type NexusConversation, type NexusUser, type NexusNotification, type NexusLeaderboardRow, type NotificationGroupId } from "@/lib/nexus-api";
@@ -408,6 +408,9 @@ function StatRow(_: { data: NexusDashboardResponse }) {
       from: "#fcd34d", to: "#ea580c", glow: "#fbbf24",
       retry: g.isError && !g.data ? () => void g.refetch() : undefined,
       detail: <QuestsDetail quests={quests} claim={claim} focusKey={search.quest?.split(":")[0]} />,
+      // "0/0 Quests" said nothing (run 19 decision 10, zero-over-zero): with none, say so, and offer how quests work
+      // (the XP rules card below explains who makes them and what they give).
+      empty: g.data && quests.length === 0 ? { text: "No active quests", action: "How quests work", open: openXpRules } : undefined,
     },
   ];
 
@@ -460,7 +463,8 @@ function StatCardButton({ card, index, onOpen }: { card: StatCard; index: number
       {card.empty && !card.retry ? (
         <>
           <div className="text-sm font-semibold text-foreground text-balance">{t(card.empty.text)}</div>
-          <div className="mt-1 text-xs font-medium text-primary">{t(card.empty.action)}</div>
+          {/* Styled as the link it is (UI tour run 20, R20-WB-7: it read as plain text). */}
+          <div className="mt-1 text-xs font-semibold text-primary underline decoration-primary/40 underline-offset-2 group-hover:decoration-primary">{t(card.empty.action)}</div>
         </>
       ) : (
         <>
@@ -1153,7 +1157,9 @@ function ScheduleCard() {
         <div className="flex flex-1 flex-col items-center justify-center gap-3 py-4 text-center">
           <span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/10 text-primary"><CalendarClock className="h-6 w-6" aria-hidden /></span>
           <p className="text-sm text-muted-foreground">{t("No upcoming tasks with a due date.")}</p>
-          <Link to="/my-tasks" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">{t("Open My Tasks")}</Link>
+          {/* Only when there are open tasks to date: with none, the Tasks tile above already offers "Open My Tasks"
+              (one place for one action, UI tour run 20, R20-WB-7). */}
+          {(tasks.data ?? []).some((x) => !["DONE", "CANCELLED"].includes((x.status ?? "").toUpperCase())) && <Link to="/my-tasks" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">{t("Open My Tasks")}</Link>}
         </div>
       )}
       <div className="space-y-2.5">

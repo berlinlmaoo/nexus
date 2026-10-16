@@ -124,7 +124,7 @@ export function SocialSettings({
 
   return (
     <Sheet open={open} onOpenChange={close}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-lg [&>button:first-of-type]:hidden">
+      <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-xl [&>button:first-of-type]:hidden">
         <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
           <div className="min-w-0">
             <SheetTitle className="text-base font-semibold">{t("Platforms & targets")}</SheetTitle>
@@ -144,14 +144,16 @@ export function SocialSettings({
             <div className="flex flex-col gap-6">
               <section className="flex flex-col gap-2">
                 <div>
-                  <h3 className="text-sm font-semibold">{t("Targets for {month}", { month: monthLabel(data.month, locale) })}</h3>
+                  {/* A step above the platform names, which read as field labels with room above them (UI tour run 20,
+                      R20-WB-10: the section and its platforms had the same size and weight). */}
+                  <h3 className="text-base font-semibold">{t("Targets for {month}", { month: monthLabel(data.month, locale) })}</h3>
                   <p className="text-xs text-muted-foreground">{t("Each day's target is the month's split evenly, unless a day sets its own in the calendar. Leave a box empty for no target.")}</p>
                 </div>
                 {/* Each platform: its name as a heading above a plain card, as the outlet's Report settings sections (UI
                     tour run 19, R19-WB-6: a fieldset legend cut into the card's border). */}
                 {savedActive.map((p) => (
-                  <div key={p.id} role="group" aria-labelledby={`socmed-target-${p.id}`} className="flex flex-col gap-1.5">
-                  <h4 id={`socmed-target-${p.id}`} className="text-sm font-semibold text-foreground">{p.name}</h4>
+                  <div key={p.id} role="group" aria-labelledby={`socmed-target-${p.id}`} className="mt-2 flex flex-col gap-1.5">
+                  <h4 id={`socmed-target-${p.id}`} className="text-xs font-semibold text-muted-foreground">{p.name}</h4>
                   <div className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-card p-3">
                     <label className="text-xs font-medium text-muted-foreground">
                       {t("Engagement target")}
@@ -168,7 +170,7 @@ export function SocialSettings({
 
               <section className="flex flex-col gap-2">
                 <div>
-                  <h3 className="text-sm font-semibold">{t("Platforms")}</h3>
+                  <h3 className="text-base font-semibold">{t("Platforms")}</h3>
                   <p className="text-xs text-muted-foreground">{t("Renaming keeps every figure. Archiving hides a platform from the form; its past days keep their numbers.")}</p>
                 </div>
                 <div className="rounded-xl border border-border bg-card">

@@ -648,6 +648,16 @@ html:has([data-snap-rows]:not([role="dialog"] *), [data-snap-row]:not([role="dia
 [data-snap-off] [data-snap-row] {
   scroll-snap-align: none;
 }
+/* Attendance board rows: a snap point the UI tour can see, vertical only (the phone's board snaps its day columns
+   sideways on its own). */
+tr[data-snap-row] {
+  scroll-snap-align: start none;
+}
+/* A page on a white canvas (project, doc): the room after it (the snap tail, the phone's tab bar room) is the same
+   white, not a grey band at the end of the scroll (UI tour run 20, R20-WB-5). */
+html:has([data-page-canvas="card"]) :is([data-snap-tail="document"], [data-tabbar-room]) {
+  background-color: var(--card);
+}
 /* A scroll box of its own (a table, a side panel) snaps its rows under its own sticky head. */
 [data-snap-box] {
   scroll-snap-type: y proximity;

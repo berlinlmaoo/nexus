@@ -84,7 +84,7 @@ object ChatSystemText {
         }
     }
 
-    /** "Mira", "Mira and Yuda", "Mira, Yuda and Anita" — no serial comma, as the contract writes it. */
+    /** "Mira", "Mira and Yoga", "Mira, Yoga and Anita" — no serial comma, as the contract writes it. */
     fun joinNames(names: List<String>, and: String): String = when (names.size) {
         0 -> ""; 1 -> names[0]
         else -> names.dropLast(1).joinToString(", ") + " $and " + names.last()

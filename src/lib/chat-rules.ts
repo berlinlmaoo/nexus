@@ -483,7 +483,7 @@ export function canReplyTo(m: { kind?: string | null } | null | undefined): bool
 export const SYSTEM_MESSAGE_REPLY = "SYSTEM_MESSAGE_REPLY"
 export const SYSTEM_MESSAGE_REPLY_MESSAGE = "Pesan sistem tidak bisa dibalas."
 
-/** "Mira" · "Mira dan Yuda" · "Mira, Yuda dan Anita" (Indonesian; the web/iOS render their own). */
+/** "Mira" · "Mira dan Yoga" · "Mira, Yoga dan Anita" (Indonesian; the web/iOS render their own). */
 export function joinNames(names: string[], and = "dan"): string {
   const list = names.map((n) => n.trim()).filter(Boolean)
   if (list.length <= 1) return list[0] ?? ""

@@ -971,7 +971,9 @@ function VaultPage() {
             <div className="h-1.5 w-40 min-w-0 shrink rounded-full bg-muted overflow-hidden">
               <div
                 className={cn("h-full rounded-full", quotaPct > 90 ? "bg-destructive" : "bg-primary")}
-                style={{ width: `${quotaPct}%` }}
+                // At least a visible sliver once anything is stored: 19 MB of 60 GB rounded to 0% and the meter read
+                // as empty or broken (UI tour run 20, R20-WB-13).
+                style={{ width: data.quota.usedBytes > 0 ? `max(4px, ${quotaPct}%)` : "0%" }}
               />
             </div>
             <span className="shrink-0">

@@ -7,7 +7,7 @@ import type { OutletGuestLine, OutletGuests } from "@/lib/outlet-sales-api";
 import { count, monthLabel } from "./outlet-ui";
 
 /**
- * The Overview's Guest overview (owner, 14 Oct 2026, after a meeting with Ryan): for the month shown, RSVP
+ * The Overview's Guest overview (owner, 14 Oct 2026, after a meeting with the outlet team): for the month shown, RSVP
  * total with its items, Hosting total with its items, and Communities — the grand total and each
  * community's, a Breakdown community opening onto its own items. The numbers are the server's
  * (summarizeGuests in lib/outlet-sales.ts); the items and their order are the outlet's Report settings.
@@ -162,7 +162,9 @@ function Communities({ guests }: { guests: OutletGuests }) {
                     <span className="shrink-0 font-medium tabular-nums">{count(c.total, lang)}</span>
                   </div>
                 )}
-                <div aria-hidden className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
+                {/* With the chevron gutter, the bar starts where the name does (UI tour run 20, R20-WM-5: "Run Club"
+                    sat indented over a bar from the card's edge). */}
+                <div aria-hidden className={cn("mt-1 h-1 overflow-hidden rounded-full bg-muted", gutter && "ml-[1.125rem]")}>
                   <div className="h-full rounded-full bg-primary/40 transition-[width] duration-300 ease-out" style={{ width: `${share}%` }} />
                 </div>
                 {expandable && isOpen && (

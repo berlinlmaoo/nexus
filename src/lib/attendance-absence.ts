@@ -772,7 +772,7 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date; 
               // fakta hari itu. Hitungan ulang di sini memakai shift yang berlaku SEKARANG, dan shift
               // bisa diubah belakangan: dibikin lebih pagi (Aji 12:00 → 10:00 pada 15 Sep 2026: check-in
               // 12:17 yang tepat waktu tiba-tiba "telat 137 menit" + potong day-off) atau lebih siang
-              // (Queen 15:00 → 19:00: penalti lama jadi tidak adil). Ambil yang paling ringan dari
+              // (seorang staff 15:00 → 19:00: penalti lama jadi tidak adil). Ambil yang paling ringan dari
               // keduanya: perubahan shift tidak pernah menghukum ke belakang, tapi boleh memaafkan.
               const lateMin = record.lateMinutes != null && record.lateMinutes >= 0
                 ? Math.min(record.lateMinutes, recomputed)

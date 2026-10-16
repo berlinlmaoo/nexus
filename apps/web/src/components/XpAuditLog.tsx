@@ -65,10 +65,9 @@ export function XpAuditLog() {
           <ScrollText className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-sm font-black">
-            {tr("XP log")}
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">Admin</span>
-          </div>
+          {/* No role badge: only the BoD and up see this log, so a badge told them nothing (UI tour run 20, R20-WB-1;
+              it read "Admin" after the system ADMIN role was retired). */}
+          <div className="text-sm font-black">{tr("XP log")}</div>
           <div className="text-xs text-muted-foreground">{tr("Every XP change, added or deducted, for everyone")}</div>
         </div>
         <ChevronDown className={cn("h-5 w-5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />

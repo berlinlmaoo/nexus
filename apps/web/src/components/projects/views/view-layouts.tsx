@@ -98,7 +98,7 @@ export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; c
   if (vals.length === 0) return null;
   if (def.kind === "date") {
     // A date field holding a name, not a date: Notion imports filled "Request by" (a Created-time field) with
-    // who asked. That name is text, not a NEXUS person: it reads "Request by: Sifal" with the text glyph, never as
+    // who asked. That name is text, not a NEXUS person: it reads "Request by: Sinta" with the text glyph, never as
     // an assignee-looking chip (UI tour run 19, R19-WB-2, decision 5: the person glyph is for real people only).
     if (Number.isNaN(new Date(vals[0]).getTime())) return <TextProp label={def.label} value={vals[0]} />;
     const overdue = def.key === "due" && !isDoneStatus(task.status) && new Date(vals[0]).getTime() < new Date().setHours(0, 0, 0, 0);
@@ -149,7 +149,7 @@ export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; c
   return <span className={cn(pill, "bg-muted text-muted-foreground")} title={def.label}>{vals[0]}</span>;
 }
 
-/** A text property on a card: its field name and the text, with the text glyph ("Request by: Sifal"), so it never
+/** A text property on a card: its field name and the text, with the text glyph ("Request by: Sinta"), so it never
  *  reads as a person (UI tour run 19, R19-WB-2, decision 5). */
 function TextProp({ label, value }: { label: string; value: string }) {
   return (
@@ -191,7 +191,9 @@ export function PropLine({ task, keys, defs, ctx, className, slots }: { task: Ne
           const content = d.key === firstDateKey
             ? <><DateChips task={task} items={dateItems} fit />{!isDateItem(d) && <PropValue task={task} def={d} ctx={ctx} />}</>
             : <PropValue task={task} def={d} ctx={ctx} />;
-          return <span key={d.key} className={cn("inline-flex min-w-0 items-center gap-1 max-sm:shrink-0 max-sm:empty:hidden sm:overflow-hidden", listSlotWidth(d))}>{content}</span>;
+          // Phone: the dates first and the people right after them, so a wrapped line never leaves an avatar alone
+          // on a third line (UI tour run 20, R20-WM-12).
+          return <span key={d.key} className={cn("inline-flex min-w-0 items-center gap-1 max-sm:shrink-0 max-sm:empty:hidden sm:overflow-hidden", d.kind === "date" ? "max-sm:order-1" : d.key === "assignee" ? "max-sm:order-2" : "max-sm:order-3", listSlotWidth(d))}>{content}</span>;
         })}
       </div>
     );
@@ -252,11 +254,11 @@ function DateChips({ task, items, fit }: { task: NexusTask; items: PropDef[]; fi
   const tip = (text: string) => `${(shown.get(text) ?? []).join(", ")}: ${text}`;
   const lead = startText && dueText && startText !== dueText ? (
     <span title={`${tip(startText)} · ${tip(dueText)}`} aria-label={`${tip(startText)}, ${tip(dueText)}`} className={cn("inline-flex shrink-0 items-center gap-1 text-[11px] tabular-nums", overdue ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
-      <Clock className="h-3 w-3" />{startText}<ArrowRight className="h-3 w-3 opacity-70" aria-hidden />{dueText}
+      <Clock className="h-3 w-3 shrink-0" />{startText}<ArrowRight className="h-3 w-3 shrink-0 opacity-70" aria-hidden />{dueText}
     </span>
   ) : dueText || startText ? (
     <span title={tip((dueText ?? startText)!)} aria-label={tip((dueText ?? startText)!)} className={cn("inline-flex shrink-0 items-center gap-1 text-[11px] tabular-nums", overdue ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
-      <Clock className="h-3 w-3" />{dueText ?? startText}{!dueText && <ArrowRight className="h-3 w-3 opacity-70" aria-hidden />}
+      <Clock className="h-3 w-3 shrink-0" />{dueText ?? startText}{!dueText && <ArrowRight className="h-3 w-3 shrink-0 opacity-70" aria-hidden />}
     </span>
   ) : null;
   const room = !fit ? others.length : !lead ? 2 : startText && dueText && startText !== dueText ? 0 : 1;
@@ -265,11 +267,14 @@ function DateChips({ task, items, fit }: { task: NexusTask; items: PropDef[]; fi
   return (
     <>
       {lead}
-      {/* Any other date names its field ("Request by 24 May"): beside the due date's clock a second bare date
-          could not be told apart (UI tour run 19, R19-WD-4). */}
+      {/* Any other date names its field ("Request by: 24 May"): beside the due date's clock a second bare date
+          could not be told apart (UI tour run 19, R19-WD-4). With a colon, as a text property's "Request by: Sinta"
+          (one pattern, UI tour run 20, R20-WD-8). */}
       {shownOthers.map((text) => (
-        <span key={text} title={tip(text)} aria-label={tip(text)} className="inline-flex min-w-0 shrink-0 items-center gap-1 text-[11px] tabular-nums text-muted-foreground">
-          <CalendarDays className="h-3 w-3 shrink-0" aria-hidden /><span className="truncate opacity-80">{(shown.get(text) ?? [])[0]}</span>{text}
+        // The one part that gives way in a narrow slot: its field name truncates, never the due date and its clock
+        // before it (UI tour run 20, R20-WD-3: "PELUNASAN …" lost half its clock).
+        <span key={text} title={tip(text)} aria-label={tip(text)} className="inline-flex min-w-0 items-center gap-1 text-[11px] tabular-nums text-muted-foreground">
+          <CalendarDays className="h-3 w-3 shrink-0" aria-hidden /><span className="min-w-0 truncate opacity-80">{(shown.get(text) ?? [])[0]}:</span><span className="shrink-0">{text}</span>
         </span>
       ))}
       {folded.length > 0 && (

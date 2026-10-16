@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { SidebarProjectTree } from "@/components/SidebarProjectTree";
-import { GideonMark } from "@/components/gideon/GideonMark";
+import { navGroups } from "@/components/nav-groups";
 import { GideonAskButton } from "@/components/gideon/GideonLauncher";
 import nexusLogo from "@/assets/nexus-logo.png";
 import {
@@ -25,47 +25,6 @@ import { modKey } from "@/lib/keyboard";
 import { openGlobalSearch } from "@/lib/search-event";
 import { openShortcutsHelp } from "@/components/ShortcutsHelp";
 
-const groups = [
-  {
-    label: "Home",
-    items: [
-      { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-      { title: "Messages", url: "/messages", icon: MessageCircle },
-      // GIDEON full page (12 Oct 2026, Notion AI's chat page): conversations with search.
-      { title: "GIDEON", url: "/gideon", icon: GideonMark },
-      { title: "Notifications", url: "/inbox", icon: Inbox },
-      { title: "My Tasks", url: "/my-tasks", icon: CheckSquare },
-      { title: "My Submissions", url: "/submissions", icon: FileText },
-      { title: "Calendar", url: "/calendar", icon: Calendar },
-      { title: "Attendance", url: "/attendance", icon: ClipboardCheck },
-    ],
-  },
-  {
-    label: "Work",
-    items: [
-      { title: "Projects", url: "/projects", icon: FolderKanban },
-      // Invitation only (owner, 14 Oct 2026): shown when canAccessLegal; the server refuses everyone else.
-      { title: "Legal", url: "/legal", icon: Scale },
-      { title: "Leaderboard", url: "/leaderboard", icon: Trophy },
-    ],
-  },
-  {
-    label: "Team",
-    items: [
-      { title: "Z Vault", url: "/vault", icon: HardDrive },
-      { title: "Threads", url: "/threads", icon: AtSign },
-      { title: "Room Booking", url: "/room-booking", icon: CalendarClock },
-    ],
-  },
-  {
-    label: "System",
-    items: [
-      { title: "Tickets", url: "/complaints", icon: Ticket },
-      { title: "Settings", url: "/settings", icon: Settings },
-      { title: "Control Room", url: "/admin", icon: Shield },
-    ],
-  },
-];
 
 export function AppSidebar() {
   const { toggleSidebar } = useSidebar();
@@ -112,7 +71,7 @@ export function AppSidebar() {
   // The same cap as the dashboard bell and the phone tab bar ("47", "99+"): the sidebar said "9+" while the bell
   // beside it said "47" for one count (UI tour run 14, R14-WD-13).
   const badgeText = (n: number) => (n > 99 ? "99+" : String(n));
-  const visibleGroups = groups
+  const visibleGroups = navGroups
     .map((g) => ({ ...g, items: g.items.filter((item) => (canManageOrg || !MANAGER_ONLY_URLS.has(item.url))) }))
     .filter((g) => g.items.length > 0);
 

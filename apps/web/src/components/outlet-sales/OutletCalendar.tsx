@@ -22,9 +22,9 @@ function monthDays(month: string): string[] {
 }
 
 /**
- * The outlet's month (Ryan, 10 Oct 2026: "ketika pencet sebuah tanggal, di bawah muncul details"): a
+ * The outlet's month (the outlet team, 10 Oct 2026: "ketika pencet sebuah tanggal, di bawah muncul details"): a
  * Monday-first grid with each day's events (names on a wide screen, dots on a phone, coloured by status),
- * and below it the chosen day's events in Ryan's order, each with Fill / Edit report. A day of the
+ * and below it the chosen day's events in the outlet team's order, each with Fill / Edit report. A day of the
  * previous or next month switches to that month.
  */
 export function OutletCalendar({
@@ -106,20 +106,19 @@ export function OutletCalendar({
                   isSel && "bg-cal-accent/5 ring-2 ring-inset ring-cal-accent dark:ring-primary",
                 )}
               >
-                <span
-                  className={cn(
-                    "grid h-6 w-6 place-items-center self-start rounded-full text-xs tabular-nums",
-                    isToday && "bg-cal-accent font-semibold text-cal-accent-foreground dark:bg-primary dark:text-primary-foreground",
-                  )}
-                >
-                  {Number(d.slice(8))}
+                {/* The day-target mark right after the date number, in a neutral colour, on every width and every month
+                    grid (decision 12, UI tour run 20, R20-WM-7: in the corner it touched the date and the cell edge). */}
+                <span className="flex items-center gap-0.5 self-start pr-0.5">
+                  <span
+                    className={cn(
+                      "grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs tabular-nums",
+                      isToday && "bg-cal-accent font-semibold text-cal-accent-foreground dark:bg-primary dark:text-primary-foreground",
+                    )}
+                  >
+                    {Number(d.slice(8))}
+                  </span>
+                  {hasTarget && <Target aria-hidden className="h-3 w-3 shrink-0 text-muted-foreground sm:h-3.5 sm:w-3.5" />}
                 </span>
-                {/* The day-target mark sits in the cell's top-right corner on every width (decision 12, UI tour run 17,
-                    R17-WM-4), inset clear of the selection ring; a phone's smaller mark stays clear of the date
-                    badge too (R14-WM-12). */}
-                {hasTarget && (
-                  <Target aria-hidden className="absolute right-1.5 top-1.5 h-3 w-3 text-primary sm:right-2 sm:top-2 sm:h-3.5 sm:w-3.5" />
-                )}
                 {evs.length > 0 && (
                   <span aria-hidden className="flex items-center gap-0.5 sm:hidden">
                     {/* One dot per night (three at most), coloured by status. */}
@@ -147,7 +146,7 @@ export function OutletCalendar({
 
       <MarkerLegend
         items={[
-          { mark: <Target className="h-3 w-3 text-primary" />, label: t("Day target") },
+          { mark: <Target className="h-3 w-3 text-muted-foreground" />, label: t("Day target") },
           ...STATUS_ORDER.map((s) => ({ mark: <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[s])} />, label: t(STATUS_LABEL[s]) })),
         ]}
       />

@@ -559,7 +559,7 @@ export async function POST(
     }
     const finalStatus = sectionChosen && routedTaskList.taskStatus ? String(routedTaskList.taskStatus) : status
 
-    // Apply the project's auto-assign (e.g. always-to-Gerald) when the form's routing rules didn't
+    // Apply the project's auto-assign (e.g. always to one person) when the form's routing rules didn't
     // already pick assignees — same as a normal task create (forms previously skipped this).
     const finalAssigneeIds = resolveAutoAssignAssigneeIds({
       requestedAssigneeIds: Array.from(routedAssigneeIds),

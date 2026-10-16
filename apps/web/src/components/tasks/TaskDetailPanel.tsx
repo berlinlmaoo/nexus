@@ -1161,9 +1161,9 @@ function fmtCreatedDateTime(ts: string, locale: string): string {
   return `${m.day} ${m.month} ${m.year} • ${m.hour}:${m.minute}`;
 }
 
-/** An empty table cell reads "—", in every column (UI tour run 15, R15-WB-4: Assignee showed "—" while an empty
- *  date or text cell was blank). */
-const EMPTY_CELL = "—";
+/** An empty table cell is blank, in every column alike (UI tour run 15, R15-WB-4: one rule for all columns; run 20
+ *  decision 21, R20-WD-7: blank as Notion, the dashes were noise down whole columns). */
+const EMPTY_CELL = "";
 
 export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLeft }: { field: NexusCustomField; projectId?: string; onSet: (value: unknown) => void; hideLabel?: boolean; /** The task's creator was offboarded: the CREATED field marks them "Left". */ creatorLeft?: boolean }) {
   const { t: tr, locale } = useLang();

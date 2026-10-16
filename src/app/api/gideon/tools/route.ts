@@ -562,7 +562,7 @@ async function getAttendanceDay(actor: User, input: Record<string, unknown>) {
   }))
   const realCover = coveringRequests.filter((r) => !r.isAutoDeduction)
 
-  // Request yang DIBATALKAN atau DITOLAK untuk tanggal ini. Bukan cover — tapi bukti niat: Violet
+  // Request yang DIBATALKAN atau DITOLAK untuk tanggal ini. Bukan cover — tapi bukti niat: seorang staff
   // mengajukan izin 13 Sep lalu membatalkannya karena ternyata sakit, dan tool ini dulu melaporkan
   // "tidak ada pengajuan" seolah dia tidak pernah bilang apa-apa. GIDEON perlu tahu ada yang pernah
   // diajukan, apa alasannya, dan kapan dibatalkan — lalu menilai buktinya sendiri.
@@ -581,7 +581,7 @@ async function getAttendanceDay(actor: User, input: Record<string, unknown>) {
 
   // ---- Telat menurut shift SEKARANG vs penalti yang tercatat. ---------------------------------
   // Penalti dihitung malam itu dengan shift yang berlaku SAAT ITU. Kalau shift orangnya lalu
-  // diubah (Queen: 15:00 → 19:00), catatan jamnya tetap benar tapi penaltinya jadi salah — dan
+  // diubah (seorang staff: 15:00 → 19:00), catatan jamnya tetap benar tapi penaltinya jadi salah — dan
   // obatnya PEMBATALAN POTONGAN, bukan mengganti jam masuk yang memang benar. Tanpa fakta ini
   // GIDEON pernah mengusulkan mengubah 18:05 menjadi 19:00 pada orang yang memang absen 18:05.
   let lateAgainstCurrentShift: number | null = null
@@ -687,7 +687,7 @@ async function getAttendanceDay(actor: User, input: Record<string, unknown>) {
   const outageRow = await getOutageRecord(raw)
   let coversShiftStart: boolean | null = null
   // Jam PULANG yang diharapkan: shift tetap → akhir shift; Flexi → check-in + 9 jam. Outage sore
-  // yang menelan jam ini membuat orang tidak bisa check-out (Farchan, 15 Sep 2026: masuk 12:14,
+  // yang menelan jam ini membuat orang tidak bisa check-out (seorang staff, 15 Sep 2026: masuk 12:14,
   // pulang seharusnya 21:14, tunnel mati 18:09–23:54, lalu kena −25 "lupa check-out").
   let expectedCheckoutAt: Date | null = null
   let coversExpectedCheckout: boolean | null = null

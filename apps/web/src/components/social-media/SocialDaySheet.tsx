@@ -290,7 +290,7 @@ function DayTargets({
   const share = (v: number | null | undefined) => (v == null ? t("No target") : num(v / days, lang));
   return (
     <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="rounded-xl border border-primary/30 bg-primary/[0.03] p-4">
-      <h3 className="flex items-center gap-1.5 text-sm font-semibold"><Target aria-hidden className="h-4 w-4 text-primary" /> {t("This day's targets")}</h3>
+      <h3 className="flex items-center gap-1.5 text-sm font-semibold"><Target aria-hidden className="h-4 w-4 text-muted-foreground" /> {t("This day's targets")}</h3>
       <div className="mt-3 flex flex-col gap-3">
         {platformIds.map((id) => {
           const name = data.config.platforms.find((p) => p.id === id)?.name ?? id;

@@ -528,9 +528,9 @@ private fun BoardCard(e: OutletEvent, thisYear: Int, onClick: () -> Unit) {
 
 // endregion
 
-// region Event detail (Ryan's list, in order)
+// region Event detail (the outlet team's list, in order)
 
-/** The detail card: status + Fill/Edit, then Ryan's rows in his order, labels from the form. */
+/** The detail card: status + Fill/Edit, then the outlet team's rows in their order, labels from the form. */
 @Composable
 internal fun EventCard(e: OutletEvent, form: OutletForm, today: String?, onFill: () -> Unit) {
     val c = Nx.colors

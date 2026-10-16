@@ -458,11 +458,15 @@ function ProjectsPage() {
           aria-label={tr("Create a new project")}
         >
           <div className={cn("max-h-[calc(100dvh-2rem)] w-full overflow-y-auto overscroll-contain rounded-[32px] border border-border bg-card p-5 shadow-pop max-sm:max-h-[calc(100dvh-env(safe-area-inset-top)-1.5rem)] max-sm:rounded-b-none max-sm:rounded-t-[24px] max-sm:border-x-0 max-sm:border-b-0 max-sm:pb-[calc(1.25rem+env(safe-area-inset-bottom))]", newProjectType === null ? "max-w-4xl" : "max-w-lg")}>
+            {/* Phone: the bottom sheet's grab handle, as the More sheet (UI tour run 20, R20-WM-4). */}
+            <div aria-hidden className="-mt-2 mb-3 flex justify-center sm:hidden"><div className="h-1.5 w-10 rounded-full bg-foreground/15" /></div>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-black tracking-tight">{tr("Create a new project")}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {tr("The project starts with default sections and opens when it's ready.")}
+                  {/* Neutral, whatever the chosen preview shows (UI tour run 20, R20-WD-11: it promised "default sections"
+                      beside a Dashboards preview). */}
+                  {tr("Choose a starting point. The project opens as soon as it's ready.")}
                 </p>
               </div>
               <button
@@ -575,6 +579,8 @@ function ProjectsPage() {
                 </p>
               )}
 
+              {/* Phone: pinned to the sheet's bottom edge, so Create is always in reach (UI tour run 20, R20-WM-4). */}
+              <div className="max-sm:sticky max-sm:bottom-0 max-sm:-mx-5 max-sm:border-t max-sm:border-border max-sm:bg-card max-sm:px-5 max-sm:pb-[calc(0.75rem+env(safe-area-inset-bottom))] max-sm:pt-3">
               <Button
                 isDisabled={
                   !newProjectName.trim() || !(newProjectWorkspaceId || workspaceOptions[0]?.id) || createProject.isPending || creating
@@ -585,6 +591,7 @@ function ProjectsPage() {
               >
                 {createProject.isPending ? tr("Creating project…") : newProjectType === "PIPELINE" ? tr("Create project + open pipeline") : newProjectType === "OUTLET_SALES" || newProjectType === "SOCIAL_MEDIA_REPORT" ? tr("Create project + open dashboard") : tr("Create project + open board")}
               </Button>
+              </div>
             </div>
             )}
           </div>
@@ -594,35 +601,21 @@ function ProjectsPage() {
       <div className="p-4 md:p-8 space-y-5">
         <section className="rounded-[28px] border border-border bg-card p-4 md:p-5 shadow-soft overflow-hidden relative">
           <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                <Sparkles className="h-3.5 w-3.5" /> {tn(computedProjects.length, "{shown} of {n} project", "{shown} of {n} projects", { shown: visibleProjects.length })}
-              </div>
-              {/* Phone: the summary stays one compact block so the list starts above the fold (audit 12 Oct 2026). */}
-              <p className="mt-2 hidden text-sm text-muted-foreground sm:block">
+            {/* One quiet summary line, not three big-number tiles, and one sentence (UI tour run 20, R20-WB-8). */}
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground tabular-nums">
+                {tn(computedProjects.length, "{shown} of {n} project", "{shown} of {n} projects", { shown: visibleProjects.length })}
+                <span className="font-normal text-muted-foreground">
+                  {" · "}{tr("{n}% average progress", { n: liveProgress })}
+                  {" · "}{tr("{n} tasks done", { n: formatCount(totalCompleted) })}
+                  {/* Distinct people, not memberships summed over projects ("972 Members" in a 54-person workspace,
+                      QA 13 Oct 2026). */}
+                  {" · "}{tr("{n} members", { n: formatCount(new Set(computedProjects.flatMap((p) => p.memberIds)).size) })}
+                </span>
+              </p>
+              <p className="mt-1 hidden text-sm text-muted-foreground sm:block">
                 {tr("Open a project to see its board, pages, calendar and timeline.")}
               </p>
-            </div>
-            {/* Shown on the phone too (UI tour 13 Oct 2026: the desktop's three numbers were missing at
-                440 px); one compact row of three keeps the list close to the fold. */}
-            <div className="grid grid-cols-3 gap-2 sm:min-w-[280px]">
-              <MiniStat
-                icon={<Target className="h-4 w-4" />}
-                label={tr("Average progress")}
-                value={`${liveProgress}%`}
-              />
-              <MiniStat
-                icon={<CheckCircle2 className="h-4 w-4" />}
-                label={tr("Tasks done")}
-                value={formatCount(totalCompleted)}
-              />
-              <MiniStat
-                icon={<Users className="h-4 w-4" />}
-                label={tr("Members")}
-                // Distinct people, not memberships summed over projects ("972 Members" in a 54-person
-                // workspace, QA 13 Oct 2026).
-                value={formatCount(new Set(computedProjects.flatMap((p) => p.memberIds)).size)}
-              />
             </div>
           </div>
 
@@ -664,9 +657,6 @@ function ProjectsPage() {
                   <X className="h-3.5 w-3.5" /> {tr("Clear filters ({n})", { n: activeFilters })}
                 </button>
               )}
-            </div>
-            <div className="hidden text-xs text-muted-foreground md:block">
-              {tr("Select a project to open it.")}
             </div>
           </div>
         </section>

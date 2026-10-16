@@ -1392,7 +1392,9 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
                 {/* questions */}
                 <div className="mt-6 pb-24 md:pl-0" onDragOver={(e) => { if (dragFrom.current) e.preventDefault(); }}>
                   {fields.map((f, i) => (
-                    <div key={f.id} data-snap-top="" className="snap-start">
+                    // The snap point is 4px into the gap above the card (a negative scroll margin), so a position
+                    // rounded by a pixel never shows the bottom edge of the card before (UI tour run 20, R20-WD-4).
+                    <div key={f.id} data-snap-top="" className="snap-start [scroll-margin-top:-4px]">
                       {/* gap above each card: drop target + "add a question here" */}
                       <div
                         className="group/gap relative flex h-5 items-center justify-center"

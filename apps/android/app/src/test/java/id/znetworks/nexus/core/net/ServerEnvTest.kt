@@ -12,7 +12,10 @@ class ServerEnvTest {
         assertEquals(ServerEnv.PRODUCTION, ServerEnv.of(null))
         assertEquals(ServerEnv.PRODUCTION, ServerEnv.of("staging"))
         assertEquals(ServerEnv.DEV, ServerEnv.of("dev"))
-        assertEquals("https://nexus-prod.tail765d02.ts.net:8443", ServerEnv.DEV.base)
+        // The DEV host is a build setting (gradle property nexusDevHost), never a literal in the sources.
+        assertTrue(NexusConfig.DEV_HOST.isNotBlank())
+        assertFalse(File("src/main/java/id/znetworks/nexus/core/net/NexusConfig.kt").readText().contains(".ts.net"))
+        assertEquals("https://${NexusConfig.DEV_HOST}:8443", ServerEnv.DEV.base)
     }
 
     @Test fun theCookieGoesOnlyToTheChosenServer() {
@@ -21,12 +24,12 @@ class ServerEnvTest {
             NexusConfig.env = ServerEnv.PRODUCTION
             assertEquals(NexusConfig.PUBLIC_BASE, NexusConfig.base)
             assertTrue(NexusConfig.isNexusHost("nexus.znetworks.id")); assertTrue(NexusConfig.isNexusHost("lan.nexus.znetworks.id"))
-            assertFalse(NexusConfig.isNexusHost("nexus-prod.tail765d02.ts.net"))
+            assertFalse(NexusConfig.isNexusHost(NexusConfig.DEV_HOST))
             NexusConfig.env = ServerEnv.DEV
             assertEquals(NexusConfig.DEV_BASE, NexusConfig.base)
-            assertTrue(NexusConfig.isNexusHost("nexus-prod.tail765d02.ts.net"))
+            assertTrue(NexusConfig.isNexusHost(NexusConfig.DEV_HOST))
             assertFalse(NexusConfig.isNexusHost("nexus.znetworks.id")); assertFalse(NexusConfig.isNexusHost("lan.nexus.znetworks.id"))
-            assertFalse(NexusConfig.isNexusHost("evil.nexus-prod.tail765d02.ts.net"))
+            assertFalse(NexusConfig.isNexusHost("evil." + NexusConfig.DEV_HOST))
         } finally { NexusConfig.env = before }
     }
 

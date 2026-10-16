@@ -227,7 +227,7 @@ sealed interface PanelRow {
     data class Task(override val key: String, val item: CalItem, val unitId: String?, val person: String?, val depth: Int, val cardUnit: String?, val last: Boolean) : PanelRow
     data class End(override val key: String, val cardUnit: String?) : PanelRow
     data class UnplacedHead(override val key: String, val count: Int) : PanelRow
-    /** Consecutive masked rows of one place, as one line: "4 internal tasks · Budi, Geraldo" (audit 2 #26). */
+    /** Consecutive masked rows of one place, as one line: "4 internal tasks · Budi, Gita" (audit 2 #26). */
     data class MaskedGroup(override val key: String, val items: List<CalItem>, val unitId: String?, val depth: Int, val cardUnit: String?) : PanelRow
 }
 

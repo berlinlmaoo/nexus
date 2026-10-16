@@ -13,15 +13,15 @@ class ChatSystemTextTest {
     private val id = ChatSystemText.Words("Kamu", "kamu", "dan", "%1\$s menambahkan %2\$s", "%1\$s mengeluarkan %2\$s", "%1\$s keluar",
         "%1\$s membuat grup", "%1\$s membuat grup “%2\$s”", "%1\$s mengubah nama grup jadi “%2\$s”")
     private fun p(id: String, name: String) = ChatSystemEvent.Person(id, name)
-    private val budi = p("b", "Budi Santoso"); private val mira = p("m", "Mira"); private val yuda = p("y", "Yuda"); private val anita = p("a", "Anita")
+    private val budi = p("b", "Budi Santoso"); private val mira = p("m", "Mira"); private val yoga = p("y", "Yoga"); private val anita = p("a", "Anita")
     private fun s(e: ChatSystemEvent, me: String? = "viewer", w: ChatSystemText.Words = en) = ChatSystemText.sentence(e, "FALLBACK", me, w)
 
     @Test fun added() {
-        val e = ChatSystemEvent("members_added", budi, listOf(mira, yuda, anita))
-        assertEquals("Budi Santoso added Mira, Yuda and Anita", s(e))
-        assertEquals("Budi Santoso menambahkan Mira, Yuda dan Anita", s(e, w = id))
-        assertEquals("You added Mira, Yuda and Anita", s(e, me = "b"))
-        assertEquals("Budi Santoso added you, Yuda and Anita", s(e, me = "m"))
+        val e = ChatSystemEvent("members_added", budi, listOf(mira, yoga, anita))
+        assertEquals("Budi Santoso added Mira, Yoga and Anita", s(e))
+        assertEquals("Budi Santoso menambahkan Mira, Yoga dan Anita", s(e, w = id))
+        assertEquals("You added Mira, Yoga and Anita", s(e, me = "b"))
+        assertEquals("Budi Santoso added you, Yoga and Anita", s(e, me = "m"))
         assertEquals("Budi Santoso menambahkan kamu", s(ChatSystemEvent("members_added", budi, listOf(mira)), me = "m", w = id))
         // The same person twice is named once.
         assertEquals("Budi Santoso added Mira", s(ChatSystemEvent("members_added", budi, listOf(mira, mira))))

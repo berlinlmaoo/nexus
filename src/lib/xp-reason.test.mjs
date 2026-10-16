@@ -74,7 +74,7 @@ check("BoD adjustment keeps the note (with the 'oleh' stamp) as detail", () => {
   const a = m.describeXpReason("admin:adjust:Telat meeting klien · oleh Berlin", -30)
   assert.equal(a.kind, "admin_adjust")
   assert.equal(a.detail, "Telat meeting klien · oleh Berlin")
-  assert.equal(a.label, "Adjusted by the BoD · Telat meeting klien · oleh Berlin")
+  assert.equal(a.label, "Adjusted by the board · Telat meeting klien · oleh Berlin")
   assert.equal(m.describeXpReason("admin:adjust", 10).detail, null)
   // A note with colons stays whole.
   assert.equal(m.describeXpReason("admin:adjust:jam 10:30 · oleh X", -5).detail, "jam 10:30 · oleh X")

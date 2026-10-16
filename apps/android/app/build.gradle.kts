@@ -66,7 +66,12 @@ android {
             setProperty("apiKey", ((client?.get("api_key") as? List<*>)?.firstOrNull() as? Map<*, *>)?.get("current_key")?.toString().orEmpty())
         }
     }
+    // The DEV server's host (Settings › Server) is not in the repo: set `nexusDevHost=<host>` in
+    // ~/.gradle/gradle.properties (or pass -PnexusDevHost=…). Without it the DEV choice points at a
+    // placeholder that never resolves. Never in local.properties or any committed file.
+    val devHost = (findProperty("nexusDevHost") as String?)?.trim()?.takeIf { it.isNotEmpty() } ?: "nexus-dev.invalid"
     defaultConfig {
+        buildConfigField("String", "DEV_HOST", "\"$devHost\"")
         listOf("projectId", "applicationId", "apiKey", "senderId").forEach { key ->
             buildConfigField("String", "FIREBASE_${key.uppercase()}", "\"${firebaseProps.getProperty(key, "")}\"")
         }

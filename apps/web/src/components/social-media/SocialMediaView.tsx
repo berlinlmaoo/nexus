@@ -200,7 +200,7 @@ function Overview({ data, onRecord, onSetup }: { data: SocialMonthResponse; onRe
                 {p.postsTargetToDate === null
                   ? tn(p.posts, "1 post", "{n} posts", { n: num(p.posts, lang) })
                   : tn(p.postsTargetToDate, "{n} / {target} post", "{n} / {target} posts", { n: num(p.posts, lang), target: num(p.postsTargetToDate, lang) })}
-                {p.postsPct !== null && <span className="ml-1.5 text-muted-foreground">({p.postsPct}%)</span>}
+                {p.postsPct !== null && <PctPill pct={p.postsPct} className="ml-1.5 text-xs" />}
               </span>
               <div className="col-span-2 sm:col-span-1"><Meter pct={p.postsPct} label={t("{name} posts against target", { name: p.name })} /></div>
             </li>
@@ -209,6 +209,16 @@ function Overview({ data, onRecord, onSetup }: { data: SocialMonthResponse; onRe
         <p className="mt-3 text-xs text-muted-foreground">{t("Target to date = each day's target up to today. A day without its own target takes the month's target split evenly.")}</p>
       </section>
     </>
+  );
+}
+
+/** A share of the target as a pill, the one style for Engagement and Posts (decision 20, UI tour run 20, R20-WB-9:
+ *  Posts read "(31%)" in parentheses beside Engagement's pill). */
+function PctPill({ pct, className }: { pct: number; className?: string }) {
+  return (
+    <span className={cn("inline-block rounded-full px-2 py-0.5 font-semibold tabular-nums", pct >= 100 ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-200" : "bg-primary/10 text-primary", className)}>
+      {pct}%
+    </span>
   );
 }
 
@@ -232,11 +242,7 @@ function EngagementCard({ p, baseTarget, onSetTarget }: {
       <p className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 tabular-nums">
         <span className="text-2xl font-semibold tracking-tight md:text-3xl">{num(p.engagement, lang)}</span>
         <span className="text-base text-muted-foreground">/ {p.engagementTargetToDate === null ? "—" : num(p.engagementTargetToDate, lang)}</span>
-        {p.engagementPct !== null && (
-          <span className={cn("rounded-full px-2 py-0.5 text-sm font-semibold", p.engagementPct >= 100 ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-200" : "bg-primary/10 text-primary")}>
-            {p.engagementPct}%
-          </span>
-        )}
+        {p.engagementPct !== null && <PctPill pct={p.engagementPct} className="text-sm" />}
       </p>
       <div className="mt-3"><Meter pct={p.engagementPct} label={t("{name} engagement against target", { name: p.name })} /></div>
       <p className="mt-2 text-xs text-muted-foreground">
