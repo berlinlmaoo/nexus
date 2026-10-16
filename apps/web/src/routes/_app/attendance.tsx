@@ -509,7 +509,8 @@ function Attendance() {
         {/* Columns follow the space the cards actually get (a container query), not the window: at 1024 with
             the sidebar open four columns left ~160px each and every title was cut ("Rea…", "4 a…"), QA 13 Oct 2026. */}
         <div className="@container">
-        <section data-snap-rows className="grid gap-4 @lg:grid-cols-2 @5xl:grid-cols-4">
+        {/* Two by two: in four columns the headings wrapped ("Ready to / check in"), UI tour run 20, R20-WD-9. */}
+        <section data-snap-rows className="grid gap-4 @lg:grid-cols-2">
           <FunMetric
             icon={<Coffee className="h-5 w-5" />}
             label={tr("Today’s status")}
@@ -534,7 +535,8 @@ function Attendance() {
           <FunMetric
             icon={<Sparkles className="h-5 w-5" />}
             label={tr("Days off")}
-            value={tr("{used}/{quota} used", { used: today.data?.dayOffUsedThisMonth ?? 0, quota: today.data?.dayOffQuota ?? 4 })}
+            // No label above the heading (decision 4, UI tour run 20, R20-WB-3): the heading names what it counts.
+            value={tr("Days off · {used}/{quota} used", { used: today.data?.dayOffUsedThisMonth ?? 0, quota: today.data?.dayOffQuota ?? 4 })}
             helper={(today.data?.dayOffAllowance?.bonus ?? 0) > 0
               ? tr("Includes {n} extra ({reasons}) — expires on the 27th", { n: today.data!.dayOffAllowance!.bonus, reasons: today.data!.dayOffAllowance!.grants.map((g) => g.reason).join(", ") })
               : tr("See how your days off were used")}
@@ -546,9 +548,9 @@ function Attendance() {
             label={tr("Public holidays")}
             // Zero over zero says nothing (run 19 decision 10, R19-B-13): say there are none this month.
             value={(today.data?.redDateQuota ?? 0) === 0 && (today.data?.redDateUsedThisMonth ?? 0) === 0
-              // "None this month" under the "Public holidays" label: the full sentence was cut at two lines.
+              // "None this month" over "See public holidays used" (decision 11): the subline names the subject.
               ? tr("None this month")
-              : tr("{used}/{quota} used", { used: today.data?.redDateUsedThisMonth ?? 0, quota: today.data?.redDateQuota ?? 0 })}
+              : tr("Public holidays · {used}/{quota} used", { used: today.data?.redDateUsedThisMonth ?? 0, quota: today.data?.redDateQuota ?? 0 })}
             helper={tr("See public holidays used")}
             tone="rose"
             onClick={(origin) => setLogKind({ kind: "RED_DATE", origin })}
@@ -560,7 +562,9 @@ function Attendance() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
             <div>
               <h2 className="text-lg font-semibold tracking-tight">{viewMode === "grid" ? (canSeeBoard ? tr("Attendance board") : tr("Your attendance history")) : (canSeeBoard ? tr("Attendance log") : tr("Your attendance history"))}</h2>
-              <p className="text-sm text-muted-foreground">{viewMode === "grid" ? tr("Green = present or permit, red = absent, orange = sick, purple = day off / public holiday, yellow = leave.") : (canSeeBoard ? tr("Everyone’s attendance history, with check-in/out selfie and location.") : tr("Your check-in/out history, with selfie and location."))}
+              {/* The colour sentence only where the legend beside it is hidden (a phone); one key, not two (UI tour run 20,
+                  R20-WD-9). */}
+              <p className="text-sm text-muted-foreground">{viewMode === "grid" ? <span className="sm:hidden">{tr("Green = present or permit, red = absent, orange = sick, purple = day off / public holiday, yellow = leave.")}</span> : (canSeeBoard ? tr("Everyone’s attendance history, with check-in/out selfie and location.") : tr("Your check-in/out history, with selfie and location."))}
                 {" "}{viewMode === "grid" ? (coarse ? tr("Tap a cell for details.") : tr("Click a cell for details.")) : (coarse ? tr("Tap a row for details.") : tr("Click a row for details."))}</p>
             </div>
             <div className="flex items-center gap-3">
@@ -767,14 +771,16 @@ function Attendance() {
                               <span title={tr("Day off left this period: {left} of {quota} (used {used})", { left: d.remaining, quota: d.quota, used: d.used }) + (d.bonus && d.bonus.days > 0 ? "\n" + tr("Quota {base} + {n} extra ({reasons}) — expires on the 27th", { base: d.baseQuota ?? d.quota - d.bonus.days, n: d.bonus.days, reasons: d.bonus.grants.map((g) => `${g.days}: ${g.reason}`).join("; ") }) : "")}
                                 className={cn(pill, quotaTone(d.remaining), d.bonus && d.bonus.days > 0 && "ring-emerald-300 dark:ring-emerald-400/60")}>
                                 {/* Spelled out (UI tour run 13, W-D24: "0/4 DO" and "0/0 PH" were cryptic). */}
-                                {tr("{left}/{quota} days off", { left: d.remaining, quota: d.quota })}{d.bonus && d.bonus.days > 0 && <span className="ml-0.5 text-emerald-600 dark:text-emerald-400">+</span>}
+                                {daysOffLeft(d.remaining)}{d.bonus && d.bonus.days > 0 && <span className="ml-0.5 text-emerald-600 dark:text-emerald-400">+</span>}
                               </span>
-                              <span title={d.redDate.quota === 0
-                                  ? tr("The board hasn't set this month's public-holiday allowance yet")
-                                  : tr("Public holidays left this calendar month: {left} of {quota} (used {used})", { left: d.redDate.remaining, quota: d.redDate.quota, used: d.redDate.used })}
-                                className={cn(pill, d.redDate.quota === 0 ? "bg-muted/50 text-muted-foreground/70 ring-border" : quotaTone(d.redDate.remaining))}>
-                                {tr("{left}/{quota} holidays", { left: d.redDate.remaining, quota: d.redDate.quota })}
-                              </span>
+                              {/* Only in a month that has public holidays (decision 11, UI tour run 20, R20-WB-4: every row
+                                  read "0/0 holidays"). */}
+                              {hasHolidays(d.redDate) && (
+                                <span title={tr("Public holidays left this calendar month: {left} of {quota} (used {used})", { left: d.redDate.remaining, quota: d.redDate.quota, used: d.redDate.used })}
+                                  className={cn(pill, quotaTone(d.redDate.remaining))}>
+                                  {holidaysLeft(d.redDate.remaining)}
+                                </span>
+                              )}
                               <span title={`${formatCount(d.xp.score)} XP · ${d.xp.levelName} (Lv.${d.xp.level}) — ${tr("the XP period runs from the 28th to the 27th, as attendance")}`}
                                 className={cn(pill, xpTone)}>
                                 {formatCount(d.xp.score)} XP
@@ -1089,12 +1095,27 @@ function xpPillTone(score: number): string {
  * tour run 10, WM-3). Spelled out as on the desktop pills, and the XP with a true minus (UI tour run 14,
  * R14-WM-14 / R14-WM-15: "0/4 DO", "0/0 PH" and "-590 XP").
  */
-function PhoneMemberSummary({ d }: { d: { remaining: number; quota: number; redDate?: { remaining: number; quota: number } | null; xp: { score: number } } | null }) {
+/**
+ * What is LEFT, in words (decision 10, UI tour run 20, B-19): "x/4" means used on the stat card, so a bare "4/4" on a
+ * person's chip read the other way round.
+ */
+function daysOffLeft(n: number): string {
+  return n <= 0 ? tr("No days off left") : n === 1 ? tr("1 day off left") : tr("{n} days off left", { n });
+}
+function holidaysLeft(n: number): string {
+  return n <= 0 ? tr("No holidays left") : n === 1 ? tr("1 holiday left") : tr("{n} holidays left", { n });
+}
+/** A month with public holidays: an allowance set, or one already used. */
+function hasHolidays(r: { quota: number; used?: number } | null | undefined): boolean {
+  return !!r && (r.quota > 0 || (r.used ?? 0) > 0);
+}
+
+function PhoneMemberSummary({ d }: { d: { remaining: number; quota: number; redDate?: { remaining: number; quota: number; used?: number } | null; xp: { score: number } } | null }) {
   if (!d) return null;
   return (
     <div className="text-[10px] leading-tight tabular-nums text-muted-foreground sm:hidden">
-      <div className="whitespace-nowrap">{tr("{left}/{quota} days off", { left: d.remaining, quota: d.quota })}</div>
-      {d.redDate && <div className="whitespace-nowrap">{tr("{left}/{quota} holidays", { left: d.redDate.remaining, quota: d.redDate.quota })}</div>}
+      <div className="whitespace-nowrap">{daysOffLeft(d.remaining)}</div>
+      {hasHolidays(d.redDate) && <div className="whitespace-nowrap">{holidaysLeft(d.redDate!.remaining)}</div>}
       <div className={cn("whitespace-nowrap", d.xp.score < 0 && "font-medium text-rose-600 dark:text-rose-400")}>{formatCount(d.xp.score)} XP</div>
     </div>
   );
@@ -2356,14 +2377,14 @@ function FunMetric({ icon, label, value, helper, tone, onClick }: { icon: React.
     <>
       {/* One line per value, icon pinned to the label row: the four cards share a baseline (audit 12 Oct 2026,
           a long value wrapped and pushed its card's text off the others). */}
-      <div className="flex items-start gap-3">
+      <div className="flex items-center gap-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/70 dark:bg-background/60">{icon}</span>
         <div className="min-w-0 flex-1">
-          {/* The label in sentence case, not an uppercase eyebrow (run 19 decision 1, R19-WB-4). */}
-          <p className="line-clamp-2 text-sm font-medium leading-5 opacity-80">{label}</p>
-          <h3 title={value} className="line-clamp-2 text-xl font-black leading-7 tracking-tight text-foreground [overflow-wrap:anywhere] [text-wrap:balance] xl:text-2xl">{value}</h3>
+          {/* No label above the heading (run 20 decision 4, R20-WB-3): the heading, icon and colour carry it; the
+              label is still read out before the value. */}
+          <h3 title={value} className="line-clamp-2 text-xl font-black leading-7 tracking-tight text-foreground [overflow-wrap:anywhere] [text-wrap:balance] xl:text-2xl"><span className="sr-only">{label}: </span>{value}</h3>
         </div>
-        {onClick && <ChevronRight className="mt-3 h-4 w-4 shrink-0 opacity-40" />}
+        {onClick && <ChevronRight className="h-4 w-4 shrink-0 opacity-40" />}
       </div>
       <p className="mt-3 text-sm text-muted-foreground">{helper}</p>
     </>
