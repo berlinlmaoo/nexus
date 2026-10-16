@@ -54,7 +54,7 @@ export async function PATCH(
 
     const { formId } = await params
     const body = await request.json()
-    const { name, description, fields, isPublic, requireAuth, accessSchedule, branding, settings } = body
+    const { name, description, fields, isPublic, requireAuth, accessSchedule, branding, settings, baseUpdatedAt } = body
 
     const existing = await prisma.form.findUnique({
       where: { id: formId },
@@ -70,24 +70,44 @@ export async function PATCH(
 
     const normalizedAccessSchedule = (normalizeFormAccessSchedule(accessSchedule) ?? undefined) as InputJsonValue | undefined
 
-    const form = await prisma.form.update({
-      where: { id: formId },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(!existing.slug && { slug }),
-        ...(description !== undefined && { description }),
-        ...(fields !== undefined && { fields }),
-        ...(accessSchedule !== undefined && { accessSchedule: normalizedAccessSchedule }),
-        ...(isPublic !== undefined && { isPublic }),
-        ...(requireAuth !== undefined && { requireAuth }),
-        // Builder rebuild (12 Oct 2026): the page's icon/cover and the response settings. Absent = unchanged
-        // (released apps never send them); null or an empty object clears them.
-        ...(branding !== undefined && { branding: jsonOrDbNull(normalizeFormBranding(branding)) }),
-        ...(settings !== undefined && { settings: jsonOrDbNull(normalizeFormSettings(settings)) }),
-      },
-    })
+    const data = {
+      ...(name !== undefined && { name }),
+      ...(!existing.slug && { slug }),
+      ...(description !== undefined && { description }),
+      ...(fields !== undefined && { fields }),
+      ...(accessSchedule !== undefined && { accessSchedule: normalizedAccessSchedule }),
+      ...(isPublic !== undefined && { isPublic }),
+      ...(requireAuth !== undefined && { requireAuth }),
+      // Builder rebuild (12 Oct 2026): the page's icon/cover and the response settings. Absent = unchanged
+      // (released apps never send them); null or an empty object clears them.
+      ...(branding !== undefined && { branding: jsonOrDbNull(normalizeFormBranding(branding)) }),
+      ...(settings !== undefined && { settings: jsonOrDbNull(normalizeFormSettings(settings)) }),
+    }
 
-    logAudit({ action: "update", entityType: "form", entityId: formId, entityName: form.name, userId: session.user.id, request, metadata: { changes: Object.keys(body) } })
+    // Compare-and-swap on updatedAt (race audit 16 Oct 2026, H7). The builder autosaves the whole form every
+    // 700 ms; two people (or two tabs) editing one form each sent their copy and the last one silently undid the
+    // other's questions — 20 saves from one copy: 20 × 200, 19 edits lost. `baseUpdatedAt` = the updatedAt of the
+    // form the client last saw (load or its own last save): the write lands only if nobody saved since, else
+    // 409 FORM_CHANGED with the form as it is now, nothing written. The web sends only the keys it changed, so
+    // it can re-apply them on the new copy. Without a base (released apps): as before.
+    let form
+    if (baseUpdatedAt !== undefined) {
+      const base = typeof baseUpdatedAt === "string" ? new Date(baseUpdatedAt) : null
+      if (!base || Number.isNaN(base.getTime())) return NextResponse.json({ error: "baseUpdatedAt must be an ISO date", code: "INVALID_BASE" }, { status: 400 })
+      const claimed = await prisma.form.updateMany({ where: { id: formId, updatedAt: base }, data })
+      if (claimed.count === 0) {
+        const current = await prisma.form.findUnique({ where: { id: formId } })
+        return NextResponse.json(
+          { error: "This form was changed by someone else. Your last change was not saved.", code: "FORM_CHANGED", conflict: true, form: current },
+          { status: 409 },
+        )
+      }
+      form = await prisma.form.findUniqueOrThrow({ where: { id: formId } })
+    } else {
+      form = await prisma.form.update({ where: { id: formId }, data })
+    }
+
+    logAudit({ action: "update", entityType: "form", entityId: formId, entityName: form.name, userId: session.user.id, request, metadata: { changes: Object.keys(body).filter((k) => k !== "baseUpdatedAt") } })
 
     return NextResponse.json(form)
   } catch (error) {

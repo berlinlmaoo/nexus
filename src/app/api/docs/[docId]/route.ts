@@ -8,7 +8,8 @@ import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
 import { restorableDelete } from '@/lib/deletion-snapshot'
 import { sanitizeDoc } from '@/lib/blockdoc'
-import { contentForClient, loadBody, saveBody } from '@/lib/block-bodies'
+import { BodyConflictError, contentForClient, loadBody, saveBody } from '@/lib/block-bodies'
+import { flushLiveRoom } from '@/lib/collab-rooms'
 import { eventBus, BUS_EVENTS } from '@/lib/event-bus'
 export async function GET(req: NextRequest, { params }: { params: Promise<{ docId: string }> }) {
   try {
@@ -64,12 +65,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ do
       nextContent = sanitizeDoc(body.content)
       if (!nextContent) return NextResponse.json({ error: 'content must be a document ({ type: "doc", content: [...] }) under 2 MB' }, { status: 400 })
     }
-    if (typeof body.baseUpdatedAt === 'string') {
+    const docInclude = { author: { select: { id: true, name: true, avatar: true } }, owner: { select: { id: true, name: true, avatar: true } }, project: { select: { id: true, name: true, color: true } } } as const
+    const conflict = async () => {
+      const current = await prisma.doc.findUnique({ where: { id: docId }, include: docInclude })
+      return NextResponse.json({ error: 'This page was changed by someone else.', code: 'DOC_CHANGED', conflict: true, doc: current }, { status: 409 })
+    }
+    const base = typeof body.baseUpdatedAt === 'string' ? body.baseUpdatedAt : undefined
+    // A header-only save with a base: checked here. A body save checks its base INSIDE saveBody's transaction,
+    // under the row lock (race audit 16 Oct 2026, M10) — this check alone let 3 of 20 saves from one base land.
+    if (base && !nextContent) {
       const now = await prisma.doc.findUnique({ where: { id: docId }, select: { updatedAt: true } })
-      if (now && now.updatedAt.toISOString() !== body.baseUpdatedAt) {
-        const current = await prisma.doc.findUnique({ where: { id: docId }, include: { author: { select: { id: true, name: true, avatar: true } }, owner: { select: { id: true, name: true, avatar: true } }, project: { select: { id: true, name: true, color: true } } } })
-        return NextResponse.json({ error: 'This page was changed by someone else.', conflict: true, doc: current }, { status: 409 })
-      }
+      if (now && now.updatedAt.toISOString() !== base) return conflict()
     }
 
     const data: Record<string, unknown> = {}
@@ -87,25 +93,31 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ do
     if (body.verifiedAt !== undefined) data.verifiedAt = new Date(body.verifiedAt)
     if (body.ownerId !== undefined) data.ownerId = body.ownerId
 
+    let replacedLive: string | null = null
     if (nextContent) {
+      // Live editors' unsaved typing is stored first (race audit H9), so a base check below sees it and a save
+      // without a base replaces it knowingly (kept in this audit row as replacedLiveText).
+      const live = await flushLiveRoom(`doc:${docId}`)
       const loaded = await loadBody('doc', docId)
       if (!loaded) return NextResponse.json({ error: 'Not found' }, { status: 404 })
       if (data.title) loaded.title = data.title as string
-      await saveBody(loaded, nextContent, { actorId: session.user.id })
+      try {
+        await saveBody(loaded, nextContent, { actorId: session.user.id, expect: base ? { updatedAt: base } : undefined })
+      } catch (e) {
+        if (e instanceof BodyConflictError) return conflict()
+        throw e
+      }
+      if (live.flushed && !base) replacedLive = live.replaced
     }
 
     const doc = await prisma.doc.update({
       where: { id: docId },
       data,
-      include: {
-        author: { select: { id: true, name: true, avatar: true } },
-        owner: { select: { id: true, name: true, avatar: true } },
-        project: { select: { id: true, name: true, color: true } },
-      },
+      include: docInclude,
     })
     if (!nextContent) eventBus.emit(BUS_EVENTS.DOC_CHANGED, { projectId: doc.projectId, docId, actorId: session.user.id })
 
-    logAudit({ action: "update", entityType: "doc", entityId: (await params).docId, entityName: doc.title, userId: session.user.id, request: req, metadata: { changes: Object.keys(body) } })
+    logAudit({ action: "update", entityType: "doc", entityId: (await params).docId, entityName: doc.title, userId: session.user.id, request: req, metadata: { changes: Object.keys(body), ...(replacedLive ? { replacedLiveText: replacedLive } : {}) } })
 
     return NextResponse.json({ doc: contentForClient(req, doc) })
   } catch (error) {

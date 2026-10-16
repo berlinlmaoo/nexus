@@ -3,7 +3,8 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
-import { bodyAccess, loadBody, saveBody } from "@/lib/block-bodies"
+import { BodyConflictError, bodyAccess, loadBody, saveBody } from "@/lib/block-bodies"
+import { flushLiveRoom } from "@/lib/collab-rooms"
 import { sanitizeDoc } from "@/lib/blockdoc"
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit"
 
@@ -48,12 +49,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
   const doc = sanitizeDoc(payload.doc)
   if (!doc) return NextResponse.json({ error: "doc must be a document ({ type: \"doc\", content: [...] }) under 2 MB" }, { status: 400 })
 
+  // Live editors' unsaved typing first (race audit 16 Oct 2026, H9), then the base check INSIDE saveBody's
+  // transaction under the Task row lock (M10): checked here before, 6 of 20 saves from one base landed.
+  const live = await flushLiveRoom(`taskbody:${taskId}`)
   const current = await loadBody("taskbody", taskId)
   if (!current) return NextResponse.json({ error: "Task not found" }, { status: 404 })
-  if (typeof payload.baseText === "string" && payload.baseText !== current.text) {
-    return NextResponse.json({ error: "This description was changed by someone else.", conflict: true, doc: current.json, text: current.text, updatedAt: current.updatedAt.toISOString() }, { status: 409 })
+  const conflict = (c: typeof current) =>
+    NextResponse.json({ error: "This description was changed by someone else.", code: "DESCRIPTION_CHANGED", conflict: true, doc: c.json, text: c.text, updatedAt: c.updatedAt.toISOString() }, { status: 409 })
+  const baseText = typeof payload.baseText === "string" ? payload.baseText : undefined
+  if (baseText !== undefined && baseText !== current.text) return conflict(current)
+  let saved
+  try {
+    saved = await saveBody(current, doc, { actorId: session.user.id, expect: baseText !== undefined ? { text: baseText } : undefined })
+  } catch (e) {
+    if (e instanceof BodyConflictError) return conflict(e.current)
+    throw e
   }
-  const saved = await saveBody(current, doc, { actorId: session.user.id })
-  logAudit({ action: "update", entityType: "task", entityId: taskId, entityName: current.title, userId: session.user.id, request: req, metadata: { changes: ["description"], via: "block-editor" } })
+  const replacedLive = live.flushed && baseText === undefined ? live.replaced : null
+  logAudit({ action: "update", entityType: "task", entityId: taskId, entityName: current.title, userId: session.user.id, request: req, metadata: { changes: ["description"], via: "block-editor", ...(replacedLive ? { replacedLiveText: replacedLive } : {}) } })
   return NextResponse.json({ doc: saved.json, text: saved.text ?? "", updatedAt: saved.updatedAt.toISOString() })
 }
