@@ -62,7 +62,12 @@ struct OutletCalendarView: View {
             if !inMonth { Task { await store.show(month: String(d.prefix(7))) } }
         } label: {
             VStack(alignment: .leading, spacing: 3) {
-                NXMonthDayNumber(day: number, inMonth: inMonth, isToday: isToday, wide: wide)
+                // Phone: the ◎ right beside its own number; in the corner of a 56 pt cell it touched the next
+                // day's number and read as that day's (UI tour run 19, R19-I-27).
+                HStack(alignment: .center, spacing: 2) {
+                    NXMonthDayNumber(day: number, inMonth: inMonth, isToday: isToday, wide: wide)
+                    if ownTarget && !wide { NXMonthTargetMark(wide: false) }
+                }
                 if wide {
                     ForEach(list.prefix(2)) { e in
                         // Two lines for the name: one line cut every event to "ZZ QA cu…" on an iPad (run 14, P-I28).
@@ -95,7 +100,7 @@ struct OutletCalendarView: View {
             .padding(wide ? 6 : 3)
             .frame(maxWidth: .infinity, minHeight: wide ? 104 : 56, alignment: .topLeading)
             .overlay(alignment: .topTrailing) {
-                if ownTarget { NXMonthTargetMark(wide: wide).padding(wide ? 7 : 4) }
+                if ownTarget && wide { NXMonthTargetMark(wide: wide).padding(7) }
             }
             .nxMonthCell(inMonth: inMonth, selected: selected)
             .contentShape(Rectangle())

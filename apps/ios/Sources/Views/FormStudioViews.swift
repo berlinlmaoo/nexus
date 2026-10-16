@@ -817,8 +817,9 @@ struct FormAddQuestionMenu: View {
 struct FormPanelHint: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(T("Question settings").uppercased())
-                .font(NXFont.text(12, .semibold)).tracking(0.6).foregroundStyle(NX.mutedFg)
+            // A heading, not an uppercase eyebrow (decision 1 of run 19, R19-B-15).
+            Text(T("Question settings"))
+                .font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
             // "Tap" on an iPad, "Click" on a Mac (UI tour run 13, I-12).
             Text(PlatformWording.tapOrClick(
                 tap: "Tap a question to change its type, make it required, add logic or choose where its answer goes.",

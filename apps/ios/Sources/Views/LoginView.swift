@@ -235,17 +235,7 @@ struct LoginView: View {
             .overlay(RoundedRectangle(cornerRadius: 38, style: .continuous).strokeBorder(.white.opacity(0.65), lineWidth: 1))
             .shadow(color: .black.opacity(0.10), radius: 40, y: 26)
         }
-        .overlay(alignment: .bottom) {
-            Text(T("Secure sign-in").uppercased())
-                .font(NXFont.text(10, .bold))
-                .tracking(2)
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16).padding(.vertical, 7)
-                .background(NX.coral, in: Capsule())
-                .overlay(Capsule().strokeBorder(.white, lineWidth: 2))
-                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
-                .offset(y: 14)
-        }
+        // No "SECURE SIGN-IN" pill on the card's edge: an eyebrow with nothing to say (decision 1 of run 19).
     }
 
     @ViewBuilder
@@ -254,7 +244,7 @@ struct LoginView: View {
                                            @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline) {
-                Text(label.uppercased()).font(NXFont.text(11, .bold)).tracking(1).foregroundStyle(NX.mutedFg)
+                Text(label).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
                 Spacer(minLength: 8)
                 if let accessory { accessory }
             }

@@ -326,7 +326,15 @@ struct GideonPanel: View {
         } else {
             ZStack {
                 NX.background.ignoresSafeArea()
-                conversation
+                VStack(spacing: 0) {
+                    // The phone's bar drops its title for the tier, history, new chat and ⋯ group, so the name
+                    // and the web's "Acts in NEXUS as you" (what GIDEON may do) sit at the top of the page
+                    // (UI tour run 19, R19-I-11).
+                    if GideonSystemTitle.available && hSize == .compact {
+                        title.frame(maxWidth: .infinity).padding(.vertical, 6)
+                    }
+                    conversation
+                }
             }
             .navigationBarTitleDisplayMode(.inline)
             .modifier(GideonSystemTitle(title: displayName, subtitle: subtitleText))
@@ -468,7 +476,7 @@ struct GideonPanel: View {
             Text(subtitleText)
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
         }
-        .frame(maxWidth: 170)
+        .frame(maxWidth: 260)
         .accessibilityElement(children: .combine)
     }
 

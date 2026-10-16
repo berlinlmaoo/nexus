@@ -853,14 +853,14 @@ struct SocialDaySheet: View {
                     .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
             }
             ForEach(platforms) { p in platformSection(p) }
-            Section(T("What worked")) {
+            Section {
                 TextField(T("e.g. the 7 pm reel, a trending sound"), text: $worked, axis: .vertical)
                     .lineLimit(3...8).disabled(!editable)
-            }
-            Section(T("What didn't work")) {
+            } header: { SheetSectionTitle(T("What worked")) }
+            Section {
                 TextField(T("e.g. carousel posted too late"), text: $didntWork, axis: .vertical)
                     .lineLimit(3...8).disabled(!editable)
-            }
+            } header: { SheetSectionTitle(T("What didn't work")) }
             if store.canManage { targetsSection }
             if let by = day?.updatedBy, let at = OutletFormat.stamp(day?.updatedAt) {
                 Section {
@@ -893,7 +893,8 @@ struct SocialDaySheet: View {
                     ForEach(SocialMetric.allCases) { m in
                         VStack(alignment: .leading, spacing: 4) {
                             Text(m.label).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                            TextField("—", text: figureBinding(p.id, m))
+                            // An empty box, not a "—" placeholder that read as an entered value (R19-B-14).
+                            TextField("", text: figureBinding(p.id, m))
                                 .keyboardType(.numberPad)
                                 .monospacedDigit()
                                 .padding(.horizontal, 10).frame(minHeight: 36)
@@ -928,7 +929,7 @@ struct SocialDaySheet: View {
             }
         } header: {
             HStack {
-                Text(p.isArchived ? "\(p.name) · \(T("archived"))" : p.name)
+                SheetSectionTitle(p.isArchived ? "\(p.name) · \(T("archived"))" : p.name)
                 if wide {
                     Spacer(minLength: 8)
                     Text("\(T("Engagement")) \(engagementText)").monospacedDigit().textCase(nil)
@@ -1222,7 +1223,7 @@ struct SocialSettingsSheet: View {
                     .moveDisabled(true)
                 }
             } header: {
-                Text(String(format: T("Targets for %@"), OutletFormat.monthLabel(store.month)))
+                SheetSectionTitle(String(format: T("Targets for %@"), OutletFormat.monthLabel(store.month)))
             } footer: {
                 Text(T("Each day's target is the month's split evenly, unless a day sets its own in the calendar. Leave a box empty for no target."))
             }
@@ -1253,7 +1254,7 @@ struct SocialSettingsSheet: View {
                 }
                 .moveDisabled(true)
             } header: {
-                Text(T("Platforms"))
+                SheetSectionTitle(T("Platforms"))
             } footer: {
                 // The web's note on new platforms too (UI tour run 15, Q-IB14).
                 Text(T("Renaming keeps every figure. Archiving hides a platform from the form; its past days keep their numbers.")

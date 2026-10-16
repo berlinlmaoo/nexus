@@ -716,8 +716,10 @@ struct OutletMeter: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule().fill(NX.muted)
-                // The web's neutral fill (UI tour run 15, Q-IB11: purple bars), green once the target is reached.
-                Capsule().fill((pct ?? 0) >= 100 ? NX.success : NX.foreground.opacity(0.55)).frame(width: geo.size.width * value)
+                // The web's near-black fill (decision 6 of run 19: the 55% grey was barely visible at 4%; R19-I-24,
+                // R19-B-04), green once the target is reached. A started target shows at least a dot's worth.
+                Capsule().fill((pct ?? 0) >= 100 ? NX.success : NX.foreground)
+                    .frame(width: value > 0 ? max(height, geo.size.width * value) : 0)
             }
         }
         .frame(height: height)
@@ -947,8 +949,13 @@ struct OutletOverviewView: View {
                                 store.openForm(eventId: e.id, date: nil)
                                 tab = .reportForm
                             } label: {
-                                Text("\(OutletFormat.dayShort(e.date, thisYear: store.thisYear)) \(e.name)")
-                                    .font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                                // The date muted, then the night's name in bold, as the web's chip ("Tue, 13 Oct  ZZ temp
+                                // night"); one weight ran them together (UI tour run 19, R19-I-25 / R19-B-05).
+                                let day = OutletFormat.dayShort(e.date, thisYear: store.thisYear)
+                                    .replacingOccurrences(of: #"^(\S+) "#, with: "$1, ", options: .regularExpression)
+                                (Text(day).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                                 + Text("  ") + Text(e.name).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground))
+                                    .lineLimit(1)
                                     .padding(.horizontal, 10).padding(.vertical, 8)
                                     .background(NX.card, in: Capsule())
                                     .overlay(Capsule().strokeBorder(NX.warning.opacity(0.45)))
@@ -1160,9 +1167,11 @@ struct OutletEventCard: View {
                 }
             }
             .padding(.bottom, 6)
-            row(form.label("name", "Event name"), Text(event.name).fontWeight(.semibold))
+            // Every value in the card's one right-hand column, the name and the date as the figures (UI tour
+            // run 19, R19-I-28 / R19-B-11: they started mid-card while Sales and Pax sat at the edge).
+            row(form.label("name", "Event name"), Text(event.name).fontWeight(.semibold), number: true)
             // "Date", not the question's "Day/Date": the answer is one date (run 14, N-28).
-            row(T("Date"), Text(OutletFormat.dayLong(event.date, thisYear: thisYear)))
+            row(T("Date"), Text(OutletFormat.dayLong(event.date, thisYear: thisYear)), number: true)
             row(form.label("sales", "Sales"), Text(OutletFormat.vsTarget(event.sales, event.salesTarget, event.salesPct, money: true)), number: true)
             row(form.label("pax", "Pax"), Text(OutletFormat.vsTarget(event.pax, event.paxTarget, event.paxPct, money: false)), number: true)
             if event.status == .reported || event.rsvpTotal != nil || event.hostingTotal != nil {

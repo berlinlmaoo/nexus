@@ -23,8 +23,9 @@ struct OutletGuestOverview: View {
         let monthName = OutletFormat.monthLabel(store.month)
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
+                // The same title style as "Sales · October" beside it (UI tour run 19, R19-I-26).
                 Text(String(format: T("Guests · %@"), monthName))
-                    .font(NXFont.display(wide ? 18 : 16, .bold)).foregroundStyle(NX.foreground)
+                    .font(NXFont.text(wide ? 15 : 14, .semibold)).foregroundStyle(NX.foreground)
                 Spacer(minLength: 8)
                 if let g = store.guests, g.reportCount > 0 {
                     Text(g.reportCount == 1 ? T("From 1 report") : String(format: T("From %d reports"), Int(g.reportCount)))
@@ -128,15 +129,17 @@ struct OutletGuestOverview: View {
     /// One community: the chevron's slot on every row so the names line up (F-33 / I-27); the ones that
     /// open draw it. Same height and text colour for both kinds.
     private func communityRow(_ c: OutletGuestCommunity, expandable: Bool) -> some View {
+        // The name starts where the RSVP and Hosting labels start; the chevron follows it, so the three groups
+        // keep one label column (UI tour run 19, R19-I-26: a leading chevron slot indented every community).
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(NX.violetText)
-                .rotationEffect(.degrees(open.contains(c.id) ? 90 : 0))
-                .frame(width: 12)
-                .opacity(expandable ? 1 : 0)
-                .accessibilityHidden(true)
             Text(c.archived ? "\(c.name) · \(T("archived"))" : c.name)
                 .font(NXFont.text(14)).foregroundStyle(c.archived ? NX.mutedFg : NX.foreground).lineLimit(1)
+            if expandable {
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(NX.violetText)
+                    .rotationEffect(.degrees(open.contains(c.id) ? 90 : 0))
+                    .accessibilityHidden(true)
+            }
             Spacer(minLength: 4)
             Text(OutletFormat.count(c.total)).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                 .monospacedDigit()
@@ -665,12 +668,23 @@ extension View {
 
 
 /// A settings section's heading with its helper line right under it, as the web's (UI tour run 16, R16-B-18).
+/// A section heading in a settings or record sheet: the primary label colour, as the web's, not the grouped
+/// list's secondary grey that read as disabled and was lighter than its own helper line (decision 7 of run 19,
+/// R19-I-29 / R19-B-09).
+struct SheetSectionTitle: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View {
+        Text(text).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).textCase(nil)
+    }
+}
+
 struct OutletSettingsHeading: View {
     let title: String
     let helper: String
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(title)
+            SheetSectionTitle(title)
             Text(helper).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).textCase(nil)
                 .fixedSize(horizontal: false, vertical: true)
         }

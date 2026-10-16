@@ -1263,7 +1263,7 @@ if !XpRules.tiers.isEmpty {
             HStack {
                 Text(T("Daily agenda")).font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
                 Spacer()
-                Text(ProjDate.fmt("MMMM yyyy").string(from: selectedDay).capitalized)
+                Text(AppDateLocale.monthTitle(selectedDay))
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
             // Whole days only: the chips share the card's width out evenly (as many as fit at 46 pt or
@@ -1363,11 +1363,8 @@ if !XpRules.tiers.isEmpty {
                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(NX.border, lineWidth: 1))
             }
             .buttonStyle(.plain)
-            // The phone's card names the person here; on iPad / Mac the greeting above already does, and the
-            // web card has no name under Edit profile (UI tour run 16, R16-B-14).
-            if hSize != .regular {
-                Text(name).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-            }
+            // No name under Edit profile on any width, as on the web: on the phone it sat alone under the button,
+            // away from the avatar (UI tour run 19, iPhone R19-I-07).
         }
         .nexusCard()
     }
@@ -1379,7 +1376,8 @@ if !XpRules.tiers.isEmpty {
 
     private func row(_ label: String, _ value: String) -> some View {
         HStack(spacing: 12) {
-            SectionLabel(label).lineLimit(1).fixedSize()
+            // A field label in sentence case, not an uppercase eyebrow (UI tour run 19, R19-B-15, decision 1).
+            Text(label).font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg).lineLimit(1).fixedSize()
             Text(value).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
         }
     }
