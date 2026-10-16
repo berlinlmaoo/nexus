@@ -41,17 +41,21 @@ export async function moveToGroup(task: NexusTask, by: string, from: string, to:
     if (!none) await nexusApi.addAssignee(task.id, to);
     return;
   }
+  // Tags and multi / people values move relative to what is stored (race audit 16 Oct 2026, M13): the whole
+  // list from this screen's copy undid what someone else added meanwhile.
   if (by === "tags") {
-    const tags = (task.tags ?? []).filter((x) => x !== from);
-    return nexusApi.updateTask(task.id, { tags: none ? tags : Array.from(new Set([...tags, to])) });
+    return nexusApi.updateTask(task.id, { ...(from !== EMPTY_GROUP ? { removeTags: [from] } : {}), ...(none ? {} : { addTags: [to] }) });
   }
   const def = propDef(defs, by);
   if (!def || !by.startsWith("cf:")) return;
   const fieldId = by.slice(3);
   if (def.kind === "select") return nexusApi.setCustomFieldValue(fieldId, task.id, none ? "" : to);
+  if (def.kind === "person" || def.kind === "multi") {
+    return nexusApi.editCustomFieldValues(fieldId, task.id, { ...(from !== EMPTY_GROUP ? { removeValues: [from] } : {}), ...(none ? {} : { addValues: [to] }) });
+  }
   const list = taskValues(task, by).filter((x) => x !== from);
   const next = none ? list : Array.from(new Set([...list, to]));
-  return nexusApi.setCustomFieldValue(fieldId, task.id, def.kind === "person" || def.kind === "multi" ? JSON.stringify(next) : next[0] ?? "");
+  return nexusApi.setCustomFieldValue(fieldId, task.id, next[0] ?? "");
 }
 
 /** Undo of moveToGroup for the groupings that aren't a plain task field: put the task's old value back. */
@@ -62,7 +66,10 @@ async function restoreGroup(orig: NexusTask, by: string, from: string, to: strin
     if (from !== EMPTY_GROUP && from !== to) await nexusApi.addAssignee(orig.id, from);
     return;
   }
-  if (by === "tags") return nexusApi.updateTask(orig.id, { tags: orig.tags ?? [] });
+  if (by === "tags") {
+    const had = orig.tags ?? [];
+    return nexusApi.updateTask(orig.id, { ...(to !== EMPTY_GROUP && !had.includes(to) ? { removeTags: [to] } : {}), ...(from !== EMPTY_GROUP ? { addTags: [from] } : {}) });
+  }
   if (!by.startsWith("cf:")) return;
   const fieldId = by.slice(3);
   const raw = (orig.customFieldValues ?? []).find((c) => c.customFieldId === fieldId)?.value;

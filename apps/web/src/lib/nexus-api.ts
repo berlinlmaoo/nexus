@@ -2453,7 +2453,7 @@ export const nexusApi = {
   /** Many tasks to one column in one request (multi-drag): the same edit as updateTask, per task. */
   batchMoveTasks: (payload: { taskIds: string[]; taskListId?: string; status?: string; priority?: string; projectContextId?: string }) =>
     apiFetch<{ moved: string[]; failed: Array<{ id: string; error: string }> }>("/api/tasks/batch-move", { method: "POST", body: JSON.stringify(payload) }),
-  updateTask: (taskId: string, payload: Partial<Pick<NexusTask, "title" | "status" | "priority" | "dueDate" | "tags">> & { description?: string | null; taskListId?: string; position?: number; projectContextId?: string }) => apiFetch<NexusTask>(`/api/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  updateTask: (taskId: string, payload: Partial<Pick<NexusTask, "title" | "status" | "priority" | "dueDate" | "tags">> & { description?: string | null; taskListId?: string; position?: number; projectContextId?: string; /** Relative to what is stored (race audit M13). */ addTags?: string[]; removeTags?: string[] }) => apiFetch<NexusTask>(`/api/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   goals: () => apiFetch<{ goals: NexusGoal[] }>("/api/goals"),
   createGoal: (payload: { title: string; description?: string | null; workspaceId: string; dueDate?: string | null; parentId?: string | null }) => apiFetch<{ goal: NexusGoal }>("/api/goals", { method: "POST", body: JSON.stringify(payload) }),
   goal: (goalId: string) => apiFetch<{ goal: NexusGoalDetail }>(`/api/goals/${goalId}`),
@@ -2645,7 +2645,8 @@ export const nexusApi = {
   /** Undo of the caller's own task deletes (30 minutes; else Control Room → Audit). */
   undoDeleteTasks: (auditLogIds: string[]) => apiFetch<{ restored: string[]; failed: Array<{ id: string; error: string }> }>("/api/tasks/undo-delete", { method: "POST", body: JSON.stringify({ auditLogIds }) }),
   /** Manual order inside a section: its tasks in the new order, top first. */
-  reorderTasks: (payload: { taskListId: string; orderedIds: string[]; movedId?: string }) => apiFetch<{ ok: boolean; updated: number }>("/api/tasks/reorder", { method: "POST", body: JSON.stringify(payload) }),
+  /** `movedIds` + `beforeId` (null = to the end): a move applied to the column as stored now (race audit M12); `orderedIds`: the whole order (undo). */
+  reorderTasks: (payload: { taskListId: string; orderedIds?: string[]; movedIds?: string[]; beforeId?: string | null; afterId?: string | null; movedId?: string }) => apiFetch<{ ok: boolean; updated: number; order?: string[] }>("/api/tasks/reorder", { method: "POST", body: JSON.stringify(payload) }),
   // Backend accepts an optional { dueDate } to override the copy's due date (used by batch duplicate).
   /**
    * Duplicate a task. Pass `taskListId` to copy it into ANOTHER list — which may belong to a
@@ -2824,6 +2825,21 @@ export const nexusApi = {
   projectTaskCovers: (projectId: string) => apiFetch<{ covers: Record<string, { url: string; attachmentId: string }> }>(`/api/projects/${projectId}/task-covers`),
   projectCustomFields: (projectId: string) => apiFetch<{ fields: NexusCustomField[] }>(`/api/custom-fields?projectId=${encodeURIComponent(projectId)}`),
   setCustomFieldValue: (id: string, taskId: string, value: unknown) => apiFetch<{ success?: boolean }>("/api/custom-fields", { method: "PATCH", body: JSON.stringify({ id, taskId, value }) }),
+  /**
+   * Save a value the screen edited from `prev`. A list (multi-select) goes as the options ticked / unticked,
+   * applied to what is stored now, so two people ticking different options both land (race audit M13).
+   */
+  saveCustomFieldValue: (id: string, taskId: string, value: unknown, prev?: unknown) => {
+    if (Array.isArray(value) && Array.isArray(prev)) {
+      const was = prev.map(String), now = value.map(String);
+      const addValues = now.filter((v) => !was.includes(v)), removeValues = was.filter((v) => !now.includes(v));
+      if (!addValues.length && !removeValues.length) return Promise.resolve({ success: true });
+      return apiFetch<{ success?: boolean }>("/api/custom-fields", { method: "PATCH", body: JSON.stringify({ id, taskId, ...(addValues.length ? { addValues } : {}), ...(removeValues.length ? { removeValues } : {}) }) });
+    }
+    return apiFetch<{ success?: boolean }>("/api/custom-fields", { method: "PATCH", body: JSON.stringify({ id, taskId, value }) });
+  },
+  /** Tick / untick options of a multi-select or people value, relative to what is stored (race audit M13). */
+  editCustomFieldValues: (id: string, taskId: string, ops: { addValues?: string[]; removeValues?: string[] }) => apiFetch<{ success?: boolean }>("/api/custom-fields", { method: "PATCH", body: JSON.stringify({ id, taskId, ...ops }) }),
   uploadCustomFieldFile: (projectId: string, file: File) => {
     const fd = new FormData();
     fd.set("projectId", projectId); fd.set("file", file);
@@ -2831,7 +2847,7 @@ export const nexusApi = {
   },
   // --- Custom field DEFINITIONS (manage per-project) ---
   createCustomField: (projectId: string, payload: { name: string; type: string; options?: NexusCustomFieldOptions | null }) => apiFetch<{ field: NexusCustomField }>("/api/custom-fields", { method: "POST", body: JSON.stringify({ projectId, name: payload.name, type: payload.type, options: payload.options ?? undefined, saveToLibrary: false }) }),
-  updateCustomField: (id: string, payload: { name?: string; type?: string; options?: NexusCustomFieldOptions | null }) => apiFetch<{ field: NexusCustomField }>("/api/custom-fields", { method: "PATCH", body: JSON.stringify({ id, ...payload }) }),
+  updateCustomField: (id: string, payload: { name?: string; type?: string; options?: NexusCustomFieldOptions | null; /** Relative to the stored list (race audit M13). */ addOptions?: string[]; removeOptions?: string[] }) => apiFetch<{ field: NexusCustomField }>("/api/custom-fields", { method: "PATCH", body: JSON.stringify({ id, ...payload }) }),
   deleteCustomField: (id: string) => apiFetch<{ success?: boolean }>(`/api/custom-fields?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
   reorderCustomFields: (projectId: string, orderedIds: string[]) => apiFetch<{ success?: boolean }>("/api/custom-fields", { method: "PATCH", body: JSON.stringify({ projectId, reorder: orderedIds.map((id) => ({ id })) }) }),
 
@@ -3034,7 +3050,7 @@ export const nexusApi = {
   // --- Portfolios ---
   portfolios: () => apiFetch<NexusPortfolio[]>("/api/portfolios"),
   createPortfolio: (payload: { name: string; description?: string | null; workspaceId: string; projectIds?: string[] }) => apiFetch<NexusPortfolio>("/api/portfolios", { method: "POST", body: JSON.stringify(payload) }),
-  updatePortfolio: (portfolioId: string, payload: { name?: string; description?: string | null; projectIds?: string[] }) => apiFetch<NexusPortfolio>(`/api/portfolios/${portfolioId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  updatePortfolio: (portfolioId: string, payload: { name?: string; description?: string | null; projectIds?: string[]; /** Relative to the stored links (race audit M13). */ addProjectIds?: string[]; removeProjectIds?: string[] }) => apiFetch<NexusPortfolio>(`/api/portfolios/${portfolioId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deletePortfolio: (portfolioId: string) => apiFetch<{ success?: boolean }>(`/api/portfolios/${portfolioId}`, { method: "DELETE" }),
 
   // --- Reports ---
@@ -3064,7 +3080,7 @@ export const nexusApi = {
   formsMany: (projectIds: string[]) => apiFetch<NexusForm[]>(`/api/forms?projectIds=${projectIds.map(encodeURIComponent).join(",")}`),
   form: (formId: string) => apiFetch<NexusForm>(`/api/forms/${formId}`),
   createForm: (payload: { name: string; description?: string | null; fields: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; projectId: string; accessSchedule?: unknown; branding?: NexusFormBranding | null; settings?: NexusFormSettings | null }) => apiFetch<NexusForm>("/api/forms", { method: "POST", body: JSON.stringify(payload) }),
-  updateForm: (formId: string, payload: { name?: string; description?: string | null; fields?: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; accessSchedule?: unknown; branding?: NexusFormBranding | null; settings?: NexusFormSettings | null }) => apiFetch<NexusForm>(`/api/forms/${formId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  updateForm: (formId: string, payload: { name?: string; description?: string | null; fields?: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; accessSchedule?: unknown; branding?: NexusFormBranding | null; settings?: NexusFormSettings | null; /** The form's updatedAt this edit started from: 409 FORM_CHANGED when someone saved since (race audit H7). */ baseUpdatedAt?: string }) => apiFetch<NexusForm>(`/api/forms/${formId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   /** The builder's Responses tab: submissions newest first with the task each one created (12 Oct 2026). */
   formResponses: (formId: string) => apiFetch<{ total: number; projectId: string; responses: NexusFormResponse[] }>(`/api/forms/${formId}/responses`),
   // expectCount: the response count the person saw; with force the server refuses (409) if more arrived since.

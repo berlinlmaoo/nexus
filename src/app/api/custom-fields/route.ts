@@ -429,6 +429,16 @@ export async function PATCH(req: NextRequest) {
     }
 
     const { id, taskId, value, name, type, options, position, promoteToLibrary } = body
+    // Race audit 16 Oct 2026 (M13): edits relative to what is stored NOW. A multi-select (or people) value and a
+    // field's option list were only ever sent whole, from the client's copy: 20 options ticked at once kept 1,
+    // 10 options added at once kept 1. These are applied under a lock to the stored list instead.
+    const strList = (v: unknown) => (Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean).slice(0, 200) : undefined)
+    const addValues = strList(body.addValues)
+    const removeValues = strList(body.removeValues)
+    const addOptions = strList(body.addOptions)
+    const removeOptions = strList(body.removeOptions)
+    const valueOps = addValues !== undefined || removeValues !== undefined
+    const optionOps = addOptions !== undefined || removeOptions !== undefined
     if (!id) {
       return NextResponse.json({ error: "Missing field id" }, { status: 400 })
     }
@@ -478,13 +488,13 @@ export async function PATCH(req: NextRequest) {
       options !== undefined && prevColors && typeof prevColors === "object" && !(options && typeof options === "object" && !Array.isArray(options) && "optionColors" in options)
         ? { ...(Array.isArray(options) ? { options } : (options as Record<string, unknown>)), optionColors: prevColors }
         : options
-    const normalizedOptionsJson =
+    let normalizedOptionsJson =
       options !== undefined
         ? (normalizeCustomFieldOptions(normalizedType, optionsIn) ?? undefined) as InputJsonValue | undefined
         : undefined
     // NUMBER values are stored per the field's format (Rupiah = integer digits), so writes use the
     // options this request leaves the field with.
-    const effectiveOptions: unknown = options !== undefined ? normalizedOptionsJson ?? null : existingField.options
+    let effectiveOptions: unknown = options !== undefined ? normalizedOptionsJson ?? null : existingField.options
 
     if (taskId) {
       const task = await prisma.task.findFirst({
@@ -517,26 +527,39 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ error: "Task not found in this project" }, { status: 404 })
       }
 
-      const serializedValue =
-        normalizedType === "CREATED"
-          ? serializeCustomFieldValue(normalizedType, undefined, task.createdAt)
-          : serializeCustomFieldValue(normalizedType, value, task.createdAt, effectiveOptions)
-
-      const fieldValue = await prisma.customFieldValue.upsert({
-        where: {
-          customFieldId_taskId: {
-            customFieldId: id,
-            taskId,
-          },
-        },
-        update: {
-          value: serializedValue,
-        },
-        create: {
-          customFieldId: id,
-          taskId,
-          value: serializedValue,
-        },
+      if (valueOps && normalizedType !== "MULTI_SELECT" && normalizedType !== "TEXT") {
+        return NextResponse.json({ error: "addValues / removeValues are for multi-select and people fields", code: "INVALID_VALUE_OP" }, { status: 400 })
+      }
+      // One writer per (field, task) at a time: the value is read and written under
+      // pg_advisory_xact_lock('cfv|<field>|<task>'), which also ends the upsert's create-twice race (P2002 → 500).
+      const { fieldValue, previous } = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`cfv|${id}|${taskId}`})::int8)`
+        const stored = await tx.customFieldValue.findUnique({ where: { customFieldId_taskId: { customFieldId: id, taskId } }, select: { value: true } })
+        let serializedValue: string
+        if (valueOps) {
+          // The list stored now (a multi-select's JSON array; a people field's JSON array in a TEXT value).
+          let list: string[] = []
+          try {
+            const parsed = stored?.value ? JSON.parse(stored.value) : []
+            if (Array.isArray(parsed)) list = parsed.map((x) => String(x))
+          } catch {
+            list = stored?.value ? [stored.value] : []
+          }
+          for (const v of addValues ?? []) if (!list.includes(v)) list.push(v)
+          if (removeValues?.length) list = list.filter((v) => !removeValues.includes(v))
+          serializedValue = normalizedType === "MULTI_SELECT" ? serializeCustomFieldValue(normalizedType, list, task.createdAt, effectiveOptions) : JSON.stringify(list)
+        } else {
+          serializedValue =
+            normalizedType === "CREATED"
+              ? serializeCustomFieldValue(normalizedType, undefined, task.createdAt)
+              : serializeCustomFieldValue(normalizedType, value, task.createdAt, effectiveOptions)
+        }
+        const row = await tx.customFieldValue.upsert({
+          where: { customFieldId_taskId: { customFieldId: id, taskId } },
+          update: { value: serializedValue },
+          create: { customFieldId: id, taskId, value: serializedValue },
+        })
+        return { fieldValue: row, previous: stored?.value ?? "" }
       })
 
       // A person set this value by hand: it is theirs now, not GIDEON's (AI Autofill ✨ marker, 12 Oct 2026).
@@ -548,7 +571,7 @@ export async function PATCH(req: NextRequest) {
         projectId: existingField.projectId,
         actorId: session.user.id,
         taskId,
-        changes: { [`cf:${id}`]: { from: parseCustomFieldValue(normalizedType, task.customFieldValues[0]?.value ?? "", task.createdAt), to: parseCustomFieldValue(normalizedType, fieldValue.value, task.createdAt) } },
+        changes: { [`cf:${id}`]: { from: parseCustomFieldValue(normalizedType, previous, task.createdAt), to: parseCustomFieldValue(normalizedType, fieldValue.value, task.createdAt) } },
       }).catch(() => {})
 
       logAudit({
@@ -563,7 +586,7 @@ export async function PATCH(req: NextRequest) {
           fieldId: id,
           fieldName: existingField.name,
           taskTitle: task.title,
-          from: auditDisplayValue(normalizedType, existingField.options, task.customFieldValues[0]?.value),
+          from: auditDisplayValue(normalizedType, existingField.options, previous),
           to: auditDisplayValue(normalizedType, existingField.options, fieldValue.value),
         },
       })
@@ -588,6 +611,27 @@ export async function PATCH(req: NextRequest) {
     const nextName = name !== undefined ? String(name).trim() : existingField.name
 
     const updatedField = await prisma.$transaction(async (tx: any) => {
+      // The field row locked first (race audit 16 Oct 2026, M13), and its options read again under the lock:
+      // `addOptions` / `removeOptions` and the option colours a released app does not know about are applied to
+      // the list stored NOW, not to the copy read at the top of the request.
+      await tx.$queryRaw`SELECT id FROM "CustomField" WHERE id = ${id} FOR UPDATE`
+      if (optionOps || options !== undefined) {
+        const fresh = await tx.customField.findUnique({ where: { id }, select: { options: true } })
+        const freshObj = (fresh?.options ?? null) as { options?: unknown; optionColors?: unknown } | unknown[] | null
+        const freshColors = freshObj && !Array.isArray(freshObj) ? freshObj.optionColors : undefined
+        if (optionOps) {
+          const sentList = options !== undefined ? (Array.isArray(options) ? options : (options as { options?: unknown } | null)?.options) : undefined
+          const baseList: string[] = (Array.isArray(sentList) ? sentList : Array.isArray(freshObj) ? freshObj : Array.isArray(freshObj?.options) ? freshObj!.options as unknown[] : []).map((x: unknown) => String(x))
+          let list = [...baseList]
+          for (const o of addOptions ?? []) if (!list.includes(o)) list.push(o)
+          if (removeOptions?.length) list = list.filter((o) => !removeOptions.includes(o))
+          const rest = options && typeof options === "object" && !Array.isArray(options) ? (options as Record<string, unknown>) : freshObj && !Array.isArray(freshObj) ? (freshObj as Record<string, unknown>) : {}
+          normalizedOptionsJson = (normalizeCustomFieldOptions(normalizedType, { ...rest, options: list, ...(freshColors && !("optionColors" in (options && typeof options === "object" ? options : {})) ? { optionColors: freshColors } : {}) }) ?? undefined) as InputJsonValue | undefined
+        } else if (freshColors && typeof freshColors === "object" && !(options && typeof options === "object" && !Array.isArray(options) && "optionColors" in options)) {
+          normalizedOptionsJson = (normalizeCustomFieldOptions(normalizedType, { ...(Array.isArray(options) ? { options } : (options as Record<string, unknown>)), optionColors: freshColors }) ?? undefined) as InputJsonValue | undefined
+        }
+        effectiveOptions = normalizedOptionsJson ?? null
+      }
       let libraryId = existingField.libraryId
 
       if (promoteToLibrary && !libraryId) {
@@ -604,13 +648,13 @@ export async function PATCH(req: NextRequest) {
         libraryId = libraryField.id
       }
 
-      if (libraryId && (name !== undefined || type !== undefined || options !== undefined || promoteToLibrary)) {
+      if (libraryId && (name !== undefined || type !== undefined || options !== undefined || optionOps || promoteToLibrary)) {
         await tx.customFieldLibrary.update({
           where: { id: libraryId },
           data: {
             ...(name !== undefined || promoteToLibrary ? { name: nextName } : {}),
             ...(type !== undefined || promoteToLibrary ? { type: normalizedType } : {}),
-            ...(options !== undefined || promoteToLibrary ? { options: normalizedOptionsJson } : {}),
+            ...(options !== undefined || optionOps || promoteToLibrary ? { options: normalizedOptionsJson } : {}),
           },
         })
       }
@@ -629,7 +673,7 @@ export async function PATCH(req: NextRequest) {
         data: {
           ...(name !== undefined || promoteToLibrary ? { name: nextName } : {}),
           ...(type !== undefined || promoteToLibrary ? { type: normalizedType } : {}),
-          ...(options !== undefined || promoteToLibrary ? { options: normalizedOptionsJson } : {}),
+          ...(options !== undefined || optionOps || promoteToLibrary ? { options: normalizedOptionsJson } : {}),
           ...(promoteToLibrary ? { libraryId } : {}),
         },
       })

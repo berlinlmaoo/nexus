@@ -56,6 +56,7 @@ function DocPage() {
   const titleDirty = useRef(false);
   const titleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const base = useRef<string | undefined>(undefined);
+  const baseFor = useRef<string | null>(null);
 
   // Header fields follow the server unless being typed into here.
   useEffect(() => {
@@ -64,7 +65,13 @@ function DocPage() {
     setIcon(d.icon ?? null);
     setCover(d.coverImage ?? null);
     setFullWidth(!!d.fullWidth);
-    base.current = d.updatedAt ?? undefined;
+    // The body's base only from the first load of this page and from our own saves (race audit 16 Oct 2026,
+    // M10): taking it from every refetch (someone else's header edit, their body save) moved it onto content
+    // this editor never merged, and its next REST save then overwrote theirs without a 409.
+    if (base.current === undefined || baseFor.current !== d.id) {
+      base.current = d.updatedAt ?? undefined;
+      baseFor.current = d.id;
+    }
   }, [d]);
 
   const patch = useCallback(async (payload: Parameters<typeof nexusApi.updateDoc>[1]) => {

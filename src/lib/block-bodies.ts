@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma"
+import type { Prisma } from "@/generated/prisma/client"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
 import { checkProjectAccess, hasProjectLevel } from "@/lib/rbac"
 import { canReadProjectContent, canReadTask } from "@/lib/read-access"
@@ -45,14 +46,14 @@ export function parseRoomKey(key: unknown): { kind: BodyKind; id: string } | nul
   return m ? { kind: m[1] as BodyKind, id: m[2] } : null
 }
 
-export async function loadBody(kind: BodyKind, id: string): Promise<LoadedBody | null> {
+export async function loadBody(kind: BodyKind, id: string, db: Prisma.TransactionClient | typeof prisma = prisma): Promise<LoadedBody | null> {
   if (kind === "doc") {
-    const doc = await prisma.doc.findUnique({ where: { id }, select: { content: true, contentText: true, title: true, projectId: true, updatedAt: true } })
+    const doc = await db.doc.findUnique({ where: { id }, select: { content: true, contentText: true, title: true, projectId: true, updatedAt: true } })
     if (!doc) return null
     const json = sanitizeDoc(doc.content) ?? EMPTY_DOC
     return { kind, id, json, title: doc.title, projectId: doc.projectId, text: doc.contentText ?? "", updatedAt: doc.updatedAt }
   }
-  const task = await prisma.task.findUnique({
+  const task = await db.task.findUnique({
     where: { id },
     select: { description: true, title: true, updatedAt: true, taskList: { select: { projectId: true } }, body: { select: { doc: true } } },
   })
@@ -182,30 +183,69 @@ function announce(key: string, throttle: boolean, fn: () => void) {
 }
 
 /**
+ * What a save expects the stored body to still be (race audit 16 Oct 2026, M10). Checked INSIDE the save's
+ * transaction, with the Doc / Task row locked (SELECT … FOR UPDATE), so two savers can no longer both pass a
+ * check made before either wrote (20 REST saves from one base used to land 3–6 times, each overwriting the last):
+ *  - `canon`: the canonical JSON the saver last saw (a live room: what it last persisted);
+ *  - `updatedAt`: the Doc's updatedAt the editor started from (REST `baseUpdatedAt`; docs only — a task's
+ *    updatedAt moves on every field edit, so a task body is checked by its content instead);
+ *  - `text`: the description the editor started from (REST `baseText`).
+ * A mismatch throws BodyConflictError carrying what is stored now; nothing is written.
+ */
+export type BodyExpectation = { canon?: string; updatedAt?: string; text?: string }
+
+export class BodyConflictError extends Error {
+  constructor(readonly current: LoadedBody) {
+    super("This content was changed by someone else.")
+  }
+}
+
+/** The row lock every body writer takes first (the Doc row, or the Task row for a task body). */
+async function lockBodyRow(tx: Prisma.TransactionClient, kind: BodyKind, id: string) {
+  if (kind === "doc") await tx.$queryRaw`SELECT id FROM "Doc" WHERE id = ${id} FOR UPDATE`
+  else await tx.$queryRaw`SELECT id FROM "Task" WHERE id = ${id} FOR UPDATE`
+}
+
+/**
  * Store a body. `prev` is what the saver started from (mentions already there are not notified again).
- * Returns the stored JSON and text.
+ * Returns the stored JSON and text. One transaction with the row locked; with `expect` the stored body is
+ * re-read under that lock and compared first (BodyConflictError on a mismatch, nothing written).
  */
 export async function saveBody(
   body: LoadedBody,
   next: BlockDoc,
-  opts: { actorId: string | null; prev?: BlockDoc; fromRoom?: boolean },
+  opts: { actorId: string | null; prev?: BlockDoc; fromRoom?: boolean; expect?: BodyExpectation },
 ): Promise<{ json: BlockDoc; text: string | null; updatedAt: Date }> {
   const text = descriptionOf(next)
-  let updatedAt: Date
+  const saved = await prisma.$transaction(async (tx) => {
+    await lockBodyRow(tx, body.kind, body.id)
+    const exp = opts.expect
+    if (exp && (exp.canon !== undefined || exp.updatedAt !== undefined || exp.text !== undefined)) {
+      const fresh = await loadBody(body.kind, body.id, tx)
+      if (!fresh) throw new BodyConflictError(body)
+      const stale =
+        (exp.canon !== undefined && canonicalDoc(fresh.json) !== exp.canon) ||
+        (exp.updatedAt !== undefined && body.kind === "doc" && fresh.updatedAt.toISOString() !== exp.updatedAt) ||
+        (exp.text !== undefined && fresh.text !== exp.text)
+      if (stale) throw new BodyConflictError(fresh)
+    }
+    if (body.kind === "doc") {
+      const row = await tx.doc.update({ where: { id: body.id }, data: { content: next as unknown as InputJsonValue, contentText: text }, select: { updatedAt: true, projectId: true } })
+      return { updatedAt: row.updatedAt, projectId: row.projectId, parentId: null as string | null }
+    }
+    const task = await tx.task.update({ where: { id: body.id }, data: { description: text }, select: { parentId: true, updatedAt: true, taskList: { select: { projectId: true } } } })
+    await tx.taskBody.upsert({ where: { taskId: body.id }, create: { taskId: body.id, doc: next as unknown as InputJsonValue, updatedById: opts.actorId }, update: { doc: next as unknown as InputJsonValue, updatedById: opts.actorId } })
+    return { updatedAt: task.updatedAt, projectId: task.taskList.projectId, parentId: task.parentId }
+  })
+  const { updatedAt, projectId, parentId } = saved
   if (body.kind === "doc") {
-    const row = await prisma.doc.update({ where: { id: body.id }, data: { content: next as unknown as InputJsonValue, contentText: text }, select: { updatedAt: true, projectId: true } })
-    updatedAt = row.updatedAt
-    announce(`doc:${body.id}`, !!opts.fromRoom, () => eventBus.emit(BUS_EVENTS.DOC_CHANGED, { projectId: row.projectId, docId: body.id, actorId: opts.actorId }))
+    announce(`doc:${body.id}`, !!opts.fromRoom, () => eventBus.emit(BUS_EVENTS.DOC_CHANGED, { projectId, docId: body.id, actorId: opts.actorId }))
   } else {
-    const [task] = await prisma.$transaction([
-      prisma.task.update({ where: { id: body.id }, data: { description: text }, select: { id: true, parentId: true, updatedAt: true, taskList: { select: { projectId: true } } } }),
-      prisma.taskBody.upsert({ where: { taskId: body.id }, create: { taskId: body.id, doc: next as unknown as InputJsonValue, updatedById: opts.actorId }, update: { doc: next as unknown as InputJsonValue, updatedById: opts.actorId } }),
-    ])
-    updatedAt = task.updatedAt
     // Ids (and the new text) only: lists refetch; iOS reads id/parentId.
-    announce(`task:${body.id}`, !!opts.fromRoom, () => emitTaskUpdated(task.taskList.projectId, { id: task.id, parentId: task.parentId, description: text, updatedAt: task.updatedAt.toISOString() }))
+    announce(`task:${body.id}`, !!opts.fromRoom, () => emitTaskUpdated(projectId, { id: body.id, parentId, description: text, updatedAt: updatedAt.toISOString() }))
   }
-  // A REST save while a live room has the body open: the room reloads from what was just stored.
+  // A REST save while a live room has the body open: the room reloads from what was just stored. The caller
+  // flushed the room's pending edits BEFORE writing (flushLiveRoom, lib/collab-rooms.ts — race audit H9).
   if (!opts.fromRoom) eventBus.emit(BUS_EVENTS.COLLAB_EXTERNAL_WRITE, { key: `${body.kind}:${body.id}` })
   await notifyNewMentions(body, opts.prev ?? body.json, next, opts.actorId).catch((error) => log.warn("mentions failed", { error: String(error) }))
   await syncReminders(body, next).catch((error) => log.warn("reminders failed", { error: String(error) }))

@@ -143,8 +143,8 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   const toggleAssignee = async (taskId: string, userId: string, has: boolean) => {
     try { has ? await nexusApi.removeAssignee(taskId, userId) : await nexusApi.addAssignee(taskId, userId); invalidate(); } catch { toast.error(t("Couldn't save the change")); }
   };
-  const setCf = async (fieldId: string, taskId: string, value: unknown) => {
-    try { await nexusApi.setCustomFieldValue(fieldId, taskId, value); invalidate(); qc.invalidateQueries({ queryKey: ["gideon-autofill", projectId] }); } catch { toast.error(t("Couldn't save the change")); }
+  const setCf = async (fieldId: string, taskId: string, value: unknown, prev?: unknown) => {
+    try { await nexusApi.saveCustomFieldValue(fieldId, taskId, value, prev); invalidate(); qc.invalidateQueries({ queryKey: ["gideon-autofill", projectId] }); } catch { toast.error(t("Couldn't save the change")); }
   };
   // ✨ on AI Autofill columns and on the values GIDEON wrote (a person's edit makes a value theirs again).
   const ai = useAutofillMarks(projectId);
@@ -418,7 +418,7 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
   projectId: string;
   patchTask: (taskId: string, payload: Parameters<typeof nexusApi.updateTask>[1]) => void;
   toggleAssignee: (taskId: string, userId: string, has: boolean) => void;
-  setCf: (fieldId: string, taskId: string, value: unknown) => void;
+  setCf: (fieldId: string, taskId: string, value: unknown, prev?: unknown) => void;
 }) {
   const { t, locale } = useLang();
   // Cells read as text until hovered (Notion): no select chevrons, no "mm/dd/yyyy" in empty dates.
@@ -432,7 +432,7 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
     // MULTI_SELECT (e.g. TALENT) can hold many options — rendered inline it stretches the whole table
     // to the right. In the Table view collapse it to a compact summary + dropdown instead.
     if ((def.type ?? "").toUpperCase() === "MULTI_SELECT") {
-      return <MultiSelectCell field={def} value={Array.isArray(value) ? (value as string[]) : []} onSet={(v) => setCf(def.id, task.id, v)} />;
+      return <MultiSelectCell field={def} value={Array.isArray(value) ? (value as string[]) : []} onSet={(v) => setCf(def.id, task.id, v, value)} />;
     }
     if ((def.type ?? "").toUpperCase() === "CREATED") return <CreatedCell raw={raw} task={task} members={members} />;
     // key by the persisted raw value so the editor re-seeds its internal state after a save+refetch

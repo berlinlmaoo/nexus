@@ -503,7 +503,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["task-followers", taskId] }),
   });
   const setCfMut = useMutation({
-    mutationFn: ({ id, value }: { id: string; value: unknown }) => nexusApi.setCustomFieldValue(id, taskId, value),
+    mutationFn: ({ id, value, prev }: { id: string; value: unknown; prev?: unknown }) => nexusApi.saveCustomFieldValue(id, taskId, value, prev),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["task-cf", taskId] }); if (projectId) qc.invalidateQueries({ queryKey: ["gideon-autofill", projectId] }); },
   });
   const [cfAdding, setCfAdding] = useState(false);
@@ -856,7 +856,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
               {projectId && (customFields.data?.fields ?? []).map((f) => (
                 <PropRow key={f.id} icon={fieldIcon(f.type)} label={f.name}
                   aside={ai.aiFields.has(f.id) ? <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 text-[10px] font-semibold text-primary/80" title={ai.isMarked(f.id, taskId) ? "GIDEON" : tr("AI Autofill")}><Sparkles className="h-3 w-3" />{ai.isMarked(f.id, taskId) ? "AI" : null}</span> : null}>
-                  <CustomFieldInput field={f} projectId={projectId} creatorLeft={!!t.creator?.deactivatedAt} onSet={(value) => setCfMut.mutate({ id: f.id, value })} bare />
+                  <CustomFieldInput field={f} projectId={projectId} creatorLeft={!!t.creator?.deactivatedAt} onSet={(value) => setCfMut.mutate({ id: f.id, value, prev: f.value })} bare />
                 </PropRow>
               ))}
               {/* also in projects (multi-project links) */}

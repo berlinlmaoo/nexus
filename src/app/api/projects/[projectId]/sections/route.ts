@@ -78,21 +78,21 @@ export async function POST(
       if (bound > 0) taskStatus = "TODO"
     }
 
-    // Auto-set position to last
-    const lastSection = await prisma.taskList.findFirst({
-      where: { projectId: (await params).projectId },
-      orderBy: { position: "desc" },
-      select: { position: true },
-    })
-
-    const section = await prisma.taskList.create({
-      data: {
-        name: name.trim(),
-        projectId: (await params).projectId,
-        position: (lastSection?.position ?? -1) + 1,
-        taskStatus,
-        color: cleanColor(color),
-      },
+    // Auto-set position to last — max + 1 read and the insert under the project's sections lock (race audit
+    // 16 Oct 2026, PR 7), so two sections added at once never share a position.
+    const projectId = (await params).projectId
+    const section = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`sections:${projectId}`})::int8)`
+      const lastSection = await tx.taskList.findFirst({ where: { projectId }, orderBy: { position: "desc" }, select: { position: true } })
+      return tx.taskList.create({
+        data: {
+          name: name.trim(),
+          projectId,
+          position: (lastSection?.position ?? -1) + 1,
+          taskStatus,
+          color: cleanColor(color),
+        },
+      })
     })
 
     return NextResponse.json(section, { status: 201 })
@@ -127,46 +127,39 @@ export async function PATCH(
       return NextResponse.json({ error: "taskStatus tidak dikenal.", code: "INVALID_TASK_STATUS" }, { status: 400 })
     }
 
-    const existing = await prisma.taskList.findUnique({ where: { id } })
-    if (!existing || existing.projectId !== (await params).projectId) {
-      return NextResponse.json({ error: "Section not found" }, { status: 404 })
-    }
+    const projectId = (await params).projectId
+    // Race audit 16 Oct 2026 (PR 7): the shift-then-set below ran as separate statements on a position read
+    // before them; 10 section moves at once left 3 duplicate positions. One transaction per project's sections,
+    // serialized by pg_advisory_xact_lock('sections:<projectId>'), with the section re-read inside it.
+    const section = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`sections:${projectId}`})::int8)`
+      const existing = await tx.taskList.findUnique({ where: { id } })
+      if (!existing || existing.projectId !== projectId) return null
 
-    // Handle reorder: shift other sections
-    if (position !== undefined && position !== existing.position) {
-      const oldPos = existing.position
-      const newPos = position
-
-      if (newPos < oldPos) {
-        // Moving up: shift items in [newPos, oldPos) down by 1
-        await prisma.taskList.updateMany({
-          where: {
-            projectId: (await params).projectId,
-            position: { gte: newPos, lt: oldPos },
-          },
-          data: { position: { increment: 1 } },
-        })
-      } else {
-        // Moving down: shift items in (oldPos, newPos] up by 1
-        await prisma.taskList.updateMany({
-          where: {
-            projectId: (await params).projectId,
-            position: { gt: oldPos, lte: newPos },
-          },
-          data: { position: { decrement: 1 } },
-        })
+      // Handle reorder: shift other sections
+      if (position !== undefined && position !== existing.position) {
+        const oldPos = existing.position
+        const newPos = position
+        if (newPos < oldPos) {
+          // Moving up: shift items in [newPos, oldPos) down by 1
+          await tx.taskList.updateMany({ where: { projectId, position: { gte: newPos, lt: oldPos } }, data: { position: { increment: 1 } } })
+        } else {
+          // Moving down: shift items in (oldPos, newPos] up by 1
+          await tx.taskList.updateMany({ where: { projectId, position: { gt: oldPos, lte: newPos } }, data: { position: { decrement: 1 } } })
+        }
       }
-    }
 
-    const section = await prisma.taskList.update({
-      where: { id },
-      data: {
-        ...(name !== undefined && { name: name.trim() }),
-        ...(position !== undefined && { position }),
-        ...(taskStatus !== undefined && { taskStatus }),
-        ...(color !== undefined && { color: cleanColor(color) }),
-      },
+      return tx.taskList.update({
+        where: { id },
+        data: {
+          ...(name !== undefined && { name: name.trim() }),
+          ...(position !== undefined && { position }),
+          ...(taskStatus !== undefined && { taskStatus }),
+          ...(color !== undefined && { color: cleanColor(color) }),
+        },
+      })
     })
+    if (!section) return NextResponse.json({ error: "Section not found" }, { status: 404 })
 
     return NextResponse.json(section)
   } catch (error) {
@@ -228,13 +221,15 @@ export async function DELETE(
       metadata: { projectId, movedTo: firstRemaining.id, movedToName: firstRemaining.name, tasksMoved },
       meta: { open: { type: "project", id: projectId }, projectId },
       before: async (tx) => {
+        // The sections lock (see PATCH), so the renumbering below works on the order as it is now.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`sections:${projectId}`})::int8)`
         const moved = await tx.task.findMany({ where: { taskListId: id }, select: { id: true } })
         await tx.task.updateMany({ where: { taskListId: id }, data: { taskListId: firstRemaining.id, ...(firstRemaining.taskStatus ? { status: firstRemaining.taskStatus } : {}) } })
         return moved.map((t) => ({ table: "Task", column: "taskListId", key: t.id, value: id, movedTo: firstRemaining.id }))
       },
       remove: async (tx) => {
         await tx.taskList.delete({ where: { id } })
-        const remaining = allSections.filter((s) => s.id !== id)
+        const remaining = await tx.taskList.findMany({ where: { projectId }, orderBy: [{ position: "asc" }, { id: "asc" }], select: { id: true, position: true } })
         for (let i = 0; i < remaining.length; i++) {
           if (remaining[i].position !== i) {
             await tx.taskList.update({ where: { id: remaining[i].id }, data: { position: i } })
