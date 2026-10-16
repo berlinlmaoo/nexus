@@ -33,7 +33,7 @@ interface LeaderboardPodiumProps extends React.HTMLAttributes<HTMLDivElement> {
   moreLabel: (n: number) => string
 }
 
-const STACK_MAX = 4
+const STACK_MAX = 3
 
 /**
  * Three steps, 2nd left, 1st centre, 3rd right, one per score (owner, 16 Oct 2026: keep the podium when
@@ -57,11 +57,11 @@ const LeaderboardPodium = React.forwardRef<HTMLDivElement, LeaderboardPodiumProp
                 <PodiumAvatar item={group[0]} size={s.avatar} ring={s.ring} />
               ) : (
                 <div className="flex -space-x-3">
-                  {shown.map((g) => <PodiumAvatar key={g.userId} item={g} size={Math.round(s.avatar * 0.62)} ring={cn("ring-2", s.ring)} />)}
+                  {shown.map((g) => <PodiumAvatar key={g.userId} item={g} size={Math.round(s.avatar * 0.5)} ring={cn("ring-2", s.ring)} />)}
                   {group.length > STACK_MAX && (
                     <span className={cn("relative grid shrink-0 place-items-center rounded-full bg-card text-xs font-semibold tabular-nums ring-2", s.ring)}
-                      style={{ width: Math.round(s.avatar * 0.62), height: Math.round(s.avatar * 0.62) }}>
-                      {moreLabel(group.length - STACK_MAX)}
+                      style={{ width: Math.round(s.avatar * 0.5), height: Math.round(s.avatar * 0.5) }}>
+                      +{group.length - STACK_MAX}
                     </span>
                   )}
                 </div>
@@ -71,16 +71,16 @@ const LeaderboardPodium = React.forwardRef<HTMLDivElement, LeaderboardPodiumProp
               </span>
             </div>
             {group.length === 1 ? (
-              <div className="max-w-full truncate text-sm font-semibold">{group[0].userName}</div>
+              <div className="line-clamp-2 max-w-full text-balance text-center text-sm font-semibold leading-tight [overflow-wrap:anywhere]">{group[0].userName}</div>
             ) : (
               <div className="flex max-w-full flex-col items-center" title={group.map((g) => g.userName).join(", ")}>
                 <span className="text-sm font-semibold">{tiedLabel(group.length)}</span>
-                <span className="max-w-full truncate text-xs text-muted-foreground">
+                <span className="line-clamp-2 max-w-full text-balance text-center text-xs leading-tight text-muted-foreground">
                   {names}{group.length > 2 ? ` ${moreLabel(group.length - 2)}` : ""}
                 </span>
               </div>
             )}
-            <div className="mb-2 text-sm text-muted-foreground tabular-nums">{formatCount(group[0].value)} XP</div>
+            <div className="mb-2 mt-0.5 text-sm text-muted-foreground tabular-nums">{formatCount(group[0].value)} XP</div>
             <div className={cn("flex w-full items-start justify-center rounded-t-xl pt-3 text-2xl font-bold", s.bar, s.barText, s.height)}>
               {place}
             </div>
