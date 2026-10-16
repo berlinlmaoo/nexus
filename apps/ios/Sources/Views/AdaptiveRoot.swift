@@ -541,6 +541,9 @@ struct SidebarRoot: View {
         // 13" iPad ended its nav under the account footer, "Pin a project to keep it here." half hidden on
         // every page (UI tour run 18, iPad R18-I-03; R17-I-06 and R16-I-14 before it).
         .listSectionSpacing(.compact)
+        // Group headers a little lower, so the last row clears the footer's divider by a margin and not ~2 pt
+        // (UI tour run 19, iPad R19-I-06).
+        .environment(\.defaultMinListHeaderHeight, 30)
         #endif
         // The list's end clears the fade above the footer, so its last row ("Pin a project to keep it here.")
         // is never left half under it (UI tour run 16, R16-I-14 iPad).
@@ -1035,7 +1038,9 @@ struct SidebarMoreBelow: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
             content.onScrollGeometryChange(for: Bool.self) { g in
-                g.contentOffset.y + g.containerSize.height < g.contentSize.height + g.contentInsets.bottom - 4
+                // Not the list's own 24 pt end margin: with only that left below, the fade lay over the last row
+                // ("Pin a project to keep it here." at ~1.5:1; UI tour run 19, iPad R19-I-06).
+                g.contentOffset.y + g.containerSize.height < g.contentSize.height + g.contentInsets.bottom - 28
             } action: { _, below in
                 moreBelow = below
             }

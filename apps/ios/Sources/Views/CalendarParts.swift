@@ -832,7 +832,16 @@ private struct CalMonthGridBody: View {
         // Top-left like every month grid on every platform, the web phone's included (UI tour run 15, decision
         // on one month-grid style: R15-WB-3).
         VStack(alignment: .leading, spacing: 2) {
-            number(day, inMonth: inMonth, isToday: isToday, isSel: isSel, holiday: holiday)
+            // The day's task count at the top right, as the web's grid ("2", "14"; UI tour run 19, R19-I-08).
+            HStack(alignment: .top, spacing: 0) {
+                number(day, inMonth: inMonth, isToday: isToday, isSel: isSel, holiday: holiday)
+                Spacer(minLength: 0)
+                if let n = grid.cells[day]?.count, n > 0 {
+                    Text(AppNumber.int(n)).font(NXFont.text(CalType.size(10), .medium)).monospacedDigit()
+                        .foregroundStyle(NX.mutedFg).lineLimit(1).minimumScaleFactor(0.7)
+                        .padding(.top, 2)
+                }
+            }
             // The web's mark on every width (mobile web and desktop MonthGrid): a short red dash under
             // the date, not a red count badge (UI tour run 3: desktop web is the reference).
             Capsule().fill(info.overdue > 0 ? CalTone.overdue : Color.clear)
@@ -1100,8 +1109,11 @@ struct CalItemRow: View {
                         }
                     }
                     .accessibilityHidden(true)
+                    // Every name, wrapped, as the web: one line cut "WILLIAM ERSAN, Daniel Afrizal, Mohamad Okta Fi…"
+                    // (UI tour run 19, R19-I-09).
                     Text(here.map { who($0) }.joined(separator: ", "))
-                        .font(NXFont.text(CalType.size(11.5), .semibold)).foregroundStyle(NX.foreground.opacity(0.9)).lineLimit(1)
+                        .font(NXFont.text(CalType.size(11.5), .semibold)).foregroundStyle(NX.foreground.opacity(0.9))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             if !others.isEmpty {
@@ -1225,14 +1237,12 @@ struct CalSectionCard: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        let tint = calUnitColor(node.unit)
         let count = own ? Set(node.items.map(\.key) + node.people.flatMap { $0.items.map(\.key) }).count : node.count
         VStack(alignment: .leading, spacing: 0) {
             Button(action: toggle) {
                 header(count)
                     .padding(.horizontal, 12).padding(.vertical, 11)
                     .frame(minHeight: 44)
-                    .overlay(alignment: .leading) { Rectangle().fill(tint).frame(width: 3) }
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -1258,6 +1268,8 @@ struct CalSectionCard: View {
     /// came down to about four letters beside a "You" badge.
     @ViewBuilder private func header(_ count: Int) -> some View {
         let name = Text(node.unit.name.uppercased()).calCaps().foregroundStyle(NX.foreground)
+        // The division's colour as a dot before its name, not a thick left border (decision 3 of run 19, R19-I-10).
+        let dot = Circle().fill(calUnitColor(node.unit)).frame(width: 8, height: 8).accessibilityHidden(true)
         // "1 task", not a bare "1": the count is of distinct tasks, and one task shared by three teams of
         // the card is listed under each of them, so a bare number read as a miscount of the rows below
         // (UI tour run 14, N-38).
@@ -1270,6 +1282,7 @@ struct CalSectionCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 10) {
                     CalUnitMark(unit: node.unit, size: 24)
+                    dot.padding(.top, 8)
                     name.lineLimit(3).fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -1283,6 +1296,7 @@ struct CalSectionCard: View {
         } else {
             HStack(spacing: 10) {
                 CalUnitMark(unit: node.unit, size: 24)
+                dot
                 // Two lines before it is cut: "FRAMEWORK AGE…" on the Mac (UI tour run 15, Q-M8).
                 name.lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
@@ -1360,7 +1374,7 @@ struct CalSubNode: View {
             let large = typeSize.isAccessibilitySize
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: large ? VerticalAlignment.top : .center, spacing: 8) {
-                    RoundedRectangle(cornerRadius: 1.5).fill(calUnitColor(node.unit)).frame(width: 3, height: 14)
+                    Circle().fill(calUnitColor(node.unit)).frame(width: 8, height: 8)
                         .padding(.top, large ? 4 : 0)
                     Text(node.unit.name).font(NXFont.text(CalType.size(12.5), .semibold)).foregroundStyle(NX.foreground.opacity(0.85))
                         .lineLimit(large ? 3 : 1)
@@ -1894,7 +1908,7 @@ struct CalPeopleWeek: View {
                     CalUnitMark(unit: unit, size: 18)
                     Text(unit.name.uppercased()).calCaps().foregroundStyle(NX.foreground).lineLimit(1)
                 } else {
-                    RoundedRectangle(cornerRadius: 1.5).fill(calUnitColor(unit)).frame(width: 3, height: CalType.size(14))
+                    Circle().fill(calUnitColor(unit)).frame(width: 8, height: 8)
                     Text(unit.name).font(NXFont.text(CalType.size(12.5), .semibold)).foregroundStyle(NX.foreground.opacity(0.85)).lineLimit(1)
                 }
                 countPill(count)

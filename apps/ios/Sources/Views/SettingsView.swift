@@ -205,6 +205,7 @@ struct SettingsView: View {
     @ViewBuilder private var webTabContent: some View {
         if tab == .profile {
             webProfileCard
+            JoinWorkspaceCard()
             webDeleteCard
             webLogoutCard
         } else {
@@ -218,6 +219,7 @@ struct SettingsView: View {
         switch tab {
         case .profile:
             profileSection
+            JoinWorkspaceCard()
             // Password is in Security only, with passkeys and sessions (UI tour run 14, N-08).
             accountSection
         case .members:
@@ -278,10 +280,12 @@ struct SettingsView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "at").font(.system(size: 13, weight: .bold))
                         .foregroundStyle(googleEmail.isEmpty ? NX.mutedFg : NX.violetText)
-                    Text(googleEmail.isEmpty ? T("No company Google account linked yet.") : googleEmail)
+                    Text(googleEmail.isEmpty ? T("No company Google account linked yet. A board member links it from Control Room.") : googleEmail)
                         .font(NXFont.text(googleEmail.isEmpty ? 12 : 15))
                         .foregroundStyle(googleEmail.isEmpty ? NX.mutedFg : NX.foreground)
-                        .lineLimit(1).truncationMode(.middle)
+                        // The next step too, as on the web (UI tour run 19, R19-I-37): two lines when unlinked.
+                        .lineLimit(googleEmail.isEmpty ? 3 : 1).truncationMode(.middle)
+                        .fixedSize(horizontal: false, vertical: googleEmail.isEmpty)
                     Spacer(minLength: 0)
                 }
                 .padding(12).frame(maxWidth: .infinity, alignment: .leading)

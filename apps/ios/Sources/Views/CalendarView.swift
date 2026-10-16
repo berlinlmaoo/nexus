@@ -512,7 +512,9 @@ struct CalendarView: View {
     @ViewBuilder private var content: some View {
         if access == "none" {
             EmptyState(icon: "lock", title: T("This calendar is for members of the company"),
-                       subtitle: T("You are in a personal workspace. Ask a board member or manager to add you to the company's workspace; the Calendar then shows the tasks of everyone there."))
+                       subtitle: T("You are in a personal workspace. Enter your company's workspace code in Settings to join it; the Calendar then shows the tasks of everyone there."),
+                       actionTitle: T("Enter the workspace code"), actionIcon: "key",
+                       action: { router.go(.settings) })
         } else if access == "off" {
             EmptyState(icon: "calendar", title: T("The Calendar is on its way"),
                        subtitle: T("It opens for the board and managers first, then for everyone. Your own tasks are still in Tasks."))
@@ -700,7 +702,8 @@ struct CalendarView: View {
             }
             .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
             .disabled(selected == today)
-            .opacity(selected == today ? 0.5 : 1)
+            // The button style's own disabled dimming only (the web's 50%): another half opacity on top of it left
+            // the pill nearly invisible (~1.3:1; UI tour run 19, R19-B-18).
             .padding(.leading, 4)
             .macHelp("\(T("Today")) (⌘T)")
         }

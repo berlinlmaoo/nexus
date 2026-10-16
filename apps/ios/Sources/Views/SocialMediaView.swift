@@ -515,9 +515,19 @@ struct SocialOverviewView: View {
         let month = p.engagementTargetMonth
         let hasDayTargets = store.hasOwnEngagementTarget(p.id)
         if let month, hasDayTargets, base?.rounded() != month.rounded() {
-            return String(format: T("Target to date · month target %@ (incl. day targets)"), SocialFormat.count(month))
+            return Self.phrases(String(format: T("Target to date · month target %@ (incl. day targets)"), SocialFormat.count(month)))
         }
-        return String(format: T("Target to date · month target %@"), SocialFormat.count(month))
+        return Self.phrases(String(format: T("Target to date · month target %@"), SocialFormat.count(month)))
+    }
+
+    /// Breaks only between phrases (at " · " and before "("), never inside one: "month / target 62.000" and
+    /// "(incl. / day targets)" wrapped mid-phrase (UI tour run 19, iPad R19-I-09, Mac R19-M-10).
+    static func phrases(_ line: String) -> String {
+        line.components(separatedBy: " · ").map { part in
+            part.components(separatedBy: " (").map { $0.replacingOccurrences(of: " ", with: "\u{00A0}") }
+                .joined(separator: " (")
+        }
+        .joined(separator: " · ")
     }
 
     private func stat(_ label: String, _ value: Double?) -> some View {
@@ -534,21 +544,20 @@ struct SocialOverviewView: View {
         OutletCard {
             Text(T("Posts published")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
             ForEach(o.platforms) { p in
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text(p.name).font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Spacer(minLength: 8)
+                // One row as the web's: the platform, its bar, then "5 / 16 posts (31%)" (UI tour run 19, R19-B-06).
+                HStack(spacing: 10) {
+                    Text(p.name).font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+                        .frame(width: 84, alignment: .leading)
+                    OutletMeter(pct: p.postsPct, height: 6)
+                    Group {
                         if let target = p.postsTargetToDate {
-                            Text(String(format: T("%@ / %@ posts"), SocialFormat.count(p.posts), SocialFormat.count(target)))
-                                .font(NXFont.text(13)).monospacedDigit()
-                            // The same % chip as the engagement cards above (run 14, N-21).
-                            if let pct = p.postsPct { SocialPctChip(pct: pct, size: 12) }
+                            Text(String(format: T("%@ / %@ posts"), SocialFormat.count(p.posts), SocialFormat.count(target))
+                                 + (p.postsPct.map { " (\($0)%)" } ?? ""))
                         } else {
                             Text(SocialFormat.posts(p.posts))
-                                .font(NXFont.text(13)).monospacedDigit()
                         }
                     }
-                    OutletMeter(pct: p.postsPct, height: 6)
+                    .font(NXFont.text(13)).monospacedDigit().lineLimit(1).fixedSize()
                 }
                 .accessibilityElement(children: .combine)
             }
@@ -655,8 +664,11 @@ struct SocialCalendarView: View {
                                  muted: future, wide: wide)
                 // The plain dotted figure ("2.200"), never a compact "2.2k" (owner rule R14-WB-2, N-22 / P-M22).
                 if let e = day?.engagement {
-                    Text(SocialFormat.count(e)).font(NXFont.text(wide ? 14 : 11, .semibold)).foregroundStyle(NX.foreground)
+                    // Smaller, regular weight and muted under the bold day number, so "2" over "2.200" no longer
+                    // reads as one figure (UI tour run 19, R19-B-17).
+                    Text(SocialFormat.count(e)).font(NXFont.text(wide ? 12 : 10, .regular)).foregroundStyle(NX.mutedFg)
                         .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+                        .padding(.top, 2)
                 }
                 // The posts line on every width, as the web and the caption under the grid say (UI tour run 17,
                 // iPhone R17-I-04, decision 13).

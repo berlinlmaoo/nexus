@@ -3513,6 +3513,19 @@ extension APIClient {
         _ = try await run(req, decode: EmploymentStartSaved.self)
     }
 
+    /// Whether this account may join a workspace with a code (owner, 16 Oct 2026): GET /api/workspaces/join.
+    func workspaceJoinStatus() async throws -> WorkspaceJoinStatus {
+        try await run(makeRequest("/api/workspaces/join"), decode: WorkspaceJoinStatus.self)
+    }
+
+    /// Joins the workspace of `code`; the personal workspace is deleted (POST /api/workspaces/join).
+    func joinWorkspace(code: String) async throws -> WorkspaceJoined {
+        var req = makeRequest("/api/workspaces/join", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["code": code])
+        return try await run(req, decode: WorkspaceJoined.self)
+    }
+
     /// Day off, public holidays and XP per person for an attendance period (web board pills):
     /// GET /api/attendance/deductions?month=.
     func attendanceDeductionsSummary(month: String) async throws -> AttendanceDeductionsSummary {

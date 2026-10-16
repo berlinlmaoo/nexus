@@ -412,7 +412,7 @@ struct FormBuilderView: View {
                 ToolbarItem(placement: .principal) {
                     Text(displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                         .lineLimit(2).multilineTextAlignment(.center).truncationMode(.tail)
-                        .frame(width: max(120, barWidth - 250))
+                        .frame(width: max(110, barWidth - 300))
                         .fixedSize(horizontal: false, vertical: true)
                         .opacity(headOnScreen && tab == .questions ? 0 : 1)
                         .animation(.easeInOut(duration: 0.15), value: headOnScreen)
@@ -422,7 +422,8 @@ struct FormBuilderView: View {
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 // "Saved" in words on an iPad / Mac, as the web's bar (UI tour run 15, Q-IA32).
-                FormSaveIndicator(state: saveState, hasId: currentId != nil, compact: !regular) { retry() }
+                // "Saved" in words on the phone too, as the web's bar (UI tour run 19, iPhone R19-I-21).
+                FormSaveIndicator(state: saveState, hasId: currentId != nil, compact: false) { retry() }
                 previewButton
                 moreMenu
             }
@@ -459,21 +460,27 @@ struct FormBuilderView: View {
         // A Button that is itself the bar item is bridged to a bar button and drawn as its image alone on the Mac,
         // whatever its label (run 18, R18-M-02: the bare eye again). Inside a stack the item is a view of its own,
         // drawn as laid out here, like "Saved" beside it.
-        if regular {
-            HStack(spacing: 0) {
-                Button { Task { await openPreview() } } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "eye").font(.system(size: 13, weight: .medium))
-                        Text(T("Preview")).font(NXFont.text(13, .medium))
-                    }
-                }
-                .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
-                .accessibilityLabel(T("Preview"))
-            }
-            .fixedSize()
-        } else {
-            Button { Task { await openPreview() } } label: { Label(T("Preview"), systemImage: "eye") }
+        // Run 19 (Mac R19-M-01, the 4th report): wrapped in a stack, the Button was STILL bridged to a bar button
+        // drawn as its image alone. "Saved" beside it is not a Button and always kept its words, so Preview is not
+        // one either on the wide bar: a labelled view with a tap action and the button trait, which the bar can
+        // only host as drawn.
+        // The phone too: "✓" and a bare eye read as "Done" and "watch" (UI tour run 19, iPhone R19-I-21).
+        HStack(spacing: 6) {
+            Image(systemName: "eye").font(.system(size: 13, weight: .medium))
+            Text(T("Preview")).font(NXFont.text(13, .medium))
         }
+        .foregroundStyle(NX.foreground)
+        .padding(.horizontal, 10).frame(height: 30)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+        .contentShape(Rectangle())
+        .onTapGesture { Task { await openPreview() } }
+        .hoverEffect(.highlight)
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(T("Preview"))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { Task { await openPreview() } }
     }
 
     private var moreMenu: some View {

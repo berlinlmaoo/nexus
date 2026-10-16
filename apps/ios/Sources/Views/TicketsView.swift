@@ -358,7 +358,7 @@ struct TicketsView: View {
         }
         .sheet(item: $selected) { t in TicketDetailSheet(ticket: t) { await load() }.environment(auth).environment(router) }
         // Reloads rather than splicing the new ticket in: the server decides the status, the
-        // reporter shown (anonymous tickets hide it) and the ordering, so a locally-invented row
+        // reporter shown (only to the board and the reporter) and the ordering, so a locally-invented row
         // would differ from the one everybody else sees.
         .sheet(isPresented: $showCreate) { NewTicketSheet { await load() }.environment(auth).environment(router) }
     }
@@ -505,7 +505,8 @@ struct TicketsView: View {
                     if let r = t.reporter {
                         AvatarView(url: r.avatar, initial: String((r.name ?? "?").prefix(1)).uppercased(), size: 20)
                     }
-                    Text(t.reporter?.name ?? "—").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                    // No anonymous tickets (owner, 16 Oct 2026): a missing reporter is someone who left.
+                    Text(t.reporter?.name ?? T("Former member")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(width: Col.from, alignment: .leading)

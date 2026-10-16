@@ -44,14 +44,16 @@ struct LeaderboardView: View {
     /// The sidebar's Leaderboard page on an iPad or Mac: the web's page header instead of the nav bar.
     private var isRoot: Bool { NXSidebarPage.isRoot(.leaderboard, hSize: hSize, router: router) }
 
-    /// The period the board covers: this calendar month in WIB, shown as its first and LAST day
-    /// ("1 Oct – 31 Oct"), as the web's header since QA 13 Oct 2026.
+    /// The period the board covers, in WIB: from the 28th to the 27th, the same period as attendance (owner,
+    /// 16 Oct 2026; server period.resetDay 28), shown as its first and LAST day ("28 Sep – 27 Oct").
     private static var periodText: String {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "Asia/Jakarta") ?? .current
         let now = Date()
-        guard let start = cal.date(from: cal.dateComponents([.year, .month], from: now)),
-              let next = cal.date(byAdding: .month, value: 1, to: start),
+        guard let monthStart = cal.date(from: cal.dateComponents([.year, .month], from: now)),
+              let thisReset = cal.date(byAdding: .day, value: 27, to: monthStart) else { return "" }
+        let start = now >= thisReset ? thisReset : (cal.date(byAdding: .month, value: -1, to: thisReset) ?? thisReset)
+        guard let next = cal.date(byAdding: .month, value: 1, to: start),
               let last = cal.date(byAdding: .day, value: -1, to: next) else { return "" }
         // AppDateLocale: the app language, and "Sep" rather than en_GB's "Sept".
         let f = AppDateLocale.formatter("d MMM", timeZone: cal.timeZone)
@@ -63,7 +65,7 @@ struct LeaderboardView: View {
     /// It resets on the 1st." It floated top-right above the title's baseline on the iPad and Mac, and was a
     /// separate line on the phone (UI tour run 14, P-I34 / P-M29).
     private static var subtitle: String {
-        T("Everyone's XP for {range}. It resets on the 1st.").replacingOccurrences(of: "{range}", with: periodText)
+        T("Everyone's XP for {range}. It resets on the 28th.").replacingOccurrences(of: "{range}", with: periodText)
     }
 
     private var pageHeader: some View {

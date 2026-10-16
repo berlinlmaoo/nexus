@@ -27,6 +27,13 @@ struct ProfileTarget: Identifiable, Hashable {
 /// board's own sheet) and remove an XP deduction from the log. The web draws the same page at
 /// /people/<id>.
 struct MemberProfileView: View {
+    /// "+40 XP gained · 15 XP lost", the plus only on a gain: "+0" beside a bare "0" read as two kinds of zero
+    /// (UI tour run 19, R19-I-39).
+    static func gainedLost(_ gained: Int?, _ lost: Int?) -> String {
+        let g = gained ?? 0
+        return String(format: T("%@ XP gained · %@ XP lost"), (g > 0 ? "+" : "") + AppNumber.int(g), AppNumber.int(lost ?? 0))
+    }
+
     let target: ProfileTarget
 
     @Environment(AuthStore.self) private var auth
@@ -402,7 +409,7 @@ struct MemberProfileView: View {
                 }
                 if let xp {
                     factRow("sparkles", "XP",
-                            String(format: T("+%@ XP gained · %@ XP lost"), AppNumber.int(xp.gained ?? 0), AppNumber.int(xp.lost ?? 0))
+                            MemberProfileView.gainedLost(xp.gained, xp.lost)
                             + ((xp.removed ?? 0) > 0 ? " · " + String(format: T("%d removed by the board"), xp.removed ?? 0) : ""))
                     // Absences on the tiles and nothing lost read as a contradiction (UI tour run 14, N-32):
                     // say when an absence costs XP and when it does not.
@@ -887,7 +894,7 @@ private struct RecordXpCard: View {
                 Spacer()
                 if let t = record.summary?.xp {
                     // Said with its unit, not "+0 · 0" (UI tour run 15, R15-I-21).
-                    Text(String(format: T("+%@ XP gained · %@ XP lost"), AppNumber.int(t.gained ?? 0), AppNumber.int(t.lost ?? 0)))
+                    Text(MemberProfileView.gainedLost(t.gained, t.lost))
                         .font(NXFont.text(11, .bold)).foregroundStyle(NX.mutedFg)
                 }
             }
@@ -898,7 +905,7 @@ private struct RecordXpCard: View {
             if current.isEmpty {
                 EmptyState(icon: "sparkles",
                            title: T("No XP moved this period"),
-                           subtitle: T("XP comes from quests and goes on attendance penalties — late, no check-out, absent."),
+                           subtitle: T("XP comes from quests and is lost to attendance penalties — late, no check-out, absent."),
                            actionTitle: canWalkBack ? T("Load older") : nil,
                            actionIcon: "clock.arrow.circlepath",
                            action: walkBack,

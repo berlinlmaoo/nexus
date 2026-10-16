@@ -61,7 +61,9 @@ struct LegalSettingsPane: View {
             if let list = companies, list.count > 1 {
                 ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    // 6 pt gaps and 10 pt insets: the four companies fit a phone's width whole, so "The Z Networks TZN"
+                    // rests whole at the end instead of under the edge fade (UI tour run 19, iPhone R19-I-06).
+                    HStack(spacing: 6) {
                         ForEach(list) { c in
                             let on = (lit ?? list.first?.id) == c.id
                             Button { withAnimation(.snappy) { current = c.id; lit = c.id } } label: {
@@ -73,7 +75,7 @@ struct LegalSettingsPane: View {
                                         Text(verbatim: c.code).font(.system(size: 11, design: .monospaced)).foregroundStyle(NX.mutedFg)
                                     }
                                 }
-                                    .padding(.horizontal, 12).padding(.vertical, 6)
+                                    .padding(.horizontal, 10).padding(.vertical, 6)
                                     .nxChoiceChip(on: on)
                                     .frame(minHeight: 44).contentShape(Rectangle())
                             }
@@ -344,7 +346,10 @@ private struct LegalSeriesRow: View {
     private var summary: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(series.label).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+                // Two lines for the name: one cut "SPK Content Creator PATS Un…" beside the switch (UI tour run 19,
+                // iPhone R19-I-36).
+                Text(series.label).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 0) {
                     // The full type where it fits ("Warning letter (SP)", as on the web; UI tour run 15, Q-IB26), the
                     // short one ("MoU", "PKS") where it would be cut inside its brackets (N-40).
@@ -389,10 +394,14 @@ private struct LegalSeriesRow: View {
         .accessibilityLabel(T("In use"))
         // Its words beside it on every width, as the web's (UI tour run 17, iPhone R17-I-15), with the standard
         // 8 pt of air: at 6 the label read as part of the switch (R17-B-07).
+        // The phone: the switch alone (its VoiceOver label still says "In use"), so the name keeps the room
+        // (UI tour run 19, iPhone R19-I-36). Wider screens keep the words beside it, as the web's.
         HStack(spacing: 8) {
             toggle.fixedSize()
-            Text(T("In use")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1).fixedSize()
-                .accessibilityHidden(true)
+            if hSize == .regular {
+                Text(T("In use")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1).fixedSize()
+                    .accessibilityHidden(true)
+            }
         }
     }
 

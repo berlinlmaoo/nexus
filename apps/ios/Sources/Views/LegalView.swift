@@ -128,6 +128,7 @@ struct LegalDocumentsPane: View {
     @State private var error: String?
     @State private var companies: [LegalCompany] = []
     @State private var link: LegalLink?
+    @State private var filtersOpen = false
     @State private var sheet: Sheet?
     @State private var open: LegalOpenID?
     /// The pane's width. The table's fixed columns need ~720 pt before the Title column gets any room:
@@ -151,7 +152,14 @@ struct LegalDocumentsPane: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 toolbar
-                filters
+                // Phone: one "Filters" control with the count, the pills under it when opened. Seven pills wrapped
+                // to three rows and pushed the first document to mid-screen (UI tour run 19, iPhone R19-I-34).
+                if wide {
+                    filters
+                } else {
+                    filtersToggle
+                    if filtersOpen { filters }
+                }
                 list
             }
             .padding(.horizontal, gutter)
@@ -279,6 +287,36 @@ struct LegalDocumentsPane: View {
         .padding(.vertical, 1)
     }
 
+    private var activeFilters: Int {
+        [query.companyId, query.docType, query.status, query.signed, query.source, query.parentId]
+            .filter { !($0 ?? "").isEmpty }.count
+            + ((query.from ?? query.to) != nil ? 1 : 0) + ((query.projectId ?? query.dealId) != nil ? 1 : 0)
+    }
+
+    private var filtersToggle: some View {
+        Button { withAnimation(.snappy) { filtersOpen.toggle() } } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "line.3.horizontal.decrease").font(.system(size: 13, weight: .semibold))
+                Text(T("Filters")).font(NXFont.text(14, .semibold))
+                if activeFilters > 0 {
+                    Text(AppNumber.int(activeFilters)).font(NXFont.text(12, .bold)).monospacedDigit()
+                        .foregroundStyle(NX.background)
+                        .padding(.horizontal, 7).padding(.vertical, 1)
+                        .background(NX.foreground, in: Capsule())
+                }
+                Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                    .rotationEffect(.degrees(filtersOpen ? 180 : 0))
+            }
+            .foregroundStyle(NX.foreground)
+            .padding(.horizontal, 12).frame(minHeight: 36)
+            .background(NX.card, in: Capsule())
+            .overlay(Capsule().strokeBorder(NX.border))
+            .frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(filtersOpen ? T("Expanded") : T("Collapsed"))
+    }
+
     private var dateLabel: String {
         switch (query.from, query.to) {
         case (nil, nil): return T("Any date")
@@ -383,7 +421,7 @@ struct LegalDocumentsPane: View {
     /// ~150 pt of empty room each (UI tour run 18, iPad R18-I-02).
     private var narrowTable: Bool { width - 2 * gutter < 760 }
     private var numberW: CGFloat { narrowTable ? 150 : 170 }
-    private var companyW: CGFloat { narrowTable ? 84 : 120 }
+    private var companyW: CGFloat { narrowTable ? 96 : 120 }
     private var dateW: CGFloat { narrowTable ? 62 : 90 }
     private var statusW: CGFloat { narrowTable ? 74 : 80 }
 
@@ -432,13 +470,19 @@ struct LegalDocumentsPane: View {
                 if d.parent != nil { Text("↳").font(NXFont.text(13)).foregroundStyle(NX.mutedFg).accessibilityLabel(T("Addendum")) }
                 // The middle of a long number folds ("PKS/PATS-UNIV/…/2026/005"), as the web's, so Title gets
                 // the width (UI tour run 16, R16-M-01); the whole number on hover.
-                Text(d.number.isEmpty ? "—" : LegalLabels.shortNumber(d.number)).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.foreground)
-                    .strikethrough(d.numberReleased).lineLimit(1).minimumScaleFactor(0.85)
+                // Folded only at "/", never cut at its end: the sequence stays (UI tour run 19, iPad R19-I-03).
+                if d.number.isEmpty {
+                    Text("—").font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.foreground)
+                } else {
+                    LegalNumberText(number: d.number).foregroundStyle(NX.foreground).strikethrough(d.numberReleased)
+                }
             }
             .frame(width: numberW, alignment: .leading)
             .help(d.number)
             VStack(alignment: .leading, spacing: 2) {
-                Text(LegalLabels.unbroken(d.title)).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground).lineLimit(2)
+                // The whole title, as the web's archive (UI tour run 19, iPad R19-I-04: two lines and "…").
+                Text(LegalLabels.unbroken(d.title)).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground)
+                    .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
                 let sub = subtitle(d)
                 if !sub.isEmpty { Text(sub).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2) }
@@ -450,7 +494,9 @@ struct LegalDocumentsPane: View {
                 Text(d.counterparty.isEmpty ? "—" : d.counterparty).font(NXFont.text(13)).foregroundStyle(NX.foreground)
                     .lineLimit(2).frame(width: Self.counterpartyW, alignment: .leading)
             }
-            Text(d.company?.name ?? "—").font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(2).frame(width: companyW, alignment: .leading)
+            // One line, a size smaller where it must: "The Z / Networks" broke over two (R19-I-04).
+            Text(d.company?.name ?? "—").font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(1).minimumScaleFactor(0.75)
+                .frame(width: companyW, alignment: .leading)
             Text(LegalLabels.shortDay(d.docDate)).font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(1)
                 .minimumScaleFactor(0.8).frame(width: dateW, alignment: .leading)
             LegalStatusChip(status: d.status).frame(width: statusW, alignment: .leading)

@@ -507,7 +507,7 @@ struct PasskeyCard: View {
                 if busy {
                     ProgressView().scaleEffect(0.7).tint(.white)
                 } else {
-                    Image(systemName: "person.badge.key.fill").font(.system(size: 13, weight: .bold))
+                    Image(systemName: "key.fill").font(.system(size: 13, weight: .bold))
                 }
                 Text(T("Add passkey"))
             }

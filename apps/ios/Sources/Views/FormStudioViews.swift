@@ -738,7 +738,8 @@ struct FormCanvasControl: View {
                     .padding(.horizontal, 9).padding(.vertical, 4)
                     .background(NX.background, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(NX.border))
-                Text(T("One or more files, up to 50 MB each")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                // "50 MB" never splits across lines (UI tour run 19, iPad R19-I-13).
+                Text(T("One or more files, up to 50 MB each").replacingOccurrences(of: "50 MB", with: "50\u{00A0}MB")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     .lineLimit(2)
                 Spacer(minLength: 0)
             }

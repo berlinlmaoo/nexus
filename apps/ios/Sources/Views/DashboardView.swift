@@ -1011,28 +1011,13 @@ struct DashboardView: View {
             if xpRulesOpen {
                 VStack(alignment: .leading, spacing: 18) {
                     Divider().overlay(NX.border)
-                    xpRulesSection(title: T("XP Penalties"), icon: "arrow.down.right", tone: NX.danger, rows: XpRules.penalties)
-                    xpRulesSection(title: T("XP Bonuses"), icon: "arrow.up.right", tone: NX.success, rows: XpRules.bonuses)
-if !XpRules.tiers.isEmpty {
-                                        VStack(alignment: .leading, spacing: 6) {
-                        Text(T("Tier rewards (end of period)").uppercased())
-                            .font(NXFont.text(11, .bold)).tracking(0.6).foregroundStyle(NX.mutedFg)
-                        ForEach(XpRules.tiers, id: \.label) { t in
-                            HStack(spacing: 10) {
-                                Text(t.range).font(NXFont.text(14, .black)).monospacedDigit()
-                                Text(t.label.uppercased()).font(NXFont.text(11, .bold)).tracking(0.5)
-                                Text(t.reward).font(NXFont.text(13, .semibold)).lineLimit(2)
-                                Spacer(minLength: 0)
-                            }
-                            .foregroundStyle(t.tone)
-                            .padding(.horizontal, 12).padding(.vertical, 8)
-                            .background(t.tone.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(t.tone.opacity(0.25)))
-                        }
+                    xpRulesSection(title: T("XP penalties"), icon: "arrow.down.right", tone: NX.danger, rows: XpRules.penalties)
+                    xpRulesSection(title: T("XP bonuses"), icon: "arrow.up.right", tone: NX.success, rows: XpRules.bonuses)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(T("“Automatic” is worked out by the system from attendance. “Manual” comes from a quest or from BoD."))
+                        Text(T("Your level is this period's level: everyone starts at 1.000 XP on the 28th."))
                     }
-                    }
-                    Text(T("\"Automatic\" is calculated by the system from attendance & end of period. \"Manual\" is awarded by Head/HR/management based on their judgment."))
-                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.top, 14)
                 .transition(.opacity.combined(with: .move(edge: .top)))
@@ -1048,13 +1033,14 @@ if !XpRules.tiers.isEmpty {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 5) {
                 Image(systemName: icon).font(.system(size: 10, weight: .bold))
-                Text(title.uppercased()).font(NXFont.text(11, .bold)).tracking(0.6)
+                // Sentence case, no uppercase eyebrow (decision 1 of run 19; the web's card).
+                Text(title).font(NXFont.text(13, .semibold))
             }
             .foregroundStyle(tone)
             ForEach(Array(rows.enumerated()), id: \.offset) { i, r in
                 if i > 0 { Divider().overlay(NX.border.opacity(0.6)) }
                 HStack(alignment: .top, spacing: 10) {
-                    Text(r.xp).font(NXFont.text(14, .black)).monospacedDigit().foregroundStyle(tone)
+                    Text(T(r.xp)).font(NXFont.text(14, .black)).monospacedDigit().foregroundStyle(tone)
                         .frame(width: 84, alignment: .leading)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(T(r.rule)).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
@@ -1467,13 +1453,13 @@ enum XpRules {
         Row(xp: "-25 XP", rule: "Offsite check-out rejected by your approver", note: "Per incident", auto: true),
         Row(xp: "-150 XP", rule: "No-show, no heads-up (absent)", note: "Per day", auto: true),
     ]
-    // No automatic bonus. The "+50 for a month without absence" and the Excellent/Good/Review tiers
-    // were retired on the server (src/lib/period-rewards.ts: "XP is now 100% quest-only, assigned
-    // by BoD"); the card kept promising them for months.
+    // Quests as they really are (owner, 16 Oct 2026; the web's XpRulesCard): made by BoD and up, for everyone,
+    // one person, chosen divisions or a set of tasks, worth the XP the quest sets. No more "+30 / +50 / +20".
     static let bonuses: [Row] = [
-        Row(xp: "+30 XP", rule: "Finish a side quest from your Head", note: "Head's call", auto: false),
-        Row(xp: "+50 XP", rule: "Performance beyond target", note: "Management's call", auto: false),
-        Row(xp: "+20 XP", rule: "Feedback the company adopts", note: "HR's call", auto: false),
+        Row(xp: "Per quest", rule: "Finish a quest",
+            note: "Made by BoD and up, for everyone, one person, chosen divisions or a set of tasks. You get the XP the quest sets when you claim it.",
+            auto: false),
+        Row(xp: "± XP", rule: "Adjustment by BoD", note: "Up to 1.000 XP up or down each time, with who made it", auto: false),
     ]
     /// Empty on purpose — see `bonuses`. The section that draws these hides itself when there are none.
     static let tiers: [Tier] = []
