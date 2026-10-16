@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic"
 
-import { mkdir, writeFile } from "fs/promises"
+import { mkdir, unlink, writeFile } from "fs/promises"
 import path from "path"
 import { NextRequest, NextResponse } from "next/server"
 import type { Prisma } from "@/generated/prisma/client"
@@ -24,7 +24,7 @@ import {
   serializeAttendanceRequest,
   startOfAttendanceMonth,
 } from "@/lib/attendance"
-import { cancelAttendancePenaltiesForRange, isAutoDeduction } from "@/lib/attendance-absence"
+import { cancelAttendancePenaltiesForRange, isAutoDeduction, lockAttendanceRequests } from "@/lib/attendance-absence"
 import {
   attendanceRequestCreateSchema,
   attendanceRequestQuerySchema,
@@ -132,6 +132,206 @@ const NOT_AUTO_DEDUCTION: Prisma.AttendanceRequestWhereInput = {
     { reviewedById: { not: null } },
     { NOT: { reason: { startsWith: "Auto:" } } },
   ],
+}
+
+type RequestConflictArgs = {
+  userId: string
+  workspaceId: string
+  start: Date
+  end: Date
+  type: "LEAVE" | "SICK" | "DAY_OFF" | "PERMIT" | "RED_DATE"
+  isGrant: boolean
+}
+type Db = Prisma.TransactionClient
+
+/**
+ * The checks POST makes before inserting a request, each answering exactly what it always answered.
+ * Run once on the way in and again inside the insert's transaction, under the per-person request lock
+ * (race audit H3), with `db` = that transaction.
+ *
+ * Overlap with another live request, or attendance already recorded on one of the dates.
+ */
+async function overlapConflict(db: Db, a: RequestConflictArgs): Promise<NextResponse | null> {
+  const [existingRequests, existingAttendance] = await Promise.all([
+    db.attendanceRequest.findMany({
+      where: {
+        userId: a.userId,
+        workspaceId: a.workspaceId,
+        status: { in: ["PENDING", "APPROVED"] },
+        startDate: { lte: a.end },
+        endDate: { gte: a.start },
+        // The cron's own auto-deduction row is not a request the person made. Counting it here
+        // answered "overlaps with another active request" to anyone filing sick leave for a day
+        // the cron had already cut — the exact day they most need to file for — and the refund
+        // below was never reached. 1,070 such rows exist.
+        ...NOT_AUTO_DEDUCTION,
+      },
+      select: {
+        id: true,
+        startDate: true,
+        endDate: true,
+      },
+    }),
+    db.attendanceRecord.findMany({
+      where: {
+        userId: a.userId,
+        workspaceId: a.workspaceId,
+        attendanceDate: {
+          gte: a.start,
+          lte: a.end,
+        },
+        OR: [
+          { checkInAt: { not: null } },
+          { checkOutAt: { not: null } },
+        ],
+      },
+      select: {
+        id: true,
+      },
+    }),
+  ])
+
+  if (existingRequests.length > 0) {
+    return NextResponse.json({ error: "This request overlaps with another active attendance request." }, { status: 409 })
+  }
+
+  if (existingAttendance.length > 0) {
+    return NextResponse.json({ error: "Attendance already exists for one or more selected dates." }, { status: 409 })
+  }
+  return null
+}
+
+/**
+ * Monthly quota enforcement for the two bucketed leave types: DAY_OFF (per-person override,
+ * default 4) and RED_DATE / "tanggal merah" (RedDateQuota of the month, set by BoD, default 0 —
+ * below). Each counts within its OWN type, so the two buckets are independent. Admin grants
+ * (isGrant) bypass the cap.
+ */
+async function quotaConflict(db: Db, a: RequestConflictArgs): Promise<NextResponse | null> {
+  if (a.type === "DAY_OFF" || a.type === "RED_DATE") {
+    const reqType = a.type
+    // DAY_OFF quota resets on the 28→27 payroll period; RED_DATE stays on the calendar month.
+    const isDayOff = reqType === "DAY_OFF"
+    const keyOf = (d: Date) => (isDayOff ? attendancePeriodKey(formatAttendanceDateKey(d)) : formatMonthKey(d))
+    const rangeOf = (mk: string) => (isDayOff ? attendancePeriodRange(mk) : attendanceMonthRange(mk))
+    const requestDates = enumerateAttendanceDates(a.start, a.end)
+    const monthCounts = new Map<string, number>()
+
+    for (const date of requestDates) {
+      const monthKey = keyOf(date)
+      monthCounts.set(monthKey, (monthCounts.get(monthKey) ?? 0) + 1)
+    }
+
+    const existingMonthCounts = new Map<string, number>()
+    if (isDayOff) {
+      // DAY_OFF usage lives in lib/day-off-usage — the same rule this block always applied (every
+      // PENDING/APPROVED DAY_OFF of this person, auto-cuts included, charged day by day to its
+      // 28→27 period), moved out so the izin guard, the reviewer queue and the absence push quote
+      // the number this cap acts on instead of re-deriving it.
+      const periodKeys = Array.from(monthCounts.keys())
+      const usedByPeriod = await dayOffUsedByPeriod(periodKeys.map((periodKey) => ({ userId: a.userId, periodKey })), db)
+      for (const periodKey of periodKeys) {
+        const used = usedByPeriod.get(dayOffUsageKey(a.userId, periodKey)) ?? 0
+        if (used > 0) existingMonthCounts.set(periodKey, used)
+      }
+    } else {
+      const monthWindows = Array.from(monthCounts.keys()).map((monthKey) => ({
+        monthKey,
+        ...rangeOf(monthKey),
+      }))
+
+      const existingSameType = await db.attendanceRequest.findMany({
+        where: {
+          userId: a.userId,
+          type: reqType,
+          status: { in: ["PENDING", "APPROVED"] },
+          OR: monthWindows.map((window) => ({
+            startDate: { lte: window.end },
+            endDate: { gte: window.start },
+          })),
+        },
+        select: { startDate: true, endDate: true },
+      })
+
+      for (const requestItem of existingSameType) {
+        for (const date of enumerateAttendanceDates(requestItem.startDate, requestItem.endDate)) {
+          const monthKey = keyOf(date)
+          if (!monthCounts.has(monthKey)) continue
+          existingMonthCounts.set(monthKey, (existingMonthCounts.get(monthKey) ?? 0) + 1)
+        }
+      }
+    }
+
+    const label = reqType === "DAY_OFF" ? "day-off" : "tanggal merah"
+    // DAY_OFF: per-person override (default 4) + the extra days the BoD granted for THAT period
+    // (DayOffBonus) — each period the request touches is capped by its own allowance.
+    // RED_DATE: per-month quota set by BoD (default 0 until BoD inputs it — so staff can't request
+    // tanggal merah until BoD sets the month's jatah).
+    const dayOffQuotaByPeriod = new Map<string, number>()
+    const redQuotaByMonth = new Map<string, number>()
+    if (reqType === "DAY_OFF") {
+      const periodKeys = Array.from(monthCounts.keys())
+      const allowance = await effectiveDayOffQuotas(a.workspaceId, periodKeys.map((periodKey) => ({ userId: a.userId, periodKey })), db)
+      for (const periodKey of periodKeys) {
+        dayOffQuotaByPeriod.set(periodKey, allowance.get(dayOffUsageKey(a.userId, periodKey))?.quota ?? DEFAULT_DAY_OFF_QUOTA)
+      }
+    } else {
+      const rows = await db.redDateQuota.findMany({
+        where: { workspaceId: a.workspaceId, month: { in: Array.from(monthCounts.keys()) } },
+        select: { month: true, quota: true },
+      })
+      for (const r of rows) redQuotaByMonth.set(r.month, r.quota)
+    }
+
+    if (!a.isGrant) {
+      for (const [monthKey, requestedCount] of Array.from(monthCounts.entries())) {
+        const total = requestedCount + (existingMonthCounts.get(monthKey) ?? 0)
+        const quota = reqType === "DAY_OFF" ? (dayOffQuotaByPeriod.get(monthKey) ?? DEFAULT_DAY_OFF_QUOTA) : (redQuotaByMonth.get(monthKey) ?? 0)
+        if (total > quota) {
+          return NextResponse.json(
+            { error: `Jatah ${label} ${monthKey} terlampaui. Maksimal ${quota} hari per bulan${quota === 0 ? " (direksi belum set jatah)" : ""}.` },
+            { status: 422 }
+          )
+        }
+      }
+    }
+  }
+  return null
+}
+
+/** Annual leave: 12 days per calendar year (eligibility is checked by the caller first). */
+async function leaveQuotaConflict(db: Db, a: RequestConflictArgs): Promise<NextResponse | null> {
+  // Charge each calendar year the request touches to that year's own allowance, so a request
+  // spanning New Year can't dodge either year's cap.
+  const yearsTouched = new Set<number>()
+  for (const d of enumerateAttendanceDates(a.start, a.end)) yearsTouched.add(d.getUTCFullYear())
+
+  for (const year of Array.from(yearsTouched)) {
+    const { start, end } = leaveYearRange(new Date(Date.UTC(year, 5, 1)))
+    const existing = await db.attendanceRequest.findMany({
+      where: {
+        userId: a.userId,
+        type: "LEAVE",
+        status: { in: ["PENDING", "APPROVED"] },
+        startDate: { lte: end },
+        endDate: { gte: start },
+      },
+      select: { startDate: true, endDate: true },
+    })
+    const used = existing.reduce((sum, r) => sum + leaveDaysInYear(r.startDate, r.endDate, year), 0)
+    const asking = leaveDaysInYear(a.start, a.end, year)
+    if (used + asking > ANNUAL_LEAVE_DAYS) {
+      const left = Math.max(0, ANNUAL_LEAVE_DAYS - used)
+      return NextResponse.json(
+        {
+          error: `Jatah cuti tahunan ${year} nggak cukup. Sisa ${left} dari ${ANNUAL_LEAVE_DAYS} hari, kamu minta ${asking} hari.`,
+          code: "LEAVE_QUOTA_EXCEEDED",
+        },
+        { status: 422 }
+      )
+    }
+  }
+  return null
 }
 
 export async function GET(request: NextRequest) {
@@ -491,53 +691,14 @@ export async function POST(request: NextRequest) {
       effectiveUserId = targetUserId
     }
 
-    const [existingRequests, existingAttendance, primaryAttendanceTeam] = await Promise.all([
-      prisma.attendanceRequest.findMany({
-        where: {
-          userId: effectiveUserId,
-          workspaceId: context.workspace.id,
-          status: { in: ["PENDING", "APPROVED"] },
-          startDate: { lte: parsedEndDate },
-          endDate: { gte: parsedStartDate },
-          // The cron's own auto-deduction row is not a request the person made. Counting it here
-          // answered "overlaps with another active request" to anyone filing sick leave for a day
-          // the cron had already cut — the exact day they most need to file for — and the refund
-          // below was never reached. 1,070 such rows exist.
-          ...NOT_AUTO_DEDUCTION,
-        },
-        select: {
-          id: true,
-          startDate: true,
-          endDate: true,
-        },
-      }),
-      prisma.attendanceRecord.findMany({
-        where: {
-          userId: effectiveUserId,
-          workspaceId: context.workspace.id,
-          attendanceDate: {
-            gte: parsedStartDate,
-            lte: parsedEndDate,
-          },
-          OR: [
-            { checkInAt: { not: null } },
-            { checkOutAt: { not: null } },
-          ],
-        },
-        select: {
-          id: true,
-        },
-      }),
+    const conflictArgs: RequestConflictArgs = {
+      userId: effectiveUserId, workspaceId: context.workspace.id, start: parsedStartDate, end: parsedEndDate, type: reqType, isGrant,
+    }
+    const [overlap, primaryAttendanceTeam] = await Promise.all([
+      overlapConflict(prisma, conflictArgs),
       getPrimaryAttendanceTeam(effectiveUserId, context.workspace.id),
     ])
-
-    if (existingRequests.length > 0) {
-      return NextResponse.json({ error: "This request overlaps with another active attendance request." }, { status: 409 })
-    }
-
-    if (existingAttendance.length > 0) {
-      return NextResponse.json({ error: "Attendance already exists for one or more selected dates." }, { status: 409 })
-    }
+    if (overlap) return overlap
 
     if (
       supportingDocument instanceof File &&
@@ -546,98 +707,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Supporting document must be smaller than 10MB." }, { status: 400 })
     }
 
-    // Monthly quota enforcement for the two bucketed leave types: DAY_OFF (per-person override,
-    // default 4) and RED_DATE / "tanggal merah" (RedDateQuota of the month, set by BoD, default 0 —
-    // below). Each counts within its OWN type, so the two buckets are independent. Admin grants
-    // (isGrant) bypass the cap.
-    if (validation.data.type === "DAY_OFF" || validation.data.type === "RED_DATE") {
-      const reqType = validation.data.type
-      // DAY_OFF quota resets on the 28→27 payroll period; RED_DATE stays on the calendar month.
-      const isDayOff = reqType === "DAY_OFF"
-      const keyOf = (d: Date) => (isDayOff ? attendancePeriodKey(formatAttendanceDateKey(d)) : formatMonthKey(d))
-      const rangeOf = (mk: string) => (isDayOff ? attendancePeriodRange(mk) : attendanceMonthRange(mk))
-      const requestDates = enumerateAttendanceDates(parsedStartDate, parsedEndDate)
-      const monthCounts = new Map<string, number>()
-
-      for (const date of requestDates) {
-        const monthKey = keyOf(date)
-        monthCounts.set(monthKey, (monthCounts.get(monthKey) ?? 0) + 1)
-      }
-
-      const existingMonthCounts = new Map<string, number>()
-      if (isDayOff) {
-        // DAY_OFF usage lives in lib/day-off-usage — the same rule this block always applied (every
-        // PENDING/APPROVED DAY_OFF of this person, auto-cuts included, charged day by day to its
-        // 28→27 period), moved out so the izin guard, the reviewer queue and the absence push quote
-        // the number this cap acts on instead of re-deriving it.
-        const periodKeys = Array.from(monthCounts.keys())
-        const usedByPeriod = await dayOffUsedByPeriod(periodKeys.map((periodKey) => ({ userId: effectiveUserId, periodKey })))
-        for (const periodKey of periodKeys) {
-          const used = usedByPeriod.get(dayOffUsageKey(effectiveUserId, periodKey)) ?? 0
-          if (used > 0) existingMonthCounts.set(periodKey, used)
-        }
-      } else {
-        const monthWindows = Array.from(monthCounts.keys()).map((monthKey) => ({
-          monthKey,
-          ...rangeOf(monthKey),
-        }))
-
-        const existingSameType = await prisma.attendanceRequest.findMany({
-          where: {
-            userId: effectiveUserId,
-            type: reqType,
-            status: { in: ["PENDING", "APPROVED"] },
-            OR: monthWindows.map((window) => ({
-              startDate: { lte: window.end },
-              endDate: { gte: window.start },
-            })),
-          },
-          select: { startDate: true, endDate: true },
-        })
-
-        for (const requestItem of existingSameType) {
-          for (const date of enumerateAttendanceDates(requestItem.startDate, requestItem.endDate)) {
-            const monthKey = keyOf(date)
-            if (!monthCounts.has(monthKey)) continue
-            existingMonthCounts.set(monthKey, (existingMonthCounts.get(monthKey) ?? 0) + 1)
-          }
-        }
-      }
-
-      const label = reqType === "DAY_OFF" ? "day-off" : "tanggal merah"
-      // DAY_OFF: per-person override (default 4) + the extra days the BoD granted for THAT period
-      // (DayOffBonus) — each period the request touches is capped by its own allowance.
-      // RED_DATE: per-month quota set by BoD (default 0 until BoD inputs it — so staff can't request
-      // tanggal merah until BoD sets the month's jatah).
-      const dayOffQuotaByPeriod = new Map<string, number>()
-      const redQuotaByMonth = new Map<string, number>()
-      if (reqType === "DAY_OFF") {
-        const periodKeys = Array.from(monthCounts.keys())
-        const allowance = await effectiveDayOffQuotas(context.workspace.id, periodKeys.map((periodKey) => ({ userId: effectiveUserId, periodKey })))
-        for (const periodKey of periodKeys) {
-          dayOffQuotaByPeriod.set(periodKey, allowance.get(dayOffUsageKey(effectiveUserId, periodKey))?.quota ?? DEFAULT_DAY_OFF_QUOTA)
-        }
-      } else {
-        const rows = await prisma.redDateQuota.findMany({
-          where: { workspaceId: context.workspace.id, month: { in: Array.from(monthCounts.keys()) } },
-          select: { month: true, quota: true },
-        })
-        for (const r of rows) redQuotaByMonth.set(r.month, r.quota)
-      }
-
-      if (!isGrant) {
-        for (const [monthKey, requestedCount] of Array.from(monthCounts.entries())) {
-          const total = requestedCount + (existingMonthCounts.get(monthKey) ?? 0)
-          const quota = reqType === "DAY_OFF" ? (dayOffQuotaByPeriod.get(monthKey) ?? DEFAULT_DAY_OFF_QUOTA) : (redQuotaByMonth.get(monthKey) ?? 0)
-          if (total > quota) {
-            return NextResponse.json(
-              { error: `Jatah ${label} ${monthKey} terlampaui. Maksimal ${quota} hari per bulan${quota === 0 ? " (direksi belum set jatah)" : ""}.` },
-              { status: 422 }
-            )
-          }
-        }
-      }
-    }
+    // Monthly quota enforcement for DAY_OFF / RED_DATE (see quotaConflict).
+    const quota = await quotaConflict(prisma, conflictArgs)
+    if (quota) return quota
 
     // ── Cuti tahunan ────────────────────────────────────────────────────────────────────────────
     // Staff may now submit LEAVE themselves (it used to be BoD-grant only), gated on two things:
@@ -653,36 +725,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: eligibility.reason, code: "LEAVE_NOT_ELIGIBLE" }, { status: 403 })
       }
 
-      // Charge each calendar year the request touches to that year's own allowance, so a request
-      // spanning New Year can't dodge either year's cap.
-      const yearsTouched = new Set<number>()
-      for (const d of enumerateAttendanceDates(parsedStartDate, parsedEndDate)) yearsTouched.add(d.getUTCFullYear())
-
-      for (const year of Array.from(yearsTouched)) {
-        const { start, end } = leaveYearRange(new Date(Date.UTC(year, 5, 1)))
-        const existing = await prisma.attendanceRequest.findMany({
-          where: {
-            userId: effectiveUserId,
-            type: "LEAVE",
-            status: { in: ["PENDING", "APPROVED"] },
-            startDate: { lte: end },
-            endDate: { gte: start },
-          },
-          select: { startDate: true, endDate: true },
-        })
-        const used = existing.reduce((sum, r) => sum + leaveDaysInYear(r.startDate, r.endDate, year), 0)
-        const asking = leaveDaysInYear(parsedStartDate, parsedEndDate, year)
-        if (used + asking > ANNUAL_LEAVE_DAYS) {
-          const left = Math.max(0, ANNUAL_LEAVE_DAYS - used)
-          return NextResponse.json(
-            {
-              error: `Jatah cuti tahunan ${year} nggak cukup. Sisa ${left} dari ${ANNUAL_LEAVE_DAYS} hari, kamu minta ${asking} hari.`,
-              code: "LEAVE_QUOTA_EXCEEDED",
-            },
-            { status: 422 }
-          )
-        }
-      }
+      const leaveQuota = await leaveQuotaConflict(prisma, conflictArgs)
+      if (leaveQuota) return leaveQuota
     }
 
     let supportingDocumentUrl: string | null = null
@@ -733,48 +777,69 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const attendanceRequest = await prisma.attendanceRequest.create({
-      data: {
-        userId: effectiveUserId,
-        workspaceId: context.workspace.id,
-        teamId: primaryAttendanceTeam?.teamId ?? null,
-        type: validation.data.type,
-        startDate: parsedStartDate,
-        endDate: parsedEndDate,
-        reason: validation.data.reason.trim(),
-        supportingDocumentUrl,
-        supportingDocumentName,
-        submittedLat: permitLat,
-        submittedLng: permitLng,
-        submittedAddress: permitAddress,
-        reportDelayMinutes: permitDelay,
-        // BoD granting on behalf of a user → already approved by that BoD.
-        ...(isGrant ? { status: "APPROVED" as const, reviewedById: session.user.id, reviewedAt: new Date() } : {}),
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            avatar: true,
+    // Overlap and quota were checked above, then the request is inserted: two statements apart, so a
+    // double submit (or two tabs, or two day-offs filed at once against the last day of quota) both
+    // passed and both landed (race audit H3). The insert now runs under a per-person advisory lock that
+    // every request writer takes (attreq|user: this route, the BoD day-off and override routes, the
+    // cron's auto day-off), and the same checks are made again inside it. A request that loses answers
+    // exactly what it would have answered a moment later — the overlap 409 or the quota 422.
+    const created = await prisma.$transaction(async (tx) => {
+      await lockAttendanceRequests(tx, effectiveUserId)
+      const conflict =
+        (await overlapConflict(tx, conflictArgs)) ??
+        (await quotaConflict(tx, conflictArgs)) ??
+        (reqType === "LEAVE" && !isGrant ? await leaveQuotaConflict(tx, conflictArgs) : null)
+      if (conflict) return conflict
+      return tx.attendanceRequest.create({
+        data: {
+          userId: effectiveUserId,
+          workspaceId: conflictArgs.workspaceId,
+          teamId: primaryAttendanceTeam?.teamId ?? null,
+          type: validation.data.type,
+          startDate: parsedStartDate,
+          endDate: parsedEndDate,
+          reason: validation.data.reason.trim(),
+          supportingDocumentUrl,
+          supportingDocumentName,
+          submittedLat: permitLat,
+          submittedLng: permitLng,
+          submittedAddress: permitAddress,
+          reportDelayMinutes: permitDelay,
+          // BoD granting on behalf of a user → already approved by that BoD.
+          ...(isGrant ? { status: "APPROVED" as const, reviewedById: session.user.id, reviewedAt: new Date() } : {}),
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              avatar: true,
+            },
+          },
+          reviewedBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          team: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-        reviewedBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        team: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
+      })
     })
+    if (created instanceof NextResponse) {
+      if (supportingDocumentUrl) {
+        await unlink(path.join(process.cwd(), "public", "uploads", "attendance", "requests", path.basename(supportingDocumentUrl))).catch(() => {})
+      }
+      return created
+    }
+    const attendanceRequest = created
 
     await logAudit({
       action: isGrant ? "grant" : "create",

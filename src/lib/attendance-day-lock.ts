@@ -15,6 +15,16 @@ export async function lockAttendanceDay(tx: Prisma.TransactionClient, userId: st
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`attday|${userId}|${dateKey}`})::int8)`
 }
 
+/**
+ * One lock per person for every writer of their attendance REQUESTS (race audit H3): the request form,
+ * the BoD day-off and status-override routes, and the cron's auto day-off. Each re-checks overlap and
+ * quota under it before inserting, so two inserts can no longer both pass a check made before either.
+ * Taken before the member-day lock when a transaction needs both.
+ */
+export async function lockAttendanceRequests(tx: Prisma.TransactionClient, userId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`attreq|${userId}`})::int8)`
+}
+
 const DAY_REASON = /^attendance:(late|nocheckout|alpha|waiver):(\d{4}-\d{2}-\d{2})$/
 
 /** The member-day a ledger reason belongs to ("attendance:late:2026-10-16" → "2026-10-16"), else null. */

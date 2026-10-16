@@ -4,12 +4,12 @@ import { enumerateAttendanceDates, FLEXI_WINDOW_END, formatAttendanceDateKey, ge
 import { awardXpOnce, setLatePenalty, clearLatePenalty, refundXpByReason, refundXpByReasonTx } from "@/lib/gamification"
 import { getHolidayKeys, isHoliday } from "@/lib/holidays"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
-import { attendanceDayBlockedTx, attendanceWaiverReason, isAutoDeduction, lockAttendanceDay, type AttendanceDayGuard } from "@/lib/attendance-day-lock"
+import { attendanceDayBlockedTx, attendanceWaiverReason, isAutoDeduction, lockAttendanceDay, lockAttendanceRequests, type AttendanceDayGuard } from "@/lib/attendance-day-lock"
 import type { Prisma } from "@/generated/prisma/client"
 
 // Defined next to the member-day lock (lib/attendance-day-lock.ts), which the XP ledger also needs;
 // re-exported so every existing import from here keeps working.
-export { attendanceWaiverReason, isAutoDeduction }
+export { attendanceWaiverReason, isAutoDeduction, lockAttendanceRequests }
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 // Don't auto-deduct (or apply ANY attendance XP penalty) for days before the policy went live — avoids
@@ -409,7 +409,7 @@ export async function clearLeaveCoveredOpenRecords(userId: string, workspaceId: 
 /**
  * Create the cron's auto "potong jatah day-off" request for one member-day, but ONLY if no PENDING/
  * APPROVED day-off already covers that date — idempotently. The re-check + create run inside one
- * transaction guarded by a (userId, dateKey) advisory lock, so two overlapping deduction runs (e.g. the
+ * transaction guarded by the per-person request lock (attreq|user), so two overlapping deduction runs (e.g. the
  * 02:00 cron and a manual "run now") can't both pass a stale duplicate-check and double-cut the quota.
  * Returns the new request id, or null if one already existed.
  */
@@ -426,7 +426,9 @@ async function createAutoDayOffOnce(opts: {
 }): Promise<string | null> {
   const { userId, workspaceId, teamId, date, dateKey, reason, reviewNote } = opts
   return await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`autodayoff|${userId}|${dateKey}`})::int8)`
+    // The per-person request lock (race audit H3; it was autodayoff|user|date, which serialized two cron
+    // runs but not the cron against a request being filed for the same day).
+    await lockAttendanceRequests(tx, userId)
     // A BoD pardon, a correction or a real request that landed after the cron's reads (race audit H2):
     // the pardon dropped the auto day-offs that existed then, so this one must not appear after it.
     await lockAttendanceDay(tx, userId, dateKey)

@@ -16,6 +16,7 @@ import {
   serializeAttendanceRequest,
 } from "@/lib/attendance"
 import { dayOffUsageKey, effectiveDayOffQuotas } from "@/lib/day-off-usage"
+import { lockAttendanceRequests } from "@/lib/attendance-day-lock"
 
 const DEFAULT_DAYOFF_QUOTA = 4 // workspace default; overridable per-person via PATCH
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -173,39 +174,43 @@ export async function POST(req: NextRequest) {
 
     const day = parseDateOnlyToUtc(date)
 
-    // Idempotent: skip if a day-off already covers that date.
-    const existing = await prisma.attendanceRequest.findFirst({
-      where: {
-        workspaceId, userId, type: "DAY_OFF",
-        status: { in: ["PENDING", "APPROVED"] },
-        startDate: { lte: day }, endDate: { gte: day },
-      },
-      select: { id: true },
-    })
-    if (existing) return NextResponse.json({ error: "Sudah ada day-off di tanggal itu." }, { status: 409 })
-
     const primary = await getPrimaryAttendanceTeam(userId, workspaceId)
-    const created = await prisma.attendanceRequest.create({
-      data: {
-        userId,
-        workspaceId,
-        teamId: primary?.teamId ?? null,
-        type: "DAY_OFF",
-        status: "APPROVED",
-        startDate: day,
-        endDate: day,
-        reason: reason || "Day-off diatur oleh direksi (Control Room)",
-        reviewNote: "Diatur via Control Room",
-        approvalSource: "ADMIN",
-        reviewedAt: new Date(),
-        reviewedById: session.user.id,
-      },
-      include: {
-        user: { select: { id: true, name: true, email: true, avatar: true } },
-        reviewedBy: { select: { id: true, name: true, email: true } },
-        team: { select: { id: true, name: true } },
-      },
+    // Idempotent: skip if a day-off already covers that date. Checked and inserted under the person's
+    // request lock (race audit H3), so a double click cannot grant the same day twice.
+    const created = await prisma.$transaction(async (tx) => {
+      await lockAttendanceRequests(tx, userId)
+      const existing = await tx.attendanceRequest.findFirst({
+        where: {
+          workspaceId, userId, type: "DAY_OFF",
+          status: { in: ["PENDING", "APPROVED"] },
+          startDate: { lte: day }, endDate: { gte: day },
+        },
+        select: { id: true },
+      })
+      if (existing) return null
+      return tx.attendanceRequest.create({
+        data: {
+          userId,
+          workspaceId,
+          teamId: primary?.teamId ?? null,
+          type: "DAY_OFF",
+          status: "APPROVED",
+          startDate: day,
+          endDate: day,
+          reason: reason || "Day-off diatur oleh direksi (Control Room)",
+          reviewNote: "Diatur via Control Room",
+          approvalSource: "ADMIN",
+          reviewedAt: new Date(),
+          reviewedById: session.user.id,
+        },
+        include: {
+          user: { select: { id: true, name: true, email: true, avatar: true } },
+          reviewedBy: { select: { id: true, name: true, email: true } },
+          team: { select: { id: true, name: true } },
+        },
+      })
     })
+    if (!created) return NextResponse.json({ error: "Sudah ada day-off di tanggal itu." }, { status: 409 })
 
     try {
       await logAudit({
