@@ -597,10 +597,11 @@ private val PENALTIES = listOf(
     XpRules.Row("-150 XP", R.string.xp_no_show, R.string.xp_per_day, true),
 )
 // No automatic bonus: XP is quest-only, assigned by BoD (server period-rewards.ts).
+// Owner, 16 Oct 2026: quests as they really are (made by BoD and up, the XP the quest sets) and BoD adjustments;
+// the old +30 / +50 / +20 lines were promises the server never kept. Same rows as the web XpRulesCard.
 private val BONUSES = listOf(
-    XpRules.Row("+30 XP", R.string.xp_side_quest, R.string.xp_heads_call, false),
-    XpRules.Row("+50 XP", R.string.xp_beyond_target, R.string.xp_mgmt_call, false),
-    XpRules.Row("+20 XP", R.string.xp_feedback, R.string.xp_hr_call, false),
+    XpRules.Row("Per quest", R.string.xp_side_quest, R.string.xp_heads_call, false),
+    XpRules.Row("± XP", R.string.xp_beyond_target, R.string.xp_mgmt_call, false),
 )
 
 @Composable
@@ -635,7 +636,8 @@ private fun XpSection(title: String, icon: ImageVector, tone: Color, rows: List<
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, tint = tone, modifier = Modifier.size(12.dp))
             Spacer(Modifier.width(5.dp))
-            Text(title.uppercase(Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, color = tone)
+            // A sentence-case heading, no uppercase eyebrow (run 19 decision 1).
+            Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Nx.colors.foreground)
         }
         rows.forEachIndexed { i, r ->
             if (i > 0) HorizontalDivider(color = c.border.copy(alpha = 0.6f))

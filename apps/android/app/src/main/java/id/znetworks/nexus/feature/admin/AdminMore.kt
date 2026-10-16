@@ -232,7 +232,7 @@ fun QuestsTab() {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(title, { title = it }, singleLine = true, label = { Text(stringResource(R.string.qa_title)) }, placeholder = { Text(stringResource(R.string.qa_title_ph)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
-                    Column { listOf("task_count", "overdue_cleared", "priority_done", "has_overdue").forEach { t -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column { listOf("task_count", "overdue_cleared", "priority_done").forEach { t -> Row(verticalAlignment = Alignment.CenterVertically) {
                         FilterChip(type == t, { type = t }, { Text(questType(t, null) ?: t, fontSize = 12.sp) }) } } }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(count, { count = it.filter(Char::isDigit).take(3) }, singleLine = true, label = { Text("N") }, keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done, keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
