@@ -247,7 +247,7 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
                     <div className="min-w-0 flex-1">
                       <div className="truncate">
                         {versionKindLabel(v.kind)}{v.note ? ` — ${v.note}` : ""}
-                        <span className="ml-1.5 rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground" title={v.downloadName}>{revLabel(v.label, t)}</span>
+                        <span className="ml-1.5 rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground" title={v.downloadName}>{v.label}</span>
                         {doc.signedVersion === v.version && <span className="ml-1.5 rounded bg-emerald-500/10 px-1.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">{t("Signed copy")}</span>}
                         {doc.finalVersion === v.version && <span className="ml-1.5 rounded bg-primary/10 px-1.5 text-[10px] font-medium text-primary">{t("Final")}</span>}
                       </div>
@@ -441,11 +441,3 @@ function UploadVersionButton({ doc, onDone }: { doc: LegalDocument; onDone: () =
   );
 }
 
-/**
- * The template revision a version was made from, said as such: "v1 · Generated · Template rev 1", not two bare
- * version numbers side by side (decision 28, UI tour run 20, R20-WB-12). Display only; the file name keeps "REV".
- */
-function revLabel(label: string, t: (s: string, v?: Record<string, string | number>) => string): string {
-  const m = /^REV[\s._-]*(\d+)$/i.exec(label.trim());
-  return m ? t("Template rev {n}", { n: m[1] }) : label;
-}

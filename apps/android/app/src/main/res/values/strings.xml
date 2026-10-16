@@ -636,7 +636,7 @@
     <string name="xp_auto">Automatic</string>
     <string name="xp_manual">Manual</string>
     <string name="xp_footnote">“Automatic” is worked out by the system from attendance. “Manual” comes from a quest or from BoD. Your level is this period\'s level: everyone starts at 1.000 XP on the 28th.</string>
-    <string name="home_q_chat">Chat</string>
+    <string name="home_q_chat">Messages</string>
     <string name="home_q_leaderboard">Leaderboard</string>
     <string name="home_q_rooms">Room Booking</string>
     <string name="home_q_threads">Threads</string>
@@ -661,7 +661,7 @@
     <string name="ptab_automations">Automations</string>
     <string name="ptab_pages">Pages</string>
     <string name="ptab_forms">Forms</string>
-    <string name="ptab_chat">Chat</string>
+    <string name="ptab_chat">Messages</string>
     <string name="pt_sheet_empty">No tasks to show in the spreadsheet yet.</string>
     <string name="pt_col_task">Task</string>
     <string name="pt_col_section">Section</string>
@@ -2584,7 +2584,7 @@
         <item quantity="one">%d person is typing…</item>
         <item quantity="other">%d people are typing…</item>
     </plurals>
-    <string name="tab_chat">Chat</string>
+    <string name="tab_chat">Messages</string>
     <!-- Chat tab, Home tiles, group of two (owner, 9 Oct; NAV-HOME-GROUP) -->
     <string name="ng_make_group">Make it a group</string>
     <string name="ng_forced">Two or more people always make a group.</string>
