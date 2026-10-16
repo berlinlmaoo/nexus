@@ -217,53 +217,59 @@ export async function ensureExecutionProject(
  */
 export async function syncMainDateTask(dealId: string, actorId: string): Promise<void> {
   try {
-    const deal = await prisma.pipelineDeal.findUnique({
-      where: { id: dealId },
-      select: {
-        code: true, name: true, mainDate: true, mainDateTaskId: true,
-        executionProjectId: true, executionCalendarProjectId: true, bdUserId: true, pmUserId: true,
-      },
-    })
-    const targetProjectId = deal?.executionCalendarProjectId ?? deal?.executionProjectId
-    if (!deal || !targetProjectId) return
-    const existing = deal.mainDateTaskId
-      ? await prisma.task.findFirst({
-          where: { id: deal.mainDateTaskId, taskList: { projectId: targetProjectId } },
-          select: { id: true, dueDate: true },
-        })
-      : null
+    // Under the deal's row lock (race audit 16 Oct 2026, M8): two date changes at once both found no task
+    // yet and both made one, so the calendar showed the event twice. Now the second waits, then sees the
+    // first one's mainDateTaskId and only moves that task.
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "PipelineDeal" WHERE id = ${dealId} FOR UPDATE`
+      const deal = await tx.pipelineDeal.findUnique({
+        where: { id: dealId },
+        select: {
+          code: true, name: true, mainDate: true, mainDateTaskId: true,
+          executionProjectId: true, executionCalendarProjectId: true, bdUserId: true, pmUserId: true,
+        },
+      })
+      const targetProjectId = deal?.executionCalendarProjectId ?? deal?.executionProjectId
+      if (!deal || !targetProjectId) return
+      const existing = deal.mainDateTaskId
+        ? await tx.task.findFirst({
+            where: { id: deal.mainDateTaskId, taskList: { projectId: targetProjectId } },
+            select: { id: true, dueDate: true },
+          })
+        : null
 
-    if (existing) {
-      const same = (existing.dueDate?.getTime() ?? null) === (deal.mainDate?.getTime() ?? null)
-      if (!same) await prisma.task.update({ where: { id: existing.id }, data: { dueDate: deal.mainDate } })
-      return
-    }
-    if (!deal.mainDate) return
+      if (existing) {
+        const same = (existing.dueDate?.getTime() ?? null) === (deal.mainDate?.getTime() ?? null)
+        if (!same) await tx.task.update({ where: { id: existing.id }, data: { dueDate: deal.mainDate } })
+        return
+      }
+      if (!deal.mainDate) return
 
-    const list = await prisma.taskList.findFirst({
-      where: { projectId: targetProjectId },
-      orderBy: { position: "asc" },
-      select: { id: true, project: { select: { workspaceId: true } } },
+      const list = await tx.taskList.findFirst({
+        where: { projectId: targetProjectId },
+        orderBy: { position: "asc" },
+        select: { id: true, project: { select: { workspaceId: true } } },
+      })
+      if (!list) return
+      const people = [...new Set([deal.pmUserId, deal.bdUserId].filter((id): id is string => !!id))]
+      const assignees = people.length
+        ? (await tx.workspaceMember.findMany({ where: { workspaceId: list.project.workspaceId, userId: { in: people } }, select: { userId: true } })).map((m) => m.userId)
+        : []
+      const last = await tx.task.findFirst({ where: { taskListId: list.id }, orderBy: { position: "desc" }, select: { position: true } })
+      const task = await tx.task.create({
+        data: {
+          title: `Tanggal Event · ${deal.name}`.slice(0, 250),
+          description: `Tanggal event / main date deal ${deal.code} di Pipeline. Ubah tanggalnya di Pipeline, task ini ikut pindah.`,
+          dueDate: deal.mainDate,
+          taskListId: list.id,
+          creatorId: actorId,
+          position: (last?.position ?? -1) + 1,
+          assignees: { create: assignees.map((userId) => ({ userId })) },
+        },
+        select: { id: true },
+      })
+      await tx.pipelineDeal.update({ where: { id: dealId }, data: { mainDateTaskId: task.id } })
     })
-    if (!list) return
-    const people = [...new Set([deal.pmUserId, deal.bdUserId].filter((id): id is string => !!id))]
-    const assignees = people.length
-      ? (await prisma.workspaceMember.findMany({ where: { workspaceId: list.project.workspaceId, userId: { in: people } }, select: { userId: true } })).map((m) => m.userId)
-      : []
-    const last = await prisma.task.findFirst({ where: { taskListId: list.id }, orderBy: { position: "desc" }, select: { position: true } })
-    const task = await prisma.task.create({
-      data: {
-        title: `Tanggal Event · ${deal.name}`.slice(0, 250),
-        description: `Tanggal event / main date deal ${deal.code} di Pipeline. Ubah tanggalnya di Pipeline, task ini ikut pindah.`,
-        dueDate: deal.mainDate,
-        taskListId: list.id,
-        creatorId: actorId,
-        position: (last?.position ?? -1) + 1,
-        assignees: { create: assignees.map((userId) => ({ userId })) },
-      },
-      select: { id: true },
-    })
-    await prisma.pipelineDeal.update({ where: { id: dealId }, data: { mainDateTaskId: task.id } })
   } catch (error) {
     // The deal itself is saved; a calendar entry that failed is made again on the next date change.
     console.error("Pipeline: could not sync the main-date task of deal", dealId, error)

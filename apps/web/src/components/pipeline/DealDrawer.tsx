@@ -686,7 +686,12 @@ function PaymentTerms({ deal, projectId, canEdit }: { deal: PipelineDeal; projec
   const base = deal.invoiceValue > 0 ? deal.invoiceValue : deal.contractValue;
   const baseIsInvoice = deal.invoiceValue > 0;
   const total = sum?.totalAmount ?? 0;
-  const add = () => run.mutate(() => pipelineApi.addTerm(projectId, deal.id, { amount: Math.max(0, base - total) }));
+  // One key per press (race audit 16 Oct 2026, M7): a retried or doubled request stores one term, and two
+  // quick presses are two terms (the key, not the content, tells them apart).
+  const add = () => {
+    const clientRequestId = crypto.randomUUID();
+    run.mutate(() => pipelineApi.addTerm(projectId, deal.id, { amount: Math.max(0, base - total), clientRequestId }));
+  };
 
   return (
     <div className="space-y-2.5">

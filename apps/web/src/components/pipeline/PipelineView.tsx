@@ -9,7 +9,7 @@ import { nexusApi } from "@/lib/nexus-api";
 import { useRealtime, useRealtimeRoom } from "@/lib/realtime";
 import { EmptyAction, EmptyState } from "@/components/EmptyState";
 import { PIPELINE_STAGES, summarize, type HealthKey } from "@/lib/pipeline";
-import { pipelineApi, pipelineKey, servicesOf, type PipelineDeal, type PipelineDealPatch, type PipelineResponse } from "@/lib/pipeline-api";
+import { pipelineApi, pipelineKey, servicesOf, type PipelineDeal, type PipelineDealPatch, type PipelineListBases, type PipelineResponse } from "@/lib/pipeline-api";
 import { PipelineKpis } from "./PipelineKpis";
 import { PipelineBoard } from "./PipelineBoard";
 import { PipelineTable } from "./PipelineTable";
@@ -134,7 +134,8 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
   }, [people]);
 
   const update = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: PipelineDealPatch }) => pipelineApi.update(projectId, id, patch),
+    mutationFn: ({ id, patch, bases }: { id: string; patch: PipelineDealPatch; bases?: PipelineListBases }) =>
+      pipelineApi.update(projectId, id, { ...patch, ...bases }),
     onMutate: async ({ id, patch }) => {
       await qc.cancelQueries({ queryKey: key });
       const before = qc.getQueryData<PipelineResponse>(key);
@@ -163,7 +164,16 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
       qc.invalidateQueries({ queryKey: [...key, "deal", saved.id] });
     },
   });
-  const patchDeal = useCallback((id: string, patch: PipelineDealPatch) => update.mutate({ id, patch }), [update]);
+  // A cost or link list goes with the list it was edited from (race audit 16 Oct 2026, M6), read from the
+  // cache before the optimistic update: the server merges the edit into the deal as it is now, so a line
+  // another person added in the meantime is kept instead of overwritten.
+  const patchDeal = useCallback((id: string, patch: PipelineDealPatch) => {
+    const cur = qc.getQueryData<PipelineResponse>(key)?.deals.find((d) => d.id === id);
+    const bases: PipelineListBases = {};
+    if (cur && "costs" in patch) bases.costsBase = cur.costs ?? [];
+    if (cur && "links" in patch) bases.linksBase = cur.links ?? [];
+    update.mutate({ id, patch, bases });
+  }, [update, qc, key]);
 
   // "+" asks for the deal's name first and creates nothing until it's saved: closing the box leaves no
   // blank "New deal" behind and burns no TZN code (QA B48, 13 Oct 2026).

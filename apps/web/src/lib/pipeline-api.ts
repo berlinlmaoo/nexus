@@ -118,6 +118,10 @@ export type PipelineDeal = {
   marginPct?: number | null;
 };
 
+/** The lists a list PATCH started from (race audit 16 Oct 2026, M6): with them the server merges the edit
+ *  into the deal as it is NOW — a cost line or link someone else added meanwhile stays. */
+export type PipelineListBases = { costsBase?: readonly PipelineCostItem[]; linksBase?: readonly PipelineLink[] };
+
 /** The fields a PATCH may carry (and `position`). */
 export type PipelineDealPatch = Partial<Omit<PipelineDeal,
   "id" | "projectId" | "code" | "bd" | "pm" | "executionProjectId" | "executionProject" | "executionCalendarProjectId" | "executionCalendarProject" | "executionFolderId" | "executionFolder" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy" | "stageGroup" | "daysOverdue" | "health" | "phases" | "terms" | "termSummary" | "costTotal" | "margin" | "marginPct">>;
@@ -153,7 +157,7 @@ export const pipelineApi = {
     apiFetch<PipelineDeal>(base(projectId), { method: "POST", body: JSON.stringify(payload) }),
   detail: (projectId: string, dealId: string) =>
     apiFetch<{ deal: PipelineDeal; history: PipelineChange[] }>(`${base(projectId)}/${encodeURIComponent(dealId)}`),
-  update: (projectId: string, dealId: string, payload: PipelineDealPatch) =>
+  update: (projectId: string, dealId: string, payload: PipelineDealPatch & PipelineListBases) =>
     apiFetch<PipelineDeal>(`${base(projectId)}/${encodeURIComponent(dealId)}`, { method: "PATCH", body: JSON.stringify(payload) }),
   remove: (projectId: string, dealId: string) =>
     apiFetch<{ success: boolean }>(`${base(projectId)}/${encodeURIComponent(dealId)}`, { method: "DELETE" }),
@@ -162,7 +166,7 @@ export const pipelineApi = {
   createExecution: (projectId: string, dealId: string) =>
     apiFetch<{ projectId: string; calendarProjectId: string | null; folderId: string | null; created: boolean; deal: PipelineDeal }>(`${base(projectId)}/${encodeURIComponent(dealId)}/execution`, { method: "POST" }),
   /** Payment terms (9 Oct 2026). Every answer carries the whole deal: its receivable and health moved. */
-  addTerm: (projectId: string, dealId: string, payload: PipelineTermPatch) =>
+  addTerm: (projectId: string, dealId: string, payload: PipelineTermPatch & { clientRequestId?: string }) =>
     apiFetch<{ deal: PipelineDeal; term: PipelineTerm }>(`${base(projectId)}/${encodeURIComponent(dealId)}/terms`, { method: "POST", body: JSON.stringify(payload) }),
   updateTerm: (projectId: string, dealId: string, termId: string, payload: PipelineTermPatch) =>
     apiFetch<{ deal: PipelineDeal; term: PipelineTerm }>(`${base(projectId)}/${encodeURIComponent(dealId)}/terms/${encodeURIComponent(termId)}`, { method: "PATCH", body: JSON.stringify(payload) }),

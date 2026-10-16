@@ -234,51 +234,56 @@ export async function putSocialDay(
   const at = dayIn(date)
   const before: Record<string, unknown> = {}
   const after: Record<string, unknown> = {}
-  for (const [pid, f] of figures) {
-    const where = { projectId_date_platformId: { projectId, date: at, platformId: pid } }
-    const cur = await prisma.socialMediaDay.findUnique({ where })
-    const next: Record<SocialMetric, number | null> = {
-      views: cur?.views ?? null, likes: cur?.likes ?? null, comments: cur?.comments ?? null, shares: cur?.shares ?? null, posts: cur?.posts ?? null,
-    }
-    const changed: SocialMetric[] = []
-    for (const k of METRIC_KEYS) {
-      if (!(k in f)) continue
-      if (next[k] !== f[k]) { changed.push(k); next[k] = f[k] ?? null }
-    }
-    if (changed.length === 0) continue
-    for (const k of changed) {
-      before[`${pid}.${k}`] = cur ? cur[k] : null
-      after[`${pid}.${k}`] = next[k]
-    }
-    if (METRIC_KEYS.every((k) => next[k] === null)) {
-      if (cur) await prisma.socialMediaDay.delete({ where })
-    } else {
-      await prisma.socialMediaDay.upsert({
-        where,
-        create: { projectId, date: at, platformId: pid, ...next, updatedById: userId },
-        update: { ...next, updatedById: userId },
-      })
-    }
-  }
-  if (Object.keys(noteData).length > 0) {
-    const where = { projectId_date: { projectId, date: at } }
-    const cur = await prisma.socialMediaNote.findUnique({ where })
-    const next = { worked: noteData.worked ?? cur?.worked ?? "", didntWork: noteData.didntWork ?? cur?.didntWork ?? "" }
-    const was = { worked: cur?.worked ?? "", didntWork: cur?.didntWork ?? "" }
-    if (next.worked !== was.worked || next.didntWork !== was.didntWork) {
-      for (const k of ["worked", "didntWork"] as const) if (next[k] !== was[k]) { before[k] = was[k]; after[k] = next[k] }
-      if (!next.worked && !next.didntWork) {
-        if (cur) await prisma.socialMediaNote.delete({ where })
+  // One writer per project-day (race audit 16 Oct 2026, M9): two people filling different figures of the
+  // same day each read the row, then wrote all five figures back — the second write put the first one's
+  // figure back to what it read. Read-merge-write now happens under this lock, so nothing sent is lost.
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`social|${projectId}|${date}`})::int8)`
+    for (const [pid, f] of figures) {
+      const where = { projectId_date_platformId: { projectId, date: at, platformId: pid } }
+      const cur = await tx.socialMediaDay.findUnique({ where })
+      const next: Record<SocialMetric, number | null> = {
+        views: cur?.views ?? null, likes: cur?.likes ?? null, comments: cur?.comments ?? null, shares: cur?.shares ?? null, posts: cur?.posts ?? null,
+      }
+      const changed: SocialMetric[] = []
+      for (const k of METRIC_KEYS) {
+        if (!(k in f)) continue
+        if (next[k] !== f[k]) { changed.push(k); next[k] = f[k] ?? null }
+      }
+      if (changed.length === 0) continue
+      for (const k of changed) {
+        before[`${pid}.${k}`] = cur ? cur[k] : null
+        after[`${pid}.${k}`] = next[k]
+      }
+      if (METRIC_KEYS.every((k) => next[k] === null)) {
+        if (cur) await tx.socialMediaDay.delete({ where })
       } else {
-        await prisma.socialMediaNote.upsert({
+        await tx.socialMediaDay.upsert({
           where,
-          create: { projectId, date: at, ...next, updatedById: userId },
+          create: { projectId, date: at, platformId: pid, ...next, updatedById: userId },
           update: { ...next, updatedById: userId },
         })
       }
     }
-  }
-
+    if (Object.keys(noteData).length > 0) {
+      const where = { projectId_date: { projectId, date: at } }
+      const cur = await tx.socialMediaNote.findUnique({ where })
+      const next = { worked: noteData.worked ?? cur?.worked ?? "", didntWork: noteData.didntWork ?? cur?.didntWork ?? "" }
+      const was = { worked: cur?.worked ?? "", didntWork: cur?.didntWork ?? "" }
+      if (next.worked !== was.worked || next.didntWork !== was.didntWork) {
+        for (const k of ["worked", "didntWork"] as const) if (next[k] !== was[k]) { before[k] = was[k]; after[k] = next[k] }
+        if (!next.worked && !next.didntWork) {
+          if (cur) await tx.socialMediaNote.delete({ where })
+        } else {
+          await tx.socialMediaNote.upsert({
+            where,
+            create: { projectId, date: at, ...next, updatedById: userId },
+            update: { ...next, updatedById: userId },
+          })
+        }
+      }
+    }
+  })
   const changedKeys = Object.keys(after)
   if (changedKeys.length > 0) {
     await logAudit({
@@ -328,23 +333,27 @@ export async function putSocialTargets(userId: string, projectId: string, body: 
   if (!parts.ok) return fail(400, parts.error)
   const before: Record<string, unknown> = {}
   const after: Record<string, unknown> = {}
-  for (const [pid, t] of parts.value) {
-    const where = { projectId_month_platformId: { projectId, month, platformId: pid } }
-    const cur = await prisma.socialMediaTarget.findUnique({ where })
-    const was = { engagementTarget: cur?.engagementTarget ?? null, postsTarget: cur?.postsTarget ?? null }
-    const next = {
-      engagementTarget: "engagementTarget" in t ? t.engagementTarget ?? null : was.engagementTarget,
-      postsTarget: "postsTarget" in t ? t.postsTarget ?? null : was.postsTarget,
+  // One writer per project-month (race audit M9): the same read-merge-write as a day's figures.
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`socialtarget|${projectId}|${month}`})::int8)`
+    for (const [pid, t] of parts.value) {
+      const where = { projectId_month_platformId: { projectId, month, platformId: pid } }
+      const cur = await tx.socialMediaTarget.findUnique({ where })
+      const was = { engagementTarget: cur?.engagementTarget ?? null, postsTarget: cur?.postsTarget ?? null }
+      const next = {
+        engagementTarget: "engagementTarget" in t ? t.engagementTarget ?? null : was.engagementTarget,
+        postsTarget: "postsTarget" in t ? t.postsTarget ?? null : was.postsTarget,
+      }
+      if (next.engagementTarget === was.engagementTarget && next.postsTarget === was.postsTarget) continue
+      await tx.socialMediaTarget.upsert({
+        where,
+        create: { projectId, month, platformId: pid, ...next, updatedById: userId },
+        update: { ...next, updatedById: userId },
+      })
+      before[pid] = was
+      after[pid] = next
     }
-    if (next.engagementTarget === was.engagementTarget && next.postsTarget === was.postsTarget) continue
-    await prisma.socialMediaTarget.upsert({
-      where,
-      create: { projectId, month, platformId: pid, ...next, updatedById: userId },
-      update: { ...next, updatedById: userId },
-    })
-    before[pid] = was
-    after[pid] = next
-  }
+  })
   if (Object.keys(after).length > 0) {
     await logAudit({
       action: "update",
@@ -376,27 +385,31 @@ export async function putSocialDayTargets(userId: string, projectId: string, bod
   const at = dayIn(date)
   const before: Record<string, unknown> = {}
   const after: Record<string, unknown> = {}
-  for (const [pid, t] of parts.value) {
-    const where = { projectId_date_platformId: { projectId, date: at, platformId: pid } }
-    const cur = await prisma.socialMediaDayTarget.findUnique({ where })
-    const was = { engagementTarget: cur?.engagementTarget ?? null, postsTarget: cur?.postsTarget ?? null }
-    const next = {
-      engagementTarget: "engagementTarget" in t ? t.engagementTarget ?? null : was.engagementTarget,
-      postsTarget: "postsTarget" in t ? t.postsTarget ?? null : was.postsTarget,
+  // One writer per project-day's targets (race audit M9).
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`socialdaytarget|${projectId}|${date}`})::int8)`
+    for (const [pid, t] of parts.value) {
+      const where = { projectId_date_platformId: { projectId, date: at, platformId: pid } }
+      const cur = await tx.socialMediaDayTarget.findUnique({ where })
+      const was = { engagementTarget: cur?.engagementTarget ?? null, postsTarget: cur?.postsTarget ?? null }
+      const next = {
+        engagementTarget: "engagementTarget" in t ? t.engagementTarget ?? null : was.engagementTarget,
+        postsTarget: "postsTarget" in t ? t.postsTarget ?? null : was.postsTarget,
+      }
+      if (next.engagementTarget === was.engagementTarget && next.postsTarget === was.postsTarget) continue
+      if (next.engagementTarget === null && next.postsTarget === null) {
+        if (cur) await tx.socialMediaDayTarget.delete({ where })
+      } else {
+        await tx.socialMediaDayTarget.upsert({
+          where,
+          create: { projectId, date: at, platformId: pid, ...next, updatedById: userId },
+          update: { ...next, updatedById: userId },
+        })
+      }
+      before[pid] = was
+      after[pid] = next
     }
-    if (next.engagementTarget === was.engagementTarget && next.postsTarget === was.postsTarget) continue
-    if (next.engagementTarget === null && next.postsTarget === null) {
-      if (cur) await prisma.socialMediaDayTarget.delete({ where })
-    } else {
-      await prisma.socialMediaDayTarget.upsert({
-        where,
-        create: { projectId, date: at, platformId: pid, ...next, updatedById: userId },
-        update: { ...next, updatedById: userId },
-      })
-    }
-    before[pid] = was
-    after[pid] = next
-  }
+  })
   if (Object.keys(after).length > 0) {
     await logAudit({
       action: "update",

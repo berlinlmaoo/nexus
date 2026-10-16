@@ -3,7 +3,7 @@ import type { Prisma } from "@/generated/prisma/client"
 import { carryOverFields, type TemplateField } from "@/lib/legal/filters"
 import { inspectTemplate } from "@/lib/legal/template"
 import { isLegalDocType } from "@/lib/legal/rules"
-import { LEGAL_MAX_TEMPLATE_BYTES, looksLikeZip, safeFileName, storeLegalFile } from "@/lib/legal/storage"
+import { deleteLegalFile, LEGAL_MAX_TEMPLATE_BYTES, looksLikeZip, safeFileName, storeLegalFile } from "@/lib/legal/storage"
 
 // Legal templates (owner, 14 Oct 2026): a .docx with {{PLACEHOLDERS}} uploaded from the app, fields detected
 // automatically, versioned. A document records the version it was made from, so a new upload never
@@ -132,16 +132,25 @@ export async function addTemplateVersion(actorId: string, templateId: string, fo
   })
   if (!template) throw new LegalTemplateError("Template not found", 404)
   const upload = await readTemplateUpload(form)
-  const previous = (template.versions[0]?.fields ?? []) as unknown as TemplateField[]
-  const fields = carryOverFields(upload.fields, previous)
   const note = typeof form.get("note") === "string" ? String(form.get("note")).trim().slice(0, 500) : ""
   const storageKey = await storeLegalFile(upload.fileName, upload.bytes)
-  const version = (template.versions[0]?.version ?? 0) + 1
-  await prisma.$transaction([
-    prisma.legalTemplateVersion.create({
-      data: { templateId, version, storageKey, fileName: upload.fileName, size: upload.bytes.length, fields: fields as unknown as Prisma.InputJsonValue, note, createdById: actorId },
-    }),
-    prisma.legalTemplate.update({ where: { id: templateId }, data: { currentVersion: version } }),
-  ])
+  // Two uploads at once both read the same latest version and both wrote max + 1: the second hit the
+  // (templateId, version) unique key and answered 500, its file left behind (race audit 16 Oct 2026, Legal
+  // LOW). The next number and the fields carried over are read under a per-template lock instead.
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`legaltpl|${templateId}`})::int8)`
+      const latest = await tx.legalTemplateVersion.findFirst({ where: { templateId }, orderBy: { version: "desc" }, select: { version: true, fields: true } })
+      const fields = carryOverFields(upload.fields, (latest?.fields ?? []) as unknown as TemplateField[])
+      const version = (latest?.version ?? 0) + 1
+      await tx.legalTemplateVersion.create({
+        data: { templateId, version, storageKey, fileName: upload.fileName, size: upload.bytes.length, fields: fields as unknown as Prisma.InputJsonValue, note, createdById: actorId },
+      })
+      await tx.legalTemplate.update({ where: { id: templateId }, data: { currentVersion: version } })
+    })
+  } catch (error) {
+    await deleteLegalFile(storageKey)
+    throw error
+  }
   return prisma.legalTemplate.findUniqueOrThrow({ where: { id: templateId }, include: templateInclude })
 }

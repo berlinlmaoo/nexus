@@ -25,11 +25,12 @@ vi.mock('@/lib/prisma', () => {
     updatedBy: null,
     reportedBy: null,
   })
-  return {
-    default: {
+  const prisma = {
       project: { findUnique: vi.fn(async () => ({ outletReportConfig: h.config })) },
       outletSalesEvent: {
-        findFirst: vi.fn(async () => (h.event ? withRow({}) : null)),
+        // The create's repeat check (race audit M9: by key, or same night in the last 10 s) finds none here.
+        findFirst: vi.fn(async ({ where }: { where?: Record<string, unknown> } = {}) =>
+          where && ('clientRequestId' in where || 'createdAt' in where) ? null : h.event ? withRow({}) : null),
         update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
           h.updates.push(data)
           h.event = { ...h.event, ...data }
@@ -41,8 +42,11 @@ vi.mock('@/lib/prisma', () => {
           return withRow({})
         }),
       },
-    },
+      $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma)),
+      $queryRaw: vi.fn(async () => []),
+      $executeRaw: vi.fn(async () => 0),
   }
+  return { default: prisma }
 })
 
 import {

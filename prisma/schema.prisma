@@ -4037,6 +4037,10 @@ model PipelinePaymentTerm {
   paidAmount  Float        @default(0)
   paidAt      DateTime?
   note        String       @default("")
+  /// The key a client sent with "Add term" (race audit 16 Oct 2026, M7): a repeat with the same key on the
+  /// same deal returns this term instead of adding another. Unique per dealId WHERE NOT NULL — a partial
+  /// index, so it lives in prisma/sql/2026-10-16-race-pr4-idempotency.sql, not here.
+  clientRequestId String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
@@ -4200,6 +4204,10 @@ model OutletSalesEvent {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  /// The key a client sent with "Add night" (race audit 16 Oct 2026, M9): a repeat with the same key in the
+  /// same project returns this event. Unique per projectId WHERE NOT NULL — partial index in
+  /// prisma/sql/2026-10-16-race-pr4-idempotency.sql.
+  clientRequestId String?
   @@index([projectId, date])
 }
 

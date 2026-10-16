@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { DOUBLE_TAP_MS, readIdempotencyKey } from "@/lib/idempotency"
 import type { Prisma } from "@/generated/prisma/client"
 import { checkProjectAccess, hasProjectLevel } from "@/lib/rbac"
 import { logAudit } from "@/lib/audit"
@@ -380,7 +381,9 @@ export async function createOutletEvent(
   projectId: string,
   body: Record<string, unknown>,
   request?: Request,
-): Promise<WriteResult<SerializedOutletEvent>> {
+): Promise<WriteResult<SerializedOutletEvent> & { duplicate?: boolean }> {
+  const idem = readIdempotencyKey(request, body.clientRequestId)
+  if (!idem.ok) return { ok: false, status: 400, body: { error: "Idempotency key must be 8–200 characters of letters, digits, . _ : -", code: "BAD_IDEMPOTENCY_KEY" } }
   const parsed = parseEventFields(body, "create")
   if (!parsed.ok) return { ok: false, status: 400, body: { ...parsed.error, code: "INVALID_FIELD" } }
   const config = await loadReportConfig(projectId)
@@ -393,19 +396,40 @@ export async function createOutletEvent(
   if (!reportOpen(dayOut(d.date as Date), outletToday()) && writesReport({ ...d, ...json })) return reportNotOpen
   const sales = (d.sales as number | null | undefined) ?? null
   const pax = (d.pax as number | null | undefined) ?? null
-  const created = await prisma.outletSalesEvent.create({
-    data: {
-      ...(d as Omit<Prisma.OutletSalesEventUncheckedCreateInput, "projectId" | "name" | "date">),
-      reportValues: json,
-      name: d.name as string,
-      date: d.date as Date,
-      projectId,
-      createdById: userId,
-      updatedById: userId,
-      ...reportStamp(null, { sales, pax }, userId),
-    },
-    include: eventInclude,
+  // One "Add night" at a time per outlet (race audit 16 Oct 2026, M9): a double tap or a retry stored the
+  // night twice. With a key (body clientRequestId or Idempotency-Key) the same key gives the same night;
+  // without one (every app before this) the same night — same name, same date — added by the same person in
+  // the last 10 s is the same press. Either way the repeat answers 200 with the night already stored.
+  const made = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`outletev|${projectId}`})::int8)`
+    const seen = idem.key
+      ? await tx.outletSalesEvent.findFirst({ where: { projectId, clientRequestId: idem.key }, include: eventInclude })
+      : await tx.outletSalesEvent.findFirst({
+          where: {
+            projectId, createdById: userId, clientRequestId: null, name: d.name as string, date: d.date as Date,
+            createdAt: { gte: new Date(Date.now() - DOUBLE_TAP_MS) },
+          },
+          include: eventInclude,
+        })
+    if (seen) return { event: seen, duplicate: true }
+    const event = await tx.outletSalesEvent.create({
+      data: {
+        ...(d as Omit<Prisma.OutletSalesEventUncheckedCreateInput, "projectId" | "name" | "date">),
+        reportValues: json,
+        name: d.name as string,
+        date: d.date as Date,
+        projectId,
+        createdById: userId,
+        updatedById: userId,
+        clientRequestId: idem.key,
+        ...reportStamp(null, { sales, pax }, userId),
+      },
+      include: eventInclude,
+    })
+    return { event, duplicate: false }
   })
+  if (made.duplicate) return { ok: true, value: serializeEvent(made.event, outletToday(), config), duplicate: true }
+  const created = made.event
   const date = dayOut(created.date)
   await logAudit({
     action: "create",
@@ -444,55 +468,65 @@ export async function updateOutletEvent(
   body: Record<string, unknown>,
   request?: Request,
 ): Promise<WriteResult<SerializedOutletEvent>> {
-  const current = await findOutletEvent(projectId, eventId)
-  if (!current) return notFound
   const parsed = parseEventFields(body, "patch")
   if (!parsed.ok) return { ok: false, status: 400, body: { ...parsed.error, code: "INVALID_FIELD" } }
   const config = await loadReportConfig(projectId)
   const vals = parseValues(body.values, config)
   if (!vals.ok) return { ok: false, status: 400, body: { ...vals.error } }
   const fields = { ...parsed.data, ...vals.columns }
-  const cur = current as unknown as Record<string, unknown>
-  const changed = Object.keys(fields).filter((k) => auditValue(cur[k]) !== auditValue(fields[k]))
-  // The JSON figures: merged key by key, so two people filling different items never undo each other.
-  const before = valuesOf(current)
-  const changedValues = Object.keys(vals.json).filter((k) => (before[k] ?? null) !== vals.json[k])
-  if (changed.length === 0 && changedValues.length === 0) return { ok: true, value: serializeEvent(current, outletToday(), config) }
-  // A night after today: no report yet. Clearing one, or changing the plan (name, targets), still goes; moving
-  // a night that already has a report into the future does not.
-  const nextDate = changed.includes("date") ? dayOut(fields.date as Date) : dayOut(current.date)
-  if (!reportOpen(nextDate, outletToday())) {
-    const sent: Record<string, unknown> = {}
-    for (const k of changed) sent[k] = fields[k]
-    for (const k of changedValues) sent[k] = vals.json[k]
-    const kept: Record<string, unknown> = { ...before }
-    for (const k of Object.keys(OUTLET_FIELDS)) kept[k] = cur[k]
-    if (writesReport(sent) || (changed.includes("date") && writesReport({ ...kept, ...sent }))) return reportNotOpen
-  }
 
-  const update: Record<string, unknown> = {}
-  for (const k of changed) update[k] = fields[k]
-  if (changedValues.length > 0) {
-    const json: Record<string, number> = {}
-    for (const [k, v] of Object.entries(before)) if (!isLegacyItemId(k)) json[k] = v
-    for (const k of changedValues) {
-      const v = vals.json[k]
-      if (v === null) delete json[k]
-      else json[k] = v
+  // Read, merge and write under the event's row lock (race audit 16 Oct 2026, M9). The JSON figures are
+  // merged key by key in code; two people filling different items read the same JSON, and the second write
+  // put back the item the first had just filled. Now the second waits and merges into the first's result.
+  const done = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "OutletSalesEvent" WHERE id = ${eventId} AND "projectId" = ${projectId} FOR UPDATE`
+    const current = await tx.outletSalesEvent.findFirst({ where: { id: eventId, projectId }, include: eventInclude })
+    if (!current) return { kind: "early" as const, result: notFound }
+    const cur = current as unknown as Record<string, unknown>
+    const changed = Object.keys(fields).filter((k) => auditValue(cur[k]) !== auditValue(fields[k]))
+    // The JSON figures: merged key by key, so two people filling different items never undo each other.
+    const before = valuesOf(current)
+    const changedValues = Object.keys(vals.json).filter((k) => (before[k] ?? null) !== vals.json[k])
+    if (changed.length === 0 && changedValues.length === 0) return { kind: "early" as const, result: { ok: true as const, value: serializeEvent(current, outletToday(), config) } as WriteResult<SerializedOutletEvent> }
+    // A night after today: no report yet. Clearing one, or changing the plan (name, targets), still goes; moving
+    // a night that already has a report into the future does not.
+    const nextDate = changed.includes("date") ? dayOut(fields.date as Date) : dayOut(current.date)
+    if (!reportOpen(nextDate, outletToday())) {
+      const sent: Record<string, unknown> = {}
+      for (const k of changed) sent[k] = fields[k]
+      for (const k of changedValues) sent[k] = vals.json[k]
+      const kept: Record<string, unknown> = { ...before }
+      for (const k of Object.keys(OUTLET_FIELDS)) kept[k] = cur[k]
+      if (writesReport(sent) || (changed.includes("date") && writesReport({ ...kept, ...sent }))) return { kind: "early" as const, result: reportNotOpen }
     }
-    update.reportValues = json
-  }
-  const sales = "sales" in update ? (update.sales as number | null) : current.sales
-  const pax = "pax" in update ? (update.pax as number | null) : current.pax
-  const saved = await prisma.outletSalesEvent.update({
-    where: { id: eventId },
-    data: { ...update, updatedById: userId, ...reportStamp(current, { sales, pax }, userId) } as Prisma.OutletSalesEventUncheckedUpdateInput,
-    include: eventInclude,
+
+    const update: Record<string, unknown> = {}
+    for (const k of changed) update[k] = fields[k]
+    if (changedValues.length > 0) {
+      const json: Record<string, number> = {}
+      for (const [k, v] of Object.entries(before)) if (!isLegacyItemId(k)) json[k] = v
+      for (const k of changedValues) {
+        const v = vals.json[k]
+        if (v === null) delete json[k]
+        else json[k] = v
+      }
+      update.reportValues = json
+    }
+    const sales = "sales" in update ? (update.sales as number | null) : current.sales
+    const pax = "pax" in update ? (update.pax as number | null) : current.pax
+    const saved = await tx.outletSalesEvent.update({
+      where: { id: eventId },
+      data: { ...update, updatedById: userId, ...reportStamp(current, { sales, pax }, userId) } as Prisma.OutletSalesEventUncheckedUpdateInput,
+      include: eventInclude,
+    })
+    const auditBefore: Record<string, unknown> = {}
+    const auditAfter: Record<string, unknown> = {}
+    for (const k of changed) { auditBefore[k] = auditValue(cur[k]); auditAfter[k] = auditValue(update[k]) }
+    for (const k of changedValues) { auditBefore[`values.${k}`] = before[k] ?? null; auditAfter[`values.${k}`] = vals.json[k] }
+    return { kind: "saved" as const, saved, changed, changedValues, auditBefore, auditAfter }
   })
-  const auditBefore: Record<string, unknown> = {}
-  const auditAfter: Record<string, unknown> = {}
-  for (const k of changed) { auditBefore[k] = auditValue(cur[k]); auditAfter[k] = auditValue(update[k]) }
-  for (const k of changedValues) { auditBefore[`values.${k}`] = before[k] ?? null; auditAfter[`values.${k}`] = vals.json[k] }
+  if (done.kind === "early") return done.result
+  const { saved, changed, changedValues, auditBefore, auditAfter } = done
   const date = dayOut(saved.date)
   await logAudit({
     action: "update",
@@ -626,26 +660,31 @@ export async function putOutletDayTarget(
     data[key] = Math.round(n)
   }
   const where = { projectId_date: { projectId, date: dayIn(date) } }
-  const before = await prisma.outletSalesDayTarget.findUnique({ where })
-  const next = {
-    salesTarget: "salesTarget" in data ? data.salesTarget ?? null : before?.salesTarget ?? null,
-    paxTarget: "paxTarget" in data ? data.paxTarget ?? null : before?.paxTarget ?? null,
-  }
-  const was = { salesTarget: before?.salesTarget ?? null, paxTarget: before?.paxTarget ?? null }
-  if (was.salesTarget === next.salesTarget && was.paxTarget === next.paxTarget) return { ok: true, value: { date, ...next } }
-  let entityId: string
-  if (next.salesTarget === null && next.paxTarget === null) {
-    if (!before) return { ok: true, value: { date, ...next } }
-    await prisma.outletSalesDayTarget.delete({ where })
-    entityId = before.id
-  } else {
-    const saved = await prisma.outletSalesDayTarget.upsert({
+  // Read-merge-write under one lock per outlet-date (race audit 16 Oct 2026, M9): two people setting the
+  // sales and the pax target of one date at once each wrote both parts back from what they had read.
+  const done = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`outletdaytarget|${projectId}|${date}`})::int8)`
+    const before = await tx.outletSalesDayTarget.findUnique({ where })
+    const next = {
+      salesTarget: "salesTarget" in data ? data.salesTarget ?? null : before?.salesTarget ?? null,
+      paxTarget: "paxTarget" in data ? data.paxTarget ?? null : before?.paxTarget ?? null,
+    }
+    const was = { salesTarget: before?.salesTarget ?? null, paxTarget: before?.paxTarget ?? null }
+    if (was.salesTarget === next.salesTarget && was.paxTarget === next.paxTarget) return { next, was, entityId: null }
+    if (next.salesTarget === null && next.paxTarget === null) {
+      if (!before) return { next, was, entityId: null }
+      await tx.outletSalesDayTarget.delete({ where })
+      return { next, was, entityId: before.id }
+    }
+    const saved = await tx.outletSalesDayTarget.upsert({
       where,
       create: { projectId, date: dayIn(date), ...next, updatedById: userId },
       update: { ...next, updatedById: userId },
     })
-    entityId = saved.id
-  }
+    return { next, was, entityId: saved.id }
+  })
+  const { next, was, entityId } = done
+  if (!entityId) return { ok: true, value: { date, ...next } }
   await logAudit({
     action: "update",
     entityType: "outlet_sales_target",

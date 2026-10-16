@@ -39,7 +39,11 @@ const counterWhere = (c: Counter): Prisma.DocumentNumberWhereInput =>
   c.monthly ? { series: c.series, year: c.year, month: c.month } : { series: c.series, year: c.year }
 
 async function lockCounter(tx: Prisma.TransactionClient, c: Counter) {
-  const key = `legalnum|${c.series}|${c.year}|${c.monthly ? c.month : "Y"}`
+  // Per series and YEAR, whatever the reset period (race audit 16 Oct 2026, Legal LOW). The key used to
+  // carry the month for a monthly series, read from LegalSeries.resetPeriod at the time: a release made
+  // after the period was changed then locked another key than the allocation it races. One key per year
+  // serialises a monthly counter a little more than needed, and never too little.
+  const key = `legalnum|${c.series}|${c.year}`
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key})::int8)`
 }
 
