@@ -891,7 +891,9 @@ final class NEXUSUITour: XCTestCase {
         }
         // `page` counts the pending page too, so the cap holds.
         while page < maxPages {
-            drag(target, dx: 0, dy: -pageStep)
+            // Run 20 (R20-I-05, T-3, decision 29): the step ends in the gap between two rows, so the next page
+            // starts on a whole row instead of one sliced at its top.
+            drag(target, dx: 0, dy: -restingStep(last, target: target, window: root.windows.firstMatch.frame))
             if navigatedAway() { break }
             if !web { _ = waitForSpinnersToStop(timeout: 4) }
             let shot = takeShot(root)
@@ -1009,6 +1011,44 @@ final class NEXUSUITour: XCTestCase {
     /// 0.000, project-table-2 0.002 (only empty columns came in); the lowest real sideways page 0.013 (iPhone
     /// project-table-3, runs 18-20).
     private var minSidewaysChange: CGFloat { CGFloat(Double(env["TOUR_MIN_SIDEWAYS_CHANGE"] ?? "") ?? 0.005) }
+
+    /// The vertical step, as a share of the drag rect's height, that puts the next page's top edge in the middle
+    /// of the widest row with no ink (text, icons: grey more than 48 levels off the row's median) between 60 and
+    /// 76 % of the view, so that page starts on a whole row; `pageStep` when there is no such gap of 4 pt or more.
+    /// Measured offline on runs 20 (iPhone, iPad, Mac; every page but the last): such a gap exists on 198 of 207
+    /// pages, 18-46 pt wide (10th-90th percentile), the space between rows and cards, not between two lines of
+    /// one row. The range stays inside the 85-110 % of `pageStep` the shift tests search.
+    private func restingStep(_ png: Data, target: ScrollTarget, window: CGRect) -> CGFloat {
+        guard (env["TOUR_ROW_REST"] ?? "1") != "0",
+              let g = greyRect(png, rect: target.visible, window: window), g.height > 100 else { return pageStep }
+        let w = g.width, h = g.height
+        let lo = Int(CGFloat(h) * 0.60), hi = Int(CGFloat(h) * 0.76)
+        var blank = [Bool](repeating: false, count: h)
+        g.pixels.withUnsafeBufferPointer { px in
+            var hist = [Int](repeating: 0, count: 256)
+            for y in lo..<min(h, hi + Int(g.scale * 60)) {
+                for i in 0..<256 { hist[i] = 0 }
+                for x in 0..<w { hist[Int(px[y * w + x])] += 1 }
+                var median = 0, seen = 0
+                while median < 255 && seen + hist[median] <= w / 2 { seen += hist[median]; median += 1 }
+                var ink = 0
+                for x in 0..<w where abs(Int(px[y * w + x]) - median) > 48 { ink += 1; if ink > 2 { break } }
+                blank[y] = ink <= 2
+            }
+        }
+        let minRun = Int(g.scale * 4)
+        var best: (len: Int, mid: Int)?
+        var y = lo
+        while y < hi {
+            guard blank[y] else { y += 1; continue }
+            var e = y
+            while e < blank.count && blank[e] { e += 1 }
+            if e - y >= minRun, best.map({ e - y > $0.len }) ?? true { best = (e - y, (y + e) / 2) }
+            y = e
+        }
+        guard let best else { return pageStep }
+        return CGFloat(min(best.mid, hi)) / CGFloat(h)
+    }
 
     /// A page is a repeat when less than this share of its content rows (`fineRows`) is on no earlier page.
     private var minUnseen: CGFloat { CGFloat(Double(env["TOUR_MIN_UNSEEN"] ?? "") ?? 0.01) }
