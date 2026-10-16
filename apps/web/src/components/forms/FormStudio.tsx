@@ -1269,7 +1269,7 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
     />
   ) : (
     <div className="px-5 py-5 text-sm text-muted-foreground">
-      <div className="text-[11px] font-semibold uppercase tracking-wider">{t("Question settings")}</div>
+      <h3 className="text-sm font-semibold text-foreground">{t("Question settings")}</h3>
       <p className="mt-2">{t("Click a question to change its type, make it required, add logic or choose where its answer goes.")}</p>
       <ul className="mt-4 space-y-2 text-xs">
         <li className="flex gap-2"><kbd className="rounded border border-border bg-muted px-1.5 font-mono text-[11px] text-foreground">/</kbd> {t("in a question's title picks its type")}</li>
@@ -1321,7 +1321,8 @@ export function FormBuilder({ projectId, form, onClose, onCreated }: { projectId
           {TABS.map((x) => (
             <button key={x.key} type="button" aria-current={tab === x.key && !preview ? "page" : undefined} onClick={() => { setPreview(null); setTab(x.key); }}
               className={cn("inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-md px-3 text-sm transition-colors", tab === x.key && !preview ? "bg-muted font-semibold" : "text-muted-foreground")}>
-              {x.label}{x.badge ? <span className="text-[11px] tabular-nums text-muted-foreground">{x.badge}</span> : null}
+              {/* The same count pill as the desktop tabs (UI tour run 19, R19-WM-2: a bare raised number). */}
+              {x.label}{x.badge ? <span className="rounded-full bg-background px-1.5 text-[11px] font-semibold leading-4 tabular-nums text-muted-foreground ring-1 ring-border">{x.badge}</span> : null}
             </button>
           ))}
         </nav>
