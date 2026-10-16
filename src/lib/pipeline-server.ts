@@ -491,22 +491,23 @@ export function defaultProbability(stage: string): number {
 }
 
 /**
- * The next free code in the project: "TZN-" + 2-digit year + 3-digit sequence, one above the highest
- * code that can still show up on this board — the deals that exist, and the deleted deals Control Room →
- * Audit can still restore (an unrestored DeletionSnapshot; restoring one with a code handed out again
- * would hit the unique index). Not the audit trail of every deal ever created: an emptied board starts
- * again at 001, and a code comes free only once nothing can bring its deal back (owner, 9 Oct 2026:
- * "start fresh" after the demo deals were cleared). The company has one board (POST /api/projects
- * refuses a second, owner/GM 9 Oct 2026), so this is its one series.
+ * The next free deal code: "TZN-" + 2-digit year + 3-digit sequence, one above the highest code ever handed out
+ * on ANY board (owner, 16 Oct 2026: unique across boards, never reused). "Ever handed out" = the PipelineDealCode
+ * ledger (rows are never deleted), plus, for codes from before the ledger, the deals that exist and the deleted
+ * deals Control Room → Audit can still restore. Before 16 Oct the count was per board and an emptied board began
+ * again at 001. The caller claims the code in the ledger in the same transaction as the deal (claimDealCode); a
+ * concurrent create that picked the same code fails on the ledger's key and takes the next one.
+ * `projectId` is kept for the callers' signature; the series is the company's, not the board's.
  */
-export async function nextDealCode(projectId: string, now: Date = new Date()): Promise<string> {
+export async function nextDealCode(_projectId?: string, now: Date = new Date()): Promise<string> {
   // The year of the company's day (WIB), so a deal added at 01:00 on 1 January is already "27…".
   const yy = pipelineToday(now).slice(2, 4)
   const head = `${DEAL_CODE_PREFIX}${yy}`
-  const [live, restorable] = await Promise.all([
-    prisma.pipelineDeal.findMany({ where: { projectId, code: { startsWith: head } }, select: { code: true } }),
+  const [issued, live, restorable] = await Promise.all([
+    prisma.pipelineDealCode.findMany({ where: { code: { startsWith: head } }, select: { code: true } }),
+    prisma.pipelineDeal.findMany({ where: { code: { startsWith: head } }, select: { code: true } }),
     prisma.deletionSnapshot.findMany({
-      where: { entityType: "pipeline_deal", restoredAt: null, meta: { path: ["projectId"], equals: projectId } },
+      where: { entityType: "pipeline_deal", restoredAt: null },
       select: { data: true },
     }),
   ])
@@ -516,12 +517,19 @@ export async function nextDealCode(projectId: string, now: Date = new Date()): P
     const n = Number.parseInt(code.slice(head.length), 10)
     if (Number.isFinite(n) && n > max) max = n
   }
+  for (const d of issued) consider(d.code)
   for (const d of live) consider(d.code)
   for (const snap of restorable) {
     const rows = (snap.data as { tables?: { PipelineDeal?: { code?: unknown }[] } } | null)?.tables?.PipelineDeal
     for (const row of Array.isArray(rows) ? rows : []) consider(row?.code)
   }
   return `${head}${String(max + 1).padStart(3, "0")}`
+}
+
+/** Takes `code` in the ledger of handed-out codes, inside the deal's create transaction. Throws the unique
+ *  violation (P2002) when another create took it first. */
+export async function claimDealCode(tx: Prisma.TransactionClient, code: string, projectId: string): Promise<void> {
+  await tx.pipelineDealCode.create({ data: { code, projectId } })
 }
 
 // ── Payment terms (owner, 9 Oct 2026: "perlu per termin") ─────────────────────────────────────────────
