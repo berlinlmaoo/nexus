@@ -1857,8 +1857,8 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
             </div>
             {windowed && (
               <div className="inline-flex shrink-0 rounded-lg border border-border bg-background p-0.5 text-xs font-semibold" role="group" aria-label={tr("Date range")}>
-                <button type="button" onClick={() => setRange("recent")} className={cn("rounded-md px-2.5 py-1 transition-colors", range === "recent" ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground")}>{tr("Last 3 days")}</button>
-                <button type="button" onClick={() => setRange("period")} title={period.label} className={cn("rounded-md px-2.5 py-1 transition-colors", range === "period" ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground")}>{tr("This period")}</button>
+                <button type="button" onClick={() => setRange("recent")} aria-pressed={range === "recent"} className={cn("rounded-md px-2.5 py-1 transition-colors", range === "recent" ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground")}>{tr("Last 3 days")}</button>
+                <button type="button" onClick={() => setRange("period")} aria-pressed={range === "period"} title={period.label} className={cn("rounded-md px-2.5 py-1 transition-colors", range === "period" ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground")}>{tr("This period")}</button>
               </div>
             )}
           </div>
