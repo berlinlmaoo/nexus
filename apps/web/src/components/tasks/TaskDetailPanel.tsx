@@ -9,6 +9,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   AlignLeft,
+  ChevronsRight,
+  Maximize2,
   Calendar,
   CheckCircle2,
   ChevronDown,
@@ -74,6 +76,13 @@ import { patchTaskInCaches, settleTaskWrite } from "@/lib/task-cache";
 import { friendlyError, pushUndo } from "@/lib/task-undo";
 import { LoadError, retryTransient } from "@/components/LoadError";
 import { EmptyAction } from "@/components/EmptyState";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Link } from "@tanstack/react-router";
+
+/** When the last side peek went away: a peek opened right after it (another row clicked) swaps in without sliding. */
+let peekGoneAt = 0;
+/** Clicks that must not close a side peek: the rows and cards that open one, and anything floating above the page. */
+const PEEK_KEEP = "[data-bulk-task],[data-morph-id],[data-radix-popper-content-wrapper],[role='dialog'],[role='alertdialog'],[role='menu'],[role='listbox'],[data-sonner-toaster],[data-peek-keep]";
 
 // The description's block editor (TipTap + Yjs) is the heaviest part of the popup; it loads beside the popup
 // rather than in front of it, so the title, status and fields show first (perf pass, 12 Oct 2026).
@@ -196,17 +205,24 @@ function SecCard({ icon: Icon, label, action, children, className }: { icon: typ
   );
 }
 
-export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; onClose: () => void; morphId?: string }) {
+export function TaskDetailPanel({ taskId, onClose, morphId, peek }: {
+  taskId: string; onClose: () => void; morphId?: string;
+  /** Notion's side peek (project views, 16 Oct 2026): from md the task opens as a full-height panel on the right,
+   *  the view stays in sight and clickable, and clicking another row swaps the panel. A phone keeps the sheet. */
+  peek?: boolean;
+}) {
   const qc = useQueryClient();
   const reduce = useReducedMotion();
-  const morph = !!morphId && !reduce;
+  const isPhone = useIsMobile();
+  const [side] = useState(() => !!peek && !isPhone);
+  const morph = !side && !!morphId && !reduce;
   // --- card → panel MORPH via a manual FLIP (no shared layoutId, see note at top of file) ---
   // The box starts exactly on the source card's measured rect and grows to the panel; on close it shrinks
   // back to wherever the card is NOW. Driven by raw motion values so a moving/unmounting card can never
   // yank or blur it (the rect is just a number snapshot).
   const asideRef = useRef<HTMLElement | null>(null);
   const panelRectRef = useRef<DOMRect | null>(null); // panel's natural (untransformed) rect, measured once
-  const sourceRect = useRef<DOMRect | null>(morphId && lastMorph && lastMorph.id === morphId ? lastMorph.rect : null);
+  const sourceRect = useRef<DOMRect | null>(morph && lastMorph && lastMorph.id === morphId ? lastMorph.rect : null);
   const mx = useMotionValue(0);
   const my = useMotionValue(0);
   const msx = useMotionValue(1);
@@ -222,6 +238,13 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
     const el = asideRef.current;
     if (!el) return;
     panelRectRef.current = el.getBoundingClientRect(); // transforms are still identity here → natural rect
+    if (side) {
+      // The peek slides in from the right edge; swapping rows (a peek closed a moment ago) shows the next at once.
+      if (reduce || Date.now() - peekGoneAt < 400) { asideO.set(1); return; }
+      mx.set(40); asideO.set(0);
+      fmAnimate(mx, 0, { duration: 0.2, ease: [0.2, 0, 0, 1] }); fmAnimate(asideO, 1, { duration: 0.16 });
+      return;
+    }
     fmAnimate(backdropO, 1, { duration: 0.2 });
     if (reduce) { asideO.set(1); return; }
     const src = sourceRect.current;
@@ -259,6 +282,11 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
     setClosing(true);
     const el = asideRef.current;
     const p = panelRectRef.current;
+    if (side) {
+      if (!reduce) fmAnimate(mx, 40, { duration: 0.16, ease: [0.4, 0, 1, 1] });
+      fmAnimate(asideO, 0, { duration: reduce ? 0.1 : 0.16 }).then(() => onClose());
+      return;
+    }
     fmAnimate(backdropO, 0, { duration: 0.2 });
     const node = openedWithRect.current && morphId ? (document.querySelector(`[data-morph-id="${morphId}"]`) as HTMLElement | null) : null;
     const live = node?.getBoundingClientRect();
@@ -283,6 +311,17 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
     // defaultPrevented: Esc already closed a menu or the delete alert (Radix) — leave the panel open.
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented && !openSubRef.current) requestClose(); };
     document.addEventListener("keydown", onKey);
+    if (side) {
+      // A side peek leaves the page scrollable; a click on the page outside it closes it (Notion), except on a
+      // row or card, which opens that task in the peek instead.
+      const onDown = (e: PointerEvent) => {
+        const el = e.target as Element | null;
+        if (!el || asideRef.current?.contains(el) || el.closest?.(PEEK_KEEP) || openSubRef.current) return;
+        requestClose();
+      };
+      document.addEventListener("pointerdown", onDown, true);
+      return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("pointerdown", onDown, true); peekGoneAt = Date.now(); };
+    }
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
@@ -505,12 +544,12 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 grid place-items-center p-0 sm:p-4">
-      <motion.div
+    <div className={side ? "fixed inset-y-0 right-0 z-50 flex w-[min(720px,calc(100vw-22rem))] min-w-[440px]" : "fixed inset-0 z-50 grid place-items-center p-0 sm:p-4"}>
+      {!side && <motion.div
         className="absolute inset-0 bg-foreground/30 dark:bg-scrim backdrop-blur-sm"
         style={{ opacity: backdropO }}
         onClick={requestClose}
-      />
+      />}
       {/* Centered modal that MORPHS out of the clicked card (manual FLIP, no layoutId). The box (mx/my +
           scaleX/scaleY) is mapped from the card's rect with transform-origin top-left; content fades in
           just after the box starts so the stretch isn't visible. */}
@@ -520,9 +559,12 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
       <motion.aside
         ref={asideRef}
         role="dialog"
-        aria-modal="true"
+        aria-modal={side ? undefined : "true"}
+        aria-label={side ? (task.data?.title || tr("Task")) : undefined}
         style={{ x: mx, y: my, scaleX: msx, scaleY: msy, opacity: asideO, transformOrigin: "top left", pointerEvents: closing ? "none" : undefined, ...(morph ? { borderRadius: 24 } : null) }}
-        className="relative z-10 flex h-[100dvh] max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden border-border bg-card shadow-pop sm:h-[min(92dvh,880px)] sm:max-h-[92dvh] sm:rounded-3xl sm:border"
+        className={side
+          ? "relative z-10 flex h-[100dvh] w-full flex-col overflow-hidden border-l border-border bg-card shadow-[-12px_0_32px_-12px_rgba(15,15,15,0.12)]"
+          : "relative z-10 flex h-[100dvh] max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden border-border bg-card shadow-pop sm:h-[min(92dvh,880px)] sm:max-h-[92dvh] sm:rounded-3xl sm:border"}
       >
             {/* inner scroll region — separate from the animated shell so the transform never breaks scrolling on iOS.
                 During the morph the content fades in just after the box starts so it doesn't look stretched. */}
@@ -536,6 +578,14 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 end, the secondary actions in a ⋯ menu (Delete no longer sits next to Close), the breadcrumb on its own line. */}
         <div className="sticky top-0 z-10 flex flex-col-reverse gap-0.5 border-b border-border bg-card/85 px-5 pb-2.5 pt-1.5 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-8 sm:py-4">
           <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-muted-foreground">
+            {/* Notion's peek corner: close it to the side, or open the task as a page. */}
+            {side && (
+              <span className="-ml-2 flex shrink-0 items-center gap-0.5">
+                <button type="button" onClick={requestClose} className="grid h-7 w-7 place-items-center rounded-md transition-colors hover:bg-accent hover:text-foreground" title={tr("Close")} aria-label={tr("Close")}><ChevronsRight className="h-4 w-4" /></button>
+                <Link to="/tasks/$taskId" params={{ taskId }} className="grid h-7 w-7 place-items-center rounded-md transition-colors hover:bg-accent hover:text-foreground" title={tr("Open as page")} aria-label={tr("Open as page")}><Maximize2 className="h-3.5 w-3.5" /></Link>
+                <span aria-hidden className="mx-1 h-4 w-px bg-border" />
+              </span>
+            )}
             {t?.taskList?.project && (
               <>
                 <ProjectMarkFor projectId={t.taskList.project.id} icon={(t.taskList.project as { icon?: string | null }).icon} size={14} />

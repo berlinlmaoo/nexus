@@ -7,8 +7,9 @@ import {
   Check,
   CheckSquare,
   ChevronDown,
-  CircleDashed,
   Columns3,
+  Loader,
+  Users,
   Eye,
   EyeOff,
   Flag,
@@ -21,7 +22,6 @@ import {
   Tags,
   Trash2,
   Type,
-  User,
   Rows3,
   CircleDot,
   X,
@@ -59,10 +59,11 @@ import {
 // ─── small parts ─────────────────────────────────────────────────────────────────────────────────────
 
 export function PropIcon({ def, className }: { def?: PropDef; className?: string }) {
-  const cls = cn("h-3.5 w-3.5 shrink-0 text-muted-foreground", className);
+  // Notion's property glyphs (16 Oct 2026 pass): 16px, the status sunburst, two people for a person field.
+  const cls = cn("h-4 w-4 shrink-0 text-muted-foreground", className);
   if (!def) return <CircleDot className={cls} />;
   if (def.key === "section") return <Columns3 className={cls} />;
-  if (def.key === "status") return <CircleDashed className={cls} />;
+  if (def.key === "status") return <Loader className={cls} />;
   if (def.key === "priority") return <Flag className={cls} />;
   if (def.key === "subtasks") return <ListChecks className={cls} />;
   if (def.key === "comments") return <MessageSquare className={cls} />;
@@ -78,7 +79,7 @@ export function PropIcon({ def, className }: { def?: PropDef; className?: string
     case "multi":
       return <Tags className={cls} />;
     case "person":
-      return <User className={cls} />;
+      return <Users className={cls} />;
     case "date":
       return <Calendar className={cls} />;
     case "number":
@@ -139,8 +140,9 @@ export function ToolbarButton({ icon: Icon, label, active, count, onClick, disab
       disabled={disabled}
       aria-label={label}
       className={cn(
-        "inline-flex h-8 min-w-8 shrink-0 items-center justify-center gap-1 rounded-md px-1.5 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/30 disabled:opacity-40",
-        active ? "text-[color:var(--accent-foreground)]" : "text-muted-foreground hover:text-foreground",
+        "inline-flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-md px-1.5 text-sm transition-colors hover:bg-foreground/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/30 disabled:opacity-40",
+        // Notion: an applied filter or sort turns its icon blue.
+        active ? "text-[#2383e2]" : "text-muted-foreground hover:text-foreground",
         showLabel && "lg:px-2",
         className,
       )}

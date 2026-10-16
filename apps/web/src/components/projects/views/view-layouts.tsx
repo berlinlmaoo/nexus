@@ -1,6 +1,6 @@
 import { NumberValue } from "@/components/projects/number-field";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, CalendarDays, ChevronRight, CircleCheck, Clock, ImageOff, ListChecks, MessageSquare, Plus, Type, UserRound } from "lucide-react";
+import { ArrowRight, CalendarDays, CircleCheck, Clock, ImageOff, ListChecks, MessageSquare, Plus, Type, UserRound } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { Avatar } from "@/components/Avatar";
 import { StatusPill } from "@/components/tasks/StatusPicker";
@@ -304,19 +304,22 @@ export function GroupHeader({ group, groupBy, defs, cfg, collapsed, onToggle, ch
   // count in the same hue (Notion's coloured groups, owner 12 Oct 2026). Plain sections stay plain.
   const coloured = !!def && (def.kind === "select" || def.kind === "multi") && group.key !== "__none__" && (groupBy !== "section" || !!def.options?.find((o) => o.value === group.key)?.color);
   const tone = coloured ? COLOR_PRESETS[optionColor(groupBy!, group.key, defs)] : null;
+  const pillDot = groupBy === "status" || groupBy === "section" || def?.fieldType === "STATUS";
   return (
     <div className={cn("flex min-w-0 items-center gap-1.5", sticky && "sticky left-0", className)}>
       <button type="button" onClick={onToggle} aria-expanded={!collapsed} className="flex min-w-0 items-center gap-1.5 rounded-md py-1 pl-0.5 pr-1.5 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/30">
-        <ChevronRight className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150", !collapsed && "rotate-90")} />
+        {/* Notion's group toggle: a small solid triangle, pointing down while open. */}
+        <svg aria-hidden viewBox="0 0 12 12" className={cn("h-4 w-4 shrink-0 p-[3px] text-foreground/70 transition-transform duration-150", collapsed && "-rotate-90")}><path d="M1.5 3.5h9L6 9z" fill="currentColor" /></svg>
         {tone ? (
-          <span className="inline-flex min-w-0 items-center gap-1.5 truncate rounded-full px-2 py-0.5 text-sm font-medium" style={{ backgroundColor: tone.bg, color: tone.text }}>
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tone.dot }} />
+          // Status values are round pills with a dot; other options are Notion's small square-cornered tags.
+          <span className={cn("inline-flex min-w-0 items-center gap-1.5 truncate px-1.5 py-px text-sm", pillDot ? "rounded-full pl-2" : "rounded")} style={{ backgroundColor: tone.bg, color: tone.text }}>
+            {pillDot && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tone.dot }} />}
             <span className="truncate">{label}</span>
           </span>
         ) : (
-          <span className="truncate text-sm font-semibold">{label}</span>
+          <span className="truncate text-sm font-medium">{label}</span>
         )}
-        <span className="shrink-0 text-xs tabular-nums" style={{ color: tone?.text ?? "var(--muted-foreground)" }} title={calc.hint ? t("{done} of {total} tasks done", calc.hint) : t(calc.label)}>{calc.value}</span>
+        <span className="shrink-0 text-sm tabular-nums" style={{ color: tone?.text ?? "var(--muted-foreground)" }} title={calc.hint ? t("{done} of {total} tasks done", calc.hint) : t(calc.label)}>{calc.value}</span>
       </button>
       {children}
     </div>

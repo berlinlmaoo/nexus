@@ -212,7 +212,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   const scrollRef = useRef<HTMLDivElement>(null);
   const edgeFade = useEdgeFade(scrollRef, [columns.length], true);
   const groupRow = (g: TaskGroup, by: string | null, key: string, depth: number) => (
-    <div className={cn("sticky left-0 flex snap-start items-center border-b border-border bg-card px-1.5 py-1", depth > 0 && "pl-6")}>
+    <div className={cn("sticky left-0 flex snap-start items-center border-b border-border bg-card px-0.5 pb-1 pt-4", depth > 0 && "pl-6 pt-2")}>
       <GroupHeader group={g} groupBy={by} defs={defs} cfg={cfg} collapsed={collapsed.has(key)} onToggle={() => onToggleGroup(key)} />
     </div>
   );
@@ -231,13 +231,15 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
       <div className="relative">
       {/* The header's right end says when more columns lie that way (UI tour run 20, R20-WM-6: a glyph sliver of
           the third column's name sat at the edge); the rows keep their fade. */}
-      <EdgeArrows target={scrollRef} sides="right" className="right-px top-px h-[35px] rounded-tr-lg" />
-      <div ref={scrollRef} data-snap-box style={{ "--snap-box-head": "36px" } as CSSProperties} className={cn("overflow-auto overscroll-x-contain rounded-lg border border-border max-h-[max(20rem,calc(100dvh-10rem))] max-md:max-h-[max(16rem,calc(100dvh-var(--tabbar-room)-8rem))]", edgeFade)}>
+      <EdgeArrows target={scrollRef} sides="right" className="right-0 top-px h-[35px]" />
+      <div ref={scrollRef} data-snap-box style={{ "--snap-box-head": "36px" } as CSSProperties} className={cn("overflow-auto overscroll-x-contain border-t border-border max-h-[max(20rem,calc(100dvh-10rem))] max-md:max-h-[max(16rem,calc(100dvh-var(--tabbar-room)-8rem))]", edgeFade)}>
         {/* Width from the columns' minimums, never from cell contents (perf pass, 12 Oct 2026): with min-w-max a
             row that loaded wider content widened every column and the header jumped. */}
         <div className="w-full" style={{ minWidth: nameW + columns.reduce((n, k) => n + colMin(k), 0) + 40 }}>
           {/* Header row */}
-          <div className="sticky top-0 z-[1] grid h-9 items-stretch border-b border-border bg-card text-xs text-muted-foreground" style={{ gridTemplateColumns: gridTemplate }}>
+          {/* Notion's column names: 14px in the page's grey, a type glyph before each, on the open canvas (no boxed
+              card around the table, 16 Oct 2026 pass). */}
+          <div className="sticky top-0 z-[1] grid h-9 items-stretch border-b border-border bg-card text-sm text-muted-foreground" style={{ gridTemplateColumns: gridTemplate }}>
             <div className="flex items-center gap-1.5 px-3 py-2"><PropIcon def={propDef(defs, "title")} />{t("Name")}</div>
             {columns.map((key) => {
               const def = propDef(defs, key);
@@ -359,7 +361,7 @@ function NameCell({ task, handle, onRename, onOpen }: { task: NexusTask; handle?
           title={task.title}
           // Breaks between words only (break-words splits a word only when it alone is wider than the cell), and a
           // spaced dash stays with the word after it, so a clamp never ends on "–…" (UI tour run 17, R17-WM-2).
-          className={cn("line-clamp-2 md:line-clamp-1 min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm font-medium leading-snug break-words hover:border-border", done && "text-muted-foreground line-through")}
+          className={cn("line-clamp-2 md:line-clamp-1 min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm leading-snug break-words hover:border-border", done && "text-muted-foreground line-through")}
         >
           {glueDash(title)}
         </button>

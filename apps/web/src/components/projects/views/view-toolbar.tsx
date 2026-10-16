@@ -132,7 +132,7 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
               onKeyDown={(e) => { if (e.target !== e.currentTarget) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(tab.key); } }}
               className={cn(
                 TAB_PILL,
-                active ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                active ? "bg-foreground/[0.06] font-medium text-foreground" : "text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground",
                 dragId === v?.id && "opacity-40",
                 overId === v?.id && dragId !== v?.id && "ring-1 ring-[color:var(--accent-foreground)]/50",
               )}
@@ -179,8 +179,9 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
 }
 
 /** Tab pill classes, shared by the row and its measuring copy. */
-const TAB_PILL = "group inline-flex h-8 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/30";
-const MORE_PILL = "inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground";
+// Notion's view tabs (16 Oct 2026 pass): round pills, 14px, the icon in the tab's grey, the active one on a soft fill.
+const TAB_PILL = "group inline-flex h-8 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/30";
+const MORE_PILL = "inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground";
 /** Width of the "+" after the strip (the "N more" button is measured with the tabs). */
 const ADD_W = 36;
 const GAP = 2;
@@ -243,7 +244,7 @@ function useTabOverflowMenu(on: boolean, tabs: ToolbarTab[], activeKey: string |
         </span>
       ))}
       {/* The "N more" button, with the widest count it can show. */}
-      <span className={cn(MORE_PILL, "shrink-0")}>{t("{n} more", { n: tabs.length })}<ChevronDown className="h-3.5 w-3.5" /></span>
+      <span className={cn(MORE_PILL, "shrink-0")}>{t("{n} more…", { n: tabs.length })}</span>
     </div>
   );
   return { on, outerRef, measure, shown, hidden };
@@ -257,7 +258,7 @@ function MoreTabsMenu({ tabs, onSelect }: { tabs: ToolbarTab[]; onSelect: (key: 
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button type="button" aria-label={t("{n} more tabs", { n: tabs.length })} className={cn(MORE_PILL, "shrink-0")}>
-          {t("{n} more", { n: tabs.length })}<ChevronDown className="h-3.5 w-3.5" />
+          {t("{n} more…", { n: tabs.length })}
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-56 p-1">
@@ -295,7 +296,7 @@ export function ToolbarSearch({ value, onChange }: { value: string; onChange: (v
   useEffect(() => { if (open) ref.current?.focus(); }, [open]);
   if (!open && !value) {
     return (
-      <button type="button" onClick={() => setOpen(true)} aria-label={t("Search")} title={t("Search")} className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+      <button type="button" onClick={() => setOpen(true)} aria-label={t("Search")} title={t("Search")} className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/30">
         <Search className="h-4 w-4" />
       </button>
     );
@@ -311,7 +312,7 @@ export function ToolbarSearch({ value, onChange }: { value: string; onChange: (v
         onKeyDown={(e) => { if (e.key === "Escape") { onChange(""); setOpen(false); } }}
         placeholder={t("Search tasks…")}
         aria-label={t("Search tasks")}
-        className="h-8 w-40 rounded-md border border-border bg-card pl-7 pr-7 text-sm outline-none transition-colors focus:border-[color:var(--accent-foreground)] sm:w-52"
+        className="h-7 w-40 rounded-md border border-border bg-card pl-7 pr-7 text-sm outline-none transition-colors focus:border-[color:var(--accent-foreground)] sm:w-52"
       />
       {value && (
         <button type="button" onClick={() => { onChange(""); setOpen(false); }} aria-label={t("Clear search")} className="absolute right-1 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
@@ -327,13 +328,14 @@ export function AddTaskSplit({ sections, onAdd, extra }: { sections: Array<{ id:
   // Can view / Can comment: no Add task (QA round 2, N-02).
   if (!useProjectCanEdit()) return null;
   return (
-    <div className="inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-md bg-primary text-primary-foreground">
-      <button type="button" onClick={() => onAdd()} className="inline-flex items-center gap-1.5 pl-2.5 pr-2 text-sm font-medium transition-colors hover:bg-white/10">
-        <Plus className="h-4 w-4" /><span>{t("Add task")}</span>
+    // Notion's blue "New ▾" (16 Oct 2026 pass): 28px, the database's one coloured control.
+    <div className="inline-flex h-7 shrink-0 items-stretch overflow-hidden rounded-md bg-[#2383e2] text-white shadow-[inset_0_0_0_1px_rgba(15,15,15,0.1),0_1px_2px_rgba(15,15,15,0.1)] dark:bg-[#2383e2]">
+      <button type="button" onClick={() => onAdd()} aria-label={t("New task")} className="inline-flex items-center px-2.5 text-sm font-medium transition-colors hover:bg-[#0077d4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/60">
+        <span>{t("New")}</span>
       </button>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <button type="button" aria-label={t("More ways to add")} className="grid w-7 place-items-center border-l border-white/20 transition-colors hover:bg-white/10"><ChevronDown className="h-3.5 w-3.5" /></button>
+          <button type="button" aria-label={t("More ways to add")} className="grid w-6 place-items-center border-l border-white/25 transition-colors hover:bg-[#0077d4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/60"><ChevronDown className="h-3.5 w-3.5" /></button>
         </PopoverTrigger>
         <PopoverContent align="end" className="w-60 p-1">
           <div className="px-2 pb-1 pt-1.5 text-xs font-medium text-muted-foreground">{t("Add a task to")}</div>
