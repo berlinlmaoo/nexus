@@ -562,12 +562,12 @@ export function attendanceClientOf(userAgent: string | null | undefined, clientH
 }
 
 /**
- * An iPhone / iPad / iPod browser checking in or out without the app — refused (owner, Sep 2026):
- * on a phone that has the app, the browser cannot report the location trail.
+ * An iPhone / iPad / iPod browser checking in or out without the app — always refused (owner, 16 Oct 2026;
+ * since Sep 2026 it was tied to the iOS minimum version): the browser cannot report the location trail.
  *
- * Never refused: anything with X-Nexus-Client ios/…, the legacy apps (`NEXUS/<build> …`, no header —
+ * Not matched: anything with X-Nexus-Client ios/…, the legacy apps (`NEXUS/<build> …`, no header —
  * their UA carries no device name anyway), Android and desktop browsers, and iPadOS Safari in its
- * default desktop mode, which sends a Macintosh User-Agent and cannot be told from a Mac.
+ * default desktop mode, which sends a Macintosh User-Agent (isDesktopBrowser refuses that one).
  */
 export function isIosBrowserWithoutApp(userAgent: string | null | undefined, clientHeader: string | null | undefined): boolean {
   if (/^\s*ios\//i.test(clientHeader ?? "")) return false
@@ -580,8 +580,8 @@ export function isIosBrowserWithoutApp(userAgent: string | null | undefined, cli
  * A browser on a laptop or desktop (Mac, Windows, Linux, ChromeOS — and iPadOS Safari in desktop mode,
  * which sends a Mac User-Agent): refused for check-in AND check-out (owner, 2 Oct 2026: "laptop udah
  * gaboleh"). A laptop cannot report where the day is spent, so a check-in from one escapes the location
- * trail and the automatic offsite check-out. Android browsers still pass while the Android app is in
- * development; iPhone/iPad browsers are isIosBrowserWithoutApp's. Apps always pass (ios/… or android/…
+ * trail and the automatic offsite check-out. Android browsers are isAndroidBrowserWithoutApp's;
+ * iPhone/iPad browsers are isIosBrowserWithoutApp's. Apps always pass (ios/… or android/…
  * header, legacy NEXUS/<build> UA, NEXUS-Android UA), and a caller that is not a browser at all (no
  * Mozilla UA, no web/ header — curl, scripts) is never guessed at.
  */
@@ -594,6 +594,41 @@ export function isDesktopBrowser(userAgent: string | null | undefined, clientHea
   if (!browser) return false
   return !/Android|iPhone|iPad|iPod/.test(ua)
 }
+
+/**
+ * An Android phone's browser (not the app). Allowed for now (owner, 16 Oct 2026); refused once the remote-config
+ * flag `blockAndroidBrowserAttendance` is switched on, when the big-release Android APK ships.
+ */
+export function isAndroidBrowserWithoutApp(userAgent: string | null | undefined, clientHeader: string | null | undefined): boolean {
+  const header = (clientHeader ?? "").trim()
+  if (/^(ios|android)\//i.test(header)) return false
+  const ua = (userAgent ?? "").trim()
+  if (/^NEXUS(-Android)?\//.test(ua)) return false
+  const browser = /^web\//i.test(header) || /^Mozilla\//.test(ua)
+  return browser && /Android/.test(ua)
+}
+
+/**
+ * Check-in and check-out are for the apps (owner, 16 Oct 2026): a laptop/desktop browser and an iPhone/iPad
+ * browser are always refused; an Android browser only when the remote-config flag
+ * `flags.blockAndroidBrowserAttendance` is on (default off). null = let it through. `androidBlocked` is read
+ * only for an Android browser (the flag costs a settings read).
+ */
+export async function browserAttendanceRefusal(
+  userAgent: string | null | undefined,
+  clientHeader: string | null | undefined,
+  androidBlocked: () => Promise<boolean>,
+): Promise<{ error: string; code: string } | null> {
+  if (isIosBrowserWithoutApp(userAgent, clientHeader)) return USE_IOS_APP_ERROR
+  if (isDesktopBrowser(userAgent, clientHeader)) return USE_PHONE_APP_ERROR
+  if (isAndroidBrowserWithoutApp(userAgent, clientHeader) && (await androidBlocked())) return USE_ANDROID_APP_ERROR
+  return null
+}
+
+export const USE_ANDROID_APP_ERROR = {
+  error: "Absen dari HP Android pakai app NEXUS ya — di browser lokasi kerjamu tidak bisa dicatat.",
+  code: "USE_ANDROID_APP",
+} as const
 
 export const USE_PHONE_APP_ERROR = {
   error: "Absen pakai app NEXUS di HP ya — dari laptop lokasi kerjamu tidak bisa dicatat.",

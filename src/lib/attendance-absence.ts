@@ -3,6 +3,7 @@ import { logAudit } from "@/lib/audit"
 import { enumerateAttendanceDates, FLEXI_WINDOW_END, formatAttendanceDateKey, getAttendanceDate, getPrimaryAttendanceTeam, isWorkdayForAttendanceDate, minutesLateAgainstShift, resolveEffectiveAttendanceShift, resolveShiftWindowAt, safeAttendanceTimezone, isRestDayForMember } from "@/lib/attendance"
 import { awardXpOnce, setLatePenalty, clearLatePenalty, refundXpByReason, refundXpByReasonTx } from "@/lib/gamification"
 import { getHolidayKeys, isHoliday } from "@/lib/holidays"
+import { ORG_WORKSPACE_ID } from "@/lib/org"
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 // Don't auto-deduct (or apply ANY attendance XP penalty) for days before the policy went live — avoids
@@ -311,6 +312,8 @@ async function officeForMemberDate(userId: string, workspaceId: string, date: Da
 }
 
 export async function rederiveLatePenaltyForDate(userId: string, workspaceId: string, date: Date, dateKey: string): Promise<number> {
+  // The automatic late penalty is the company workspace's rule only (owner, 16 Oct 2026).
+  if (workspaceId !== ORG_WORKSPACE_ID) return 0
   if (date.getTime() < startFloor().getTime()) return 0
   if (await isOutageDay(dateKey)) return 0
 
@@ -654,8 +657,9 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date; 
 
   const dates = enumerateAttendanceDates(from, to)
 
-  // One active office per workspace (used for workdays/timezone).
-  const offices = await prisma.officeLocation.findMany({ where: { isActive: true } })
+  // One active office per workspace (used for workdays/timezone). The automatic attendance penalties are the
+  // company workspace's rule only (owner, 16 Oct 2026): never in a personal or any other workspace.
+  const offices = await prisma.officeLocation.findMany({ where: { isActive: true, workspaceId: ORG_WORKSPACE_ID } })
   const officeByWorkspace = new Map<string, (typeof offices)[number]>()
   for (const o of offices) if (!officeByWorkspace.has(o.workspaceId)) officeByWorkspace.set(o.workspaceId, o)
 
@@ -875,7 +879,8 @@ export async function accrueLatePenalties(now: Date = new Date()): Promise<LateA
   // System outage day → staff can't check in; don't accrue late penalties at all.
   if (await isOutageDay(dateKey)) return result
 
-  const offices = await prisma.officeLocation.findMany({ where: { isActive: true } })
+  // Company workspace only (owner, 16 Oct 2026), as the nightly deductions.
+  const offices = await prisma.officeLocation.findMany({ where: { isActive: true, workspaceId: ORG_WORKSPACE_ID } })
   const officeByWorkspace = new Map<string, (typeof offices)[number]>()
   for (const o of offices) if (!officeByWorkspace.has(o.workspaceId)) officeByWorkspace.set(o.workspaceId, o)
 

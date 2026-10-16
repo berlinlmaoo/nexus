@@ -13,8 +13,9 @@ import { setLatePenalty, clearLatePenalty } from "@/lib/gamification"
 import { startFloor, isOutageDay, isAutoDeduction, hasAttendanceWaiver } from "@/lib/attendance-absence"
 import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
 import { attendanceActionSchema } from "@/lib/validations"
-import { USE_IOS_APP_ERROR, USE_PHONE_APP_ERROR, attendanceClientOf, isDesktopBrowser, isIosBrowserWithoutApp } from "@/lib/attendance-outside"
-import { iosBrowserCheckInBlocked } from "@/lib/version-policy"
+import { attendanceClientOf, browserAttendanceRefusal } from "@/lib/attendance-outside"
+import { androidBrowserAttendanceBlocked } from "@/lib/app-config"
+import { ORG_WORKSPACE_ID } from "@/lib/org"
 
 const MAX_SELFIE_SIZE = 10 * 1024 * 1024
 
@@ -36,18 +37,13 @@ export async function POST(request: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    // An iPhone / iPad browser must use the app (owner, Sep 2026): a browser cannot report the location
-    // trail. Android and desktop browsers, iPadOS desktop mode and every app build (header or legacy
-    // NEXUS/<build> UA) pass — see isIosBrowserWithoutApp in lib/attendance-outside.ts.
+    // Check-in is for the apps (owner, 16 Oct 2026): a laptop/desktop or iPhone/iPad browser is refused, an
+    // Android browser only once the remote-config flag blockAndroidBrowserAttendance is on. Every app build
+    // (header or legacy NEXUS/<build> UA) passes — see browserAttendanceRefusal in lib/attendance-outside.ts.
     const userAgent = request.headers.get("user-agent")
     const clientHeader = request.headers.get("x-nexus-client")
-    if (isIosBrowserWithoutApp(userAgent, clientHeader) && (await iosBrowserCheckInBlocked())) {
-      return NextResponse.json(USE_IOS_APP_ERROR, { status: 403 })
-    }
-    // Laptops / desktops: never (owner, 2 Oct 2026) — see isDesktopBrowser.
-    if (isDesktopBrowser(userAgent, clientHeader)) {
-      return NextResponse.json(USE_PHONE_APP_ERROR, { status: 403 })
-    }
+    const refusal = await browserAttendanceRefusal(userAgent, clientHeader, androidBrowserAttendanceBlocked)
+    if (refusal) return NextResponse.json(refusal, { status: 403 })
     const checkInClient = attendanceClientOf(userAgent, clientHeader)
 
     const context = await getAttendanceWorkspaceContext(session.user.id)
@@ -330,7 +326,9 @@ export async function POST(request: NextRequest) {
     // still late & unchecked-in, freezing it at the real lateness. The nightly cron is a
     // backstop and also handles >120min -> day-off, no-checkout (-25), and alpha (-150).
     // BoD & One Above All are exempt from ALL attendance XP penalties (same as the crons).
-    const exemptFromPenalty = context.workspaceRole === "BOD" || context.workspaceRole === "ONE_ABOVE_ALL"
+    // The automatic late penalty applies in the company workspace only (owner, 16 Oct 2026): a check-in in a
+    // personal or any other workspace is never docked.
+    const exemptFromPenalty = context.workspaceRole === "BOD" || context.workspaceRole === "ONE_ABOVE_ALL" || context.workspace.id !== ORG_WORKSPACE_ID
     // No attendance penalty before the policy go-live date (same floor the crons use) — keeps the live
     // check-in path consistent with "penalties start from ABSENCE_DEDUCTION_START_DATE", not today.
     const beforePolicyFloor = attendanceDate.getTime() < startFloor().getTime()

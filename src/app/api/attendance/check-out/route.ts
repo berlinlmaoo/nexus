@@ -11,8 +11,9 @@ import { isHoliday } from "@/lib/holidays"
 import { isAutoDeduction, hasAttendanceWaiver, startFloor, isOutageDay } from "@/lib/attendance-absence"
 import { awardXpOnce } from "@/lib/gamification"
 import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
-import { USE_IOS_APP_ERROR, USE_PHONE_APP_ERROR, isDesktopBrowser, isIosBrowserWithoutApp } from "@/lib/attendance-outside"
-import { iosBrowserCheckInBlocked } from "@/lib/version-policy"
+import { browserAttendanceRefusal } from "@/lib/attendance-outside"
+import { androidBrowserAttendanceBlocked } from "@/lib/app-config"
+import { ORG_WORKSPACE_ID } from "@/lib/org"
 import { attendanceActionSchema } from "@/lib/validations"
 import { notifyOffsiteCheckoutPending } from "@/lib/notification-service"
 import { assessReflection } from "@/lib/reflection-quality"
@@ -28,19 +29,12 @@ export async function POST(request: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    // Owner, 2 Oct 2026: attendance from a browser is only for Android phones (while the Android app
-    // is in development). A laptop/desktop browser and an iPhone/iPad browser are refused here as at
-    // check-in — before this a day checked in on the app could still be closed from a laptop. Someone
-    // checked in from a laptop earlier closes the day from the app on their phone.
+    // Check-out is for the apps, as check-in (owner, 2 and 16 Oct 2026): a laptop/desktop or iPhone/iPad browser
+    // is refused, an Android browser only once the remote-config flag blockAndroidBrowserAttendance is on.
+    // Someone checked in from a browser earlier closes the day from the app on their phone.
     {
-      const userAgent = request.headers.get("user-agent")
-      const clientHeader = request.headers.get("x-nexus-client")
-      if (isIosBrowserWithoutApp(userAgent, clientHeader) && (await iosBrowserCheckInBlocked())) {
-        return NextResponse.json(USE_IOS_APP_ERROR, { status: 403 })
-      }
-      if (isDesktopBrowser(userAgent, clientHeader)) {
-        return NextResponse.json(USE_PHONE_APP_ERROR, { status: 403 })
-      }
+      const refusal = await browserAttendanceRefusal(request.headers.get("user-agent"), request.headers.get("x-nexus-client"), androidBrowserAttendanceBlocked)
+      if (refusal) return NextResponse.json(refusal, { status: 403 })
     }
 
     const context = await getAttendanceWorkspaceContext(session.user.id)
@@ -342,8 +336,10 @@ export async function POST(request: NextRequest) {
         where: { userId_workspaceId: { userId: session.user.id, workspaceId: context.workspace.id } },
         select: { restDays: true },
       })
+      // Automatic attendance penalties are the company workspace's rule only (owner, 16 Oct 2026).
       const exempt =
         context.workspaceRole === "BOD" || context.workspaceRole === "ONE_ABOVE_ALL" ||
+        context.workspace.id !== ORG_WORKSPACE_ID ||
         isRestDayForMember(attendanceDate, restMember?.restDays ?? [], checkInOffice.timezone) ||
         attendanceDate.getTime() < startFloor().getTime() ||
         (await isOutageDay(formatAttendanceDateKey(attendanceDate)))
