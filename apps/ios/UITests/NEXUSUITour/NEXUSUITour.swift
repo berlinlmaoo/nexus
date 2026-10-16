@@ -557,7 +557,9 @@ final class NEXUSUITour: XCTestCase {
         return names.isEmpty ? [step] : names
     }
 
-    /// A step whose labels are matched as a part of the button's label ("~QA Dev": a leaderboard row, whose
+    /// A step whose labels are matched as a part of the button's label ("~, QA Dev, Level": the leaderboard row
+    /// "1, QA Dev, Level 6 · Diamond, 1.000 XP" only, never the iPad / Mac sidebar's account button "QA Dev 5, …",
+    /// which "~QA Dev" hit in run 19, T-2; a row
     /// label also holds its rank, level and XP), after the optional "?".
     private static func partial(_ step: String) -> Bool {
         (step.hasPrefix("?") ? String(step.dropFirst()) : step).hasPrefix("~")
@@ -919,6 +921,10 @@ final class NEXUSUITour: XCTestCase {
             }
             #endif
             if savedShots.contains(data) { break }
+            // Run 19 (iPhone R19-I-01 / R19-I-04, iPad / Mac T-1): the end of a scroll moved the page only a little
+            // and what it brought in holds no text or icon (empty sheet space, a card's bottom edge). The tests
+            // above read sub-pixel redraws as new rows and kept it. Such a page goes, whatever they say.
+            if shiftedOnly(from: last, to: data, in: target.compare, window: window) { break }
             let rows = fineRows(data, in: target.compare, window: window)
             let content = rows.compactMap { $0 }
             // The share of this page's content rows on no earlier page. Measured offline on runs 16-18 (every
@@ -972,6 +978,110 @@ final class NEXUSUITour: XCTestCase {
     /// A page the shift tests call a repeat stays only when at least this share of its rows is new.
     private var minUnseenOfRepeat: CGFloat { CGFloat(Double(env["TOUR_MIN_UNSEEN_OF_REPEAT"] ?? "") ?? 0.03) }
     private var minCovered: CGFloat { CGFloat(Double(env["TOUR_MIN_COVERED"] ?? "") ?? 0.98) }
+
+    /// True when `new` is `old` moved up by less than half a page step (the end of the scroll) and the band the
+    /// move brought in holds less than `maxRevealedInk` points of rows with dark ink (text, icons, avatars: grey
+    /// more than 48 levels off the row's median) that did not sit in the same place before (a floating button),
+    /// while almost all ink above that band is explained by the old picture at that shift.
+    /// Measured offline on every vertical page of runs 16-19 (rects from the tour logs): it drops exactly the
+    /// shift-only pages the reviews name (run 19 iPhone dashboard-3, project-templates-2, socmed-settings-2;
+    /// iPad project-table-6; Mac calendar-2, projects-2, socmed-calendar-2; run 17 iPhone gideon-2, iPad
+    /// dashboard-3, Mac socmed-day-3) and keeps every last page that adds a line (iPad outlet-day-2 16 pt,
+    /// iPhone outlet-calendar-2 12.7 pt, Mac project-overview-3 10 pt, leaderboard-6 with the XP log 36 pt).
+    private func shiftedOnly(from old: Data, to new: Data, in rect: CGRect, window: CGRect) -> Bool {
+        guard let a = greyRect(old, rect: rect, window: window), let b = greyRect(new, rect: rect, window: window),
+              a.width == b.width, a.height == b.height, a.height > 60, a.width > 8 else { return false }
+        let w = a.width, h = a.height, scale = a.scale
+        // The shift: the row profiles (mean and spread per row) that line up best.
+        func profile(_ g: GreyRect) -> (mean: [Double], spread: [Double]) {
+            var mean = [Double](repeating: 0, count: h), spread = [Double](repeating: 0, count: h)
+            g.pixels.withUnsafeBufferPointer { px in
+                for y in 0..<h {
+                    var sum = 0, sq = 0
+                    for x in 0..<w { let v = Int(px[y * w + x]); sum += v; sq += v * v }
+                    let m = Double(sum) / Double(w)
+                    mean[y] = m; spread[y] = (Double(sq) / Double(w) - m * m).squareRoot()
+                }
+            }
+            return (mean, spread)
+        }
+        let pa = profile(a), pb = profile(b)
+        let step = CGFloat(h) * pageStep
+        var bestErr = Double.infinity, d = 0
+        for shift in 0..<min(h - 40, Int(step * 1.15)) {
+            var err = 0.0, n = 0
+            for y in 0..<(h - shift) where pb.spread[y] > 2 || pa.spread[y + shift] > 2 {
+                err += abs(pb.mean[y] - pa.mean[y + shift]); n += 1
+            }
+            guard n >= 30 else { continue }
+            if err / Double(n) < bestErr { bestErr = err / Double(n); d = shift }
+        }
+        let shiftPt = CGFloat(d) / scale
+        guard shiftPt >= 2, CGFloat(d) < step * 0.5 else { return false }
+        let ink = 48
+        var bandRows = 0, outInk = 0, outLeft = 0
+        a.pixels.withUnsafeBufferPointer { pa in
+            b.pixels.withUnsafeBufferPointer { pb in
+                var hist = [Int](repeating: 0, count: 256)
+                for y in 0..<h {
+                    for i in 0..<256 { hist[i] = 0 }
+                    for x in 0..<w { hist[Int(pb[y * w + x])] += 1 }
+                    var median = 0, seen = 0
+                    while median < 255 && seen + hist[median] <= w / 2 { seen += hist[median]; median += 1 }
+                    let inBand = y >= h - d
+                    var rowNew = 0
+                    for x in 0..<w {
+                        let v = Int(pb[y * w + x])
+                        guard abs(v - median) > ink else { continue }
+                        func near(_ yy: Int) -> Bool { yy >= 0 && yy < h && abs(Int(pa[yy * w + x]) - v) <= ink }
+                        let inPlace = near(y - 1) || near(y) || near(y + 1)
+                        if inBand {
+                            if !inPlace { rowNew += 1 }
+                        } else if !inPlace && !near(y + d - 1) && !near(y + d) && !near(y + d + 1) {
+                            outLeft += 1
+                        }
+                        if !inBand { outInk += 1 }
+                    }
+                    if rowNew >= 3 { bandRows += 1 }
+                }
+            }
+        }
+        let revealed = CGFloat(bandRows) / scale
+        let unexplained = outInk == 0 ? 0 : CGFloat(outLeft) / CGFloat(outInk)
+        return revealed < maxRevealedInk && unexplained < 0.05
+    }
+
+    /// A page that only shifted brings in less than this many points of ink rows (one line of the smallest text
+    /// is about 8 pt).
+    private var maxRevealedInk: CGFloat { CGFloat(Double(env["TOUR_MAX_REVEALED_INK"] ?? "") ?? 6) }
+
+    private struct GreyRect { let pixels: [UInt8]; let width: Int; let height: Int; let scale: CGFloat }
+
+    /// The grey pixels of `rect` (screen points) at full resolution, the right 10 pt (the scroll bar) left out.
+    private func greyRect(_ png: Data, rect: CGRect, window: CGRect) -> GreyRect? {
+        guard let image = UIImage(data: png)?.cgImage, window.width > 0 else { return nil }
+        let width = image.width, height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        let drawn: Bool = pixels.withUnsafeMutableBytes { buffer in
+            guard let ctx = CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: width, space: CGColorSpaceCreateDeviceGray(),
+                                      bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return false }
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return nil }
+        let scale = CGFloat(width) / window.width
+        let local = rect.offsetBy(dx: -window.minX, dy: -window.minY)
+        let x0 = max(0, Int(local.minX * scale)), x1 = min(width, Int((local.maxX - 10) * scale))
+        let y0 = max(0, Int(local.minY * scale)), y1 = min(height, Int(local.maxY * scale))
+        guard x1 > x0, y1 > y0 else { return nil }
+        var out = [UInt8](repeating: 0, count: (x1 - x0) * (y1 - y0))
+        let w = x1 - x0
+        for y in y0..<y1 {
+            for x in x0..<x1 { out[(y - y0) * w + (x - x0)] = pixels[y * width + x] }
+        }
+        return GreyRect(pixels: out, width: w, height: y1 - y0, scale: scale)
+    }
 
     /// One hash per pixel row of `rect` at full resolution (grey, 8 levels), the right 10 pt (the scroll bar)
     /// left out; nil for a blank row. Unlike `wideRows`, two rows with different words never share a hash, so
