@@ -630,7 +630,7 @@
     <string name="xp_auto">Otomatis</string>
     <string name="xp_manual">Manual</string>
     <string name="xp_footnote">“Otomatis” dihitung sistem dari absensi. “Manual” datang dari quest atau dari BoD. Level-mu adalah level periode ini: semua mulai dari 1.000 XP setiap tanggal 28.</string>
-    <string name="home_q_chat">Chat</string>
+    <string name="home_q_chat">Pesan</string>
     <string name="home_q_leaderboard">Papan Peringkat</string>
     <string name="home_q_rooms">Booking Ruangan</string>
     <string name="home_q_threads">Utas</string>
@@ -655,7 +655,7 @@
     <string name="ptab_automations">Otomasi</string>
     <string name="ptab_pages">Halaman</string>
     <string name="ptab_forms">Formulir</string>
-    <string name="ptab_chat">Chat</string>
+    <string name="ptab_chat">Pesan</string>
     <string name="pt_sheet_empty">Belum ada task buat ditampilin di spreadsheet.</string>
     <string name="pt_col_task">Task</string>
     <string name="pt_col_section">Bagian</string>
@@ -2543,7 +2543,7 @@
     <plurals name="ty_many">
         <item quantity="other">%d orang sedang mengetik…</item>
     </plurals>
-    <string name="tab_chat">Chat</string>
+    <string name="tab_chat">Pesan</string>
     <!-- Chat tab, Home tiles, group of two (owner, 9 Oct; NAV-HOME-GROUP) -->
     <string name="ng_make_group">Jadikan grup</string>
     <string name="ng_forced">Dua orang atau lebih otomatis jadi grup.</string>

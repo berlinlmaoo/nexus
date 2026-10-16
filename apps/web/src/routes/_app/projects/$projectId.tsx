@@ -230,7 +230,7 @@ const SPECIAL_TABS: { id: ViewId; label: string; icon: typeof LayoutGrid }[] = [
   // A Social Media Report project's views (owner, 14 Oct 2026); one SocialMediaView behind them.
   { id: "sm-overview", label: "Overview", icon: Activity },
   { id: "sm-calendar", label: "Calendar", icon: CalIcon },
-  { id: "chat", label: "Chat", icon: MessageSquare },
+  { id: "chat", label: "Messages", icon: MessageSquare },
 ];
 
 // A task project's tabs that are not views of its tasks (owner, 12 Oct 2026). Overview sits before the
@@ -240,7 +240,7 @@ const MODULE_TABS: { id: ModuleKey; label: string; icon: typeof LayoutGrid; befo
   { id: "sheet", label: "Spreadsheet", icon: SheetIcon },
   { id: "pages", label: "Pages", icon: FileText },
   { id: "forms", label: "Forms", icon: FormInput },
-  { id: "chat", label: "Chat", icon: MessageSquare },
+  { id: "chat", label: "Messages", icon: MessageSquare },
 ];
 
 /** The five built-in views as a client-side stand-in, read-only, while the views API is unreachable. */
