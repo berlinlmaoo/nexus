@@ -47,5 +47,8 @@ extension AppLanguage {
         // Project tab row overflow (decision 5)
         "%d more": "%d lainnya",
         "More views": "View lainnya",
+        // Home Quests tile without quests (fix20 API copy 6)
+        "No active quests": "Tidak ada quest aktif",
+        "How quests work": "Cara kerja quest",
     ]
 }

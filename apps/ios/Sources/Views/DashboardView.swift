@@ -627,10 +627,17 @@ struct DashboardView: View {
                 // No task at all: the tile says so and opens My Tasks, as web ("No open tasks · Open My Tasks";
                 // decision 8 of run 20, R20-I-25 / R20-B-05). It said "0/0 Tasks".
                 let noTasks = i == 1 && (d.total ?? 0) == 0
-                Button { if noTasks { router.go(.tasks) } else { toggleStat(i) } } label: {
+                // No quests: "No active quests · How quests work", which opens the XP rules card (fix20 API copy 6).
+                let noQuests = i == 2 && (d.total ?? 0) == 0
+                Button {
+                    if noTasks { router.go(.tasks) }
+                    else if noQuests { withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { xpRulesOpen = true } }
+                    else { toggleStat(i) }
+                } label: {
                     StatCardView(value: d.value, total: d.total, label: d.label, icon: d.icon, from: d.from, to: d.to, glow: d.glow,
                                  plain: hSize == .regular,
-                                 emptyTitle: noTasks ? T("No open tasks") : nil, emptyAction: noTasks ? T("Open My Tasks") : nil)
+                                 emptyTitle: noTasks ? T("No open tasks") : noQuests ? T("No active quests") : nil,
+                                 emptyAction: noTasks ? T("Open My Tasks") : noQuests ? T("How quests work") : nil)
                         .morphSource("stat-\(i)", in: morphSpace, store: morphFrames)
                 }
                 .buttonStyle(PressableCardStyle())

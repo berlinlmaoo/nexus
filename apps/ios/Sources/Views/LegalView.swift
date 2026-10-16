@@ -260,14 +260,20 @@ struct LegalDocumentsPane: View {
                 .buttonStyle(NXButtonStyle(kind: .bordered, compact: true))
                 .accessibilityHint(T("Clear filters"))
             }
-            Button { sheet = .dates } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "calendar").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
-                    Text(dateLabel).font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+            // iPad / Mac: the web's two date fields, "From – To" (UI tour run 20, iPad R20-I-02); the phone keeps
+            // the one control that opens both.
+            if wide {
+                LegalDateRangeFields(from: binding(\.from), to: binding(\.to))
+            } else {
+                Button { sheet = .dates } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "calendar").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
+                        Text(dateLabel).font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+                    }
+                    .legalInput()
                 }
-                .legalInput()
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
             LegalLinkButton(value: link, placeholder: T("Any project or deal")) { v in
                 link = v
                 query.projectId = v?.projectId
@@ -570,6 +576,60 @@ struct LegalDocumentsPane: View {
 }
 
 /// From / To for the archive (each optional).
+/// The web archive's DateRange (LegalDocuments.tsx): "From" and "To" fields, each empty until picked, From never
+/// after To and To never before From, each with its own clear button.
+private struct LegalDateRangeFields: View {
+    @Binding var from: String?
+    @Binding var to: String?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            field(T("From"), $from, lower: nil, upper: to)
+            Text(verbatim: "–").foregroundStyle(NX.mutedFg).accessibilityHidden(true)
+            field(T("To"), $to, lower: from, upper: nil)
+        }
+    }
+
+    @ViewBuilder private func field(_ label: String, _ value: Binding<String?>, lower: String?, upper: String?) -> some View {
+        if let day = value.wrappedValue {
+            let lo = lower.flatMap { LegalText.date(fromDay: $0) } ?? .distantPast
+            let hi = upper.flatMap { LegalText.date(fromDay: $0) } ?? .distantFuture
+            HStack(spacing: 2) {
+                DatePicker(label, selection: Binding(get: { LegalText.date(fromDay: day) ?? Date() },
+                                                     set: { value.wrappedValue = LegalText.dayString($0) }),
+                           in: lo...max(lo, hi), displayedComponents: .date)
+                    .labelsHidden()
+                    .environment(\.locale, AppDateLocale.current)
+                    .environment(\.timeZone, LegalText.jakarta)
+                    .accessibilityLabel(label)
+                Button { value.wrappedValue = nil } label: {
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 13)).foregroundStyle(NX.mutedFg)
+                        .frame(width: 28, height: 28).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(format: T("Clear %@"), label))
+            }
+        } else {
+            Button {
+                // Starts on today, kept inside the other end of the range.
+                var start = LegalText.todayJakarta()
+                if let upper, start > upper { start = upper }
+                if let lower, start < lower { start = lower }
+                value.wrappedValue = start
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
+                    Text(label).font(NXFont.text(13, .medium)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                }
+                .frame(minWidth: 84, alignment: .leading)
+                .legalInput()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(label)
+        }
+    }
+}
+
 private struct LegalDateRangeSheet: View {
     @Binding var from: String?
     @Binding var to: String?

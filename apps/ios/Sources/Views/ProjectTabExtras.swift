@@ -158,6 +158,22 @@ struct ProjectTableTab: View {
     /// so they stay at the leading edge (UI tour run 13, F-05 / I-7 / M-6: scrolled right, the rows had no
     /// name and the group headers were blank bands). iOS 18+; earlier systems scroll the column away.
     @State private var stickyX: CGFloat = 0
+    /// Where every resting place of the vertical scroll starts (group headers, rows, "Show more", "+ New task"),
+    /// the rows' height and the scroll's own: for `endRoom`.
+    @State private var rowTops: [String: CGFloat] = [:]
+    @State private var rowsHeight: CGFloat = 0
+    @State private var rowsViewport: CGFloat = 0
+
+    /// The room after the last row: 24 pt, plus what makes the scroll's END a row start too. At the end the scroll
+    /// cannot snap, so the last pages began with the bottom of the row before (its hairline ~3 pt under the
+    /// header: a doubled rule; UI tour run 20, R20-I-06). With the end on a row start every resting offset is a row
+    /// boundary, and the header's own rule is the only line at the top.
+    private var endRoom: CGFloat {
+        let base: CGFloat = 24
+        let maxOff = rowsHeight + base - rowsViewport
+        guard rowsViewport > 0, maxOff > 0, let next = rowTops.values.filter({ $0 >= maxOff - 0.5 }).min() else { return base }
+        return base + (next - maxOff)
+    }
 
     private var compact: Bool { hSize != .regular }
     /// Date fields that hold names ("Request by" from a Notion import): the text glyph, not a calendar (and not a
@@ -193,8 +209,11 @@ struct ProjectTableTab: View {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(lanes) { lane in group(lane, cols) }
                     }
-                    .padding(.bottom, 24)
+                    .coordinateSpace(.named(TableRowTop.space))
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowsHeight = $0 }
+                    .padding(.bottom, endRoom)
                 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowsViewport = $0 }
                 // Rows come to rest whole under the header, never half cut under it (UI tour run 16,
                 // R16-I-07; the web's WB-1). Each group's rows are the resting places (group(_:_:)).
                 .scrollTargetBehavior(.viewAligned(limitBehavior: .never))
@@ -246,10 +265,12 @@ struct ProjectTableTab: View {
         let limit = shown[lane.id] ?? 40
         return VStack(alignment: .leading, spacing: 0) {
             groupHeader(lane, count: tasks.count, collapsed: isCollapsed)
+                .modifier(TableRowTop(key: "g:\(lane.id)", tops: $rowTops))
             if !isCollapsed {
                 let order: () -> [String] = { tasks.map(\.id) }
                 ForEach(Array(tasks.prefix(limit))) { t in
                     row(t, laneId: lane.id, cols: cols, order: order)
+                        .modifier(TableRowTop(key: "t:\(t.id)", tops: $rowTops))
                 }
                 if tasks.count > limit {
                     let more = min(25, tasks.count - limit)
@@ -264,8 +285,9 @@ struct ProjectTableTab: View {
                     .buttonStyle(.plain)
                     .hoverEffect(.highlight)
                     .overlay(alignment: .bottom) { TableHairline() }
+                    .modifier(TableRowTop(key: "m:\(lane.id)", tops: $rowTops))
                 }
-                if onAddTask != nil { newTaskRow(lane.id) }
+                if onAddTask != nil { newTaskRow(lane.id).modifier(TableRowTop(key: "n:\(lane.id)", tops: $rowTops)) }
             }
         }
         // The header and every row are resting places for the vertical scroll (viewAligned above).
@@ -401,6 +423,21 @@ struct StickyColumnEdge: View {
 }
 
 /// The Table's 1pt grid line under a row.
+/// Reports a resting place's top in the table rows' coordinate space (ProjectTableTab.endRoom); a row that goes
+/// away (a group folded) takes its entry with it.
+struct TableRowTop: ViewModifier {
+    static let space = "tableRows"
+    let key: String
+    @Binding var tops: [String: CGFloat]
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.space)).minY } action: { y in
+                if abs((tops[key] ?? -1) - y) > 0.5 { tops[key] = y }
+            }
+            .onDisappear { tops[key] = nil }
+    }
+}
+
 struct TableHairline: View {
     var body: some View { Rectangle().fill(NX.border).frame(height: 1) }
 }

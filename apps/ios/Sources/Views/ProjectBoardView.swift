@@ -1526,7 +1526,10 @@ struct ProjectDetailView: View {
                 // a pale To Do column scrolled half away left only its "•••" floating at the edge, and the
                 // "+ Status" column was cut at the other (UI tour run 14, N-13 / P-I13). The margin is the
                 // scroll's own (not padding inside it), so the snapped column keeps its 14 pt inset.
-                .scrollTargetBehavior(.viewAligned)
+                // iPad / Mac: only on a column start whose window ends in a gap between columns, so with narrow
+                // empty lanes every resting place still shows whole columns (R20-B-10); the phone as before.
+                .modifier(WideBoardSnap(widths: wide ? wideColumnWidths(detail, shown: shown, statusStyle: statusStyle, grouped: grouped) : [],
+                                        gap: Self.wideGap, leading: 14, viewport: boardViewport))
                 .contentMargins(.leading, 14, for: .scrollContent)
                 // iPad / Mac: the columns are sized so whole columns fill the board (`wideLaneWidth`), so a
                 // resting board never cuts one at its edge and "Add status" never peeks under a fade (UI tour
@@ -1570,12 +1573,50 @@ struct ProjectDetailView: View {
     /// The room for columns: the board less its 14 pt leading margin and one 12 pt gap at the right edge.
     private var wideAvail: CGFloat { boardViewport - 14 - Self.wideGap }
 
-    /// iPad / Mac: as many columns of at least 260 pt as fit whole, sharing the room exactly, so a board at
-    /// rest never cuts a column at its right edge. nil on a phone or before the board is measured.
+    /// An empty lane's width on iPad / Mac: its header and "+" (web w-48; UI tour run 20, R20-B-10: an empty To Do
+    /// took a full ~430 pt lane).
+    private static let emptyLaneW: CGFloat = 200
+
+    /// iPad / Mac: the width of a lane WITH cards. The first window holds as many lanes as fit (an empty lane at
+    /// `emptyLaneW`, the others at least 260 pt, then the tail's columns counted at 260) and the lanes with cards
+    /// share the room exactly, so a board at rest never cuts a column at its right edge. nil on a phone or before
+    /// the board is measured.
     private var wideLaneWidth: CGFloat? {
         guard wide, boardViewport > 0 else { return nil }
-        let k = max(1, Int((wideAvail + Self.wideGap) / (260 + Self.wideGap)))
-        return (wideAvail - Self.wideGap * CGFloat(k - 1)) / CGFloat(k)
+        let shown = displayLanes("board")
+        var used: CGFloat = 0, empty: CGFloat = 0, full = 0, count = 0
+        var i = 0
+        while true {
+            let isEmpty = i < shown.count && Self.laneIsEmpty(shown[i])
+            let w: CGFloat = isEmpty ? Self.emptyLaneW : 260
+            let next = used + (count > 0 ? Self.wideGap : 0) + w
+            guard next <= wideAvail + 0.5 else { break }
+            used = next; count += 1
+            if isEmpty { empty += w } else { full += 1 }
+            i += 1
+            if i > shown.count + 8 { break }
+        }
+        guard full > 0 else { return 260 }
+        return (wideAvail - empty - Self.wideGap * CGFloat(max(0, count - 1))) / CGFloat(full)
+    }
+
+    private static func laneIsEmpty(_ lane: ProjectDetail.Lane) -> Bool { (lane.tasks ?? []).isEmpty }
+
+    /// A lane's drawn width on iPad / Mac (nil = the phone's default).
+    private func laneWidth(_ lane: ProjectDetail.Lane) -> CGFloat? {
+        guard let w = wideLaneWidth else { return nil }
+        return Self.laneIsEmpty(lane) ? Self.emptyLaneW : w
+    }
+
+    /// Every column of the wide board in order, with its width: the lanes, "Add status", the linked lanes.
+    private func wideColumnWidths(_ detail: ProjectDetail, shown: [ProjectDetail.Lane], statusStyle: Bool, grouped: Bool) -> [CGFloat] {
+        guard let w = wideLaneWidth else { return [] }
+        var widths = shown.map { Self.laneIsEmpty($0) ? Self.emptyLaneW : w }
+        if statusStyle && detail.canManageProject { widths.append(Self.addStatusW) }
+        if !grouped {
+            for lane in linkedLanes(detail) { widths.append(linkedAsRail(lane.id, shownCount: shown.count) ? Self.railW : w) }
+        }
+        return widths
     }
 
     /// The board's columns after the project's own lanes: "Add status", then the linked lanes.
@@ -1590,7 +1631,9 @@ struct ProjectDetailView: View {
     private func fitsWithoutRails(shownCount: Int) -> Bool {
         guard let w = wideLaneWidth, let d = detail else { return true }
         let tail = boardTail(d)
-        var widths = Array(repeating: w, count: shownCount)
+        let shown = displayLanes("board")
+        var widths = shown.count == shownCount ? shown.map { Self.laneIsEmpty($0) ? Self.emptyLaneW : w }
+            : Array(repeating: w, count: shownCount)
         if tail.addStatus { widths.append(Self.addStatusW) }
         widths += Array(repeating: w, count: tail.linked.count)
         let total = widths.reduce(0, +) + Self.wideGap * CGFloat(max(0, widths.count - 1))
@@ -1604,12 +1647,8 @@ struct ProjectDetailView: View {
     /// The end margin that makes the last resting place a column's start, so the board's end shows whole
     /// columns too.
     private func wideTrailingRoom(_ detail: ProjectDetail, shown: [ProjectDetail.Lane], statusStyle: Bool, grouped: Bool) -> CGFloat {
-        guard let w = wideLaneWidth else { return 32 }
-        var widths = Array(repeating: w, count: shown.count)
-        if statusStyle && detail.canManageProject { widths.append(Self.addStatusW) }
-        if !grouped {
-            for lane in linkedLanes(detail) { widths.append(linkedAsRail(lane.id, shownCount: shown.count) ? Self.railW : w) }
-        }
+        guard wideLaneWidth != nil else { return 32 }
+        let widths = wideColumnWidths(detail, shown: shown, statusStyle: statusStyle, grouped: grouped)
         var starts: [CGFloat] = []
         var x: CGFloat = 0
         for v in widths { starts.append(x); x += v + Self.wideGap }
@@ -1680,7 +1719,7 @@ struct ProjectDetailView: View {
             canAdd: addable && canEdit,
             canEdit: canEdit,
             fieldIds: projectFieldIds,
-            width: wideLaneWidth
+            width: laneWidth(lane)
         )
     }
 
@@ -2582,6 +2621,49 @@ struct BoardCard: View {
 
 /// A linked lane folded to a narrow rail on an iPad / Mac board (web R17-WD-1): its count, the source project's
 /// name upright, "Linked". A click opens the lane.
+/// The wide board's resting places (see `boardTab`): `.viewAligned` on a phone, else `WholeColumnSnap`.
+private struct WideBoardSnap: ViewModifier {
+    let widths: [CGFloat]
+    let gap: CGFloat
+    let leading: CGFloat
+    let viewport: CGFloat
+    func body(content: Content) -> some View {
+        if widths.isEmpty || viewport <= 0 {
+            content.scrollTargetBehavior(.viewAligned)
+        } else {
+            content.scrollTargetBehavior(WholeColumnSnap(widths: widths, gap: gap, leading: leading, viewport: viewport))
+        }
+    }
+}
+
+/// Rests on a column's start (the column at the leading margin) only where the window's right edge falls in
+/// the gap after a column (or past the last one), and on the scroll's end; the nearest such place to where the
+/// swipe would stop. With every column the same width each start qualified (the old `.viewAligned`); with narrow
+/// empty lanes some starts would cut a column at the right edge, and those are skipped.
+struct WholeColumnSnap: ScrollTargetBehavior {
+    let widths: [CGFloat]
+    let gap: CGFloat
+    let leading: CGFloat
+    let viewport: CGFloat
+
+    func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
+        let maxX = max(0, context.contentSize.width - context.containerSize.width)
+        guard maxX > 0 else { return }
+        var starts: [CGFloat] = [], ends: [CGFloat] = []
+        var x: CGFloat = 0
+        for w in widths { starts.append(x); ends.append(x + w); x += w + gap }
+        let total = x - gap
+        let clean = starts.filter { s in
+            guard s <= maxX + 0.5 else { return false }
+            let edge = s + viewport - leading
+            return edge >= total - 0.5 || ends.contains { e in edge >= e - 0.5 && edge <= e + gap + 0.5 }
+        } + [maxX]
+        let proposed = min(max(0, target.rect.origin.x), maxX)
+        guard let best = clean.min(by: { abs($0 - proposed) < abs($1 - proposed) }) else { return }
+        target.rect.origin.x = min(best, maxX)
+    }
+}
+
 private struct LinkedLaneRail: View {
     let lane: ProjectDetail.Lane
     let open: () -> Void
