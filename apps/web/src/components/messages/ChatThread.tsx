@@ -745,7 +745,13 @@ export function ChatThread({
         {thread && !hasMoreOlder && messages.length > 0 && (
           <p className="pb-2 text-center text-[11px] text-muted-foreground">{t("This is the start of the conversation.")}</p>
         )}
-        {thread && messages.length === 0 && shownOutbox.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">{t("No messages yet. Say hi 👋")}</p>}
+        {/* Plain copy and a next step, no emoji in place of an icon (UI tour run 19, R19-WD-3, decision 4). */}
+        {thread && messages.length === 0 && shownOutbox.length === 0 && (
+          <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <p className="text-sm text-muted-foreground">{t("No messages yet.")}</p>
+            <button type="button" onClick={() => inputRef.current?.focus()} className="inline-flex items-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground shadow-soft transition hover:bg-primary/90 active:scale-[0.98]">{t("Start a conversation")}</button>
+          </div>
+        )}
         {messages.map((m: NexusMessage) => {
           const mine = !!(m.userId && meId && m.userId === meId);
           const day = dayLabel(m.createdAt);
