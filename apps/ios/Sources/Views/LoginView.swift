@@ -261,8 +261,9 @@ struct LoginView: View {
             openReset(NXPasswordResetRequest(email: email.trimmingCharacters(in: .whitespacesAndNewlines),
                                              invited: false))
         } label: {
-            Text(T("Forgot password?").uppercased())
-                .font(NXFont.text(11, .bold)).tracking(0.5)
+            // Sentence case beside the "Password" label it sits on (decision 1 of run 19).
+            Text(T("Forgot password?"))
+                .font(NXFont.text(13, .semibold))
                 .foregroundStyle(NX.onyx)
                 .contentShape(Rectangle())
         }
