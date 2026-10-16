@@ -9,6 +9,8 @@ import {
   AlarmClock, AlertTriangle, AlignLeft, ArrowDownToLine, ArrowUp, AtSign, CalendarClock, Check, ChevronDown, ChevronRight, ChevronsRight, ClipboardList, Clock, Copy,
   ExternalLink, FilePlus2, FileText, FolderKanban, HelpCircle, ImagePlus, ListChecks, ListTree, Loader2, Maximize2, MessageCircle, MessageSquare, Minimize2,
   MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Search, ShieldCheck, Square, SquarePen, Trash2, UserRound, X,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { GideonMark } from "./GideonMark";
@@ -529,9 +531,19 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   const headerTitle = chatTitle && !fresh ? chatTitleText(chatTitle) || t("Untitled chat") : t("New chat");
   // On the full page from md up the chat list is its own column, so the title is only a label there.
   const titleIsToggle = !isPage;
+  // The full page's chat list column folds away (owner, 16 Oct 2026), remembered per browser.
+  const [listOpen, setListOpenState] = useState(() => { try { return localStorage.getItem("gideon-chatlist-open") !== "0"; } catch { return true; } });
+  const setListOpen = (open: boolean) => { setListOpenState(open); try { localStorage.setItem("gideon-chatlist-open", open ? "1" : "0"); } catch { /* private mode */ } };
 
   const header = (
     <div className={cn("flex h-11 shrink-0 items-center gap-0.5 px-2", isPage && "border-b border-border/60 md:px-3")}>
+      {isPage && (
+        <button type="button" onClick={() => setListOpen(!listOpen)} aria-expanded={listOpen}
+          title={listOpen ? t("Hide chat list") : t("Show chat list")} aria-label={listOpen ? t("Hide chat list") : t("Show chat list")}
+          className={cn(iconBtn, "mr-1 hidden md:grid")}>
+          {listOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+        </button>
+      )}
       {/* Notion AI: the chat's title is the way into the history ("New AI chat ⌄"). On the full page the
           title stays a toggle below md, where the chat list column is hidden (UI tour 13 Oct 2026). */}
       <button
@@ -543,13 +555,13 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
         className={cn(
           "flex min-w-0 items-center gap-1.5 rounded-md py-1 pl-1 pr-1.5 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           view === "history" && "bg-accent",
-          !titleIsToggle && "md:pointer-events-none",
+          !titleIsToggle && listOpen && "md:pointer-events-none",
         )}
       >
         <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-border bg-background text-foreground"><GideonMark className="h-3.5 w-3.5" /></span>
         {isPage && <><span className="hidden shrink-0 text-sm font-medium text-muted-foreground sm:inline">{name}</span><span aria-hidden className="hidden px-0.5 text-muted-foreground/60 sm:inline">/</span></>}
         <span className="truncate text-sm font-medium">{headerTitle}</span>
-        <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", view === "history" && "rotate-180", !titleIsToggle && "md:hidden")} />
+        <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", view === "history" && "rotate-180", !titleIsToggle && listOpen && "md:hidden")} />
       </button>
       <div className="min-w-2 flex-1" />
       <button type="button" onClick={newChat} title={t("New chat ({keys})", { keys: modKey("O") })} aria-label={t("New chat")} className={iconBtn}><SquarePen className="h-4 w-4" /></button>
@@ -859,7 +871,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
       {header}
       {isPage ? (
         <div className="flex min-h-0 flex-1">
-          <aside className="hidden w-64 shrink-0 flex-col border-r border-border/60 bg-muted/20 md:flex">
+          <aside className={cn("hidden w-64 shrink-0 flex-col border-r border-border/60 bg-muted/20", listOpen && "md:flex")}>
             <ChatHistoryList activeId={fresh ? null : chatId} onPick={(id) => { openChat(id); router.history.replace(`/gideon?chat=${id}`); }} onNew={() => { newChat(); router.history.replace("/gideon"); }} />
           </aside>
           <div className="flex min-w-0 flex-1 flex-col">{body}{composer}</div>
