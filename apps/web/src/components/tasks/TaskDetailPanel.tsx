@@ -896,7 +896,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
                 </div>
               </PropRow>
               {/* "+ Add a property": a new project field, made right here */}
-              {projectId && !cfAdding && (
+              {projectId && !cfAdding && canEditTask && (
                 <button type="button" onClick={() => setCfAdding(true)} className="mt-0.5 flex h-9 items-center gap-2 rounded-lg px-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 pointer-coarse:h-11">
                   <Plus className="h-4 w-4" /> {tr("Add a property")}
                 </button>
@@ -975,7 +975,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
                   )}
                   {/* inline add — Enter spawns a real task linked to this one.
                       Needs a project home (taskList) so the backend can validate the parent. */}
-                  {!!projectId && !!t.taskList?.id && (
+                  {!!projectId && !!t.taskList?.id && canEditTask && (
                   <div className="-mx-1.5 flex min-h-9 items-center gap-2 rounded-lg px-1.5 text-sm transition-colors focus-within:bg-muted/60 hover:bg-muted/60">
                     {addSubtask.isPending ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" /> : <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />}
                     <input
@@ -1007,7 +1007,8 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
               icon={Paperclip}
               label={tr("Attachments")}
               action={
-                <div className="flex items-center gap-2">
+                // Can view / Can comment: no Upload (it read as live in the disabled fieldset, QA 16 Oct 2026).
+                !canEditTask ? undefined : <div className="flex items-center gap-2">
                   <span className="hidden text-[11px] text-muted-foreground sm:inline">{tr("Max {size}", { size: MAX_ATTACH_LABEL })}</span>
                   <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary">
                     {uploadMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {tr("Upload")}
@@ -1049,7 +1050,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
                     {att.size != null && <span className="shrink-0 text-xs text-muted-foreground">{Math.round(att.size / 1024)} KB</span>}
                     <button onClick={() => setPreviewAtt(att)} aria-label={tr("Preview")} title={tr("Preview")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
                     {att.url && <a href={`${att.url}?download=${encodeURIComponent(att.name || "file")}`} download={att.name || ""} aria-label={tr("Download")} title={tr("Download")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-3.5 w-3.5" /></a>}
-                    <button aria-label={tr("Delete attachment")} onClick={() => setConfirmAtt(att)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                    {canEditTask && <button aria-label={tr("Delete attachment")} onClick={() => setConfirmAtt(att)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>}
                   </div>
                 ))}
                 {(attachments.data ?? []).length === 0 && <p className="text-xs text-muted-foreground">{tr("No attachments.")}</p>}
