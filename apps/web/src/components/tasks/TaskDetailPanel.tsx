@@ -326,7 +326,14 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
   const openSubRef = useRef<string | null>(null);
   useEffect(() => {
     // defaultPrevented: Esc already closed a menu or the delete alert (Radix) — leave the panel open.
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented && !openSubRef.current) requestClose(); };
+    // ProseMirror marks every Escape typed in the description as handled, so that alone kept the popup open while
+    // typing in the body (QA 16 Oct 2026); there it closes unless the slash / mention / block menu is open.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || openSubRef.current) return;
+      const inBody = !!(e.target as HTMLElement | null)?.closest?.(".ProseMirror");
+      const bodyMenu = !!document.querySelector('.nx-menu[role="listbox"], .nx-menu[role="menu"]');
+      if (!e.defaultPrevented || (inBody && !bodyMenu)) requestClose();
+    };
     document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
