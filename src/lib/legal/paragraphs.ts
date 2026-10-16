@@ -3,6 +3,7 @@ import { DOMParser, XMLSerializer, type Element as XElement, type Document as XD
 import { diffWords } from "@/lib/legal/diff"
 import { DOCX_MAX_UNZIPPED_BYTES, zipUnpackedSize } from "@/lib/legal/storage"
 import { keepManualBreaksUnstretched } from "@/lib/legal/template"
+import { pageSetup, paragraphLayouts, type PageSetup, type ParagraphLayout } from "@/lib/legal/paragraph-layout"
 
 // A generated document, paragraph by paragraph, for review (owner, 14 Oct 2026: "edit lines/paragraphs
 // manually; GIDEON can edit precisely"). Only the body is listed — the kop and the headers/footers are not
@@ -26,6 +27,8 @@ export type DocParagraph = {
   /** pStyle, when the paragraph has one (Heading1, ListParagraph …) */
   style?: string
   inTable: boolean
+  /** How it looks on the page (only with `{ layout: true }`): Review & edit shows the document as it prints. */
+  layout?: ParagraphLayout
 }
 
 export class ParagraphEditError extends Error {
@@ -134,11 +137,22 @@ const locked = (a: Analyzed, lockedTexts: string[]): LockReason | undefined => {
 }
 
 /** The body's paragraphs, in order. `lockedTexts`: text whose paragraph may not change (the number). */
-export function readParagraphs(docx: Buffer, lockedTexts: string[] = []): DocParagraph[] {
-  return load(docx).paragraphs.map((a, index) => {
+export function readParagraphs(docx: Buffer, lockedTexts: string[] = [], opts: { layout?: boolean } = {}): DocParagraph[] {
+  const { zip, paragraphs } = load(docx)
+  // Layout is a best-effort extra: a file it can't read still lists its paragraphs.
+  let layouts: ParagraphLayout[] | null = null
+  if (opts.layout) {
+    try { layouts = paragraphLayouts(zip, paragraphs) } catch (e) { console.error("Legal paragraph layout:", e) }
+  }
+  return paragraphs.map((a, index) => {
     const lockReason = locked(a, lockedTexts)
-    return { index, text: a.text, editable: !lockReason, ...(lockReason ? { lockReason } : {}), ...(a.style ? { style: a.style } : {}), inTable: a.inTable }
+    return { index, text: a.text, editable: !lockReason, ...(lockReason ? { lockReason } : {}), ...(a.style ? { style: a.style } : {}), inTable: a.inTable, ...(layouts ? { layout: layouts[index] } : {}) }
   })
+}
+
+/** The page the body is laid out on (size, margins, default font). */
+export function readPageSetup(docx: Buffer): PageSetup | null {
+  try { return pageSetup(load(docx).zip) } catch { return null }
 }
 
 export function paragraphTexts(docx: Buffer): string[] {

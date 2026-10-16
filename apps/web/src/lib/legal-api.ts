@@ -272,7 +272,18 @@ export const legalUploadApi = {
 };
 
 // ── Review & versions ──
-export type DocParagraph = { index: number; text: string; editable: boolean; lockReason?: "number" | "complex" | "empty"; style?: string; inTable: boolean };
+export type DocRunStyle = { text: string; b?: true; i?: true; u?: true };
+/** How a paragraph looks on the page, in points (server: lib/legal/paragraph-layout.ts). */
+export type DocParagraphLayout = {
+  align?: "left" | "center" | "right" | "justify";
+  indentLeft?: number; hanging?: number; firstLine?: number;
+  spaceBefore?: number; spaceAfter?: number; lineHeight?: number; size?: number;
+  marker?: string;
+  runs?: DocRunStyle[];
+  cell?: { table: number; row: number; col: number };
+};
+export type DocPageSetup = { width: number; marginLeft: number; marginRight: number; marginTop: number; font?: string; size?: number };
+export type DocParagraph = { index: number; text: string; editable: boolean; lockReason?: "number" | "complex" | "empty"; style?: string; inTable: boolean; layout?: DocParagraphLayout };
 export type DiffSegment = { type: "same" | "del" | "ins"; text: string };
 export type ParagraphDiff =
   | { type: "same"; a: number; b: number; text: string }
@@ -282,7 +293,7 @@ export type ParagraphDiff =
 
 export const legalVersionsApi = {
   paragraphs: (id: string, version?: number) =>
-    apiFetch<{ version: number; current: number; paragraphs: DocParagraph[] }>(`${docUrl(id)}/paragraphs${version ? `?version=${version}` : ""}`),
+    apiFetch<{ version: number; current: number; paragraphs: DocParagraph[]; page?: DocPageSetup | null }>(`${docUrl(id)}/paragraphs${version ? `?version=${version}` : ""}`),
   saveEdits: (id: string, baseVersion: number, edits: { index: number; text: string }[], note: string) =>
     apiFetch<{ version: number; pdfError: string | null }>(`${docUrl(id)}/versions`, { method: "POST", body: JSON.stringify({ baseVersion, edits, note }) }),
   uploadVersion: (id: string, baseVersion: number, file: File, note: string, status?: LegalStatus) => {

@@ -173,6 +173,8 @@ export const ID_LEGAL: Record<string, string> = {
   "Click a paragraph to edit it, or tick paragraphs to ask GIDEON to change them.": "Klik paragraf untuk mengeditnya, atau centang paragraf untuk minta GIDEON mengubahnya.",
   "Click a paragraph to edit it.": "Klik paragraf untuk mengeditnya.",
   "Select paragraph {n}": "Pilih paragraf {n}",
+  "The letterhead and page footer show in the PDF.": "Kop surat dan footer halaman tampil di PDF.",
+  "Click to edit": "Klik untuk mengedit",
   "The document number can't be edited.": "Nomor dokumen tidak bisa diedit.",
   "Has a field, image or link: edit it in Word and upload the file as a new version.": "Berisi field, gambar, atau tautan: edit di Word lalu unggah filenya sebagai versi baru.",
   "Save as new version": "Simpan sebagai versi baru",
