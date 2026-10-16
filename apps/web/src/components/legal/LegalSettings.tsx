@@ -26,8 +26,9 @@ export function LegalSettings() {
   const canEdit = (me.data?.invitePower ?? "NONE") !== "NONE";
   const headerTop = useStickyHeaderOffset();
   const jumpRef = useRef<HTMLElement>(null);
-  // The chip of the company in view is marked, following the scroll (UI tour run 15, R15-WB-7): the company
-  // whose card starts at or above the line just under the pinned chips, else the first.
+  // The chip of the company in view is marked, following the scroll (UI tour run 15, R15-WB-7). One rule on every
+  // platform (UI tour run 20, decision 14, R20-WD-1 / R20-WM-9): the company whose card covers the largest part of
+  // the visible area under the pinned chips; scrolled to the end, the last company with a card on screen.
   const [inView, setInView] = useState<string | null>(null);
   const list = companies.data?.companies;
   // Rows snap whole under the pinned chips too, not just under the page header (UI tour run 16, R16-WB-1:
@@ -47,17 +48,22 @@ export function LegalSettings() {
     let frame = 0;
     const read = () => {
       frame = 0;
-      const line = headerTop + (jumpRef.current?.offsetHeight ?? 0) + 24;
-      let current = list[0]?.id ?? null;
-      // Scrolled to the end, the last cards can never reach the line: then the last company whose card is on screen
-      // is the one in view (UI tour run 19, R19-WD-1: the chip said Suwara Lokal while only TZN's card showed).
+      const top0 = headerTop + (jumpRef.current?.offsetHeight ?? 0);
+      // The phone's floating tab bar covers the bottom of the screen; what is under it is not "in view".
+      const bar = document.querySelector<HTMLElement>("[data-tabbar-room]");
+      const bottom = window.innerHeight - (bar && bar.offsetHeight > 0 ? bar.offsetHeight : 0);
       const doc = document.scrollingElement ?? document.documentElement;
       const atEnd = doc.scrollTop > 0 && doc.scrollTop + window.innerHeight >= doc.scrollHeight - 2;
+      let current = list[0]?.id ?? null;
+      let most = 0;
       for (const c of list) {
         const el = document.getElementById(`legal-co-${c.id}`);
         if (!el) continue;
-        const top = el.getBoundingClientRect().top;
-        if (top <= line || (atEnd && top < window.innerHeight - 48)) current = c.id;
+        const r = el.getBoundingClientRect();
+        const shown = Math.min(r.bottom, bottom) - Math.max(r.top, top0);
+        if (shown <= 0) continue;
+        // At the end the last cards can never fill the screen: the last one with a card on screen wins.
+        if (atEnd || shown > most) { current = c.id; most = shown; }
       }
       setInView(current);
     };
