@@ -51,7 +51,10 @@ export function SnapTail({ scroller }: { scroller: "document" | "parent" }) {
       window.removeEventListener("resize", schedule);
     };
   }, [scroller]);
-  return <div ref={ref} aria-hidden data-snap-tail="" style={{ height: h }} />;
+  // flexShrink 0: inside a flex column that scrolls (the phone board's lane) an empty spacer was shrunk back to 0
+  // by the overflowing cards, so the lane's end never became a snap point (UI tour run 19, R19-WB-1 wm
+  // project-board-2: the last screen began under the lane head, the first card's title hidden).
+  return <div ref={ref} aria-hidden data-snap-tail="" style={{ height: h, flexShrink: 0 }} />;
 }
 
 const SNAP_POINTS = "[data-snap-row], [data-snap-rows] > *, [data-snap-top]";
@@ -63,6 +66,23 @@ function scrollParent(node: HTMLElement): HTMLElement | null {
     if (/(auto|scroll|hidden)/.test(cs.overflowY) || /(auto|scroll|hidden)/.test(cs.overflowX)) return a;
   }
   return null;
+}
+
+/**
+ * How far transforms move `node` down from where layout puts it (it and its ancestors up to `stop`). A card that
+ * fades in from below (Reveal: translateY 16px until it is in view) would otherwise be measured 16px too low, and
+ * the end would rest 16px into the card before it once it had moved into place (UI tour run 19, R19-WB-1, wm
+ * dashboard-3: the page ended inside the profile card). Translations only; the app's snapping cards don't scale.
+ */
+function translateYOf(node: HTMLElement, stop: Element | null): number {
+  let y = 0;
+  for (let a: HTMLElement | null = node; a && a !== stop && a !== document.body; a = a.parentElement) {
+    const tf = getComputedStyle(a).transform;
+    if (tf && tf !== "none") {
+      try { y += new DOMMatrixReadOnly(tf).m42; } catch { /* an unparsable value moves nothing we can measure */ }
+    }
+  }
+  return y;
 }
 
 /** The tail's height: how far the furthest scroll position must move to reach the next snap point. */
@@ -84,7 +104,7 @@ function tailFor(tail: HTMLElement, box: HTMLElement | null, doc: Element, curre
     if (scrollParent(p) !== box) continue;
     const r = p.getBoundingClientRect();
     if (!r.height) continue;
-    const at = r.top - top0 + scrollTop - padTop - (parseFloat(getComputedStyle(p).scrollMarginTop) || 0);
+    const at = r.top - translateYOf(p, box) - top0 + scrollTop - padTop - (parseFloat(getComputedStyle(p).scrollMarginTop) || 0);
     // The first snap point at or past the end position: from there the end of the content is still in view.
     if (at >= maxScroll - 0.5 && at < best) best = at;
   }

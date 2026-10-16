@@ -251,8 +251,10 @@ function SectionCard({ node, own = false, collapsed, toggle, mine, lens, common 
     <div style={unitVars(common.ix.byId.get(node.unit.id))} data-snap-row="" className="snap-start overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
       <Heading level={3}>
         <button type="button" onClick={() => toggle(key)} aria-expanded={!closed}
-          className={cn("flex w-full items-center gap-[10px] border-l-[3px] border-[var(--c)] px-[12px] py-2.5 text-left hover:bg-muted/50 dark:border-[var(--cd)]", FOCUS_ROW)}>
+          className={cn("flex w-full items-center gap-[10px] px-[12px] py-2.5 text-left hover:bg-muted/50", FOCUS_ROW)}>
           <UnitMark unit={node.unit} size={24} />
+          {/* The division's colour as a dot before its name, not a thick left border (run 19 decision 3, I-10). */}
+          <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[var(--c)] dark:bg-[var(--cd)]" />
           {/* Wraps instead of truncating (at a large text size "FRAMEWORK AGENCY" was cut to "FR…"); "You"
               drops under the name when the two do not fit side by side. */}
           <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
@@ -277,14 +279,16 @@ function SectionCard({ node, own = false, collapsed, toggle, mine, lens, common 
 function NodeBody({ node, own, lens, level, common }: { node: TreeNode; own?: boolean; lens: Lens; level: number; common: Common }): ReactNode {
   return (
     <>
+      {/* Each task is a snap point too, not only its card (UI tour run 19, R19-WB-1 wd calendar-2: a long card's
+          middle had no point to rest on, so the panel stopped inside a task, its title under the lens bar). */}
       {lens === "division"
-        ? node.items.map((i) => <ItemRow key={i.key} item={i} unitId={node.unit.id} {...common} />)
+        ? node.items.map((i) => <div key={i.key} data-snap-row="" className="snap-start"><ItemRow item={i} unitId={node.unit.id} {...common} /></div>)
         : (
           <>
             {viewerFirst(node.people, (p) => p.userId === common.meId).map((p) => (
               <PersonBlock key={p.userId} row={p} unitId={node.unit.id} level={level + 1} common={common} />
             ))}
-            {node.loose.map((i) => <ItemRow key={i.key} item={i} unitId={node.unit.id} {...common} showPeople={false} />)}
+            {node.loose.map((i) => <div key={i.key} data-snap-row="" className="snap-start"><ItemRow item={i} unitId={node.unit.id} {...common} showPeople={false} /></div>)}
           </>
         )}
       {!own && node.children.map((k) => <SubNode key={k.unit.id} node={k} lens={lens} level={subLevel(level)} common={common} />)}
@@ -309,7 +313,7 @@ function SubNode({ node, lens, level, common }: { node: TreeNode; lens: Lens; le
   return (
     <div style={unitVars(common.ix.byId.get(node.unit.id))} data-snap-row="" className="mt-1.5 snap-start">
       <Heading level={level} className="flex items-center gap-2 px-[10px] pb-0.5 pt-1">
-        <span aria-hidden className="h-3.5 w-[3px] shrink-0 rounded-full bg-[var(--c)] dark:bg-[var(--cd)]" />
+        <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[var(--c)] dark:bg-[var(--cd)]" />
         <span className="min-w-0 flex-1 text-xs font-semibold text-foreground/85 [overflow-wrap:anywhere]">{node.unit.name}</span>
         <span aria-hidden className="shrink-0 text-2xs font-semibold tabular-nums text-muted-foreground">{node.count}</span>
         <SrCount n={node.count} />

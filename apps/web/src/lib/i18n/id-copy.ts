@@ -137,7 +137,7 @@ export const ID_COPY: Record<string, string> = {
   "Check-out for {date} deleted — attendance reopened": "Check-out {date} dihapus — absensi dibuka lagi",
   "Attendance for {date} deleted": "Absensi {date} dihapus",
   "See {name}'s XP and day-off deductions": "Lihat potongan XP dan day off {name}",
-  "the XP period is the calendar month, not the 28→27 attendance period": "periode XP adalah bulan kalender, bukan periode absensi 28→27",
+  "the XP period runs from the 28th to the 27th, as attendance": "periode XP berjalan dari tanggal 28 sampai 27, sama dengan absensi",
   "Deduction for {date} removed — XP and day off restored": "Potongan {date} dibatalkan — XP dan day off dikembalikan",
   "No deduction on {date}.": "Tidak ada potongan pada {date}.",
   "Couldn't remove the deduction.": "Potongan gagal dibatalkan.",

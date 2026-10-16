@@ -37,4 +37,9 @@ export const ID_R19WEB: Record<string, string> = {
   "That workspace code is not valid.": "Kode workspace itu tidak valid.",
   "Enter the workspace code": "Masukkan kode workspace",
   "You are in a personal workspace. Enter your company's workspace code in Settings to join it; the Calendar then shows the tasks of everyone there.": "Kamu berada di workspace pribadi. Masukkan kode workspace perusahaanmu di Pengaturan untuk bergabung; Kalender lalu menampilkan tugas semua orang di sana.",
+
+  // UI tour run 19 web findings
+  "No public holidays this month": "Tidak ada tanggal merah bulan ini",
+  "No open tasks": "Tidak ada task terbuka",
+  "Start a conversation": "Mulai percakapan",
 }
