@@ -52,6 +52,7 @@ import { ID_QAFIX_KBD } from "@/lib/i18n/id-qafix-kbd";
 import { ID_R7WEB } from "@/lib/i18n/id-r7web";
 import { ID_R10WEB } from "@/lib/i18n/id-r10web";
 import { ID_R11WEB } from "@/lib/i18n/id-r11web";
+import { ID_RACE_COLLAB } from "@/lib/i18n/id-race-collab";
 import { ID_R12WEB } from "@/lib/i18n/id-r12web";
 import { ID_R13WEB } from "@/lib/i18n/id-r13web";
 import { ID_R14WEB_A } from "@/lib/i18n/id-r14web-a";
@@ -83,6 +84,8 @@ const KEY = "nexus-lang";
 const listeners = new Set<() => void>();
 
 const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDAR, ...ID_CALENDAR_PAGE, ...ID_CALENDAR_EXTRA, ...ID_CHAT, ...ID_AUDIT, ...ID_OFFBOARD, ...ID_FORMER, ...ID_PROJECTS, ...ID_TEMPLATES, ...ID_PROFILE, ...ID_VAULT, ...ID_NAV, ...ID_PIPELINE, ...ID_AUTOMATIONS, ...ID_FOLDERS, ...ID_OUTLET, ...ID_SOCIAL, ...ID_PROJECT_OVERVIEW, ...ID_SHEETS, ...ID_SHEETS_MENUS, ...ID_SHEETS_PANELS, ...ID_SHEETS_CHART, ...ID_SHEETS_DATA, ...ID_SHEETS_TOOLBAR, ...ID_SHEETS_GRID, ...ID_SHEETS_PIVOT, ...ID_SHEETS_FORMATS, ...ID_VIEWS, ...ID_EDITOR, ...ID_GIDEON, ...ID_GIDEON_AI, ...ID_CATEGORIES, ...ID_COPY, ...ID_I18N_ADMIN, ...ID_I18N_SHELL, ...ID_I18N_ATTENDANCE, ...ID_I18N_WORK, ...ID_FORMS, ...ID_I18N_PROJECTS_EXTRA, ...ID_SESSIONS, ...ID_FIX_PAGES, ...ID_UISWEEP, ...ID_TASK_VIEWS, ...ID_QAFIX_WORK, ...ID_QAFIX_KBD, ...ID_QAFIX_PERM, ...ID_LEGAL, ...ID_LEGAL_REQUESTS, ...ID_R7WEB, ...ID_R10WEB, ...ID_R11WEB, ...ID_R12WEB, ...ID_R13WEB, ...ID_R14WEB_A, ...ID_R14WEB_B, ...ID_R14WEB_C, ...ID_R14WEB_D, ...ID_NUMFMT, ...ID_R15WEB, ...ID_R16WEB, ...ID_R17WEB, ...ID_R18WEB, ...ID_R19WEB, ...ID_R20WEB, ...ID_GIDEON_CALENDAR, ...ID_NOTION_VIEWS };
+// Race-condition fixes (16 Oct 2026), merged separately so parallel work on the table above does not collide.
+Object.assign(ID, ID_RACE_COLLAB);
 
 function read(): Lang {
   try {

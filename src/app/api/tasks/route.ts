@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { TASK_ORDER } from "@/lib/task-order"
 import { USER_CARD_SELECT } from "@/lib/user-card-select"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
@@ -166,7 +167,7 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: [{ position: "asc" }, { createdAt: "desc" }],
+      orderBy: TASK_ORDER,
     })
 
     // Attach task-bundle quest membership (board/list "+X XP" badge) — mirrors the project payload so

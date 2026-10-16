@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { TASK_ORDER } from "@/lib/task-order"
 import { auth } from "@/lib/auth"
 import { canReadTask, taskReadRefusal } from "@/lib/read-access"
 import { logAudit } from "@/lib/audit"
@@ -50,7 +51,7 @@ export async function GET(
             include: {
               assignees: { include: { user: { select: { id: true, name: true, avatar: true } } } },
             },
-            orderBy: { position: "asc" },
+            orderBy: TASK_ORDER,
           },
           activityLogs: {
             include: { user: true },

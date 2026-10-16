@@ -102,7 +102,7 @@ export async function PATCH(
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const { portfolioId } = await params
-    const { name, description, status, projectIds } = await request.json()
+    const { name, description, status, projectIds, addProjectIds, removeProjectIds } = await request.json()
 
     const existing = await prisma.portfolio.findUnique({ where: { id: portfolioId } })
     if (!existing) {
@@ -112,28 +112,34 @@ export async function PATCH(
     const refusal = await workspaceItemWriteRefusal(session.user.id, existing.workspaceId)
     if (refusal) return refusal
 
-    if (projectIds !== undefined) {
-      if (!Array.isArray(projectIds)) {
-        return NextResponse.json({ error: "projectIds must be an array" }, { status: 400 })
-      }
-      // Only projects ADDED now are checked (same workspace, or one the caller can open); the list is
-      // sent whole, so the ones already in it (perhaps added by someone else) are kept as they are.
-      const linked = new Set(
-        (await prisma.portfolioProject.findMany({ where: { portfolioId }, select: { projectId: true } })).map((row) => row.projectId),
-      )
-      const added = projectIds.filter((id: unknown): id is string => typeof id === "string" && !linked.has(id))
-      if (await firstUnlinkableProject(session.user.id, added, existing.workspaceId)) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-      }
+    const idList = (v: unknown) => (Array.isArray(v) ? v.filter((id: unknown): id is string => typeof id === "string") : null)
+    if (projectIds !== undefined && !Array.isArray(projectIds)) {
+      return NextResponse.json({ error: "projectIds must be an array" }, { status: 400 })
     }
+    const whole = projectIds !== undefined ? idList(projectIds)! : null
+    const toAdd = idList(addProjectIds) ?? []
+    const toRemove = new Set(idList(removeProjectIds) ?? [])
 
-    if (projectIds !== undefined) {
-      await prisma.portfolioProject.deleteMany({ where: { portfolioId } })
-      if (projectIds.length > 0) {
-        await prisma.portfolioProject.createMany({
-          data: projectIds.map((projectId: string) => ({ portfolioId, projectId })),
-        })
-      }
+    if (whole || toAdd.length || toRemove.size) {
+      // Race audit 16 Oct 2026 (M13): deleteMany + createMany outside a transaction — 10 saves of one list at once
+      // answered 6 × 500 (unique violation). Now one transaction with the portfolio row locked: the links stored
+      // NOW are read, the request applied to them (the whole `projectIds`, and/or `addProjectIds` /
+      // `removeProjectIds`, which never undo what someone else linked meanwhile), and only the difference written.
+      // Only projects ADDED are checked (same workspace, or one the caller can open).
+      const result = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Portfolio" WHERE id = ${portfolioId} FOR UPDATE`
+        const linked = (await tx.portfolioProject.findMany({ where: { portfolioId }, select: { projectId: true } })).map((row) => row.projectId)
+        let next = whole ? [...new Set(whole)] : [...linked]
+        for (const id of toAdd) if (!next.includes(id)) next.push(id)
+        next = next.filter((id) => !toRemove.has(id))
+        const added = next.filter((id) => !linked.includes(id))
+        const removed = linked.filter((id) => !next.includes(id))
+        if (await firstUnlinkableProject(session.user.id!, added, existing.workspaceId)) return "forbidden" as const
+        if (removed.length) await tx.portfolioProject.deleteMany({ where: { portfolioId, projectId: { in: removed } } })
+        if (added.length) await tx.portfolioProject.createMany({ data: added.map((projectId) => ({ portfolioId, projectId })), skipDuplicates: true })
+        return "ok" as const
+      })
+      if (result === "forbidden") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     const portfolio = await prisma.portfolio.update({
@@ -155,7 +161,7 @@ export async function PATCH(
       },
     })
 
-    logAudit({ action: "update", entityType: "portfolio", entityId: portfolioId, entityName: portfolio.name, userId: session.user.id, request, metadata: { changes: { name, description, status, projectIds } } })
+    logAudit({ action: "update", entityType: "portfolio", entityId: portfolioId, entityName: portfolio.name, userId: session.user.id, request, metadata: { changes: { name, description, status, projectIds, addProjectIds, removeProjectIds } } })
 
     return NextResponse.json(portfolio)
   } catch (error) {

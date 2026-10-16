@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { isUniqueViolation } from "@/lib/prisma-errors"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { notifyTaskAssigned } from "@/lib/notification-service"
@@ -48,13 +49,22 @@ export async function POST(
       return NextResponse.json({ error: "User is already assigned" }, { status: 400 })
     }
 
-    const assignee = await prisma.taskAssignee.create({
-      data: {
-        taskId: (await params).taskId,
-        userId,
-      },
-      include: { user: true },
-    })
+    // Two taps (or two people) assigning the same person at once both passed the check above; the second insert
+    // hit the unique key and answered 500, after which both sent a notification (race audit 16 Oct 2026, M13).
+    // The key decides now: the loser gets the same 400 as a sequential second tap, and sends nothing.
+    let assignee
+    try {
+      assignee = await prisma.taskAssignee.create({
+        data: {
+          taskId: (await params).taskId,
+          userId,
+        },
+        include: { user: true },
+      })
+    } catch (error) {
+      if (isUniqueViolation(error)) return NextResponse.json({ error: "User is already assigned" }, { status: 400 })
+      throw error
+    }
 
     await prisma.activityLog.create({
       data: {
@@ -127,14 +137,10 @@ export async function DELETE(
       return NextResponse.json({ error: "Assignee not found" }, { status: 404 })
     }
 
-    await prisma.taskAssignee.delete({
-      where: {
-        taskId_userId: {
-          taskId: (await params).taskId,
-          userId,
-        },
-      },
-    })
+    // deleteMany, not delete: a removal that lost the race to another one is the same 404 as a sequential repeat,
+    // not a 500 (P2025), and writes no second activity row.
+    const removed = await prisma.taskAssignee.deleteMany({ where: { taskId: (await params).taskId, userId } })
+    if (removed.count === 0) return NextResponse.json({ error: "Assignee not found" }, { status: 404 })
 
     await prisma.activityLog.create({
       data: {

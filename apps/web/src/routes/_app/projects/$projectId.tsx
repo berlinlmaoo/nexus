@@ -16,7 +16,7 @@ import { EmptyAction, EmptyState } from "@/components/EmptyState";
 import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { Avatar, AvatarStack } from "@/components/Avatar";
 import { celebrate } from "@/components/Celebration";
-import { fmtDate, isTransientError, memberLevelOf, nexusApi, retryTransient, statusLabel, type ProjectAccessLevel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusProjectView, type NexusTask, type NexusTaskStatus } from "@/lib/nexus-api";
+import { ApiError, fmtDate, isTransientError, memberLevelOf, nexusApi, retryTransient, statusLabel, type ProjectAccessLevel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusProjectView, type NexusTask, type NexusTaskStatus } from "@/lib/nexus-api";
 import { TaskBulkProvider, useTaskBulk } from "@/components/tasks/task-bulk";
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { openGideon } from "@/lib/gideon";
@@ -1223,7 +1223,9 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
     apply(next);
     const end = beginTaskWrite();
     try {
-      await nexusApi.reorderTasks({ taskListId: listId, orderedIds: next, movedId: ids[0] });
+      // A relative move (race audit 16 Oct 2026, M12): applied to the column as stored now, so two people
+      // dragging in one column both land. The undo below puts back the whole order this screen had.
+      await nexusApi.reorderTasks({ taskListId: listId, movedIds: ids, beforeId: next[next.indexOf(ids[ids.length - 1]) + 1] ?? null, movedId: ids[0] });
       pushUndo(tn(ids.length, "Task moved", "Moved {n} tasks"), async () => {
         apply(order);
         await nexusApi.reorderTasks({ taskListId: listId, orderedIds: order, movedId: ids[0] });
@@ -1231,7 +1233,8 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
       });
     } catch (e) {
       apply(order);
-      toast.error(t("Couldn't move the task"), { description: friendlyError(e) });
+      if (e instanceof ApiError && e.status === 409) toast.error(t("The column changed while you were dragging"), { description: t("It was refreshed. Drop the task again.") });
+      else toast.error(t("Couldn't move the task"), { description: friendlyError(e) });
     } finally {
       end();
       settleTaskWrite(qc, project.id);
