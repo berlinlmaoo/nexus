@@ -103,7 +103,7 @@ export type GideonBookingView = {
 };
 /** GET /api/room-bookings/availability: every room for one slot, and the nearest free slots when none is free. */
 export type RoomAvailability = {
-  rooms: { room: string; capacity: number | null; free: boolean; busy: { id: string; title: string; by: string | null; startsAt: string; endsAt: string } | null }[];
+  rooms: { room: string; free: boolean; busy: { id: string; title: string; by: string | null; startsAt: string; endsAt: string } | null }[];
   freeSlots: { startsAt: string; endsAt: string; rooms: string[] }[];
 };
 export type GideonStep = { id: string; tool: string; arg?: string | null; label: string; status: "running" | "done" | "error"; error?: string | null };

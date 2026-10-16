@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Link2, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -245,10 +245,13 @@ function FormBody({
     return out as OutletEventWrite;
   };
 
+  // One key for this form's "add night" (race audit 16 Oct 2026, M9): a double press or a retry after a
+  // timeout stores the night once — the server answers the repeat with the night it already has.
+  const createKey = useRef<string>(crypto.randomUUID());
   const save = useMutation({
     mutationFn: async () => {
       const body = payload();
-      if (!event) return { saved: await outletApi.create(projectId, body), created: true };
+      if (!event) return { saved: await outletApi.create(projectId, { ...body, clientRequestId: createKey.current }), created: true };
       if (Object.keys(body).length === 0) return { saved: event, created: false };
       return { saved: await outletApi.update(projectId, event.id, body), created: false };
     },

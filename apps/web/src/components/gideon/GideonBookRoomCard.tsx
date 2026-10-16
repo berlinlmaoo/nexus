@@ -125,8 +125,7 @@ export function GideonBookRoomCard({ proposal, onDecided }: { proposal: GideonPr
 const wibTime = (iso: string, locale: string) => new Date(iso).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Jakarta" });
 
 /**
- * Every room for one slot: free ones selectable, busy ones disabled with who holds them until when, the capacity
- * when it is known. Shared by the book_room card and the move card (GideonBookingChangeCard).
+ * Every room for one slot: free ones selectable, busy ones disabled with who holds them until when. Shared by the book_room card and the move card (GideonBookingChangeCard).
  */
 export function RoomPicker({ rooms, room, disabled, onPick }: { rooms: RoomAvailability["rooms"]; room: string | null; disabled?: boolean; onPick: (room: string) => void }) {
   const { t, locale } = useLang();
@@ -151,7 +150,7 @@ export function RoomPicker({ rooms, room, disabled, onPick }: { rooms: RoomAvail
             {room === r.room && r.free && <span className="h-1.5 w-1.5 rounded-full bg-sidebar-primary" />}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block font-semibold">{t(roomLabel(r.room))}{r.capacity ? <span className="font-normal text-muted-foreground"> · {t("{n} seats", { n: r.capacity })}</span> : null}</span>
+            <span className="block font-semibold">{t(roomLabel(r.room))}</span>
             {r.busy && <span className="block truncate text-muted-foreground">{t("Booked by {name} until {time}", { name: r.busy.by ?? t("someone"), time: wibTime(r.busy.endsAt, locale) })}</span>}
           </span>
         </button>

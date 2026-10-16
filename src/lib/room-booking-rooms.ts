@@ -12,28 +12,6 @@ export const BOOKING_ROOMS: readonly string[] = ROOM_BOOKING_ROOMS
 /** English names, as the notifications and the web show them. */
 export const ROOM_EN: Readonly<Record<string, string>> = { "Ruang Meeting VIP": "VIP Meeting Room", "Ruang Meeting": "Meeting Room", Studio: "Studio" }
 
-/**
- * Seats per room are DATA, not code (16 Oct 2026): the AppSetting row ROOM_CAPACITY_SETTING_KEY holds
- * { "<room>": <seats> }, read by lib/room-booking.ts roomCapacities() and set by a BoD through
- * PUT /api/admin/room-capacity (or that row directly). No number is recorded yet; a room without one shows none.
- */
-export const ROOM_CAPACITY_SETTING_KEY = "room-capacity"
-
-/** Largest number of seats accepted for one room (a typo guard, not a building rule). */
-export const ROOM_CAPACITY_MAX = 500
-
-/** A stored or sent capacity map, kept to the known rooms and whole numbers 1..ROOM_CAPACITY_MAX. */
-export function normalizeRoomCapacity(raw: unknown): Record<string, number> {
-  const out: Record<string, number> = {}
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out
-  for (const room of BOOKING_ROOMS) {
-    const v = (raw as Record<string, unknown>)[room]
-    const n = typeof v === "string" && v.trim() ? Number(v) : v
-    if (typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= ROOM_CAPACITY_MAX) out[room] = n
-  }
-  return out
-}
-
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
 
 /**

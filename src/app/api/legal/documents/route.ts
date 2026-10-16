@@ -5,7 +5,7 @@ import { logAudit } from "@/lib/audit"
 import { legalGate } from "@/lib/legal/access"
 import { generateLegalDocument, LegalGenerateError } from "@/lib/legal/generate"
 import { listDocuments } from "@/lib/legal/archive"
-import { linkRequestToDocument, requestGenerateProblem } from "@/lib/legal/requests"
+import { requestGenerateProblem, syncRequestForDocument } from "@/lib/legal/requests"
 
 /** The archive: every legal document, filtered (see lib/legal/archive.ts for the parameters). */
 export async function GET(request: NextRequest) {
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     const parentDocumentId = typeof body.parentDocumentId === "string" ? body.parentDocumentId : null
     if (requestId) {
       const problem = await requestGenerateProblem(requestId, parentDocumentId)
-      if (problem) return NextResponse.json({ error: problem.error }, { status: problem.status })
+      if (problem) return NextResponse.json({ error: problem.error, code: problem.code }, { status: problem.status })
     }
     const made = await generateLegalDocument(gate.actor, {
       templateId: body.templateId,
@@ -46,6 +46,9 @@ export async function POST(request: NextRequest) {
       projectId: typeof body.projectId === "string" ? body.projectId : null,
       dealId: typeof body.dealId === "string" ? body.dealId : null,
       parentDocumentId: typeof body.parentDocumentId === "string" ? body.parentDocumentId : null,
+      // Re-checked and linked inside the numbering transaction (race audit 16 Oct 2026, H5): two presses
+      // at once give one document, and the other gets the same 409 the up-front check gives.
+      requestId,
     })
     await logAudit({
       action: "create",
@@ -56,11 +59,14 @@ export async function POST(request: NextRequest) {
       metadata: { templateId: body.templateId, number: made.number, ...(body.parentDocumentId ? { parentDocumentId: body.parentDocumentId } : {}), ...(requestId ? { requestId } : {}) },
       request,
     })
-    if (requestId) await linkRequestToDocument(requestId, made.id, parentDocumentId, gate.actor.userId)
+    if (requestId) await syncRequestForDocument(made.id, gate.actor.userId)
     return NextResponse.json({ id: made.id, number: made.number, pdfError: made.pdfError }, { status: 201 })
   } catch (error) {
     if (error instanceof LegalGenerateError) {
-      return NextResponse.json({ error: error.message, fieldErrors: error.fieldErrors, problems: error.problems }, { status: error.status })
+      return NextResponse.json(
+        { error: error.message, fieldErrors: error.fieldErrors, problems: error.problems, ...(error.code ? { code: error.code } : {}) },
+        { status: error.status },
+      )
     }
     console.error("Error generating a Legal document:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

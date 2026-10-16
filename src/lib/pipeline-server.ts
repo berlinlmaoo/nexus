@@ -475,6 +475,40 @@ export function sameValue(a: unknown, b: unknown): boolean {
 }
 
 /**
+ * A list a client sends whole (cost lines, documents & links), merged three ways by id (race audit 16 Oct
+ * 2026, M6). `base` is the list the client edited, `sent` its result, `current` the list as stored NOW
+ * (read under the deal's row lock). Without a base every client before this one sends, the sent list
+ * replaces the stored one as it always did.
+ *   - a line the client removed (in base, not sent) is removed — unless someone else changed it since;
+ *   - a line the client changed (sent differs from base) takes the client's version;
+ *   - a line the client never saw (in current, not in base) stays, where it is;
+ *   - a line the client added (sent, not in base) is appended in the client's order.
+ * Order follows `current`, the client's new lines after it (neither list can be reordered by hand).
+ */
+export function mergeListById<T extends { id: string }>(
+  base: readonly T[],
+  sent: readonly T[],
+  current: readonly T[],
+  /** What makes two versions of a line the same (the stored and the sent shape may differ). */
+  sig: (x: T) => unknown = (x) => x,
+): T[] {
+  const same = (a: T, b: T) => JSON.stringify(sig(a) ?? null) === JSON.stringify(sig(b) ?? null)
+  const baseById = new Map(base.map((x) => [x.id, x]))
+  const sentById = new Map(sent.map((x) => [x.id, x]))
+  const out: T[] = []
+  for (const cur of current) {
+    const was = baseById.get(cur.id)
+    if (!was) { out.push(cur); continue }                     // added by someone else meanwhile
+    const now = sentById.get(cur.id)
+    if (!now) { if (!same(cur, was)) out.push(cur); continue } // removed here; kept if changed elsewhere since
+    out.push(same(now, was) ? cur : now)                      // edited here → the edit; else as stored now
+  }
+  const have = new Set(out.map((x) => x.id))
+  for (const x of sent) if (!baseById.has(x.id) && !have.has(x.id)) out.push(x)
+  return out
+}
+
+/**
  * Moving a deal into Lost / Cancelled makes its probability 0, into a won stage 1 — unless the same
  * request sets probability itself. Otherwise a deal won at 25% keeps weighing 25% if someone moves it
  * back, and a lost one keeps counting in the forecast.
