@@ -28,4 +28,7 @@ export const ID_R20WEB: Record<string, string> = {
   // XP numbers (decision 9, B-06): the period score and where it comes from, one line (same copy on iOS)
   "Starts at {base} on the 28th · +{gained} gained · {lost} lost": "Mulai dari {base} tiap tanggal 28 · +{gained} didapat · {lost} hilang",
   "{n} XP this period": "{n} XP periode ini",
+  // Home Quests tile with no quests (run 19 decision 10, zero-over-zero)
+  "No active quests": "Tidak ada quest aktif",
+  "How quests work": "Cara kerja quest",
 };

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronDown, TrendingDown, TrendingUp, Gift } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,12 +34,27 @@ function Row({ xp, rule, note, auto, tone }: { xp: string; rule: string; note: s
   );
 }
 
+/** Opens the XP rules card on the page and brings it into view (the Home "No active quests" tile). */
+export const OPEN_XP_RULES_EVENT = "nexus:open-xp-rules";
+export function openXpRules() {
+  window.dispatchEvent(new Event(OPEN_XP_RULES_EVENT));
+}
+
 export function XpRulesCard() {
   const { t: tr } = useLang();
   const [open, setOpen] = useState(false);
   const reduce = useReducedMotion();
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onOpen = () => {
+      setOpen(true);
+      ref.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "nearest" });
+    };
+    window.addEventListener(OPEN_XP_RULES_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_XP_RULES_EVENT, onOpen);
+  }, [reduce]);
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
+    <div ref={ref} id="xp-rules" className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
       <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 px-5 py-4 text-left">
         <motion.span whileTap={reduce ? undefined : { scale: 0.9 }} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Gift className="h-5 w-5" /></motion.span>
         <div className="min-w-0 flex-1">

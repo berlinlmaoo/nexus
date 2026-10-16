@@ -36,7 +36,7 @@ import { notificationMessage, notificationTitle } from "@/lib/server-text";
 import { chatUnreadTotal } from "@/lib/chat-unread";
 import { isSystemMessage, systemSentence } from "@/lib/chat-system";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
-import { XpRulesCard } from "@/components/XpRulesCard";
+import { openXpRules, XpRulesCard } from "@/components/XpRulesCard";
 import { UserXpLogModal } from "@/components/UserXpLogModal";
 import { MorphPanel, type MorphOrigin } from "@/components/motion/MorphPanel";
 import { activeNotifications, fmtTime, nexusApi, notificationGroup, statusLabel, type NexusDashboardResponse, type NexusProject, type NexusTask, type NexusQuest, type NexusConversation, type NexusUser, type NexusNotification, type NexusLeaderboardRow, type NotificationGroupId } from "@/lib/nexus-api";
@@ -408,6 +408,9 @@ function StatRow(_: { data: NexusDashboardResponse }) {
       from: "#fcd34d", to: "#ea580c", glow: "#fbbf24",
       retry: g.isError && !g.data ? () => void g.refetch() : undefined,
       detail: <QuestsDetail quests={quests} claim={claim} focusKey={search.quest?.split(":")[0]} />,
+      // "0/0 Quests" said nothing (run 19 decision 10, zero-over-zero): with none, say so, and offer how quests work
+      // (the XP rules card below explains who makes them and what they give).
+      empty: g.data && quests.length === 0 ? { text: "No active quests", action: "How quests work", open: openXpRules } : undefined,
     },
   ];
 
