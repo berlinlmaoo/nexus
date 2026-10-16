@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma/client"
 import { diffParagraphs } from "@/lib/legal/diff"
 import { pdfLater } from "@/lib/legal/generate"
-import { applyParagraphEdits, paragraphTexts, ParagraphEditError, readParagraphs, type ParagraphChange } from "@/lib/legal/paragraphs"
+import { applyParagraphEdits, paragraphTexts, ParagraphEditError, readPageSetup, readParagraphs, type ParagraphChange } from "@/lib/legal/paragraphs"
 import { deleteLegalFile, readLegalFile, storeLegalFile } from "@/lib/legal/storage"
 import { storeUpload, type StoredUpload } from "@/lib/legal/uploads"
 import { downloadBaseName, lockProblem, statusChangeProblem } from "@/lib/legal/rules"
@@ -58,7 +58,7 @@ export async function documentParagraphs(documentId: string, version?: number) {
   const doc = await loadDocForVersions(documentId)
   const v = version ?? doc.currentVersion
   const docx = await versionDocx(documentId, v)
-  return { version: v, current: doc.currentVersion, paragraphs: asVersionError(() => readParagraphs(docx, lockedTextsOf(doc))) }
+  return { version: v, current: doc.currentVersion, paragraphs: asVersionError(() => readParagraphs(docx, lockedTextsOf(doc), { layout: true })), page: readPageSetup(docx) }
 }
 
 type NewVersion = {
