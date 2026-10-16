@@ -374,7 +374,11 @@ export function RealtimeProvider({
           const r = applyRemoteTask(queryClient, evt === "task-created" ? "created" : "updated", data as Record<string, unknown> & { id: string });
           // An open popup of this task re-reads its detail (section, activity, fields the card payload lacks):
           // one request, and only in tabs that have that popup open.
-          if (evt === "task-updated") void queryClient.invalidateQueries({ queryKey: ["task", data.id] });
+          if (evt === "task-updated") {
+            void queryClient.invalidateQueries({ queryKey: ["task", data.id] });
+            // Its property rows (custom fields) are their own query (QA 16 Oct 2026: a field set elsewhere never showed).
+            void queryClient.invalidateQueries({ queryKey: ["task-cf", data.id] });
+          }
           // A new card may belong in a flat list (Calendar, Sheet task column) the payload can't place: refetch
           // those if on screen. An update was patched into them already.
           queueRefetch(r, evt === "task-created");

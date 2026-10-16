@@ -1249,6 +1249,8 @@ export type NexusComment = {
   createdAt?: string | null;
   updatedAt?: string | null;
   parentId?: string | null;
+  /** Set once its author changed it. */
+  isEdited?: boolean;
   user?: NexusUser | null;
   reactions?: NexusCommentReaction[];
   replies?: NexusComment[];

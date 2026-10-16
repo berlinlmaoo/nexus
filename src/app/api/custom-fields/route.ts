@@ -24,6 +24,7 @@ import {
 import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
 import { numberFieldFormat } from "@/lib/custom-field-number"
 import { runAutomations } from "@/lib/automation-engine"
+import { emitTaskUpdated } from "@/lib/socket-emitter"
 
 /** A stored custom-field value as a person reads it (option label, "Rp 2.000.000", file names). */
 function auditDisplayValue(type: SupportedCustomFieldType, options: unknown, raw: string | null | undefined): string | null {
@@ -564,6 +565,12 @@ export async function PATCH(req: NextRequest) {
 
       // A person set this value by hand: it is theirs now, not GIDEON's (AI Autofill ✨ marker, 12 Oct 2026).
       await prisma.customFieldAiFill.deleteMany({ where: { customFieldId: id, taskId } }).catch(() => {})
+
+      // Everyone else with this board, table or task open sees the value at once (QA 16 Oct 2026: a field change
+      // reached nobody until they reloaded). The task's whole value list: the client replaces the card's list.
+      void prisma.customFieldValue.findMany({ where: { taskId }, select: { customFieldId: true, value: true } })
+        .then((values) => emitTaskUpdated(existingField.projectId, { id: taskId, customFieldValues: values }))
+        .catch(() => {})
 
       // "Field changed" automations on this custom field (12 Oct 2026). Values are compared as stored.
       runAutomations({

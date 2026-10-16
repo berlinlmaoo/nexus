@@ -13,4 +13,6 @@ export const ID_NOTION_VIEWS: Record<string, string> = {
   "Add filter rule": "Tambah aturan filter",
   "Add advanced filter": "Tambah filter lanjutan",
   "New task with details…": "Task baru dengan detail…",
+  "Edit comment": "Edit komentar",
+  "Couldn't edit the comment.": "Komentar gagal diubah.",
 };

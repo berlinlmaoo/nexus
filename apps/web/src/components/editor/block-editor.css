@@ -38,6 +38,9 @@
 }
 .nx-editor.is-embedded .tiptap,
 .nx-editor.is-embedded .nx-static { font-size: 0.9375rem; min-height: 5.5rem; }
+/* The task page's body: an empty one is a single placeholder line (Notion), not a tall blank band. */
+.nx-editor.is-embedded.is-compact .tiptap,
+.nx-editor.is-embedded.is-compact .nx-static { min-height: 1.75rem; }
 
 .nx-editor .tiptap > * + *,
 .nx-editor .nx-static > * + * { margin-top: 0.25em; }

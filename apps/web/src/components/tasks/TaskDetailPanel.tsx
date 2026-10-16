@@ -33,7 +33,9 @@ import {
   MapPin,
   MoreHorizontal,
   Paperclip,
+  Pencil,
   Plus,
+  Reply,
   Search,
   Star,
   Trash2,
@@ -449,6 +451,16 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["task-comments", taskId] }); qc.invalidateQueries({ queryKey: ["task", taskId] }); },
     // The composer keeps the text (C-BUG-7); this says why it didn't go.
     onError: (e: unknown) => toast.error(tr("Couldn't send the comment. Your text is still there — try again."), { description: friendlyError(e) }),
+  });
+  const editComment = useMutation({
+    mutationFn: ({ commentId, content }: { commentId: string; content: string }) => nexusApi.updateComment(taskId, commentId, content),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["task-comments", taskId] }),
+    onError: (e: unknown) => toast.error(tr("Couldn't edit the comment."), { description: friendlyError(e) }),
+  });
+  const replyComment = useMutation({
+    mutationFn: ({ parentId, content, mentionedUserIds }: { parentId: string; content: string; mentionedUserIds?: string[] }) => nexusApi.addComment(taskId, content, { parentId, mentionedUserIds }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["task-comments", taskId] }),
+    onError: (e: unknown) => toast.error(tr("Couldn't send the reply."), { description: friendlyError(e) }),
   });
   const delComment = useMutation({
     mutationFn: (commentId: string) => nexusApi.deleteComment(taskId, commentId),
@@ -884,7 +896,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
                 </div>
               </PropRow>
               {/* "+ Add a property": a new project field, made right here */}
-              {projectId && !cfAdding && (
+              {projectId && !cfAdding && canEditTask && (
                 <button type="button" onClick={() => setCfAdding(true)} className="mt-0.5 flex h-9 items-center gap-2 rounded-lg px-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 pointer-coarse:h-11">
                   <Plus className="h-4 w-4" /> {tr("Add a property")}
                 </button>
@@ -902,17 +914,23 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
               <h3 className="mb-2 text-sm font-semibold text-muted-foreground">{tr("Comments")}</h3>
               <div className="space-y-4">
                 {sortedComments.map((c) => (
-                  <CommentItem key={c.id} comment={c} currentUserId={currentUserId} onReact={(emoji, has) => reactMut.mutate({ commentId: c.id, emoji, has })} onDelete={() => delComment.mutate(c.id)} />
+                  <CommentItem key={c.id} comment={c} currentUserId={currentUserId} me={me} members={projectMembers} canReply={canCommentTask}
+                    onReact={(commentId, emoji, has) => reactMut.mutate({ commentId, emoji, has })}
+                    onDelete={(commentId) => delComment.mutate(commentId)}
+                    onEdit={(commentId, content) => editComment.mutateAsync({ commentId, content }).then(() => true, () => false)}
+                    replyPending={replyComment.isPending}
+                    onReply={(content, mentionedUserIds) => replyComment.mutateAsync({ parentId: c.id, content, mentionedUserIds }).then(() => true, () => false)} />
                 ))}
-                {canCommentTask && <CommentComposer me={me} members={projectMembers} pending={addComment.isPending} onSubmit={(content, mentionedUserIds) => addComment.mutateAsync({ content, mentionedUserIds }).then(() => true, () => false)} />}
+                {canCommentTask && <CommentComposer me={me} members={projectMembers} pending={addComment.isPending} draftKey={`nx-comment-draft:${taskId}`} onSubmit={(content, mentionedUserIds) => addComment.mutateAsync({ content, mentionedUserIds }).then(() => true, () => false)} />}
                 {!canCommentTask && sortedComments.length === 0 && comments.data && <p className="text-sm text-muted-foreground">{tr("No comments yet.")}</p>}
               </div>
             </section>
 
             <fieldset disabled={!canEditTask} className="contents [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-60 [&_input:disabled]:opacity-60">
             {/* the page body: the description is the page itself (a block document: slash menu, @mentions, live) */}
-            <div aria-label={tr("Description")} className="-mt-1 min-h-[96px]">
-              <Suspense fallback={<div className="min-h-[72px] animate-pulse rounded-md bg-muted/40" aria-busy />}>
+            {/* An empty body is one placeholder line (Notion), not a tall blank band. */}
+            <div aria-label={tr("Description")} className="-mt-1">
+              <Suspense fallback={<div className="h-7 animate-pulse rounded-md bg-muted/40" aria-busy />}>
                 <TaskBodyEditor taskId={t.id} projectId={projectId ?? null} onOpenTask={setOpenSub} />
               </Suspense>
             </div>
@@ -957,7 +975,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
                   )}
                   {/* inline add — Enter spawns a real task linked to this one.
                       Needs a project home (taskList) so the backend can validate the parent. */}
-                  {!!projectId && !!t.taskList?.id && (
+                  {!!projectId && !!t.taskList?.id && canEditTask && (
                   <div className="-mx-1.5 flex min-h-9 items-center gap-2 rounded-lg px-1.5 text-sm transition-colors focus-within:bg-muted/60 hover:bg-muted/60">
                     {addSubtask.isPending ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" /> : <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />}
                     <input
@@ -989,7 +1007,8 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
               icon={Paperclip}
               label={tr("Attachments")}
               action={
-                <div className="flex items-center gap-2">
+                // Can view / Can comment: no Upload (it read as live in the disabled fieldset, QA 16 Oct 2026).
+                !canEditTask ? undefined : <div className="flex items-center gap-2">
                   <span className="hidden text-[11px] text-muted-foreground sm:inline">{tr("Max {size}", { size: MAX_ATTACH_LABEL })}</span>
                   <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary">
                     {uploadMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {tr("Upload")}
@@ -1031,7 +1050,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId, asPage }: {
                     {att.size != null && <span className="shrink-0 text-xs text-muted-foreground">{Math.round(att.size / 1024)} KB</span>}
                     <button onClick={() => setPreviewAtt(att)} aria-label={tr("Preview")} title={tr("Preview")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
                     {att.url && <a href={`${att.url}?download=${encodeURIComponent(att.name || "file")}`} download={att.name || ""} aria-label={tr("Download")} title={tr("Download")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-3.5 w-3.5" /></a>}
-                    <button aria-label={tr("Delete attachment")} onClick={() => setConfirmAtt(att)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                    {canEditTask && <button aria-label={tr("Delete attachment")} onClick={() => setConfirmAtt(att)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>}
                   </div>
                 ))}
                 {(attachments.data ?? []).length === 0 && <p className="text-xs text-muted-foreground">{tr("No attachments.")}</p>}
@@ -1439,9 +1458,21 @@ function FileFieldEditor({ projectId, value, onSet, compact }: { projectId?: str
 
 /** Comment input with @-mention autocomplete (project members). Tracks the EXACT userIds picked and sends
  *  them as `mentionedUserIds` so the backend notifies the right person regardless of name. */
-function CommentComposer({ me, members, pending, onSubmit }: { me: NexusUser | null; members: NexusUser[]; pending: boolean; onSubmit: (content: string, mentionedUserIds: string[]) => Promise<boolean> }) {
+function CommentComposer({ me, members, pending, onSubmit, draftKey, autoFocus, placeholder, onCancel, avatarSize = 24 }: { me: NexusUser | null; members: NexusUser[]; pending: boolean; onSubmit: (content: string, mentionedUserIds: string[]) => Promise<boolean>;
+  /** sessionStorage key: an unsent comment survives closing the popup (Notion keeps the draft). */
+  draftKey?: string; autoFocus?: boolean; placeholder?: string;
+  /** Esc in an empty box (a reply box) closes it. */
+  onCancel?: () => void; avatarSize?: number }) {
   const { t: tr } = useLang();
-  const [text, setText] = useState("");
+  const [text, setTextState] = useState(() => {
+    if (!draftKey) return "";
+    try { return sessionStorage.getItem(draftKey) ?? ""; } catch { return ""; }
+  });
+  const setText = (v: string | ((cur: string) => string)) => setTextState((cur) => {
+    const next = typeof v === "function" ? v(cur) : v;
+    if (draftKey) { try { if (next) sessionStorage.setItem(draftKey, next); else sessionStorage.removeItem(draftKey); } catch { /* private mode */ } }
+    return next;
+  });
   const [mentions, setMentions] = useState<{ id: string; name: string }[]>([]);
   const [query, setQuery] = useState<string | null>(null); // active "@…" token being typed (null = closed)
   const [active, setActive] = useState(0);
@@ -1505,6 +1536,7 @@ function CommentComposer({ me, members, pending, onSubmit }: { me: NexusUser | n
       if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pick(matches[active]); return; }
       if (e.key === "Escape") { e.preventDefault(); setQuery(null); return; }
     }
+    if (e.key === "Escape" && onCancel && !text.trim()) { e.preventDefault(); onCancel(); return; }
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
   };
 
@@ -1512,9 +1544,9 @@ function CommentComposer({ me, members, pending, onSubmit }: { me: NexusUser | n
     // Notion's comment line in NEXUS's shape: your avatar, a borderless "Add a comment…", the send arrow once
     // there is text. Enter sends, Shift+Enter breaks the line, @ mentions a project member.
     <div className="group flex items-start gap-2.5 rounded-xl border border-transparent px-1 py-1 transition-colors focus-within:border-border focus-within:bg-background focus-within:shadow-soft">
-      <span className="mt-0.5"><MiniAvatar user={me} size={24} /></span>
+      <span className="mt-0.5"><MiniAvatar user={me} size={avatarSize} /></span>
       <div className="relative min-w-0 flex-1">
-        <textarea ref={ref} value={text} onChange={onChange} onKeyDown={onKeyDown} rows={1} aria-label={tr("Add a comment…")} placeholder={tr("Add a comment…")} className="block w-full resize-none overflow-y-auto bg-transparent py-1 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70" />
+        <textarea ref={ref} value={text} onChange={onChange} onKeyDown={onKeyDown} rows={1} autoFocus={autoFocus} aria-label={placeholder ?? tr("Add a comment…")} placeholder={placeholder ?? tr("Add a comment…")} className="block w-full resize-none overflow-y-auto bg-transparent py-1 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70" />
         {query !== null && matches.length > 0 && (
           <div className="absolute bottom-full left-0 z-20 mb-1 max-h-56 w-64 overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-pop">
             {matches.map((u, i) => (
@@ -1532,9 +1564,75 @@ function CommentComposer({ me, members, pending, onSubmit }: { me: NexusUser | n
   );
 }
 
-function CommentItem({ comment, currentUserId, onReact, onDelete }: { comment: NexusComment; currentUserId?: string; onReact: (emoji: string, has: boolean) => void; onDelete: () => void }) {
+/** One comment's own line: avatar, name, time, "edited", and for your own comment Edit and Delete (Notion). */
+function CommentLine({ comment, isMine, size, onEdit, onDelete, actions }: { comment: NexusComment; isMine: boolean; size: number; onEdit: (content: string) => Promise<boolean>; onDelete: () => void; actions?: ReactNode }) {
+  const { t: tr } = useLang();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(comment.content);
+  const [saving, setSaving] = useState(false);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
+  }, [draft, editing]);
+  const save = () => {
+    const next = draft.trim();
+    if (!next || saving) return;
+    if (next === comment.content.trim()) { setEditing(false); return; }
+    setSaving(true);
+    void onEdit(next).then((ok) => { setSaving(false); if (ok) setEditing(false); });
+  };
+  const edited = comment.isEdited;
+  const tool = "grid h-7 w-7 place-items-center rounded-lg text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover/line:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100";
+  const indent = size + 10;
+  return (
+    <div className="group/line">
+      <div className="flex items-center gap-2.5">
+        <MiniAvatar user={comment.user} size={size} />
+        <span className="min-w-0 truncate text-sm font-semibold">{displayName(comment.user)}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">{fmtDate(comment.createdAt)} {fmtTime(comment.createdAt)}{edited ? ` · ${tr("edited")}` : ""}</span>
+        <div className="ml-auto flex shrink-0 items-center">
+          {actions}
+          {isMine && !editing && (
+            <>
+              <button type="button" onClick={() => { setDraft(comment.content); setEditing(true); }} aria-label={tr("Edit comment")} title={tr("Edit comment")} className={cn(tool, "hover:bg-accent hover:text-foreground")}><Pencil className="h-3.5 w-3.5" /></button>
+              <button type="button" onClick={onDelete} aria-label={tr("Delete comment")} title={tr("Delete comment")} className={cn(tool, "hover:bg-destructive/10 hover:text-destructive")}><Trash2 className="h-3.5 w-3.5" /></button>
+            </>
+          )}
+        </div>
+      </div>
+      {editing ? (
+        <div className="mt-1 rounded-xl border border-border bg-background px-2 py-1 shadow-soft" style={{ marginLeft: indent }}>
+          <textarea ref={ref} autoFocus value={draft} rows={1} aria-label={tr("Edit comment")} onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
+              if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
+              else if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); save(); }
+            }}
+            className="block w-full resize-none overflow-y-auto bg-transparent py-1 text-sm leading-relaxed outline-none" />
+          <div className="flex justify-end gap-1.5 pb-0.5">
+            <button type="button" onClick={() => setEditing(false)} className="h-7 rounded-lg px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent pointer-coarse:h-11">{tr("Cancel")}</button>
+            <button type="button" onClick={save} disabled={!draft.trim() || saving} className="inline-flex h-7 items-center gap-1 rounded-lg bg-primary px-2.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50 pointer-coarse:h-11">{saving && <Loader2 className="h-3 w-3 animate-spin" />}{tr("Save")}</button>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed" style={{ marginLeft: indent }}>{comment.content}</p>
+      )}
+    </div>
+  );
+}
+
+function CommentItem({ comment, currentUserId, me, members, canReply, onReact, onDelete, onEdit, onReply, replyPending }: {
+  comment: NexusComment; currentUserId?: string; me: NexusUser | null; members: NexusUser[]; canReply: boolean;
+  onReact: (commentId: string, emoji: string, has: boolean) => void; onDelete: (commentId: string) => void;
+  onEdit: (commentId: string, content: string) => Promise<boolean>;
+  onReply: (content: string, mentionedUserIds: string[]) => Promise<boolean>; replyPending: boolean;
+}) {
   const { t: tr } = useLang();
   const [showEmoji, setShowEmoji] = useState(false);
+  const [replying, setReplying] = useState(false);
   const grouped = useMemo(() => {
     const map = new Map<string, { count: number; mine: boolean }>();
     for (const r of comment.reactions ?? []) {
@@ -1545,21 +1643,16 @@ function CommentItem({ comment, currentUserId, onReact, onDelete }: { comment: N
     }
     return Array.from(map.entries());
   }, [comment.reactions, currentUserId]);
-  const isMine = comment.user?.id && comment.user.id === currentUserId;
+  const mine = (c: NexusComment) => !!c.user?.id && c.user.id === currentUserId;
 
   return (
     // A thread as on a Notion page: avatar, name and time on one line, the text under it, replies indented below.
     <div className="group/comment -mx-1 rounded-xl px-1 py-1 transition-colors hover:bg-muted/40">
-      <div className="flex items-center gap-2.5">
-        <MiniAvatar user={comment.user} size={24} />
-        <span className="text-sm font-semibold">{displayName(comment.user)}</span>
-        <span className="text-xs text-muted-foreground">{fmtDate(comment.createdAt)} {fmtTime(comment.createdAt)}</span>
-        {isMine && <button onClick={onDelete} aria-label={tr("Delete comment")} title={tr("Delete comment")} className="ml-auto grid h-7 w-7 place-items-center rounded-lg text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover/comment:opacity-100 pointer-coarse:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>}
-      </div>
-      <p className="ml-[34px] mt-0.5 whitespace-pre-wrap text-sm leading-relaxed">{comment.content}</p>
+      <CommentLine comment={comment} isMine={mine(comment)} size={24} onEdit={(content) => onEdit(comment.id, content)} onDelete={() => onDelete(comment.id)}
+        actions={canReply ? <button type="button" onClick={() => setReplying(true)} aria-label={tr("Reply")} title={tr("Reply")} className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover/comment:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100"><Reply className="h-3.5 w-3.5" /></button> : null} />
       <div className="ml-[34px] mt-1.5 flex flex-wrap items-center gap-1.5">
         {grouped.map(([emoji, info]) => (
-          <button key={emoji} onClick={() => onReact(emoji, info.mine)} className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors", info.mine ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-card hover:bg-accent")}>
+          <button key={emoji} onClick={() => onReact(comment.id, emoji, info.mine)} className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors", info.mine ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-card hover:bg-accent")}>
             {emoji} {info.count}
           </button>
         ))}
@@ -1568,24 +1661,21 @@ function CommentItem({ comment, currentUserId, onReact, onDelete }: { comment: N
           {showEmoji && (
             <div className="absolute z-20 mt-1 flex gap-1 rounded-xl border border-border bg-popover p-1.5 shadow-pop">
               {REACTION_EMOJIS.map((e) => (
-                <button key={e} onClick={() => { onReact(e, false); setShowEmoji(false); }} className="rounded-lg px-1.5 py-1 text-base transition-colors hover:bg-accent">{e}</button>
+                <button key={e} onClick={() => { onReact(comment.id, e, false); setShowEmoji(false); }} className="rounded-lg px-1.5 py-1 text-base transition-colors hover:bg-accent">{e}</button>
               ))}
             </div>
           )}
         </div>
       </div>
-      {(comment.replies?.length ?? 0) > 0 && (
+      {((comment.replies?.length ?? 0) > 0 || replying) && (
         <div className="ml-[34px] mt-2 space-y-2 border-l-2 border-border pl-3">
-          {comment.replies!.map((r) => (
-            <div key={r.id} className="text-sm">
-              <div className="flex items-center gap-2">
-                <MiniAvatar user={r.user} size={20} />
-                <span className="font-semibold">{r.user?.name}</span>
-                <span className="text-[11px] text-muted-foreground">{fmtDate(r.createdAt)}</span>
-              </div>
-              <p className="mt-1 whitespace-pre-wrap leading-relaxed">{r.content}</p>
-            </div>
+          {(comment.replies ?? []).map((r) => (
+            <CommentLine key={r.id} comment={r} isMine={mine(r)} size={20} onEdit={(content) => onEdit(r.id, content)} onDelete={() => onDelete(r.id)} />
           ))}
+          {replying && (
+            <CommentComposer me={me} members={members} pending={replyPending} autoFocus avatarSize={20} placeholder={tr("Write a reply…")} onCancel={() => setReplying(false)}
+              onSubmit={(content, ids) => onReply(content, ids).then((ok) => { if (ok) setReplying(false); return ok; })} />
+          )}
         </div>
       )}
     </div>
