@@ -161,7 +161,8 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
             </div>
             {divideAfter === tab.key && (
               <>
-                {addView && <span data-tab-extra="" className="inline-flex shrink-0 items-center">{addView}</span>}
+                {/* The one-row strip shows "+" once, after "N more…" (it showed twice, 16 Oct 2026). */}
+                {addView && !menu.on && <span data-tab-extra="" className="inline-flex shrink-0 items-center">{addView}</span>}
                 <span aria-hidden data-tab-extra="" className="mx-1.5 h-4 w-px shrink-0 bg-border" />
               </>
             )}

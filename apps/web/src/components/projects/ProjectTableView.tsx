@@ -212,7 +212,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   const scrollRef = useRef<HTMLDivElement>(null);
   const edgeFade = useEdgeFade(scrollRef, [columns.length], true);
   const groupRow = (g: TaskGroup, by: string | null, key: string, depth: number) => (
-    <div className={cn("sticky left-0 flex snap-start items-center border-b border-border bg-card px-0.5 pb-1 pt-4", depth > 0 && "pl-6 pt-2")}>
+    <div className={cn("sticky left-0 flex snap-start items-center border-b border-border bg-card px-0.5 pb-1 pt-3", depth > 0 && "pl-6 pt-2")}>
       <GroupHeader group={g} groupBy={by} defs={defs} cfg={cfg} collapsed={collapsed.has(key)} onToggle={() => onToggleGroup(key)} />
     </div>
   );

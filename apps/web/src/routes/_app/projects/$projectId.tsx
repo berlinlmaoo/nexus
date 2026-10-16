@@ -1295,7 +1295,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
         }}
       >
         {showHeader && (
-          <div className="mb-1 flex items-center gap-1 px-0.5" style={{ color: tone.text }}>
+          <div className="mb-1 flex h-7 items-center gap-1 px-0.5" style={{ color: tone.text }}>
             <span
               draggable={!!section}
               onDragStart={(e) => { if (!section) return; setDragLaneId(g.key); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", g.key); }}
