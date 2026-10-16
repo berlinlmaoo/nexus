@@ -3297,6 +3297,10 @@ export const nexusApi = {
   },
   // Self-service account deletion (deactivate + anonymise). Call logout() after it succeeds.
   deleteMyAccount: () => apiFetch<{ ok: true }>("/api/user/account/delete", { method: "POST", body: JSON.stringify({ confirm: "DELETE" }) }),
+  // Join a workspace with its code from an account that only has its personal workspace (16 Oct 2026). The
+  // personal workspace is deleted on join.
+  workspaceJoinStatus: () => apiFetch<{ eligible: boolean; personalWorkspace: { id: string; name: string } | null }>("/api/workspaces/join"),
+  joinWorkspaceByCode: (code: string) => apiFetch<{ ok: true; workspace: { id: string; name: string }; removedWorkspaces: string[] }>("/api/workspaces/join", { method: "POST", body: JSON.stringify({ code }) }),
 
   // --- Self-registration (OTP email verification) ---
   register: (payload: { name: string; email: string; password: string; workspaceCode?: string }) =>
