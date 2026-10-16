@@ -54,7 +54,9 @@ export function SnapTail({ scroller }: { scroller: "document" | "parent" }) {
   // flexShrink 0: inside a flex column that scrolls (the phone board's lane) an empty spacer was shrunk back to 0
   // by the overflowing cards, so the lane's end never became a snap point (UI tour run 19, R19-WB-1 wm
   // project-board-2: the last screen began under the lane head, the first card's title hidden).
-  return <div ref={ref} aria-hidden data-snap-tail="" style={{ height: h, flexShrink: 0 }} />;
+  // `data-snap-tail="document"`: the page's tail, which takes the page canvas colour on a white-canvas page
+  // (styles.css; UI tour run 20, R20-WB-5: a grey band under the project page's white canvas).
+  return <div ref={ref} aria-hidden data-snap-tail={scroller} style={{ height: h, flexShrink: 0 }} />;
 }
 
 const SNAP_POINTS = "[data-snap-row], [data-snap-rows] > *, [data-snap-top]";

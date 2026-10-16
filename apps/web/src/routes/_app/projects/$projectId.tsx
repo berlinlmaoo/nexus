@@ -772,7 +772,7 @@ function ProjectDetail() {
         this sheet's min-h-dvh that made every short project view taller than the screen, a grey strip scrolled
         into view under the tab bar (UI tour run 9). The sheet takes that room over as its own padding, so a
         short view is exactly one screen tall and the white runs to the bottom edge. */}
-    <div className="min-h-dvh bg-card max-md:-mb-(--tabbar-room) max-md:pb-(--tabbar-room)">
+    <div data-page-canvas="card" className="min-h-dvh bg-card max-md:-mb-(--tabbar-room) max-md:pb-(--tabbar-room)">
       <PageHeader
         compact
         className="bg-card md:bg-card max-md:bg-card max-md:before:bg-card [--page-header-bg:var(--card)]"
