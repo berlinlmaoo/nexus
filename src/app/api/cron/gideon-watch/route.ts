@@ -7,6 +7,7 @@ import { isCronRequest } from "@/lib/cron-auth"
 import { createInAppNotification } from "@/lib/notification-service"
 import { GIDEON_TICKET_CATEGORIES } from "@/lib/gideon-ticket"
 import { GIDEON_EMAIL } from "@/lib/gideon-identity"
+import { runCronJob } from "@/lib/cron-lock"
 
 // GIDEON watch. The support chain (NEXUS → shim → Hermes) is called fire-and-forget:
 // `void reviewSupportTicket(id).catch(() => {})`. When it breaks — the shim down, Hermes out of
@@ -32,97 +33,100 @@ export async function POST(req: NextRequest) {
     // CRON_SECRET only (Authorization: Bearer, as cron/nexus-cron.sh sends it). No session fallback.
     if (!isCronRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    // dryRun detects and reports without notifying anyone. There are ten BoD and `push: true` reaches
-    // their phones, so proving the DETECTION works must not cost ten people a 5am notification. The
-    // notification path itself is not in doubt — the disk alarm has fired it in production.
-    let body: { dryRun?: boolean } | null = null
-    try {
-      body = (await req.json()) as { dryRun?: boolean }
-    } catch {
-      // no body
-    }
-    const dryRun = body?.dryRun === true
+    // One run at a time, cron calls only on the singleton leader (lib/cron-lock.ts).
+    return await runCronJob("gideon-watch", { fromCron: true }, async () => {
+      // dryRun detects and reports without notifying anyone. There are ten BoD and `push: true` reaches
+      // their phones, so proving the DETECTION works must not cost ten people a 5am notification. The
+      // notification path itself is not in doubt — the disk alarm has fired it in production.
+      let body: { dryRun?: boolean } | null = null
+      try {
+        body = (await req.json()) as { dryRun?: boolean }
+      } catch {
+        // no body
+      }
+      const dryRun = body?.dryRun === true
 
-    const now = Date.now()
-    const cutoff = new Date(now - WAIT_MINUTES * 60 * 1000)
-    const floor = new Date(now - RECENT_DAYS * 24 * 60 * 60 * 1000)
+      const now = Date.now()
+      const cutoff = new Date(now - WAIT_MINUTES * 60 * 1000)
+      const floor = new Date(now - RECENT_DAYS * 24 * 60 * 60 * 1000)
 
-    // Candidates: a GIDEON-category ticket, still open, whose thread has been quiet longer than the
-    // wait. Whether GIDEON actually owes an answer is decided below, from the last message's author.
-    const candidates = await prisma.complaint.findMany({
-      where: {
-        category: { in: [...GIDEON_TICKET_CATEGORIES] },
-        status: { notIn: ["RESOLVED", "CLOSED"] },
-        lastMessageAt: { lt: cutoff, gt: floor },
-      },
-      select: {
-        id: true,
-        subject: true,
-        lastMessageAt: true,
-        messages: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: { author: { select: { email: true } } },
+      // Candidates: a GIDEON-category ticket, still open, whose thread has been quiet longer than the
+      // wait. Whether GIDEON actually owes an answer is decided below, from the last message's author.
+      const candidates = await prisma.complaint.findMany({
+        where: {
+          category: { in: [...GIDEON_TICKET_CATEGORIES] },
+          status: { notIn: ["RESOLVED", "CLOSED"] },
+          lastMessageAt: { lt: cutoff, gt: floor },
         },
-      },
-      orderBy: { lastMessageAt: "asc" },
-      take: 50,
-    })
-
-    // GIDEON owes an answer exactly when the last word is not its own — the same test its own
-    // self-answer guard uses, so this cannot disagree with the thing it is watching.
-    const waiting = candidates.filter((c) => c.messages[0]?.author?.email !== GIDEON_EMAIL)
-
-    if (waiting.length === 0) {
-      return NextResponse.json({ ok: true, waiting: 0, notified: 0, level: "ok" })
-    }
-
-    const oldest = waiting[0]
-    const oldestMin = Math.round((now - oldest.lastMessageAt.getTime()) / 60000)
-
-    if (dryRun) {
-      return NextResponse.json({
-        ok: true, dryRun: true, level: "alarm", waiting: waiting.length, oldestMinutes: oldestMin,
-        wouldNotify: waiting.map((c) => ({ id: c.id, subject: c.subject })),
+        select: {
+          id: true,
+          subject: true,
+          lastMessageAt: true,
+          messages: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { author: { select: { email: true } } },
+          },
+        },
+        orderBy: { lastMessageAt: "asc" },
+        take: 50,
       })
-    }
 
-    const bod = await prisma.workspaceMember.findMany({
-      where: { role: { in: ["BOD", "ONE_ABOVE_ALL"] } },
-      select: { userId: true },
-      distinct: ["userId"],
-    })
+      // GIDEON owes an answer exactly when the last word is not its own — the same test its own
+      // self-answer guard uses, so this cannot disagree with the thing it is watching.
+      const waiting = candidates.filter((c) => c.messages[0]?.author?.email !== GIDEON_EMAIL)
 
-    const message =
-      `${waiting.length} tiket nunggu jawaban GIDEON lebih dari ${WAIT_MINUTES} menit. ` +
-      `Paling lama: "${oldest.subject.slice(0, 60)}" (${oldestMin} menit). ` +
-      "Biasanya GIDEON jawab dalam setengah menit, jadi ini tandanya rantai shim/Hermes lagi mati atau nolak."
+      if (waiting.length === 0) {
+        return NextResponse.json({ ok: true, waiting: 0, notified: 0, level: "ok" })
+      }
 
-    let notified = 0
-    for (const m of bod) {
-      // Same dedupe as the disk alarm: one per day per BoD while it stays broken. A watchdog that
-      // fires every 15 minutes is how a real alarm gets muted.
-      const made = await createInAppNotification({
-        userId: m.userId,
-        type: "system_gideon",
-        ...bi(
-          ["GIDEON Support isn't answering", `${waiting.length} ticket${waiting.length === 1 ? "" : "s"} waited for GIDEON for more than ${WAIT_MINUTES} minutes. Oldest: "${oldest.subject.slice(0, 60)}" (${oldestMin} min). GIDEON usually answers within half a minute, so the shim/Hermes chain is probably down or refusing.`],
-          ["GIDEON Support tidak menjawab", message]
-),
-        link: "/complaints",
-        push: true,
-        dedupeWindowMs: 23 * 60 * 60 * 1000,
-      }).catch(() => null)
-      if (made) notified += 1
-    }
+      const oldest = waiting[0]
+      const oldestMin = Math.round((now - oldest.lastMessageAt.getTime()) / 60000)
 
-    return NextResponse.json({
-      ok: true,
-      level: "alarm",
-      waiting: waiting.length,
-      oldestMinutes: oldestMin,
-      ids: waiting.map((c) => c.id),
-      notified,
+      if (dryRun) {
+        return NextResponse.json({
+          ok: true, dryRun: true, level: "alarm", waiting: waiting.length, oldestMinutes: oldestMin,
+          wouldNotify: waiting.map((c) => ({ id: c.id, subject: c.subject })),
+        })
+      }
+
+      const bod = await prisma.workspaceMember.findMany({
+        where: { role: { in: ["BOD", "ONE_ABOVE_ALL"] } },
+        select: { userId: true },
+        distinct: ["userId"],
+      })
+
+      const message =
+        `${waiting.length} tiket nunggu jawaban GIDEON lebih dari ${WAIT_MINUTES} menit. ` +
+        `Paling lama: "${oldest.subject.slice(0, 60)}" (${oldestMin} menit). ` +
+        "Biasanya GIDEON jawab dalam setengah menit, jadi ini tandanya rantai shim/Hermes lagi mati atau nolak."
+
+      let notified = 0
+      for (const m of bod) {
+        // Same dedupe as the disk alarm: one per day per BoD while it stays broken. A watchdog that
+        // fires every 15 minutes is how a real alarm gets muted.
+        const made = await createInAppNotification({
+          userId: m.userId,
+          type: "system_gideon",
+          ...bi(
+            ["GIDEON Support isn't answering", `${waiting.length} ticket${waiting.length === 1 ? "" : "s"} waited for GIDEON for more than ${WAIT_MINUTES} minutes. Oldest: "${oldest.subject.slice(0, 60)}" (${oldestMin} min). GIDEON usually answers within half a minute, so the shim/Hermes chain is probably down or refusing.`],
+            ["GIDEON Support tidak menjawab", message]
+  ),
+          link: "/complaints",
+          push: true,
+          dedupeWindowMs: 23 * 60 * 60 * 1000,
+        }).catch(() => null)
+        if (made) notified += 1
+      }
+
+      return NextResponse.json({
+        ok: true,
+        level: "alarm",
+        waiting: waiting.length,
+        oldestMinutes: oldestMin,
+        ids: waiting.map((c) => c.id),
+        notified,
+      })
     })
   } catch (error) {
     console.error("gideon watch failed:", error)

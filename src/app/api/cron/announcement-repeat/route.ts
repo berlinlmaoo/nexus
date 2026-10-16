@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma"
 import { attendanceWallClockToUtc, formatAttendanceDateKey } from "@/lib/attendance"
 import { isCronRequest } from "@/lib/cron-auth"
 import { notifyAnnouncement } from "@/lib/notification-service"
+import { runCronJob } from "@/lib/cron-lock"
 
 // Repeat announcements. An announcement with a `repeatUntil` comes back every day until that date,
 // at `repeatAtTime` (Asia/Jakarta), on the web pop-up AND as a push.
@@ -41,53 +42,62 @@ export async function POST(req: NextRequest) {
     // CRON_SECRET only (Authorization: Bearer, as cron/nexus-cron.sh sends it). No session fallback.
     if (!isCronRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    let body: { dryRun?: boolean } | null = null
-    try {
-      body = (await req.json()) as { dryRun?: boolean }
-    } catch {
-      // no body
-    }
-    const dryRun = body?.dryRun === true
-
-    const now = new Date()
-    const { startOfDay, minutes } = jakarta(now)
-
-    // Still running today: repeatUntil is 00:00 WIB of the LAST day, so today counts while
-    // startOfDay <= repeatUntil.
-    const candidates = await prisma.announcement.findMany({
-      where: { active: true, repeatUntil: { gte: startOfDay }, repeatAtTime: { not: null } },
-      select: { id: true, title: true, repeatAtTime: true, lastRepeatedAt: true, repeatUntil: true },
-      take: 50,
-    })
-
-    const fired: { id: string; title: string }[] = []
-    const skipped: { id: string; why: string }[] = []
-
-    for (const a of candidates) {
-      const at = parseHHmm(a.repeatAtTime)
-      if (at === null) { skipped.push({ id: a.id, why: "jam tidak valid" }); continue }
-      if (minutes < at) { skipped.push({ id: a.id, why: "belum waktunya hari ini" }); continue }
-      // Already sent today. Compared against the Jakarta day boundary, not "24 hours ago", or an
-      // announcement set for 08:00 would drift later every day and eventually skip one.
-      if (a.lastRepeatedAt && a.lastRepeatedAt >= startOfDay) {
-        skipped.push({ id: a.id, why: "sudah dikirim hari ini" })
-        continue
-      }
-      if (dryRun) { fired.push({ id: a.id, title: a.title }); continue }
-
-      // Order matters. The stamp goes FIRST: if the notify below throws, this must not become a
-      // notice that re-sends on every cron run for the rest of the day.
-      await prisma.announcement.update({ where: { id: a.id }, data: { lastRepeatedAt: now } })
-      await prisma.announcementSeen.deleteMany({ where: { announcementId: a.id } })
+    // One run at a time, cron calls only on the singleton leader (lib/cron-lock.ts).
+    return await runCronJob("announcement-repeat", { fromCron: true }, async () => {
+      let body: { dryRun?: boolean } | null = null
       try {
-        await notifyAnnouncement(a.id)
-      } catch (err) {
-        console.error("announcement repeat: notify failed", { id: a.id, err })
+        body = (await req.json()) as { dryRun?: boolean }
+      } catch {
+        // no body
       }
-      fired.push({ id: a.id, title: a.title })
-    }
+      const dryRun = body?.dryRun === true
 
-    return NextResponse.json({ ok: true, dryRun, checked: candidates.length, fired, skipped })
+      const now = new Date()
+      const { startOfDay, minutes } = jakarta(now)
+
+      // Still running today: repeatUntil is 00:00 WIB of the LAST day, so today counts while
+      // startOfDay <= repeatUntil.
+      const candidates = await prisma.announcement.findMany({
+        where: { active: true, repeatUntil: { gte: startOfDay }, repeatAtTime: { not: null } },
+        select: { id: true, title: true, repeatAtTime: true, lastRepeatedAt: true, repeatUntil: true },
+        take: 50,
+      })
+
+      const fired: { id: string; title: string }[] = []
+      const skipped: { id: string; why: string }[] = []
+
+      for (const a of candidates) {
+        const at = parseHHmm(a.repeatAtTime)
+        if (at === null) { skipped.push({ id: a.id, why: "jam tidak valid" }); continue }
+        if (minutes < at) { skipped.push({ id: a.id, why: "belum waktunya hari ini" }); continue }
+        // Already sent today. Compared against the Jakarta day boundary, not "24 hours ago", or an
+        // announcement set for 08:00 would drift later every day and eventually skip one.
+        if (a.lastRepeatedAt && a.lastRepeatedAt >= startOfDay) {
+          skipped.push({ id: a.id, why: "sudah dikirim hari ini" })
+          continue
+        }
+        if (dryRun) { fired.push({ id: a.id, title: a.title }); continue }
+
+        // Order matters. The stamp goes FIRST: if the notify below throws, this must not become a
+        // notice that re-sends on every cron run for the rest of the day. And it is a claim (race audit):
+        // only the run that moves lastRepeatedAt from "before today" sends; an overlapping run that read
+        // the same old value finds it already moved and sends nothing.
+        const claimed = await prisma.announcement.updateMany({
+          where: { id: a.id, OR: [{ lastRepeatedAt: null }, { lastRepeatedAt: { lt: startOfDay } }] },
+          data: { lastRepeatedAt: now },
+        })
+        if (claimed.count !== 1) { skipped.push({ id: a.id, why: "sudah dikirim hari ini" }); continue }
+        await prisma.announcementSeen.deleteMany({ where: { announcementId: a.id } })
+        try {
+          await notifyAnnouncement(a.id)
+        } catch (err) {
+          console.error("announcement repeat: notify failed", { id: a.id, err })
+        }
+        fired.push({ id: a.id, title: a.title })
+      }
+
+      return NextResponse.json({ ok: true, dryRun, checked: candidates.length, fired, skipped })
+    })
   } catch (error) {
     console.error("announcement repeat failed:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

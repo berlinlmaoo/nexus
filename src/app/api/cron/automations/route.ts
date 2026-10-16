@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { isCronRequest } from "@/lib/cron-auth"
 import { runTimeBasedAutomations } from "@/lib/automation-engine"
+import { runCronJob } from "@/lib/cron-lock"
 
 /**
  * POST /api/cron/automations (Bearer CRON_SECRET) — one pass of the time-based automations: due date
@@ -13,8 +14,11 @@ import { runTimeBasedAutomations } from "@/lib/automation-engine"
 export async function POST(req: NextRequest) {
   if (!isCronRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   try {
-    const result = await runTimeBasedAutomations()
-    return NextResponse.json({ ok: true, ...result })
+    // One run at a time, cron calls only on the singleton leader (lib/cron-lock.ts).
+    return await runCronJob("automations", { fromCron: true }, async () => {
+      const result = await runTimeBasedAutomations()
+      return NextResponse.json({ ok: true, ...result })
+    })
   } catch (error) {
     console.error("cron automations failed", error)
     return NextResponse.json({ ok: false, error: "Internal server error" }, { status: 500 })

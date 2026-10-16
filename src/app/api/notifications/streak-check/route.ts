@@ -5,6 +5,7 @@ import { secretMatches } from "@/lib/cron-auth"
 import prisma from "@/lib/prisma"
 import { notifyStreakAtRisk } from "@/lib/notification-service"
 import { getAttendanceDate } from "@/lib/attendance"
+import { runCronJob } from "@/lib/cron-lock"
 
 /**
  * Nudge people whose streak lapses at midnight.
@@ -20,31 +21,34 @@ export async function POST(req: NextRequest) {
     if (!secret) return NextResponse.json({ error: "CRON_SECRET is not configured" }, { status: 503 })
     if (!secretMatches(bearer, secret)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const today = getAttendanceDate()
-    const startOfToday = new Date(today)
-    startOfToday.setHours(0, 0, 0, 0)
+    // One run at a time, cron calls only on the singleton leader (lib/cron-lock.ts).
+    return await runCronJob("streak-check", { fromCron: true }, async () => {
+      const today = getAttendanceDate()
+      const startOfToday = new Date(today)
+      startOfToday.setHours(0, 0, 0, 0)
 
-    const atRisk = await prisma.userStreak.findMany({
-      where: {
-        currentStreak: { gt: 0 },
-        OR: [{ lastActivityDay: null }, { lastActivityDay: { lt: startOfToday } }],
-      },
-      select: { userId: true, currentStreak: true },
-    })
-
-    let sent = 0
-    for (const row of atRisk) {
-      // One nudge per person per day, even if this route is run twice.
-      const already = await prisma.notification.findFirst({
-        where: { userId: row.userId, type: "streak_at_risk", createdAt: { gte: startOfToday } },
-        select: { id: true },
+      const atRisk = await prisma.userStreak.findMany({
+        where: {
+          currentStreak: { gt: 0 },
+          OR: [{ lastActivityDay: null }, { lastActivityDay: { lt: startOfToday } }],
+        },
+        select: { userId: true, currentStreak: true },
       })
-      if (already) continue
-      await notifyStreakAtRisk({ userId: row.userId, currentStreak: row.currentStreak })
-      sent++
-    }
 
-    return NextResponse.json({ ok: true, candidates: atRisk.length, sent })
+      let sent = 0
+      for (const row of atRisk) {
+        // One nudge per person per day, even if this route is run twice.
+        const already = await prisma.notification.findFirst({
+          where: { userId: row.userId, type: "streak_at_risk", createdAt: { gte: startOfToday } },
+          select: { id: true },
+        })
+        if (already) continue
+        await notifyStreakAtRisk({ userId: row.userId, currentStreak: row.currentStreak })
+        sent++
+      }
+
+      return NextResponse.json({ ok: true, candidates: atRisk.length, sent })
+    })
   } catch (error) {
     console.error("streak-check error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

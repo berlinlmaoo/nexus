@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { getAttendanceWorkspaceContext } from "@/lib/attendance"
 import { sendAttendanceReminders } from "@/lib/attendance-reminders"
+import { isCronRequest } from "@/lib/cron-auth"
+import { runCronJob } from "@/lib/cron-lock"
 
 // Cron secret OR a logged-in attendance admin (canManageAttendance). Mirrors /accrue-late & /deduct-absences.
 async function authorize(req: NextRequest): Promise<boolean> {
@@ -36,8 +38,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     if (!(await authorize(req))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    const result = await sendAttendanceReminders(new Date())
-    return NextResponse.json({ ok: true, ...result })
+    // One run at a time, cron calls only on the singleton leader (lib/cron-lock.ts).
+    return await runCronJob("reminders", { fromCron: isCronRequest(req) }, async () => {
+      const result = await sendAttendanceReminders(new Date())
+      return NextResponse.json({ ok: true, ...result })
+    })
   } catch (error) {
     console.error("[attendance-reminders] failed", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

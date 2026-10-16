@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { getAttendanceWorkspaceContext, parseDateOnlyToUtc } from "@/lib/attendance"
 import { processAbsenceDeductions } from "@/lib/attendance-absence"
+import { runCronJob } from "@/lib/cron-lock"
 
 // Triggered by the nightly cron (Authorization: Bearer <CRON_SECRET>) or by an
 // attendance admin (logged-in session with canManageAttendance) via the admin button.
@@ -36,22 +37,25 @@ export async function POST(req: NextRequest) {
       return signedIn ? NextResponse.json({ error: "Forbidden" }, { status: 403 }) : NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    let from: Date | undefined
-    let to: Date | undefined
-    try {
-      const body = (await req.json()) as { from?: string; to?: string } | null
-      if (body?.from) from = parseDateOnlyToUtc(body.from)
-      if (body?.to) to = parseDateOnlyToUtc(body.to)
-    } catch {
-      // no body → default rolling window
-    }
+    // One run at a time, cron calls only on the singleton leader (lib/cron-lock.ts).
+    return await runCronJob("deduct-absences", { fromCron: actor === "cron" }, async () => {
+      let from: Date | undefined
+      let to: Date | undefined
+      try {
+        const body = (await req.json()) as { from?: string; to?: string } | null
+        if (body?.from) from = parseDateOnlyToUtc(body.from)
+        if (body?.to) to = parseDateOnlyToUtc(body.to)
+      } catch {
+        // no body → default rolling window
+      }
 
-    // Backfill (menghukum hari lebih tua dari PENALTY_LOOKBACK_DAYS) HANYA untuk BoD yang menyebut
-    // rentang tanggalnya sendiri. Cron malam lewat route ini juga (nexus-absence.timer, tanpa body)
-    // dan dia harus kena pagar 2 hari — itulah yang bikin 16 Sep 02:00 menghukum 14 hari ke belakang.
-    const backfill = actor !== "cron" && Boolean(from || to)
-    const result = await processAbsenceDeductions({ from, to, backfill })
-    return NextResponse.json({ ...result, actor })
+      // Backfill (menghukum hari lebih tua dari PENALTY_LOOKBACK_DAYS) HANYA untuk BoD yang menyebut
+      // rentang tanggalnya sendiri. Cron malam lewat route ini juga (nexus-absence.timer, tanpa body)
+      // dan dia harus kena pagar 2 hari — itulah yang bikin 16 Sep 02:00 menghukum 14 hari ke belakang.
+      const backfill = actor !== "cron" && Boolean(from || to)
+      const result = await processAbsenceDeductions({ from, to, backfill })
+      return NextResponse.json({ ...result, actor })
+    })
   } catch (error) {
     console.error("deduct-absences error:", error)
     return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 })

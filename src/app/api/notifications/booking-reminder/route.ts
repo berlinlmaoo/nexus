@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { secretMatches } from "@/lib/cron-auth"
 import prisma from "@/lib/prisma"
 import { notifyBookingSoon } from "@/lib/notification-service"
+import { runCronJob } from "@/lib/cron-lock"
 
 const LEAD_MINUTES = 15
 
@@ -21,34 +22,37 @@ export async function POST(req: NextRequest) {
     if (!secret) return NextResponse.json({ error: "CRON_SECRET is not configured" }, { status: 503 })
     if (!secretMatches(bearer, secret)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const now = new Date()
-    const until = new Date(now.getTime() + LEAD_MINUTES * 60_000)
+    // One run at a time, cron calls only on the singleton leader (lib/cron-lock.ts).
+    return await runCronJob("booking-reminder", { fromCron: true }, async () => {
+      const now = new Date()
+      const until = new Date(now.getTime() + LEAD_MINUTES * 60_000)
 
-    const soon = await prisma.roomBooking.findMany({
-      where: { status: "ACTIVE", startsAt: { gt: now, lte: until } },
-      select: { id: true, room: true, title: true, startsAt: true, createdById: true },
+      const soon = await prisma.roomBooking.findMany({
+        where: { status: "ACTIVE", startsAt: { gt: now, lte: until } },
+        select: { id: true, room: true, title: true, startsAt: true, createdById: true },
+      })
+
+      let sent = 0
+      for (const booking of soon) {
+        const already = await prisma.notification.findFirst({
+          where: { userId: booking.createdById, type: "booking_soon", link: { contains: booking.id } },
+          select: { id: true },
+        })
+        if (already) continue
+
+        const minutes = Math.max(1, Math.round((booking.startsAt.getTime() - now.getTime()) / 60_000))
+        await notifyBookingSoon({
+          userId: booking.createdById,
+          bookingId: booking.id,
+          room: booking.room,
+          title: booking.title,
+          minutes,
+        })
+        sent++
+      }
+
+      return NextResponse.json({ ok: true, upcoming: soon.length, sent })
     })
-
-    let sent = 0
-    for (const booking of soon) {
-      const already = await prisma.notification.findFirst({
-        where: { userId: booking.createdById, type: "booking_soon", link: { contains: booking.id } },
-        select: { id: true },
-      })
-      if (already) continue
-
-      const minutes = Math.max(1, Math.round((booking.startsAt.getTime() - now.getTime()) / 60_000))
-      await notifyBookingSoon({
-        userId: booking.createdById,
-        bookingId: booking.id,
-        room: booking.room,
-        title: booking.title,
-        minutes,
-      })
-      sent++
-    }
-
-    return NextResponse.json({ ok: true, upcoming: soon.length, sent })
   } catch (error) {
     console.error("booking-reminder error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { secretMatches } from "@/lib/cron-auth"
 import { checkDueSoonTasks } from "@/lib/notification-service"
+import { runCronJob } from "@/lib/cron-lock"
 
 // Can be called by cron or manually to check for due-soon tasks
 export async function POST(req: NextRequest) {
@@ -11,8 +12,11 @@ export async function POST(req: NextRequest) {
     const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
     if (!secret) return NextResponse.json({ error: "CRON_SECRET is not configured" }, { status: 503 })
     if (!secretMatches(bearer, secret)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    await checkDueSoonTasks()
-    return NextResponse.json({ success: true })
+    // One run at a time, cron calls only on the singleton leader (lib/cron-lock.ts).
+    return await runCronJob("due-check", { fromCron: true }, async () => {
+      await checkDueSoonTasks()
+      return NextResponse.json({ success: true })
+    })
   } catch (error) {
     console.error("Due-check error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

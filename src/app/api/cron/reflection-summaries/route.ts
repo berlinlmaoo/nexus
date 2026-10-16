@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { isCronRequest } from "@/lib/cron-auth"
 import { previousMonthKey, isMonthKey, summarizeReflectionMonth } from "@/lib/reflection-summaries"
+import { acquireCronLock, CRON_SKIPPED_NOT_LEADER, CRON_SKIPPED_RUNNING, waitForLeader } from "@/lib/cron-lock"
 
 /**
  * Monthly: GIDEON writes last month's reflection summary for everyone who wrote reflections.
@@ -16,6 +17,11 @@ import { previousMonthKey, isMonthKey, summarizeReflectionMonth } from "@/lib/re
 export async function POST(req: NextRequest) {
   // CRON_SECRET only (Authorization: Bearer, as cron/nexus-cron.sh sends it). No session fallback.
   if (!isCronRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // One run at a time, only on the singleton leader (lib/cron-lock.ts). The run outlives this response,
+  // so the lock is held by the background work below and released when it ends.
+  if (!(await waitForLeader())) return NextResponse.json(CRON_SKIPPED_NOT_LEADER)
+  const release = await acquireCronLock("reflection-summaries")
+  if (!release) return NextResponse.json(CRON_SKIPPED_RUNNING)
 
   const override = req.nextUrl.searchParams.get("month")
   const month = isMonthKey(override) ? override : previousMonthKey()
@@ -24,6 +30,9 @@ export async function POST(req: NextRequest) {
   const people = await prisma.attendanceRecord.groupBy({
     by: ["userId", "workspaceId"],
     where: { attendanceDate: { gte: start, lt: end }, checkOutReflection: { not: null } },
+  }).catch(async (err) => {
+    await release()
+    throw err
   })
 
   void (async () => {
@@ -40,7 +49,7 @@ export async function POST(req: NextRequest) {
       }
     }
     console.log(`reflection-summaries cron: ${month} — written ${done}, already current ${skipped}, failed ${failed}`)
-  })()
+  })().finally(() => release())
 
   return NextResponse.json({ ok: true, month, people: people.length, started: true }, { status: 202 })
 }

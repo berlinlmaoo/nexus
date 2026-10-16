@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { isCronRequest } from "@/lib/cron-auth"
 import { syncAttendanceSheet } from "@/lib/attendance-sheet"
+import { runCronJob } from "@/lib/cron-lock"
 
 /**
  * Live attendance → Google Sheets ("NEXUS · Absensi (live)"). Every minute from the host crontab:
@@ -18,21 +19,24 @@ export async function POST(req: NextRequest) {
     // CRON_SECRET only (Authorization: Bearer, as cron/nexus-cron.sh sends it). No session fallback.
     if (!isCronRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    type Body = { dryRun?: boolean }
-    let body: Body | null = null
-    try { body = (await req.json()) as Body } catch { /* tanpa body */ }
-    const q = req.nextUrl.searchParams.get("dryRun")
-    const dryRun = body?.dryRun === true || q === "1" || q === "true"
+    // One run at a time, cron calls only on the singleton leader (lib/cron-lock.ts).
+    return await runCronJob("attendance-sheet", { fromCron: true }, async () => {
+      type Body = { dryRun?: boolean }
+      let body: Body | null = null
+      try { body = (await req.json()) as Body } catch { /* tanpa body */ }
+      const q = req.nextUrl.searchParams.get("dryRun")
+      const dryRun = body?.dryRun === true || q === "1" || q === "true"
 
-    // ?period=YYYY-MM also (re)writes that older period's tab — the one-off backfill of history.
-    // Only a closed period is accepted; the current one is written on every run anyway.
-    const period = req.nextUrl.searchParams.get("period")
-    if (period && !/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
-      return NextResponse.json({ ok: false, reason: "period must be YYYY-MM" }, { status: 400 })
-    }
-    const result = await syncAttendanceSheet({ dryRun, extraPeriods: period ? [period] : [] })
-    if (!result.ok) console.error("attendance sheet sync not ok:", { stage: result.stage, reason: result.reason })
-    return NextResponse.json(result)
+      // ?period=YYYY-MM also (re)writes that older period's tab — the one-off backfill of history.
+      // Only a closed period is accepted; the current one is written on every run anyway.
+      const period = req.nextUrl.searchParams.get("period")
+      if (period && !/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+        return NextResponse.json({ ok: false, reason: "period must be YYYY-MM" }, { status: 400 })
+      }
+      const result = await syncAttendanceSheet({ dryRun, extraPeriods: period ? [period] : [] })
+      if (!result.ok) console.error("attendance sheet sync not ok:", { stage: result.stage, reason: result.reason })
+      return NextResponse.json(result)
+    })
   } catch (error) {
     console.error("attendance sheet sync failed:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
