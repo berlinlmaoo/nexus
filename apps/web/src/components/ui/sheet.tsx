@@ -53,22 +53,31 @@ const sheetVariants = cva(
 interface SheetContentProps
   extends
     React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
-    VariantProps<typeof sheetVariants> {}
+    VariantProps<typeof sheetVariants> {
+  /** A sheet that scrolls as a whole (overflow-y-auto on the content): keep the close button in view at the top
+   *  while it scrolls, instead of scrolling away with the first lines (UI tour run 19, R19-WB-3). Off by default. */
+  pinClose?: boolean;
+}
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, ...props }, ref) => {
+>(({ side = "right", className, children, pinClose = false, ...props }, ref) => {
   const { t, lang } = useLang();
+  const close = (
+    <SheetPrimitive.Close className={cn("absolute right-4 top-4 z-20 rounded-sm opacity-70 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary", pinClose && "pointer-events-auto")}>
+      <X className="h-4 w-4" />
+      {/* The screen may not be translated yet (<html lang="en">): the label carries its own language. */}
+      <span className="sr-only" lang={lang}>{t("Close")}</span>
+    </SheetPrimitive.Close>
+  );
   return (
     <SheetPortal>
       <SheetOverlay />
       <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
-        <SheetPrimitive.Close className="absolute right-4 top-4 z-20 rounded-sm opacity-70 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
-          <X className="h-4 w-4" />
-          {/* The screen may not be translated yet (<html lang="en">): the label carries its own language. */}
-          <span className="sr-only" lang={lang}>{t("Close")}</span>
-        </SheetPrimitive.Close>
+        {/* Pinned: a zero-height band stuck to the scroll box's top edge, spanning the padding (-mx-6 -mt-6, the
+            mb-6 gives the 24px back), so the button sits where it always did and stays there. */}
+        {pinClose ? <div className="pointer-events-none sticky top-0 z-30 -mx-6 -mt-6 mb-6 h-0">{close}</div> : close}
         {children}
       </SheetPrimitive.Content>
     </SheetPortal>

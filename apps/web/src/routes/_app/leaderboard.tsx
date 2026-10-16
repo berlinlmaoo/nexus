@@ -59,13 +59,14 @@ function Leaderboard() {
   return (
     <div>
       {/* The period is part of the subtitle, under the title (UI tour run 13, W-D9: it floated small at the top
-          right, off the title's baseline). `end` is exclusive (the 1st of next month): the range shows the last
-          day that counts, "1 Oct – 31 Oct" (QA 13 Oct 2026: it read "1 Oct → 1 Nov"). */}
+          right, off the title's baseline). `end` is exclusive (the next 28th): the range shows the last day that
+          counts, "28 Sep – 27 Oct" (QA 13 Oct 2026: it read one day too far). The period runs 28th → 27th like
+          attendance (owner, 16 Oct 2026). */}
       <PageHeader
         title={t("Leaderboard")}
         subtitle={board.data?.period
-          ? t("Everyone's XP for {range}. It resets on the 1st.", { range: `${fmtDate(board.data.period.start)} – ${fmtDate(new Date(new Date(board.data.period.end).getTime() - 1).toISOString())}` })
-          : t("Everyone's XP this month. It resets on the 1st.")}
+          ? t("Everyone's XP for {range}. It resets on the 28th.", { range: `${fmtDate(board.data.period.start)} – ${fmtDate(new Date(new Date(board.data.period.end).getTime() - 1).toISOString())}` })
+          : t("Everyone's XP this period. It resets on the 28th.")}
       />
       <PageBody>
         <div className="space-y-6">

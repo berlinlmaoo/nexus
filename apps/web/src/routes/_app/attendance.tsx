@@ -35,6 +35,7 @@ import { localeOf, t as tr, useLang } from "@/lib/lang";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
 import { formatCount } from "@/lib/number-format";
 import { useStickyHeaderOffset } from "@/hooks/use-sticky-header-offset";
+import { monthTitle } from "@/lib/month-title";
 
 type HistRow = NonNullable<NexusAttendanceHistory["rows"]>[number];
 
@@ -451,7 +452,7 @@ function Attendance() {
   // "current period" (and the Next-button guard) must roll over on the 28th, not on the 1st.
   const nowKey = (() => { const d = new Date(); const a = new Date(d.getFullYear(), d.getMonth() + (d.getDate() > CUTOFF_DAY ? 1 : 0), 1); return `${a.getFullYear()}-${String(a.getMonth() + 1).padStart(2, "0")}`; })();
   const isCurrentMonth = monthKey === nowKey;
-  const monthLabel = new Date(year, month, 1).toLocaleDateString(locale, { month: "long", year: "numeric" });
+  const monthLabel = monthTitle(new Date(year, month, 1), locale);
   const periodLabel = `${periodStart.toLocaleDateString(locale, { day: "numeric", month: "short" })} – ${periodEnd.toLocaleDateString(locale, { day: "numeric", month: "short" })}`;
   const shiftMonth = (delta: number) => { const d = new Date(year, month + delta, 1); setMonthKey(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
   // Key by full date (YYYY-MM-DD) since the period spans two calendar months — day-of-month alone collides.
@@ -543,7 +544,11 @@ function Attendance() {
           <FunMetric
             icon={<Calendar className="h-5 w-5" />}
             label={tr("Public holidays")}
-            value={tr("{used}/{quota} used", { used: today.data?.redDateUsedThisMonth ?? 0, quota: today.data?.redDateQuota ?? 0 })}
+            // Zero over zero says nothing (run 19 decision 10, R19-B-13): say there are none this month.
+            value={(today.data?.redDateQuota ?? 0) === 0 && (today.data?.redDateUsedThisMonth ?? 0) === 0
+              // "None this month" under the "Public holidays" label: the full sentence was cut at two lines.
+              ? tr("None this month")
+              : tr("{used}/{quota} used", { used: today.data?.redDateUsedThisMonth ?? 0, quota: today.data?.redDateQuota ?? 0 })}
             helper={tr("See public holidays used")}
             tone="rose"
             onClick={(origin) => setLogKind({ kind: "RED_DATE", origin })}
@@ -574,8 +579,10 @@ function Attendance() {
               <Segmented label={tr("Attendance view")} size="xs" value={viewMode} onChange={setViewMode} options={[{ key: "grid", label: tr("Board") }, { key: "log", label: tr("Log") }]} />
             </div>
           </div>
-          {/* Audit controls: month navigation + per-staff search. */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
+          {/* Audit controls: month navigation + per-staff search. A snap point of its own, and so is the board below
+              it: a scrolled page starts on the whole controls row or right at the board's head, never with the
+              Search / Export row cut in half under the header (UI tour run 19, R19-WB-1 wm attendance-3). */}
+          <div data-snap-row className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
             <div className="flex items-center gap-1.5">
               <button onClick={() => shiftMonth(-1)} aria-label={tr("Previous month")} className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><ChevronLeft className="h-4 w-4" /></button>
               <span className="flex min-w-[8.5rem] flex-col items-center leading-tight">
@@ -653,7 +660,7 @@ function Attendance() {
           // `isolate`: the board's own layers (pinned head z-30, edge fades z-30, the arrow z-40) stack inside this
           // box only. Without it the bottom fade painted over the phone's pinned page title when a section below
           // the board snapped right under the header (UI tour run 17, R17-WM-1).
-          <div className="relative isolate">
+          <div data-snap-row className="relative isolate">
           <div ref={boardScrollRef} onScroll={setBoardEdge} className="isolate max-h-[calc(100dvh-11rem)] overflow-auto overscroll-contain [scroll-padding-top:var(--board-snap-top,0px)] [scroll-snap-type:y_proximity] max-sm:[scroll-padding-left:7.5rem] max-sm:[scroll-snap-type:both_proximity]">
             {/* `min-w-max`: with a plain `w-full` the 31 day columns and the member column were
                 squeezed into the phone's width, so the name, the pills and the dots all landed on
@@ -768,7 +775,7 @@ function Attendance() {
                                 className={cn(pill, d.redDate.quota === 0 ? "bg-muted/50 text-muted-foreground/70 ring-border" : quotaTone(d.redDate.remaining))}>
                                 {tr("{left}/{quota} holidays", { left: d.redDate.remaining, quota: d.redDate.quota })}
                               </span>
-                              <span title={`${formatCount(d.xp.score)} XP · ${d.xp.levelName} (Lv.${d.xp.level}) — ${tr("the XP period is the calendar month, not the 28→27 attendance period")}`}
+                              <span title={`${formatCount(d.xp.score)} XP · ${d.xp.levelName} (Lv.${d.xp.level}) — ${tr("the XP period runs from the 28th to the 27th, as attendance")}`}
                                 className={cn(pill, xpTone)}>
                                 {formatCount(d.xp.score)} XP
                               </span>
@@ -1366,7 +1373,7 @@ function ReflectionsSection({ canPickPeople, members }: { canPickPeople: boolean
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
   });
   const [y, m] = month.split("-").map(Number);
-  const label = new Date(y, m - 1, 1).toLocaleDateString(locale, { month: "long", year: "numeric" });
+  const label = monthTitle(new Date(y, m - 1, 1), locale);
   const shift = (d: number) => { const n = new Date(y, m - 1 + d, 1); setMonth(`${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`); setOpen(null); };
   const isCurrent = (() => { const d = new Date(); return y === d.getFullYear() && m === d.getMonth() + 1; })();
   const days = q.data?.days ?? [];
@@ -2264,8 +2271,8 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
     <section className="overflow-hidden rounded-3xl border border-primary/10 bg-gradient-to-br from-accent via-card to-secondary p-5 shadow-soft">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-primary">{tr("Attendance")}</p>
-          <h2 className="mt-1 font-display text-2xl font-bold tracking-tight">{forcePending ? tr("Finish your previous attendance") : mode === "check-in" ? tr("Start your day") : mode === "check-out" ? tr("Wrap up the day") : tr("All done for today")}</h2>
+          {/* No "Attendance" eyebrow: it repeated the page title (run 19 decision 1, R19-WB-4). */}
+          <h2 className="font-display text-2xl font-bold tracking-tight">{forcePending ? tr("Finish your previous attendance") : mode === "check-in" ? tr("Start your day") : mode === "check-out" ? tr("Wrap up the day") : tr("All done for today")}</h2>
           <p className="mt-1 inline-flex items-center gap-2 text-sm text-muted-foreground">
             {effCheckInAt && <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> {tr("In {time}", { time: fmtTime(effCheckInAt) })}{forcePending && pendingDateLabel ? ` · ${pendingDateLabel}` : ""}</span>}
             {!forcePending && checkOutAt && <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> {tr("Out {time}", { time: fmtTime(checkOutAt) })}</span>}
@@ -2352,7 +2359,8 @@ function FunMetric({ icon, label, value, helper, tone, onClick }: { icon: React.
       <div className="flex items-start gap-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/70 dark:bg-background/60">{icon}</span>
         <div className="min-w-0 flex-1">
-          <p className="line-clamp-2 text-xs font-semibold uppercase leading-4 tracking-wide opacity-70">{label}</p>
+          {/* The label in sentence case, not an uppercase eyebrow (run 19 decision 1, R19-WB-4). */}
+          <p className="line-clamp-2 text-sm font-medium leading-5 opacity-80">{label}</p>
           <h3 title={value} className="line-clamp-2 text-xl font-black leading-7 tracking-tight text-foreground [overflow-wrap:anywhere] [text-wrap:balance] xl:text-2xl">{value}</h3>
         </div>
         {onClick && <ChevronRight className="mt-3 h-4 w-4 shrink-0 opacity-40" />}

@@ -9,8 +9,10 @@ const CAP = 1000
 
 /**
  * GET /api/calendar/overdue — every open task the caller may see whose WIB due day is before today,
- * newest day first. Tasks of projects without status (calendar-only) are never overdue. The app splits it: up to `rules.overdueWindowDays` old → the overdue rail, older →
- * "Terbengkalai". A task with a time that passed earlier today comes from /items (the app knows `now`).
+ * newest day first. Tasks of projects without status (calendar-only) are never overdue. The app splits it: up to
+ * `rules.overdueWindowDays` old → the overdue rail; older → still overdue, marked "Overdue for more than N days"
+ * (no "Terbengkalai" bucket, decision 3). A task with a time that passed earlier today comes from /items (the app
+ * knows `now`).
  */
 export async function GET(req: NextRequest) {
   try {

@@ -34,6 +34,7 @@ import { LeftTag } from "@/components/LeftTag";
 import { HScroll } from "@/components/HScroll";
 import { DateField } from "@/components/DateField";
 import { UnitTreePicker } from "@/components/UnitTreePicker";
+import { monthTitle } from "@/lib/month-title";
 
 // The section is in the URL (?tab=audit), like Reports' ?tab=team: a reload, Back or a shared link lands
 // on the same section (QA 13 Oct 2026; it was memory-only and always reset to Users).
@@ -266,7 +267,8 @@ function Admin() {
             { key: "suspects" as const, label: t("Attendance monitor"), icon: ShieldAlert },
           ] : []),
           { key: "audit", label: t("Audit log"), icon: ScrollText },
-          { key: "quests", label: t("Quests"), icon: Trophy },
+          // Quests are made by BoD and up (owner, 16 Oct 2026); a Manager no longer gets the tab.
+          ...(canAnnounce ? [{ key: "quests" as const, label: t("Quests"), icon: Trophy }] : []),
           ...(canAnnounce ? [
             { key: "announcements" as const, label: t("Announcements"), icon: Megaphone },
             { key: "gideon" as const, label: "GIDEON", icon: GideonMark },
@@ -281,7 +283,7 @@ function Admin() {
         {view === "extra-dayoff" && canManageShift && <ExtraDayOffAdmin members={wsMembers} />}
         {view === "suspects" && canManageShift && <SuspectAttendanceAdmin />}
         {view === "audit" && <AuditLog />}
-        {view === "quests" && <AdminQuests />}
+        {view === "quests" && canAnnounce && <AdminQuests />}
         {view === "announcements" && canAnnounce && <AnnouncementsAdmin />}
         {view === "gideon" && canAnnounce && <GideonAdmin />}
         {view === "app" && canAnnounce && <AppInstalls />}
@@ -423,7 +425,7 @@ function RedDateQuotaModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const { t, locale } = useLang();
   const monthKey = new Date().toISOString().slice(0, 7);
-  const monthLabel = new Date(`${monthKey}-01T00:00:00`).toLocaleDateString(locale, { month: "long", year: "numeric" });
+  const monthLabel = monthTitle(new Date(`${monthKey}-01T00:00:00`), locale);
   const q = useQuery({ queryKey: ["nexus", "red-date-quota", monthKey], queryFn: () => nexusApi.redDateQuota(monthKey), retry: false });
   const [val, setVal] = useState("");
   useEffect(() => { if (q.data) setVal(String(q.data.quota)); }, [q.data]);
@@ -1900,7 +1902,6 @@ const REQ_TYPES = [
   { value: "task_count", label: "Complete N tasks" },
   { value: "overdue_cleared", label: "Clear N overdue" },
   { value: "priority_done", label: "Complete N urgent tasks" },
-  { value: "has_overdue", label: "Have ≥N overdue tasks (penalty)" },
 ];
 
 function AdminQuests() {
@@ -1948,6 +1949,15 @@ function AdminQuests() {
   const [deadline, setDeadline] = useState("");
   const [selectedUnits, setSelectedUnits] = useState<Set<string>>(new Set());
   const toggleUnit = (id: string) => setSelectedUnits((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  // Chosen people (owner, 16 Oct 2026): with divisions too, a person sees the quest when in one OR picked here.
+  const membersQ = useQuery({ queryKey: ["members"], queryFn: nexusApi.members, staleTime: 300_000 });
+  const members = useMemo(() => { const raw = membersQ.data; return (Array.isArray(raw) ? raw : raw?.members ?? []); }, [membersQ.data]);
+  const memberName = (id: string) => { const m = members.find((x) => x.id === id); return m?.name || m?.email || tq("Former member"); };
+  const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
+  const [peopleSearch, setPeopleSearch] = useState("");
+  const peopleResults = peopleSearch.trim()
+    ? members.filter((m) => !selectedPeople.includes(m.id) && (m.name ?? m.email ?? "").toLowerCase().includes(peopleSearch.trim().toLowerCase())).slice(0, 8)
+    : [];
 
   // Task-based quest (specific_tasks): pick exact tasks. Done = all DONE; XP to doers; visible to project members.
   const isTasks = requirementType === "specific_tasks";
@@ -1964,26 +1974,26 @@ function AdminQuests() {
   const create = useMutation({
     mutationFn: () => isTasks
       ? nexusApi.createAdminQuest({ title: title.trim(), requirementType: "specific_tasks", xpReward: Math.min(50, Math.max(0, Number(xpReward) || 0)), taskIds: questTasks.map((t) => t.id), deadline: deadline || null })
-      : nexusApi.createAdminQuest({ workspaceId, title: title.trim(), requirementType, requiredCount: Number(requiredCount), xpReward: Math.min(50, Math.max(0, Number(xpReward) || 0)), unitIds: Array.from(selectedUnits), deadline: deadline || null }),
-    onSuccess: () => { setTitle(""); setDeadline(""); setSelectedUnits(new Set()); setQuestTasks([]); setTaskSearch(""); invalidate(); },
+      : nexusApi.createAdminQuest({ workspaceId, title: title.trim(), requirementType, requiredCount: Number(requiredCount), xpReward: Math.min(50, Math.max(0, Number(xpReward) || 0)), unitIds: Array.from(selectedUnits), userIds: selectedPeople, deadline: deadline || null }),
+    onSuccess: () => { setTitle(""); setDeadline(""); setSelectedUnits(new Set()); setSelectedPeople([]); setPeopleSearch(""); setQuestTasks([]); setTaskSearch(""); invalidate(); },
   });
   const del = useMutation({
     mutationFn: (id: string) => nexusApi.deleteAdminQuest(id),
     onSuccess: () => { invalidate(); toast.success(tq("Quest deleted")); },
-    onError: (e: unknown) => toast.error(tq("Couldn't delete the quest"), { description: isForbidden(e) ? tq("Only managers and the board can manage quests") : friendlyError(e) ?? tq("Try again.") }),
+    onError: (e: unknown) => toast.error(tq("Couldn't delete the quest"), { description: isForbidden(e) ? tq("Only BoD and up can manage quests") : friendlyError(e) ?? tq("Try again.") }),
   });
   const inputCls = "rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
 
   return (
     <div className="space-y-4">
       {list.isError && (isForbidden(list.error)
-        ? <EmptyState icon={Trophy} tone="muted" title={tq("Only managers and the board can manage quests")} message={tq("Your own quests are on the dashboard, in the Quests card.")} />
+        ? <EmptyState icon={Trophy} tone="muted" title={tq("Only BoD and up can manage quests")} message={tq("Your own quests are on the dashboard, in the Quests card.")} />
         : <LoadError error={list.error} what={tq("the quests")} onRetry={() => void list.refetch()} />)}
       {!list.isError && (
         <>
           <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
             <h2 className="mb-1 font-display text-base font-bold tracking-tight">{tq("Assign a new quest")}</h2>
-            <p className="mb-3 text-xs text-muted-foreground">{tq("Create a quest: finish tasks against a target and a due date, for an XP reward (max 50).")}</p>
+            <p className="mb-3 text-xs text-muted-foreground">{tq("Create a quest: finish tasks against a target and a due date, for an XP reward (max 50).")} {tq("For everyone, one person, chosen divisions or a set of tasks.")}</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={tq("Quest title (e.g. Finish 5 tasks this week)")} className={cn(inputCls, "sm:col-span-2")} />
               <label className="text-xs font-semibold text-muted-foreground">{tq("Type")}
@@ -2036,6 +2046,30 @@ function AdminQuests() {
                     ? <span className="text-xs text-muted-foreground">{tq("Couldn't load the divisions. The quest goes to everyone.")}</span>
                     : <UnitTreePicker units={units} value={selectedUnits} onChange={setSelectedUnits} disabled={orgQ.isLoading} />}
                 </div>
+                <span className="mt-3 block text-xs font-semibold text-muted-foreground">{tq("People")} <span className="font-normal">{tq("(a quest for one person, or a few · with divisions too, someone in them OR picked here gets it)")}</span></span>
+                {selectedPeople.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {selectedPeople.map((id) => (
+                      <span key={id} className="inline-flex items-center gap-1 rounded-full bg-muted py-0.5 pl-2.5 pr-1 text-xs font-medium">
+                        {memberName(id)}
+                        <button type="button" aria-label={tq("Remove {name}", { name: memberName(id) })} onClick={() => setSelectedPeople((prev) => prev.filter((x) => x !== id))} className="rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="relative mt-1.5">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <input value={peopleSearch} onChange={(e) => setPeopleSearch(e.target.value)} placeholder={tq("Search people to add…")} aria-label={tq("Search people to add…")} className={cn(inputCls, "w-full border-dashed pl-8")} />
+                </div>
+                {peopleResults.length > 0 && (
+                  <div className="mt-1 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-border bg-background p-1">
+                    {peopleResults.map((m) => (
+                      <button key={m.id} type="button" onClick={() => { setSelectedPeople((prev) => [...prev, m.id]); setPeopleSearch(""); }} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent">
+                        <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> <span className="min-w-0 flex-1 truncate">{m.name || m.email}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             <button disabled={!title.trim() || !workspaceId || create.isPending || (isTasks && questTasks.length === 0)} onClick={() => create.mutate()} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} {isTasks ? tq("Create quest") : tq("Assign quest")}</button>
@@ -2055,8 +2089,8 @@ function AdminQuests() {
                       {q.deadline && <span>· ⏰ {tq("until {date}", { date: fmtDate(q.deadline) })}</span>}
                       {q.requirementType === "specific_tasks"
                         ? <span>· {tq("members of the task's project")}</span>
-                        : <span>· {q.unitIds && q.unitIds.length > 0
-                            ? q.unitIds.map((id) => (unitById.has(id) ? unitPath(id) : tq("Deleted division"))).join(", ")
+                        : <span>· {(q.unitIds && q.unitIds.length > 0) || (q.userIds && q.userIds.length > 0)
+                            ? [...(q.unitIds ?? []).map((id) => (unitById.has(id) ? unitPath(id) : tq("Deleted division"))), ...(q.userIds ?? []).map(memberName)].join(", ")
                             : q.teamIds && q.teamIds.length > 0 ? (teamsQuery.isSuccess ? audienceText(q.teamIds) : tn(q.teamIds.length, "{n} team", "{n} teams"))
                             : q.teamsRetired ? tq("Everyone (was for a team that no longer exists)") : tq("Everyone")}</span>}
                     </div>

@@ -23,8 +23,9 @@ import {
 import type { InputJsonValue } from '@prisma/client/runtime/client'
 
 /**
- * Project automations (rebuilt 12 Oct 2026). Anyone who can see the project lists them; only people who
- * manage it (LEAD: Manager, BoD, One Above All — lib/rbac.ts) create, edit, toggle or delete.
+ * Project automations (rebuilt 12 Oct 2026). Anyone who can see the project lists them; only people with Full
+ * access to it (checkProjectAccess "LEAD": the Project Owner, a member with Full, BoD / One Above All of the
+ * workspace — lib/rbac.ts; a Manager only when invited with Full) create, edit, toggle or delete.
  *
  * Every trigger/action type is normalised on save AND on read (lib/automation-rules.ts): the old web UI
  * stored "task_created" while the engine matched "TASK_CREATED", so its rules never fired.

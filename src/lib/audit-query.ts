@@ -10,12 +10,16 @@ import type { AuditIdKind, AuditIdSets, AuditNames } from '@/lib/audit-describe'
  * Caller must hold an admin-tier role. Memberships are resolved deterministically (the old findFirst
  * picked an arbitrary membership, so a STAFF-in-A / BOD-in-B user got an unpredictable verdict).
  * Every workspace where they're BOD/MANAGER/ONE_ABOVE_ALL is collected — visibility is then scoped to
- * actors in exactly those workspaces (no cross-tenant audit-log leak). A system ADMIN or the company
- * workspace's ONE_ABOVE_ALL sees everything.
+ * actors in exactly those workspaces (no cross-tenant audit-log leak). The company workspace's
+ * ONE_ABOVE_ALL sees everything.
+ *
+ * Restore (POST /api/audit/[id]/restore) is narrower: BoD and One Above All only (owner, 16 Oct 2026), for
+ * the rows of the workspaces where they hold that role (everything for the company's One Above All).
+ * `restoreScope` is null when the caller may restore nothing (a Manager).
  */
 export type AuditAccess =
   | { ok: false }
-  | { ok: true; allSeeing: boolean; scope: Prisma.AuditLogWhereInput }
+  | { ok: true; allSeeing: boolean; scope: Prisma.AuditLogWhereInput; restoreScope: Prisma.AuditLogWhereInput | null }
 
 export async function resolveAuditAccess(userId: string): Promise<AuditAccess> {
   const memberships = await prisma.workspaceMember.findMany({
@@ -36,7 +40,15 @@ export async function resolveAuditAccess(userId: string): Promise<AuditAccess> {
   const scope: Prisma.AuditLogWhereInput = isAllSeeing
     ? {}
     : { user: { workspaceMembers: { some: { workspaceId: { in: adminWorkspaceIds } } } } }
-  return { ok: true, allSeeing: isAllSeeing, scope }
+  const restoreWorkspaceIds = memberships
+    .filter((m) => m.role === 'BOD' || m.role === 'ONE_ABOVE_ALL')
+    .map((m) => m.workspaceId)
+  const restoreScope: Prisma.AuditLogWhereInput | null = isAllSeeing
+    ? {}
+    : restoreWorkspaceIds.length
+      ? { user: { workspaceMembers: { some: { workspaceId: { in: restoreWorkspaceIds } } } } }
+      : null
+  return { ok: true, allSeeing: isAllSeeing, scope, restoreScope }
 }
 
 const MAX_IDS_PER_KIND = 200

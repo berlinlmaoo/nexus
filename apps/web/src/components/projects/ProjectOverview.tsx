@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowUpRight, CalendarClock, CheckCircle2, FileText, ListChecks, Loader2, Pencil, Plus, Sparkles, Users } from "lucide-react";
 import { Avatar, AvatarFace, AvatarStack } from "@/components/Avatar";
@@ -70,6 +70,14 @@ const PRIORITY_ROWS = [
 
 const CARD = "rounded-2xl border border-border bg-card shadow-soft";
 
+/** True inside the Overview column whose cards are no snap points (useColumnPin): its cards and rows then carry no
+ *  data-snap-row at all, so nothing that looks for snap points (the browser, SnapTail, the UI tour) rests on them. */
+const SnapOff = createContext(false);
+/** `data-snap-row` for a card or row, or nothing inside a column whose snap points are off. */
+function useSnapRow(): "" | undefined {
+  return useContext(SnapOff) ? undefined : "";
+}
+
 function Section({ title, icon, action, children, className, id, pinHead, headExtra, headRef }: {
   title: string; icon?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; id: string;
   /** The title (and `headExtra`, a column-label row) stay pinned under the page header while the card scrolls past,
@@ -86,11 +94,16 @@ function Section({ title, icon, action, children, className, id, pinHead, headEx
       {action}
     </div>
   );
+  const snapRow = useSnapRow();
+  // In the column whose cards are no snap points (it scrolls along with the long one), every card's head is pinned:
+  // where that column is cut under the header, the card there still shows its title (UI tour run 19, R19-WD-R2:
+  // "Sections" lost its title). Its rows already carry no snap point.
+  const pinned = pinHead || snapRow === undefined;
   return (
     // A card stops whole under the pinned project header while the page scrolls (UI tour run 15, R15-WB-1).
     // `overflow-clip` (not hidden) when the head is pinned: a sticky head cannot stick inside an overflow-hidden box.
-    <section aria-labelledby={id} data-snap-row className={cn(CARD, "min-w-0", pinHead ? "overflow-clip" : "overflow-hidden", className)}>
-      {pinHead ? (
+    <section aria-labelledby={id} data-snap-row={snapRow} className={cn(CARD, "min-w-0", pinned ? "overflow-clip" : "overflow-hidden", className)}>
+      {pinned ? (
         <div ref={headRef} className="sticky top-[var(--page-sticky-top,0px)] z-[5] rounded-t-2xl bg-card md:top-[calc(var(--page-sticky-top,0px)+1rem)]">
           {head}
           {headExtra}
@@ -107,8 +120,8 @@ const linkBtn = "inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 te
  * The Overview's two columns on a wide screen (UI tour run 16, R16-WB-1: the page snaps to one column's cards, so
  * the other column was left with a card cut mid-way under the header). The shorter column sticks under the header
  * when it fits the screen, so only the long one scrolls and snaps; its own cards are then no snap points. When it
- * does not fit, it scrolls too, with a soft fade at its top under the header, so a card there is never hard-cut.
- * At rest that fade sits in the page padding above the column (-mt-8), so it never dims the first card.
+ * does not fit, it scrolls too; its cards are no snap points then either and each pins its head under the header
+ * (run 19, R19-WD-R2), so the page rests on the long column's cards and the short one still names its card.
  */
 function useColumnPin() {
   const leftRef = useRef<HTMLDivElement>(null);
@@ -137,13 +150,16 @@ function useColumnPin() {
   }, []);
   const classOf = (side: "left" | "right") => {
     if (state.side !== side) return "";
-    return state.fits
-      ? "lg:sticky lg:top-[calc(var(--page-sticky-top,0px)+1rem)]"
-      : "lg:before:pointer-events-none lg:before:sticky lg:before:top-[var(--page-sticky-top,0px)] lg:before:z-10 lg:before:-mt-8 lg:before:block lg:before:h-8 lg:before:bg-gradient-to-b lg:before:from-card lg:before:to-transparent lg:before:content-['']";
+    // Not fitting: no top fade any more, its cards pin their heads instead (Section, run 19 R19-WD-R2).
+    return state.fits ? "lg:sticky lg:top-[calc(var(--page-sticky-top,0px)+1rem)]" : "";
   };
-  // The pinned column's cards stop being snap points through an attribute (styles.css): the snap rule is unlayered
-  // CSS, so a Tailwind utility could not switch it off (it never did since run 16).
-  const snapOffOf = (side: "left" | "right") => (state.side === side && state.fits ? "" : undefined);
+  // The shorter column's cards stop being snap points: the column carries data-snap-off (styles.css), and its cards
+  // and rows drop data-snap-row (SnapOff context), so SnapTail and the UI tour, which look for that attribute, skip
+  // them as the browser does. Also when it does not fit and scrolls with its fade: only the long column decides
+  // where the page rests, so its card at the top is whole. Snapping to the short column's rows cut the long one
+  // (UI tour run 19, R19-WD-R2: the page's end rested on a "Who's working on what" row, and the right column began
+  // under the header without its "Sections" title).
+  const snapOffOf = (side: "left" | "right") => (state.side === side ? "" : undefined);
   return { leftRef, rightRef, classOf, snapOffOf };
 }
 
@@ -313,6 +329,7 @@ export function ProjectOverview({
   return (
     <div className="mx-auto grid max-w-6xl gap-4 p-4 md:gap-6 md:p-8 lg:grid-cols-12">
       <div ref={cols.leftRef} data-snap-off={cols.snapOffOf("left")} className={cn("min-w-0 space-y-4 md:space-y-6 lg:col-span-8 lg:self-start", cols.classOf("left"))}>
+        <SnapOff.Provider value={cols.snapOffOf("left") !== undefined}>
         {/* Progress: the stacked status bar is the progress visual; the counters open the board filtered. */}
         <section aria-labelledby="ov-progress" className={cn(CARD, "overflow-hidden")}>
           <div className="p-4 md:p-5">
@@ -374,9 +391,11 @@ export function ProjectOverview({
         {/* In the wide column: on the right it made that column much longer than this one, which ended in a
             large empty hole (UI tour run 13, W-D13). */}
         <StatusUpdatesCard projectId={project.id} />
+        </SnapOff.Provider>
       </div>
 
       <div ref={cols.rightRef} data-snap-off={cols.snapOffOf("right")} className={cn("min-w-0 space-y-4 md:space-y-6 lg:col-span-4 lg:self-start", cols.classOf("right"))}>
+        <SnapOff.Provider value={cols.snapOffOf("right") !== undefined}>
         <BriefCard project={project} onEdit={onEditBrief} />
 
         <Section id="ov-priority" title={t("Open tasks by priority")} icon={<AlertTriangle className="h-4 w-4" />}>
@@ -419,6 +438,7 @@ export function ProjectOverview({
         )}
 
         <RecentlyDoneCard completed={m.completed} memberById={memberById} onOpenTask={onOpenTask} />
+        </SnapOff.Provider>
       </div>
     </div>
   );
@@ -496,6 +516,7 @@ function TeamCard({ people, memberById, nobody, onDrill }: { people: Map<string,
   const unassigned = nobody.open;
   const headRef = useRef<HTMLDivElement>(null);
   const [headH, setHeadH] = useState(0);
+  const snapRow = useSnapRow();
   useEffect(() => {
     const el = headRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
@@ -529,7 +550,7 @@ function TeamCard({ people, memberById, nobody, onDrill }: { people: Map<string,
           <ul>
             {/* Each row stops whole right under the card's pinned head (its height as scroll margin). */}
             {shown.map((r) => (
-              <li key={r.id} data-snap-row style={{ scrollMarginTop: headH }}>
+              <li key={r.id} data-snap-row={snapRow} style={{ scrollMarginTop: headH }}>
                 <button type="button" disabled={!r.open} onClick={() => onDrill({ assigneeId: r.id })} title={r.open ? tn(r.open, "Show 1 open task", "Show {n} open tasks") : undefined} className={cn(grid, "w-full px-4 py-2 text-left transition-colors hover:bg-muted/50 disabled:cursor-default disabled:hover:bg-transparent")}>
                   <span className="flex min-w-0 items-center gap-2.5">
                     <Avatar userId={r.id} name={r.name} avatar={r.avatar} size={28} />
@@ -550,7 +571,7 @@ function TeamCard({ people, memberById, nobody, onDrill }: { people: Map<string,
               </li>
             ))}
             {(unassigned > 0 || nobody.doneMonth > 0) && (
-              <li data-snap-row style={{ scrollMarginTop: headH }}>
+              <li data-snap-row={snapRow} style={{ scrollMarginTop: headH }}>
                 <button type="button" disabled={!unassigned} onClick={() => onDrill({ assigneeId: "NONE" })} className={cn(grid, "w-full px-4 py-2 text-left transition-colors hover:bg-muted/50 disabled:cursor-default disabled:hover:bg-transparent")}>
                   <span className="flex min-w-0 items-center gap-2.5">
                     <span aria-hidden className="h-7 w-7 shrink-0 rounded-full border-2 border-dashed border-control-border" />

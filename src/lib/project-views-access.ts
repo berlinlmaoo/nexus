@@ -7,9 +7,10 @@ import { emitProjectChanged } from "@/lib/workspace-realtime"
  *  - read the shared views: anyone who can open the project;
  *  - make / change / delete one's OWN personal views: Can edit and up (Notion: view-only people filter and
  *    sort on screen but don't add views — QA R2 Manager N3, 13 Oct 2026);
- *  - add, change, reorder or delete a SHARED view: project members and above (the same bar as editing
- *    tasks and sections). Viewers and guests can still filter and sort on screen, they just cannot save
- *    it for everyone.
+ *  - add, change, reorder or delete a SHARED view: Can edit and up (checkProjectAccess "MEMBER" = Can edit or
+ *    Full), the same bar as editing tasks; owner, 16 Oct 2026: Can edit may change shared views. Sections
+ *    are stricter (Full only). Can comment / Can view and guests can still filter and sort on screen, they
+ *    just cannot save it for everyone.
  */
 export async function viewAccess(userId: string, projectId: string): Promise<{ read: boolean; editShared: boolean; editPersonal: boolean }> {
   const read = await checkProjectAccess(userId, projectId, ["GUEST"])

@@ -547,8 +547,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Monthly quota enforcement for the two bucketed leave types: DAY_OFF (per-person override,
-    // default 4) and RED_DATE / "tanggal merah" (fixed 2/month). Each counts within its OWN type,
-    // so the two buckets are independent. Admin grants (isGrant) bypass the cap.
+    // default 4) and RED_DATE / "tanggal merah" (RedDateQuota of the month, set by BoD, default 0 —
+    // below). Each counts within its OWN type, so the two buckets are independent. Admin grants
+    // (isGrant) bypass the cap.
     if (validation.data.type === "DAY_OFF" || validation.data.type === "RED_DATE") {
       const reqType = validation.data.type
       // DAY_OFF quota resets on the 28→27 payroll period; RED_DATE stays on the calendar month.

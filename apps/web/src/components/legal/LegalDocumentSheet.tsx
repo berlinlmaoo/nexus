@@ -121,7 +121,7 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
     <Sheet open={!!documentId} onOpenChange={(o) => !o && onClose()}>
       {/* Opens with the drawer itself focused, not its close button: a ring on the X before anyone used the
           keyboard read as an error, and was cut at the corner (UI tour run 13, W-B17). */}
-      <SheetContent lang={lang} className={cn("w-full overflow-y-auto outline-none sm:max-w-3xl", snapping && "[scroll-snap-type:y_proximity]")}
+      <SheetContent pinClose lang={lang} className={cn("w-full overflow-y-auto outline-none sm:max-w-3xl", snapping && "[scroll-snap-type:y_proximity]")}
         style={snapping ? { scrollPaddingTop: headH + 16 } : undefined} onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus(); }}>
         {!doc ? (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">

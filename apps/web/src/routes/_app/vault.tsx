@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
   Check, ChevronRight, Download, ExternalLink, Eye, File as FileIcon, FileText, Film,
   FolderInput, FolderPlus, Folder, HardDrive, Image as ImageIcon, ListChecks, Loader2, Lock, Music,
-  MoreVertical, Pencil, RefreshCw, RotateCcw, Search, Share2, ShieldCheck, Trash2, Upload, X,
+  MoreHorizontal, Pencil, RefreshCw, RotateCcw, Search, Share2, ShieldCheck, Trash2, Upload, X,
   type LucideIcon,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
@@ -705,7 +705,7 @@ function VaultPage() {
           className={cn("grid place-items-center rounded-md hover:bg-muted shrink-0", tone === "tile" ? "h-8 w-8" : "h-8 w-8")}
           aria-label={t("Actions for {name}", { name: item.name })}
         >
-          <MoreVertical className="h-4 w-4" />
+          <MoreHorizontal className="h-4 w-4" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" lang={lang}>

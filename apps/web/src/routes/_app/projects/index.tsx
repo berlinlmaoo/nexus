@@ -41,7 +41,7 @@ import {
   Inbox,
   LayoutGrid,
   List,
-  MoreVertical,
+  MoreHorizontal,
   Plus,
   Search,
   SlidersHorizontal,
@@ -449,12 +449,15 @@ function ProjectsPage() {
       />
 
       {isCreateOpen && (
+        // Phone: a bottom sheet across the full width, as the outlet and social sheets (UI tour run 19, R19-WM-1: a
+        // centred desktop modal with a grey margin on a 440 px screen). From sm: the centred dialog as before.
         <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/35 dark:bg-scrim px-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 grid place-items-center bg-black/35 dark:bg-scrim px-4 backdrop-blur-sm max-sm:place-items-end max-sm:px-0"
           role="dialog"
           aria-modal="true"
+          aria-label={tr("Create a new project")}
         >
-          <div className={cn("max-h-[calc(100dvh-2rem)] w-full overflow-y-auto overscroll-contain rounded-[32px] border border-border bg-card p-5 shadow-pop", newProjectType === null ? "max-w-4xl" : "max-w-lg")}>
+          <div className={cn("max-h-[calc(100dvh-2rem)] w-full overflow-y-auto overscroll-contain rounded-[32px] border border-border bg-card p-5 shadow-pop max-sm:max-h-[calc(100dvh-env(safe-area-inset-top)-1.5rem)] max-sm:rounded-b-none max-sm:rounded-t-[24px] max-sm:border-x-0 max-sm:border-b-0 max-sm:pb-[calc(1.25rem+env(safe-area-inset-bottom))]", newProjectType === null ? "max-w-4xl" : "max-w-lg")}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-black tracking-tight">{tr("Create a new project")}</h2>
@@ -464,7 +467,7 @@ function ProjectsPage() {
               </div>
               <button
                 onClick={() => setIsCreateOpen(false)}
-                className="rounded-full p-2 hover:bg-muted"
+                className="tap-area rounded-full p-2 hover:bg-muted pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:grid pointer-coarse:place-items-center"
                 aria-label={tr("Close")}
               >
                 <X className="h-4 w-4" />
@@ -1007,7 +1010,7 @@ function FolderSection({ folder, count, collapsed, onToggle, actions, depth = 0,
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button type="button" className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground transition hover:bg-accent" aria-label={t("More for {name}", { name: folder.name })}>
-                <MoreVertical className="h-4 w-4" />
+                <MoreHorizontal className="h-4 w-4" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-60">

@@ -21,7 +21,6 @@ import {
   Check,
   Crown,
   X,
-  Maximize2,
   Loader2,
   RotateCw,
   CalendarClock,
@@ -50,6 +49,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { monthGrid, sameMonth, shiftMonth } from "@/lib/calendar/core";
 import { thumbUrl } from "@/lib/thumb";
 import { formatCount } from "@/lib/number-format";
+import { monthTitle } from "@/lib/month-title";
 
 export const Route = createFileRoute("/_app/dashboard")({
   // `quest` comes from the quest_claimable notification: "<questKey>:<periodKey>".
@@ -113,7 +113,9 @@ function Dashboard() {
           {/* The calendar and schedule sit under XP rules on every width, as on the desktop (QA S-26 put
               them in the main column; the UI tour of 13 Oct 2026 found the phone showing them only after
               the whole rail, and a double gap where the hidden copy was). Two columns from xl. */}
-          <div data-dashboard-main-cal="" className="grid gap-6 xl:grid-cols-2">
+          {/* Phone: the Calendar and Your schedule cards are snap points of their own, not one block (UI tour run 19,
+              R19-WB-1 wm dashboard-2: the page rested on the Calendar's last week row). */}
+          <div data-dashboard-main-cal="" data-snap-rows={phone ? "" : undefined} className="grid gap-6 xl:grid-cols-2">
             <Reveal delay={0.15}><CalendarCard /></Reveal>
             <Reveal delay={0.2} className="xl:h-full"><ScheduleCard /></Reveal>
           </div>
@@ -355,6 +357,8 @@ type StatCard = {
   detail: React.ReactNode;
   /** Set when the card's request failed: the card shows "—" and a retry instead of a fake 0 (QA 13 Oct 2026). */
   retry?: () => void;
+  /** Nothing to count: the tile says so in words and opens this instead of the details (run 19 decision 10). */
+  empty?: { text: string; action: string; open: () => void };
 };
 
 function StatRow(_: { data: NexusDashboardResponse }) {
@@ -396,6 +400,8 @@ function StatRow(_: { data: NexusDashboardResponse }) {
       from: "#6ee7b7", to: "#059669", glow: "#34d399",
       retry: myTasks.isError && !myTasks.data ? () => void myTasks.refetch() : undefined,
       detail: <TasksDetail tasks={taskList} />,
+      // "0/0 Tasks" said nothing (UI tour run 19, R19-WD-2).
+      empty: myTasks.data && taskList.length === 0 ? { text: "No open tasks", action: "Open My Tasks", open: () => void navigate({ to: "/my-tasks" }) } : undefined,
     },
     {
       value: questsDone, total: quests.length, label: "Quests", Icon: Sparkles,
@@ -420,7 +426,7 @@ function StatRow(_: { data: NexusDashboardResponse }) {
     <>
       <div className="grid grid-cols-3 items-stretch gap-3 sm:gap-5">
         {cards.map((c, i) => (
-          <StatCardButton key={c.label} card={c} index={i} onOpen={() => (c.retry ? c.retry() : setActive(i))} />
+          <StatCardButton key={c.label} card={c} index={i} onOpen={() => (c.retry ? c.retry() : c.empty ? c.empty.open() : setActive(i))} />
         ))}
       </div>
       <StatCardModal cards={cards} active={active} onClose={close} />
@@ -433,32 +439,39 @@ function StatCardButton({ card, index, onOpen }: { card: StatCard; index: number
   const { t } = useLang();
   const reduce = useReducedMotion();
   const { Icon } = card;
+  // A plain card with the number, not a gradient hero tile (run 19 decision 11, R19-WD-2); the colour stays only
+  // in the icon chip. It still morphs into the details (shared layoutId).
   return (
     <motion.button
       type="button"
       layoutId={reduce ? undefined : `stat-card-${index}`}
       onClick={onOpen}
-      aria-label={card.retry ? t("{label}: couldn't load. Try again", { label: t(card.label) }) : card.total != null ? t("{label}: {n} of {total}. Open details", { label: t(card.label), n: card.value, total: card.total }) : t("{label}: {n}. Open details", { label: t(card.label), n: card.value })}
-      initial={reduce ? false : { opacity: 0, y: 18, scale: 0.97 }}
-      whileInView={reduce ? undefined : { opacity: 1, y: 0, scale: 1 }}
+      aria-label={card.retry ? t("{label}: couldn't load. Try again", { label: t(card.label) }) : card.empty ? `${t(card.empty.text)}. ${t(card.empty.action)}` : card.total != null ? t("{label}: {n} of {total}. Open details", { label: t(card.label), n: card.value, total: card.total }) : t("{label}: {n}. Open details", { label: t(card.label), n: card.value })}
+      initial={reduce ? false : { opacity: 0, y: 18 }}
+      whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-40px" }}
       transition={{ type: "spring", stiffness: 260, damping: 24, delay: index * 0.07 }}
-      whileHover={reduce ? undefined : { y: -4 }}
       whileTap={reduce ? undefined : { scale: 0.98 }}
-      className="group relative flex h-full w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-3xl px-3 py-5 text-center text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 sm:px-4 dark:shadow-none!"
-      style={{ backgroundImage: `linear-gradient(150deg, ${card.from} 0%, ${card.to} 100%)`, boxShadow: `0 12px 28px -12px ${card.glow}` }}
+      className="group relative flex h-full w-full cursor-pointer flex-col items-center justify-center rounded-3xl border border-border bg-card px-3 py-5 text-center text-foreground shadow-soft transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:px-4"
     >
-      <span className="pointer-events-none absolute -right-6 -top-8 h-24 w-24 rounded-full bg-white/20 blur-2xl" />
-      <Maximize2 className="absolute right-3 top-3 h-3.5 w-3.5 text-white/50 transition-colors group-hover:text-white/90" />
-      <span className="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-2xl bg-white/25 backdrop-blur-sm">
-        <Icon className="h-5 w-5" strokeWidth={2.5} />
+      <span className="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-2xl" style={{ backgroundColor: `${card.glow}26`, color: card.to }}>
+        <Icon className="h-5 w-5" strokeWidth={2.25} />
       </span>
-      <div className="font-display text-3xl font-bold tracking-tight drop-shadow-sm md:text-4xl">
-        {card.retry ? "—" : <CountUp value={card.value} />}
-        {!card.retry && card.total != null && <span className="text-white/70">/{card.total}</span>}
-      </div>
-      <div className="mt-1.5 text-sm font-medium text-white/85">{t(card.label)}</div>
-      {card.retry && <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-white/90"><RotateCw className="h-3 w-3" /> {t("Couldn't load · Try again")}</div>}
+      {card.empty && !card.retry ? (
+        <>
+          <div className="text-sm font-semibold text-foreground text-balance">{t(card.empty.text)}</div>
+          <div className="mt-1 text-xs font-medium text-primary">{t(card.empty.action)}</div>
+        </>
+      ) : (
+        <>
+          <div className="font-display text-3xl font-bold tracking-tight tabular-nums md:text-4xl">
+            {card.retry ? "—" : <CountUp value={card.value} />}
+            {!card.retry && card.total != null && <span className="text-muted-foreground">/{card.total}</span>}
+          </div>
+          <div className="mt-1.5 text-sm font-medium text-muted-foreground">{t(card.label)}</div>
+        </>
+      )}
+      {card.retry && <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground"><RotateCw className="h-3 w-3" /> {t("Couldn't load · Try again")}</div>}
     </motion.button>
   );
 }
@@ -779,7 +792,6 @@ function ProfileCard({ avatarUrl }: { avatarUrl?: string | null }) {
   const { t, locale } = useLang();
   const g = useGamification();
   const totalXp = g.data?.xp?.totalXp ?? 0;
-  const info = levelForXp(totalXp);
   return (
     <section className="rounded-3xl border border-border bg-card p-5 shadow-soft">
       <div className="flex items-center gap-4">
@@ -791,8 +803,8 @@ function ProfileCard({ avatarUrl }: { avatarUrl?: string | null }) {
           </div>
         )}
         <div className="min-w-0 flex-1 space-y-1.5">
-          <div className="flex items-baseline justify-between gap-2"><span className="text-xs uppercase tracking-wide text-muted-foreground">{t("Level")}</span><span className="text-sm font-bold">{levelLabel(info.level, info.name, t)}</span></div>
-          <div className="flex items-baseline justify-between gap-2"><span className="text-xs uppercase tracking-wide text-muted-foreground">{t("XP this period")}</span><span className="text-sm font-bold tabular-nums">{formatCount(totalXp)}</span></div>
+          {/* The level is shown once, in the header pill (run 19 decision 11, R19-WD-2); labels in sentence case. */}
+          <div className="flex items-baseline justify-between gap-2"><span className="text-sm text-muted-foreground">{t("XP this period")}</span><span className="text-sm font-bold tabular-nums">{formatCount(totalXp)}</span></div>
         </div>
       </div>
       <Link to="/settings" className="mt-4 flex h-11 items-center justify-center gap-2 rounded-xl border border-primary/40 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
@@ -1071,7 +1083,7 @@ function CalendarCard() {
   const days = monthGrid(anchor);
   const todayKey = wibDay(Date.now());
   // The day strings are calendar dates, so format them in UTC to keep the month from shifting.
-  const monthLabel = new Date(`${anchor.slice(0, 8)}01T00:00:00Z`).toLocaleDateString(locale, { month: "long", year: "numeric", timeZone: "UTC" });
+  const monthLabel = monthTitle(new Date(`${anchor.slice(0, 8)}01T00:00:00Z`), locale, "UTC");
 
   return (
     <Section title={t("Calendar")} action={<SeeAll to="/calendar" />}>

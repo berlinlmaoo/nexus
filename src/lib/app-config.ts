@@ -29,6 +29,9 @@ export type AppConfig = {
      *  the record stays open until they check out; they still get the 1 h 30 and 2 h reminders, and
      *  their attendance approvers one push at 1 h 30. The apps show no countdown while it is off. */
     outsideAutoCheckout: boolean
+    /** Check-in/out refused from an Android phone's BROWSER (owner, 16 Oct 2026). Off until the big-release
+     *  Android APK ships; desktop and iPhone/iPad browsers are always refused. The apps may ignore it. */
+    blockAndroidBrowserAttendance: boolean
   }
   values: {
     /** Local alert on the phone this many minutes into an outside episode (0 = off). */
@@ -42,7 +45,7 @@ export type AppConfig = {
 }
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
-  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false },
+  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false, blockAndroidBrowserAttendance: false },
   values: { outsideHourAlertMinutes: 60, calendarPollSeconds: 60 },
   texts: {
     en: {
@@ -95,4 +98,9 @@ export async function getAppConfig(platform: "ios" | "android" | "web" | null): 
   let cfg = merge(APP_CONFIG_DEFAULTS, shared)
   if (platform && platforms?.[platform]) cfg = merge(cfg, platforms[platform])
   return { ...cfg, updatedAt: null }
+}
+
+/** flags.blockAndroidBrowserAttendance as stored (shared block, default off); a settings read error keeps it off. */
+export async function androidBrowserAttendanceBlocked(): Promise<boolean> {
+  return (await getAppConfig(null).catch(() => null))?.flags.blockAndroidBrowserAttendance === true
 }

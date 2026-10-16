@@ -249,9 +249,9 @@ function CorrectionPendingChip() {
 function TicketRow({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: boolean; onOpen: () => void }) {
   const { t, tn } = useLang();
   const cat = catOf(c.category);
-  // The server only sends a reporter the viewer may see (BoD, or the reporter themself); anything else
-  // stays anonymous here too.
-  const who = c.reporter?.name ?? t("Anonymous");
+  // The server sends the reporter to BoD and to the reporter themself (there are no anonymous tickets); a
+  // missing one is an account that is gone.
+  const who = c.reporter?.name ?? t("Former member");
   // The two things a row has to say beyond its status: GIDEON has been in here, and a decision is
   // sitting unmade. Both come straight off /api/complaints and are independent of the status chip.
   // "Awaiting decision" is ONE label (run 9): the status chip and this marker used to say it two ways.

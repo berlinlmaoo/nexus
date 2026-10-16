@@ -1036,6 +1036,8 @@ export type NexusAdminQuest = {
   teamIds?: string[];
   /** IP & Division Chart units (13 Oct 2026); empty = everyone. */
   unitIds?: string[];
+  /** Chosen people (16 Oct 2026); empty = not per person. */
+  userIds?: string[];
   /** Pointed at deleted teams and was moved to everyone. */
   teamsRetired?: boolean;
   deadline?: string | null;
@@ -1822,6 +1824,8 @@ export type NexusAuditEntryDetail = {
     restoredBy: { id: string; name: string | null } | null;
     counts: NexusRestoreCounts;
   }) | null;
+  /** Whether the viewer may restore this entry (BoD and One Above All, 16 Oct 2026). Absent on older servers. */
+  canRestore?: boolean;
 };
 
 export type NexusNotificationPrefs = {
@@ -2626,7 +2630,7 @@ export const nexusApi = {
     return apiFetch<NexusXpAuditResponse>(`/api/gamification/xp-transactions${s ? `?${s}` : ""}`);
   },
   adminQuests: (workspaceId?: string) => apiFetch<{ quests: NexusAdminQuest[] }>(`/api/gamification/quests/admin${workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ""}`),
-  createAdminQuest: (payload: { workspaceId?: string; title: string; description?: string | null; requirementType: string; requiredCount?: number; xpReward: number; teamIds?: string[]; unitIds?: string[]; taskIds?: string[]; deadline?: string | null }) => apiFetch<{ quest: NexusAdminQuest }>("/api/gamification/quests/admin", { method: "POST", body: JSON.stringify(payload) }),
+  createAdminQuest: (payload: { workspaceId?: string; title: string; description?: string | null; requirementType: string; requiredCount?: number; xpReward: number; teamIds?: string[]; unitIds?: string[]; userIds?: string[]; taskIds?: string[]; deadline?: string | null }) => apiFetch<{ quest: NexusAdminQuest }>("/api/gamification/quests/admin", { method: "POST", body: JSON.stringify(payload) }),
   deleteAdminQuest: (id: string) => apiFetch<{ success?: boolean }>(`/api/gamification/quests/admin?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   // --- Tasks (detail surface) ---
@@ -3293,6 +3297,10 @@ export const nexusApi = {
   },
   // Self-service account deletion (deactivate + anonymise). Call logout() after it succeeds.
   deleteMyAccount: () => apiFetch<{ ok: true }>("/api/user/account/delete", { method: "POST", body: JSON.stringify({ confirm: "DELETE" }) }),
+  // Join a workspace with its code from an account that only has its personal workspace (16 Oct 2026). The
+  // personal workspace is deleted on join.
+  workspaceJoinStatus: () => apiFetch<{ eligible: boolean; personalWorkspace: { id: string; name: string } | null }>("/api/workspaces/join"),
+  joinWorkspaceByCode: (code: string) => apiFetch<{ ok: true; workspace: { id: string; name: string }; removedWorkspaces: string[] }>("/api/workspaces/join", { method: "POST", body: JSON.stringify({ code }) }),
 
   // --- Self-registration (OTP email verification) ---
   register: (payload: { name: string; email: string; password: string; workspaceCode?: string }) =>

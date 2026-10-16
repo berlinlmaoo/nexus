@@ -20,7 +20,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!gate.ok) return gate.response
     if (!(await canManageOutletTargets(userId, projectId))) {
       return NextResponse.json(
-        { error: "Target hanya bisa diatur lead project, Manager, atau BoD.", code: "TARGETS_FORBIDDEN" },
+        { error: "Target hanya bisa diatur oleh yang punya akses Full di project ini.", code: "TARGETS_FORBIDDEN" },
         { status: 403 },
       )
     }

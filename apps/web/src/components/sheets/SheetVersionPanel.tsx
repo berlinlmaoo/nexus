@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronRight, Loader2, MoreVertical } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import type { NexusSheetRevision } from "@/lib/nexus-api";
@@ -97,7 +97,7 @@ export function VersionHistoryPanel({ revisions, loading, named, selectedAt, sho
             aria-haspopup="menu"
             onClick={(e) => setMenu({ at: v.at, rect: e.currentTarget.getBoundingClientRect() })}
             className="absolute right-1 top-1.5 rounded p-1 text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition hover:bg-background hover:text-foreground group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100"
-          ><MoreVertical className="h-3.5 w-3.5" /></button>
+          ><MoreHorizontal className="h-3.5 w-3.5" /></button>
         )}
         {isSel && !v.current && (
           <div className="px-2.5 pb-2">

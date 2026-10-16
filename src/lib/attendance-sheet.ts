@@ -47,7 +47,7 @@ import { formerMembersOf, isExemptRole } from "@/lib/former-recaps"
  * credentials are deliberately not used.
  *
  * Quota: one spreadsheets.get + ONE spreadsheets.batchUpdate per run (both tabs in the same batch on
- * the first day of a period), plus a one-off create and one permissions.create per new reader.
+ * the first day of a period), plus a one-off create and one permissions.create per new person on the share list.
  */
 
 export const ATTENDANCE_SHEET_TITLE = "NEXUS · Absensi (live)"
@@ -380,7 +380,8 @@ export interface AttendanceSheetApi {
   /** null when the file is gone (404). */
   getTabs(spreadsheetId: string): Promise<ExistingTab[] | null>
   batchUpdate(spreadsheetId: string, requests: sheets_v4.Schema$Request[]): Promise<void>
-  shareReader(spreadsheetId: string, email: string): Promise<void>
+  /** Editor ("writer") access, so the people on the share list can invite others (owner, 16 Oct 2026). */
+  shareWriter(spreadsheetId: string, email: string): Promise<void>
 }
 
 export function spreadsheetUrl(id: string) {
@@ -444,12 +445,14 @@ export function googleAttendanceSheetApi(opts: { rootUrl?: string; auth?: OAuthC
     async batchUpdate(spreadsheetId, requests) {
       await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests, includeSpreadsheetInResponse: false } })
     },
-    async shareReader(spreadsheetId, email) {
+    async shareWriter(spreadsheetId, email) {
+      // Also upgrades someone granted "reader" before 16 Oct 2026: a second grant to the same person takes
+      // the higher role.
       await drive.permissions.create({
         fileId: spreadsheetId,
         sendNotificationEmail: false,
         fields: "id",
-        requestBody: { type: "user", role: "reader", emailAddress: email },
+        requestBody: { type: "user", role: "writer", emailAddress: email },
       })
     },
   }
@@ -481,8 +484,11 @@ export type AttendanceSheetState = {
   url: string
   workspaceId: string
   createdAt: string
-  /** Readers already granted (drive.permissions.create is not repeated). */
+  /** Everyone already granted, any role (drive.permissions.create is not repeated for a writer). */
   sharedWith: string[]
+  /** Those granted "writer" (since 16 Oct 2026). Someone in sharedWith but not here was a reader and is granted
+   *  again as a writer once. */
+  sharedWriters?: string[]
   /** email → ISO time of the last failed grant; retried at most hourly. */
   shareFailedAt?: Record<string, string>
   /** The last previous-period tab written after its period closed (see syncAttendanceSheet). */
@@ -511,7 +517,8 @@ export async function getAttendanceSheetUrl(workspaceId: string): Promise<string
   }
 }
 
-/** NEXUS_ATTENDANCE_SHEET_SHARE: comma-separated readers granted access once. Unset = nobody. */
+/** NEXUS_ATTENDANCE_SHEET_SHARE: comma-separated people granted editor ("writer") access once, so they can invite
+ *  others (owner, 16 Oct 2026). Unset = nobody. */
 export function attendanceSheetShareList(raw = process.env.NEXUS_ATTENDANCE_SHEET_SHARE) {
   const source = raw ?? ""
   return [...new Set(source.split(",").map((s) => s.trim().toLowerCase()).filter((s) => /^[^\s@]+@[^\s@]+$/.test(s)))]
@@ -725,12 +732,13 @@ export async function syncAttendanceSheet(opts: {
       const sharedNow: string[] = []
       const shareErrors: Array<{ email: string; reason: string }> = []
       const failedAt = { ...(state.shareFailedAt ?? {}) }
+      const writers = state.sharedWriters ?? []
       for (const email of opts.shareList ?? attendanceSheetShareList()) {
-        if (state.sharedWith.includes(email)) continue
+        if (writers.includes(email)) continue
         const last = failedAt[email] ? Date.parse(failedAt[email]) : 0
         if (last && now.getTime() - last < SHARE_RETRY_MS) continue
         try {
-          await api.shareReader(state.spreadsheetId, email)
+          await api.shareWriter(state.spreadsheetId, email)
           sharedNow.push(email)
           delete failedAt[email]
         } catch (err) {
@@ -741,7 +749,12 @@ export async function syncAttendanceSheet(opts: {
         }
       }
       if (sharedNow.length || shareErrors.length) {
-        state = { ...state, sharedWith: [...state.sharedWith, ...sharedNow], shareFailedAt: failedAt }
+        state = {
+          ...state,
+          sharedWith: [...new Set([...state.sharedWith, ...sharedNow])],
+          sharedWriters: [...writers, ...sharedNow],
+          shareFailedAt: failedAt,
+        }
         dirty = true
       }
       if (dirty) await store.set(state)

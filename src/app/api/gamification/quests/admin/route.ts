@@ -3,9 +3,10 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { restorableSoftDelete } from "@/lib/deletion-snapshot"
 
+/** Quests are made and managed by BoD and up (owner, 16 Oct 2026; Manager could before). */
 async function canManage(userId: string, workspaceId: string): Promise<boolean> {
   const m = await prisma.workspaceMember.findUnique({ where: { userId_workspaceId: { userId, workspaceId } }, select: { role: true } })
-  return m?.role === "BOD" || m?.role === "MANAGER" || m?.role === "ONE_ABOVE_ALL"
+  return m?.role === "BOD" || m?.role === "ONE_ABOVE_ALL"
 }
 
 export async function GET(req: NextRequest) {
@@ -31,13 +32,15 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    const { workspaceId, title, description, requirementType, requiredCount, xpReward, teamIds, unitIds, taskIds, deadline } = await req.json()
+    const { workspaceId, title, description, requirementType, requiredCount, xpReward, teamIds, unitIds, userIds, taskIds, deadline } = await req.json()
     if (!title || !requirementType) return NextResponse.json({ error: "Missing fields" }, { status: 400 })
     // Hadiah XP di-cap maks 50.
     const xp = Number.isFinite(Number(xpReward)) ? Math.max(0, Math.min(50, Math.trunc(Number(xpReward)))) : 50
     const teams = Array.isArray(teamIds) ? teamIds.filter((t: unknown): t is string => typeof t === "string" && t.length > 0) : []
     // Divisions / units of the IP & Division Chart (13 Oct 2026). Older clients send no unitIds = everyone.
     const units = Array.isArray(unitIds) ? [...new Set(unitIds.filter((t: unknown): t is string => typeof t === "string" && t.length > 0))] : []
+    // Chosen people (owner, 16 Oct 2026). Older clients send no userIds = not per person.
+    const people = Array.isArray(userIds) ? [...new Set(userIds.filter((t: unknown): t is string => typeof t === "string" && t.length > 0))] : []
     let deadlineDate: Date | null = null
     if (deadline) {
       const d = new Date(deadline)
@@ -66,9 +69,13 @@ export async function POST(req: NextRequest) {
       const found = await prisma.orgUnit.count({ where: { id: { in: units }, workspaceId: wsId } })
       if (found !== units.length) return NextResponse.json({ error: "Divisi tidak ditemukan di workspace ini.", code: "UNKNOWN_UNIT" }, { status: 400 })
     }
+    if (people.length && !tasks.length) {
+      const found = await prisma.workspaceMember.count({ where: { userId: { in: people }, workspaceId: wsId } })
+      if (found !== people.length) return NextResponse.json({ error: "Ada orang yang bukan anggota workspace ini.", code: "UNKNOWN_USER" }, { status: 400 })
+    }
 
     const quest = await prisma.quest.create({
-      data: { workspaceId: wsId, title: String(title).trim(), description: description || null, requirementType, requiredCount: reqCount, xpReward: xp, teamIds: teams, unitIds: tasks.length ? [] : units, taskIds: tasks, deadline: deadlineDate, createdById: session.user.id },
+      data: { workspaceId: wsId, title: String(title).trim(), description: description || null, requirementType, requiredCount: reqCount, xpReward: xp, teamIds: teams, unitIds: tasks.length ? [] : units, userIds: tasks.length ? [] : people, taskIds: tasks, deadline: deadlineDate, createdById: session.user.id },
     })
     return NextResponse.json({ quest }, { status: 201 })
   } catch (error) {

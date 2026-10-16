@@ -69,6 +69,10 @@ export async function GET(
       // An entry that kept a copy (a delete, or a revoke): what comes back and whether it already did.
       // POST …/restore does it.
       restore: row.action !== 'restore' ? await restoreDetailFor(row.id) : null,
+      // Whether the caller may restore this entry (BoD and One Above All, owner 16 Oct 2026).
+      canRestore: access.restoreScope
+        ? Boolean(await prisma.auditLog.findFirst({ where: { AND: [{ id: row.id }, access.restoreScope] }, select: { id: true } }))
+        : false,
     })
   } catch (error) {
     console.error('Audit entry API error:', error)

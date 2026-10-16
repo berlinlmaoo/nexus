@@ -36,13 +36,13 @@ export async function POST(req: NextRequest) {
 
     const quests = await prisma.quest.findMany({
       where: { isActive: true, requirementType: { not: "specific_tasks" } },
-      select: { id: true, title: true, requiredCount: true, xpReward: true, requirementType: true, teamIds: true, unitIds: true, deadline: true, workspaceId: true },
+      select: { id: true, title: true, requiredCount: true, xpReward: true, requirementType: true, teamIds: true, unitIds: true, userIds: true, deadline: true, workspaceId: true },
     })
     const live = quests.filter((q) => !q.deadline || q.deadline >= now)
 
     const defs = [
-      ...AUTO_QUESTS.map((q) => ({ key: q.key, title: q.title, requirementType: q.requirementType, requiredCount: q.requiredCount, teamIds: [] as string[], unitIds: [] as string[], workspaceId: null as string | null })),
-      ...live.map((q) => ({ key: q.id, title: q.title, requirementType: q.requirementType, requiredCount: q.requiredCount, teamIds: q.teamIds, unitIds: q.unitIds, workspaceId: q.workspaceId })),
+      ...AUTO_QUESTS.map((q) => ({ key: q.key, title: q.title, requirementType: q.requirementType, requiredCount: q.requiredCount, teamIds: [] as string[], unitIds: [] as string[], userIds: [] as string[], workspaceId: null as string | null })),
+      ...live.map((q) => ({ key: q.id, title: q.title, requirementType: q.requirementType, requiredCount: q.requiredCount, teamIds: q.teamIds, unitIds: q.unitIds, userIds: q.userIds, workspaceId: q.workspaceId })),
     ]
     if (defs.length === 0) return NextResponse.json({ ok: true, quests: 0, sent: 0 })
 
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
 
       for (const def of defs) {
         if (def.workspaceId && def.workspaceId !== member.workspaceId) continue
-        // No units and no teams = the whole crew (lib/quest-audience.ts).
+        // No units, no teams and no people = the whole crew (lib/quest-audience.ts).
         if (!questVisibleTo(def, audience)) continue
 
         const claimed = await prisma.questClaim.findUnique({

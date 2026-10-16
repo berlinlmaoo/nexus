@@ -163,7 +163,7 @@ function LoginPage() {
 
         <form className="space-y-6" onSubmit={onSubmit}>
           <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1 block">{lang.t("Email")}</label>
+            <label className="text-sm font-medium text-muted-foreground ml-1 block">{lang.t("Email")}</label>
             <input
               type="email"
               required
@@ -178,8 +178,8 @@ function LoginPage() {
 
           <div className="space-y-1.5">
             <div className="flex justify-between items-center">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">{lang.t("Password")}</label>
-              <a href="/forgot-password" className="text-[11px] font-bold uppercase tracking-wider text-primary hover:text-primary/80 transition-colors">{lang.t("Forgot password?")}</a>
+              <label className="text-sm font-medium text-muted-foreground ml-1">{lang.t("Password")}</label>
+              <a href="/forgot-password" className="text-sm font-medium text-primary hover:text-primary/80 transition-colors">{lang.t("Forgot password?")}</a>
             </div>
             <input
               type="password"
@@ -257,7 +257,6 @@ function LoginPage() {
           <p className="text-sm text-muted-foreground">{lang.t("New here?")} <a href="/register" className="text-primary font-bold hover:underline underline-offset-4 decoration-2 decoration-primary/30 transition-all ml-1">{lang.t("Request access")}</a></p>
         </div>
 
-        <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-[#FF7F50] text-white text-[10px] font-bold uppercase tracking-[0.2em] rounded-full shadow-lg border-2 border-white dark:border-background">{lang.t("Secure sign-in")}</div>
       </div>
 
       <style>{`

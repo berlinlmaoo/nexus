@@ -1,7 +1,7 @@
 # Legal documents
 
 Owner decisions of 14 Oct 2026. Docassemble-style document assembly + a Paperless-style archive for the four
-issuing companies (Intoo, PATS, Suwara Lokal, Z Networks). Server: `src/lib/legal/*`, `src/app/api/legal/*`.
+issuing companies (Intoo, PATS, Suwara Lokal, The Z Networks). Server: `src/lib/legal/*`, `src/app/api/legal/*`.
 Web: `apps/web/src/routes/_app/legal.tsx`, `apps/web/src/components/legal/*`.
 
 ## Access (invitation only)

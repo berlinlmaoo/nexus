@@ -23,13 +23,15 @@ export function isIosBrowser() {
 }
 
 /** The server's refusal for a browser that may not take attendance (iPhone/iPad: USE_IOS_APP; laptop or
- *  desktop: USE_PHONE_APP) — switch to the card. */
+ *  desktop: USE_PHONE_APP; an Android browser once the server's remote-config flag is on: USE_ANDROID_APP)
+ *  — switch to the card. */
 export function isUseIosAppError(e: unknown) {
   const code = e instanceof ApiError && e.status === 403 ? (e.payload as { code?: string } | null)?.code : undefined;
-  return code === "USE_IOS_APP" || code === "USE_PHONE_APP";
+  return code === "USE_IOS_APP" || code === "USE_PHONE_APP" || code === "USE_ANDROID_APP";
 }
 
-/** Only an Android phone's browser may still check in or out (owner, 2 Oct 2026); everything else uses the app. */
+/** Only an Android phone's browser may still check in or out (owner, 2 and 16 Oct 2026, until the server's
+ *  `blockAndroidBrowserAttendance` flag is switched on); everything else uses the app. */
 export function browserMayTakeAttendance() {
   if (typeof navigator === "undefined") return true;
   return /Android/i.test(navigator.userAgent || "");
@@ -37,6 +39,7 @@ export function browserMayTakeAttendance() {
 
 export function IosAppCheckInCard({ className }: { className?: string }) {
   useLang();
+  if (isAndroidBrowser()) return <AndroidAppCheckInCard className={className} />;
   if (!isIosBrowser()) return <PhoneAppCheckInCard className={className} />;
   return (
     <div className={cn("rounded-2xl border border-primary/20 bg-card p-4 shadow-soft", className)}>
@@ -132,6 +135,23 @@ export function AndroidAppCheckInNote({ className }: { className?: string }) {
 }
 
 /** Laptop / desktop: attendance happens on the phone (owner, 2 Oct 2026). */
+/** An Android browser the server refused (USE_ANDROID_APP, once the big-release APK is out). */
+function AndroidAppCheckInCard({ className }: { className?: string }) {
+  useLang();
+  return (
+    <div className={cn("rounded-2xl border border-primary/20 bg-card p-4 shadow-soft", className)}>
+      <div className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><Smartphone className="h-5 w-5" /></span>
+        <div className="min-w-0">
+          <p className="font-display text-base font-bold leading-snug tracking-tight">{t("Check in from the NEXUS app on your Android phone")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("In a browser your work location can't be recorded during the day, so check-in and check-out happen in the app.")}</p>
+        </div>
+      </div>
+      <a href={NEXUS_ANDROID_DOWNLOAD} className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-primary px-3 py-2.5 text-sm font-bold text-primary-foreground shadow-soft transition hover:bg-primary/90 active:scale-[0.99]"><Download className="h-4 w-4 shrink-0" /> {t("Get the Android app")}</a>
+    </div>
+  );
+}
+
 function PhoneAppCheckInCard({ className }: { className?: string }) {
   useLang();
   return (

@@ -428,8 +428,73 @@ function ProfileSection() {
         </div>
         {save.isSuccess && <p className="text-right text-xs font-semibold text-success">{t("Profile saved.")}</p>}
       </div>
+      <JoinWorkspaceSection />
       {/* The password card lives under Security only (UI tour run 14, R14-WM-23: it was on both tabs). */}
       <DeleteAccountSection />
+    </div>
+  );
+}
+
+/**
+ * Join your company's workspace with its code (owner, 16 Oct 2026). Only for an account whose workspaces have
+ * nobody else in them (signed up without a code); the personal workspace is deleted on join, so it asks first.
+ * The Calendar's "none" state links here (#join-workspace).
+ */
+function JoinWorkspaceSection() {
+  const { t } = useLang();
+  const status = useQuery({ queryKey: ["nexus", "workspace-join"], queryFn: nexusApi.workspaceJoinStatus, retry: false, staleTime: 60_000 });
+  const [code, setCode] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const join = useMutation({
+    mutationFn: () => nexusApi.joinWorkspaceByCode(code.trim()),
+    onSuccess: (r) => {
+      setConfirming(false);
+      // Everything workspace-scoped (projects, Home, the Calendar, the sidebar groups) changes: start fresh.
+      window.setTimeout(() => { window.location.href = "/dashboard"; }, 1200);
+      setDone(r.workspace.name);
+    },
+    onError: () => setConfirming(false),
+  });
+  if (!status.data?.eligible) return null;
+  const joinCode = (join.error as { payload?: { code?: string } } | null)?.payload?.code;
+  const joinError = joinCode === "INVALID_CODE" ? t("That workspace code is not valid.")
+    : joinCode === "NOT_ELIGIBLE" ? t("Your account already shares a workspace with other people. Ask that workspace's admin to add you instead.")
+    : joinCode === "ALREADY_MEMBER" ? t("You are already in that workspace.")
+    : join.isError ? failureText(join.error) : null;
+  const personal = status.data.personalWorkspace?.name ?? null;
+  return (
+    <div id="join-workspace" className="scroll-mt-24 space-y-3 rounded-xl border border-border bg-card p-6 shadow-soft">
+      <div>
+        <h2 className="font-semibold">{t("Join your company's workspace")}</h2>
+        <p className="mt-1 text-xs text-muted-foreground">{t("Ask your company's admin for the code. Your personal workspace and everything in it is deleted when you join.")}</p>
+      </div>
+      {done ? (
+        <p role="status" className="flex items-center gap-2 text-sm font-semibold text-success"><Check className="h-4 w-4" aria-hidden /> {t("You joined {name}.", { name: done })}</p>
+      ) : (
+        <>
+          <label className="block">
+            <span className="text-xs font-medium text-muted-foreground">{t("Workspace code")}</span>
+            <input value={code} onChange={(e) => { setCode(e.target.value); setConfirming(false); }} autoComplete="off" autoCapitalize="characters" spellCheck={false}
+              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm uppercase tracking-wider outline-none focus:border-primary" />
+          </label>
+          {joinError && <p role="alert" className="text-sm font-medium text-destructive">{joinError}</p>}
+          {confirming ? (
+            <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/[0.04] px-3 py-2.5">
+              <p className="text-sm font-semibold">{personal ? t("Delete “{name}” and join?", { name: personal }) : t("Join this workspace?")}</p>
+              <p className="text-xs text-muted-foreground">{t("Its projects, tasks and files are deleted for good. Nothing is moved to the company's workspace.")}</p>
+              <div className="flex flex-wrap justify-end gap-2">
+                <button type="button" onClick={() => setConfirming(false)} disabled={join.isPending} className="rounded-md border border-border px-3 py-1.5 text-sm font-semibold transition hover:bg-accent disabled:opacity-50">{t("Cancel")}</button>
+                <button type="button" onClick={() => join.mutate()} disabled={join.isPending} autoFocus className="inline-flex items-center gap-2 rounded-md bg-destructive px-3 py-1.5 text-sm font-semibold text-destructive-foreground shadow-soft transition hover:bg-destructive/90 disabled:opacity-50">{join.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Delete and join")}</button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex justify-end">
+              <button type="button" disabled={!code.trim()} onClick={() => setConfirming(true)} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground shadow-soft transition hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50"><UserPlus className="h-4 w-4" /> {t("Join workspace")}</button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

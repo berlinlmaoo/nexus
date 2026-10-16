@@ -182,8 +182,10 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   // A column is at least as wide as its name (UI tour run 14, WD-1: "Tanggal Pengg…" could not be read).
   // Phone: a narrower Name column, so the next column peeks in past Assignee and the table reads as one
   // that scrolls sideways (WM-9: Name and Assignee filled the box exactly and looked like the whole table).
+  // Run 19 (R19-WM-4, Notion): the Name column is the widest on a phone too, about 55% of the screen, so two-line
+  // names read whole; the next column still peeks in and the rest scroll sideways.
   const isPhone = useIsMobile();
-  const nameW = isPhone ? 168 : 280;
+  const nameW = isPhone ? Math.round(Math.min(260, Math.max(200, ((typeof window !== "undefined" ? window.innerWidth : 390) - 32) * 0.56))) : 280;
   const colMin = (k: string) => colW[k] ?? Math.min(280, Math.max(160, Math.ceil(64 + propLabel(propDef(defs, k)).length * 6.8)));
   const gridTemplate = `minmax(${nameW}px,2fr) ${columns.map((k) => (colW[k] ? `${colW[k]}px` : `minmax(${colMin(k)}px,1fr)`)).join(" ")} 40px`;
   const rowIn = (gKey: string | null, subKey: string | null) => (task: NexusTask) => row(task, mover.enabled && gKey !== null && canDragTask(task, projectId)
@@ -453,7 +455,7 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
   }
   if (colKey === "created" || colKey === "updated") {
     const v = colKey === "created" ? task.createdAt : task.updatedAt;
-    return <span className="block truncate px-1.5 py-1 text-sm text-muted-foreground">{v ? new Date(v).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>;
+    return <span className="block truncate px-1.5 py-1 text-sm text-muted-foreground">{v ? new Date(v).toLocaleDateString(locale, { day: "numeric", month: "short", ...(new Date(v).getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }) }) : "—"}</span>;
   }
   if (colKey === "subtasks") {
     const subs = task.subtasks ?? [];

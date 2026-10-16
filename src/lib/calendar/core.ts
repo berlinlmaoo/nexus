@@ -112,7 +112,8 @@ export type CalendarSettings = {
   notPrivateProjectIds: string[]
   /** A project whose name starts with one of these (case-insensitive) is private — new Finance/Legal ones too. */
   privateNamePrefixes: string[]
-  /** Overdue longer than this → "Terbengkalai" instead of the overdue rail (decision 6). */
+  /** Overdue longer than this → still overdue, marked "Overdue for more than N days" (the "stale" state) and left
+   *  out of the overdue rail and the urgent count. There is no separate "Terbengkalai" bucket (decision 3). */
   overdueWindowDays: number
   /** "Mendesak" = due within this many days counting today (2 = today and tomorrow). */
   urgentDays: number

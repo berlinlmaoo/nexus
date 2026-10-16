@@ -447,8 +447,13 @@ internal fun CalendarContent(s: CalState, vm: CalendarViewModel, onBack: () -> U
                     d == null && s.error == null -> Skeleton()
                     d == null -> EmptyState(Icons.Filled.Refresh, stringResource(R.string.cal_load_failed), stringResource(R.string.cal_check_connection),
                         stringResource(R.string.try_again), { vm.refresh() }, Modifier.fillMaxSize())
-                    s.access == CalAccess.NONE -> EmptyState(Icons.Filled.CalendarMonth, stringResource(R.string.cal_none_title), stringResource(R.string.cal_none_body),
-                        stringResource(R.string.cal_open_my_tasks), onOpenMyMission, Modifier.fillMaxSize())
+                    // A personal-workspace account joins the company's workspace with its code (owner, 16 Oct 2026).
+                    s.access == CalAccess.NONE -> {
+                        var joining by remember { mutableStateOf(false) }
+                        EmptyState(Icons.Filled.CalendarMonth, stringResource(R.string.cal_none_title), stringResource(R.string.cal_none_body),
+                            stringResource(R.string.ws_join_enter_code), { joining = true }, Modifier.fillMaxSize())
+                        if (joining) JoinWorkspaceDialog(onDismiss = { joining = false }, onJoined = { joining = false; vm.refresh() })
+                    }
                     s.access == CalAccess.OFF -> EmptyState(Icons.Filled.CalendarMonth, stringResource(R.string.cal_off_title), stringResource(R.string.cal_off_body),
                         stringResource(R.string.cal_open_my_tasks), onOpenMyMission, Modifier.fillMaxSize())
                     else -> {

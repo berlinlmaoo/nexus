@@ -36,7 +36,7 @@ export const ID_CHAT: Record<string, string> = {
   "Loading earlier messages…": "Memuat pesan sebelumnya…",
   "Couldn't load earlier messages. Try again": "Pesan sebelumnya gagal dimuat. Coba lagi",
   "This is the start of the conversation.": "Ini awal percakapan.",
-  "No messages yet. Say hi 👋": "Belum ada pesan. Sapa dulu 👋",
+  "No messages yet.": "Belum ada pesan.",
   "Attachment": "Lampiran",
   "A member": "Seorang anggota",
   "Jump to that message": "Lompat ke pesan itu",

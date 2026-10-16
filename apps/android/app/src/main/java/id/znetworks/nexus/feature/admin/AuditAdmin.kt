@@ -119,7 +119,9 @@ import java.util.Locale
 @Serializable data class AuditLink(val type: String? = null, val id: String? = null)
 @Serializable data class AuditDetail(val label: String = "", val value: JsonElement? = null, val link: AuditLink? = null)
 @Serializable data class AuditEntryResponse(val entry: AuditEntry, val title: String? = null, val changes: List<AuditChange> = emptyList(), val details: List<AuditDetail> = emptyList(),
-                                            val restore: AuditRestoreDetail? = null)
+                                            val restore: AuditRestoreDetail? = null,
+                                            /** BoD and One Above All only (owner, 16 Oct 2026); absent on older servers = may. */
+                                            val canRestore: Boolean = true)
 
 object AuditLogic {
     val LINKABLE = setOf("task", "project", "user")
@@ -287,7 +289,7 @@ fun AuditEntryScreen(id: String, onBack: () -> Unit, onOpenLink: (type: String, 
                         DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", Locale.getDefault()).format(Instant.parse(it).atZone(OfficeTime.ZONE)) }.getOrNull() } ?: ""), fontSize = 12.sp, color = c.mutedFg)
                 }
                 x.restore?.let { rs ->
-                    RestoreCard(x.entry, rs, restoredNow, restoring, restoreError, onRestore = { confirm = true }, onOpenTarget = onOpenTarget)
+                    RestoreCard(x.entry, rs, restoredNow, restoring, restoreError, onRestore = { confirm = true }, onOpenTarget = onOpenTarget, canRestore = x.canRestore)
                     if (confirm) androidx.compose.material3.AlertDialog(onDismissRequest = { confirm = false },
                         title = { Text(stringResource(R.string.au_restore_confirm, x.entry.entityName ?: "")) },
                         text = { Text(restoreExplanation(rs, x.entry.entityType)) },
@@ -369,7 +371,7 @@ private fun restoreExplanation(r: AuditRestoreDetail, entityType: String?): Stri
 /** Right under the entry's header: bring it back, or who already did (iOS restoreCard). */
 @Composable
 internal fun RestoreCard(e: AuditEntry, r: AuditRestoreDetail, restoredNow: AuditRestoreResult?, restoring: Boolean, error: String?,
-                        onRestore: () -> Unit, onOpenTarget: (RestoreTarget) -> Unit) {
+                        onRestore: () -> Unit, onOpenTarget: (RestoreTarget) -> Unit, canRestore: Boolean = true) {
     val c = Nx.colors
     val soft = r.soft == true
     if (!r.available || restoredNow != null) AdminCard {
@@ -394,6 +396,8 @@ internal fun RestoreCard(e: AuditEntry, r: AuditRestoreDetail, restoredNow: Audi
         Text(restoreExplanation(r, e.entityType), fontSize = 13.sp, color = c.foreground)
         RestoreKinds.note(e.entityType, soft)?.let { Text(stringResource(it), fontSize = 11.sp, color = c.mutedFg) }
         error?.let { Text(it, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.dangerText) }
+        // A Manager reads what would come back, without the button (owner, 16 Oct 2026).
+        if (!canRestore) { Text(stringResource(R.string.au_restore_bod_only), fontSize = 12.sp, color = c.mutedFg); return@AdminCard }
         androidx.compose.material3.Button(onClick = onRestore, enabled = !restoring, shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth().height(48.dp)) {
             if (restoring) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = LocalContentColor.current)

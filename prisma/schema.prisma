@@ -517,9 +517,10 @@ model Project {
   // matrix) were removed with their API routes. Kept for released apps; both always read false.
   enablePnlDashboard Boolean @default(false)
   financeEnabled Boolean @default(false)
-  // What the project is for (owner, 9 Oct 2026): "TASK" | "FINANCE" | "CONTENT" | "PIPELINE". Every
-  // project before this is TASK, and creation accepts only TASK for now (the rest are "coming soon",
-  // POST /api/projects answers 400 TYPE_COMING_SOON). Rules in src/lib/project-tabs.ts.
+  // What the project is for (owner, 9 Oct 2026): "TASK" | "PIPELINE" | "OUTLET_SALES" | "SOCIAL_MEDIA_REPORT" |
+  // "FINANCE" | "CONTENT". Every project before 9 Oct is TASK. Creation accepts CREATABLE_PROJECT_TYPES (TASK,
+  // PIPELINE, OUTLET_SALES, SOCIAL_MEDIA_REPORT); FINANCE and CONTENT answer 400 TYPE_COMING_SOON. Rules in
+  // src/lib/project-tabs.ts.
   type String @default("TASK")
   // Tabs this project hides (owner, 9 Oct 2026), by key — see PROJECT_TAB_KEYS in
   // src/lib/project-tabs.ts. Hiding never deletes anything. Stored as the HIDDEN set so a tab added
@@ -2660,6 +2661,9 @@ model Quest {
   teamIds         String[] @default([]) // legacy Crew Hub teams (retired); empty = semua crew (ignored for specific_tasks)
   /// IP & Division Chart units the quest is for (13 Oct 2026); empty = everyone. Members of a unit or any unit below it.
   unitIds         String[] @default([])
+  /// People the quest is for, one by one (owner, 16 Oct 2026). Empty = not per person. With unitIds: a person sees
+  /// the quest when in one of the units OR listed here. Ignored for specific_tasks, like the units.
+  userIds         String[] @default([])
   /// Pointed at deleted teams and was moved to "everyone" by 2026-10-13-qafix-perm-quest-units.sql.
   teamsRetired    Boolean  @default(false)
   taskIds         String[] @default([]) // specific_tasks quest: exact tasks to finish; visible to those tasks' project members, XP to whoever completes them
@@ -3244,7 +3248,9 @@ model Complaint {
   reporter      User               @relation("ComplaintReporter", fields: [reporterId], references: [id], onDelete: Cascade)
   category      ComplaintCategory
   subject       String
-  anonymous     Boolean            @default(false) // reporter hidden from reviewers (BoD) too
+  /// Retired (owner, 16 Oct 2026): there are no anonymous tickets. Never written or read; kept so old rows and
+  /// the column stay as they are (no DROP).
+  anonymous     Boolean            @default(false)
   confidential  Boolean            @default(false) // flagged extra-sensitive (badge for BoD)
   // Evidence photo — REQUIRED at create (API-enforced). Served via gated /api/files/complaints/<name>.
   evidenceUrl      String?
@@ -3880,7 +3886,8 @@ model PipelineDeal {
   id        String  @id @default(cuid())
   projectId String
   project   Project @relation("PipelineDealProject", fields: [projectId], references: [id], onDelete: Cascade)
-  /// "TZN-26001": prefix + 2-digit year + per-project sequence. Read-only, unique per project.
+  /// "TZN-26001": prefix + 2-digit year + sequence. Read-only, unique across ALL boards and never handed out
+  /// twice, also after a delete (owner, 16 Oct 2026): every code given is kept in PipelineDealCode.
   code      String
   /// Order inside its stage column (drag on the board).
   position  Float   @default(0)
@@ -3972,6 +3979,15 @@ model PipelineDeal {
 
 /// Per-field edit history of a deal: who changed which field from what to what (the GM's board kept only
 /// the last _updatedAt/_updatedBy). Comes back with the deal on a restore from Audit.
+/// Every Pipeline deal code ever handed out, on any board (owner, 16 Oct 2026: codes are unique across boards and
+/// never reused). Rows are never deleted: a deleted deal's code stays taken. lib/pipeline-server.ts nextDealCode.
+model PipelineDealCode {
+  code      String   @id
+  /// The board it was first given on (plain column: the board may be gone since).
+  projectId String?
+  createdAt DateTime @default(now())
+}
+
 model PipelineDealChange {
   id        String       @id @default(cuid())
   dealId    String

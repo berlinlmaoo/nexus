@@ -11,6 +11,7 @@ import {
   dealInclude,
   defaultProbability,
   nextDealCode,
+  claimDealCode,
   parseDealFields,
   pipelineGate,
   serializeDeal,
@@ -76,13 +77,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       select: { position: true },
     })
 
-    // Two people adding a deal in the same second can pick the same code; the unique index refuses
-    // the second, which then takes the next one.
+    // Two people adding a deal in the same second can pick the same code; the ledger of handed-out codes
+    // (PipelineDealCode, unique across all boards) refuses the second, which then takes the next one.
     let created = null
     for (let attempt = 0; attempt < 4 && !created; attempt++) {
       const code = await nextDealCode(projectId)
       try {
-        created = await prisma.pipelineDeal.create({
+        created = await prisma.$transaction(async (tx) => {
+          await claimDealCode(tx, code, projectId)
+          return tx.pipelineDeal.create({
           data: {
             probability: defaultProbability(stage),
             ...parsed.data,
@@ -95,6 +98,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             updatedById: userId,
           },
           include: dealInclude,
+          })
         })
       } catch (error) {
         if (!isUniqueViolation(error)) throw error
@@ -102,8 +106,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     if (!created) return NextResponse.json({ error: "Could not number the deal. Try again." }, { status: 409 })
 
-    // Awaited so the trail is complete before the response; the code sequence itself reads live deals and
-    // restorable snapshots, not these rows (nextDealCode).
+    // Awaited so the trail is complete before the response; the code sequence itself reads the ledger, live
+    // deals and restorable snapshots, not these rows (nextDealCode).
     await logAudit({
       action: "create",
       entityType: "pipeline_deal",

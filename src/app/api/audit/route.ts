@@ -77,6 +77,8 @@ export async function GET(request: NextRequest) {
       total,
       limit,
       offset,
+      // Whether the caller may restore at all (BoD and One Above All, owner 16 Oct 2026): a client hides Restore.
+      canRestore: access.restoreScope !== null,
     })
   } catch (error) {
     console.error('Audit log API error:', error)

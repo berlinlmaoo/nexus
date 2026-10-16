@@ -62,8 +62,9 @@ import id.znetworks.nexus.ui.theme.Nx
 object ControlRoomTabs {
     /** [fakeGps]: the server's `fakeGpsReview` flag (remote config). */
     fun forRole(isBoD: Boolean, fakeGps: Boolean = true) = buildList {
-        addAll(listOf("users", "attendance", "audit", "quests"))
-        if (isBoD) addAll(listOfNotNull("announcements", "extra-dayoff", "suspects".takeIf { fakeGps }, "gideon", "app"))
+        addAll(listOf("users", "attendance", "audit"))
+        // Quests are made by BoD and up (owner, 16 Oct 2026); the server answers a Manager 403.
+        if (isBoD) addAll(listOfNotNull("quests", "announcements", "extra-dayoff", "suspects".takeIf { fakeGps }, "gideon", "app"))
     }
 }
 

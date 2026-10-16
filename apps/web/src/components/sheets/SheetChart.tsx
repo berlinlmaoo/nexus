@@ -5,7 +5,7 @@ import {
   PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis,
 } from "recharts";
 import { toPng, toSvg } from "html-to-image";
-import { Copy, Download, EllipsisVertical, Pencil, Trash2 } from "lucide-react";
+import { Copy, Download, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { formatDateSerial, formatGrouped, type SheetData, type SheetEngine } from "@/lib/sheet-formula";
@@ -485,7 +485,7 @@ export function ChartObject({ spec, data, engine, theme, left, top, zoom, select
           selected || menu ? "opacity-100" : "opacity-0 pointer-coarse:opacity-100! group-hover:opacity-100",
         )}
       >
-        <EllipsisVertical className="h-4 w-4" />
+        <MoreHorizontal className="h-4 w-4" />
       </button>
       {selected && canEdit && HANDLES.map(({ h: hd, style, cursor }) => (
         <span

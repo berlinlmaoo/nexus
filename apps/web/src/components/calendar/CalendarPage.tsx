@@ -27,6 +27,7 @@ import { FilterPanel } from "./FilterPanel";
 import { TaskPreview } from "./TaskPreview";
 import { Segmented, type SegmentedOption } from "./Segmented";
 import { SnapTail } from "@/components/SnapTail";
+import { monthTitle } from "@/lib/month-title";
 
 // The full task panel is big and only opens on ?task= for a task the viewer can edit: load it on demand,
 // and warm it up when the pointer or the keyboard reaches a task row.
@@ -503,8 +504,9 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
   const iconButton = cn("grid size-8 shrink-0 place-items-center rounded-lg hover:bg-muted", coarseIcon, FOCUS_PILL);
   const atToday = date === today;
   const span = view === "people"
-    ? `${fmtDay(weekDays[0], { day: "numeric", month: "short" }, locale)} – ${fmtDay(weekDays[6], { day: "numeric", month: "short", year: "numeric" }, locale)}`
-    : fmtDay(`${month}-01`, { month: "long", year: "numeric" }, locale);
+    // The current year is hidden, as in every date and month title (run 19 decision 2).
+    ? `${fmtDay(weekDays[0], { day: "numeric", month: "short" }, locale)} – ${fmtDay(weekDays[6], { day: "numeric", month: "short", ...(weekDays[6].slice(0, 4) === today.slice(0, 4) ? {} : { year: "numeric" }) }, locale)}`
+    : monthTitle(new Date(`${month}-01T00:00:00Z`), locale, "UTC");
 
   // ‹ month › and Today (‹ week › in People).
   const dateNav = (
@@ -662,13 +664,13 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
   if (failed) {
     body = <div className="p-4 md:px-8 md:py-6"><EmptyState icon={AlertTriangle} tone="muted" title={t("The calendar could not be loaded")} message={t("Check the connection and try again.")} action={<EmptyAction onClick={() => { void structureQ.refetch(); void itemsQ.refetch(); }}>{t("Try again")}</EmptyAction>} /></div>;
   } else if (access === "none") {
-    body = <div className="p-4 md:px-8 md:py-6"><EmptyState icon={Lock} title={t("This calendar is for members of the company")} message={t("You are in a personal workspace. Ask a board member or manager to add you to the company's workspace; the Calendar then shows the tasks of everyone there.")} action={<EmptyAction to="/my-tasks">{t("Open My Tasks")}</EmptyAction>} /></div>;
+    body = <div className="p-4 md:px-8 md:py-6"><EmptyState icon={Lock} title={t("This calendar is for members of the company")} message={t("You are in a personal workspace. Enter your company's workspace code in Settings to join it; the Calendar then shows the tasks of everyone there.")} action={<EmptyAction to="/settings">{t("Enter the workspace code")}</EmptyAction>} /></div>;
   } else if (access === "off") {
     body = <div className="p-4 md:px-8 md:py-6"><EmptyState icon={CalendarDays} title={t("The Calendar is on its way")} message={t("It opens for the board and managers first, then for everyone. Your own tasks are still in My Tasks.")} action={<EmptyAction to="/my-tasks">{t("Open My Tasks")}</EmptyAction>} /></div>;
   } else if (firstLoad) {
     body = <SkeletonCalendar compact={lay.gridCompact} />;
   } else {
-    const monthName = fmtDay(`${month}-01`, { month: "long", year: "numeric" }, locale);
+    const monthName = monthTitle(new Date(`${month}-01T00:00:00Z`), locale, "UTC");
     // Why the month is empty. The header's Reset is on screen whenever a filter is on, so the banner
     // only says it; the scope has its own switch right there too.
     const banner = view !== "month" ? null

@@ -78,6 +78,7 @@ import { t as tt, useLang } from "@/lib/lang";
 import { cn, glueDash } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { priorityTone } from "@/lib/calendar/tone";
+import { monthTitle } from "@/lib/month-title";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Activity,
@@ -2029,7 +2030,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
   return (
     <div className="space-y-3 px-4 py-3 md:px-8">
       <div className="flex items-center gap-1">
-        <h2 className="mr-auto text-base font-semibold capitalize">{new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(viewMonth)}</h2>
+        <h2 className="mr-auto text-base font-semibold capitalize">{monthTitle(viewMonth, locale)}</h2>
         <button type="button" onClick={() => { const n = new Date(); setViewMonth(new Date(n.getFullYear(), n.getMonth(), 1)); }} className="h-8 rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">{t("Today")}</button>
         <button type="button" onClick={() => shiftMonth(-1)} aria-label={t("Previous month")} className="grid h-8 w-8 pointer-coarse:size-11 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><ChevronLeft className="h-4 w-4" /></button>
         <button type="button" onClick={() => shiftMonth(1)} aria-label={t("Next month")} className="grid h-8 w-8 pointer-coarse:size-11 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><ChevronRight className="h-4 w-4" /></button>
@@ -2233,10 +2234,12 @@ function daysBetween(a: Date, b: Date) { return Math.round((startOfDay(b).getTim
  * A task's progress when something measures it: its subtasks done, or 100 once it is done itself. null when
  * nothing does: no bar then, rather than a 50% made up from the status beside "No date" (UI tour run 13, W-B22).
  */
+/** Measured progress only: done subtasks over subtasks. No subtasks = no progress data, a dash, not a % made up
+ *  from the status (run 19 decision 8). */
 function tlProgress(task: NexusTask): number | null {
   const subs = task.subtasks ?? [];
   if (subs.length) return Math.round((subs.filter((s) => isDone(s.status)).length * 100) / subs.length);
-  return isDone(task.status) ? 100 : null;
+  return null;
 }
 
 /** The Progress cell: a bar and its percent, or a quiet dash when the task's progress isn't measured. */
@@ -2424,7 +2427,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   const days = Array.from({ length: dayCount }, (_, i) => new Date(min.getTime() + i * DAY_MS));
   const months: { label: string; days: number }[] = [];
   for (const d of days) {
-    const label = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(d);
+    const label = monthTitle(d, locale);
     const last = months[months.length - 1];
     if (last && last.label === label) last.days++;
     else months.push({ label, days: 1 });
@@ -2441,6 +2444,18 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   const jumpToFirst = () => {
     const el = scrollerRef.current;
     if (el && firstWin) el.scrollTo({ left: Math.max(0, xOf(firstWin.start) - GANTT_DAY_W * 2), behavior: "smooth" });
+  };
+
+  // Where the scroller opens: on today. A phone shows about six days, so when no bar falls in them it opens on the
+  // bar nearest today instead, never on a window with only off-range chips (UI tour run 19, R19-WM-3, decision 8).
+  const openingLeft = (el: HTMLDivElement) => {
+    const atToday = Math.max(0, xOf(today) - GANTT_DAY_W * (compact ? 1 : 3));
+    if (!compact || !allWins.length) return atToday;
+    const width = Math.max(GANTT_DAY_W, el.clientWidth - leftW);
+    if (allWins.some((w) => xOf(w.end) + GANTT_DAY_W > atToday && xOf(w.start) < atToday + width)) return atToday;
+    const dist = (w: { start: Date; end: Date }) => Math.min(Math.abs(w.start.getTime() - today.getTime()), Math.abs(w.end.getTime() - today.getTime()));
+    const near = allWins.reduce((a, w) => (dist(w) < dist(a) ? w : a), allWins[0]);
+    return Math.max(0, xOf(near.start) - GANTT_DAY_W);
   };
 
   // A dated bar outside the visible days: a chip at that edge of its track says where it is and brings it in
@@ -2476,7 +2491,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
         if (prev === first) return;
         el.dataset.tlMin = String(first);
         el.scrollLeft = prev === null
-          ? Math.max(0, xOf(today) - GANTT_DAY_W * (compact ? 1 : 3))
+          ? openingLeft(el)
           : Math.max(0, el.scrollLeft + Math.round((prev - first) / DAY_MS) * GANTT_DAY_W);
       }} className="relative min-h-0 flex-1 snap-y snap-proximity overflow-auto overscroll-x-contain rounded-lg border border-border bg-card [scroll-padding-top:69px]">
         {/* Rows snap under the pinned header, so a scroll never stops with half a row peeking out below it

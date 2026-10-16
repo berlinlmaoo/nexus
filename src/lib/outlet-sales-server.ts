@@ -68,11 +68,11 @@ export async function outletGate(userId: string, projectId: string, need: "read"
 }
 
 /**
- * Who sets the monthly targets: the same people who manage the project's settings (canManageProject in
- * api/projects/[projectId]/route.ts) — the project's LEAD, and BoD / One Above All of its workspace.
+ * Who sets the targets (monthly and per day) and the report settings: Full access to the project only
+ * (lib/rbac.ts) — the Project Owner, a member invited with Full, and BoD / One Above All of its workspace
+ * (owner, 13 and 16 Oct 2026). A Manager is not included as such: only when invited with Full.
  */
 export async function canManageOutletTargets(userId: string, projectId: string): Promise<boolean> {
-  // Full access (lib/rbac.ts): the Project Owner, BoD / One Above All (owner 13 Oct 2026).
   return hasProjectLevel(userId, projectId, "FULL")
 }
 

@@ -136,12 +136,14 @@ export const PeopleWeek = memo(function PeopleWeek({
             const head = (
               <>
                 <UnitMark unit={u} size={20} />
+                <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[var(--c)] dark:bg-[var(--cd)]" />
                 <span className={cn("min-w-0 flex-1 [overflow-wrap:anywhere]", CAPS)}>{u.name}</span>
                 <span aria-hidden className="shrink-0 text-xs font-bold tabular-nums text-muted-foreground">{r.count}</span>
                 <span className="sr-only">{tn(r.count, "{n} task", "{n} tasks")}</span>
               </>
             );
-            const card = "flex w-full items-center gap-2 rounded-xl border-l-[3px] border-[var(--c)] bg-card px-[10px] py-2 text-left shadow-soft dark:border-[var(--cd)]";
+            // No thick coloured left border: the division's colour is the dot before its name (run 19 decision 3).
+            const card = "flex w-full items-center gap-2 rounded-xl border border-border bg-card px-[10px] py-2 text-left shadow-soft";
             return (
               <Heading key={rowKey(r)} level={levelOf(r)} style={{ ...unitVars(u), marginLeft: indent(r, 10) }}>
                 {/* The focus card frames the whole list and does not fold; every card under it does. */}

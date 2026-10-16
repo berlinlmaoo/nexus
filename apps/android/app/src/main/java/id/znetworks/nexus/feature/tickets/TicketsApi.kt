@@ -27,7 +27,7 @@ data class Ticket(
     val lastMessageAt: String? = null,
     val resolvedAt: String? = null,
     val createdAt: String? = null,
-    /** Null = anonymous to this viewer. */
+    /** Sent to BoD and to the reporter; null for anyone else (there are no anonymous tickets, 16 Oct 2026). */
     val reporter: TPerson? = null,
     val messageCount: Int = 0,
     val gideonReplied: Boolean = false,

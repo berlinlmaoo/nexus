@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { AUTO_QUESTS, computeQuestProgress, currentPeriodKey, levelForXp, getPeriodScore, applyAutoPenalties, QUEST_ONCE_PERIOD } from "@/lib/gamification"
+import { AUTO_QUESTS, computeQuestProgress, currentPeriodKey, levelForXp, getPeriodScore, QUEST_ONCE_PERIOD } from "@/lib/gamification"
 import { audienceOf, questVisibleTo } from "@/lib/quest-audience"
 
 export async function GET() {
@@ -9,9 +9,6 @@ export async function GET() {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const userId = session.user.id
-
-    // Lazily apply any due penalty quests (idempotent per period) before reading the score.
-    await applyAutoPenalties(userId).catch((e) => console.error("applyAutoPenalties:", e))
 
     const [score, streak, memberships, claims, teamMembers, projectMembers] = await Promise.all([
       getPeriodScore(userId),
@@ -23,7 +20,7 @@ export async function GET() {
       prisma.projectMember.findMany({ where: { userId }, select: { projectId: true } }),
     ])
 
-    // Score is period-based (baseline 1000 ± this period's quest deltas); drives level too.
+    // Score is period-based (baseline 1000 ± this period's XP); the level is this period's level (16 Oct 2026).
     const totalXp = score
     const info = levelForXp(totalXp)
     const workspaceIds = memberships.map((m) => m.workspaceId)

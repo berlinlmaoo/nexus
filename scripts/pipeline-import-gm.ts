@@ -127,6 +127,9 @@ async function main() {
     }
     if (dryRun) { console.log(`would add ${code} ${data.stage} — ${data.name}`); added++; continue }
     const created = await prisma.$transaction(async (tx) => {
+      // The GM's code is taken in the ledger of handed-out codes too (unique across boards, 16 Oct 2026):
+      // a code another board already gave stops the import here instead of being given twice.
+      await tx.pipelineDealCode.create({ data: { code, projectId } })
       const row = await tx.pipelineDeal.create({ data, select: { id: true, code: true, name: true } })
       await tx.auditLog.create({
         data: {

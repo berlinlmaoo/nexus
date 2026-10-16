@@ -16,6 +16,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { priorityTone } from "@/lib/calendar/tone";
 import { useLang } from "@/lib/lang";
+import { monthTitle } from "@/lib/month-title";
 
 export const Route = createFileRoute("/_app/folders/$folderId")({ component: FolderAggregatePage });
 
@@ -258,7 +259,7 @@ function DesktopCalendarView({ tasks, projById }: { tasks: NexusTask[]; projById
     <div className="rounded-[28px] border border-border bg-card p-4 shadow-soft">
       <div className="mb-3 flex items-center justify-between">
         <button onClick={() => setMonthOffset((o) => o - 1)} aria-label={t("Previous month")} className="grid h-8 w-8 place-items-center rounded-lg hover:bg-accent"><ChevronLeft className="h-4 w-4" /></button>
-        <h3 className="font-bold">{month.toLocaleDateString(locale, { month: "long", year: "numeric" })}</h3>
+        <h3 className="font-bold">{monthTitle(month, locale)}</h3>
         <button onClick={() => setMonthOffset((o) => o + 1)} aria-label={t("Next month")} className="grid h-8 w-8 place-items-center rounded-lg hover:bg-accent"><ChevronRight className="h-4 w-4" /></button>
       </div>
       <div className="grid grid-cols-7 gap-1">
@@ -403,7 +404,7 @@ function MobileCalendarView({ tasks, projById }: { tasks: NexusTask[]; projById:
       <div className="rounded-[28px] border border-border bg-card p-3 shadow-soft">
         <div className="mb-2 flex items-center justify-between">
           <button onClick={() => goMonth(-1)} aria-label={t("Previous month")} className="grid h-9 w-9 place-items-center rounded-xl hover:bg-accent"><ChevronLeft className="h-5 w-5" /></button>
-          <h3 className="text-base font-bold capitalize">{month.toLocaleDateString(locale, { month: "long", year: "numeric" })}</h3>
+          <h3 className="text-base font-bold capitalize">{monthTitle(month, locale)}</h3>
           <button onClick={() => goMonth(1)} aria-label={t("Next month")} className="grid h-9 w-9 place-items-center rounded-xl hover:bg-accent"><ChevronRight className="h-5 w-5" /></button>
         </div>
         <div className="grid grid-cols-7 gap-1">
