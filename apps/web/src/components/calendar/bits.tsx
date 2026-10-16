@@ -27,6 +27,9 @@ export const TOUCH_ROW = "pointer-coarse:min-h-[44px]";
 export const TOUCH_ICON = "pointer-coarse:size-[44px]";
 /** The one style of a small uppercase label: card and ribbon names, column heads, badges. */
 export const CAPS = "text-2xs font-semibold uppercase tracking-wider";
+/** A group's label in a list (divisions, groups, "Overdue · 58"): sentence case, as the names are written (decision 17,
+ *  UI tour run 20, R20-WM-11: "CREATIVE · 2 TASKS" in small caps). */
+export const GROUP_LABEL = "text-xs font-semibold";
 /** A project colour's edge: a very pale or very dark colour still shows on the card, in either theme. */
 export const SWATCH_EDGE = "ring-1 ring-inset ring-foreground/20";
 

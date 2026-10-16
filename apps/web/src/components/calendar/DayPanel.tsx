@@ -8,7 +8,7 @@ import type { CalIndex, CalItem, CalScope, DayTree, PersonRow, TreeNode } from "
 import { dayDiff } from "@/lib/calendar/core";
 import { SLATE } from "@/lib/calendar/tone";
 import {
-  CAPS, Face, FOCUS_PILL, FOCUS_ROW, fmtDay, Heading, ItemRow, scrollerOf, stickyRoom, TOUCH_ICON, TOUCH_ROW, unitVars, UnitMark,
+  CAPS, GROUP_LABEL, Face, FOCUS_PILL, FOCUS_ROW, fmtDay, Heading, ItemRow, scrollerOf, stickyRoom, TOUCH_ICON, TOUCH_ROW, unitVars, UnitMark,
   useCollapsed, viewerFirst, YouTag, type PeopleLookup,
 } from "./bits";
 
@@ -168,13 +168,13 @@ export const DayPanel = memo(function DayPanel({
               <Heading level={3}>
                 <button type="button" onClick={() => setRailOpen((v) => !v)} aria-expanded={railOpen} aria-controls={railId}
                   className={cn("flex min-h-8 w-full items-center justify-between gap-2 rounded-lg px-[8px] py-1 text-left", TOUCH_ROW, FOCUS_ROW)}>
-                  <span className={cn("text-cal-overdue", CAPS)}>{t("Overdue · {n}", { n: rail.length })}</span>
+                  <span className={cn("text-cal-overdue", GROUP_LABEL)}>{t("Overdue · {n}", { n: rail.length })}</span>
                   <span className="shrink-0 text-xs font-semibold text-cal-overdue">{railOpen ? t("Show less") : t("Show all")}</span>
                 </button>
               </Heading>
             ) : (
               // Two or fewer: everything is already shown, there is nothing to expand.
-              <Heading level={3} className={cn("flex min-h-8 items-center px-[8px] py-1 text-cal-overdue", CAPS)}>{t("Overdue · {n}", { n: rail.length })}</Heading>
+              <Heading level={3} className={cn("flex min-h-8 items-center px-[8px] py-1 text-cal-overdue", GROUP_LABEL)}>{t("Overdue · {n}", { n: rail.length })}</Heading>
             )}
             <div id={railId}>
               {(railOpen ? rail : rail.slice(0, 2)).map((i) => (
@@ -196,7 +196,7 @@ export const DayPanel = memo(function DayPanel({
             ))}
             {lens === "person" && tree.unplaced.length > 0 && (
               <div data-snap-row="" className="snap-start rounded-2xl border border-dashed border-border bg-card p-[8px]">
-                <Heading level={3} className={cn("px-[8px] py-1 text-muted-foreground", CAPS)}>{t("Not in the chart yet · {n}", { n: tree.unplaced.length })}</Heading>
+                <Heading level={3} className={cn("px-[8px] py-1 text-muted-foreground", GROUP_LABEL)}>{t("Not in the chart yet · {n}", { n: tree.unplaced.length })}</Heading>
                 {viewerFirst(tree.unplaced, (p) => p.userId === meId).map((p) => <PersonBlock key={p.userId} row={p} unitId={null} level={4} common={common} />)}
               </div>
             )}
@@ -204,7 +204,7 @@ export const DayPanel = memo(function DayPanel({
                 owner 12 Oct 2026); this is where it is listed, by its PICs. */}
             {lens === "division" && noDivision.length > 0 && (
               <div data-snap-row="" className="snap-start rounded-2xl border border-dashed border-border bg-card p-[8px]">
-                <Heading level={3} className={cn("px-[8px] py-1 text-muted-foreground", CAPS)}>{t("No division · {n}", { n: noDivisionCount })}</Heading>
+                <Heading level={3} className={cn("px-[8px] py-1 text-muted-foreground", GROUP_LABEL)}>{t("No division · {n}", { n: noDivisionCount })}</Heading>
                 {viewerFirst(noDivision, (p) => p.userId === meId).map((p) => <PersonBlock key={p.userId} row={p} unitId={null} level={4} common={common} />)}
               </div>
             )}
@@ -260,7 +260,7 @@ function SectionCard({ node, own = false, collapsed, toggle, mine, lens, common 
           {/* Wraps instead of truncating (at a large text size "FRAMEWORK AGENCY" was cut to "FR…"); "You"
               drops under the name when the two do not fit side by side. */}
           <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-            <span className={cn("min-w-0 [overflow-wrap:anywhere]", CAPS)}>{node.unit.name}</span>
+            <span className={cn("min-w-0 [overflow-wrap:anywhere]", GROUP_LABEL)}>{node.unit.name}</span>
             {isMine && <YouTag />}
           </span>
           <span aria-hidden className="shrink-0 rounded-full bg-muted px-2 py-px text-xs font-bold tabular-nums">{count}</span>
@@ -305,7 +305,7 @@ function SubNode({ node, lens, level, common }: { node: TreeNode; lens: Lens; le
     return (
       <div data-snap-row="" className="mx-[4px] mt-2 snap-start rounded-xl border border-dashed border-cal-line bg-cal-accent-soft/50 px-[4px] pb-1 pt-1.5 dark:bg-cal-accent-soft/40">
         {/* The count with its unit, "CREATIVE · 1 task", as the apps write it (iPhone run 14 N-38). */}
-        <Heading level={level} className={cn("px-[6px] pb-0.5 [overflow-wrap:anywhere]", CAPS, SLATE.text)}>
+        <Heading level={level} className={cn("px-[6px] pb-0.5 [overflow-wrap:anywhere]", GROUP_LABEL, SLATE.text)}>
           {node.unit.name} · {tn(node.count, "{n} task", "{n} tasks")}
         </Heading>
         {node.children.map((k) => <SubNode key={k.unit.id} node={k} lens={lens} level={subLevel(level)} common={common} />)}

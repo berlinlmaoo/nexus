@@ -226,7 +226,8 @@ function RequestCard({ r, onOpen }: { r: BoardRequest; onOpen: () => void }) {
       </div>
       <div className="mt-0.5 truncate text-xs text-muted-foreground">{r.company.name}{r.isAddendum && r.parentNumberText ? ` · ${t("Amends {number}", { number: r.parentNumberText })}` : ""}</div>
       <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-muted-foreground">
-        <span>{r.requester?.name ?? "—"}</span>
+        {/* Says who the name is (UI tour run 20, R20-WM-8: a bare name right above "No PIC yet"). */}
+        <span>{r.requester?.name ? t("Requested by {name}", { name: r.requester.name }) : "—"}</span>
         {r.deadline && <span className={cn("inline-flex items-center gap-1", isOverdue(r) && "font-semibold text-rose-600 dark:text-rose-400")}><CalendarDays className="h-3 w-3" />{fmtDay(r.deadline, lang)}</span>}
         {r.attachments.length > 0 && <span className="inline-flex items-center gap-1"><Paperclip className="h-3 w-3" />{r.attachments.length}</span>}
       </div>

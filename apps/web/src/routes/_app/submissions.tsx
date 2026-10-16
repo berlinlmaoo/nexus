@@ -324,7 +324,10 @@ function MySubmissions() {
     // at the end, a second "In progress" lane sat past the Complete column, off the right edge, under a
     // repeated group caption (UI tour run 14, R14-WD-2 / R14-WM-7).
     const order = (g: string) => { const i = GROUP_ORDER.indexOf(g as (typeof GROUP_ORDER)[number]); return i < 0 ? GROUP_ORDER.length : i; };
-    return [...base, ...extra].map((c, i) => ({ c, i })).sort((a, b) => order(a.c.group) - order(b.c.group) || a.i - b.i).map((x) => x.c);
+    // "New" (requests not yet on a board) leads its group: New → To Do → In Progress → Done, the flow's order on
+    // every platform (decision 19, UI tour run 20, R20-WM-10: it came after "To Do").
+    const isNew = (c: NexusSubmissionColumn) => (c.key === "new" ? 0 : 1);
+    return [...base, ...extra].map((c, i) => ({ c, i })).sort((a, b) => order(a.c.group) - order(b.c.group) || isNew(a.c) - isNew(b.c) || a.i - b.i).map((x) => x.c);
   }, [q.data, t]);
 
   const shown = subs.filter((s) => (filter === "all" || s.kind === filter) && inProject(s) && (!mine || s.needsAction));

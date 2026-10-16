@@ -7,7 +7,7 @@ import type { CalIndex, CalItem, CalScope, WeekRow } from "@/lib/calendar/core";
 import { overdueState } from "@/lib/calendar/core";
 import { SLATE } from "@/lib/calendar/tone";
 import {
-  CAPS, Face, FOCUS_ROW, fmtDay, Heading, StatusGlyph, TOUCH_ROW, unitVars, UnitMark, useCollapsed, weekdayNames, YouTag,
+  CAPS, GROUP_LABEL, Face, FOCUS_ROW, fmtDay, Heading, StatusGlyph, TOUCH_ROW, unitVars, UnitMark, useCollapsed, weekdayNames, YouTag,
   type PeopleLookup,
 } from "./bits";
 
@@ -137,7 +137,7 @@ export const PeopleWeek = memo(function PeopleWeek({
               <>
                 <UnitMark unit={u} size={20} />
                 <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[var(--c)] dark:bg-[var(--cd)]" />
-                <span className={cn("min-w-0 flex-1 [overflow-wrap:anywhere]", CAPS)}>{u.name}</span>
+                <span className={cn("min-w-0 flex-1 [overflow-wrap:anywhere]", GROUP_LABEL)}>{u.name}</span>
                 <span aria-hidden className="shrink-0 text-xs font-bold tabular-nums text-muted-foreground">{r.count}</span>
                 <span className="sr-only">{tn(r.count, "{n} task", "{n} tasks")}</span>
               </>
@@ -235,7 +235,7 @@ export const PeopleWeek = memo(function PeopleWeek({
                 <div role="rowheader" aria-colspan={8} className="col-span-8 py-1.5">
                   <Heading level={levelOf(r)} className="sticky left-0 flex w-max max-w-full items-center gap-2 pr-3" style={{ paddingLeft: 12 + indent(r, 14) }}>
                     {u.kind === "GROUP" ? null : <span aria-hidden className="h-3.5 w-[3px] shrink-0 rounded-full bg-[var(--c)] dark:bg-[var(--cd)]" />}
-                    <span className={cn("min-w-0 [overflow-wrap:anywhere]", CAPS, u.kind === "GROUP" && SLATE.text)}>{u.name}</span>
+                    <span className={cn("min-w-0 [overflow-wrap:anywhere]", GROUP_LABEL, u.kind === "GROUP" && SLATE.text)}>{u.name}</span>
                     <span aria-hidden className="text-2xs font-semibold tabular-nums text-muted-foreground">{r.count}</span>
                     <span className="sr-only">{tn(r.count, "{n} task", "{n} tasks")}</span>
                   </Heading>
