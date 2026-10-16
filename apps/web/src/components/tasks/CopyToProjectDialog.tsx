@@ -84,7 +84,7 @@ export function CopyToProjectDialog({ taskIds, sourceProjectId, onClose, onDone 
   const many = taskIds.length > 1;
 
   return (
-    <div className="fixed inset-0 z-[96] grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[96] grid grid-cols-1 place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
       {/* A real dialog (bug hunt C-BUG-24): role + aria-modal, Esc closes, and it sits above the selection bar. */}
       <div role="dialog" aria-modal="true" aria-labelledby="copy-to-project-title" className="flex max-h-[85vh] w-full max-w-md flex-col rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">

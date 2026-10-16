@@ -83,7 +83,7 @@ export function MorphPanel({
   const onSettle = hasPlaceholder ? () => setSettled(true) : undefined;
 
   return createPortal(
-    <div className="fixed inset-0 z-[90] grid place-items-center p-4">
+    <div className="fixed inset-0 z-[90] grid grid-cols-1 place-items-center p-4">
       {/* Plain dim (no backdrop-blur — re-blurring the whole screen each frame janks the morph). */}
       <motion.div className="absolute inset-0 bg-black/55 dark:bg-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
       <motion.div

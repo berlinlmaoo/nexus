@@ -375,7 +375,7 @@ function Shell({ title, hint, onClose, children }: { title: string; hint?: strin
   // Esc closes it (QA S-09: Add people / Rename stayed open).
   useEscape(onClose);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={title} className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between"><h2 className="font-display text-lg font-bold tracking-tight">{title}</h2><button onClick={onClose} title={t("Close")} aria-label={t("Close")} className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent pointer-coarse:size-11"><X className="h-4 w-4" /></button></div>
         {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
@@ -506,7 +506,7 @@ function NewChat({ onClose, onCreated, meId }: { onClose: () => void; onCreated:
   const toggle = (id: string) => setSelected((cur) => cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]);
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={t("New chat")} className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between"><h2 className="font-display text-lg font-bold tracking-tight">{t("New chat")}</h2><button onClick={onClose} title={t("Close")} aria-label={t("Close")} className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent pointer-coarse:size-11"><X className="h-4 w-4" /></button></div>
         <p className="mt-1 text-xs text-muted-foreground">{t("Pick 1 person for a DM, or several for a group.")}</p>

@@ -132,7 +132,7 @@ export const SelfieCapture = forwardRef<SelfieCaptureHandle, SelfieCaptureProps>
 
       {stream &&
         createPortal(
-          <div className="fixed inset-0 z-[95] grid place-items-center bg-black/80 p-4">
+          <div className="fixed inset-0 z-[95] grid grid-cols-1 place-items-center bg-black/80 p-4">
       <EscClose onClose={stop} />
             <div role="dialog" aria-modal="true" aria-label={t("Close camera")} className="flex w-full max-w-md flex-col items-center gap-4">
               <div className="relative w-full overflow-hidden rounded-3xl bg-black shadow-pop">

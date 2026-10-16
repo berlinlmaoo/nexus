@@ -703,7 +703,7 @@ function ConfirmDelete({ ids, reduce, busy, onCancel, onConfirm }: { ids: string
   const ok = useRef<HTMLButtonElement>(null);
   useEffect(() => { ok.current?.focus(); }, []);
   return (
-    <div className="fixed inset-0 z-[96] grid place-items-center p-4">
+    <div className="fixed inset-0 z-[96] grid grid-cols-1 place-items-center p-4">
       <motion.div className="absolute inset-0 bg-black/55 dark:bg-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onCancel} />
       <motion.div
         role="alertdialog"
@@ -730,7 +730,7 @@ function DatePopup({ ids, reduce, busy, onClose, onConfirm }: { ids: string[]; r
   const { t, tn } = useLang();
   const [date, setDate] = useState<string | null>(null);
   return (
-    <div className="fixed inset-0 z-[96] grid place-items-center p-4">
+    <div className="fixed inset-0 z-[96] grid grid-cols-1 place-items-center p-4">
       <motion.div className="absolute inset-0 bg-black/55 dark:bg-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
       <motion.div
         role="dialog"

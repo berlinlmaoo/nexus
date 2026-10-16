@@ -235,7 +235,7 @@ function PasswordResetModal({ target, onClose }: { target: { memberId: string; n
   const copy = () => { navigator.clipboard?.writeText(pw).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {}); };
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
       <EscClose onClose={onClose} />
       <div role="dialog" aria-modal="true" aria-label={t("Reset password")} className="w-full max-w-md rounded-2xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
@@ -531,7 +531,7 @@ function DeleteAccountDialog({ onClose }: { onClose: () => void }) {
   const confirmed = typed.trim() === "DELETE";
   const busy = del.isPending || del.isSuccess;
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm" onClick={busy ? undefined : onClose}>
+    <div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm" onClick={busy ? undefined : onClose}>
       <EscClose onClose={() => { if (!busy) onClose(); }} />
       <div role="dialog" aria-modal="true" aria-labelledby="delete-account-title" className="w-full max-w-md rounded-2xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-border px-5 py-4">

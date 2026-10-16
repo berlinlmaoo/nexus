@@ -909,7 +909,7 @@ function Attendance() {
           />
         )}
         {overrideTarget && (
-          <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={() => setOverrideTarget(null)}>
+          <div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={() => setOverrideTarget(null)}>
       <EscClose onClose={() => setOverrideTarget(null)} />
             <div role="dialog" aria-modal="true" aria-label={overrideTarget.name ?? tr("Unnamed")} className="w-full max-w-sm rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-start justify-between gap-3">
@@ -994,7 +994,7 @@ function DeductionLogModal({ userId, name, monthKey, onClose }: { userId: string
   );
 
   return (
-    <motion.div className="fixed inset-0 z-50 grid place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm"
+    <motion.div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center bg-black/50 dark:bg-scrim p-4 backdrop-blur-sm"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <EscClose onClose={onClose} />
       <motion.div role="dialog" aria-modal="true" aria-label={name ?? tr("Unnamed")} initial={{ opacity: 0, scale: 0.96, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
@@ -1349,7 +1349,7 @@ function OfficeComposer({ office, onClose, onCreated }: { office?: NexusOffice; 
     onError: (e: unknown) => alert(e instanceof Error ? e.message : tr("Couldn't save the office.")),
   });
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
       <EscClose onClose={onClose} />
       <div role="dialog" aria-modal="true" aria-label={editing ? tr("Edit office") : tr("New office")} className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-display text-lg font-bold tracking-tight">{editing ? tr("Edit office") : tr("New office")}</h2>
@@ -2057,7 +2057,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
   const missingTarget = granting && !targetUserId;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid grid-cols-1 place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
       <EscClose onClose={onClose} />
       <div role="dialog" aria-modal="true" aria-label={granting ? tr("Grant a request to someone") : tr("New attendance request")} className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-display text-lg font-bold tracking-tight">{granting ? tr("Grant a request to someone") : tr("New attendance request")}</h2>

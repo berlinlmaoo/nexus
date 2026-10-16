@@ -61,7 +61,7 @@ export function AnnouncementModal() {
   return createPortal(
     <AnimatePresence>
       {current && (
-        <div className="fixed inset-0 z-[85] grid place-items-center p-4">
+        <div className="fixed inset-0 z-[85] grid grid-cols-1 place-items-center p-4">
           {/* Esc = the same as the close button and the backdrop (QA B50). */}
           <EscClose onClose={() => { if (!dismiss.isPending) dismiss.mutate(current.id); }} />
           <motion.div className="absolute inset-0 bg-foreground/40 dark:bg-scrim backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => dismiss.mutate(current.id)} />

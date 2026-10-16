@@ -76,7 +76,7 @@ export function SheetDialog({ title, onClose, children, footer, width = 440, lab
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return createPortal(
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/30 dark:bg-scrim p-3" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="fixed inset-0 z-[70] grid grid-cols-1 place-items-center bg-black/30 dark:bg-scrim p-3" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div
         ref={ref}
         role="dialog"
