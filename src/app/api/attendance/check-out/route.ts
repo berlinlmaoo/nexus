@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic"
 
-import { mkdir, writeFile } from "fs/promises"
+import { mkdir, unlink, writeFile } from "fs/promises"
 import path from "path"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
@@ -268,8 +268,12 @@ export async function POST(request: NextRequest) {
       simulated,
     })
 
-    const record = await prisma.attendanceRecord.update({
-      where: { id: existingRecord.id },
+    // Claim the check-out only while the record is still open (race audit M1). The read of the open
+    // record above is a separate statement: a double tap, or a live tap racing its offline replay, got
+    // both requests here and the second overwrote the first check-out (time, selfie, reflection) and ran
+    // the penalty and the notifications twice. The loser now answers like the clientId replay above.
+    const closed = await prisma.attendanceRecord.updateMany({
+      where: { id: existingRecord.id, checkOutAt: null },
       data: {
         // Office, shift, check-in status and lateness are facts of the CHECK-IN and stay as written
         // then. Only the check-out half of the day is derived here.
@@ -300,6 +304,22 @@ export async function POST(request: NextRequest) {
         notes: mergedNotes,
         status: derived.status,
       },
+    })
+    if (closed.count === 0) {
+      await unlink(path.join(uploadDir, safeName)).catch(() => {})
+      const already = await prisma.attendanceRecord.findUnique({
+        where: { id: existingRecord.id },
+        include: { officeLocation: true, user: true },
+      })
+      if (!already?.checkOutAt) {
+        // Not closed by a concurrent check-out (deleted or reopened in between): what a sequential
+        // attempt would have been told.
+        return NextResponse.json({ error: "Check-in is required before check-out." }, { status: 400 })
+      }
+      return NextResponse.json({ record: serializeAttendanceRecord(already), duplicate: true, pendingApproval: already.checkOutApproval === "PENDING" })
+    }
+    const record = await prisma.attendanceRecord.findUniqueOrThrow({
+      where: { id: existingRecord.id },
       include: {
         officeLocation: true,
         user: {
@@ -350,7 +370,8 @@ export async function POST(request: NextRequest) {
       ) {
         const dateKey = formatAttendanceDateKey(attendanceDate)
         if (!(await hasAttendanceWaiver(session.user.id, dateKey))) {
-          await awardXpOnce(session.user.id, -25, `attendance:nocheckout:${dateKey}`)
+          // The waiver read above, made again under the member-day lock (race audit H2).
+          await awardXpOnce(session.user.id, -25, `attendance:nocheckout:${dateKey}`, { guard: { workspaceId: context.workspace.id, date: attendanceDate } })
         }
       }
     } catch {

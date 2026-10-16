@@ -13,7 +13,7 @@ import {
   formatAttendanceDateKey,
   getAttendanceDate,
 } from "@/lib/attendance"
-import { cancelAttendancePenaltiesForDate, isAutoDeduction, grantAttendanceWaiver } from "@/lib/attendance-absence"
+import { cancelAttendancePenaltiesForDate, isAutoDeduction } from "@/lib/attendance-absence"
 import { notifyAttendanceOverride } from "@/lib/attendance-review-notify"
 
 type OverrideAction = "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "PERMIT" | "CLEAR_PENALTY"
@@ -77,13 +77,14 @@ export async function POST(req: NextRequest) {
 
     // Every action wipes the day's penalties: refunds late/no-checkout/alpha XP and removes the
     // cron's auto-deducted day-off (quota restored).
-    const refunded = await cancelAttendancePenaltiesForDate(targetUserId, workspaceId, date, dateKey)
+    // CLEAR_PENALTY: without a waiver the refund would NOT stick: the nightly cron re-derives penalties
+    // for every day in its window and would re-cut the XP/day-off. The waiver makes the pardon permanent
+    // (crons + check-in all skip penalty work for a waived member-day) without touching the status. It is
+    // written in the refund's own transaction (race audit H2): written after it, the per-minute accrual
+    // could re-penalise the day in between.
+    const refunded = await cancelAttendancePenaltiesForDate(targetUserId, workspaceId, date, dateKey, action === "CLEAR_PENALTY" ? { waive: "always" } : undefined)
 
     if (action === "CLEAR_PENALTY") {
-      // Without a waiver the refund would NOT stick: the nightly cron re-derives penalties for every
-      // day in its window and would re-cut the XP/day-off. The waiver makes the pardon permanent
-      // (crons + check-in all skip penalty work for a waived member-day) without touching the status.
-      await grantAttendanceWaiver(targetUserId, dateKey)
       await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, { refunded })
       notifyAttendanceOverride({ workspaceId, targetUserId, actorId: session.user.id, actorName: session.user.name ?? null, dateKey, action: "CLEAR_PENALTY", note: (body?.note ?? "").trim() || null })
         .catch((e) => console.error("notifyAttendanceOverride (clear) failed", e))

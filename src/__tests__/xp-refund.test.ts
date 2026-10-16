@@ -11,7 +11,15 @@ const db = vi.hoisted(() => ({ txns: [] as Tx[], refunds: [] as Refund[], xp: []
 
 vi.mock("@/lib/prisma", () => {
   const client = {
-    $executeRaw: vi.fn(async () => 0),
+    // Advisory locks are no-ops here; applyXpDelta's INSERT … ON CONFLICT into "UserXp" is applied to the
+    // in-memory table (values: id, userId, delta, level).
+    $executeRaw: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      if (!strings.join("?").includes('INSERT INTO "UserXp"')) return 0
+      const [, userId, delta, level] = values as [string, string, number, number]
+      const row = db.xp.find((x) => x.userId === userId)
+      if (row) { row.totalXp += delta; row.currentLevel = level } else db.xp.push({ userId, totalXp: delta, currentLevel: level })
+      return 1
+    }),
     xpTransaction: {
       findUnique: vi.fn(async ({ where }: { where: { id: string } }) => db.txns.find((t) => t.id === where.id) ?? null),
       findFirst: vi.fn(async ({ where }: { where: { userId: string; reason: string } }) => db.txns.find((t) => t.userId === where.userId && t.reason === where.reason) ?? null),

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
-import { cancelAttendancePenaltiesForDate, cancelAttendancePenaltiesForDateDetailed, grantAttendanceWaiver, readAttendancePenaltiesForDate } from "@/lib/attendance-absence"
+import { cancelAttendancePenaltiesForDate, cancelAttendancePenaltiesForDateDetailed, readAttendancePenaltiesForDate } from "@/lib/attendance-absence"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
@@ -39,6 +39,17 @@ import {
 // never be able to carry two contradictory answers to the same question.
 
 const eq = (a: Date | null, b: Date | null) => (a ? a.getTime() : null) === (b ? b.getTime() : null)
+
+// Thrown inside a decision transaction to roll it back when another decision (or a record write) got
+// there first (race audit M5). The status read before the transaction is only a fast path.
+class DecisionLost extends Error {}
+class RecordDrifted extends Error {}
+
+/** The 409 a second decision gets, worded as the sequential path words it. */
+async function alreadyDecided(correctionId: string) {
+  const now = await prisma.attendanceCorrection.findUnique({ where: { id: correctionId }, select: { status: true } })
+  return NextResponse.json({ error: `Usulan ini udah ${now?.status === "APPROVED" ? "di-approve" : "ditolak"} sebelumnya.` }, { status: 409 })
+}
 
 // GET /api/complaints/[id]/correction — proposals on this ticket. Reporter or BoD, like the thread itself.
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -172,9 +183,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // ---- REJECT: nothing but the proposal row moves. -------------------------------------------
     if (decision === "REJECT") {
       const updated = await prisma.$transaction(async (tx) => {
-        const row = await tx.attendanceCorrection.update({
-          where: { id: correction.id },
+        // Claim first: only a still-PENDING proposal can be decided (race audit M5).
+        const claim = await tx.attendanceCorrection.updateMany({
+          where: { id: correction.id, status: "PENDING" },
           data: { status: "REJECTED", decidedById: me, decidedAt, decisionNote: note },
+        })
+        if (claim.count !== 1) throw new DecisionLost()
+        const row = await tx.attendanceCorrection.findUniqueOrThrow({
+          where: { id: correction.id },
           include: ATTENDANCE_CORRECTION_INCLUDE,
         })
         await tx.complaintMessage.create({
@@ -191,7 +207,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           await tx.complaintEvent.create({ data: { complaintId: id, action: "status", fromStatus: complaint.status, toStatus: "IN_REVIEW", actorId: me } })
         }
         return row
+      }).catch((err) => {
+        if (err instanceof DecisionLost) return null
+        throw err
       })
+      if (!updated) return alreadyDecided(correction.id)
 
       logAudit({ action: "update", entityType: "attendance_correction", entityId: correction.id, userId: me, request, metadata: { decision: "REJECT", date: dateKey, note } })
       void notifyComplaintReply({ complaintId: id, workspaceId: complaint.workspaceId, reporterId: complaint.reporterId, fromReviewer: true, replierId: me }).catch(() => {})
@@ -212,6 +232,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       // The refund IS the approval here, so it runs FIRST and outside the bookkeeping transaction. If
       // it throws, the proposal stays PENDING and the BoD can tap again — the opposite of the time
       // correction, where the record write is the approval and a failed refund is only logged.
+      // Claimed before the refund (race audit M5): two BoD tapping Approve, or Approve racing Reject, used
+      // to both pass the PENDING read above and both run the reversal and the thread messages. A failed
+      // refund hands the claim back, so the proposal is still PENDING and the BoD can tap again.
+      const claim = await prisma.attendanceCorrection.updateMany({
+        where: { id: correction.id, status: "PENDING" },
+        data: { status: "APPROVED", decidedById: me, decidedAt, decisionNote: note },
+      })
+      if (claim.count !== 1) return alreadyDecided(correction.id)
+
       let refundedXp = 0
       let restoredDayOffs = 0
       try {
@@ -221,13 +250,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           correction.userId, correction.workspaceId, correction.attendanceDate, dateKey,
         )
         restoredDayOffs = sebelum.autoDayOffs
+        // Refund and (when needed) the waiver in one transaction (race audit H2).
         const undone = await cancelAttendancePenaltiesForDateDetailed(
           correction.userId, correction.workspaceId, correction.attendanceDate, dateKey,
+          persistence.waiverNeeded ? { waive: "always" } : undefined,
         )
         refundedXp = undone.xp
-        if (persistence.waiverNeeded) await grantAttendanceWaiver(correction.userId, dateKey)
       } catch (err) {
         console.error("attendance penalty cancellation: reversal failed", { correctionId: correction.id, err })
+        await prisma.attendanceCorrection.updateMany({
+          where: { id: correction.id, status: "APPROVED", decidedById: me, decidedAt },
+          data: { status: "PENDING", decidedById: null, decidedAt: null, decisionNote: null },
+        }).catch((e) => console.error("attendance penalty cancellation: claim release failed", { correctionId: correction.id, e }))
         return NextResponse.json({ error: "Gagal mengembalikan XP-nya. Usulan ini masih PENDING — coba approve lagi." }, { status: 500 })
       }
 
@@ -391,7 +425,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       proposedCheckOutAt: correction.proposedCheckOutAt,
     })
 
-    const { correction: updatedCorrection, record: updatedRecord } = await prisma.$transaction(async (tx) => {
+    const decided = await prisma.$transaction(async (tx) => {
+      // Claim first (race audit M5): only a still-PENDING proposal is decided, once.
+      const claim = await tx.attendanceCorrection.updateMany({
+        where: { id: correction.id, status: "PENDING" },
+        data: { status: "APPROVED", decidedById: me, decidedAt, decisionNote: note },
+      })
+      if (claim.count !== 1) throw new DecisionLost()
       // Same shape, two verbs. An update carries the corrected times onto a day that exists; a create
       // writes the day the outage never let happen, and needs the three identity columns as well.
       const shared = {
@@ -420,9 +460,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         user: { select: { id: true, name: true, email: true, avatar: true } },
         correctedBy: { select: { id: true, name: true, email: true } },
       }
-      const written = record
-        ? await tx.attendanceRecord.update({ where: { id: record.id }, data: shared, include })
-        : await tx.attendanceRecord.create({
+      // The drift check above is a read; the write is conditional on it still holding, so a check-out
+      // that lands in between is not erased (same rule as the BoD record correction, race audit M3).
+      let written
+      if (record) {
+        const cas = await tx.attendanceRecord.updateMany({
+          where: { id: record.id, checkInAt: record.checkInAt, checkOutAt: record.checkOutAt },
+          data: shared,
+        })
+        if (cas.count !== 1) throw new RecordDrifted()
+        written = await tx.attendanceRecord.findUniqueOrThrow({ where: { id: record.id }, include })
+      } else {
+        try {
+          written = await tx.attendanceRecord.create({
             data: {
               ...shared,
               userId: targetUserId,
@@ -432,9 +482,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             },
             include,
           })
-      const row = await tx.attendanceCorrection.update({
+        } catch (err) {
+          // The day got a record (a check-in) since the read: that is drift too.
+          if ((err as { code?: string })?.code === "P2002") throw new RecordDrifted()
+          throw err
+        }
+      }
+      const row = await tx.attendanceCorrection.findUniqueOrThrow({
         where: { id: correction.id },
-        data: { status: "APPROVED", decidedById: me, decidedAt, decisionNote: note },
         include: ATTENDANCE_CORRECTION_INCLUDE,
       })
       await tx.complaintMessage.create({
@@ -454,7 +509,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         await tx.complaintEvent.create({ data: { complaintId: id, action: "status", fromStatus: complaint.status, toStatus: "IN_REVIEW", actorId: me } })
       }
       return { correction: row, record: written }
+    }).catch((err) => {
+      if (err instanceof DecisionLost || err instanceof RecordDrifted) return err as DecisionLost | RecordDrifted
+      throw err
     })
+    if (decided instanceof DecisionLost) return alreadyDecided(correction.id)
+    if (decided instanceof RecordDrifted) {
+      return NextResponse.json(
+        { error: `Absen ${dateKey} udah berubah sejak usulan ini dibikin. Tolak usulan ini terus minta dibikinin usulan baru dari data terkini.` },
+        { status: 409 }
+      )
+    }
+    const { correction: updatedCorrection, record: updatedRecord } = decided
 
     // The XP the day cost has to come back, or the correction is only half done: the record now says
     // "hadir tepat waktu" while the ledger still shows the late/alpha deduction that record no longer
@@ -463,13 +529,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     let penaltiesReversed = false
     if (updatedRecord.checkInAt && (updatedRecord.lateMinutes ?? 0) === 0) {
       try {
-        penaltiesReversed = await cancelAttendancePenaltiesForDate(
-          updatedRecord.userId, complaint.workspaceId, updatedRecord.attendanceDate, dateKey,
-        )
         // The refund alone does not hold. The nightly job re-derives penalties across a rolling
         // window and would simply re-cut the same XP tomorrow; the waiver is the marker that stops
-        // it. Without this the member sees their points return and quietly vanish overnight.
-        await grantAttendanceWaiver(updatedRecord.userId, dateKey)
+        // it. Without this the member sees their points return and quietly vanish overnight. Both
+        // are written in one transaction (race audit H2).
+        penaltiesReversed = await cancelAttendancePenaltiesForDate(
+          updatedRecord.userId, complaint.workspaceId, updatedRecord.attendanceDate, dateKey, { waive: "always" },
+        )
       } catch (error) {
         // The attendance record is already correct and committed. A failed refund is worth shouting
         // about, but not worth telling the approver their approval failed when it did not.

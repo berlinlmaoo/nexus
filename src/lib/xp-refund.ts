@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma"
 import { bi } from "@/lib/notification-text"
 import { applyXpDelta } from "@/lib/gamification"
+import { attendanceDayOfReason, lockAttendanceDay } from "@/lib/attendance-day-lock"
 import { describeXpReason, xpRefundDecision } from "@/lib/xp-reason"
 
 /**
@@ -69,6 +70,9 @@ export async function refundXpTransaction(opts: {
 
   try {
     return await prisma.$transaction(async (tx) => {
+      // Same lock order as every attendance penalty writer: the member-day first, then the reason.
+      const dayKey = attendanceDayOfReason(head.reason)
+      if (dayKey) await lockAttendanceDay(tx, head.userId, dayKey)
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${head.userId}|${head.reason}`})::int8)`
       const [row, prior] = await Promise.all([
         tx.xpTransaction.findUnique({ where: { id: transactionId }, select: { id: true, userId: true, amount: true, reason: true, createdAt: true } }),

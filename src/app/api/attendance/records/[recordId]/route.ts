@@ -15,7 +15,7 @@ import {
   resolveEffectiveAttendanceShift,
   serializeAttendanceRecord,
 } from "@/lib/attendance"
-import { cancelAttendancePenaltiesForDate, grantAttendanceWaiver, cancelAttendancePenaltiesForDateDetailed } from "@/lib/attendance-absence"
+import { cancelAttendancePenaltiesForDate, cancelAttendancePenaltiesForDateDetailed } from "@/lib/attendance-absence"
 import { isHoliday } from "@/lib/holidays"
 import { attendanceCorrectionSchema, validateBody } from "@/lib/validations"
 
@@ -133,22 +133,14 @@ export async function PATCH(
     // day cost has to come back, or the correction is only half done"); this one now does the same
     // when the corrected day is clean — within grace and, if a check-out was written, closed. A day
     // that is still late after the correction keeps its penalty.
-    let xpRefunded = 0
-    if (!isSilentAdmin) {
-      const grace = Math.max(0, office.lateGraceMinutes ?? 0)
-      const clean = (derived.lateMinutes ?? 0) <= grace && Boolean(nextCheckOutAt)
-      if (clean) {
-        const dateKey = formatAttendanceDateKey(existingRecord.attendanceDate)
-        try {
-          const undone = await cancelAttendancePenaltiesForDateDetailed(existingRecord.userId, context.workspace.id, existingRecord.attendanceDate, dateKey)
-          xpRefunded = undone.xp
-          if (undone.changed) await grantAttendanceWaiver(existingRecord.userId, dateKey)
-        } catch (e) { console.error("correction refund failed:", e) }
-      }
-    }
-
-    const updatedRecord = await prisma.attendanceRecord.update({
-      where: { id: existingRecord.id },
+    //
+    // The record write goes first and is conditional on the record still being what this correction was
+    // computed from (race audit M3): a check-out (or another correction) that landed after the read above
+    // would otherwise be erased by `nextCheckOutAt = existingRecord.checkOutAt`. Compared on the two
+    // times, not updatedAt, because the location trail and the face check touch the row all day long.
+    // Losing that race answers 409 and refunds nothing; the refund then follows the write it belongs to.
+    const written = await prisma.attendanceRecord.updateMany({
+      where: { id: existingRecord.id, checkInAt: existingRecord.checkInAt, checkOutAt: existingRecord.checkOutAt },
       data: {
         officeLocationId: office.id,
         checkInAt: nextCheckInAt,
@@ -174,6 +166,30 @@ export async function PATCH(
         checkInDistanceMeters: nextCheckInDistance,
         checkOutDistanceMeters: nextCheckOutDistance,
       },
+    })
+    if (written.count === 0) {
+      return NextResponse.json(
+        { error: "This attendance record changed while you were editing it. Reload it and correct it again.", code: "RECORD_CHANGED" },
+        { status: 409 },
+      )
+    }
+
+    let xpRefunded = 0
+    if (!isSilentAdmin) {
+      const grace = Math.max(0, office.lateGraceMinutes ?? 0)
+      const clean = (derived.lateMinutes ?? 0) <= grace && Boolean(nextCheckOutAt)
+      if (clean) {
+        const dateKey = formatAttendanceDateKey(existingRecord.attendanceDate)
+        try {
+          // Refund and (when something came back) the waiver in one transaction (race audit H2).
+          const undone = await cancelAttendancePenaltiesForDateDetailed(existingRecord.userId, context.workspace.id, existingRecord.attendanceDate, dateKey, { waive: "ifChanged" })
+          xpRefunded = undone.xp
+        } catch (e) { console.error("correction refund failed:", e) }
+      }
+    }
+
+    const updatedRecord = await prisma.attendanceRecord.findUniqueOrThrow({
+      where: { id: existingRecord.id },
       include: {
         officeLocation: true,
         user: {
@@ -307,8 +323,9 @@ export async function DELETE(
       remove: (tx) => tx.attendanceRecord.delete({ where: { id: record.id } }),
     })
     try {
-      await cancelAttendancePenaltiesForDate(record.userId, context.workspace.id, record.attendanceDate, dateKey)
-      await grantAttendanceWaiver(record.userId, dateKey)
+      // Refund and waiver in one transaction (race audit H2): the accrual could otherwise re-penalise
+      // the emptied day between the two.
+      await cancelAttendancePenaltiesForDate(record.userId, context.workspace.id, record.attendanceDate, dateKey, { waive: "always" })
     } catch (err) {
       console.error("DELETE attendance record: penalty cleanup failed:", err)
     }

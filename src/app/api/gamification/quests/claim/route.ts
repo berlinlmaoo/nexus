@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { AUTO_QUESTS, awardXp, computeQuestProgress, currentPeriodKey, levelForXp, getPeriodScore, QUEST_ONCE_PERIOD } from "@/lib/gamification"
+import { AUTO_QUESTS, awardXpTx, computeQuestProgress, currentPeriodKey, levelForXp, getPeriodScore, QUEST_ONCE_PERIOD } from "@/lib/gamification"
 import { audienceOf, questVisibleTo } from "@/lib/quest-audience"
 
 export async function POST(req: NextRequest) {
@@ -40,8 +40,18 @@ export async function POST(req: NextRequest) {
     const progress = await computeQuestProgress(userId, def)
     if (progress < def.requiredCount) return NextResponse.json({ error: "Quest not complete yet" }, { status: 400 })
 
-    await prisma.questClaim.create({ data: { userId, questKey, periodKey, xpAwarded: def.xpReward, questId: admin?.id ?? null } })
-    await awardXp(userId, def.xpReward, "quest")
+    // The claim and its XP commit together, and the unique (userId, questKey, periodKey) decides a
+    // double tap: the loser rolls back and gets the same 409 a later tap gets (race audit, LOW). Before,
+    // the loser was a 500 and a crash between the two writes left a claim without its XP.
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.questClaim.create({ data: { userId, questKey, periodKey, xpAwarded: def.xpReward, questId: admin?.id ?? null } })
+        await awardXpTx(tx, userId, def.xpReward, "quest")
+      })
+    } catch (err) {
+      if ((err as { code?: string })?.code === "P2002") return NextResponse.json({ error: "Already claimed this period" }, { status: 409 })
+      throw err
+    }
 
     const score = await getPeriodScore(userId)
     const info = levelForXp(score)
