@@ -518,10 +518,10 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   };
 
   const isPage = variant === "page";
-  // Notion AI's panel: the page's own background, one hairline against the page, no card chrome. The
+  // Notion AI's panel: a plain white sheet, one hairline against the page, no card chrome. The
   // floating window keeps a soft edge on a desktop and fills the screen on a phone.
   const root = cn(
-    "flex h-full w-full flex-col overflow-hidden bg-background",
+    isPage ? "bg-background" : "bg-card", "flex h-full w-full flex-col overflow-hidden",
     variant === "float" && "md:rounded-2xl md:border md:border-border md:shadow-pop",
     variant === "side" && "border-l border-border",
   );
@@ -626,7 +626,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   const composerBox = (
       <div className={cn("relative mx-auto w-full", isPage && "max-w-3xl")}>
         {mention && <MentionPicker query={mention.query} onPick={addRef} onClose={() => setMention(null)} />}
-        <div className="flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-[0_1px_2px_rgba(15,15,15,0.04),0_4px_14px_rgba(15,15,15,0.05)] transition-colors focus-within:border-foreground/25">
+        <div className="flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(15,15,15,0.04),0_4px_14px_rgba(15,15,15,0.05)] transition-colors focus-within:border-foreground/25">
         {(pageContext || refs.length > 0) && (
           <div className="flex flex-wrap items-center gap-1 px-2.5 pt-2.5">
             {pageContext && (
@@ -799,7 +799,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
     </div>
   ) : (
     <div ref={scrollRef} className="flex flex-1 flex-col overflow-y-auto px-4 pb-4 pt-2">
-      <div className={cn("mx-auto flex w-full flex-1 flex-col gap-5", isPage && "max-w-3xl pt-4")}>
+      <div className={cn("mx-auto flex w-full flex-1 flex-col gap-4", isPage && "max-w-3xl pt-4")}>
         {waitingSection}
         {loading && turns.length === 0 && (
           <div className="grid h-40 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
@@ -919,7 +919,7 @@ function UserTurn({ turn }: { turn: ChatTurn }) {
   const { t } = useLang();
   const [copied, setCopied] = useState(false);
   return (
-    <div className="group flex flex-col items-end gap-1">
+    <div className="group -mb-2 flex flex-col items-end gap-0.5">
       <div className="max-w-[85%] rounded-[18px] bg-muted px-3.5 py-2 text-sm leading-relaxed text-foreground">
         {turn.attachments && turn.attachments.length > 0 && (
           <div className="mb-1.5 flex flex-col gap-2">

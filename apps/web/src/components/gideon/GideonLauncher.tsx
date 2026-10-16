@@ -53,7 +53,7 @@ export function GideonLauncher() {
 
   if (onFullPage) return null;
   const panel = (
-    <Suspense fallback={<div className="h-full w-full bg-background md:rounded-2xl md:border md:border-border" aria-busy />}>
+    <Suspense fallback={<div className="h-full w-full bg-card md:rounded-2xl md:border md:border-border" aria-busy />}>
     <GideonPanel
       key={nonce}
       onClose={closeGideon}
@@ -75,7 +75,7 @@ export function GideonLauncher() {
         <div className="fixed inset-0 z-50 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] md:inset-y-0 md:left-auto md:right-0 md:w-[420px] md:pb-0 md:pt-0 md:shadow-[-8px_0_24px_-12px_rgba(15,15,15,0.12)]">{panel}</div>
       )}
       {open && layout !== "side" && (
-        <div className={cn("fixed inset-0 z-50 bg-background pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] md:inset-auto md:bottom-5 md:right-5 md:h-[min(78vh,760px)] md:w-[calc(100vw-2.5rem)] md:bg-transparent md:pb-0 md:pt-0", wide ? "md:max-w-2xl" : "md:max-w-[420px]")}>{panel}</div>
+        <div className={cn("fixed inset-0 z-50 bg-card pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] md:inset-auto md:bottom-5 md:right-5 md:h-[min(78vh,760px)] md:w-[calc(100vw-2.5rem)] md:bg-transparent md:pb-0 md:pt-0", wide ? "md:max-w-2xl" : "md:max-w-[420px]")}>{panel}</div>
       )}
     </>
   );
