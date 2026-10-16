@@ -11,6 +11,10 @@ import {
   canWriteItem,
   cleanItemName,
   uniqueNameInFolder,
+  assertLiveFolderTx,
+  lockVaultTree,
+  withFreeName,
+  VaultWriteRefused,
   vaultUsedBytes,
   VAULT_QUOTA_BYTES,
   VAULT_ITEM_INCLUDE,
@@ -147,28 +151,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const name = await uniqueNameInFolder(actor.workspaceId, parentId, cleanItemName(body.name, "Folder baru"))
-
-    const last = await prisma.vaultItem.findFirst({
-      where: { workspaceId: actor.workspaceId, parentId, deletedAt: null },
-      orderBy: { position: "desc" },
-      select: { position: true },
-    })
-
-    const created = await prisma.vaultItem.create({
-      data: {
-        kind: "FOLDER",
-        name,
-        parentId,
-        workspaceId: actor.workspaceId,
-        uploaderId: actor.userId,
-        ownerId: actor.userId,
-        position: (last?.position ?? 0) + 1,
-        icon: typeof body.icon === "string" ? body.icon.slice(0, 40) : null,
-        color: typeof body.color === "string" ? body.color.slice(0, 20) : null,
-      },
-      include: VAULT_ITEM_INCLUDE,
-    })
+    // Under the Vault's shared tree lock (race audit 16 Oct 2026, M16): the parent is still a live folder
+    // when the row goes in, and the name is picked there (a unique index refuses a duplicate; withFreeName
+    // then picks again). Positions are only a tie-break here, so they take no lock of their own.
+    const workspaceId = actor.workspaceId
+    let created
+    try {
+      created = await withFreeName(() => prisma.$transaction(async (tx) => {
+        await lockVaultTree(tx, workspaceId, "shared")
+        await assertLiveFolderTx(tx, workspaceId, parentId)
+        const name = await uniqueNameInFolder(workspaceId, parentId, cleanItemName(body.name, "Folder baru"), undefined, tx)
+        const last = await tx.vaultItem.findFirst({
+          where: { workspaceId, parentId, deletedAt: null },
+          orderBy: { position: "desc" },
+          select: { position: true },
+        })
+        return tx.vaultItem.create({
+          data: {
+            kind: "FOLDER",
+            name,
+            parentId,
+            workspaceId,
+            uploaderId: actor.userId,
+            ownerId: actor.userId,
+            position: (last?.position ?? 0) + 1,
+            icon: typeof body.icon === "string" ? body.icon.slice(0, 40) : null,
+            color: typeof body.color === "string" ? body.color.slice(0, 20) : null,
+          },
+          include: VAULT_ITEM_INCLUDE,
+        })
+      }))
+    } catch (e) {
+      if (e instanceof VaultWriteRefused) return NextResponse.json(e.body, { status: e.status })
+      throw e
+    }
+    const name = created.name
 
     logAudit({
       action: "create",

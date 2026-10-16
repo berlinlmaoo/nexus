@@ -10,6 +10,7 @@ import { mkdir, writeFile, readFile, rm, stat, readdir, rename, unlink } from "f
 import { createReadStream, createWriteStream } from "fs"
 import { tmpdir } from "os"
 import path from "path"
+import { randomUUID } from "crypto"
 import { resolveMime } from "@/lib/mime"
 import { checkProjectAccess } from "@/lib/rbac"
 import {
@@ -19,7 +20,13 @@ import {
   uniqueNameInFolder,
   newStorageKey,
   ensureStorageDir,
-  assertQuota,
+  assertLiveFolderTx,
+  lockVaultQuota,
+  lockVaultTree,
+  reserveVaultUpload,
+  vaultQuotaProblemTx,
+  withFreeName,
+  VaultWriteRefused,
   VAULT_ITEM_INCLUDE,
   serializeVaultItem,
   type VaultActor,
@@ -57,6 +64,9 @@ const STALE_SESSION_MS = 10 * 60 * 1000
 // on the old one and started over (a new uploadId each attempt); its parts are dead weight on disk.
 const SAME_FILE_IDLE_MS = 60 * 1000
 const META_FILE = ".meta"
+// A finalize lock older than this was left by a process that died mid-finalize (a 5 GB assembly takes about
+// a minute); the next finalize may take it over instead of answering "in progress" until the sweep.
+const STALE_LOCK_MS = 30 * 60 * 1000
 const UPLOAD_ID_RE = /^[A-Za-z0-9_-]{8,64}$/
 
 // userId comes from the session (trusted); uploadId is regex-validated. Confine the dir to exactly
@@ -83,7 +93,21 @@ async function sweepOld() {
       for (const s of sessions) {
         const sdir = path.join(udir, s)
         try {
-          if (now - (await stat(sdir)).mtimeMs > SWEEP_AGE_MS) await rm(sdir, { recursive: true, force: true })
+          // Idle = nothing written in the session for SWEEP_AGE_MS: the newest of the dir and its files (a
+          // chunk rewritten in place does not touch the dir's mtime), and never while a finalize holds its
+          // lock — reaping the parts under a running assembly corrupted it (race audit 16 Oct 2026, LOW).
+          let last = (await stat(sdir)).mtimeMs
+          let finalizing = false
+          for (const f of await readdir(sdir)) {
+            try {
+              const m = (await stat(path.join(sdir, f))).mtimeMs
+              last = Math.max(last, m)
+              if (f === ".lock" && now - m < STALE_LOCK_MS) finalizing = true
+            } catch {
+              /* removed meanwhile */
+            }
+          }
+          if (!finalizing && now - last > SWEEP_AGE_MS) await rm(sdir, { recursive: true, force: true })
         } catch {
           /* ignore */
         }
@@ -97,6 +121,8 @@ async function sweepOld() {
   } catch {
     /* CHUNK_ROOT may not exist yet */
   }
+  // Reservations of uploads that stopped sending chunks no longer count (lib/vault.ts); drop the rows.
+  await prisma.vaultUploadReservation.deleteMany({ where: { expiresAt: { lt: new Date() } } }).catch(() => {})
 }
 
 // Proactive backstop: reap stale sessions even if no new upload ever starts (closes the "never send
@@ -347,9 +373,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 })
       }
       // Checked against the DECLARED total on every chunk, so a 900MB upload into a vault with 200MB
-      // left is refused at the first chunk instead of after twenty minutes of transfer.
-      const quotaError = await assertQuota(vaultActor.workspaceId, totalSize)
-      if (quotaError) return NextResponse.json({ error: quotaError }, { status: 507 })
+      // left is refused at the first chunk instead of after twenty minutes of transfer. Since 16 Oct 2026
+      // (race audit H10) the declared size is also RESERVED, under the quota lock, so two uploads into
+      // the last free gigabytes cannot both start; every chunk refreshes the reservation.
+      const quotaError = await reserveVaultUpload(vaultActor.workspaceId, userId, uploadId, totalSize)
+      if (quotaError) return NextResponse.json({ error: quotaError, code: "VAULT_FULL" }, { status: 507 })
     } else if (target === "pipeline") {
       // Same rule as editing the deal: a member of the board (checkProjectAccess MEMBER), a PIPELINE
       // project, a deal of that project with room for one more document.
@@ -407,11 +435,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Exceeds declared size" }, { status: 413 })
 
     // Stream the chunk straight to disk (constant memory), capped at the remaining budget.
+    // Into a temp file of THIS request, then renamed over the part (race audit 16 Oct 2026, M14): two
+    // requests for the same index (a retry while the first is still streaming) used to write into one file
+    // at once, and the one that failed unlinked the part the other had just finished.
     const partPath = path.join(sdir, `${chunkIndex}.part`)
-    if (!(await writeBody(request.body, partPath, Math.min(MAX_CHUNK, remaining)))) {
-      await unlink(partPath).catch(() => {})
+    const tmpPath = `${partPath}.${randomUUID()}.tmp`
+    if (!(await writeBody(request.body, tmpPath, Math.min(MAX_CHUNK, remaining)))) {
+      await unlink(tmpPath).catch(() => {})
       return NextResponse.json({ error: "Chunk write failed" }, { status: 400 })
     }
+    await rename(tmpPath, partPath)
 
     // Not the last chunk → acknowledge and wait for the rest.
     if (chunkIndex !== totalChunks - 1) return NextResponse.json({ ok: true, received: chunkIndex }, { status: 200 })
@@ -419,7 +452,14 @@ export async function POST(request: NextRequest) {
     // ---- finalize, serialized per session via an atomic lock dir ----
     const lockPath = path.join(sdir, ".lock")
     try {
-      await mkdir(lockPath) // non-recursive → throws EEXIST if another finalize already holds it
+      try {
+        await mkdir(lockPath) // non-recursive → throws EEXIST if another finalize already holds it
+      } catch (e) {
+        // Left by a finalize that died: take it over once.
+        if (Date.now() - (await stat(lockPath)).mtimeMs <= STALE_LOCK_MS) throw e
+        await rm(lockPath, { recursive: true, force: true })
+        await mkdir(lockPath)
+      }
     } catch {
       try {
         const stored = JSON.parse(await readFile(donePath, "utf8"))
@@ -480,12 +520,9 @@ export async function POST(request: NextRequest) {
 
       // ── vault finalize ──────────────────────────────────────────────────────
       if (target === "vault" && vaultActor?.workspaceId) {
-        const name = await uniqueNameInFolder(
-          vaultActor.workspaceId,
-          vaultParentId,
-          cleanItemName(filename, "Berkas"),
-        )
-        const storageKey = newStorageKey(filename || name)
+        const workspaceId = vaultActor.workspaceId
+        const desiredName = cleanItemName(filename, "Berkas")
+        const storageKey = newStorageKey(filename || desiredName)
         finalPath = await ensureStorageDir(storageKey)
 
         // Same atomic publish as the task path: assemble under a .partial name, then rename. The
@@ -493,21 +530,45 @@ export async function POST(request: NextRequest) {
         await concatToFile(sdir, totalChunks, `${finalPath}.partial`)
         await rename(`${finalPath}.partial`, finalPath)
 
-        const created = await prisma.vaultItem.create({
-          data: {
-            kind: "FILE",
-            name,
-            parentId: vaultParentId,
-            workspaceId: vaultActor.workspaceId,
-            uploaderId: userId,
-            ownerId: userId,
-            storageKey,
-            mimeType: resolveMime(mimeType, filename),
-            size: assembled,
-          },
-          include: VAULT_ITEM_INCLUDE,
-        })
+        // The row, under the Vault's locks (race audit 16 Oct 2026, H10/M16): the folder is still live, the
+        // quota is re-summed (this upload's own reservation left out, and dropped in the same transaction),
+        // and the name is picked there.
+        let created
+        try {
+          created = await withFreeName(() => prisma.$transaction(async (tx) => {
+            await lockVaultTree(tx, workspaceId, "shared")
+            await lockVaultQuota(tx, workspaceId)
+            await assertLiveFolderTx(tx, workspaceId, vaultParentId)
+            const full = await vaultQuotaProblemTx(tx, workspaceId, assembled, { own: { userId, uploadId } })
+            if (full) throw new VaultWriteRefused(507, { error: full, code: "VAULT_FULL" })
+            const name = await uniqueNameInFolder(workspaceId, vaultParentId, desiredName, undefined, tx)
+            const row = await tx.vaultItem.create({
+              data: {
+                kind: "FILE",
+                name,
+                parentId: vaultParentId,
+                workspaceId,
+                uploaderId: userId,
+                ownerId: userId,
+                storageKey,
+                mimeType: resolveMime(mimeType, filename),
+                size: assembled,
+              },
+              include: VAULT_ITEM_INCLUDE,
+            })
+            await tx.vaultUploadReservation.deleteMany({ where: { userId, uploadId } })
+            return row
+          }))
+        } catch (e) {
+          if (!(e instanceof VaultWriteRefused)) throw e
+          // Nothing refers to the assembled bytes: reclaim them (the parts stay, so a retry can finalize again).
+          await unlink(finalPath).catch(() => {})
+          finalPath = null
+          await prisma.vaultUploadReservation.deleteMany({ where: { userId, uploadId } }).catch(() => {})
+          return NextResponse.json(e.body, { status: e.status })
+        }
         committed = true
+        const name = created.name
 
         const payload = serializeVaultItem(created as unknown as VaultItemRow, vaultActor)
         // Mark done BEFORE reclaiming the parts, so a lost response retries into the stored row

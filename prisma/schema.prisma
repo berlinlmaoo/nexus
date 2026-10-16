@@ -3723,9 +3723,29 @@ model VaultItem {
   // berlaku global, bukan per-induk, jadi menyalinnya akan melarang Brand/Logo dan Clients/Logo
   // hidup bersama. Keunikan per-induk juga tidak bisa dinyatakan di Postgres karena baris dengan
   // parentId NULL tidak pernah bertabrakan. Jadi: dicek di route, dan diberi akhiran "(2)".
+  // Since 16 Oct 2026 (race audit, LOW) the database guarantees it too: a partial EXPRESSION index over
+  // (workspaceId, COALESCE(parentId, ''), lower(name)) WHERE deletedAt IS NULL, which Prisma cannot express —
+  // prisma/sql/2026-10-16-vault-live-name-unique.sql. Writers retry a refused name (lib/vault.ts withFreeName).
   @@index([workspaceId, parentId, position])
   @@index([workspaceId, deletedAt])
   @@index([parentId])
+}
+
+/// A chunked Vault upload's declared size, held against the workspace quota while its chunks arrive (race
+/// audit 16 Oct 2026, H10): refreshed by every chunk, deleted by the finalize that creates the file, ignored
+/// once expired. The quota check (lib/vault.ts vaultQuotaProblemTx) counts live files + live reservations of
+/// other uploads, under the per-workspace advisory lock. prisma/sql/2026-10-16-vault-upload-reservation.sql.
+model VaultUploadReservation {
+  id          String   @id @default(cuid())
+  userId      String
+  uploadId    String
+  workspaceId String
+  bytes       BigInt
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, uploadId])
+  @@index([workspaceId, expiresAt])
 }
 
 // Tautan berbagi, terpisah dari itemnya.

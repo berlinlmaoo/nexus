@@ -149,12 +149,20 @@ const SOFT_IGNORED = new Set(["updatedAt"])
  * the after. Rows `apply` did not change (already deleted) are not kept; nothing changed → no copy.
  */
 export async function softDeleteKeepingSnapshot(
-  input: SnapshotInput & { ids?: string[]; apply: (tx: Prisma.TransactionClient) => Promise<unknown> },
+  input: SnapshotInput & {
+    ids?: string[]
+    /** Runs first, inside the transaction: take locks and, if it returns ids, use those instead of `ids`
+     *  (a trashed folder's subtree collected under the Vault tree lock, race audit 16 Oct 2026 M16). */
+    prepare?: (tx: Prisma.TransactionClient) => Promise<string[] | void>
+    apply: (tx: Prisma.TransactionClient) => Promise<unknown>
+  },
 ): Promise<{ changed: number }> {
   const table = rootTableOf(input.entityType)
-  const ids = input.ids ?? [input.entityId]
+  let ids = input.ids ?? [input.entityId]
   let changed = 0
   await prisma.$transaction(async (tx) => {
+    const prepared = await input.prepare?.(tx)
+    if (prepared) ids = prepared
     const db = dbOf(tx)
     const schema = await schemaOf(db)
     const pk = schema.pk.get(table)?.[0] ?? "id"

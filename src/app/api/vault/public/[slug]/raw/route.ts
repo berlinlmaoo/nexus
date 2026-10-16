@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { serveFile, previewKindOf } from "@/lib/file-response"
-import { storagePath } from "@/lib/vault"
+import { storagePath, vaultEtag } from "@/lib/vault"
 import { openShare, itemInShare, shareCacheControl } from "@/lib/vault-share"
 
 // GET /api/vault/public/<slug>/raw[?item=<id>][&download=1] — the bytes behind a share link.
@@ -53,6 +53,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return serveFile(request, storagePath(item.storageKey), {
       filename: item.name,
+      // Changes with the bytes (a replace), so If-Range never stitches two versions together.
+      etag: vaultEtag(item.storageKey),
       mimeType: item.mimeType,
       forceDownload: wantsDownload,
       // A preview-only link must not hand the browser an attachment through any other door either —

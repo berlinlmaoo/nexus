@@ -2,6 +2,7 @@ import path from "path"
 import { randomUUID, randomBytes, createHash } from "crypto"
 import { mkdir, unlink } from "fs/promises"
 import { prisma } from "@/lib/prisma"
+import type { Prisma } from "@/generated/prisma/client"
 import { getUserOrgRole, isManagerRole, isBodPlus } from "@/lib/feed"
 import { ORG_WORKSPACE_ID, orgRoleOf } from "@/lib/org"
 
@@ -43,6 +44,16 @@ export function newStorageKey(originalName: string): string {
 
 /** Absolute path for a storageKey. The guard is defence in depth: keys are server-generated, so if
  *  this ever throws, something upstream started trusting client input and must be fixed there. */
+/**
+ * The validator a file's bytes are served with (race audit 16 Oct 2026, LOW): "Replace file…" keeps the item
+ * id — and every share link — but gives the bytes a new storageKey, so the ETag changes with them. A
+ * download resumed with If-Range after a replace then gets the whole new file instead of the old file's
+ * first half glued to the new one's second half. Opaque: the key itself never reaches a client.
+ */
+export function vaultEtag(storageKey: string): string {
+  return `"v-${createHash("sha256").update(storageKey).digest("hex").slice(0, 24)}"`
+}
+
 export function storagePath(storageKey: string): string {
   const full = path.resolve(VAULT_DIR, storageKey)
   if (full !== VAULT_DIR && !full.startsWith(VAULT_DIR + path.sep)) {
@@ -247,8 +258,9 @@ export async function uniqueNameInFolder(
   parentId: string | null,
   desired: string,
   ignoreItemId?: string,
+  client: Prisma.TransactionClient | typeof prisma = prisma,
 ): Promise<string> {
-  const siblings = await prisma.vaultItem.findMany({
+  const siblings = await client.vaultItem.findMany({
     where: { workspaceId, parentId, deletedAt: null, ...(ignoreItemId ? { id: { not: ignoreItemId } } : {}) },
     select: { name: true },
   })
@@ -287,12 +299,146 @@ export async function vaultUsedBytes(workspaceId: string): Promise<number> {
 }
 
 export async function assertQuota(workspaceId: string, incomingBytes: number): Promise<string | null> {
-  const used = await vaultUsedBytes(workspaceId)
-  if (used + incomingBytes > VAULT_QUOTA_BYTES) {
-    const freeGb = Math.max(0, (VAULT_QUOTA_BYTES - used) / 1024 ** 3)
-    return `Vault penuh. Sisa ${freeGb.toFixed(1)} GB dari ${(VAULT_QUOTA_BYTES / 1024 ** 3).toFixed(0)} GB.`
+  return vaultQuotaProblemTx(prisma, workspaceId, incomingBytes)
+}
+
+const quotaFullText = (used: number) => {
+  const freeGb = Math.max(0, (VAULT_QUOTA_BYTES - used) / 1024 ** 3)
+  return `Vault penuh. Sisa ${freeGb.toFixed(1)} GB dari ${(VAULT_QUOTA_BYTES / 1024 ** 3).toFixed(0)} GB.`
+}
+
+// ── concurrency (race audit 16 Oct 2026, H10 / M15 / M16) ───────────────────────────────────────────
+//
+// Two advisory locks, always taken in this order inside one transaction:
+//   1. the TREE lock, `vaulttree|<workspace>`: EXCLUSIVE for whatever reshapes the tree (move, trash, restore,
+//      empty trash), SHARED for whatever adds under a folder (upload, chunk finalize, new folder). A move
+//      re-checks "is the target below me?" and a trash collects the subtree under it, so two crossing moves
+//      can no longer make a cycle, and a file can no longer land, live, inside a folder trashed meanwhile;
+//   2. the QUOTA lock, `vault-quota:<workspace>`: every write that adds bytes re-sums the quota under it, in
+//      the transaction that writes the row, so uploads finishing together can no longer all pass one check.
+
+export async function lockVaultTree(tx: Prisma.TransactionClient, workspaceId: string, mode: "shared" | "exclusive"): Promise<void> {
+  const key = `vaulttree|${workspaceId}`
+  if (mode === "shared") await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtext(${key})::int8)`
+  else await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key})::int8)`
+}
+
+export async function lockVaultQuota(tx: Prisma.TransactionClient, workspaceId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`vault-quota:${workspaceId}`})::int8)`
+}
+
+/** How long a chunked upload's reservation lives without a new chunk. */
+export const VAULT_RESERVATION_MS = 70 * 60 * 1000
+
+/**
+ * "Vault penuh …" when `incomingBytes` more would not fit, else null. Counts every file (trash included)
+ * plus the live reservations of OTHER chunked uploads (`own` = the caller's own reservation, left out);
+ * `freeingBytes` = what the write gives back (a replace frees the old file). Exact only under
+ * lockVaultQuota; without it (the early per-chunk check) it is a hint.
+ */
+export async function vaultQuotaProblemTx(
+  client: Prisma.TransactionClient | typeof prisma,
+  workspaceId: string,
+  incomingBytes: number,
+  opts: { own?: { userId: string; uploadId: string }; freeingBytes?: number } = {},
+): Promise<string | null> {
+  const ownUser = opts.own?.userId ?? ""
+  const ownUpload = opts.own?.uploadId ?? ""
+  const [row] = await client.$queryRaw<{ used: bigint; reserved: bigint }[]>`
+    SELECT
+      (SELECT COALESCE(SUM("size"), 0) FROM "VaultItem" WHERE "workspaceId" = ${workspaceId} AND "kind" = 'FILE')::bigint AS used,
+      (SELECT COALESCE(SUM("bytes"), 0) FROM "VaultUploadReservation"
+        WHERE "workspaceId" = ${workspaceId} AND "expiresAt" > now() AND NOT ("userId" = ${ownUser} AND "uploadId" = ${ownUpload}))::bigint AS reserved`
+  const used = Number(row?.used ?? 0) + Number(row?.reserved ?? 0) - (opts.freeingBytes ?? 0)
+  return used + incomingBytes > VAULT_QUOTA_BYTES ? quotaFullText(used) : null
+}
+
+/**
+ * Hold `bytes` of the quota for a chunked upload (every chunk calls it: it also refreshes the expiry).
+ * Under the quota lock, so two uploads cannot both reserve the last free gigabytes. Returns the "Vault
+ * penuh" text when it does not fit (nothing is reserved then).
+ */
+export async function reserveVaultUpload(workspaceId: string, userId: string, uploadId: string, bytes: number): Promise<string | null> {
+  return prisma.$transaction(async (tx) => {
+    await lockVaultQuota(tx, workspaceId)
+    const problem = await vaultQuotaProblemTx(tx, workspaceId, bytes, { own: { userId, uploadId } })
+    if (problem) return problem
+    const expiresAt = new Date(Date.now() + VAULT_RESERVATION_MS)
+    await tx.vaultUploadReservation.upsert({
+      where: { userId_uploadId: { userId, uploadId } },
+      create: { userId, uploadId, workspaceId, bytes: BigInt(bytes), expiresAt },
+      update: { bytes: BigInt(bytes), expiresAt },
+    })
+    return null
+  })
+}
+
+/** A write the Vault refused under its locks; the route answers `status` with `body`. */
+export class VaultWriteRefused extends Error {
+  constructor(readonly status: number, readonly body: Record<string, unknown>) {
+    super(String(body.error ?? "refused"))
   }
-  return null
+}
+
+/**
+ * Inside the caller's transaction (tree lock held): the folder a new item goes into must still be a live
+ * folder of this workspace. FOR SHARE, so it cannot be changed under the insert either.
+ */
+export async function assertLiveFolderTx(tx: Prisma.TransactionClient, workspaceId: string, parentId: string | null): Promise<void> {
+  if (!parentId) return
+  const rows = await tx.$queryRaw<{ kind: string; deletedAt: Date | null }[]>`
+    SELECT "kind", "deletedAt" FROM "VaultItem" WHERE "id" = ${parentId} AND "workspaceId" = ${workspaceId} FOR SHARE`
+  const p = rows[0]
+  if (!p || p.deletedAt) throw new VaultWriteRefused(404, { error: "Folder tidak ada", errorEn: "The folder is gone (deleted or moved to the trash).", code: "FOLDER_GONE" })
+  if (p.kind !== "FOLDER") throw new VaultWriteRefused(400, { error: "Tujuan bukan folder" })
+}
+
+/** A unique-index refusal of a name (prisma/sql/2026-10-16-vault-live-name-unique.sql). */
+export function isNameClash(error: unknown): boolean {
+  const e = error as { code?: string; meta?: { code?: string; target?: unknown }; message?: string } | null
+  if (!e) return false
+  if (e.code === "P2002") return true
+  if (e.code === "P2010" && e.meta?.code === "23505") return true
+  return typeof e.message === "string" && e.message.includes("VaultItem_live_name_key")
+}
+
+/**
+ * Run a write that gives an item a name (a transaction that picks a free name inside it), again when the
+ * database refuses the name because someone took it in the same instant. Each attempt picks afresh.
+ */
+export async function withFreeName<T>(write: () => Promise<T>, attempts = 5): Promise<T> {
+  for (let i = 1; ; i++) {
+    try {
+      return await write()
+    } catch (error) {
+      if (i >= attempts || !isNameClash(error)) throw error
+    }
+  }
+}
+
+/** Is `itemId` the folder `targetId` or one of its ancestors? (A move of itemId under targetId would make a
+ *  cycle.) Recursive, inside the caller's transaction, so it sees the tree as the tree lock holds it. */
+export async function isAncestorOrSelfTx(tx: Prisma.TransactionClient, itemId: string, targetId: string): Promise<boolean> {
+  const rows = await tx.$queryRaw<{ hit: boolean }[]>`
+    WITH RECURSIVE up AS (
+      SELECT "id", "parentId", 0 AS depth FROM "VaultItem" WHERE "id" = ${targetId}
+      UNION ALL
+      SELECT v."id", v."parentId", up.depth + 1 FROM "VaultItem" v JOIN up ON v."id" = up."parentId" WHERE up.depth < 64
+    )
+    SELECT EXISTS (SELECT 1 FROM up WHERE "id" = ${itemId}) AS hit`
+  return rows[0]?.hit === true
+}
+
+/** subtreeIds inside a transaction (one recursive query). */
+export async function subtreeIdsTx(tx: Prisma.TransactionClient, itemId: string): Promise<string[]> {
+  const rows = await tx.$queryRaw<{ id: string }[]>`
+    WITH RECURSIVE down AS (
+      SELECT "id", 0 AS depth FROM "VaultItem" WHERE "id" = ${itemId}
+      UNION ALL
+      SELECT v."id", down.depth + 1 FROM "VaultItem" v JOIN down ON v."parentId" = down."id" WHERE down.depth < 32
+    )
+    SELECT "id" FROM down`
+  return rows.map((r) => r.id)
 }
 
 // ── serialization ────────────────────────────────────────────────────────────
