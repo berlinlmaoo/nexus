@@ -10,6 +10,7 @@ import { createInAppNotification, roomName } from "@/lib/notification-service"
 import { bi } from "@/lib/notification-text"
 import { formatBookingSlot } from "@/lib/room-booking-format"
 import { restorableDelete } from "@/lib/deletion-snapshot"
+import { bookingInclude, findRoomConflict, isRoomOverlapViolation, roomTakenBody } from "@/lib/room-booking"
 
 /** A booking can be edited/deleted by its creator, or by a workspace MANAGER/BoD/One-Above-All. */
 async function canManageBooking(userId: string, workspaceId: string, createdById: string): Promise<boolean> {
@@ -20,10 +21,6 @@ async function canManageBooking(userId: string, workspaceId: string, createdById
   })
   return isWorkspaceManagerRole(membership?.role ?? null)
 }
-
-const bookingInclude = {
-  createdBy: { select: { id: true, name: true, email: true, avatar: true } },
-} as const
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bookingId: string }> }) {
   try {
@@ -60,33 +57,33 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bo
 
     const nextStatus = data.status ?? existing.status
     if (nextStatus === "ACTIVE") {
-      const conflict = await prisma.roomBooking.findFirst({
-        where: {
-          id: { not: bookingId },
-          workspaceId: { in: workspaceIds },
-          room: nextRoom,
-          status: "ACTIVE",
-          startsAt: { lt: nextEnd },
-          endsAt: { gt: nextStart },
-        },
-      })
+      const conflict = await findRoomConflict(workspaceIds, nextRoom, nextStart, nextEnd, bookingId)
       if (conflict) {
-        return NextResponse.json({ error: `${nextRoom} sudah dibooking pada jam itu (${conflict.title}).`, code: "ROOM_TAKEN", conflict: { id: conflict.id, title: conflict.title } }, { status: 409 })
+        return NextResponse.json(await roomTakenBody(workspaceIds, nextRoom, nextStart, nextEnd, bookingId), { status: 409 })
       }
     }
 
-    const booking = await prisma.roomBooking.update({
-      where: { id: bookingId },
-      data: {
-        ...(data.room !== undefined ? { room: data.room } : {}),
-        ...(data.title !== undefined ? { title: data.title.trim() } : {}),
-        ...(data.description !== undefined ? { description: data.description?.trim() || null } : {}),
-        ...(data.startsAt !== undefined ? { startsAt: nextStart } : {}),
-        ...(data.endsAt !== undefined ? { endsAt: nextEnd } : {}),
-        ...(data.status !== undefined ? { status: data.status } : {}),
-      },
-      include: bookingInclude,
-    })
+    let booking
+    try {
+      booking = await prisma.roomBooking.update({
+        where: { id: bookingId },
+        data: {
+          ...(data.room !== undefined ? { room: data.room } : {}),
+          ...(data.title !== undefined ? { title: data.title.trim() } : {}),
+          ...(data.description !== undefined ? { description: data.description?.trim() || null } : {}),
+          ...(data.startsAt !== undefined ? { startsAt: nextStart } : {}),
+          ...(data.endsAt !== undefined ? { endsAt: nextEnd } : {}),
+          ...(data.status !== undefined ? { status: data.status } : {}),
+        },
+        include: bookingInclude,
+      })
+    } catch (error) {
+      // A move raced another booking into the same slot: the database refused it (RoomBooking_no_overlap).
+      if (isRoomOverlapViolation(error)) {
+        return NextResponse.json(await roomTakenBody(workspaceIds, nextRoom, nextStart, nextEnd, bookingId), { status: 409 })
+      }
+      throw error
+    }
 
     // Changed by somebody other than the owner (a manager) → the owner is told what happened.
     if (session.user.id !== existing.createdById) {

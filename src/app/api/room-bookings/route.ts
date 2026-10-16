@@ -5,13 +5,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { getUserWorkspaceIds } from "@/lib/workspace-scope"
 import { createRoomBookingSchema, validateBody } from "@/lib/validations"
-import { createInAppNotification, roomName } from "@/lib/notification-service"
-import { bi } from "@/lib/notification-text"
-import { formatBookingSlot } from "@/lib/room-booking-format"
-
-const bookingInclude = {
-  createdBy: { select: { id: true, name: true, email: true, avatar: true } },
-} as const
+import { bookingInclude, createRoomBooking } from "@/lib/room-booking"
 
 export async function GET(req: NextRequest) {
   try {
@@ -74,67 +68,27 @@ export async function POST(req: NextRequest) {
     }
 
     const { room, title, startsAt, endsAt, description } = validation.data
-    const start = new Date(startsAt)
-    const end = new Date(endsAt)
-    if (end <= start) {
-      return NextResponse.json({ error: "End time must be after start time" }, { status: 400 })
-    }
-    // A booking that has already ended can't be made (QA S-13, 13 Oct 2026); one under way can.
-    if (end.getTime() <= Date.now()) {
-      return NextResponse.json({ error: "That time has already passed.", code: "BOOKING_IN_PAST" }, { status: 400 })
-    }
-
     const workspaceIds = await getUserWorkspaceIds(session.user.id)
     const workspaceId = workspaceIds[0]
     if (!workspaceId) {
       return NextResponse.json({ error: "No workspace found for user" }, { status: 403 })
     }
 
-    // Double-booking guard: same room + overlapping active booking in any of the user's workspaces.
-    const conflict = await prisma.roomBooking.findFirst({
-      where: {
-        workspaceId: { in: workspaceIds },
-        room,
-        status: "ACTIVE",
-        startsAt: { lt: end },
-        endsAt: { gt: start },
-      },
-      include: bookingInclude,
-    })
-    if (conflict) {
-      return NextResponse.json(
-        { error: `${room} sudah dibooking pada jam itu (${conflict.title}).`, code: "ROOM_TAKEN", conflict },
-        { status: 409 }
-      )
-    }
-
-    const booking = await prisma.roomBooking.create({
-      data: {
-        workspaceId,
-        createdById: session.user.id,
-        room,
-        title: title.trim(),
-        description: description?.trim() || null,
-        startsAt: start,
-        endsAt: end,
-      },
-      include: bookingInclude,
-    })
-
-    // A booking is a promise about a room; the person who made it gets it in writing on their
-    // phone, and the reminder before it starts (booking_soon) follows from the cron.
-    await createInAppNotification({
+    // The same path as GIDEON's book_room (lib/room-booking.ts): range and past checks, the conflict guard
+    // over the user's workspaces, the database's exclusion constraint for two requests at once, and the
+    // "Room booked" notification.
+    const result = await createRoomBooking({
       userId: session.user.id,
-      type: "booking_confirmed",
-      ...bi(
-        [`Room booked: ${roomName(room, "en")}`, `${title.trim()} · ${formatBookingSlot(start, end, "en")}. A reminder comes before it starts.`],
-        [`Ruangan dibooking: ${room}`, `${title.trim()} · ${formatBookingSlot(start, end)}. Pengingat dikirim sebelum mulai.`]
-),
-      link: "/room-booking",
-      push: true,
-    }).catch(() => null)
-
-    return NextResponse.json({ booking }, { status: 201 })
+      workspaceId,
+      scopeWorkspaceIds: workspaceIds,
+      room,
+      title,
+      description,
+      start: new Date(startsAt),
+      end: new Date(endsAt),
+    })
+    if (!result.ok) return NextResponse.json(result.body, { status: result.status })
+    return NextResponse.json({ booking: result.booking }, { status: 201 })
   } catch (error) {
     console.error("Room bookings POST error:", error)
     return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 })
