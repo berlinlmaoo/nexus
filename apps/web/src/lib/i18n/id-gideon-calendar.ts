@@ -15,7 +15,6 @@ export const ID_GIDEON_CALENDAR: Record<string, string> = {
   "Checking the rooms…": "Mengecek ruangan…",
   "Couldn't check the rooms.": "Gagal mengecek ruangan.",
   "{room} is booked then. Pick a free room below.": "{room} sudah dibooking di jam itu. Pilih ruangan yang kosong di bawah.",
-  "{n} seats": "{n} kursi",
   "Booked by {name} until {time}": "Dibooking {name} sampai {time}",
   "No room is free then. Nearest free times:": "Tidak ada ruangan kosong di jam itu. Jam kosong terdekat:",
   "Open Room Booking": "Buka Room Booking",
