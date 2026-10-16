@@ -91,6 +91,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
   Circle,
   CornerDownRight,
   FileText,
@@ -668,7 +669,7 @@ function ProjectDetail() {
         </div>
         <div className="flex shrink-0 items-center gap-0.5 sm:hidden">
           <ToolbarButton icon={MoreHorizontal} label={toolsOpen ? tr("Hide view tools") : tr("View tools")} active={toolsOpen || filterCount > 0 || activeModule === "automations"} count={!toolsOpen && filterCount > 0 ? filterCount : undefined} onClick={() => setToolsOpen((o) => !o)} />
-          {canEditProject && <button type="button" onClick={() => addTask()} aria-label={tr("Add task")} className="ml-0.5 grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground"><Plus className="h-4 w-4" /></button>}
+          {canEditProject && <button type="button" onClick={() => addTask()} aria-label={tr("New task")} className="ml-0.5 h-7 rounded-md bg-[#2383e2] px-2.5 text-sm font-medium text-white transition-colors hover:bg-[#0077d4] pointer-coarse:h-9">{tr("New")}</button>}
         </div>
         {/* From sm the tabs share their row with Add task only; the view's tools (and the named Automations and AI
             Autofill) are a row of their own under it, on every view. With the tools beside them, the labels pushed
@@ -686,10 +687,10 @@ function ProjectDetail() {
               {layout !== "calendar" && <GroupButton cfg={cfg} layout={layout} defs={defs} ctx={ctx} onPatch={patchConfig} readOnly={!canEdit} />}
             </>
           )}
-          {/* Named on every view from lg, as on the Overview (WD-7; UI tour run 16, R16-WD-6: the Board showed bare
-              icons where the Overview said "Automations" and "AI Autofill"). */}
-          <ToolbarButton icon={Zap} label={tr("Automations")} active={activeModule === "automations"} onClick={() => select("automations")} showLabel />
-          <ToolbarButton icon={Sparkles} label={tr("AI Autofill")} iconOnly active={autofillOpen} onClick={() => setAutofillOpen(true)} showLabel />
+          {/* Icons only, as in Notion's database toolbar (owner, 16 Oct 2026: copy Notion's view); each names itself
+              in a tooltip on hover and focus. */}
+          <ToolbarButton icon={Zap} label={tr("Automations")} active={activeModule === "automations"} onClick={() => select("automations")} />
+          <ToolbarButton icon={Sparkles} label={tr("AI Autofill")} iconOnly active={autofillOpen} onClick={() => setAutofillOpen(true)} />
           {cfg && activeView && !activeModule && (
             <>
               <ToolbarSearch value={query} onChange={(q) => setSearch({ q: q || undefined })} />
@@ -763,8 +764,10 @@ function ProjectDetail() {
     <div data-page-canvas="card" className="min-h-dvh bg-card max-md:-mb-(--tabbar-room) max-md:pb-(--tabbar-room)">
       <PageHeader
         compact
+        hero
         className="bg-card md:bg-card max-md:bg-card max-md:before:bg-card [--page-header-bg:var(--card)]"
-        icon={<span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted/60 text-[28px] leading-none"><ProjectMark icon={data?.icon} color={data?.color} type={data?.type} className="max-h-9 max-w-9 rounded-lg object-cover" /></span>}
+        // Notion's database page: the icon sits bare beside a 32px bold title (16 Oct 2026 pass).
+        icon={<span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg text-[28px] leading-none md:h-10 md:w-10 md:text-[34px]"><ProjectMark icon={data?.icon} color={data?.color} type={data?.type} className="max-h-9 max-w-9 rounded-lg object-cover md:max-h-10 md:max-w-10" /></span>}
         title={data?.name || tr("Project")}
         subtitle={data?.description || (project.isLoading ? tr("Loading…") : projectFailed ? (projectOffline ? tr("No connection. Check your internet and try again.") : projectMissing ? tr("This project was deleted, or the link is wrong.") : tr("Couldn't open this project. You may not be a member.")) : undefined)}
         actions={
@@ -776,9 +779,9 @@ function ProjectDetail() {
             {data && <ProjectMembersAvatars project={data} />}
             {/* Ask GIDEON about this project (12 Oct 2026): opens the chat with the project as context. */}
             {/* Phone: icon-only, so title + actions fit one row (audit 12 Oct 2026). */}
-            {data && <Button size="sm" variant="outline" aria-label={tr("Ask GIDEON")} className="max-sm:w-8 max-sm:min-w-8 max-sm:px-0 pointer-coarse:h-11 pointer-coarse:max-sm:w-11 pointer-coarse:max-sm:min-w-11" onClick={() => openGideon({ projectId: data.id, projectName: data.name }, { newChat: true })}><GideonMark className="h-3.5 w-3.5" /><span className="max-sm:hidden">{tr("Ask GIDEON")}</span></Button>}
+            {data && <Button size="sm" variant="ghost" aria-label={tr("Ask GIDEON")} className="max-sm:w-8 max-sm:min-w-8 max-sm:px-0 pointer-coarse:h-11 pointer-coarse:max-sm:w-11 pointer-coarse:max-sm:min-w-11" onClick={() => openGideon({ projectId: data.id, projectName: data.name }, { newChat: true })}><GideonMark className="h-3.5 w-3.5" /><span className="max-sm:hidden">{tr("Ask GIDEON")}</span></Button>}
             {data && <motion.div layoutId={TUNE_MORPH_ID} style={{ borderRadius: 24 }} className="inline-block">
-              <Button size="sm" variant="outline" aria-label={tr("Project settings")} className="max-sm:w-8 max-sm:min-w-8 max-sm:px-0 pointer-coarse:h-11 pointer-coarse:max-sm:w-11 pointer-coarse:max-sm:min-w-11" onPointerEnter={() => void import("@/components/projects/ProjectSettingsDrawer")} onClick={() => setSettingsOpen(true)}><Settings2 className="h-3.5 w-3.5" /><span className="max-sm:hidden">{tr("Project settings")}</span></Button>
+              <Button size="sm" variant="ghost" aria-label={tr("Project settings")} className="max-sm:w-8 max-sm:min-w-8 max-sm:px-0 pointer-coarse:h-11 pointer-coarse:max-sm:w-11 pointer-coarse:max-sm:min-w-11" onPointerEnter={() => void import("@/components/projects/ProjectSettingsDrawer")} onClick={() => setSettingsOpen(true)}><Settings2 className="h-3.5 w-3.5" /><span className="max-sm:hidden">{tr("Project settings")}</span></Button>
             </motion.div>}
           </>
         }
@@ -910,7 +913,7 @@ function ProjectDetail() {
         />
       )}
       <Suspense fallback={null}>
-      {openTaskId && <TaskDetailPanel key={openTaskId} taskId={openTaskId} onClose={() => setOpenTask(null)} morphId={["board", "list", "calendar", "timeline", "gallery"].includes(layout) && !activeModule ? `${layout}-taskcard-${openTaskId}` : undefined} />}
+      {openTaskId && <TaskDetailPanel key={openTaskId} peek taskId={openTaskId} onClose={() => setOpenTask(null)} morphId={["board", "list", "calendar", "timeline", "gallery"].includes(layout) && !activeModule ? `${layout}-taskcard-${openTaskId}` : undefined} />}
       {data && autofillEver && <AutofillPanel projectId={data.id} open={autofillOpen} onOpenChange={setAutofillOpen} />}
       {settingsOpen && data && <ProjectSettingsDrawer project={data} onClose={() => setSettingsOpen(false)} onDeleted={() => { setSettingsOpen(false); navigate({ to: "/projects" }); }} />}
       {composerListId && data && <TaskComposer project={data} selectedListId={composerListId} initialDueDate={composerDueDate} onClose={() => { setComposerListId(null); setComposerDueDate(""); }} />}
@@ -1257,7 +1260,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
         // Phone: a lane nearly fills the screen, so the next one peeks in by its card edges only, never by half a
         // value ("Rp 3", UI tour run 15, R15-WM-2). Wider screens: an empty lane is narrow, so the columns with
         // cards come into view (R15-WB-8).
-        className={cn("group/lane flex shrink-0 snap-start flex-col rounded-lg p-1.5 transition-shadow", laneW, "max-sm:w-[calc(100vw-4rem)]", showHeader && items.length === 0 && draft !== id && "sm:w-48", showHeader && "max-h-[max(24rem,calc(100dvh-11rem))] max-sm:max-h-[max(16rem,calc(100dvh-var(--page-sticky-top,0px)-var(--page-snap-extra,0px)-var(--tabbar-room)-2.25rem))]", dragLaneId === g.key && "opacity-40")}
+        className={cn("group/lane flex shrink-0 snap-start flex-col rounded-xl p-1.5 transition-shadow", laneW, "max-sm:w-[calc(100vw-4rem)]", showHeader && items.length === 0 && draft !== id && "sm:w-48", showHeader && "max-h-[max(24rem,calc(100dvh-11rem))] max-sm:max-h-[max(16rem,calc(100dvh-var(--page-sticky-top,0px)-var(--page-snap-extra,0px)-var(--tabbar-room)-2.25rem))]", dragLaneId === g.key && "opacity-40")}
         onDragOver={(e) => {
           if (!dropOk) return;
           e.preventDefault();
@@ -1293,22 +1296,23 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
       >
         {showHeader && (
           <div className="mb-1 flex items-center gap-1 px-0.5" style={{ color: tone.text }}>
-            <button type="button" onClick={() => onToggleGroup(g.key)} aria-label={t("Collapse {name}", { name: laneLabel(g) })} className={cn(quiet, "tap-area h-6 w-5 opacity-0 pointer-coarse:opacity-100! focus-visible:opacity-100 group-hover/lane:opacity-100")}>
-              <ChevronDown className="h-3.5 w-3.5" />
-            </button>
             <span
               draggable={!!section}
               onDragStart={(e) => { if (!section) return; setDragLaneId(g.key); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", g.key); }}
               onDragEnd={() => setDragLaneId(null)}
               title={section ? t("Drag to reorder columns") : undefined}
-              className={cn("inline-flex min-w-0 items-center gap-1.5 truncate rounded-full px-2 py-0.5 text-sm font-medium", section && "cursor-grab active:cursor-grabbing")}
+              className={cn("inline-flex min-w-0 items-center gap-1.5 truncate rounded-full px-2 py-px text-sm", section && "cursor-grab active:cursor-grabbing")}
               style={{ backgroundColor: tone.bg, color: tone.text }}
             >
               <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tone.dot }} />
               <span className="truncate">{laneLabel(g)}</span>
             </span>
-            <span className="text-xs tabular-nums" title={t(groupCalcValue(laneTasks, cfg.groupCalc, defs).label)}>{groupCalcValue(laneTasks, cfg.groupCalc, defs).value}</span>
+            <span className="pl-1 text-sm tabular-nums" title={t(groupCalcValue(laneTasks, cfg.groupCalc, defs).label)}>{groupCalcValue(laneTasks, cfg.groupCalc, defs).value}</span>
             <div className="ml-auto flex shrink-0 items-center opacity-0 pointer-coarse:opacity-100! transition-opacity focus-within:opacity-100 group-hover/lane:opacity-100">
+              {/* Collapse sits with the column's other tools (Notion), so the pill starts at the column's edge. */}
+              <button type="button" onClick={() => onToggleGroup(g.key)} aria-label={t("Collapse {name}", { name: laneLabel(g) })} className={quiet}>
+                <ChevronsLeft className="h-3.5 w-3.5" />
+              </button>
               {section && canManageColumns && (
                 <StatusOptionMenu projectId={project.id} option={section} sections={sections} trigger={<button type="button" aria-label={t("Column options")} className={quiet}><MoreHorizontal className="h-3.5 w-3.5" /></button>} />
               )}
@@ -1562,7 +1566,7 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
   const filteredOut = useFilteredOut(task.id);
   const tint = cardTint(task, cfg, defs, ctx);
   return (
-    <div data-morph-id={morph && !draft ? `board-taskcard-${task.id}` : undefined} data-bulk-task={draft ? undefined : cardProps["data-bulk-task"]} style={{ borderRadius: 8 }} onContextMenu={draft ? undefined : cardProps.onContextMenu} onTouchStart={cardProps.onTouchStart} onTouchEnd={cardProps.onTouchEnd} onTouchMove={cardProps.onTouchMove} className={cn("w-full pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] [&>[data-touch-lifted]]:scale-[1.02] [&>[data-touch-lifted]]:shadow-[0_6px_18px_rgba(15,15,15,0.18)]", done && "opacity-60", draft && "pointer-events-none opacity-70", selected && "ring-2 ring-[color:var(--accent-foreground)] ring-offset-1 ring-offset-background")}>
+    <div data-morph-id={morph && !draft ? `board-taskcard-${task.id}` : undefined} data-bulk-task={draft ? undefined : cardProps["data-bulk-task"]} style={{ borderRadius: 10 }} onContextMenu={draft ? undefined : cardProps.onContextMenu} onTouchStart={cardProps.onTouchStart} onTouchEnd={cardProps.onTouchEnd} onTouchMove={cardProps.onTouchMove} className={cn("w-full pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] [&>[data-touch-lifted]]:scale-[1.02] [&>[data-touch-lifted]]:shadow-[0_6px_18px_rgba(15,15,15,0.18)]", done && "opacity-60", draft && "pointer-events-none opacity-70", selected && "ring-2 ring-[color:var(--accent-foreground)] ring-offset-1 ring-offset-background")}>
       <div
         role="button"
         tabIndex={0}
@@ -1574,7 +1578,8 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
         onPointerLeave={() => prefetchTask(qc, null)}
         onKeyDown={(e) => { if (e.key === "Enter") onOpen(task); }}
         style={tint}
-        className={cn("flex w-full cursor-pointer flex-col rounded-lg border border-border bg-card text-left shadow-[0_1px_2px_rgba(15,15,15,0.05)] transition-[box-shadow,border-color] duration-150 hover:border-foreground/15 hover:shadow-[0_2px_8px_rgba(15,15,15,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/40", CARD_PAD[cfg.cardSize])}
+        // Notion's board card: white, 10px corners, a hairline ring and a soft drop instead of a border; hover greys it.
+        className={cn("flex w-full cursor-pointer flex-col rounded-[10px] bg-card text-left shadow-[0_0_0_1px_rgba(15,15,15,0.08),0_2px_4px_rgba(15,15,15,0.06)] transition-[box-shadow,background-color] duration-150 hover:bg-muted/50 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.09)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/40", CARD_PAD[cfg.cardSize])}
       >
         {linkedFrom && <span className="truncate text-[11px] text-muted-foreground">{t("From {name}", { name: linkedFrom })}</span>}
         {task.parentId && (
@@ -1772,7 +1777,9 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
       data-snap-row
       style={{ borderRadius: 6, ...tint }}
       {...cardProps}
-      className={cn("group flex min-h-9 w-full flex-wrap items-center gap-x-2.5 gap-y-1 border-b sm:flex-nowrap sm:gap-y-0 border-border/70 px-2 py-1.5 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--accent-foreground)]/40", selected && "bg-accent", task.parentId && "pl-7")}
+      // Notion's list: 32px rows on the open page, no rule between them, a soft grey on hover (16 Oct 2026 pass). A
+      // phone keeps the hairline, since its rows wrap their properties onto a second line.
+      className={cn("group flex min-h-9 w-full flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-border/70 px-2 py-1.5 text-left transition-colors hover:bg-foreground/[0.04] sm:min-h-8 sm:flex-nowrap sm:gap-y-0 sm:rounded-md sm:border-transparent sm:py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--accent-foreground)]/40", selected && "bg-accent", task.parentId && "pl-7")}
     >
       {/* The circle is a checkbox (Notion; C-BUG-26): a click marks done / not done, it doesn't open the task. */}
       <span
@@ -1835,7 +1842,7 @@ function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs
   const newRow = (id: string, gKey: string | null, subKey: string | null) => (!canEditList ? null : draft === id
     ? <InlineTaskDraft variant="row" onCreate={(p) => create(gKey, subKey, p)} onExpand={onOpen} onClose={() => setDraft(null)} />
     : (
-      <button type="button" onClick={() => setDraft(id)} className="flex h-9 w-full items-center gap-2 border-b border-border/70 px-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground">
+      <button type="button" onClick={() => setDraft(id)} className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground">
         <Plus className="h-4 w-4" />{t("New task")}
       </button>
     ));
@@ -1850,7 +1857,7 @@ function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs
         const zone = mover.dropZone(g.key, null);
         return (
           <section key={g.key} aria-label={g.label} {...zone.props} className={cn("transition-shadow", zone.isOver && dropRing)}>
-            <GroupHeader group={g} groupBy={groupBy} defs={defs} cfg={cfg} collapsed={isCollapsed} onToggle={() => onToggleGroup(g.key)} className="mb-0.5 border-b border-border pb-1" />
+            <GroupHeader group={g} groupBy={groupBy} defs={defs} cfg={cfg} collapsed={isCollapsed} onToggle={() => onToggleGroup(g.key)} className="mb-0.5" />
             {!isCollapsed && (subs ? (
               <div className="space-y-2 pl-5 pt-1.5">
                 {newRow(g.key, g.key, null)}
