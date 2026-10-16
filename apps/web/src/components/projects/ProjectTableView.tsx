@@ -213,7 +213,9 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   const scrollRef = useRef<HTMLDivElement>(null);
   const edgeFade = useEdgeFade(scrollRef, [columns.length], true);
   const groupRow = (g: TaskGroup, by: string | null, key: string, depth: number) => (
-    <div className={cn("sticky left-0 flex snap-start items-center bg-card px-0.5 pb-1.5 pt-4", depth > 0 && "pl-6 pt-2")}>
+    // w-fit: a heading as wide as the whole table could not stay pinned, so it scrolled away sideways and left a
+    // blank band between the groups (QA 16 Oct 2026, phone and any table wider than the screen).
+    <div className={cn("sticky left-0 flex w-fit snap-start items-center bg-card px-0.5 pb-1.5 pt-4", depth > 0 && "pl-6 pt-2")}>
       <GroupHeader group={g} groupBy={by} defs={defs} cfg={cfg} collapsed={collapsed.has(key)} onToggle={() => onToggleGroup(key)} />
     </div>
   );
