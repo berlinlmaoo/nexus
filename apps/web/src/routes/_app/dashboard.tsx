@@ -141,6 +141,7 @@ function TopBar({ userName, unread }: { userName: string; unread: number }) {
   const hour = new Date().getHours();
   const greeting = hour < 11 ? t("Good morning,") : hour < 18 ? t("Good afternoon,") : t("Good evening,");
   const railChip = useMinWidth(1280);
+  const headerBell = useMinWidth(768) && !railChip;
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px] xl:gap-6 2xl:grid-cols-[minmax(0,1fr)_380px] 2xl:gap-8">
       {/* main zone: greeting (left) + level chip (right, aligns with stat cards).
@@ -151,12 +152,18 @@ function TopBar({ userName, unread }: { userName: string; unread: number }) {
           <p className="text-xl font-medium text-foreground/80">{greeting}</p>
           <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">{userName}!</h1>
         </div>
-        {!railChip && <LevelChip />}
+        {!railChip && (
+          <div className="flex w-full items-center gap-3 sm:w-auto">
+            <div className="min-w-0 flex-1 sm:flex-initial"><LevelChip /></div>
+            {/* Tablet widths, one column: the bell joins this row; alone in the rail row it left an empty band. */}
+            {headerBell && <NotificationsBell unread={unread} />}
+          </div>
+        )}
       </div>
       {/* rail zone: search (phone only) + notifications. On the two-column layout the level chip sits here,
           beside the bell and over the profile card, so the rail no longer opens on an empty strip
           (owner, 16 Oct 2026: the phone-only search left a gap there on desktop). */}
-      <div className="flex items-center justify-end gap-3">
+      {!headerBell && <div className="flex items-center justify-end gap-3">
         {railChip && <div className="min-w-0 flex-1"><LevelChip fill /></div>}
         {/* Opens the global search (⌘K), like the sidebar's box. It was an input with no handler (QA B12). Only
             where there is no sidebar: next to it there were two "Search… ⌘K" fields (UI tour run 13, W-D26). */}
@@ -173,7 +180,7 @@ function TopBar({ userName, unread }: { userName: string; unread: number }) {
           <kbd className="hidden rounded bg-muted px-1.5 py-0.5 text-[10px] md:inline">{modKey("K")}</kbd>
         </button>
         <NotificationsBell unread={unread} />
-      </div>
+      </div>}
     </div>
   );
 }
