@@ -49,12 +49,17 @@ export function EmptyState({
  * primary. `to` moves within the app through the router, without reloading it. At least 44px tall on a
  * touch screen.
  */
-export function EmptyAction({ onClick, children, to }: { onClick?: () => void; children: ReactNode; to?: string }) {
+export function EmptyAction({ onClick, children, to, secondary = false }: { onClick?: () => void; children: ReactNode; to?: string;
+  /** The header already has this action as its primary button: the empty state's copy is an outline button, so a
+   *  screen never shows two identical primary buttons (UI tour run 19, R19-WB-5). */
+  secondary?: boolean }) {
   // Same shape as the page header's primary button (rounded-md, px-3 py-1.5), so an empty state never
   // carries a second, bigger version of the action that already sits in the header.
   const cls = cn(
-    "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium shadow-soft transition-all duration-150 active:scale-[0.98] pointer-coarse:min-h-[44px]",
-    "bg-[color:var(--action,var(--primary))] text-[color:var(--action-foreground,var(--primary-foreground))] hover:bg-[color:var(--action,var(--primary))]/90",
+    "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-150 active:scale-[0.98] pointer-coarse:min-h-[44px]",
+    secondary
+      ? "border border-border bg-background text-foreground hover:bg-accent"
+      : "shadow-soft bg-[color:var(--action,var(--primary))] text-[color:var(--action-foreground,var(--primary-foreground))] hover:bg-[color:var(--action,var(--primary))]/90",
   );
   if (to) return <Link to={to} className={cls}>{children}</Link>;
   return <button type="button" onClick={onClick} className={cls}>{children}</button>;

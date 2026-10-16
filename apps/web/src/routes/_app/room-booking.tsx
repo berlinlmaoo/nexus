@@ -11,6 +11,7 @@ import { SelectPicker } from "@/components/SelectPicker";
 import { ApiError, fmtTime, nexusApi, ROOM_BOOKING_ROOMS, roomLabel, type NexusRoomBooking } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
+import { monthTitle } from "@/lib/month-title";
 
 // `booking`: a room-booking notification (old links went through /master-calendar?booking=<id>) opens the
 // month that holds that booking, scrolls to it and highlights it for a moment.
@@ -142,7 +143,7 @@ function RoomBooking() {
       />
       <div className="p-4 md:p-8">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-xl font-bold tracking-tight">{viewMonth.toLocaleDateString(locale, { month: "long", year: "numeric" })}</h2>
+          <h2 className="font-display text-xl font-bold tracking-tight">{monthTitle(viewMonth, locale)}</h2>
           <div className="flex items-center gap-1">
             <button onClick={() => shiftMonth(-1)} aria-label={t("Previous month")} className="grid h-11 w-11 place-items-center rounded-lg text-muted-foreground md:h-8 md:w-8 transition-colors hover:bg-accent hover:text-foreground active:scale-95"><ChevronLeft className="h-4 w-4" /></button>
             <button onClick={() => setViewMonth(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); })} className="h-9 rounded-md border border-border px-3 text-xs font-semibold transition-colors hover:bg-accent md:h-7">{t("Today")}</button>
@@ -160,7 +161,7 @@ function RoomBooking() {
         {!bookingsQ.isLoading && !bookingsQ.isError && agenda.length === 0 && (
           <EmptyState icon={CalendarDays} title={t(earlierCount > 0 && !showEarlier ? "Nothing else booked in {month}" : "Nothing booked in {month}", { month: viewMonth.toLocaleDateString(locale, { month: "long" }) })}
             message={t("Book meeting rooms here so two teams never turn up for the same room. Pick a room, a date and a time.")}
-            action={<EmptyAction onClick={() => setComposer({ date: todayKey })}>{t("New booking")}</EmptyAction>} />
+            action={<EmptyAction secondary onClick={() => setComposer({ date: todayKey })}>{t("New booking")}</EmptyAction>} />
         )}
 
         {agenda.length > 0 && (

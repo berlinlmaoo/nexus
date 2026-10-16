@@ -34,6 +34,7 @@ import { LeftTag } from "@/components/LeftTag";
 import { HScroll } from "@/components/HScroll";
 import { DateField } from "@/components/DateField";
 import { UnitTreePicker } from "@/components/UnitTreePicker";
+import { monthTitle } from "@/lib/month-title";
 
 // The section is in the URL (?tab=audit), like Reports' ?tab=team: a reload, Back or a shared link lands
 // on the same section (QA 13 Oct 2026; it was memory-only and always reset to Users).
@@ -424,7 +425,7 @@ function RedDateQuotaModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const { t, locale } = useLang();
   const monthKey = new Date().toISOString().slice(0, 7);
-  const monthLabel = new Date(`${monthKey}-01T00:00:00`).toLocaleDateString(locale, { month: "long", year: "numeric" });
+  const monthLabel = monthTitle(new Date(`${monthKey}-01T00:00:00`), locale);
   const q = useQuery({ queryKey: ["nexus", "red-date-quota", monthKey], queryFn: () => nexusApi.redDateQuota(monthKey), retry: false });
   const [val, setVal] = useState("");
   useEffect(() => { if (q.data) setVal(String(q.data.quota)); }, [q.data]);

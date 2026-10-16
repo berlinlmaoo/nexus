@@ -27,6 +27,7 @@ import { FilterPanel } from "./FilterPanel";
 import { TaskPreview } from "./TaskPreview";
 import { Segmented, type SegmentedOption } from "./Segmented";
 import { SnapTail } from "@/components/SnapTail";
+import { monthTitle } from "@/lib/month-title";
 
 // The full task panel is big and only opens on ?task= for a task the viewer can edit: load it on demand,
 // and warm it up when the pointer or the keyboard reaches a task row.
@@ -503,8 +504,9 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
   const iconButton = cn("grid size-8 shrink-0 place-items-center rounded-lg hover:bg-muted", coarseIcon, FOCUS_PILL);
   const atToday = date === today;
   const span = view === "people"
-    ? `${fmtDay(weekDays[0], { day: "numeric", month: "short" }, locale)} – ${fmtDay(weekDays[6], { day: "numeric", month: "short", year: "numeric" }, locale)}`
-    : fmtDay(`${month}-01`, { month: "long", year: "numeric" }, locale);
+    // The current year is hidden, as in every date and month title (run 19 decision 2).
+    ? `${fmtDay(weekDays[0], { day: "numeric", month: "short" }, locale)} – ${fmtDay(weekDays[6], { day: "numeric", month: "short", ...(weekDays[6].slice(0, 4) === today.slice(0, 4) ? {} : { year: "numeric" }) }, locale)}`
+    : monthTitle(new Date(`${month}-01T00:00:00Z`), locale, "UTC");
 
   // ‹ month › and Today (‹ week › in People).
   const dateNav = (
@@ -668,7 +670,7 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
   } else if (firstLoad) {
     body = <SkeletonCalendar compact={lay.gridCompact} />;
   } else {
-    const monthName = fmtDay(`${month}-01`, { month: "long", year: "numeric" }, locale);
+    const monthName = monthTitle(new Date(`${month}-01T00:00:00Z`), locale, "UTC");
     // Why the month is empty. The header's Reset is on screen whenever a filter is on, so the banner
     // only says it; the scope has its own switch right there too.
     const banner = view !== "month" ? null

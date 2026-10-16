@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { useLang, type Lang } from "@/lib/lang";
 import type { Bilingual, OutletEvent, OutletForm, OutletItem, OutletReportConfig, OutletStatus } from "@/lib/outlet-sales-api";
 import { formatCount, formatRupiah } from "@/lib/number-format";
+import { monthTitle } from "@/lib/month-title";
 
 /**
  * Shared bits of the Outlet Sales Dashboard (owner, 10 Oct 2026, for Ryan): number and date formats in
@@ -60,9 +61,9 @@ export function dayShort(iso: string, locale: string): string {
   return `${d.toLocaleDateString(locale, { weekday: "short" })}, ${d.toLocaleDateString(locale, { day: "numeric", month: "short" })}`;
 }
 
-/** "Oktober 2026" / "October 2026". */
+/** "Oktober" / "October" in the current year, "January 2027" otherwise (run 19 decision 2). */
 export function monthLabel(month: string, locale: string): string {
-  return dateOf(`${month}-01`).toLocaleDateString(locale, { month: "long", year: "numeric" });
+  return monthTitle(dateOf(`${month}-01`), locale);
 }
 
 export function shiftMonthKey(month: string, by: number): string {
