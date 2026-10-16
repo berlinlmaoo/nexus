@@ -5,6 +5,7 @@ import { CHAT_MESSAGE_INCLUDE, conversationAccess, canPostInConversation } from 
 import { emitConversationUpdated, emitMessageCreated } from "@/lib/socket-emitter"
 import { fanOutChatMessage, runAfterResponse } from "@/lib/chat-fanout"
 import { checkRateLimitByKey } from "@/lib/rate-limit"
+import { advanceLastReadAt, lockConversationClock } from "@/lib/chat-order"
 import {
   aroundSplit,
   canReplyTo,
@@ -14,7 +15,6 @@ import {
   parseLimit,
   shapeAroundPage,
   shapePage,
-  nextLastReadAt,
   SYSTEM_MESSAGE_REPLY,
   SYSTEM_MESSAGE_REPLY_MESSAGE,
 } from "@/lib/chat-rules"
@@ -176,25 +176,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
       quotedId = quoted.id
     }
 
-    const message = await prisma.message.create({
-      data: {
-        conversationId,
-        userId,
-        content: text,
-        attachmentUrl: attachment,
-        attachmentType: attachment && typeof attachmentType === "string" ? attachmentType.slice(0, 64) : null,
-        replyToId: quotedId,
-      },
-      include: messageInclude,
-    })
-    await prisma.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } })
-    // Writing in a room means you have seen it: your read position moves to your own message.
-    if (access.member) {
-      await prisma.conversationMember.update({
-        where: { id: access.member.id },
-        data: { lastReadAt: nextLastReadAt(access.member.lastReadAt, message.createdAt) },
+    // Stamped under the room's lock, strictly after the newest message (lib/chat-order.ts, race audit M17):
+    // an `after=` poll can no longer step over a message that commits later.
+    const message = await prisma.$transaction(async (tx) => {
+      const createdAt = await lockConversationClock(tx, conversationId)
+      const row = await tx.message.create({
+        data: {
+          conversationId,
+          userId,
+          content: text,
+          attachmentUrl: attachment,
+          attachmentType: attachment && typeof attachmentType === "string" ? attachmentType.slice(0, 64) : null,
+          replyToId: quotedId,
+          createdAt,
+        },
+        include: messageInclude,
       })
-    }
+      await tx.conversation.update({ where: { id: conversationId }, data: { updatedAt: createdAt } })
+      return row
+    }, { timeout: 15_000, maxWait: 10_000 })
+    // Writing in a room means you have seen it: your read position moves to your own message — never back
+    // (GREATEST in SQL, race audit M18).
+    if (access.member) await advanceLastReadAt(prisma, access.member.id, message.createdAt)
 
     const memberIds = (
       await prisma.conversationMember.findMany({ where: { conversationId }, select: { userId: true } })

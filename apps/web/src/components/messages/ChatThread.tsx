@@ -285,7 +285,9 @@ export function ChatThread({
     retry: false,
     // The socket is what keeps an open thread live; while it's down, ask every 10 s instead
     // (a near-empty `after=` request on current servers). Never from a background tab.
-    refetchInterval: connected ? false : 10_000,
+    // While it is up, still every 20 s (race audit 16 Oct 2026, M19): an event can be lost in a
+    // blue-green switch or a dropped connection, and this only adds what came after the last message.
+    refetchInterval: connected ? 20_000 : 10_000,
   });
   const thread = messagesQuery.data;
   const messages = useMemo(() => thread?.messages ?? [], [thread]);

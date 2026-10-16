@@ -1,5 +1,6 @@
 import type { Prisma } from "@/generated/prisma"
 import { CHAT_MESSAGE_INCLUDE } from "@/lib/chat-access"
+import { lockConversationClock } from "@/lib/chat-order"
 import { fanOutSystemMessage, runAfterResponse } from "@/lib/chat-fanout"
 import {
   MESSAGE_KIND_SYSTEM,
@@ -44,8 +45,11 @@ export async function systemPeople(tx: Tx, ids: string[]): Promise<SystemPerson[
  * list (updatedAt), as a new message does. Returns the row in the shape the messages API sends.
  */
 export async function writeSystemMessage(tx: Tx, input: { conversationId: string; actorId: string; event: SystemEvent }) {
+  // Same room clock as a sent message (lib/chat-order.ts, race audit M17).
+  const createdAt = await lockConversationClock(tx, input.conversationId)
   const message = await tx.message.create({
     data: {
+      createdAt,
       conversationId: input.conversationId,
       userId: input.actorId,
       kind: MESSAGE_KIND_SYSTEM,

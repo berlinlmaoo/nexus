@@ -388,6 +388,9 @@ function buildPrompt(input: {
   ].join("\n")
 }
 
+/** How long a review may hold its ticket's claim: the model call's own timeout (280 s) plus margin. */
+export const REVIEW_CLAIM_MS = 6 * 60_000
+
 /**
  * Fire-and-forget from the create route. Never throws into the caller: a ticket that was filed
  * successfully must not report failure because an assistant could not read the photo.
@@ -408,6 +411,19 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
   // Tickets are about attendance. A server where GIDEON must never see attendance (the dev server,
   // NEXUS_GIDEON_NO_ATTENDANCE=1) does not send them at all.
   if (process.env.NEXUS_GIDEON_NO_ATTENDANCE === "1") return
+
+  // One review per ticket at a time (race audit 16 Oct 2026, M21). The self-answer guards below read the
+  // thread and the model then thinks for up to 280 s; two triggers that both read the thread before either
+  // answered (ticket created + a reply a moment later, a re-review sweep on top of an automatic one) both
+  // passed them and both posted. The claim is a compare-and-swap taken BEFORE the thread is read, so the
+  // second trigger either sees the claim and stops, or comes after the first one's answer and its guards
+  // stop it. Raw SQL so the claim does not bump the ticket's updatedAt.
+  const claimedAt = new Date()
+  const claimed = await prisma.$executeRaw`
+    UPDATE "Complaint" SET "gideonReviewingAt" = ${claimedAt.toISOString()}::timestamp(3)
+     WHERE id = ${complaintId}
+       AND ("gideonReviewingAt" IS NULL OR "gideonReviewingAt" < ${new Date(claimedAt.getTime() - REVIEW_CLAIM_MS).toISOString()}::timestamp(3))`
+  if (claimed !== 1) return
 
   let runId: string | null = null
   let runOk = false
@@ -545,5 +561,9 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
     runError = error instanceof Error ? error.message : "review failed"
   } finally {
     if (runId) await finishRun(runId, { ok: runOk, error: runError })
+    // Let go of the claim — only our own (a stale one taken over by another process is theirs now).
+    await prisma.$executeRaw`
+      UPDATE "Complaint" SET "gideonReviewingAt" = NULL
+       WHERE id = ${complaintId} AND "gideonReviewingAt" = ${claimedAt.toISOString()}::timestamp(3)`.catch(() => {})
   }
 }

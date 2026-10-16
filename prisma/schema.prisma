@@ -3277,6 +3277,11 @@ model Complaint {
   resolvedBy    User?              @relation("ComplaintResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
+  /// GIDEON auto-support's claim on this ticket while it writes an answer (race audit 16 Oct 2026, M21):
+  /// set with a compare-and-swap before the thread is read, cleared when the review ends, so two triggers
+  /// (ticket created + a reply, a re-review sweep) never answer the same ticket twice. A claim older than
+  /// lib/gideon-ticket.ts REVIEW_CLAIM_MS is stale (a crashed process) and may be taken over.
+  gideonReviewingAt DateTime?
   messages      ComplaintMessage[]
   events        ComplaintEvent[]
   // Evidence photos. A separate table rather than parallel `String[]` columns (url/mime/size arrays

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { leaderInfo } from "@/lib/bluegreen"
 import { dbPoolStats } from "@/lib/db-pool"
+import { realtimeBridgeInfo } from "@/lib/realtime-bridge"
 
 /**
  * Where this instance is running. The office VM and the VPS warm standby run the same image; the
@@ -35,6 +36,8 @@ export async function GET() {
         },
         // Connections this process holds (one pool per process, lib/db-pool.ts): counts only.
         db: dbPoolStats(),
+        // Realtime events between the two slots (lib/realtime-bridge.ts): up + counters.
+        realtimeBridge: realtimeBridgeInfo(),
         timestamp: new Date().toISOString(),
       },
       { status: 200 }
