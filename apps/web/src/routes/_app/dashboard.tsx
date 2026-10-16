@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ProjectMarkFor, ProjectPageIcon } from "@/components/projects/ProjectIcon";
+import { ProjectMarkFor } from "@/components/projects/ProjectIcon";
 import { openGlobalSearch } from "@/lib/search-event";
 import { modKey } from "@/lib/keyboard";
 import { AndroidAppBanner } from "@/components/attendance/IosAppCheckInCard";
@@ -24,6 +24,7 @@ import {
   Loader2,
   RotateCw,
   CalendarClock,
+  Maximize2,
   } from "lucide-react";
 
 import learner from "@/assets/philearn/learner.png";
@@ -36,7 +37,7 @@ import { notificationMessage, notificationTitle } from "@/lib/server-text";
 import { chatUnreadTotal } from "@/lib/chat-unread";
 import { isSystemMessage, systemSentence } from "@/lib/chat-system";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
-import { openXpRules, XpRulesCard } from "@/components/XpRulesCard";
+import { XpRulesCard } from "@/components/XpRulesCard";
 import { UserXpLogModal } from "@/components/UserXpLogModal";
 import { MorphPanel, type MorphOrigin } from "@/components/motion/MorphPanel";
 import { activeNotifications, fmtTime, nexusApi, notificationGroup, statusLabel, type NexusDashboardResponse, type NexusProject, type NexusTask, type NexusQuest, type NexusConversation, type NexusUser, type NexusNotification, type NexusLeaderboardRow, type NotificationGroupId } from "@/lib/nexus-api";
@@ -384,8 +385,6 @@ type StatCard = {
   detail: React.ReactNode;
   /** Set when the card's request failed: the card shows "—" and a retry instead of a fake 0 (QA 13 Oct 2026). */
   retry?: () => void;
-  /** Nothing to count: the tile says so in words and opens this instead of the details (run 19 decision 10). */
-  empty?: { text: string; action: string; open: () => void };
 };
 
 function StatRow(_: { data: NexusDashboardResponse }) {
@@ -417,7 +416,7 @@ function StatRow(_: { data: NexusDashboardResponse }) {
 
   const cards: StatCard[] = [
     {
-      value: projectList.length, label: "Projects", Icon: ProjectPageIcon as unknown as typeof FolderKanban,
+      value: projectList.length, label: "Projects", Icon: FolderKanban,
       from: "#c4b5fd", to: "#7c3aed", glow: "#a78bfa",
       retry: projectsQ.isError && !projectsQ.data ? () => void projectsQ.refetch() : undefined,
       detail: <ProjectsDetail projects={projectList} />,
@@ -427,17 +426,12 @@ function StatRow(_: { data: NexusDashboardResponse }) {
       from: "#6ee7b7", to: "#059669", glow: "#34d399",
       retry: myTasks.isError && !myTasks.data ? () => void myTasks.refetch() : undefined,
       detail: <TasksDetail tasks={taskList} />,
-      // "0/0 Tasks" said nothing (UI tour run 19, R19-WD-2).
-      empty: myTasks.data && taskList.length === 0 ? { text: "No open tasks", action: "Open My Tasks", open: () => void navigate({ to: "/my-tasks" }) } : undefined,
     },
     {
       value: questsDone, total: quests.length, label: "Quests", Icon: Sparkles,
       from: "#fcd34d", to: "#ea580c", glow: "#fbbf24",
       retry: g.isError && !g.data ? () => void g.refetch() : undefined,
       detail: <QuestsDetail quests={quests} claim={claim} focusKey={search.quest?.split(":")[0]} />,
-      // "0/0 Quests" said nothing (run 19 decision 10, zero-over-zero): with none, say so, and offer how quests work
-      // (the XP rules card below explains who makes them and what they give).
-      empty: g.data && quests.length === 0 ? { text: "No active quests", action: "How quests work", open: openXpRules } : undefined,
     },
   ];
 
@@ -456,7 +450,7 @@ function StatRow(_: { data: NexusDashboardResponse }) {
     <>
       <div className="grid grid-cols-3 items-stretch gap-3 sm:gap-5">
         {cards.map((c, i) => (
-          <StatCardButton key={c.label} card={c} index={i} onOpen={() => (c.retry ? c.retry() : c.empty ? c.empty.open() : setActive(i))} />
+          <StatCardButton key={c.label} card={c} index={i} onOpen={() => (c.retry ? c.retry() : setActive(i))} />
         ))}
       </div>
       <StatCardModal cards={cards} active={active} onClose={close} />
@@ -469,40 +463,32 @@ function StatCardButton({ card, index, onOpen }: { card: StatCard; index: number
   const { t } = useLang();
   const reduce = useReducedMotion();
   const { Icon } = card;
-  // A plain card with the number, not a gradient hero tile (run 19 decision 11, R19-WD-2); the colour stays only
-  // in the icon chip. It still morphs into the details (shared layoutId).
   return (
     <motion.button
       type="button"
       layoutId={reduce ? undefined : `stat-card-${index}`}
       onClick={onOpen}
-      aria-label={card.retry ? t("{label}: couldn't load. Try again", { label: t(card.label) }) : card.empty ? `${t(card.empty.text)}. ${t(card.empty.action)}` : card.total != null ? t("{label}: {n} of {total}. Open details", { label: t(card.label), n: card.value, total: card.total }) : t("{label}: {n}. Open details", { label: t(card.label), n: card.value })}
-      initial={reduce ? false : { opacity: 0, y: 18 }}
-      whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
+      aria-label={card.retry ? t("{label}: couldn't load. Try again", { label: t(card.label) }) : card.total != null ? t("{label}: {n} of {total}. Open details", { label: t(card.label), n: card.value, total: card.total }) : t("{label}: {n}. Open details", { label: t(card.label), n: card.value })}
+      initial={reduce ? false : { opacity: 0, y: 18, scale: 0.97 }}
+      whileInView={reduce ? undefined : { opacity: 1, y: 0, scale: 1 }}
       viewport={{ once: true, margin: "-40px" }}
       transition={{ type: "spring", stiffness: 260, damping: 24, delay: index * 0.07 }}
+      whileHover={reduce ? undefined : { y: -4 }}
       whileTap={reduce ? undefined : { scale: 0.98 }}
-      className="group relative flex h-full w-full cursor-pointer flex-col items-center justify-center rounded-3xl border border-border bg-card px-3 py-5 text-center text-foreground shadow-soft transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:px-4"
+      className="group relative flex h-full w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-3xl px-3 py-5 text-center text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 sm:px-4 dark:shadow-none!"
+      style={{ backgroundImage: `linear-gradient(150deg, ${card.from} 0%, ${card.to} 100%)`, boxShadow: `0 12px 28px -12px ${card.glow}` }}
     >
-      <span className="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-2xl" style={{ backgroundColor: `${card.glow}26`, color: card.to }}>
-        <Icon className="h-5 w-5" strokeWidth={2.25} />
+      <span className="pointer-events-none absolute -right-6 -top-8 h-24 w-24 rounded-full bg-white/20 blur-2xl" />
+      <Maximize2 className="absolute right-3 top-3 h-3.5 w-3.5 text-white/50 transition-colors group-hover:text-white/90" />
+      <span className="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-2xl bg-white/25 backdrop-blur-sm">
+        <Icon className="h-5 w-5" strokeWidth={2.5} />
       </span>
-      {card.empty && !card.retry ? (
-        <>
-          <div className="text-sm font-semibold text-foreground text-balance">{t(card.empty.text)}</div>
-          {/* Styled as the link it is (UI tour run 20, R20-WB-7: it read as plain text). */}
-          <div className="mt-1 text-xs font-semibold text-primary underline decoration-primary/40 underline-offset-2 group-hover:decoration-primary">{t(card.empty.action)}</div>
-        </>
-      ) : (
-        <>
-          <div className="font-display text-3xl font-bold tracking-tight tabular-nums md:text-4xl">
-            {card.retry ? "—" : <CountUp value={card.value} />}
-            {!card.retry && card.total != null && <span className="text-muted-foreground">/{card.total}</span>}
-          </div>
-          <div className="mt-1.5 text-sm font-medium text-muted-foreground">{t(card.label)}</div>
-        </>
-      )}
-      {card.retry && <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground"><RotateCw className="h-3 w-3" /> {t("Couldn't load · Try again")}</div>}
+      <div className="font-display text-3xl font-bold tracking-tight drop-shadow-sm md:text-4xl">
+        {card.retry ? "—" : <CountUp value={card.value} />}
+        {!card.retry && card.total != null && <span className="text-white/70">/{card.total}</span>}
+      </div>
+      <div className="mt-1.5 text-sm font-medium text-white/85">{t(card.label)}</div>
+      {card.retry && <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-white/90"><RotateCw className="h-3 w-3" /> {t("Couldn't load · Try again")}</div>}
     </motion.button>
   );
 }
