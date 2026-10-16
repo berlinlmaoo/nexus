@@ -101,23 +101,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
       return NextResponse.json({ error: "Nggak ada yang diubah." }, { status: 400 })
     }
 
-    // Ids in the body the sheet no longer has, that were DELETED (a restorable column delete): a stale
-    // client must not bring them back. Read before the lock; a delete that lands after is caught by the CAS
-    // for clients that send structureVersion.
-    let deletedIds: Set<string> | undefined
-    if (base === null && Array.isArray(body.columns)) {
-      const unknownIds = (body.columns as { id?: unknown }[])
-        .map((c) => (c && typeof c.id === "string" ? c.id : null))
-        .filter((id): id is string => !!id && !access.sheet.columns.some((c) => c.id === id))
-      if (unknownIds.length) {
-        const gone = await prisma.deletionSnapshot.findMany({
-          where: { entityType: "project_sheet_column", entityId: { in: unknownIds.map((id) => `${sheetId}:${id}`) }, restoredAt: null },
-          select: { entityId: true },
-        })
-        deletedIds = new Set(gone.map((g) => g.entityId.slice(sheetId.length + 1)))
-      }
-    }
-
     type Out =
       | { kind: "ok"; row: { id: string; name: string; columns: unknown; settings: unknown; structureVersion: number } }
       | { kind: "error"; status: number; body: Record<string, unknown> }
@@ -133,7 +116,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
             body: { ...SHEET_STRUCTURE_CHANGED, current: { columns: fresh.columns, settings: fresh.settings, structureVersion: fresh.structureVersion, name: fresh.name } },
           }
         }
-        const result = normalizeColumns(body.columns, fresh.columns, base === null ? { keepMissing: true, dropIds: deletedIds } : {})
+        // Without a version: ids in the body the sheet no longer has that were DELETED (a restorable column
+        // delete) are a stale copy, not new columns — they must not come back. Read under the lock, so a delete
+        // that committed while this request waited for it is seen.
+        let dropIds: Set<string> | undefined
+        if (base === null && Array.isArray(body.columns)) {
+          const unknownIds = (body.columns as { id?: unknown }[])
+            .map((c) => (c && typeof c.id === "string" ? c.id : null))
+            .filter((id): id is string => !!id && !fresh.columns.some((c) => c.id === id))
+          if (unknownIds.length) {
+            const gone = await tx.deletionSnapshot.findMany({
+              where: { entityType: "project_sheet_column", entityId: { in: unknownIds.map((id) => `${sheetId}:${id}`) }, restoredAt: null },
+              select: { entityId: true },
+            })
+            dropIds = new Set(gone.map((g) => g.entityId.slice(sheetId.length + 1)))
+          }
+        }
+        const result = normalizeColumns(body.columns, fresh.columns, base === null ? { keepMissing: true, dropIds } : {})
         if ("error" in result) return { kind: "error", status: 422, body: { error: result.error } }
         if (JSON.stringify(result.columns) !== JSON.stringify(fresh.columns)) {
           data.columns = result.columns as unknown as object
