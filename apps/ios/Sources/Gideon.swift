@@ -100,12 +100,51 @@ struct GideonProposal: Decodable, Sendable, Equatable, Identifiable {
     let status: String
     let error: String?
     let diff: [Row]?
+    /// book_room only (16 Oct 2026): what the booking card draws. Builds before it ignore the field, and the
+    /// server refuses their Apply ("open on the latest app or the web to choose a room").
+    let booking: GideonBooking?
     struct Row: Decodable, Sendable, Equatable {
         let field: String?
         let from: GideonLoose?
         let to: GideonLoose?
     }
     var isPending: Bool { status == "PENDING" }
+}
+
+/// A room GIDEON wants to book (web GideonBookingView): the slot as ISO instants, the room named (or nil: the
+/// person picks it on the card), and once applied the booking made.
+struct GideonBooking: Decodable, Sendable, Equatable {
+    let title: String?
+    let startsAt: String?
+    let endsAt: String?
+    let room: String?
+    let bookingId: String?
+}
+
+/// The room and slot picked on the card, sent with Apply; the server checks both again.
+struct GideonBookingChoice: Sendable, Equatable {
+    let room: String
+    let startsAt: String
+    let endsAt: String
+}
+
+/// GET /api/room-bookings/availability: every room for one slot, and the nearest free slots when none is free.
+struct GideonRoomAvailability: Decodable, Sendable, Equatable {
+    struct Room: Decodable, Sendable, Equatable, Identifiable {
+        let room: String
+        let capacity: Int?
+        let free: Bool
+        let busy: Busy?
+        var id: String { room }
+        struct Busy: Decodable, Sendable, Equatable { let title: String?; let by: String?; let endsAt: String? }
+    }
+    struct Slot: Decodable, Sendable, Equatable, Identifiable {
+        let startsAt: String
+        let endsAt: String
+        var id: String { startsAt }
+    }
+    let rooms: [Room]
+    let freeSlots: [Slot]
 }
 
 /// Where the person asked from: GIDEON reads that project first, with the person's own access.
@@ -462,17 +501,29 @@ enum GideonClient {
 
     /// Apply or discard a proposed change. The server re-checks access at the moment of applying, and a
     /// double tap applies once (409 "Already decided" still carries the proposal).
-    static func decide(_ proposalId: String, apply: Bool) async throws -> GideonProposal? {
+    /// `booking`: the room and slot picked on a book_room card (required to apply one).
+    static func decide(_ proposalId: String, apply: Bool, booking: GideonBookingChoice? = nil) async throws -> GideonProposal? {
         var request = authed("/api/gideon/proposals/\(enc(proposalId))")
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: ["decision": apply ? "apply" : "discard"])
+        var body: [String: Any] = ["decision": apply ? "apply" : "discard"]
+        if let booking { body["booking"] = ["room": booking.room, "startsAt": booking.startsAt, "endsAt": booking.endsAt] }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIError.offline }
         if http.statusCode == 401 { throw APIError.unauthorized }
         let env = try? JSONDecoder().decode(GideonProposalEnvelope.self, from: data)
         if (200..<300).contains(http.statusCode) || [409, 410, 422].contains(http.statusCode), let p = env?.proposal { return p }
         throw APIError.http(http.statusCode, env?.error)
+    }
+
+    /// Every room for one slot, for the book_room card's picker (read live: availability changes by the minute).
+    static func roomAvailability(startsAt: String, endsAt: String) async throws -> GideonRoomAvailability {
+        var request = authed("/api/room-bookings/availability", query: "startsAt=\(enc(startsAt))&endsAt=\(enc(endsAt))")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await fetch(request)
+        try check(response)
+        return try JSONDecoder().decode(GideonRoomAvailability.self, from: data)
     }
 
     static func clearHistory(chatId: String? = nil) async throws {
@@ -899,9 +950,9 @@ final class GideonChat {
     }
 
     /// Apply or discard a proposal shown in the thread; the turn shows the result.
-    func decide(_ proposal: GideonProposal, apply: Bool) async {
+    func decide(_ proposal: GideonProposal, apply: Bool, booking: GideonBookingChoice? = nil) async {
         do {
-            if let updated = try await GideonClient.decide(proposal.id, apply: apply) {
+            if let updated = try await GideonClient.decide(proposal.id, apply: apply, booking: booking) {
                 replace(updated)
                 if apply, let e = updated.error, !e.isEmpty { error = e }
             }

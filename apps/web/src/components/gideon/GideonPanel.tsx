@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { GideonMark } from "./GideonMark";
 import { GideonMarkdown } from "./GideonMarkdown";
+import { GideonBookRoomCard } from "./GideonBookRoomCard";
 import {
   clearGideonHistory, decideGideonProposal, gideonAttachmentLink, loadGideonHistory, pendingGideonProposals, streamGideon,
   GIDEON_APPROVAL_MODES, GIDEON_DEFAULT_APPROVAL, GIDEON_DEFAULT_TIER, GIDEON_FILE_ACCEPT, GIDEON_MAX_FILE_BYTES, GIDEON_TIERS,
@@ -81,6 +82,7 @@ function stepText(s: GideonStep, t: LangApi["t"]): string {
     case "create_document": return a ? t("Writing doc {name}", { name: a }) : t("Writing a doc");
     case "get_calendar": return a ? t("Reading the calendar, {range}", { range: a }) : t("Reading the calendar");
     case "list_room_bookings": return a ? t("Checking room bookings, {range}", { range: a }) : t("Checking room bookings");
+    case "book_room": return a ? t("Booking {room}", { room: a }) : t("Booking a room");
     case "vision_analyze": case "vision": return t("Looking at the image");
     default: return s.label || s.tool;
   }
@@ -1248,6 +1250,12 @@ function diffDayText(label: string | null | undefined, day: string | null | unde
 }
 
 function ProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDecided: (p: GideonProposal) => void }) {
+  // A room booking has its own card: the room picker (GideonBookRoomCard).
+  if (proposal.action === "book_room" && proposal.booking) return <GideonBookRoomCard proposal={proposal} onDecided={onDecided} />;
+  return <ChangeProposalCard proposal={proposal} onDecided={onDecided} />;
+}
+
+function ChangeProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDecided: (p: GideonProposal) => void }) {
   const { t, locale } = useLang();
   const [pending, setPending] = useState<"apply" | "discard" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1262,7 +1270,7 @@ function ProposalCard({ proposal, onDecided }: { proposal: GideonProposal; onDec
       setPending(null);
     }
   };
-  const title = proposal.action === "create_task" ? t("Create a task") : proposal.action === "update_task" ? t("Change a task") : proposal.action === "add_task_comment" ? t("Post a comment") : proposal.action === "create_document" ? t("Write a doc") : proposal.action;
+  const title = proposal.action === "create_task" ? t("Create a task") : proposal.action === "update_task" ? t("Change a task") : proposal.action === "add_task_comment" ? t("Post a comment") : proposal.action === "create_document" ? t("Write a doc") : proposal.action === "book_room" ? t("Book a room") : proposal.action;
   const open = proposal.status === "PENDING";
   const statusLine =
     proposal.status === "APPLIED" ? t("Applied") :

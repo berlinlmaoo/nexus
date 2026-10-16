@@ -92,4 +92,22 @@
     <string name="gx_card_created">Created</string>
     <string name="gx_card_updated">Updated</string>
     <string name="gx_card_commented">Commented</string>
+
+    <!-- GIDEON reads the Calendar and Room Booking, and books a room (16 Oct 2026) -->
+    <string name="gx_chip_calendar">What\'s on my calendar this week?</string>
+    <string name="gx_step_calendar">Reading the calendar</string>
+    <string name="gx_step_calendar_n">Reading the calendar, %1$s</string>
+    <string name="gx_step_rooms">Checking room bookings</string>
+    <string name="gx_step_rooms_n">Checking room bookings, %1$s</string>
+    <string name="gx_step_book_room">Booking a room</string>
+    <string name="gx_step_book_room_n">Booking %1$s</string>
+    <string name="gx_book_room">Book a room</string>
+    <string name="gx_rooms_checking">Checking the rooms…</string>
+    <string name="gx_rooms_failed">Couldn\'t check the rooms.</string>
+    <string name="gx_room_named_busy">%1$s is booked then. Pick a free room below.</string>
+    <string name="gx_room_seats">%1$d seats</string>
+    <string name="gx_room_booked_by">Booked by %1$s until %2$s</string>
+    <string name="gx_someone">someone</string>
+    <string name="gx_room_none_free">No room is free then. Nearest free times:</string>
+    <string name="gx_room_booked">Room booked</string>
 </resources>

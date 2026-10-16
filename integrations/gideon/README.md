@@ -54,3 +54,8 @@ they are not in comes back masked as "Internal task" with no title, project or i
 there. `nexus_list_room_bookings` (action `list_room_bookings`) reads Room Booking (bookings, free time per room and
 day, and one slot's availability). Both are read only and company-workspace only; the server code is
 `src/lib/gideon-calendar-tools.ts`.
+
+`nexus_book_room` (action `book_room`) books a room as the asking user through the Room Booking page's own path
+(`src/lib/room-booking.ts`, `src/lib/gideon-book-room.ts`). It follows the approval modes: a card in "Always ask" and
+"Review before writing", direct only in "Don't ask" — and always a card when no single room was named, where the
+person picks the room. Apply re-checks the slot; the database also refuses an overlap.

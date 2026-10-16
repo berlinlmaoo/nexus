@@ -1,4 +1,4 @@
-import { addDays, mondayOf, weekdayOf, wibDay } from "@/lib/calendar/core"
+import { addDays, dayStartUtc, isDayKey, mondayOf, weekdayOf, wibDay } from "@/lib/calendar/core"
 
 /**
  * Days GIDEON writes (owner, 16 Oct 2026, from an end-to-end test of "turn this doc into tasks, due Friday").
@@ -97,4 +97,27 @@ export function datePromptLine(now: Date = new Date(), lang: "id" | "en" = "id")
   return lang === "en"
     ? `[DATE] Today is ${long("en")} (WIB, ${today}). A weekday name means the NEXT one, never today: "${humanDay(today, "en", today).split(" ")[0]}" said today is ${humanDay(addDays(today, 7), "en", today)}. Only "today" means today. Whenever you set or mention a relative day, write the resolved date too (e.g. "${sameWeekday}"), and pass dates to NEXUS tools as YYYY-MM-DD.`
     : `[TANGGAL] Hari ini ${long("id")} (WIB, ${today}). Nama hari berarti hari itu yang BERIKUTNYA, bukan hari ini: "${humanDay(today, "id", today).split(" ")[0]}" yang diucapkan hari ini = ${humanDay(addDays(today, 7), "id", today)}. Hanya "hari ini" yang berarti hari ini. Tiap kali memakai atau menyebut hari relatif, tulis juga tanggalnya (mis. "${sameWeekday}"), dan kirim tanggal ke tool NEXUS sebagai YYYY-MM-DD.`
+}
+
+const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined)
+
+/** "YYYY-MM-DD" or a relative day ("Friday", "besok"), else null. */
+export function dayOf(v: unknown, today: string): string | null {
+  const s = str(v)
+  if (!s) return null
+  if (isDayKey(s.slice(0, 10)) && (s.length === 10 || s[10] === "T")) return s.slice(0, 10)
+  return resolveDayPhrase(s, today)
+}
+
+/** "HH:MM" on a WIB day → the instant. */
+export function wibAt(day: string, time: string): Date {
+  const m = /^(\d{1,2})[:.](\d{2})$/.exec(time.trim())
+  if (!m || +m[1] > 24 || +m[2] > 59) throw new Error(`Invalid time: ${time} (use HH:mm, WIB)`)
+  return new Date(dayStartUtc(day).getTime() + (+m[1] * 60 + +m[2]) * 60_000)
+}
+
+/** "HH:MM" in WIB (a booking always has a time, so 07:00 WIB is "07:00", not a date-only day). */
+export function hm(d: Date): string {
+  const w = new Date(d.getTime() + 7 * 3_600_000)
+  return `${String(w.getUTCHours()).padStart(2, "0")}:${String(w.getUTCMinutes()).padStart(2, "0")}`
 }

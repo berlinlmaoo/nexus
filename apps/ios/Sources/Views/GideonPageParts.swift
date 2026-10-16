@@ -27,6 +27,9 @@ enum GideonStepText {
         case "update_task": return has ? String(format: T("Updating task %@"), a) : T("Updating a task")
         case "add_task_comment": return has ? String(format: T("Commenting on %@"), a) : T("Commenting on a task")
         case "create_document": return has ? String(format: T("Writing doc %@"), a) : T("Writing a doc")
+        case "get_calendar": return has ? String(format: T("Reading the calendar, %@"), a) : T("Reading the calendar")
+        case "list_room_bookings": return has ? String(format: T("Checking room bookings, %@"), a) : T("Checking room bookings")
+        case "book_room": return has ? String(format: T("Booking %@"), a) : T("Booking a room")
         case "vision_analyze", "vision": return T("Looking at the image")
         default:
             // A tool this build does not know: the server's own label, never the snake_case name.
@@ -140,7 +143,7 @@ struct GideonEmptyPrompt: View {
                     String(format: T("What's overdue in %@, and who owns it?"), name),
                     String(format: T("Turn the next steps of %@ into tasks"), name)]
         }
-        return [T("What's overdue for me?"), T("Summarize my week across projects"), T("What did my team decide recently? Cite the sources.")]
+        return [T("What's on my calendar this week?"), T("What's overdue for me?"), T("Summarize my week across projects"), T("What did my team decide recently? Cite the sources.")]
     }
 
     var body: some View {

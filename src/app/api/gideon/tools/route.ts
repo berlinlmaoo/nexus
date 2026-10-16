@@ -27,6 +27,7 @@ import { searchWorkspace, type SearchHitKind } from '@/lib/workspace-search'
 import { emitCommentAdded, emitTaskCreated, emitTaskUpdated } from '@/lib/socket-emitter'
 import type { Prisma, ProjectStatus, TaskPriority, TaskStatus, User } from '@/generated/prisma/client'
 import { gideonGetCalendar, gideonListRoomBookings } from '@/lib/gideon-calendar-tools'
+import { BookRoomRefusal, describeBookRoom, gideonBookRoom } from '@/lib/gideon-book-room'
 import { humanDay, parseDueInput, todayWib } from '@/lib/gideon-dates'
 import { wibDay, wibTime } from '@/lib/calendar/core'
 import {
@@ -54,6 +55,7 @@ type GideonAction =
   | 'search_workspace'
   | 'get_calendar'
   | 'list_room_bookings'
+  | 'book_room'
 
 type ToolBody = {
   action?: GideonAction | string
@@ -1303,6 +1305,9 @@ async function dispatch(actor: User, action: string, rawInput: Record<string, un
       return gideonGetCalendar(actor.id, input)
     case 'list_room_bookings':
       return gideonListRoomBookings(actor.id, input)
+    // A write (approval modes, gideon-runs.ts): the Room Booking page's own path, as this person.
+    case 'book_room':
+      return gideonBookRoom(actor.id, input)
     case 'create_task':
       return createTask(actor, input)
     case 'update_task':
@@ -1361,6 +1366,10 @@ export async function POST(req: Request) {
     try {
       return ok(await dispatch(auth.actor, proposal.action, (proposal.input as Record<string, unknown>) ?? {}))
     } catch (err) {
+      // The apply route keeps a booking card open when its slot was taken meanwhile (code ROOM_TAKEN).
+      if (err instanceof BookRoomRefusal) {
+        return NextResponse.json({ ok: false, error: err.message, code: err.code, ...err.detail }, { status: err.code === 'ROOM_TAKEN' ? 409 : 400 })
+      }
       return error(err instanceof Error ? err.message : 'NEXUS GIDEON tool failed', 400)
     }
   }
@@ -1413,7 +1422,9 @@ export async function POST(req: Request) {
         summary: proposal.summary,
         // The resolved day, to say in the reply ("due Fri 23 Oct"), never just "Friday".
         ...(due ? { due } : {}),
-        note: action === 'create_task'
+        note: action === 'book_room'
+          ? 'NOT booked yet. It is waiting for the person on the card below, where they pick or confirm the room (every room is shown with whether it is free then) and tap Apply; tell them so, do not say it is booked, and do not ask which room in the chat.'
+          : action === 'create_task'
           ? `NOT applied yet. It is waiting for the person to approve it in NEXUS; tell them so, do not say it is done.${due ? ` Say the due date as "${due}".` : ''} This proposalId is the only id of the task until then: to add assignees or a due date to it, call nexus_update_task with taskId = this proposalId and it joins the same card.`
           : `NOT applied yet. It is waiting for the person to approve it in NEXUS; tell them so, do not say it is done.${due ? ` Say the due date as "${due}".` : ''}`,
       })
@@ -1638,6 +1649,10 @@ async function describeWrite(actor: User, action: string, input: Record<string, 
     taskId = task.id
     summary = `Comment on “${task.title}”`
     diff.push({ field: 'Comment', to: content.slice(0, 600) })
+  } else if (action === 'book_room') {
+    const booking = await describeBookRoom(actor.id, input)
+    summary = booking.summary
+    diff.push(...booking.diff)
   } else if (action === 'create_document') {
     const pid = String(input.projectId ?? '').trim()
     const title = String(input.title ?? '').trim()

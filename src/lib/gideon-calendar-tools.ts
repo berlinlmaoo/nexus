@@ -1,10 +1,10 @@
 import prisma from "@/lib/prisma"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
-import { addDays, dayDiff, dayStartUtc, inScope, isDayKey, mondayOf, sundayOf, subtreeOf, wibDay, type CalItem } from "@/lib/calendar/core"
+import { addDays, dayDiff, dayStartUtc, inScope, mondayOf, sundayOf, subtreeOf, wibDay, type CalItem } from "@/lib/calendar/core"
 import { buildCalendarItems, calendarCallerFor, extraPeople, holidaysBetween, loadStructure, loadTaskRows, ROW_CAP } from "@/lib/calendar/server"
 import { BOOKING_ROOMS, ROOM_CAPACITY, ROOM_EN, resolveRoomName } from "@/lib/room-booking-rooms"
 import { bookingInclude, roomAvailability } from "@/lib/room-booking"
-import { humanDay, resolveDayPhrase, todayWib } from "@/lib/gideon-dates"
+import { dayOf, hm, humanDay, todayWib, wibAt } from "@/lib/gideon-dates"
 
 /**
  * GIDEON and the calendar (owner, 16 Oct 2026: "GIDEON can't even read the calendar").
@@ -30,14 +30,6 @@ const MASKED_TITLE = "Internal task"
 
 const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined)
 
-/** "YYYY-MM-DD" or a relative day ("Friday", "besok"), else null. */
-export function dayOf(v: unknown, today: string): string | null {
-  const s = str(v)
-  if (!s) return null
-  if (isDayKey(s.slice(0, 10)) && (s.length === 10 || s[10] === "T")) return s.slice(0, 10)
-  return resolveDayPhrase(s, today)
-}
-
 /**
  * The days a read covers: `date` alone = that day; `from`/`to` (either may be missing); nothing = `fallback`.
  * Longer than 62 days is cut to 62 and said so.
@@ -57,12 +49,6 @@ export function readRange(input: Record<string, unknown>, today: string, fallbac
   const capped = dayDiff(from, to) + 1 > GIDEON_RANGE_MAX_DAYS
   if (capped) to = addDays(from, GIDEON_RANGE_MAX_DAYS - 1)
   return { from, to, capped }
-}
-
-/** "HH:MM" in WIB (a booking always has a time, so 07:00 WIB is "07:00", not a date-only day). */
-export function hm(d: Date): string {
-  const w = new Date(d.getTime() + 7 * 3_600_000)
-  return `${String(w.getUTCHours()).padStart(2, "0")}:${String(w.getUTCMinutes()).padStart(2, "0")}`
 }
 
 // ── get_calendar ──────────────────────────────────────────────────────────────────────────────────────
@@ -135,13 +121,6 @@ export async function isCompanyMember(userId: string): Promise<boolean> {
 }
 
 const NOT_COMPANY = "Room Booking is for the company workspace, and this person is not in it. Say so; do not guess."
-
-/** "HH:MM" on a WIB day → the instant. */
-export function wibAt(day: string, time: string): Date {
-  const m = /^(\d{1,2})[:.](\d{2})$/.exec(time.trim())
-  if (!m || +m[1] > 24 || +m[2] > 59) throw new Error(`Invalid time: ${time} (use HH:mm, WIB)`)
-  return new Date(dayStartUtc(day).getTime() + (+m[1] * 60 + +m[2]) * 60_000)
-}
 
 /** The room(s) a name means; a name that matches nothing is an error that lists the rooms. */
 function roomsFor(raw: unknown): string[] {

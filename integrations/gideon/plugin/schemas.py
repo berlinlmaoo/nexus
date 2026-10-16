@@ -195,6 +195,24 @@ SCHEMAS = {
             "durationMinutes": {"type": "integer", "minimum": 15, "maximum": 720},
         },
     ),
+    "nexus_book_room": object_schema(
+        "Book one of the company's rooms for the person, as them (they own the booking and get the usual confirmation). "
+        "The server applies the Room Booking page's rules and never double-books. Depending on the person's approval mode "
+        "it is booked directly or shown as a card they approve. If the person did not name a room, or the name could be "
+        "more than one room, leave `room` out (or pass what they said): do NOT guess and do NOT ask in the chat — the card "
+        "shows every room with whether it is free then and they pick there. If the slot is taken you get the holder and the "
+        "nearest free slots; tell the person, do not retry another room on your own. Cancelling or moving a booking is not "
+        "possible yet. Check first with nexus_list_room_bookings when the person asks whether something is free.",
+        {
+            "room": {"type": "string", "description": "The room as the person named it (e.g. 'Studio', 'VIP'). Omit when not named."},
+            "date": {"type": "string", "description": "YYYY-MM-DD (WIB). A weekday name means the NEXT one, never today."},
+            "start": {"type": "string", "description": "Start time, HH:mm WIB."},
+            "end": {"type": "string", "description": "End time, HH:mm WIB. Or give durationMinutes; default one hour."},
+            "durationMinutes": {"type": "integer", "minimum": 15, "maximum": 720},
+            "title": {"type": "string", "description": "What the room is for, as it will show on the Room Booking page."},
+        },
+        ["date", "start", "title"],
+    ),
     "nexus_get_doc": object_schema(
         "Read ONE NEXUS document (page) as plain text, with its title, project and URL.",
         {"docId": {"type": "string"}},

@@ -36,7 +36,7 @@ vi.mock('@/lib/prisma', () => {
     taskList: {
       findFirst: vi.fn(async () => ({ id: 'list-todo', name: 'To Do', projectId: 'p1', project: { id: 'p1', name: 'Launch', status: 'ACTIVE', autoAssignEnabled: false, autoAssignAssigneeIds: [], members: [{ userId: 'u-ana' }, { userId: 'actor-1' }] } })),
     },
-    user: { findMany: vi.fn(async ({ where }: any) => where.id.in.map((id: string) => ({ id, name: id === 'u-ana' ? 'Ana' : id === 'u-bo' ? 'Bo' : 'Asker' }))) },
+    user: { findMany: vi.fn(async ({ where }: any) => where.id.in.map((id: string) => ({ id, name: id === 'u-ana' ? 'Alpha Tester' : id === 'u-bo' ? 'Beta Tester' : 'Asker' }))) },
     task: { create: vi.fn(), findFirst: vi.fn(async () => null), findUnique: vi.fn(async () => null) },
     taskAssignee: { createMany: vi.fn(), deleteMany: vi.fn() },
     customField: { findMany: vi.fn(async () => []) },
@@ -120,7 +120,7 @@ describe('doc → tasks: one complete proposal per new task', () => {
     const p = store.proposals[0]
     expect(p.diff.map((d: any) => d.field)).toEqual(['Title', 'Section', 'Status', 'Due', 'Assignees'])
     expect(rowOf(p, 'Due')).toEqual({ field: 'Due', to: 'Fri 23 Oct', toDay: '2026-10-23' })
-    expect(rowOf(p, 'Assignees').to).toBe('Ana')
+    expect(rowOf(p, 'Assignees').to).toBe('Alpha Tester')
     expect(p.input.dueDate).toBe('Friday')
     expect(prisma.task.create).not.toHaveBeenCalled()
   })
@@ -137,7 +137,7 @@ describe('doc → tasks: one complete proposal per new task', () => {
     expect(store.proposals).toHaveLength(1)
     const p = store.proposals[0]
     expect(p.input).toMatchObject({ title: 'Book the venue', assigneeIds: ['u-ana', 'u-bo'], dueDate: '2026-10-23' })
-    expect(rowOf(p, 'Assignees').to).toBe('Ana, Bo')
+    expect(rowOf(p, 'Assignees').to).toBe('Alpha Tester, Beta Tester')
     expect(rowOf(p, 'Due').toDay).toBe('2026-10-23')
     expect(prisma.task.create).not.toHaveBeenCalled()
   })
