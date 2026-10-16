@@ -230,6 +230,8 @@ export function ActiveSessions() {
                     {/* The count always on its own line under the name (UI tour run 15, R15-WM-9: inline after a short
                         name, on its own line after a long one), and a version stays whole: "0.1.7 (14)". */}
                     <div className="text-sm font-medium [overflow-wrap:anywhere]">{keepVersion(g.name)}</div>
+                    {/* What the unnamed group is (UI tour run 20, R20-WB-14: the largest group, with no word on it). */}
+                    {g.unknown && <p className="text-xs text-muted-foreground">{t("Older app versions and tools that don't report a device.")}</p>}
                     <span className="mt-0.5 inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground tabular-nums">{t("{n} sessions", { n: formatCount(g.sessions.length) })}</span>
                     <Meta parts={[activeLabel(first.lastActiveAt, locale, t) || null]} />
                     <button

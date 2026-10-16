@@ -190,7 +190,9 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
             {view === "overview" && <>
             {shownVersion?.hasPdf && (
               <div data-snap-row className="space-y-1.5">
-                <iframe title={doc.title} src={legalDocsApi.fileUrl(doc.id, shownVersion.version, "pdf", true)} className="h-[60vh] w-full rounded-md border border-border bg-muted" />
+                {/* Without the browser's own PDF toolbar: its dark bar (download / print / ⋮) repeated the DOCX / PDF
+                    buttons above in a light sheet (UI tour run 20, R20-WB-11). */}
+                <iframe title={doc.title} src={`${legalDocsApi.fileUrl(doc.id, shownVersion.version, "pdf", true)}#toolbar=0&navpanes=0`} className="h-[60vh] w-full rounded-md border border-border bg-muted" />
                 {/* The preview is a sheet's width: too small to read on a phone (UI tour run 14, R14-WM-22). The
                     browser's own viewer, full screen, can be zoomed. */}
                 <a href={legalDocsApi.fileUrl(doc.id, shownVersion.version, "pdf", true)} target="_blank" rel="noopener noreferrer"
@@ -245,7 +247,7 @@ export function LegalDocumentSheet({ documentId, onClose, onOpen, onShowChain }:
                     <div className="min-w-0 flex-1">
                       <div className="truncate">
                         {versionKindLabel(v.kind)}{v.note ? ` — ${v.note}` : ""}
-                        <span className="ml-1.5 rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground" title={v.downloadName}>{v.label}</span>
+                        <span className="ml-1.5 rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground" title={v.downloadName}>{revLabel(v.label, t)}</span>
                         {doc.signedVersion === v.version && <span className="ml-1.5 rounded bg-emerald-500/10 px-1.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">{t("Signed copy")}</span>}
                         {doc.finalVersion === v.version && <span className="ml-1.5 rounded bg-primary/10 px-1.5 text-[10px] font-medium text-primary">{t("Final")}</span>}
                       </div>
@@ -437,4 +439,13 @@ function UploadVersionButton({ doc, onDone }: { doc: LegalDocument; onDone: () =
       <input type="file" accept=".pdf,.docx,.jpg,.jpeg,.png" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ""; }} />
     </label>
   );
+}
+
+/**
+ * The template revision a version was made from, said as such: "v1 · Generated · Template rev 1", not two bare
+ * version numbers side by side (decision 28, UI tour run 20, R20-WB-12). Display only; the file name keeps "REV".
+ */
+function revLabel(label: string, t: (s: string, v?: Record<string, string | number>) => string): string {
+  const m = /^REV[\s._-]*(\d+)$/i.exec(label.trim());
+  return m ? t("Template rev {n}", { n: m[1] }) : label;
 }
