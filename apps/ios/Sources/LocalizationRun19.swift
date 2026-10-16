@@ -27,6 +27,9 @@ extension AppLanguage {
         "Only BoD and up can manage quests": "Hanya BoD ke atas yang bisa mengelola quest",
         "(a quest for one person, or a few · with divisions too, someone in them OR picked here gets it)": "(quest untuk satu orang atau beberapa · kalau ada divisi juga, orang di divisi itu ATAU yang dipilih di sini mendapatkannya)",
         "Search people to add…": "Cari orang untuk ditambahkan…",
+        // Messages: no emoji in an empty chat (decision 4)
+        "No messages yet.": "Belum ada pesan.",
+        "Start a conversation": "Mulai percakapan",
         // Profile (UI tour run 19, R19-I-39)
         "%@ XP gained · %@ XP lost": "%@ XP didapat · %@ XP hilang",
         "XP comes from quests and is lost to attendance penalties — late, no check-out, absent.": "XP datang dari quest dan hilang karena penalti absensi — telat, lupa check-out, TK.",
