@@ -621,8 +621,17 @@ export async function browserAttendanceRefusal(
 ): Promise<{ error: string; code: string } | null> {
   if (isIosBrowserWithoutApp(userAgent, clientHeader)) return USE_IOS_APP_ERROR
   if (isDesktopBrowser(userAgent, clientHeader)) return USE_PHONE_APP_ERROR
+  // The Mac app (Catalyst) is not for attendance either (owner, 16 Oct 2026): a laptop has no reliable
+  // location. Builds from 12 Oct name the device in their user agent ("NEXUS/<build> (Macintosh; …)");
+  // older Mac builds send a bare CFNetwork agent that cannot be told from an iPhone, so they still pass.
+  if (isMacApp(userAgent)) return USE_PHONE_APP_ERROR
   if (isAndroidBrowserWithoutApp(userAgent, clientHeader) && (await androidBlocked())) return USE_ANDROID_APP_ERROR
   return null
+}
+
+/** The NEXUS Mac (Catalyst) app, by the device it names in its user agent. */
+export function isMacApp(userAgent: string | null | undefined): boolean {
+  return /^NEXUS\/\S+ \(Macintosh;/.test(userAgent ?? "")
 }
 
 export const USE_ANDROID_APP_ERROR = {
