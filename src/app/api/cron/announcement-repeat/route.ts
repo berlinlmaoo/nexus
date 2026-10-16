@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
         if (claimed.count !== 1) { skipped.push({ id: a.id, why: "sudah dikirim hari ini" }); continue }
         await prisma.announcementSeen.deleteMany({ where: { announcementId: a.id } })
         try {
-          await notifyAnnouncement(a.id)
+          await notifyAnnouncement(a.id, { repeatDay: formatAttendanceDateKey(now) })
         } catch (err) {
           console.error("announcement repeat: notify failed", { id: a.id, err })
         }

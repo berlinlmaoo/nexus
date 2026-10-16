@@ -1,3 +1,4 @@
+import { createHash } from "crypto"
 import prisma from "@/lib/prisma"
 import { resolveAttendanceApprovers } from "@/lib/attendance-approvers"
 import { dayOffBalances, dayOffPeriodOf, dayOffUsageKey } from "@/lib/day-off-usage"
@@ -130,6 +131,14 @@ async function sendSlack(webhookUrl: string, message: string) {
  * shape with no window (one reminder per shift, forever); this is that idea made reusable.
  *
  * Returns null when the notification was suppressed.
+ *
+ * `dedupeKey` (16 Oct 2026, race audit LOW): a deterministic identity for a cron-driven notification, type +
+ * target + period. The row is inserted with ON CONFLICT DO NOTHING against the partial unique index
+ * Notification_dedupeKey_key (prisma/sql/2026-10-16-notification-dedupe-key.sql): of two runs that both passed
+ * their "already sent?" check, one stores the row and pushes, the other gets null and sends nothing. A windowed
+ * call (`dedupeWindowMs`) gets one derived from the window: the same text to the same person in the same window
+ * bucket — a subset of what the window check already suppresses, so it never drops a notification the window
+ * would have let through. Ad-hoc notifications pass neither and are inserted as before.
  */
 /**
  * Offboarded people (User.deactivatedAt, lib/offboarding.ts) get no notifications: they can't sign in
@@ -181,6 +190,8 @@ export async function createInAppNotification(data: {
   actorId?: string | null
   /** Both languages (notification-text.ts `bi`). title/message are then written in the recipient's language. */
   texts?: NotifTexts
+  /** A cron-driven notification's identity (type + target + period): stored and pushed once. See above. */
+  dedupeKey?: string
 }) {
   if (await isDeactivatedRecipient(data.userId)) {
     log.info("notification skipped: recipient offboarded", { userId: data.userId, type: data.type })
@@ -209,19 +220,30 @@ export async function createInAppNotification(data: {
     }
   }
 
-  const notification = await prisma.notification.create({
-    data: {
-      userId: data.userId,
-      type: data.type,
-      title: data.title,
-      message: data.message,
-      taskId: data.taskId || null,
-      projectId: data.projectId || null,
-      link: data.link || null,
-      ...(data.actorId ? { actorId: data.actorId } : {}),
-      ...(data.texts ? { texts: data.texts } : {}),
-    },
-  })
+  const row = {
+    userId: data.userId,
+    type: data.type,
+    title: data.title,
+    message: data.message,
+    taskId: data.taskId || null,
+    projectId: data.projectId || null,
+    link: data.link || null,
+    ...(data.actorId ? { actorId: data.actorId } : {}),
+    ...(data.texts ? { texts: data.texts } : {}),
+  }
+  const dedupeKey = data.dedupeKey ?? (data.dedupeWindowMs && data.dedupeWindowMs > 0 ? windowDedupeKey(data, data.dedupeWindowMs) : undefined)
+  let notification
+  if (dedupeKey) {
+    // INSERT … ON CONFLICT DO NOTHING RETURNING: nothing comes back when another run stored this key first.
+    const [stored] = await prisma.notification.createManyAndReturn({ data: [{ ...row, dedupeKey }], skipDuplicates: true })
+    if (!stored) {
+      log.info("notification suppressed: dedupe key already stored", { userId: data.userId, type: data.type })
+      return null
+    }
+    notification = stored
+  } else {
+    notification = await prisma.notification.create({ data: row })
+  }
 
   // Real-time: push to user's socket room
   emitNotification(data.userId, JSON.parse(JSON.stringify(notification)))
@@ -243,6 +265,12 @@ export async function createInAppNotification(data: {
   }
 
   return notification
+}
+
+/** The key of a windowed notification: same person, type, link and text, in the same window-sized bucket. */
+function windowDedupeKey(data: { userId: string; type: string; link?: string; message: string }, windowMs: number): string {
+  const what = createHash("sha256").update(`${data.link ?? ""}\u0000${data.message}`).digest("hex").slice(0, 24)
+  return `window|${data.type}|${data.userId}|${what}|${windowMs}|${Math.floor(Date.now() / windowMs)}`
 }
 
 /**
@@ -278,14 +306,16 @@ export async function notifyAttendanceReminder(data: {
         off > 0 ? [`Check-out in ${off} min`, `Your shift ends at ${t}. Don't forget to check out.`] : ["Time to check out", `It's ${t} — don't forget to check out before you leave.`],
         off > 0 ? [`Absen pulang ${soon}`, `Jam pulang ${t}. Jangan lupa check-out.`] : ["Waktunya absen pulang", `Sudah jam ${t} — jangan lupa check-out sebelum pulang.`]
 )
-  await createInAppNotification({
+  // The findFirst above stays for rows stored before the key existed; the key makes two overlapping runs one.
+  const stored = await createInAppNotification({
     userId: data.userId,
     type,
     ...texts,
     link,
     push: true,
+    dedupeKey: `attendance-reminder|${data.userId}|${data.kind}|${data.attendanceDate}|${off}`,
   })
-  return true
+  return stored !== null
 }
 
 /**
@@ -337,7 +367,7 @@ export async function notifyAttendanceAbsentRecorded(data: {
       if (existing) return false
       // Written through the shared helper (own connection, committed on return) while this
       // transaction still holds the lock — so a second run waiting on the lock finds the row.
-      await createInAppNotification({ userId: data.userId, type, ...texts, link, push })
+      await createInAppNotification({ userId: data.userId, type, ...texts, link, push, dedupeKey: `absent-recorded|${data.userId}|${data.dateKey}` })
       return true
     },
     // The push is awaited inside; APNs can take a few seconds per device.
@@ -856,7 +886,11 @@ export async function notifyFeedComment(data: {
 /// Until now posting one only wrote a row: the pop-up was picked up the next time somebody happened
 /// to open NEXUS. For "wear a mask on the way in today" that is not a delay, it is a miss — the
 /// person who most needed it reads it after they have already arrived.
-export async function notifyAnnouncement(announcementId: string) {
+/**
+ * `repeatDay` (announcement-repeat cron, "YYYY-MM-DD" WIB): the notification of that day's repeat is stored and
+ * pushed once per person even when two runs overlap. A first publish (a BoD action) passes none.
+ */
+export async function notifyAnnouncement(announcementId: string, opts: { repeatDay?: string } = {}) {
   const announcement = await prisma.announcement.findUnique({
     where: { id: announcementId },
     select: { id: true, title: true, body: true, active: true, targetUserIds: true, createdById: true, kind: true },
@@ -895,6 +929,7 @@ export async function notifyAnnouncement(announcementId: string) {
         message: author ? `${author}: ${message}` : message,
         link: `/dashboard?announcement=${announcement.id}`,
         push: true,
+        ...(opts.repeatDay ? { dedupeKey: `announcement-repeat|${announcement.id}|${userId}|${opts.repeatDay}` } : {}),
       }),
     ),
   )
@@ -927,7 +962,7 @@ export async function notifyDueSoon(data: {
       `"${data.taskTitle}" jatuh tempo ${data.dueAt ? dayText(new Date(data.dueAt), "id") : data.dueDate}`],
   )
 
-  await createInAppNotification({
+  const stored = await createInAppNotification({
     userId: data.userId,
     type,
     ...texts,
@@ -937,7 +972,10 @@ export async function notifyDueSoon(data: {
       ? `/projects/${data.projectId}/tasks/${data.taskId}`
       : `/tasks/${data.taskId}`}?reminder=${data.stage}&due=${encodeURIComponent(data.dueAt)}`,
     push: prefs.taskDueSoon,
+    // One per task, assignee, stage and due date: two overlapping due-check runs store (and email) it once.
+    dedupeKey: `due-soon|${data.taskId}|${data.userId}|${data.stage}|${data.dueAt}`,
   })
+  if (!stored) return
 
   if (!prefs.taskDueSoon) return
 
@@ -1144,12 +1182,13 @@ export async function notifySubmissionStatus(data: {
  * and haven't done anything today. Anyone at zero gets nothing: nagging someone about a streak they
  * are not on is how a notification channel earns itself a mute.
  */
-export async function notifyStreakAtRisk(data: { userId: string; currentStreak: number }) {
+export async function notifyStreakAtRisk(data: { userId: string; currentStreak: number; dedupeKey?: string }) {
   if (await isUserDnd(data.userId)) return
   const prefs = await getUserPrefs(data.userId)
   await createInAppNotification({
     userId: data.userId,
     type: "streak_at_risk",
+    dedupeKey: data.dedupeKey,
     ...bi(
       ["Your streak ends at midnight", `${data.currentStreak} day${data.currentStreak === 1 ? "" : "s"} on the line — finish something today to keep it.`],
       ["Streak kamu putus tengah malam", `${data.currentStreak} hari dipertaruhkan — selesaikan sesuatu hari ini supaya tetap jalan.`],
@@ -1170,12 +1209,14 @@ export async function notifyQuotaLow(data: {
   kind: "dayoff" | "red_date"
   remaining: number
   quota: number
+  dedupeKey?: string
 }) {
   if (await isUserDnd(data.userId)) return
   const prefs = await getUserPrefs(data.userId)
   const label = data.kind === "dayoff" ? "day-off" : "public-holiday"
   await createInAppNotification({
     userId: data.userId,
+    dedupeKey: data.dedupeKey,
     type: data.kind === "dayoff" ? "dayoff_quota_low" : "red_date_quota_low",
     ...bi(
       [`${data.remaining} ${label} day left`, `You've used ${data.quota - data.remaining} of ${data.quota} this month.`],
@@ -1208,6 +1249,7 @@ export async function notifyBookingSoon(data: {
     // Booking is its own screen now; the Calendar no longer shows bookings.
     link: `/room-booking?booking=${data.bookingId}`,
     push: prefs.statusUpdate,
+    dedupeKey: `booking-soon|${data.bookingId}|${data.userId}`,
   })
 }
 
@@ -1230,6 +1272,7 @@ export async function notifyQuestClaimable(data: {
     // The key doubles as the de-dupe marker: one nudge per quest per period.
     link: `/dashboard?quest=${data.questKey}:${data.periodKey}`,
     push: prefs.statusUpdate,
+    dedupeKey: `quest-claimable|${data.userId}|${data.questKey}:${data.periodKey}`,
   })
 }
 

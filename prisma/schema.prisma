@@ -1152,6 +1152,11 @@ model Notification {
   /// Who caused it (a person), for the sender avatar on the row. Null = system, or a row from before 13 Oct 2026.
   /// No foreign key: a deleted person just loses the avatar.
   actorId   String?
+  /// A cron-driven notification's identity, type + target + period (e.g. "attendance-reminder|<user>|checkin|
+  /// 2026-10-16|15"), written with ON CONFLICT DO NOTHING so two overlapping runs store and push it once
+  /// (16 Oct 2026). Null for ad-hoc notifications. Unique WHERE NOT NULL — a partial index built CONCURRENTLY,
+  /// so it lives in prisma/sql/2026-10-16-notification-dedupe-key.sql, not here.
+  dedupeKey String?
 
   userId    String
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
           })
           if (already) continue
 
-          await notifyQuotaLow({ userId: member.userId, kind: entry.kind, remaining, quota: entry.quota })
+          await notifyQuotaLow({ userId: member.userId, kind: entry.kind, remaining, quota: entry.quota, dedupeKey: `${entry.notifType}|${member.userId}|${monthStart.toISOString()}` })
           sent++
         }
       }
