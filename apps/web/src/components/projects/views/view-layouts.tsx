@@ -312,12 +312,12 @@ export function GroupHeader({ group, groupBy, defs, cfg, collapsed, onToggle, ch
         <svg aria-hidden viewBox="0 0 12 12" className={cn("h-4 w-4 shrink-0 p-[3px] text-foreground/70 transition-transform duration-150", collapsed && "-rotate-90")}><path d="M1.5 3.5h9L6 9z" fill="currentColor" /></svg>
         {tone ? (
           // Status values are round pills with a dot; other options are Notion's small square-cornered tags.
-          <span className={cn("inline-flex min-w-0 items-center gap-1.5 truncate px-1.5 py-px text-sm", pillDot ? "rounded-full pl-2" : "rounded")} style={{ backgroundColor: tone.bg, color: tone.text }}>
+          <span className={cn("inline-flex min-w-0 items-center gap-1.5 truncate px-2 py-0.5 font-display text-sm font-semibold", pillDot ? "rounded-full pl-2" : "rounded-md")} style={{ backgroundColor: tone.bg, color: tone.text }}>
             {pillDot && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tone.dot }} />}
             <span className="truncate">{label}</span>
           </span>
         ) : (
-          <span className="truncate text-sm font-medium">{label}</span>
+          <span className="truncate font-display text-sm font-semibold">{label}</span>
         )}
         <span className="shrink-0 text-sm tabular-nums" style={{ color: tone?.text ?? "var(--muted-foreground)" }} title={calc.hint ? t("{done} of {total} tasks done", calc.hint) : t(calc.label)}>{calc.value}</span>
       </button>
@@ -328,7 +328,7 @@ export function GroupHeader({ group, groupBy, defs, cfg, collapsed, onToggle, ch
 
 const GALLERY_COLS: Record<ViewConfig["cardSize"], string> = {
   small: "grid-cols-[repeat(auto-fill,minmax(180px,1fr))]",
-  medium: "grid-cols-[repeat(auto-fill,minmax(240px,1fr))]",
+  medium: "grid-cols-[repeat(auto-fill,minmax(260px,1fr))]",
   large: "grid-cols-[repeat(auto-fill,minmax(320px,1fr))]",
 };
 
@@ -342,12 +342,13 @@ function GalleryCard({ task, cover, keys, defs, ctx, cfg, onOpen }: { task: Nexu
     <button
       type="button"
       data-morph-id={`gallery-taskcard-${task.id}`}
-      style={{ borderRadius: 10, ...tint }}
+      style={{ borderRadius: 12, ...tint }}
       {...props}
-      className={cn("group flex flex-col overflow-hidden border border-border bg-card text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition-shadow hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/40", bulk.isSelected(task.id) && "ring-2 ring-[color:var(--accent-foreground)]")}
+      // Notion's gallery card (cover on top, the name under it) in NEXUS's soft card: 12px corners, the soft shadow.
+      className={cn("group flex flex-col overflow-hidden rounded-xl border border-border/80 bg-card text-left shadow-soft transition-[box-shadow,border-color] hover:border-ring/30 hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50", bulk.isSelected(task.id) && "ring-2 ring-ring")}
     >
       {cfg.cardCover === "image" && (
-        <div className={cn("w-full overflow-hidden border-b border-border/70 bg-muted/60", cfg.cardSize === "small" ? "aspect-[16/9]" : "aspect-[16/10]")}>
+        <div className={cn("w-full overflow-hidden border-b border-border/70 bg-muted/60", cfg.cardSize === "small" ? "aspect-[16/9]" : "aspect-[2/1]")}>
           {cover ? (
             <img src={cover} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
           ) : (
@@ -355,8 +356,8 @@ function GalleryCard({ task, cover, keys, defs, ctx, cfg, onOpen }: { task: Nexu
           )}
         </div>
       )}
-      <div className="flex flex-1 flex-col gap-2 p-3">
-        <span className={cn("line-clamp-2 text-sm font-medium leading-snug", done && "text-muted-foreground line-through")}>{task.title}</span>
+      <div className="flex flex-1 flex-col gap-2 px-3 pb-3 pt-2.5">
+        <span className={cn("line-clamp-2 text-sm font-semibold leading-snug", done && "text-muted-foreground line-through")}>{task.title}</span>
         <PropLine task={task} keys={keys} defs={defs} ctx={ctx} />
       </div>
     </button>
@@ -373,15 +374,15 @@ export function GalleryView({ projectId, groups, groupBy, cfg, keys, defs, ctx, 
   const cover = (id: string) => covers.data?.covers[id]?.url;
   const canEdit = useProjectCanEdit();
   const grid = (tasks: NexusTask[]) => (
-    <div className={cn("grid gap-3", GALLERY_COLS[cfg.cardSize])}>
+    <div className={cn("grid gap-4", GALLERY_COLS[cfg.cardSize])}>
       <Incremental items={tasks} first={40} step={40} markerClassName="col-span-full h-px" keyOf={(task) => task.id} render={(task) => <GalleryCard task={task} cover={cover(task.id)} keys={keys} defs={defs} ctx={ctx} cfg={cfg} onOpen={onOpen} />} />
-      {canEdit && <button type="button" onClick={onCreate} className="grid min-h-24 place-items-center rounded-[10px] border border-dashed border-border text-sm text-muted-foreground transition-colors hover:border-foreground/20 hover:bg-muted/50 hover:text-foreground">
+      {canEdit && <button type="button" onClick={onCreate} className="grid min-h-24 place-items-center rounded-xl border border-dashed border-border text-sm text-muted-foreground transition-colors hover:border-foreground/20 hover:bg-muted/50 hover:text-foreground">
         <span className="inline-flex items-center gap-1.5"><Plus className="h-4 w-4" />{t("New task")}</span>
       </button>}
     </div>
   );
   return (
-    <div className="space-y-6 px-4 py-4 md:px-8">
+    <div className="space-y-6 nx-gx py-4">
       {groups.map((g) => (
         <section key={g.key}>
           {groupBy && <GroupHeader group={g} groupBy={groupBy} defs={defs} cfg={cfg} collapsed={collapsed.has(g.key)} onToggle={() => onToggleGroup(g.key)} className="mb-2" />}

@@ -107,7 +107,7 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
       <button type="button" tabIndex={-1} aria-label={t("Show more tabs")} onClick={() => nudge(1)} className={cn(edgeBtn, "right-0 justify-end bg-gradient-to-l from-card from-60% to-transparent")}>{edges.more > 0 && <span className="hidden text-[11px] font-semibold tabular-nums md:inline">{edges.more}</span>}<ChevronRight className="h-4 w-4" /></button>
     )}
     <div ref={scroller} role="tablist" aria-label={t("Views")} className={cn("relative flex min-w-0 items-center gap-0.5", menu.on ? "overflow-hidden" : "flex-1 snap-x snap-proximity overflow-x-auto [scroll-padding-inline:36px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden")}>
-      {shownTabs.map((tab) => {
+      {shownTabs.map((tab, i) => {
         const active = tab.key === activeKey;
         const v = tab.view;
         const editable = v ? canEditView(v) : false;
@@ -132,7 +132,8 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
               onKeyDown={(e) => { if (e.target !== e.currentTarget) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(tab.key); } }}
               className={cn(
                 TAB_PILL,
-                active ? "bg-foreground/[0.06] font-medium text-foreground" : "text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground",
+                // The active view in NEXUS's violet tint (owner, 16 Oct 2026: Notion's structure, NEXUS's colours).
+                active ? "bg-accent font-semibold text-sidebar-primary" : "text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground",
                 dragId === v?.id && "opacity-40",
                 overId === v?.id && dragId !== v?.id && "ring-1 ring-[color:var(--accent-foreground)]/50",
               )}
@@ -159,7 +160,8 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
                 />
               )}
             </div>
-            {divideAfter === tab.key && (
+            {/* No divider right before "N more…": it read as a wider gap there (16 Oct 2026). */}
+            {divideAfter === tab.key && !(menu.on && i === shownTabs.length - 1) && (
               <>
                 {/* The one-row strip shows "+" once, after "N more…" (it showed twice, 16 Oct 2026). */}
                 {addView && !menu.on && <span data-tab-extra="" className="inline-flex shrink-0 items-center">{addView}</span>}
@@ -181,7 +183,7 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
 
 /** Tab pill classes, shared by the row and its measuring copy. */
 // Notion's view tabs (16 Oct 2026 pass): round pills, 14px, the icon in the tab's grey, the active one on a soft fill.
-const TAB_PILL = "group inline-flex h-8 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/30";
+const TAB_PILL = "group inline-flex h-8 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40";
 const MORE_PILL = "inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground";
 /** Width of the "+" after the strip (the "N more" button is measured with the tabs). */
 const ADD_W = 36;
@@ -237,7 +239,7 @@ function useTabOverflowMenu(on: boolean, tabs: ToolbarTab[], activeKey: string |
   const measure = (
     <div ref={measureRef} aria-hidden className="pointer-events-none invisible absolute left-0 top-0 flex h-0 items-center gap-0.5 overflow-hidden">
       {tabs.map((tab) => (
-        <span key={tab.key} className={cn(TAB_PILL, "shrink-0", tab.key === activeKey && "font-medium")}>
+        <span key={tab.key} className={cn(TAB_PILL, "shrink-0", tab.key === activeKey && "font-semibold")}>
           <tab.icon className="h-3.5 w-3.5 shrink-0" />
           <span className="max-w-48 truncate">{tab.label}</span>
           {tab.view && !tab.view.shared && <Lock className="h-3 w-3 shrink-0" />}
@@ -323,28 +325,39 @@ export function ToolbarSearch({ value, onChange }: { value: string; onChange: (v
 }
 
 /** "Add task ▾": the main part adds to the first section, the arrow picks the section (or a template). */
-export function AddTaskSplit({ sections, onAdd, extra }: { sections: Array<{ id: string; name: string }>; onAdd: (sectionId?: string) => void; extra?: ReactNode }) {
+export function AddTaskSplit({ sections, onAdd, onFull, extra }: { sections: Array<{ id: string; name: string; color?: string | null }>; onAdd: (sectionId?: string) => void;
+  /** "New task with details…": the full composer (the Board and List add inline first). */
+  onFull?: () => void; extra?: ReactNode }) {
   const { t } = useLang();
   const [open, setOpen] = useState(false);
   // Can view / Can comment: no Add task (QA round 2, N-02).
   if (!useProjectCanEdit()) return null;
   return (
-    // Notion's blue "New ▾" (16 Oct 2026 pass): 28px, the database's one coloured control.
-    <div className="inline-flex h-7 shrink-0 items-stretch overflow-hidden rounded-md bg-[#2383e2] text-white shadow-[inset_0_0_0_1px_rgba(15,15,15,0.1),0_1px_2px_rgba(15,15,15,0.1)] dark:bg-[#2383e2]">
-      <button type="button" onClick={() => onAdd()} aria-label={t("New task")} className="inline-flex items-center px-2.5 text-sm font-medium transition-colors hover:bg-[#0077d4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/60">
-        <span>{t("New")}</span>
+    // Notion's split "New ▾" in NEXUS's onyx CTA (owner, 16 Oct 2026: keep NEXUS's DNA), as the old "Add task".
+    <div className="inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-lg bg-primary text-primary-foreground shadow-soft transition-shadow hover:shadow-pop">
+      <button type="button" onClick={() => onAdd()} aria-label={t("New task")} className="inline-flex items-center gap-1 pl-2.5 pr-2.5 text-sm font-semibold transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+        <Plus className="h-4 w-4" /><span>{t("New")}</span>
       </button>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <button type="button" aria-label={t("More ways to add")} className="grid w-6 place-items-center border-l border-white/25 transition-colors hover:bg-[#0077d4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/60"><ChevronDown className="h-3.5 w-3.5" /></button>
+          <button type="button" aria-label={t("More ways to add")} className="grid w-7 place-items-center border-l border-white/20 transition-colors hover:bg-white/10 data-[state=open]:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"><ChevronDown className="h-3.5 w-3.5" /></button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-60 p-1">
+        {/* Notion's "Templates for …" menu: a grey heading, 30px rows with a glyph, a rule, then the extra row. */}
+        <PopoverContent align="end" sideOffset={6} className="w-64 rounded-xl p-1 shadow-pop">
           <div className="px-2 pb-1 pt-1.5 text-xs font-medium text-muted-foreground">{t("Add a task to")}</div>
           <div className="max-h-64 overflow-y-auto">
             {sections.map((s) => (
-              <button key={s.id} type="button" onClick={() => { setOpen(false); onAdd(s.id); }} className={menuItemCls}><Plus className="h-3.5 w-3.5 text-muted-foreground" /><span className="truncate">{s.name}</span></button>
+              <button key={s.id} type="button" onClick={() => { setOpen(false); onAdd(s.id); }} className={cn(menuItemCls, "h-[30px] py-0")}>
+                <span aria-hidden className="grid h-4 w-4 shrink-0 place-items-center"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color ?? "var(--muted-foreground)" }} /></span>
+                <span className="truncate">{s.name}</span>
+              </button>
             ))}
           </div>
+          {onFull && (
+            <div className="mt-1 border-t border-border pt-1">
+              <button type="button" onClick={() => { setOpen(false); onFull(); }} className={cn(menuItemCls, "h-[30px] py-0 text-muted-foreground")}><Plus className="h-4 w-4" /><span className="truncate">{t("New task with details…")}</span></button>
+            </div>
+          )}
           {extra && <div className="mt-1 border-t border-border pt-1" onClick={() => setOpen(false)}>{extra}</div>}
         </PopoverContent>
       </Popover>

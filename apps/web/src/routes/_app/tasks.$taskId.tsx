@@ -10,5 +10,5 @@ function TaskDetailPage() {
   // of always dumping the user on My Tasks. Falls back to /my-tasks on a cold/direct load with no history.
   const onClose = () =>
     router.history.canGoBack() ? router.history.back() : router.navigate({ to: "/my-tasks" });
-  return <TaskDetailPanel taskId={taskId} onClose={onClose} />;
+  return <TaskDetailPanel taskId={taskId} onClose={onClose} asPage />;
 }
