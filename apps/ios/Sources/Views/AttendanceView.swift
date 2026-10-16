@@ -2457,25 +2457,28 @@ struct StreakBoardCard: View {
         // rest into initials ("Anisa K. A."); only a name that still does not fit is cut.
         // Someone who left carries a muted "Left · 10 Oct" after the name on the same line, at the same 11 pt
         // (it was a 7 pt second line; UI tour run 20, R20-B-08), shortened to "Left" where the date does not fit.
+        // One flat list of candidates, tried in order: every name form with the long tag, then with the short
+        // one. ViewThatFits takes one ForEach of single views; a ForEach nested in a ForEach (each tag, each
+        // name form) tripped its precondition and crashed the app on opening Attendance (UI tour run 21).
         let variants = nameVariants(m.name)
-        let tags: [String] = m.leftAt == nil ? [] : [LeftTag.label(m.leftAt), LeftTag.leftWord]
+        let tags: [String?] = m.leftAt == nil ? [nil] : [LeftTag.label(m.leftAt), LeftTag.leftWord]
+        let candidates: [(name: String, tag: String?)] = tags.flatMap { tag in variants.map { (name: $0, tag: tag) } }
         return ViewThatFits(in: .horizontal) {
-            ForEach(Array(tags.enumerated()), id: \.offset) { _, tag in
-                ForEach(Array(variants.enumerated()), id: \.offset) { _, v in
-                    (Text(v) + Text(verbatim: "  " + tag).foregroundColor(NX.mutedFg))
-                        .lineLimit(1).fixedSize(horizontal: true, vertical: false)
-                }
-            }
-            if tags.isEmpty {
-                ForEach(Array(variants.enumerated()), id: \.offset) { _, v in
-                    Text(v).lineLimit(1).fixedSize(horizontal: true, vertical: false)
-                }
+            ForEach(candidates.indices, id: \.self) { i in
+                nameLine(candidates[i].name, tag: candidates[i].tag)
+                    .lineLimit(1).fixedSize(horizontal: true, vertical: false)
             }
             Text(m.name).lineLimit(1)
         }
         .font(NXFont.text(11, .medium)).foregroundStyle(NX.foreground)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(m.leftAt == nil ? m.name : "\(m.name), \(LeftTag.accessibilityText(m.leftAt))")
+    }
+
+    /// The name, then a muted tag after it on the same line when there is one; always one Text.
+    private static func nameLine(_ name: String, tag: String?) -> Text {
+        guard let tag else { return Text(name) }
+        return Text(name) + Text(verbatim: "  " + tag).foregroundColor(NX.mutedFg)
     }
 
     private var scoreColumn: some View {
