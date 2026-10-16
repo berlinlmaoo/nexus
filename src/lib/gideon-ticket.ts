@@ -33,11 +33,12 @@ import { scrubGideonReply } from "@/lib/gideon-reply-scrub"
  *   ATTENDANCE — read the evidence, may propose either remedy.
  *   EXP        — the XP deduction is downstream of the day, so the fix is the day: either the record
  *                was wrong (correction) or the penalty was (cancellation). Both attach here.
- *   DAY_OFF    — triage and answer only. GIDEON must never touch what the person themselves cannot
- *                change, and a day-off quota is exactly that: restoring one needs its own
- *                propose→approve flow, which does not exist. The prompt says so and BOTH propose
- *                functions refuse the category outright, so a model that tries anyway gets an error
- *                instead of a proposal.
+ *   DAY_OFF    — may propose a PENALTY CANCELLATION (owner, 16 Oct 2026; since 13 Sep in the code): a day
+ *                off that was "cut" is the nightly cron's automatic deduction (alpha / late >120), and
+ *                approving the cancellation gives back that day off with the XP. A time correction only
+ *                to record a day that has no record at all. A day off the person CHOSE is never touched:
+ *                proposeAttendancePenaltyCancellation refuses when nothing was auto-deducted. As on every
+ *                category, a BoD or One Above All approves (complaints/[id]/correction, canManageAttendance).
  *
  * Runs as the REPORTER, so GIDEON sees exactly what they see and nothing else.
  */
@@ -239,9 +240,9 @@ const CLOSING_RULES = [
  * the closing paragraph should contain. Everything else in the prompt is shared — the date rules, the
  * device-side fixes, and the four ways a reply may end.
  *
- * The DAY_OFF entry deliberately never names either propose tool as something to call — only as
- * something that will be refused. A prompt that pitches a tool the ticket cannot have is how you get a
- * model promising a fix it did not file.
+ * The DAY_OFF entry names the penalty cancellation as its main remedy and the time correction only for a day
+ * with no record at all (attendance-correction.ts refuses the rest), so the model never promises a fix the
+ * ticket cannot have.
  */
 const FRAMING: Record<
   GideonTicketCategory,

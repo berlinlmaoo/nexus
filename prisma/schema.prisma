@@ -3247,7 +3247,9 @@ model Complaint {
   reporter      User               @relation("ComplaintReporter", fields: [reporterId], references: [id], onDelete: Cascade)
   category      ComplaintCategory
   subject       String
-  anonymous     Boolean            @default(false) // reporter hidden from reviewers (BoD) too
+  /// Retired (owner, 16 Oct 2026): there are no anonymous tickets. Never written or read; kept so old rows and
+  /// the column stay as they are (no DROP).
+  anonymous     Boolean            @default(false)
   confidential  Boolean            @default(false) // flagged extra-sensitive (badge for BoD)
   // Evidence photo — REQUIRED at create (API-enforced). Served via gated /api/files/complaints/<name>.
   evidenceUrl      String?

@@ -19,7 +19,7 @@ const EVIDENCE_MAX = 8 * 1024 * 1024 // 8MB per photo
 const EVIDENCE_MAX_COUNT = 5   // per ticket — generous for screenshots, bounded against disk abuse
 
 // GET /api/complaints?status=… — BoD see every complaint in the workspace; everyone else sees only
-// the ones they filed. Reporter identity is anonymized in the serializer for anonymous complaints.
+// the ones they filed. BoD always see who filed a ticket (no anonymous tickets, owner 16 Oct 2026).
 export async function GET(request: NextRequest) {
   try {
     const session = await auth()
@@ -86,7 +86,8 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/complaints — JSON: { category, subject, body, anonymous?, confidential? }.
+// POST /api/complaints — JSON: { category, subject, body }. An `anonymous` or `confidential` sent by an old
+// client is ignored: every ticket is BoD-only and names its reporter to BoD (owner, 16 Oct 2026).
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()

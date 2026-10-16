@@ -1,6 +1,8 @@
 // Complaint & Escalation channel — shared constants + serializers.
-// Private, categorized chat between a staff member and the BoD. Confidential (BoD-only review) with an
-// optional ANONYMOUS mode (reporter hidden even from BoD). (The public, punitive Integrity peer reports were retired 12 Oct 2026.)
+// Private, categorized chat between a staff member and the BoD. Confidential: only the reporter and BoD see a
+// ticket, and BoD always see who filed it. There is no anonymous mode (owner, 16 Oct 2026: it was promised in
+// comments and never built; Complaint.anonymous stays in the schema, unread). (The public, punitive Integrity
+// peer reports were retired 12 Oct 2026.)
 export { getUserOrgRole, isBodPlus } from "@/lib/feed" // reuse the org-role gate helpers
 import { GIDEON_EMAIL } from "@/lib/gideon-identity"
 import { scrubGideonReply } from "@/lib/gideon-reply-scrub"
@@ -148,7 +150,7 @@ type ComplaintDetailRow = Omit<ComplaintRow, "messages" | "corrections"> & {
 
 /**
  * Serialize a complaint for a list view. The reporter's identity is shown to the reporter themselves and
- * to BoD — UNLESS the complaint is anonymous, in which case BoD see no reporter either (truly anonymous).
+ * to BoD (there are no anonymous tickets); `reporter` is null only for a viewer who is neither.
  */
 export function serializeComplaint(c: ComplaintRow, viewerId: string, viewerIsBod: boolean) {
   const isMine = c.reporterId === viewerId

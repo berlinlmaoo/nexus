@@ -314,8 +314,8 @@ async function attachProposalToThread(
  * workspace, that the actor may see, in a category corrections attach to, not closed, with a date and
  * a sentence a BoD can decide on.
  *
- * Extracted so the second remedy cannot quietly be laxer than the first. The gate that keeps DAY_OFF
- * out, and the one that stops a staffer filing against a colleague's day, are the same code for both.
+ * Extracted so the second remedy cannot quietly be laxer than the first. The category gate, and the one that
+ * stops a staffer filing against a colleague's day, are the same code for both.
  */
 async function openProposal(
   actor: { id: string; role?: string | null; name?: string | null },
@@ -368,14 +368,15 @@ async function openProposal(
   }
   if (!complaint || complaint.workspaceId !== membership.workspaceId) throw new Error('Complaint not found or not accessible')
   if (!actorIsBod && complaint.reporterId !== actor.id) throw new Error('Complaint not found or not accessible')
-  // THE gate that keeps DAY_OFF out. The prompt tells GIDEON not to try; this is what makes trying
-  // fail, so a model that calls the tool anyway gets an error back instead of filing a proposal.
+  // The category gate. ATTENDANCE, EXP and DAY_OFF tickets take both remedies (a DAY_OFF time correction only
+  // records a day with no record, checked in proposeAttendanceCorrection); any other category is refused here,
+  // so a model that calls the tool anyway gets an error back instead of filing a proposal.
   const allowedCategories = opts?.allowDayOff ? CANCELLATION_COMPLAINT_CATEGORIES : CORRECTABLE_COMPLAINT_CATEGORIES
   if (!allowedCategories.includes(complaint.category)) {
     throw new Error(
       opts?.allowDayOff
         ? `Ticket ${complaintId} is category ${complaint.category}; a penalty cancellation only attaches to an ATTENDANCE, EXP, or DAY_OFF ticket.`
-        : `Ticket ${complaintId} is category ${complaint.category}; an attendance correction only attaches to an ATTENDANCE or EXP ticket.`,
+        : `Ticket ${complaintId} is category ${complaint.category}; an attendance correction only attaches to an ATTENDANCE, EXP, or DAY_OFF ticket.`,
     )
   }
   if (complaint.status === 'CLOSED') throw new Error('Tiket ini udah ditutup, gak bisa diusulin koreksi lagi.')

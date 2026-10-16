@@ -1396,17 +1396,17 @@ export async function checkDueSoonTasks() {
 
 // ── Complaint & Escalation channel ───────────────────────────────────────────────
 
-/** A new complaint was filed → ping every BoD (reporter identity is never included, anon or not). */
-/** Who a ticket is from, the way a BoD is allowed to see it: the name, or nothing when it was filed anonymously. */
+/** Who a ticket is from, the way a BoD sees it: the reporter's name. There are no anonymous tickets (owner,
+ *  16 Oct 2026: the mode was never offered and is gone; the Complaint.anonymous column is no longer read). */
 async function complaintHeadline(complaintId: string) {
   const c = await prisma.complaint.findUnique({
     where: { id: complaintId },
-    select: { subject: true, anonymous: true, reporter: { select: { name: true, email: true } } },
+    select: { subject: true, reporter: { select: { name: true, email: true } } },
   })
   if (!c) return null
-  const reporter = c.anonymous ? "Pelapor anonim" : (c.reporter?.name || c.reporter?.email || "Seseorang")
-  const reporterEn = c.anonymous ? "An anonymous reporter" : (c.reporter?.name || c.reporter?.email || "Someone")
-  return { subject: c.subject, reporter, reporterEn, anonymous: c.anonymous }
+  const reporter = c.reporter?.name || c.reporter?.email || "Seseorang"
+  const reporterEn = c.reporter?.name || c.reporter?.email || "Someone"
+  return { subject: c.subject, reporter, reporterEn }
 }
 
 export async function notifyComplaintFiled(data: { workspaceId: string; complaintId: string; categoryLabel: string; categoryLabelEn?: string }) {
