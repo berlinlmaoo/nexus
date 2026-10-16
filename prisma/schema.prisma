@@ -517,9 +517,10 @@ model Project {
   // matrix) were removed with their API routes. Kept for released apps; both always read false.
   enablePnlDashboard Boolean @default(false)
   financeEnabled Boolean @default(false)
-  // What the project is for (owner, 9 Oct 2026): "TASK" | "FINANCE" | "CONTENT" | "PIPELINE". Every
-  // project before this is TASK, and creation accepts only TASK for now (the rest are "coming soon",
-  // POST /api/projects answers 400 TYPE_COMING_SOON). Rules in src/lib/project-tabs.ts.
+  // What the project is for (owner, 9 Oct 2026): "TASK" | "PIPELINE" | "OUTLET_SALES" | "SOCIAL_MEDIA_REPORT" |
+  // "FINANCE" | "CONTENT". Every project before 9 Oct is TASK. Creation accepts CREATABLE_PROJECT_TYPES (TASK,
+  // PIPELINE, OUTLET_SALES, SOCIAL_MEDIA_REPORT); FINANCE and CONTENT answer 400 TYPE_COMING_SOON. Rules in
+  // src/lib/project-tabs.ts.
   type String @default("TASK")
   // Tabs this project hides (owner, 9 Oct 2026), by key — see PROJECT_TAB_KEYS in
   // src/lib/project-tabs.ts. Hiding never deletes anything. Stored as the HIDDEN set so a tab added

@@ -6,8 +6,8 @@ import { canManageOutletTargets, listOutletTargets, outletGate, putOutletTarget 
 
 /**
  * Monthly targets of an outlet (owner, 10 Oct 2026). GET: every month that has one, for anyone who can
- * read the project. PUT { month, salesTarget?, paxTarget? }: the project lead, Manager, BoD, One Above
- * All (canManageOutletTargets); anyone else 403 TARGETS_FORBIDDEN.
+ * read the project. PUT { month, salesTarget?, paxTarget? }: Full access to the project only (the Project
+ * Owner, a member with Full, BoD / One Above All: canManageOutletTargets); anyone else 403 TARGETS_FORBIDDEN.
  */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
   try {
@@ -34,7 +34,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!gate.ok) return gate.response
     if (!(await canManageOutletTargets(userId, projectId))) {
       return NextResponse.json(
-        { error: "Target hanya bisa diatur lead project, Manager, atau BoD.", code: "TARGETS_FORBIDDEN" },
+        { error: "Target hanya bisa diatur oleh yang punya akses Full di project ini.", code: "TARGETS_FORBIDDEN" },
         { status: 403 },
       )
     }

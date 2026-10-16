@@ -36,7 +36,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!gate.ok) return gate.response
     if (!(await canManageOutletTargets(userId, projectId))) {
       return NextResponse.json(
-        { error: "Pengaturan laporan hanya bisa diubah lead project, Manager, atau BoD.", code: "SETTINGS_FORBIDDEN" },
+        { error: "Pengaturan laporan hanya bisa diubah oleh yang punya akses Full di project ini.", code: "SETTINGS_FORBIDDEN" },
         { status: 403 },
       )
     }

@@ -19,7 +19,8 @@ import {
  *   • signed in but not in the company workspace → 200 { access: "none" } with
  *     empty lists, so a personal-workspace account shows "enter a workspace code" instead of an error;
  *   • outside the rollout audience (AppSetting "calendar".audience) → 200 { access: "off" };
- *   • otherwise the data, with `access` = "all" for admin/OAA/BoD/Manager and the visibility mode for staff.
+ *   • otherwise the data, with `access` = "all" for BoD / One Above All and the visibility mode for everyone else,
+ *     Managers included (owner, 13 Oct 2026: a Manager sees only their own projects in full).
  */
 
 export const CALENDAR_SETTING_KEY = "calendar"

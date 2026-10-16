@@ -8,7 +8,8 @@ import { invitePowerOf, parseRootEmails, type InvitePower } from "@/lib/legal/ru
 // Legal"; every /api/legal route asks it through legalGate(), and the clients' nav flag
 // (GET /api/workspaces/members → canAccessLegal) asks hasLegalAccess(). The rule itself: rules.ts.
 
-/** Who always has Legal. Env override for the dev server's test accounts; the owner by default. */
+/** Who always has Legal: the LEGAL_ROOT_EMAILS env (comma-separated). There is no built-in default — unset, nobody
+ *  is a root and nobody has Legal until a root invites them, so it must be set on every server (rules.ts). */
 export const LEGAL_ROOT_EMAILS = parseRootEmails(process.env.LEGAL_ROOT_EMAILS)
 
 export type LegalActor = {

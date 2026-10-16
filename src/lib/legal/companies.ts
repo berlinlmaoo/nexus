@@ -1,8 +1,9 @@
 import prisma from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma/client"
 
-// Issuing companies and their numbering series (owner, 14 Oct 2026: Intoo, PATS, Suwara Lokal, Z Networks,
-// each with its own kop and number formats). Seeded by prisma/sql/2026-10-14-legal.sql; edited in Settings.
+// Issuing companies and their numbering series (owner, 14 Oct 2026: Intoo, PATS, Suwara Lokal, The Z Networks,
+// each with its own kop and number formats; "The Z Networks" is the TZN display name, owner 16 Oct 2026). Seeded by
+// prisma/sql/2026-10-14-legal.sql; edited in Settings.
 
 export const companyInclude = {
   series: { orderBy: [{ position: "asc" }, { label: "asc" }] },
