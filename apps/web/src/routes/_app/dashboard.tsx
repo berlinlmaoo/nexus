@@ -5,7 +5,7 @@ import { modKey } from "@/lib/keyboard";
 import { AndroidAppBanner } from "@/components/attendance/IosAppCheckInCard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import {
   Bell,
@@ -140,6 +140,7 @@ function TopBar({ userName, unread }: { userName: string; unread: number }) {
   const { t } = useLang();
   const hour = new Date().getHours();
   const greeting = hour < 11 ? t("Good morning,") : hour < 18 ? t("Good afternoon,") : t("Good evening,");
+  const railChip = useMinWidth(1280);
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px] xl:gap-6 2xl:grid-cols-[minmax(0,1fr)_380px] 2xl:gap-8">
       {/* main zone: greeting (left) + level chip (right, aligns with stat cards).
@@ -150,10 +151,13 @@ function TopBar({ userName, unread }: { userName: string; unread: number }) {
           <p className="text-xl font-medium text-foreground/80">{greeting}</p>
           <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">{userName}!</h1>
         </div>
-        <LevelChip />
+        {!railChip && <LevelChip />}
       </div>
-      {/* rail zone: search (phone only) + notifications */}
+      {/* rail zone: search (phone only) + notifications. On the two-column layout the level chip sits here,
+          beside the bell and over the profile card, so the rail no longer opens on an empty strip
+          (owner, 16 Oct 2026: the phone-only search left a gap there on desktop). */}
       <div className="flex items-center justify-end gap-3">
+        {railChip && <div className="min-w-0 flex-1"><LevelChip fill /></div>}
         {/* Opens the global search (⌘K), like the sidebar's box. It was an input with no handler (QA B12). Only
             where there is no sidebar: next to it there were two "Search… ⌘K" fields (UI tour run 13, W-D26). */}
         <button
@@ -171,6 +175,22 @@ function TopBar({ userName, unread }: { userName: string; unread: number }) {
         <NotificationsBell unread={unread} />
       </div>
     </div>
+  );
+}
+
+
+/** True while the viewport is at least `px` wide (the dashboard's two-column breakpoint). */
+function useMinWidth(px: number): boolean {
+  const query = `(min-width: ${px}px)`;
+  return useSyncExternalStore(
+    (onChange) => {
+      if (typeof window === "undefined" || !window.matchMedia) return () => {};
+      const mq = window.matchMedia(query);
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    () => (typeof window !== "undefined" && !!window.matchMedia ? window.matchMedia(query).matches : false),
+    () => false,
   );
 }
 
@@ -660,7 +680,7 @@ function useGamification() {
 
 /** Compact level indicator beside the greeting. Click → morphs into a detail modal
  *  showing the full tier ladder + current XP (same expand pattern as the stat cards). */
-function LevelChip() {
+function LevelChip({ fill = false }: { fill?: boolean }) {
   const { t, locale } = useLang();
   const g = useGamification();
   const totalXp = g.data?.xp?.totalXp ?? 0;
@@ -671,7 +691,7 @@ function LevelChip() {
   // A failed XP request is not "Iron Lv.1, 0 XP" (QA 13 Oct 2026): say it didn't load, tap to retry.
   if (g.isError && !g.data) {
     return (
-      <button type="button" onClick={() => void g.refetch()} className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 text-left text-sm shadow-soft transition hover:border-primary/30 sm:w-auto">
+      <button type="button" onClick={() => void g.refetch()} className={`flex w-full items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 text-left text-sm shadow-soft transition hover:border-primary/30 ${fill ? "" : "sm:w-auto"}`}>
         <span className="grid h-10 w-10 place-items-center rounded-full bg-muted text-muted-foreground"><RotateCw className="h-4 w-4" /></span>
         <span className="min-w-0">
           <span className="block font-semibold">{t("Your level didn't load")}</span>
@@ -689,7 +709,7 @@ function LevelChip() {
         aria-label={t("Your level: {name}, level {level}. Open details", { name: info.name, level: info.level })}
         whileHover={reduce ? undefined : { y: -2 }}
         whileTap={reduce ? undefined : { scale: 0.98 }}
-        className="flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 text-left shadow-soft transition-shadow hover:border-primary/30 hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:w-auto"
+        className={`flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 text-left shadow-soft transition-shadow hover:border-primary/30 hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${fill ? "" : "sm:w-auto"}`}
       >
         <TierBadge level={info.level} size={40} />
         <div className="min-w-0 flex-1 sm:flex-initial">
